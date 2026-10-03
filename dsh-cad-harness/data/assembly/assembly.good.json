@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "name": "microscope-stage-1",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "stage1",
+    "name": "显微镜第一级",
+    "kind": "assembly",
+    "interfaces": [
+      {
+        "id": "if-gap-rail",
+        "a": "bracket.轨顶点",
+        "b": "slide.槽底点",
+        "type": "间隙",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.3
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "distance",
+        "note": "滑座落在导轨顶面, 0.2 间隙膜"
+      },
+      {
+        "id": "if-bearing",
+        "a": "bracket.轴孔",
+        "b": "shaft.轴径",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.4
+        },
+        "tolerance": {
+          "min": 0.3,
+          "max": 0.5
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "轴承孔 Ø8.4 与轴 Ø8 的直径间隙"
+      },
+      {
+        "id": "if-stop",
+        "a": "bracket.止挡点",
+        "b": "slide.前挡点",
+        "type": "间隙",
+        "nominal": {
+          "quantity": "距离",
+          "value": 2
+        },
+        "tolerance": {
+          "min": 1.5,
+          "max": 2.5
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "distance",
+        "note": "滑座行程前端与止挡墙的余量"
+      }
+    ],
+    "children": [
+      {
+        "id": "bracket",
+        "name": "镜架",
+        "kind": "part",
+        "version": "v036",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "轨顶点",
+            "kind": "point"
+          },
+          {
+            "name": "止挡点",
+            "kind": "point"
+          },
+          {
+            "name": "轴孔",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "slide",
+        "name": "调焦滑座",
+        "kind": "part",
+        "version": "v037",
+        "source": "generated",
+        "material": "PLA",
+        "transform": {
+          "translate": [
+            10,
+            5,
+            16.2
+          ]
+        },
+        "datums": [
+          {
+            "name": "槽底点",
+            "kind": "point"
+          },
+          {
+            "name": "前挡点",
+            "kind": "point"
+          }
+        ]
+      },
+      {
+        "id": "shaft",
+        "name": "调焦轴",
+        "kind": "part",
+        "version": "v038",
+        "source": "generated",
+        "material": "PLA",
+        "transform": {
+          "rotate": [
+            0,
+            90,
+            0
+          ],
+          "translate": [
+            -5,
+            20,
+            38
+          ]
+        },
+        "datums": [
+          {
+            "name": "轴径",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "washer",
+        "name": "垫圈",
+        "kind": "part",
+        "version": "v040",
+        "source": "generated",
+        "material": "PLA",
+        "transform": {
+          "rotate": [
+            0,
+            90,
+            0
+          ],
+          "translate": [
+            7,
+            20,
+            38
+          ]
+        }
+      }
+    ]
+  }
+}

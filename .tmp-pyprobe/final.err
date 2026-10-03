@@ -1,0 +1,14 @@
+Python Engine enabled
+DATUM|center|0,0,4.0
+DATUM|bolt_p0|22.0,0,4.0
+
+Geometries in cache: 9
+Geometry cache size in bytes: 22824
+CGAL Polyhedrons in cache: 7
+CGAL cache size in bytes: 301000
+Total rendering time: 0:00:00.008
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      7
+   Vertices:      232
+   Facets:        488

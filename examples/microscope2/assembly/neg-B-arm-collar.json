@@ -1,0 +1,1145 @@
+{
+  "schemaVersion": 1,
+  "name": "显微镜 · 阴性对照 B（弯臂抱箍座下移 3mm）",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "microscope",
+    "name": "显微镜骨架与调焦",
+    "kind": "assembly",
+    "interfaces": [
+      {
+        "id": "if-1",
+        "a": "column.法兰底面",
+        "b": "base.法兰座面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口1：立柱法兰底面 ↔ 底座上表面（世界 z=12）。"
+      },
+      {
+        "id": "if-2",
+        "a": "arm.弯臂底面",
+        "b": "column.立柱顶面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口2：弯臂底面 ↔ 立柱顶面（世界 z=212），3×M3。"
+      },
+      {
+        "id": "if-3",
+        "a": "base.法兰孔",
+        "b": "column.根部止口",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.15
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "接口3：底座 Ø40.15 止口孔 ↔ 立柱 Ø40 根部止口，直径间隙 0.15。"
+      },
+      {
+        "id": "if-4",
+        "a": "arm.竖直定位面",
+        "b": "column.防转平面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口4：弯臂防转裙板竖直面 ↔ 立柱防转平面（世界 y=-9）。"
+      },
+      {
+        "id": "if-5",
+        "a": "stage.槽壁A",
+        "b": "stage.槽壁B",
+        "type": "间隙",
+        "nominal": {
+          "quantity": "距离",
+          "value": 25.3
+        },
+        "tolerance": {
+          "min": 25.2,
+          "max": 25.45
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口5：玻片槽宽（载玻片 25.0 → 单边 0.15）。零件内自接口。"
+      },
+      {
+        "id": "if-6",
+        "a": "bracket.支架背面",
+        "b": "arm.前立面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "补充：载物台支架背面 ↔ 弯臂前立面（世界 y=14），2×M3。载物台不直接接触弯臂。"
+      },
+      {
+        "id": "if-7",
+        "a": "stage.台底点",
+        "b": "bracket.支架顶面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "补充：载物台底面 ↔ 支架顶面（世界 z=222.13），2×M3。"
+      },
+      {
+        "id": "chain-u",
+        "a": "arm.标本面基准点",
+        "b": "arm.镜头座安装面基准点",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 13.0
+        },
+        "tolerance": {
+          "min": 12.0,
+          "max": 14.0
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "高度链 C1：标本面 230.00 + 物距 u 13.0 = 镜头座安装面 243.00。"
+      },
+      {
+        "id": "chain-v",
+        "a": "arm.像面基准点",
+        "b": "arm.镜头座安装面基准点",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 156.0
+        },
+        "tolerance": {
+          "min": 155.7,
+          "max": 156.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "高度链 C2：安装面 243.00 + 像距 v 156.0 = 像面 399.00。"
+      },
+      {
+        "id": "chain-clamp",
+        "a": "arm.抱箍座中心",
+        "b": "arm.标本面基准点",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 135.0
+        },
+        "tolerance": {
+          "min": 134.7,
+          "max": 135.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "抱箍座到标本面 = 156.0 − 13.0 − 8.0(镜头座高) = 135.0 → 抱箍座 z=365.00。"
+      },
+      {
+        "id": "chain-specimen",
+        "a": "stage.标本面",
+        "b": "stage.槽底",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 1.37
+        },
+        "tolerance": {
+          "min": 1.27,
+          "max": 1.47
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "标本面 230.00 = 槽底 228.63 + 载玻片 1.2 + 盖玻片 0.17。"
+      },
+      {
+        "id": "if-8",
+        "a": "pinion-block.轴承孔",
+        "b": "pinion-shaft.轴径",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "接口6：轴承座 Ø8.2 孔 ↔ 齿轮轴 Ø8，直径间隙 0.20。"
+      },
+      {
+        "id": "if-9",
+        "a": "carriage.滑座背面",
+        "b": "arm.导轨面",
+        "type": "滑动副",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口8：滑座舌板背面 ↔ 弯臂 T 型槽底面（静态量；运动由 simulate_motion 覆盖）。"
+      },
+      {
+        "id": "if-10",
+        "a": "carriage.齿条节线",
+        "b": "pinion-shaft.节圆点",
+        "type": "转动副",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "motion-clearance",
+        "note": "接口7：齿条 ↔ 齿轮（中心距 10.0 = 节圆半径）。机检算子未实现 → 由 simulate_motion 覆盖。"
+      },
+      {
+        "id": "if-11",
+        "a": "carriage.齿条节线",
+        "b": "pinion-shaft.节圆点",
+        "type": "弹簧",
+        "nominal": {
+          "quantity": "力",
+          "value": 2
+        },
+        "tolerance": {
+          "min": 1,
+          "max": 3
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "spring-preload",
+        "note": "接口9：齿条↔齿轮预压消隙 2N。v3 未实现 → skipped。"
+      },
+      {
+        "id": "if-12",
+        "a": "pinion-block.轴承座背面",
+        "b": "arm.前立面轴承",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "补充：轴承座背面 ↔ 弯臂前立面（世界 y=14），2×M3 @x=±18。"
+      },
+      {
+        "id": "if-13",
+        "a": "fine-ring.精调环顶面",
+        "b": "carriage.筒座底面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "精调环顶面顶住滑座抱筒孔底面（世界 z=278）：镜筒挂在精调环上，精调环坐在滑座上 → 转环即移动镜筒。"
+      },
+      {
+        "id": "if-14",
+        "a": "knob-r.旋钮孔",
+        "b": "pinion-shaft.轴径",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "右侧粗调旋钮双 D 孔 Ø8.2 ↔ Ø8 轴端。"
+      },
+      {
+        "id": "if-15",
+        "a": "knob-l.旋钮孔",
+        "b": "pinion-shaft.轴径",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "左侧粗调旋钮双 D 孔 Ø8.2 ↔ Ø8 轴端。"
+      },
+      {
+        "id": "if-16",
+        "a": "tube.镜筒内孔",
+        "b": "objective-mount.镜头座止口",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.15
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "接口10：镜筒下口 Ø26.15 内孔 ↔ 镜头座 Ø26 止口，直径间隙 0.15。"
+      },
+      {
+        "id": "if-17",
+        "a": "tube.镜筒内孔",
+        "b": "eyepiece-tube.目镜筒止口",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.15
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "接口11：镜筒上口 Ø26.15 内孔 ↔ 目镜筒 Ø26 止口，直径间隙 0.15（插入 12mm ≥ 10）。"
+      },
+      {
+        "id": "if-18",
+        "a": "objective-mount.镜头座安装面",
+        "b": "eyepiece-tube.光阑定位面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 156.0
+        },
+        "tolerance": {
+          "min": 155.7,
+          "max": 156.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口12（主尺寸链）：镜头座安装面 z=243 ↔ 目镜筒光阑定位面 z=399 → 像距 v=156.0。"
+      },
+      {
+        "id": "if-19",
+        "a": "objective-mount.镜头座安装面",
+        "b": "stage.标本面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 13.0
+        },
+        "tolerance": {
+          "min": 12.0,
+          "max": 14.0
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口13：镜头座安装面 z=243 ↔ 载物台标本面 z=230.00 → 物距 u=13.0（滑座名义位）。"
+      },
+      {
+        "id": "if-20",
+        "a": "objective-mount.镜头座轴心",
+        "b": "stage.通光孔轴心",
+        "type": "同轴",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口14：镜头座轴心 ↔ 通光孔轴心。同轴算子未实现 → 两点 distance 机检（同轴度作 note）。"
+      },
+      {
+        "id": "if-21",
+        "a": "illuminator.LED沉孔轴心",
+        "b": "stage.通光孔轴心",
+        "type": "同轴",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": -0.5,
+          "max": 0.5
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "接口15：照明座 LED 沉孔轴心 ↔ 通光孔轴心。同上，用两点 distance 代理。"
+      },
+      {
+        "id": "if-22",
+        "a": "arm.抱箍座内孔",
+        "b": "tube.镜筒外圆",
+        "type": "滑动副",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.3
+        },
+        "tolerance": {
+          "min": 0.15,
+          "max": 0.45
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "补充：弯臂抱箍座 Ø34.3 内孔 ↔ 镜筒 Ø34 外圆（顶部导向环，不夹紧）。"
+      },
+      {
+        "id": "if-23",
+        "a": "carriage.抱筒孔",
+        "b": "tube.镜筒外圆",
+        "type": "滑动副",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.3
+        },
+        "tolerance": {
+          "min": 0.15,
+          "max": 0.45
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "补充：滑座抱筒孔 Ø34.3 ↔ 镜筒 Ø34 外圆（滑座只做导向，轴向由精调环吊住）。"
+      },
+      {
+        "id": "if-24",
+        "a": "fine-ring.精调环内孔",
+        "b": "tube.镜筒外圆",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.4
+        },
+        "tolerance": {
+          "min": 0.2,
+          "max": 0.6
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "补充：精调环 34x0.5 内螺纹 ↔ 镜筒外螺纹段（名义直径间隙 0.40；牙型未机检）。"
+      },
+      {
+        "id": "if-25",
+        "a": "eyepiece-tube.目镜筒内孔",
+        "b": "camera-plate.托板止口",
+        "type": "间隙",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.4
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "diameter-match",
+        "note": "补充：目镜筒 Ø23.4 孔 ↔ 相机托板 Ø23.2 止口。目镜与相机托板共用同一孔、同一像面。"
+      },
+      {
+        "id": "if-26",
+        "a": "camera-plate.传感器定位面",
+        "b": "eyepiece-tube.光阑定位面",
+        "type": "贴合",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "补充：相机托板底面（传感器基准面）= 目镜筒光阑定位面 → 目视/摄像同一像面 z=399。"
+      },
+      {
+        "id": "if-27",
+        "a": "slide-clip.簧孔心",
+        "b": "stage.簧孔",
+        "type": "紧固",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "severity": "hard",
+        "layer": "L0",
+        "check": "distance",
+        "note": "压片簧根部 2×M3 落在载物台台面（世界 z=230.13）上。"
+      },
+      {
+        "id": "if-28",
+        "a": "slide-clip.簧根沿",
+        "b": "slide-clip.簧触点",
+        "type": "间隙",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.3
+        },
+        "tolerance": {
+          "min": 0.2,
+          "max": 0.4
+        },
+        "severity": "intent",
+        "layer": "L0",
+        "check": "distance",
+        "note": "压片簧自检（零件内）：根部 230.13 → 触点 229.83 = 0.30 下压量。玻片顶面 = 槽底 228.63 + 1.2 = 229.83，触点正好落在上面。"
+      }
+    ],
+    "children": [
+      {
+        "id": "base",
+        "name": "底座",
+        "kind": "part",
+        "version": "v001",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "法兰座面",
+            "kind": "point"
+          },
+          {
+            "name": "上表面",
+            "kind": "point"
+          },
+          {
+            "name": "配重腔中心",
+            "kind": "point"
+          },
+          {
+            "name": "法兰孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "底座上表面",
+            "kind": "plane"
+          }
+        ]
+      },
+      {
+        "id": "column",
+        "name": "立柱",
+        "kind": "part",
+        "version": "v002",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "法兰底面",
+            "kind": "point"
+          },
+          {
+            "name": "立柱顶面",
+            "kind": "point"
+          },
+          {
+            "name": "防转平面",
+            "kind": "point"
+          },
+          {
+            "name": "柱身参考点",
+            "kind": "point"
+          },
+          {
+            "name": "根部止口",
+            "kind": "cylinder"
+          },
+          {
+            "name": "柱身外圆",
+            "kind": "cylinder"
+          },
+          {
+            "name": "法兰面",
+            "kind": "plane"
+          }
+        ]
+      },
+      {
+        "id": "arm",
+        "name": "弯臂",
+        "kind": "part",
+        "version": "v018",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "弯臂底面",
+            "kind": "point"
+          },
+          {
+            "name": "竖直定位面",
+            "kind": "point"
+          },
+          {
+            "name": "前立面",
+            "kind": "point"
+          },
+          {
+            "name": "前立面轴承",
+            "kind": "point"
+          },
+          {
+            "name": "抱箍座中心",
+            "kind": "point"
+          },
+          {
+            "name": "镜头座安装面基准点",
+            "kind": "point"
+          },
+          {
+            "name": "标本面基准点",
+            "kind": "point"
+          },
+          {
+            "name": "像面基准点",
+            "kind": "point"
+          },
+          {
+            "name": "导轨面",
+            "kind": "point"
+          },
+          {
+            "name": "导轨面参考",
+            "kind": "point"
+          },
+          {
+            "name": "抱箍座内孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "镜筒轴",
+            "kind": "axis"
+          },
+          {
+            "name": "抱箍座平面",
+            "kind": "plane"
+          }
+        ]
+      },
+      {
+        "id": "stage",
+        "name": "载物台",
+        "kind": "part",
+        "version": "v034",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "标本面",
+            "kind": "point"
+          },
+          {
+            "name": "台面点",
+            "kind": "point"
+          },
+          {
+            "name": "台底点",
+            "kind": "point"
+          },
+          {
+            "name": "槽壁A",
+            "kind": "point"
+          },
+          {
+            "name": "槽壁B",
+            "kind": "point"
+          },
+          {
+            "name": "槽底",
+            "kind": "point"
+          },
+          {
+            "name": "通光孔轴心",
+            "kind": "point"
+          },
+          {
+            "name": "后缘",
+            "kind": "point"
+          },
+          {
+            "name": "通光孔",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "bracket",
+        "name": "载物台支架",
+        "kind": "part",
+        "version": "v005",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "支架顶面",
+            "kind": "point"
+          },
+          {
+            "name": "支架背面",
+            "kind": "point"
+          },
+          {
+            "name": "托面",
+            "kind": "plane"
+          }
+        ]
+      },
+      {
+        "id": "carriage",
+        "name": "调焦滑座",
+        "kind": "part",
+        "version": "v028",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "滑座背面",
+            "kind": "point"
+          },
+          {
+            "name": "齿条节线",
+            "kind": "point"
+          },
+          {
+            "name": "筒座中心",
+            "kind": "point"
+          },
+          {
+            "name": "筒座底面",
+            "kind": "point"
+          },
+          {
+            "name": "镜筒轴线点",
+            "kind": "point"
+          },
+          {
+            "name": "抱筒孔",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "pinion-shaft",
+        "name": "齿轮轴",
+        "kind": "part",
+        "version": "v020",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "轴心",
+            "kind": "point"
+          },
+          {
+            "name": "节圆点",
+            "kind": "point"
+          },
+          {
+            "name": "轴端",
+            "kind": "point"
+          },
+          {
+            "name": "轴径",
+            "kind": "cylinder"
+          },
+          {
+            "name": "齿轮节圆",
+            "kind": "cylinder"
+          },
+          {
+            "name": "轴轴线",
+            "kind": "axis"
+          }
+        ]
+      },
+      {
+        "id": "pinion-block",
+        "name": "轴承座",
+        "kind": "part",
+        "version": "v025",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "轴承座背面",
+            "kind": "point"
+          },
+          {
+            "name": "轴承座耳面",
+            "kind": "point"
+          },
+          {
+            "name": "轴承孔",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "knob-r",
+        "name": "粗调旋钮(右)",
+        "kind": "part",
+        "version": "v022",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "旋钮轴心",
+            "kind": "point"
+          },
+          {
+            "name": "旋钮孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "旋钮外端面",
+            "kind": "point"
+          }
+        ]
+      },
+      {
+        "id": "knob-l",
+        "name": "粗调旋钮(左)",
+        "kind": "part",
+        "version": "v022",
+        "source": "generated",
+        "material": "PLA",
+        "transform": {
+          "rotate": [
+            0,
+            180,
+            0
+          ],
+          "translate": [
+            0,
+            0,
+            530
+          ]
+        },
+        "datums": [
+          {
+            "name": "旋钮孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "旋钮轴心",
+            "kind": "point"
+          }
+        ]
+      },
+      {
+        "id": "fine-ring",
+        "name": "精调环",
+        "kind": "part",
+        "version": "v023",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "精调环轴心",
+            "kind": "point"
+          },
+          {
+            "name": "精调环顶面",
+            "kind": "point"
+          },
+          {
+            "name": "精调环底面",
+            "kind": "point"
+          },
+          {
+            "name": "精调环内孔",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "tube",
+        "name": "镜筒",
+        "kind": "part",
+        "version": "v029",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "镜筒下口",
+            "kind": "point"
+          },
+          {
+            "name": "镜筒上口",
+            "kind": "point"
+          },
+          {
+            "name": "镜筒轴线点",
+            "kind": "point"
+          },
+          {
+            "name": "镜筒内孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "镜筒外圆",
+            "kind": "cylinder"
+          },
+          {
+            "name": "镜筒轴",
+            "kind": "axis"
+          }
+        ]
+      },
+      {
+        "id": "objective-mount",
+        "name": "镜头座",
+        "kind": "part",
+        "version": "v030",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "镜头座安装面",
+            "kind": "point"
+          },
+          {
+            "name": "镜头座轴心",
+            "kind": "point"
+          },
+          {
+            "name": "镜头座底端",
+            "kind": "point"
+          },
+          {
+            "name": "镜头座止口",
+            "kind": "cylinder"
+          },
+          {
+            "name": "镜头座螺纹",
+            "kind": "cylinder"
+          },
+          {
+            "name": "镜头座轴",
+            "kind": "axis"
+          }
+        ]
+      },
+      {
+        "id": "eyepiece-tube",
+        "name": "目镜筒",
+        "kind": "part",
+        "version": "v031",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "光阑定位面",
+            "kind": "point"
+          },
+          {
+            "name": "目镜筒下口",
+            "kind": "point"
+          },
+          {
+            "name": "目镜筒顶面",
+            "kind": "point"
+          },
+          {
+            "name": "目镜筒止口",
+            "kind": "cylinder"
+          },
+          {
+            "name": "目镜筒内孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "目镜筒轴",
+            "kind": "axis"
+          }
+        ]
+      },
+      {
+        "id": "camera-plate",
+        "name": "相机托板",
+        "kind": "part",
+        "version": "v032",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "传感器定位面",
+            "kind": "point"
+          },
+          {
+            "name": "托板法兰面",
+            "kind": "point"
+          },
+          {
+            "name": "托板轴心",
+            "kind": "point"
+          },
+          {
+            "name": "托板止口",
+            "kind": "cylinder"
+          }
+        ]
+      },
+      {
+        "id": "illuminator",
+        "name": "照明座",
+        "kind": "part",
+        "version": "v033",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "LED沉孔轴心",
+            "kind": "point"
+          },
+          {
+            "name": "LED端面",
+            "kind": "point"
+          },
+          {
+            "name": "照明座顶面",
+            "kind": "point"
+          },
+          {
+            "name": "滑槽中心",
+            "kind": "point"
+          },
+          {
+            "name": "LED沉孔",
+            "kind": "cylinder"
+          },
+          {
+            "name": "照明轴",
+            "kind": "axis"
+          }
+        ]
+      },
+      {
+        "id": "slide-clip",
+        "name": "压片簧",
+        "kind": "part",
+        "version": "v038",
+        "source": "generated",
+        "material": "PLA",
+        "datums": [
+          {
+            "name": "簧根面",
+            "kind": "point"
+          },
+          {
+            "name": "簧触点",
+            "kind": "point"
+          },
+          {
+            "name": "簧孔心",
+            "kind": "point"
+          },
+          {
+            "name": "簧悬臂中点",
+            "kind": "point"
+          }
+        ]
+      }
+    ]
+  }
+}

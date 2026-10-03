@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "parts": [
+    {
+      "id": "p001",
+      "name": "显微-底座",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:43.910Z",
+      "lastActiveAt": "2026-10-01T06:57:43.912Z",
+      "versionIds": [
+        "v001"
+      ]
+    },
+    {
+      "id": "p002",
+      "name": "显微-立柱",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:45.819Z",
+      "lastActiveAt": "2026-10-01T06:57:45.821Z",
+      "versionIds": [
+        "v002"
+      ]
+    },
+    {
+      "id": "p003",
+      "name": "显微-弯臂",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:47.748Z",
+      "lastActiveAt": "2026-10-01T06:57:47.749Z",
+      "versionIds": [
+        "v003"
+      ]
+    },
+    {
+      "id": "p004",
+      "name": "显微-载物台",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:49.100Z",
+      "lastActiveAt": "2026-10-01T06:57:49.101Z",
+      "versionIds": [
+        "v004"
+      ]
+    },
+    {
+      "id": "p005",
+      "name": "显微-立柱-阴性对照A",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:50.913Z",
+      "lastActiveAt": "2026-10-01T06:57:50.914Z",
+      "versionIds": [
+        "v005"
+      ]
+    },
+    {
+      "id": "p006",
+      "name": "显微-弯臂-阴性对照B",
+      "nameSource": "agent",
+      "createdAt": "2026-10-01T06:57:52.144Z",
+      "lastActiveAt": "2026-10-01T06:57:52.145Z",
+      "versionIds": [
+        "v006"
+      ]
+    }
+  ]
+}

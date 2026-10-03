@@ -1,0 +1,30 @@
+# ---- 依赖与构建产物（可由源码 + lockfile 重建）----
+node_modules/
+dsh-cad-harness/lib/
+
+# ---- 缓存 / 包商店 ----
+.chrome-cache/
+.pnpm-store/
+.esbuild/
+
+# ---- 第三方大文件（可重新获取）----
+# OpenSCAD AppImage 及其解包
+bin/
+# vendored BOSL2 库（zip 可重下）
+lib/
+panel.bak.ts
+
+# ---- 生成的工件（由语料 + 脚本再生）----
+# 各 example 的版本库渲染输出（STL/PNG，由 scad 重新编译可再生）
+examples/*/out/
+# 版本库生成的模型快照
+dsh-cad-harness/data/versions/
+# 截图与渲染输出
+dsh-cad-harness/sandbox/shots/
+/shots/
+/renders/
+
+# ---- 临时区 ----
+verification/tmp/
+*.log
+.DS_Store

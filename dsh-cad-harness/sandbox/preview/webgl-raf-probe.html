@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>webgl raf probe</title></head>
+<body style="font:14px monospace;margin:0;padding:10px;background:#fff">
+<canvas id="c" width="240" height="120" style="border:1px solid #999"></canvas>
+<canvas id="d" width="240" height="120" style="border:1px solid #999"></canvas>
+<pre id="out">probing…</pre>
+<script>
+// A: continuous rAF loop, preserveDrawingBuffer on (what the panel does)
+const a = document.getElementById('c');
+const gla = a.getContext('webgl', { preserveDrawingBuffer: true });
+let t = 0;
+function loop() {
+  t += 0.05;
+  gla.clearColor(Math.abs(Math.sin(t)), 0.3, 0.7, 1);
+  gla.clear(gla.COLOR_BUFFER_BIT);
+  requestAnimationFrame(loop);
+}
+loop();
+
+// B: draw once, then freeze the buffer into a DOM <img> (guaranteed composite)
+const b = document.getElementById('d');
+const glb = b.getContext('webgl', { preserveDrawingBuffer: true });
+glb.clearColor(0.9, 0.2, 0.2, 1);
+glb.clear(glb.COLOR_BUFFER_BIT);
+const img = new Image();
+img.src = b.toDataURL('image/png');
+document.body.appendChild(img);
+document.getElementById('out').textContent = 'A=rAF canvas (blue-ish), B=frozen <img> (red)';
+</script>
+</body></html>

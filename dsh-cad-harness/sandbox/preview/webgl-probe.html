@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>webgl probe</title></head>
+<body style="font:14px monospace;margin:0;padding:10px;background:#fff">
+<canvas id="c" width="240" height="120" style="border:1px solid #999"></canvas>
+<pre id="out">probing…</pre>
+<script>
+const c = document.getElementById('c');
+const gl = c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
+const out = document.getElementById('out');
+if (gl) {
+  gl.clearColor(0.2, 0.7, 0.3, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  out.textContent =
+    'WEBGL OK\nversion: ' + gl.getParameter(gl.VERSION) +
+    '\nrenderer: ' + (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+} else {
+  out.textContent = 'WEBGL UNAVAILABLE\n' + c.toDataURL().slice(0, 40);
+}
+</script>
+</body></html>

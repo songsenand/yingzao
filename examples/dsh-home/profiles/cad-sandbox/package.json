@@ -1,0 +1,17 @@
+{
+  "name": "dsh-profile-cad-sandbox",
+  "private": true,
+  "dependencies": {
+    "dsh-cad-harness": "link:/home/songsenand/Project/ToyMarker/dsh-cad-harness"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-cad-harness"
+      ],
+      "patchReload": "live"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "dsh-plugin-shop-catalog",
+  "version": "2026.924.0",
+  "description": "The dsh plugin catalog, as published by dsh-plugin-shop.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LivXue/dsh-plugin-shop.git"
+  },
+  "homepage": "https://github.com/LivXue/dsh-plugin-shop",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "catalog"
+  ],
+  "type": "commonjs",
+  "main": "index.js",
+  "files": [
+    "v1",
+    "index.js"
+  ],
+  "catalogBuiltAt": "2026-09-24T06:04:03.376Z",
+  "catalogShas": {
+    "plugins": "2735b62a32078730aed5d438397b4baed256b4abd40c84aeb2633fb776571831",
+    "stars": "50dad6f91319137b3ece015d841ea6c2ca232b798176ebea933f1052ae5cfd4f"
+  }
+}

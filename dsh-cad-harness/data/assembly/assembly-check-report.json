@@ -1,0 +1,86 @@
+{
+  "checkedAt": "2026-10-01T17:41:23.342Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/dsh-cad-harness/data/assembly/assembly.bad.json",
+  "manifestName": "microscope-stage-1",
+  "results": [
+    {
+      "interfaceId": "if-gap-rail",
+      "ownerPath": [
+        "stage1"
+      ],
+      "a": "bracket.轨顶点",
+      "b": "slide.槽底点",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 0.3
+      },
+      "measured": 0.2,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "if-bearing",
+      "ownerPath": [
+        "stage1"
+      ],
+      "a": "bracket.轴孔",
+      "b": "shaft.轴径",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "hard-violation",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.3,
+        "max": 0.5
+      },
+      "measured": -0.8,
+      "detail": "diametral clearance Ø-0.8 (hole Ø8.4 vs shaft Ø9.2)"
+    },
+    {
+      "interfaceId": "if-stop",
+      "ownerPath": [
+        "stage1"
+      ],
+      "a": "bracket.止挡点",
+      "b": "slide.前挡点",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 1.5,
+        "max": 2.5
+      },
+      "measured": 2,
+      "detail": "point-to-point distance between declared datums"
+    }
+  ],
+  "undeclared": [
+    {
+      "partA": "shaft",
+      "partB": "washer",
+      "minDistance": 0,
+      "intersectionVolume": 27.288
+    }
+  ],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 0.75,
+  "summary": {
+    "interfaces": 3,
+    "pass": 2,
+    "hardViolations": 1,
+    "intentFlags": 0,
+    "skipped": 0,
+    "undeclared": 1
+  },
+  "overallStatus": "fail"
+}

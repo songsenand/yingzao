@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CAD panel · UI sandbox</title>
+<style>
+  :root { --dock-w: 380px; --stage-h: 900px; color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", sans-serif;
+    background: #eceff2; color: #1f2328;
+    height: var(--stage-h); overflow: hidden;
+  }
+  #app { display: flex; height: var(--stage-h); align-items: stretch; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; color: #9aa4ae; font-size: 13px; }
+  /* Emulates the docked right sidebar: fixed width column, its own scroll body. */
+  #dock {
+    width: var(--dock-w); flex: none; height: var(--stage-h);
+    background: #fff; border-left: 1px solid #d7dbe0;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #dockHeader {
+    flex: none; height: 34px; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; font-size: 12px; color: #6b7280; border-bottom: 1px solid #edf0f2;
+  }
+  #dockHeader b { font-weight: 600; color: #374151; }
+  #tabbody { flex: 1; min-height: 0; overflow: auto; }
+  #root { height: 100%; min-height: 0; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div id="stage">conversation column</div>
+    <div id="dock">
+      <div id="dockHeader"><b>CAD 预览</b><span>· 右栏 Tab</span></div>
+      <div id="tabbody"><div id="root"></div></div>
+    </div>
+  </div>
+  <script src="./dist/bundle.js"></script>
+  <!-- Holds the load event open so headless `--screenshot` captures the render
+       after the panel's async manifest/STL fetches settle. -->
+  <img src="/slow.png?ms=3600" alt="" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none" />
+</body>
+</html>

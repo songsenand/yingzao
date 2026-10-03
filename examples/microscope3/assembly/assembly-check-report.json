@@ -1,0 +1,584 @@
+{
+  "checkedAt": "2026-10-02T08:09:34.500Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope3/assembly/assembly.json",
+  "manifestName": "单目复式显微镜 microscope3",
+  "results": [
+    {
+      "interfaceId": "IF-01",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.法兰面",
+      "b": "base.上表面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-02",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.顶面",
+      "b": "arm.底面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-03",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "base.法兰孔",
+      "b": "column.止口",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.3
+      },
+      "measured": 0.15,
+      "detail": "diametral clearance Ø0.15 (hole Ø40.15 vs shaft Ø40)"
+    },
+    {
+      "interfaceId": "IF-04",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.定位面",
+      "b": "column.定位侧面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0.15,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-05",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.槽壁B",
+      "b": "stage.槽壁A",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 25.2,
+        "max": 25.45
+      },
+      "measured": 25.3,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-06",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "pinion-block.轴承孔右",
+      "b": "shaft.轴颈右",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.1,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø8.2 vs shaft Ø8)"
+    },
+    {
+      "interfaceId": "IF-07",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "carriage.齿条节圆点",
+      "b": "shaft.齿轮节圆点",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L1",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.6,
+        "max": 0.6
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r025 (干涉 0 次 · 行程 25.5mm)"
+    },
+    {
+      "interfaceId": "IF-07b",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "carriage.行程下止点",
+      "b": "carriage.行程上止点",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 25,
+        "max": 26
+      },
+      "measured": 25.5,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-08",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "carriage.导轨面",
+      "b": "arm.导轨右",
+      "type": "滑动副",
+      "severity": "hard",
+      "layer": "L1",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r025 (干涉 0 次 · 行程 25.5mm)"
+    },
+    {
+      "interfaceId": "IF-09",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "pinion-block.弹簧根",
+      "b": "pinion-block.弹簧端",
+      "type": "弹簧",
+      "severity": "hard",
+      "layer": "L1",
+      "check": "spring-preload",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "预紧力",
+        "min": 1.5,
+        "max": 2.5
+      },
+      "measured": 1.9999,
+      "detail": "installed 12.3491mm vs free 12.831mm → δ0.4819mm × 4.15N/mm = 1.9999N"
+    },
+    {
+      "interfaceId": "IF-10",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "tube.下口孔",
+      "b": "mount.止口",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.3
+      },
+      "measured": 0.15,
+      "detail": "diametral clearance Ø0.15 (hole Ø26.15 vs shaft Ø26)"
+    },
+    {
+      "interfaceId": "IF-11",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "tube.上口孔",
+      "b": "eyepiece.下口",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.3
+      },
+      "measured": 0.15,
+      "detail": "diametral clearance Ø0.15 (hole Ø26.15 vs shaft Ø26)"
+    },
+    {
+      "interfaceId": "IF-12",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "mount.安装面",
+      "b": "eyepiece.光阑面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 155.7,
+        "max": 156.3
+      },
+      "measured": 156,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-12b",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "camplate.传感器面",
+      "b": "eyepiece.光阑面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-13",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "mount.安装面",
+      "b": "stage.标本面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 12,
+        "max": 14
+      },
+      "measured": 13,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-14",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "mount.轴心",
+      "b": "stage.通光孔轴心",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-15",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "illuminator.LED轴心",
+      "b": "stage.通光孔轴心",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.5,
+        "max": 0.5
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-16",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "fine-ring.环顶面",
+      "b": "tube.座面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-17",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "knob.右旋钮前缘",
+      "b": "carriage.背面右",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 1.5
+      },
+      "measured": 0.5,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-18",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "clip.座面",
+      "b": "stage.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-20",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "carriage.管孔轴心",
+      "b": "tube.轴心320",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.15,
+        "max": 0.15
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-21",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "fine-ring.环轴",
+      "b": "mount.螺纹轴心",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-22",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "knob.右旋钮孔",
+      "b": "shaft.轴颈右",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.1,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø8.2 vs shaft Ø8)"
+    },
+    {
+      "interfaceId": "IF-23",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "knob.右内端面",
+      "b": "arm.侧面右",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 1.5
+      },
+      "measured": 0.5,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-24",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "knob.左内端面",
+      "b": "arm.侧面左",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 1.5
+      },
+      "measured": 0.5,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-25",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "shaft.轴颈右",
+      "b": "arm.轴承瓦右",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.15,
+        "max": 0.15
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "IF-26",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "pinion-block.轴承孔右",
+      "b": "arm.轴承瓦右",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    }
+  ],
+  "undeclared": [
+    {
+      "partA": "arm",
+      "partB": "stage",
+      "minDistance": 0,
+      "intersectionVolume": 0
+    },
+    {
+      "partA": "carriage",
+      "partB": "pinion-block",
+      "minDistance": 0.2,
+      "intersectionVolume": 0
+    },
+    {
+      "partA": "pinion-block",
+      "partB": "knob",
+      "minDistance": 0.5,
+      "intersectionVolume": 0
+    },
+    {
+      "partA": "tube",
+      "partB": "camplate",
+      "minDistance": 1.4732,
+      "intersectionVolume": 0
+    }
+  ],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 1.5,
+  "summary": {
+    "interfaces": 27,
+    "pass": 27,
+    "hardViolations": 0,
+    "intentFlags": 0,
+    "skipped": 0,
+    "undeclared": 4
+  },
+  "overallStatus": "check"
+}
