@@ -190,9 +190,12 @@ console.log(`image-context pruning acceptance  (real dsh-llm ${harness ? 'loaded
 console.log(`policy: deepseek keep=${DEEPSEEK_KEEP_IMAGES} quantum=${DEEPSEEK_COUNT_QUANTUM} · pi-ai maxRequestImageBytes=${PI_AI_KEEP_BYTES}\n`);
 
 // --- 1+2. reported == projected, on both routes -----------------------------
+// pi-ai's byte knob is now a FALLBACK for pathological attachments only
+// (DESGIGN §16.4: the per-preset window lives in the executor), so it is
+// exercised at a size that actually crosses 8 MiB: 88 × 112KB ≈ 13 MB base64.
 for (const [route, model, budget, viewBytes] of [
   ['deepseek', 'deepseek-flash', deepseekBudget, REAL_RENDER_BYTES[0]],
-  ['pi-ai', 'glm-5.3-flash', piAiBudget, REAL_RENDER_BYTES[0]],
+  ['pi-ai', 'glm-5.3-flash', piAiBudget, REAL_RENDER_BYTES[1]],
 ]) {
   const history = cadHistory(22, viewBytes);   // 88 images: the observed worst case
   const raw = imagesOf(history);
@@ -241,12 +244,12 @@ for (const [route, model, budget, viewBytes] of [
   check(envelopes === 22, `${label}: every tool result is still present`, `${envelopes} results`);
 }
 
-// --- the microscope3 scenario on the pi-ai byte budget ----------------------
-// 40 renders of 30KB (base64 40KB) + one 50KB user reference image:
-// 41 occurrences ≈ 1.6 MB base64 against a 256 KiB bound → the bound MUST fire
-// and must prune the OLDEST occurrences — which is the user reference image,
-// exactly as measured in production (report §8). The installed dsh has no
-// user-image exemption; this test pins that documented reality.
+// --- the microscope3 scenario under the fallback budget ---------------------
+// 40 renders of 30KB (base64 40KB) + one 50KB user reference image ≈ 1.6 MB
+// base64 — BELOW the 8 MiB fallback, by design: the route knob no longer does
+// fairness. What prunes here is the executor's per-preset window (tested in
+// accept-image-offload.mjs), so the mirror must predict NO pruning while the
+// user reference stays safe.
 {
   const img = (name, kb) => ({ type: 'image', offloaded: false, attachment: { bytes: kb * 1024, name } });
   const msgs = [
@@ -254,8 +257,8 @@ for (const [route, model, budget, viewBytes] of [
     { role: 'assistant', content: [{ type: 'tool-result', content: Array.from({ length: 40 }, (_, i) => img(`render-${i}`, 30)) }] },
   ];
   const rec = measureUsage(msgs, 'glm-5.3-flash');
-  check(rec.imagesBeforePrune === 41 && rec.images < 41,
-    'pi-ai: the byte budget fires on the microscope3 scenario and prunes',
+  check(rec.imagesBeforePrune === 41 && rec.images === 41,
+    'pi-ai: the fallback byte budget does NOT bind at microscope3 scale (the executor window prunes instead)',
     `before ${rec.imagesBeforePrune} → kept ${rec.images}`);
   if (harness) {
     const { projected } = projectOffload(harness, msgs, piAiBudget, (b) => b.bytes);

@@ -23,6 +23,9 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CAD_IMAGE_WINDOW,
+  countRetainedImages,
+  enforceSessionWindow,
   imageOffloadProjection,
   offloadMessageImages,
   selectOffloadTargets,
@@ -144,7 +147,57 @@ const fixture = [
   }
 }
 
-// ── 4. composed tree: exactly one executor owns the seam ────────────────────
+// ── 4. the per-preset window (DESGIGN §16.4, plan B′) ───────────────────────
+{
+  check(CAD_IMAGE_WINDOW === 24, 'the cad window mirrors the DeepSeek count budget', String(CAD_IMAGE_WINDOW));
+
+  // A fake session over the SAME surface fixture: header carries the preset,
+  // append() records durable decisions so the checker can inspect them.
+  const makeSession = (preset) => {
+    const log = [];
+    return {
+      log,
+      header: { agentPreset: preset },
+      surface: { nodes: fixture.map((f) => f.seq) },
+      eventAt: (seq) => fixture.find((f) => f.seq === seq),
+      deriveEventMessage: (event) => ({ role: 'user', content: structuredClone(event.content) }),
+      append: (type, data) => log.push({ type, data }),
+    };
+  };
+
+  const requestMessages = [
+    { role: 'user', content: [{ type: 'text', text: '照这个做' }] },
+    ...fixture.slice(1).map((f) => ({ role: 'user', content: [{ type: 'tool-result', content: structuredClone(f.content) }] })),
+  ];
+  check(countRetainedImages(requestMessages) === 12,
+    'countRetainedImages walks tool results', String(countRetainedImages(requestMessages)));
+
+  // 12 retained + 16 fresh user uploads = 28 → excess 4 over the 24 window.
+  const overSession = makeSession('cad');
+  const decision = enforceSessionWindow(
+    { get: () => overSession },
+    { sessionId: 's1', messages: [...requestMessages, { role: 'user', content: Array.from({ length: 16 }, (_, i) => img('extra', 30, i)) }] },
+  );
+  check(!!decision && decision.preset === 'cad' && decision.excess === 4 && decision.appended === true,
+    'cad session over the window gets a proactive offload decision', JSON.stringify(decision));
+  const decidedSeqs = overSession.log.flatMap((d) => d.data.targets.map((t) => t.seq));
+  check(decidedSeqs.length > 0 && decidedSeqs.every((seq) => seq !== userSeq),
+    'the window decision still spares the user reference image',
+    JSON.stringify(decidedSeqs));
+
+  const underSession = makeSession('cad');
+  const under = enforceSessionWindow({ get: () => underSession }, { sessionId: 's1', messages: requestMessages });
+  check(!!under && under.appended === false && under.excess <= 0,
+    'cad session under the window is left alone', JSON.stringify(under));
+
+  const std = makeSession('standard');
+  check(enforceSessionWindow({ get: () => std }, { sessionId: 's1', messages: requestMessages }) === null,
+    'a standard-mode session is NEVER proactively pruned (the fairness the user asked for)');
+  check(enforceSessionWindow({}, { sessionId: 's1', messages: requestMessages }) === null,
+    'no sessions service → not applicable');
+}
+
+// ── 5. composed tree: exactly one executor owns the seam ────────────────────
 {
   const realHome = join(homedir(), '.dsh');
   const srcDir = join(realHome, 'profiles', 'web');

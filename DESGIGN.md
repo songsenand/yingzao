@@ -2003,3 +2003,22 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 ### 16.3 生效
 
 重启 dsh 进程（宿主半 bundle 启动加载；cordis patch 在组合时应用）。
+
+### 16.4 每会话图片窗口（方案 B′，v2.19，2026-10-03 同日）
+
+用户裁定：全局图片预算对标准模式不公平（256KiB 对真实截图≈2-5 张就裁），且
+方案 B（动态翻全局旋钮）在并发会话下互踩，否决。落地为：
+
+- **路由旋钮降级为兜底**：pi-ai `PI_AI_KEEP_BYTES` 256KiB → **8MiB**（仅防
+  病态大附件，普通聊天与 CAD 渲染风暴都碰不到）；deepseek 24 张对聊天无感，保留。
+- **真窗口在执行器**：`llm/stream` 观察点拿 `options.sessionId` →
+  `ctx.sessions.get()` → `session.header.agentPreset`；**造物模式（cad）**
+  会话保留窗口 24 张（`CAD_IMAGE_WINDOW`，镜像 deepseek 计数预算），超窗即
+  主动记 `image/offload` 决策，下一请求合规；**标准模式永不主动裁剪**。
+- 并发安全：按 sessionId 去重 in-flight；辅助调用（session-title/compaction
+  带 `purpose`）不驱动窗口。
+- 已知代价：窗口收紧后的第一个请求仍按旧窗口发出（多付一次视觉 token），
+  下一请求起合规；会话查不到（极端时序）按不适用处理（fail-open）。
+- 验收：accept-image-offload 新增窗口 5 断言（超窗追加、 spared 用户图、
+  窗内不动、标准模式 null、无服务 null）；accept-image-budget 的 pi-ai 期望
+  改为兜底语义（显微镜3 场景 41 张不再被路由裁，窗口在执行器侧）。

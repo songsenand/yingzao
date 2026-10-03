@@ -30,31 +30,22 @@ export const DEEPSEEK_KEEP_IMAGES = 24;
 /** Removal step; mirrors `imageOffloadCountQuantum` (2 render rounds of 4 views). */
 export const DEEPSEEK_COUNT_QUANTUM = 8;
 /**
- * Bytes the pi-ai routes keep.
+ * Bytes the pi-ai routes keep — a FALLBACK for pathological attachments only.
  *
- * MECHANISM, VERIFIED AGAINST THE INSTALLED dsh (0.2.0-rc.2): the pi-ai adapter
- * (`@deepseek-ai/dsh-llm-pi-ai`) has NO count knob — its profile schema accepts
- * only `maxRequestImageBytes`, and `toPiContextWithImages()` fails the request
- * with `IMAGE_OFFLOAD_REQUIRED` when the base64 bound is exceeded. The profile's
- * `image-offload` row (`@deepseek-ai/dsh-compaction-image-offload`) then offloads
- * the OLDEST retained occurrences — user messages and tool results alike, there
- * is no user-image exemption — and retries. So a byte bound DOES prune like a
- * count budget would; the microscope3 failure was only that 2.5 MiB is far more
- * than small normalized renders cost: measured production base64 p50 ≈ 8.6 KB
- * per occurrence, so 2.5 MiB held a median of 296 images.
+ * Since DESGIGN §16.4 the per-preset image window is enforced at the SESSION
+ * level by the protected offload executor (`image-offload.ts`: 造物模式 keeps
+ * 24 images, standard mode is never proactively pruned). The route knob cannot
+ * see presets, so it must not be where fairness is decided — it only has to
+ * stop one pathological attachment from exploding a request. 8 MiB of base64
+ * ≈ a dozen full-size normalized screenshots; ordinary chats never touch it,
+ * and a CAD render storm (88 × 45KB ≈ 4 MB) also fits, because the session
+ * window prunes it a request earlier.
  *
- * This constant is calibrated against that measurement: 256 KiB ≈ 24 rendered
- * occurrences at the measured p50, the same retention window the DeepSeek
- * route's count budget produces. Large attachments (user screenshots) exhaust
- * it faster and prune harder — the safe direction for token cost; pruned
- * occurrences stay recoverable via `read_image` on the placeholder's path.
- *
- * An earlier revision of this file claimed a `maxRequestImages` knob had been
- * added to the adapter. That was never true of any installed dsh and was
- * delivered without a sandbox run; `scripts/accept-image-budget.mjs` now checks
- * the composed profile tree so this class of drift cannot ship silently again.
+ * (History: 2.5 MiB — measured carrying 296 microscope renders, the §14
+ * failure; then 256 KiB as a fairness-blind global cap, rejected by the user
+ * as unfair to standard mode.)
  */
-export const PI_AI_KEEP_BYTES = 256 * 1024;
+export const PI_AI_KEEP_BYTES = 8 * 1024 * 1024;
 
 /**
  * How many leading image occurrences a request projection removes.

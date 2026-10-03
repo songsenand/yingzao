@@ -29,6 +29,30 @@
 /** The stable failure code the adapters raise when a request exceeds its image budget. */
 const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED';
 
+import { DEEPSEEK_KEEP_IMAGES } from './image-budget.ts';
+
+/**
+ * Images a 造物模式 (cad) session keeps in vision — the per-SESSION window
+ * enforced here (DESGIGN §16.4), mirroring the DeepSeek route's count budget.
+ * Standard-mode sessions are NEVER proactively pruned: the only image loss
+ * there is the route's pathological-attachment fallback (`PI_AI_KEEP_BYTES`),
+ * which ordinary chats never reach. Fairness was the user's explicit call.
+ */
+export const CAD_IMAGE_WINDOW = DEEPSEEK_KEEP_IMAGES;
+
+/** Retained (not yet offloaded) image occurrences in a request's messages. */
+export function countRetainedImages(messages: readonly any[] | undefined): number {
+  let count = 0;
+  const walk = (blocks: any[]) => {
+    for (const b of blocks ?? []) {
+      if (b?.type === 'image') { if (b.offloaded !== true) count += 1; }
+      else if (b?.type === 'tool-result') walk(b.content);
+    }
+  };
+  for (const m of messages ?? []) walk(m?.content);
+  return count;
+}
+
 // ── durable decision event: image/offload ───────────────────────────────────
 
 /** Whether a durable value is a JSON object. */
@@ -214,4 +238,51 @@ export function applyProtectedImageOffload(ctx: any): void {
     if (!offloadOldestProtected(session, sourceEventSeqs, error.failure.offloadImages)) return next();
     return true;
   });
+
+  // Per-preset image window (DESGIGN §16.4): every request carries its
+  // sessionId; a 造物模式 session over the window gets a proactive offload
+  // decision so the NEXT request fits. Standard-mode sessions are exempt —
+  // that is the whole point of doing this here instead of in the route config.
+  const windowInFlight = new Set<string>();
+  ctx.on('llm/stream', (options: any, next: () => unknown) => {
+    const sessionId: string | undefined = options?.sessionId;
+    // Auxiliary calls (session-title, compaction) neither carry the
+    // conversation's image load nor should drive the window.
+    if (sessionId && !options?.purpose && !windowInFlight.has(sessionId)) {
+      windowInFlight.add(sessionId);
+      void Promise.resolve()
+        .then(() => enforceSessionWindow(sessionsRef(ctx), options))
+        .catch((e) => ctx.logger?.warn?.(`cad-harness: image window check failed: ${String((e as Error)?.message ?? e)}`))
+        .finally(() => windowInFlight.delete(sessionId));
+    }
+    return next();
+  });
+}
+
+/** The sessions service reference, resolved lazily (mount may still be polling). */
+function sessionsRef(ctx: any): any {
+  return ctx.reflect.get('sessions');
+}
+
+/**
+ * The per-preset window decision for one observed request. Returns what was
+ * done so the acceptance can pin the behavior without a live dsh:
+ * `null` = not applicable (no session / not a cad session / under window),
+ * otherwise `{ preset, retained, excess, appended }`.
+ */
+export function enforceSessionWindow(sessions: any, options: { sessionId?: string; messages?: any[] }):
+  { preset: string | null; retained: number; excess: number; appended: boolean } | null {
+  const sessionId = options?.sessionId;
+  if (!sessionId || typeof sessions?.get !== 'function') return null;
+  const session = sessions.get(sessionId);
+  if (!session) return null;
+  // The preset is a session CREATION fact (dsh accepts switching only while
+  // the session is blank), so the header is the authoritative source.
+  const preset: string | null = session.header?.agentPreset ?? null;
+  if (preset !== 'cad') return null;
+  const retained = countRetainedImages(options?.messages);
+  const excess = retained - CAD_IMAGE_WINDOW;
+  if (excess <= 0) return { preset, retained, excess, appended: false };
+  const appended = offloadOldestProtected(session, session.surface.nodes, excess);
+  return { preset, retained, excess, appended };
 }
