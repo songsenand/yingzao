@@ -29,6 +29,7 @@ import {
 } from './import.ts';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { basename, join, relative } from 'node:path';
 
 interface GeneratePartArgs {
@@ -2631,6 +2632,135 @@ export function registerCadTools(
         skipped: report.results.filter((r) => r.verdict === 'skipped').map(trim),
         undeclared: report.undeclared,
       };
+    },
+  }));
+
+  // --- recall_reference_image: bring a pruned user attachment back into vision ---
+  //
+  // WHY: the image-offload policy is OLDEST-FIRST with no user-image exemption
+  // (verified against the stock dsh 0.2.0 — DESGIGN §15.1), so the user's
+  // reference image is always the FIRST occurrence pruned once the budget
+  // fires. The route leaves a text placeholder naming the attachment and its
+  // local path; this tool turns that name back into a visible image block on
+  // the CURRENT tool result — the newest image in the request, so it survives
+  // pruning for the following rounds. Bytes are re-committed through the
+  // content-addressed attachment store, so a recall of an already-stored
+  // image dedupes to the same object; nothing is duplicated.
+  type RecallArgs = { attachmentId?: string; path?: string; name?: string };
+  type RecallRef = { ref: unknown; label: string };
+  const pendingRecallRefs = new Map<string, RecallRef>();
+
+  /** Sniff the media type from magic bytes; null when not a supported image. */
+  function sniffImageType(b: Uint8Array): string | null {
+    if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+    if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+    if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45) return 'image/webp';
+    return null;
+  }
+
+  registerTool(defineTool({
+    name: 'recall_reference_image',
+    description:
+      'Re-attach a user-uploaded reference image (or any earlier attachment) as a fresh image on this tool result. ' +
+      'Use it when a reference image has been pruned from context (its placeholder reads "image omitted; <name>; path=<path>") ' +
+      'and the task depends on seeing it again — comparing a build against a reference, matching proportions or colors. ' +
+      'Pass the `path` from the placeholder, or the `attachmentId`. The recalled image becomes the NEWEST image in context, ' +
+      'so it survives pruning for the following rounds; recall again when needed.',
+    parameters: {
+      path: {
+        type: 'string',
+        description: 'Local file path of the pruned image, exactly as the "image omitted" placeholder names it (preferred).',
+      },
+      attachmentId: {
+        type: 'string',
+        description: 'Durable attachment id (sha256:…) if the placeholder or history named one instead of a path.',
+      },
+      name: {
+        type: 'string',
+        description: 'Display name to keep for the recalled image; defaults to the file name or the attachment id.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          recalled: { type: 'boolean', required: true },
+          source: { type: 'string', required: true, description: 'Where the bytes came from.' },
+          mediaType: { type: 'string', required: true },
+          bytes: { type: 'integer', required: true },
+          attached: { type: 'boolean', required: true, description: 'Whether an image block rides on this result.' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{
+        type: 'text',
+        text: JSON.stringify(value, (k, v) => (k === 'recallToken' ? undefined : v)),
+      }],
+    },
+    timeoutMs: 30_000,
+    async execute(args: unknown): Promise<{ recalled: boolean; source: string; mediaType: string; bytes: number; attached: boolean }> {
+      const a = args as RecallArgs;
+      let data: Uint8Array;
+      let source: string;
+      let fallbackName: string;
+      if (a.attachmentId) {
+        const ref = { attachmentId: a.attachmentId };
+        try {
+          data = new Uint8Array(await (ctx.attachments as any).readImage(ref));
+        } catch (e) {
+          throw new Error(
+            `attachment ${a.attachmentId} could not be read (${String((e as Error)?.message ?? e)}). ` +
+            'If the pruned-image placeholder named a path, pass `path` instead.');
+        }
+        source = `attachment ${a.attachmentId}`;
+        fallbackName = a.attachmentId.slice(0, 19);
+      } else if (a.path) {
+        // Bounded read with a magic-byte check: the bytes must decode as an
+        // image we actually serve, and stay far below any request limit.
+        const MAX = 20 * 1024 * 1024;
+        const st = await readFile(a.path).then(
+          (b) => b,
+          () => { throw new Error(`path ${a.path} does not exist on the host — copy it from the "image omitted" placeholder verbatim`); },
+        );
+        if (st.byteLength > MAX) throw new Error(`image at ${a.path} is ${st.byteLength} bytes; over the 20 MiB recall cap`);
+        const type = sniffImageType(st);
+        if (!type) throw new Error(`file at ${a.path} is not a PNG/JPEG/WebP image (magic bytes)`);
+        data = st;
+        source = `path ${a.path}`;
+        fallbackName = basename(a.path);
+      } else {
+        throw new Error('recall_reference_image needs `path` (from the "image omitted" placeholder) or `attachmentId`');
+      }
+      const mediaType = (sniffImageType(data) ?? 'image/png') as never;
+      const [ref] = await ctx.attachments.saveImages([{
+        data, mediaType, name: a.name?.trim() || fallbackName,
+      }]);
+      if (!ref) throw new Error('attachment store returned no reference for the recalled image');
+      const token = randomUUID();
+      pendingRecallRefs.set(token, { ref, label: a.name?.trim() || fallbackName });
+      return {
+        recalled: true, source, mediaType,
+        bytes: data.byteLength,
+        attached: true,
+        // consumed by finalizeContent (stripped from the rendered JSON below)
+        recallToken: token,
+      } as never;
+    },
+    finalizeContent(_exec, result) {
+      const value = (result as { value?: { attached?: boolean; recallToken?: string } & Record<string, unknown> }).value;
+      if (!value?.attached || !value.recallToken) return undefined;
+      const entry = pendingRecallRefs.get(value.recallToken);
+      if (!entry) return undefined;
+      pendingRecallRefs.delete(value.recallToken);
+      const { ref, label } = entry;
+      return [
+        {
+          type: 'text',
+          text: `Recalled reference image "${label}" — this is the newest image in context now. ` +
+            'If it is pruned again later, call recall_reference_image once more with the same path/id.',
+        },
+        { type: 'image', attachment: ref },
+      ] as never;
     },
   }));
 

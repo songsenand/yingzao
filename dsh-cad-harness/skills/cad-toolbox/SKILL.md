@@ -26,6 +26,7 @@ says **which one the question belongs to**, and what has already gone wrong.
 | "can this actually be printed", "is this wall too thin", "will this need supports" | `check_printability` | looking at renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |
+| "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
 
 **An imported part is not a special kind of part.** `import_part` lands the file
 as an ordinary version, so every other row of this table applies to it unchanged:
@@ -220,6 +221,15 @@ near-touching pairs were never declared).
   points pass while one bore is tilted. Interfaces about alignment use
   `"check": "coaxial"` with `datum_axis`/`datum_cyl` endpoints — it measures
   axis-to-axis offset AND flags non-parallel axes.
+- **Old images are pruned oldest-first, and the user's reference image is
+  always the oldest.** When you see a block like
+  `image omitted; 参考图.png; path=/…/attachments/…` and the task depends on
+  that picture (matching proportions, colors, a bought part's shape), call
+  `recall_reference_image({ path })` — do not work "from memory". The recalled
+  image becomes the newest in context, so it survives for the following rounds;
+  recall again whenever you need to look at it once more. Before delivering
+  anything claimed to "match the reference", make sure the reference is
+  actually in vision at that moment — if it is not, recall it first.
 
 ## Printability checklist (volunteer it with the design, don't wait to be asked)
 
