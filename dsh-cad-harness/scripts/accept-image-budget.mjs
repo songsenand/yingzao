@@ -261,8 +261,20 @@ for (const [route, model, budget, viewBytes] of [
     const { projected } = projectOffload(harness, msgs, piAiBudget, (b) => b.bytes);
     const keptNames = imagesOf(projected).map((i) => i.attachment.name);
     check(!keptNames.includes('用户参考图'),
-      'pi-ai: the oldest user reference image IS pruned (no user-image exemption in the installed dsh — documented reality)',
+      'pi-ai: the STOCK adapter projection still prunes the user reference (what the adapter asks for)',
       `kept: ${keptNames.slice(0, 3).join(', ')}…`);
+    // Since DESGIGN §16 the stock executor is DISABLED and the plugin's
+    // protected executor owns the seam — at the selection level the user
+    // image survives while renders go first.
+    const { selectOffloadTargets } = await import('../src/host/image-offload.ts');
+    const entries = [
+      { seq: 1, type: 'user/message', content: msgs[0].content },
+      { seq: 2, type: 'tool/result', content: msgs[1].content[0].content },
+    ];
+    const targets = selectOffloadTargets(entries, 16);
+    check(targets.every((t) => t.seq !== 1),
+      'pi-ai: the PROTECTED executor selection spares the user reference image (DESGIGN §16)',
+      JSON.stringify(targets?.map((t) => t.seq)));
   }
 }
 

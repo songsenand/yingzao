@@ -9,6 +9,7 @@
 import type { ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection';
 import { registerCadTools } from './tools.ts';
 import { applyPiAiImageBudget } from './image-budget.ts';
+import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
 
 export const name = 'cad-harness';
@@ -63,6 +64,12 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // per provider profile, and those profile names live in the user's settings
   // document, so it has to be applied against the resolved section at runtime.
   applyPiAiImageBudget(ctx);
+
+  // Protected image-offload executor: replaces the stock compaction-image-
+  // offload row (disabled in cordis.patch.yml) so the oldest-first offload
+  // spares user-message top-level images — the reference images that stock
+  // behavior always pruned first. See image-offload.ts and DESGIGN §16.
+  applyProtectedImageOffload(ctx);
 
   // Browser-facing routes only when a web connection exists (headless has none).
   // reflect.get() reads the service without the inject requirement.

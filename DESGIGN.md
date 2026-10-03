@@ -1973,3 +1973,33 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 5. 交付说明里必须附上以上命令的实际输出摘要，没有输出摘要 = 未验证。
 
 **文档结束。** 后续变更在此文档追加版本记录，不新建文档。
+
+---
+
+## 16. 用户图裁剪豁免：插件内受保护执行器（v2.18，2026-10-03）
+
+### 16.1 方案 B 的落地
+
+按 §15.1 第 4 条，现货 `dsh-compaction-image-offload` 最老优先、无豁免，参考图
+必先出局。本版不打宿主文件，全部在插件内实现：
+
+- `cordis.patch.yml` 将现货 `image-offload` 行 `disabled: true`（组合树已验证）；
+- `src/host/image-offload.ts` 移植现货执行器全文，唯一行为差异：
+  **`user/message` 事件顶层图片永不入选**；`tool/result` 照常可裁；
+- 决策事件仍为 `image/offload`，投影校验与错误瀑布语义逐行保真
+  （`agent/request-error` → retry；`compaction/summary-error` → true）；
+  另加防御：投影层拒绝任何会命中用户图的决策（防篡改）；
+- `scripts/accept-image-offload.mjs` 13 项全 PASS：选择逻辑（含与现货行为
+  同夹具对照——现货确实选用户图第一）、投影校验、组合树 disable 落地。
+
+### 16.2 兜底与边界
+
+- 接缝为 `sessions.registerMessageProjection` + 两个错误事件，属内部形状：
+  dsh 升级若改动，accept-image-offload 的组合树/行为断言会红，不会静默；
+- 只剩用户图可裁时选择器返回 null，瀑布继续走错误路径（不会无限重试）；
+- 非当前表面节点（历史压缩掉的事件）不在 `sourceEventSeqs`，天然不涉及；
+- 召回工具（§15 之后的 `recall_reference_image`）仍是模型侧兜底，两者互补。
+
+### 16.3 生效
+
+重启 dsh 进程（宿主半 bundle 启动加载；cordis patch 在组合时应用）。

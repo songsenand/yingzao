@@ -65,6 +65,20 @@
     maxImagesPerRequest: 24
     imageOffloadCountQuantum: 8
 
+# Replace the stock image-offload executor with the plugin's protected one.
+# The stock `@deepseek-ai/dsh-compaction-image-offload` offloads the OLDEST
+# retained occurrences with no exemption, so the user's reference image —
+# always the oldest — is pruned first (measured on microscope3, DESGIGN §15.1).
+# The plugin's executor (src/host/image-offload.ts) ports the stock behavior
+# verbatim except that user-message TOP-LEVEL images are never selected; tool
+# results stay fully prunable. Exactly one executor may own the `image/offload`
+# seam, hence the disable — `scripts/accept-image-offload.mjs` verifies this
+# row reads disabled after composition and that the plugin's projection is
+# mounted instead.
+- id: image-offload
+  name: '@deepseek-ai/dsh-compaction-image-offload'
+  disabled: true
+
 # The pi-ai route (GLM and friends) has no count budget — only a per-provider
 # `maxRequestImageBytes` — and its provider profiles are named by the user's
 # settings document, so a static patch cannot address them. The host half

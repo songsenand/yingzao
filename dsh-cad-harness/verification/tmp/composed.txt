@@ -46,7 +46,7 @@
   name: '@deepseek-ai/dsh-agent'
 - id: plugin-package-inventory-deepseek
   name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
-# == @deepseek-ai/dsh-base, patched by /tmp/tmp.n4KzCzmdaL/profiles/web/cordis.patch.yml
+# == @deepseek-ai/dsh-base, patched by /tmp/tmp.6Iim6l9Hs6/profiles/web/cordis.patch.yml
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
@@ -74,7 +74,7 @@
       'win32'].includes(process.platform) ? process.platform : null
 - id: credentials
   name: '@deepseek-ai/dsh-credentials-local'
-# == @deepseek-ai/dsh-base, patched by /tmp/tmp.n4KzCzmdaL/profiles/web/cordis.patch.yml
+# == @deepseek-ai/dsh-base, patched by /tmp/tmp.6Iim6l9Hs6/profiles/web/cordis.patch.yml
 - id: llm-pi-ai
   name: '@deepseek-ai/dsh-llm-pi-ai'
   config:
@@ -357,9 +357,10 @@
     headChars: 4096
     tailChars: 1024
   disabled: true
-# == @deepseek-ai/dsh-base
+# == @deepseek-ai/dsh-base, patched by dsh-cad-harness
 - id: image-offload
   name: '@deepseek-ai/dsh-compaction-image-offload'
+  disabled: true
 # == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app
 - id: tool-todo
   name: '@deepseek-ai/dsh-tool-todo'
@@ -572,7 +573,7 @@
   name: '@deepseek-ai/dsh-client-ui-sidebar-files'
 - id: ui-settings
   name: '@deepseek-ai/dsh-client-ui-settings'
-# == @deepseek-ai/dsh-web-app, patched by /tmp/tmp.n4KzCzmdaL/profiles/web/cordis.patch.yml
+# == @deepseek-ai/dsh-web-app, patched by /tmp/tmp.6Iim6l9Hs6/profiles/web/cordis.patch.yml
 - id: ui-settings-general
   name: '@deepseek-ai/dsh-client-ui-settings-general'
   config:
