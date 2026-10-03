@@ -12,7 +12,7 @@
 //   2. parity: a re-implementation of the STOCK selection on the same fixture
 //      picks the user image first — pinning exactly the difference.
 //   3. projection: valid decisions apply `offloaded` marks; malformed ones and
-//      decisions targeting a protected user image are refused.
+//      a user-image decision applies verbatim (stock parity for non-cad).
 //   4. composed tree: the stock row reads `disabled: true` after composition
 //      and no patch was skipped (a dsh upgrade that renames the row fails here).
 //
@@ -28,6 +28,7 @@ import {
   enforceSessionWindow,
   imageOffloadProjection,
   offloadMessageImages,
+  offloadOldestProtected,
   selectOffloadTargets,
 } from '../src/host/image-offload.ts';
 
@@ -55,13 +56,13 @@ const fixture = [
 // ── 1. protected selection ──────────────────────────────────────────────────
 {
   // The microscope3 moment: the route needs 1 occurrence omitted.
-  const one = selectOffloadTargets(fixture, 1);
+  const one = selectOffloadTargets(fixture, 1, true);
   check(!!one && one[0].seq === 2 && one[0].imageIndexes.length === 1,
     'needs 1 → the OLDEST TOOL image goes, not the user reference',
     JSON.stringify(one));
 
   // Every prunable occurrence: 12 tool images, user image untouched.
-  const all = selectOffloadTargets(fixture, 999);
+  const all = selectOffloadTargets(fixture, 999, true);
   const total = all?.reduce((a, t) => a + t.imageIndexes.length, 0) ?? 0;
   check(total === 12 && !all.some((t) => t.seq === userSeq),
     'needs 999 → exactly the 12 tool images, user image never selected',
@@ -69,7 +70,7 @@ const fixture = [
 
   // Only user images left → nothing prunable → null (waterfall proceeds).
   const userOnly = [fixture[0], { seq: 2, type: 'user/message', content: [img('截图', 40, 0)] }];
-  check(selectOffloadTargets(userOnly, 1) === null,
+  check(selectOffloadTargets(userOnly, 1, true) === null,
     'only user images remain → null (no infinite retry)');
 }
 
@@ -131,20 +132,44 @@ const fixture = [
     'non-increasing indexes refused');
   check(refused({ targets: [{ seq: 2, imageIndexes: [0, 1, 9] }] }, 'does not exist').ok,
     'out-of-range index refused');
-  // A decision that would hit a user top-level image is refused (defence in
-  // depth: the selector never produces one, so this only fires on tampering).
+  // A decision targeting a user top-level image now APPLIES — non-cad
+  // presets must replay stock decisions verbatim (protection lives in the
+  // selector, dispatched by preset, not in the projection).
   const userCtx = {
     nodes: new Set([1]),
     events: [{ type: 'user/message', data: fixture[0].content }],
     baseSeq: 1,
     messages: new Map([[1, message(fixture[0].content)]]),
   };
-  try {
-    imageOffloadProjection.project({ data: { targets: [{ seq: 1, imageIndexes: [0] }] } }, userCtx);
-    check(false, 'a decision targeting a user image is refused');
-  } catch (e) {
-    check(e.message.includes('protected user image'), 'a decision targeting a user image is refused', e.message);
+  {
+    const out = imageOffloadProjection.project({ data: { targets: [{ seq: 1, imageIndexes: [0] }] } }, userCtx);
+    const images = out.get(1).content.filter((b) => b.type === 'image');
+    check(images[0].offloaded === true,
+      'a user-image decision still APPLIES (stock parity for non-cad presets)');
   }
+}
+
+// ── 3b. error-waterfall dispatch by preset ──────────────────────────────────
+{
+  const makeSession = (preset) => {
+    const log = [];
+    return {
+      log, header: { agentPreset: preset },
+      surface: { nodes: fixture.map((f) => f.seq) },
+      eventAt: (seq) => fixture.find((f) => f.seq === seq),
+      deriveEventMessage: (event) => ({ role: 'user', content: structuredClone(event.content) }),
+      append: (type, data) => log.push({ type, data }),
+    };
+  };
+  const cadSession = makeSession('cad');
+  check(offloadOldestProtected(cadSession, fixture.map((f) => f.seq), 1) === true
+    && JSON.stringify(cadSession.log[0].data.targets).includes('"seq":2'),
+    'cad session: the executor spares the user image', JSON.stringify(cadSession.log));
+  const stdSession = makeSession('standard');
+  check(offloadOldestProtected(stdSession, fixture.map((f) => f.seq), 1) === true
+    && JSON.stringify(stdSession.log[0].data.targets).includes(`"seq":${userSeq}`),
+    'standard session: the executor behaves EXACTLY like stock (user image first)',
+    JSON.stringify(stdSession.log));
 }
 
 // ── 4. the per-preset window (DESGIGN §16.4, plan B′) ───────────────────────
@@ -224,8 +249,8 @@ const fixture = [
         'the stock image-offload row reads disabled after composition');
       check(!/patch: entry .* not found|patch: name mismatch/.test(out),
         'no patch was skipped (a renamed row on dsh upgrade fails here)');
-      check(/- id: preset-cad/.test(out) && /maxImagesPerRequest: 24/.test(out),
-        'the earlier patches still land (preset-cad, llm-deepseek budget)');
+      check(/- id: preset-cad/.test(out) && !out.includes('maxImagesPerRequest'),
+        'preset-cad lands and the llm-deepseek row stays UNPATCHED (factory defaults)');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

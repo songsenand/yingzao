@@ -17,7 +17,7 @@
 import { mkdir, readFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { telemetryRoot } from './project.ts';
-import { DEEPSEEK_COUNT_QUANTUM, DEEPSEEK_KEEP_IMAGES, PI_AI_KEEP_BYTES, offloadedPrefixCount } from './image-budget.ts';
+import { DEEPSEEK_COUNT_QUANTUM, DEEPSEEK_KEEP_IMAGES, offloadedPrefixCount } from './image-budget.ts';
 
 /** Conservative per-image token estimate used when no provider number exists. */
 const IMAGE_TOKEN_ESTIMATE = Number(process.env.CAD_IMAGE_TOKEN_ESTIMATE ?? 1000);
@@ -82,19 +82,17 @@ function countBlocks(
 /** Represented length of one image, exactly as the serving adapter accounts it. */
 const rawLength = (bytes: number): number => bytes;
 const base64Length = (bytes: number): number => Math.ceil(bytes / 3) * 4;
-/** Per-image request-version cap the pi-ai route applies before accounting. */
-const PI_AI_PER_IMAGE_CAP = 1024 * 1024;
 
 /**
  * Which image budget applies to a request, and how that adapter accounts it.
  *
- * The usage record carries only a model id, not the adapter that served it, and
- * the two adapters prune on different axes: the native DeepSeek one has a count
- * budget, pi-ai has only a per-provider byte budget (applied at boot by
- * image-budget.ts). The ids this deployment actually runs are `deepseek-*` on
- * the native adapter and `glm-*` on pi-ai; anything unrecognised is treated as
- * pi-ai, whose byte budget reports MORE images than a count budget would —
- * over-reporting cost is the safe direction to be wrong in.
+ * DESGIGN §16–17: the plugin applies NO route-level budget — standard mode
+ * runs on factory defaults (no proactive pruning on either route). The
+ * deepseek count numbers below PREDICT the 造物 (cad) session window the
+ * executor enforces (24 retained), which is the closest honest model of what
+ * a CAD request costs; every other preset has no pruning predicted. A
+ * user-configured pathological-attachment budget fails a request loudly
+ * instead of silently pruning — that path is not modeled here.
  */
 function budgetFor(model: string | undefined): {
   maxImages?: number;
@@ -112,15 +110,13 @@ function budgetFor(model: string | undefined): {
       represent: rawLength,
     }
     : {
-      // Byte budget only: the installed pi-ai adapter has no count knob (see
-      // image-budget.ts for the verified mechanism — the bound fires
-      // IMAGE_OFFLOAD_REQUIRED and the offload executor prunes the oldest
-      // occurrences, then the request retries).
+      // No route budget on pi-ai: what keeps a CAD session at 24 images is
+      // the executor's session window, not this route.
       maxImages: undefined,
-      maxBytes: PI_AI_KEEP_BYTES,
+      maxBytes: undefined,
       countQuantum: 1,
       byteQuantum: 1,
-      represent: (bytes: number) => base64Length(Math.min(bytes, PI_AI_PER_IMAGE_CAP)),
+      represent: base64Length,
     };
 }
 
@@ -210,9 +206,9 @@ export async function usageReport(): Promise<Record<string, unknown>> {
     },
     records: last20,
     imageBudget: {
-      deepseek: { maxImagesPerRequest: DEEPSEEK_KEEP_IMAGES, imageOffloadCountQuantum: DEEPSEEK_COUNT_QUANTUM },
-      piAi: { maxRequestImageBytes: PI_AI_KEEP_BYTES, mechanism: 'byte bound → IMAGE_OFFLOAD_REQUIRED → oldest-first offload + retry' },
-      note: 'declared for llm-deepseek in cordis.patch.yml; applied for llm-pi-ai by image-budget.ts',
+      deepseek: { cadWindow: DEEPSEEK_KEEP_IMAGES, quantum: DEEPSEEK_COUNT_QUANTUM, note: 'session-level window for the cad preset, enforced by the offload executor' },
+      piAi: { budget: 'none', note: 'factory defaults on every preset; the cad window is session-level (image-offload.ts)' },
+      note: 'route knobs stay at dsh defaults for every preset; see DESGIGN §16–17',
     },
     note: `image token estimate = ${IMAGE_TOKEN_ESTIMATE}/image (set CAD_IMAGE_TOKEN_ESTIMATE to calibrate); `
       + '`images` counts what the route receives after old-turn images are replaced by text placeholders',

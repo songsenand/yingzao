@@ -1,30 +1,28 @@
-// Protected image-offload executor (plugin-side replacement for the stock
+// Preset-aware image-offload executor (plugin-side replacement for the stock
 // `@deepseek-ai/dsh-compaction-image-offload`, which cordis.patch.yml disables).
 //
-// WHY THIS EXISTS: the stock executor offloads the OLDEST retained occurrences
-// with no exemption — verified against dsh 0.2.0-rc.2 (DESGIGN §15.1 #4) — and
-// the user's reference image is always the oldest thing in a session. This
-// module is a faithful port of the stock implementation (lib/index.js, 154
-// lines) with ONE behavioral difference:
+// THE RULE (user decision, DESGIGN §16–17): standard-mode sessions behave as
+// UNMODIFIED dsh; only 造物模式 (cad) sessions get image economy. Concretely:
 //
-//   * images sitting at the TOP LEVEL of a `user/message` event — the files a
-//     human drags into the session — are never selected for offload. Tool
-//     results (`tool/result`) remain fully prunable; that is where the render
-//     views live and what the budget is for.
+//   * error-waterfall offloads (IMAGE_OFFLOAD_REQUIRED): a cad session never
+//     selects user-message TOP-LEVEL images — the reference image that stock
+//     behavior always pruned first; every other preset gets EXACTLY the stock
+//     selection (oldest-first, no exemption).
+//   * the cad session additionally keeps a 24-image retention window enforced
+//     proactively from `llm/stream` (options.sessionId → preset); standard
+//     mode is never proactively pruned, and NO route-level budget exists —
+//     route knobs stay at dsh factory defaults for every preset.
 //
-// Everything else is byte-for-byte the same shape: the same `image/offload`
+// Everything else is byte-for-byte the stock shape: the same `image/offload`
 // durable decision event, the same projection validation, the same error
 // waterfall semantics (`agent/request-error` → {kind:"retry"};
-// `compaction/summary-error` → true), so routes and the session surface see
-// no difference other than which occurrences get omitted.
+// `compaction/summary-error` → true).
 //
 // UPGRADE SAFETY: this lives in our repository, so dsh upgrades cannot clobber
-// it. The cost is that it tracks two internal seams —
-// `sessions.registerMessageProjection` and the `image/offload` event shape.
-// `scripts/accept-image-offload.mjs` pins both: the projection is exercised
-// against the stock module's own validation semantics, and the composed-tree
-// check proves the stock row is disabled (exactly one executor may own the
-// seam). If a dsh upgrade changes the seam shape, this acceptance fails loud.
+// it. The cost is that it tracks internal seams —
+// `sessions.registerMessageProjection`, the `image/offload` event shape, and
+// `llm/stream`'s `options.sessionId`. `scripts/accept-image-offload.mjs` pins
+// all three; if a dsh upgrade changes them, this acceptance fails loud.
 
 /** The stable failure code the adapters raise when a request exceeds its image budget. */
 const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED';
@@ -68,20 +66,19 @@ function isIndex(value: unknown): value is number {
 export interface OffloadTarget { seq: number; imageIndexes: number[] }
 
 /**
- * Select the oldest retained input-image occurrences to omit, skipping
- * top-level images of user messages. Image indexes count every occurrence,
- * including previously offloaded ones, within each message.
+ * Select the oldest retained input-image occurrences to omit.
  *
- * @param entries - input message events in the failed request's order: `{seq,
- *   type, content}` where `type` is `user/message` or `tool/result` and
- *   `content` is the message's content block array.
+ * @param protectUserImages - the 造物 exemption: images at the TOP LEVEL of a
+ *   `user/message` event are never selected. `false` reproduces the stock
+ *   selection exactly (oldest-first, no exemption) for non-cad presets.
  * @param count - additional retained occurrences the adapter needs omitted.
- * @returns targets for a `image/offload` decision, or `null` when nothing
+ * @returns targets for an `image/offload` decision, or `null` when nothing
  *   prunable remained (the caller must let the error waterfall proceed).
  */
 export function selectOffloadTargets(
   entries: readonly { seq: number; type: string; content: any }[],
   count: number,
+  protectUserImages: boolean,
 ): OffloadTarget[] | null {
   const targets: OffloadTarget[] = [];
   for (const entry of entries) {
@@ -94,7 +91,7 @@ export function selectOffloadTargets(
         if (count === 0) return;
         if (block.type === 'image') {
           const isUserTopLevel = entry.type === 'user/message';
-          if (block.offloaded !== true && !isUserTopLevel) {
+          if (block.offloaded !== true && !(protectUserImages && isUserTopLevel)) {
             imageIndexes.push(imageIndex);
             count -= 1;
           }
@@ -135,6 +132,8 @@ export function offloadMessageImages(message: any, indexes: readonly number[]): 
 }
 
 /** Whether a projected message's blocks contain an image at top level. */
+// (kept for future diagnostics; the projection itself no longer refuses
+// user-image targets — non-cad presets must replay stock decisions verbatim)
 function hasTopLevelImage(content: any): boolean {
   return Array.isArray(content) && content.some((b) => b?.type === 'image');
 }
@@ -171,11 +170,6 @@ export const imageOffloadProjection = {
         previous = index;
       }
       const message = context.messages.get(seq) ?? (source.type === 'user/message' ? source.data : source.data.message);
-      if (source.type === 'user/message' && hasTopLevelImage(message.content)) {
-        // A user-message top-level image being selected means a selector
-        // without protection produced this event — refuse rather than replay.
-        throw new Error(`image/offload: target seq ${seq} would offload a protected user image`);
-      }
       messages.set(seq, offloadMessageImages(message, target['imageIndexes']));
     }
     return messages;
@@ -183,18 +177,22 @@ export const imageOffloadProjection = {
 };
 
 /**
- * Record one protected offload decision on the session and report whether any
- * prunable occurrence remained. Mirrors the stock executor's contract:
- * `true` means a decision was appended and the request should retry.
+ * Record one offload decision on the session and report whether any prunable
+ * occurrence remained. Dispatches by the session's preset: cad (造物模式)
+ * protects user-message top-level images; every other preset gets EXACTLY the
+ * stock selection (oldest-first, no exemption) — standard mode behaves as
+ * unmodified dsh. `true` means a decision was appended and the request should
+ * retry.
  */
 export function offloadOldestProtected(session: any, sourceEventSeqs: readonly number[], count: number): boolean {
+  const cad = session?.header?.agentPreset === 'cad';
   const entries = [];
   for (const seq of sourceEventSeqs) {
     const event = session.eventAt(seq);
     if (event.type !== 'user/message' && event.type !== 'tool/result') continue;
     entries.push({ seq, type: event.type, content: session.deriveEventMessage(event).content });
   }
-  const targets = selectOffloadTargets(entries, count);
+  const targets = selectOffloadTargets(entries, count, cad);
   if (!targets) return false;
   session.append('image/offload', { targets });
   return true;
@@ -219,7 +217,7 @@ export function applyProtectedImageOffload(ctx: any): void {
     }
     mounted = true;
     sessions.registerMessageProjection(imageOffloadProjection);
-    ctx.logger?.info?.('cad-harness: protected image-offload executor mounted (user-message images exempt)');
+    ctx.logger?.info?.('cad-harness: preset-aware image-offload executor mounted (cad: user images exempt + 24-image window; other presets: stock behavior)');
   };
   tryMount();
 

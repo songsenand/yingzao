@@ -8,7 +8,6 @@
 
 import type { ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection';
 import { registerCadTools } from './tools.ts';
-import { applyPiAiImageBudget } from './image-budget.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
 
@@ -59,16 +58,10 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // tool-scope.ts for the measurement and for the adoption cost).
   if (config?.toolScope === 'preset') applyPresetToolScope(ctx, cadTools, config);
 
-  // Image-context pruning, pi-ai half. The DeepSeek half is declared in
-  // cordis.patch.yml because its budget is a global config field; pi-ai's is
-  // per provider profile, and those profile names live in the user's settings
-  // document, so it has to be applied against the resolved section at runtime.
-  applyPiAiImageBudget(ctx);
-
-  // Protected image-offload executor: replaces the stock compaction-image-
-  // offload row (disabled in cordis.patch.yml) so the oldest-first offload
-  // spares user-message top-level images — the reference images that stock
-  // behavior always pruned first. See image-offload.ts and DESGIGN §16.
+  // Image policy (DESGIGN §16–17): NO route-level budget is applied —
+  // standard-mode sessions run on dsh factory defaults. The 造物 preset's
+  // 24-image window is enforced per session by the preset-aware offload
+  // executor, which also replaces the stock executor (cordis.patch.yml).
   applyProtectedImageOffload(ctx);
 
   // Browser-facing routes only when a web connection exists (headless has none).

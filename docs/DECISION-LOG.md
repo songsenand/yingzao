@@ -75,3 +75,24 @@ agent-loop buildRequest 盖章）；`session.header.agentPreset` 为创建事实
 
 **影响：** pi-ai 兜底预算变化需同步 accept-image-budget 期望；窗口逻辑依赖
 `llm/stream` + sessions 查询接缝，dsh 升级漂移由验收脚本盯住。
+
+## 2026-10-03：标准模式回归 dsh 出厂默认，图片干预仅限造物模式
+
+**触发条件：** 第 1 条（用户拍板："标准模式不改变dsh的默认配置"）。
+
+**要解决的问题：** §16.4 落地后仍有两处全局干预（deepseek 24 张 patch、pi-ai
+8MiB settings 写入），标准模式被插件改了行为；且"永不裁剪"本身也不是 dsh 默认。
+
+**决策内容：** 撤销全部路由级预算（llm-deepseek patch 删除、pi-ai settings 写入
+删除）；offload 执行器按 preset 分派——cad 会话 = 24 张窗口 + 用户图豁免，
+其余 preset = 与现货执行器逐字节一致（最老优先、无豁免）；投影层允许用户图
+决策重放（非 cad 现货决策必须可回放）。
+
+**理由：** 用户模式/非用户模式界限清晰：插件只在用户点名的造物模式里改变行为，
+标准会话与裸 dsh 无差别。执行器已持有接缝，分派零边际成本。
+
+**依据：** accept-image-offload 同夹具对照（standard 选择与现货逐字节一致）；
+accept-image-budget 组合树确认 llm-deepseek UNPATCHED；三套验收全绿。
+
+**影响：** 造物会话预算完全依赖主动窗口（超窗首请求多付一次）；非 cad 会话若
+用户自行配置路由预算，得到现货处置（含用户图被裁——那是 dsh 默认）。

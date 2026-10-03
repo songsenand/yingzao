@@ -1,42 +1,15 @@
 # dsh-cad-harness bundle patch.
 #
 # 1) Activate the host half.
-# 2) Give the DeepSeek route a context-economy image budget.
 #
-# Image pruning (DESGIGN §12.3「图片修剪扩展」). The CAD loop re-sends the whole
-# session history every step, and every `generate_part` result carries its own
-# render views (4 images). Measured on this workspace's own telemetry
-# (`data/usage/usage.jsonl`, 1094 conversation calls): image count per request
-# reaches 88, i.e. ~88k image tokens in a single request, against ~168k text
-# tokens — images were a quarter of the peak request and 25% of all tokens.
-#
-# The harness already implements exactly the planned policy — "old-turn images
-# become a text placeholder" — in `offloadRequestImagesWithPolicy()`: the OLDEST
-# images are replaced, in whole quanta, by `offloadedImageText(ref, access)`,
-# which names the attachment AND its local normalized path, so the model can
-# pull a pruned image back with `read_image` on demand. Nothing is lost.
-#
-# Defaults (600 images / step 20) are a *provider hard limit*, not context
-# economy, so they never fire for a CAD session. These two knobs turn the same
-# tested code path into the retention window the design asked for:
-#
-#   maxImagesPerRequest: 24      keep the newest 24 images = 6 render rounds
-#   imageOffloadCountQuantum: 8  drop them in steps of 8 (2 rounds), so the
-#                                removed prefix stays fixed for a while and the
-#                                provider's prefix cache is not invalidated on
-#                                every single step
-#
-# Resulting window: 17..24 images in flight, ~24k image tokens at worst instead
-# of 88k. Keeping >=4 rounds in vision is the trigger line DESGIGN recorded.
-#
-# NOTE: a patch replaces the targeted row's whole `config`; both rows below have
-# no config of their own (verified with `dsh --profile web --dump-config`), so
-# nothing is clobbered. The `name` guard turns a drifted row id into a warning
-# instead of a silent no-op. That guard has bitten once already: the row's
-# bundle was renamed `@deepseek-ai/dsh-llm-deepseek` →
-# `@deepseek-ai/dsh-llm-deepseek-api-key` in a dsh upgrade and this patch
-# silently skipped until `scripts/accept-image-budget.mjs` caught it — run it
-# after every dsh upgrade.
+# IMAGE POLICY (DESGIGN §16–17): NO route-level budget is patched at all —
+# the user's rule is that standard-mode sessions run on DSH FACTORY DEFAULTS
+# (deepseek 600/20, pi-ai unbounded) with zero plugin interference. The 造物
+# (cad) preset's 24-image retention window is enforced per SESSION by the
+# plugin's offload executor (src/host/image-offload.ts), which this patch
+# swaps in for the stock one below. `scripts/accept-image-offload.mjs` pins
+# that the llm-deepseek row stays untouched and the stock executor stays off.
+
 - insert:
     - id: cad-harness-host
       name: 'dsh-cad-harness'
@@ -59,30 +32,26 @@
         presets:
           - cad
 
-- id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
-  config:
-    maxImagesPerRequest: 24
-    imageOffloadCountQuantum: 8
-
-# Replace the stock image-offload executor with the plugin's protected one.
+# Replace the stock image-offload executor with the plugin's preset-aware one.
 # The stock `@deepseek-ai/dsh-compaction-image-offload` offloads the OLDEST
 # retained occurrences with no exemption, so the user's reference image —
 # always the oldest — is pruned first (measured on microscope3, DESGIGN §15.1).
 # The plugin's executor (src/host/image-offload.ts) ports the stock behavior
-# verbatim except that user-message TOP-LEVEL images are never selected; tool
-# results stay fully prunable. Exactly one executor may own the `image/offload`
-# seam, hence the disable — `scripts/accept-image-offload.mjs` verifies this
-# row reads disabled after composition and that the plugin's projection is
-# mounted instead.
+# and dispatches by the session's preset:
+#   * cad (造物模式): 24-image retention window + user-message top-level images
+#     are never selected;
+#   * every other preset: EXACTLY the stock selection (oldest-first, no
+#     exemption) — standard mode behaves as unmodified dsh.
+# Exactly one executor may own the `image/offload` seam, hence the disable —
+# `scripts/accept-image-offload.mjs` verifies this row reads disabled after
+# composition and that the dispatch behaves as above.
 - id: image-offload
   name: '@deepseek-ai/dsh-compaction-image-offload'
   disabled: true
 
-# The pi-ai route (GLM and friends) has no count budget — only a per-provider
-# `maxRequestImageBytes` — and its provider profiles are named by the user's
-# settings document, so a static patch cannot address them. The host half
-# applies that budget at boot (`src/host/image-budget.ts`); see DESGIGN §13.10.
+# NO pi-ai route budget is written either (the earlier settings write was
+# removed): route knobs are global and would tax standard-mode sessions. The
+# cad window covers the render-storm case at the session level.
 
 # Ship the CAD agent preset from this repository, so "which sessions may call
 # the CAD tools" is versioned with the plugin.

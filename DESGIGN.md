@@ -2022,3 +2022,39 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 - 验收：accept-image-offload 新增窗口 5 断言（超窗追加、 spared 用户图、
   窗内不动、标准模式 null、无服务 null）；accept-image-budget 的 pi-ai 期望
   改为兜底语义（显微镜3 场景 41 张不再被路由裁，窗口在执行器侧）。
+
+---
+
+## 17. 标准模式回归 dsh 出厂默认；一切图片干预仅限造物模式（v2.20，2026-10-03）
+
+### 17.1 用户裁定（推翻 §16.4 的残留）
+
+§16.4 仍保留了两个全局干预：deepseek 路由 24 张预算 patch、pi-ai 8MiB settings
+写入。用户明确：**标准模式不应被修改，应保持 dsh 出厂默认**——"永不裁剪"不是
+默认配置，默认配置是"根本不设预算"。据此全部撤除：
+
+- `cordis.patch.yml`：删除 llm-deepseek 预算块（该行恢复出厂 600/20，组合树
+  已验证无 `maxImagesPerRequest`）；不写任何 pi-ai 设置；
+- `image-budget.ts`：删除 `applyPiAiImageBudget` 与全部 PI_AI_* 常量，只留
+  造物窗口常量与遥测镜像；
+- 执行器按 preset 分派：**cad** = 24 张窗口 + 用户图豁免；**其余 preset =
+  与现货执行器逐字节一致的行为**（最老优先、无豁免——`accept-image-offload`
+  用同夹具对照钉死两种行为）；投影不再拒绝用户图决策（非 cad 的现货决策
+  必须能原样重放）。
+
+### 17.2 造物模式的预算由谁承担
+
+路由不再有限预算，造物会话的 24 张窗口完全由执行器在 `llm/stream` 主动执行
+（§16.4 的机制不变）。代价与边界不变：超窗后的第一个请求仍按旧状态发出
+（多付一次），下一请求合规；会话查不到时 fail-open；标准模式触发
+`IMAGE_OFFLOAD_REQUIRED` 的唯一途径是用户自己配置路由预算——此时非 cad
+会话得到与现货完全一致的处置。
+
+### 17.3 验证
+
+- `accept-image-offload.mjs` 21 项全 PASS：同夹具对照证明 cad 选择器 spare
+  用户图、standard 选择器与现货逐字节一致（用户图第一个被选——原样保留）；
+- `accept-image-budget.mjs` 重写为"路由零干预"期望：llm-deepseek 行
+  UNPATCHED、现货行 disabled、preset-cad 落地、pi-ai 任何常规规模都不预测
+  裁剪、镜像对照真实实现 195 例全对；
+- `accept-recall.mjs` 回归 OK；tsc 干净；`lib/` 已重建。
