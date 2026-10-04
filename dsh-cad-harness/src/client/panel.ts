@@ -1,7 +1,7 @@
 /** React panel: product browser (versions + runs) with a preview-first Three.js viewport. */
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  currentProject, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice,
+  currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice,
   refreshProjectScope, withProject,
   type CadScope,
 } from './project';
@@ -227,7 +227,9 @@ function liveSession(): { sessionId: string; actx: any; face: any } | null {
     const state = sessionsService?.list?.getSnapshot?.()
       ?? sessionsService?.list?.get?.()
       ?? sessionsService?.list?.value;
-    const sessionId = state?.current;
+    // `current` was removed from the list snapshot in the 2026-10-03 dsh
+    // upgrade (DESGIGN §18) — resolve structurally like project.ts does.
+    const sessionId = state?.current ?? currentSessionId();
     if (!sessionId) return null;
     const actx = sessionsService?.scope?.(sessionId);
     if (!actx) return null;

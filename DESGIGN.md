@@ -2162,3 +2162,17 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 **边界**：有意过盈/预压的合法出口是装配契约的 intent 严重级——不是放宽
 判定，而是把例外显式化。`simulate_physics` 的零件间瞬态穿透暂不进判定
 （对地穿透有 solver 伪影问题，注释在 physics.ts），保持现状。
+
+### 18.1 第二处症状：截图发送失败（同日）
+
+`panel.ts::liveSession()` 还有一个独立的 `state?.current` 读法——会话解析失败
+→ `sendImageToSession` 报「没有活动会话」→ **截图发送完全无效**（图片落进
+浮层/托盘，模型永远看不到）。修法与 §18 相同：`currentSessionId()` 结构化
+解析（导出复用）。沙盒 `assert=insert` 模式的假会话桩升级为新形状（无
+current、binding + retainInfo），并补上缺失的 `setProjectServices` 接线——
+E2E 截图证明全链路：scope → sessionOf ✓ → createDrafts → sendSession(face ✓)，
+提示「截图已发送到会话（排队）」（`verification/shots/send-e2e-proof.png`）。
+
+**教训（§13.13u 第五条加强版）**：升级删掉一个快照字段，散落各处的读法
+各自失效。判据：修一处读法时必须 `grep state?.current` 全仓清零，并为每种
+症状写 E2E。

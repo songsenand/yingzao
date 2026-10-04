@@ -36,7 +36,7 @@ export function currentProject(): string {
  * (`sessions.binding(id)`) AND the main view retains it
  * (`retainInfo(id).retainedBy.mainView > 0`). Mirror exactly that.
  */
-function currentSessionId(): string {
+export function currentSessionId(): string {
   try {
     const state = sessionsList();
     if (!state?.byId) return '';

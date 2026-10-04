@@ -8,6 +8,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import * as THREE from 'three';
 import { CadPanel, setClientServices } from '../../src/client/panel';
+import { setProjectServices } from '../../src/client/project';
 import { ViewportOverlay } from '../../src/client/overlay';
 
 const q = new URLSearchParams(location.search);
@@ -150,9 +151,23 @@ if (q.get('assert') === 'insert') {
   const actx = { stub: 'actx' };
   const face = { stub: 'face' };
   const drafts = [{ id: 'draft-1', kind: 'image' }];
+  // The panel resolves the session structurally (DESGIGN §18) — both service
+  // views must see the same post-upgrade shape (NO `current`).
+  setProjectServices({
+    sessions: {
+      list: { getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1', cwd: '/tmp/sandbox' } } }) },
+      binding: (id: string) => (id === 'session-1' ? { sessionId: id } : undefined),
+      retainInfo: (id: string) => ({ getSnapshot: () => ({ retainedBy: { mainView: id === 'session-1' ? 1 : 0 } }) }),
+    },
+  });
   setClientServices({
     sessions: {
-      list: { get: () => ({ current: 'session-1' }) },
+      // Post-upgrade shape: NO `current` — the panel must resolve the session
+      // structurally (binding + mainView retention), which is what this stub
+      // exercises (DESGIGN §18).
+      list: { getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1', cwd: '/tmp/sandbox' } } }) },
+      binding: (id: string) => (id === 'session-1' ? { sessionId: id } : undefined),
+      retainInfo: (id: string) => ({ getSnapshot: () => ({ retainedBy: { mainView: id === 'session-1' ? 1 : 0 } }) }),
       scope: (id: string) => { log.push(`sessions.scope(${id})`); return actx; },
       sessionOf: (a: unknown) => { log.push(`sessions.sessionOf(${a === actx ? 'actx ✓' : 'wrong ctx'})`); return face; },
     },
@@ -225,6 +240,10 @@ const shotParam = q.get('shot');
 if (subjectParam) setTimeout(() => selectSubject(subjectParam), 1400);
 // ?shot=1 — click 📥截图 so a stale-version capture (and its warning) can be reviewed.
 if (shotParam) setTimeout(() => clickByText('截图'), 2100);
+// ?send=1 — after the draft, click ✓发送到会话: the stubbed sendSession logs the
+// outcome into the debug pre, so an E2E shot PROVES the image was sent.
+const sendParam = q.get('send');
+if (sendParam) setTimeout(() => clickByText('✓ 发送到会话'), 2900);
 // After the subject: the record list it renders only exists once that landed.
 if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);
 // `open` accepts a comma-separated sequence: `open=参数,⤢` clicks the tab, then
