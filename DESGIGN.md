@@ -2207,3 +2207,32 @@ E2E 截图证明全链路：scope → sessionOf ✓ → createDrafts → sendSes
 未知版本 id 不判定（不是我们该管的）；纯内联 SCAD 的场景运行不涉及版本，
 自然不标记。验收 `scripts/accept-stale-evidence.mjs` 6 项全 PASS；视觉存档
 `verification/shots/stale-evidence.png`。
+
+### 20.4 三栏浏览的三个真 bug（microscope5 实测，v2.26）
+
+用户报告"切类后下级列表更新慢""仿真/组件/装配契约内容经常为空"。用
+microscope5 的 69 次运行实测，抓到三个**互相独立**的原因：
+
+1. **重复条目**：`buildProducts` 设计上会把多零件运行**同时**放进 scene 桶和
+   它引用的每个零件下；面板把两者拍平却未去重 → 契约 213 行（真实 22）、
+   仿真 61 行（真实 28）。下拉列表因此又长又怪，切类时的"先不动/再混合"
+   观感也来自这批重复项的增删。
+2. **类别串味**：`组件` 曾定义为 assembly ∪ assembly-check，于是它打开的最新
+   条目往往是一份**没有几何**的清单检查报告，视口只能显示"这次运行没有几何
+   体"的空卡片——看起来就是"空的"。现在：`组件` = `validate_assembly` 的装配
+   体（有几何）；`装配契约` = `assembly-check` 报告；二者不再相交。
+3. **切类不落位**：自动选中逻辑只跟随"零件"的 `records`，另外三类的列表是
+   扁平数组，切换类别后没有任何条目被选中 → 视口空白，直到手动再选一次。
+   现在选中逻辑跟随当前类别的列表，切类即落在最新一条（新增 `kindRef`，
+   `idsKey` 带上类别前缀）。
+
+顺带修掉一个**沙盒保真度**问题：沙盒 server 用自写的 ASCII 名字白名单，
+把中文零件名（`齿轮轴.stl`）全部拒掉，导致组件视图报"几何体读取失败"——
+真实 host 路由用的是 `safeArtifactName`（只挡路径分隔符与控制字符）。沙盒已
+改为复用同一个函数（它自己的 README 就禁止与真实路由漂移）。
+
+分类与去重逻辑抽到 `src/client/browse.ts`（纯函数），由
+`scripts/accept-browse-categories.mjs` 10 项断言保护：多属主运行只出现一次、
+最新在前、三类不重叠、三类恰好划分全部运行、空语料四个空列表。
+视觉存档：`verification/shots/m5-sim.png`（仿真·28，自动落位 r069）、
+`m5-assembly.png`（组件·19，渲染真实 4 零件装配）、`m5-contract.png`（契约·22）。

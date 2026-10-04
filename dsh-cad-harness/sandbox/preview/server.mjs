@@ -92,9 +92,14 @@ async function api(req, url) {
   }
 
   // --- run-addressed artifacts ---------------------------------------------
+  // The name guard must be the ROUTE's guard, not a private one: a local
+  // ASCII-only regex rejected every CJK part name (齿轮轴.stl …) and made the
+  // sandbox report "几何体读取失败" for corpora the real host serves fine. The
+  // host uses safeArtifactName (path separators / control chars only).
+  const { safeArtifactName } = await import('../../src/host/runs.ts');
   const runId = url.searchParams.get('id') ?? '';
   const runFile = (...rel) =>
-    /^r\d{3,}$/.test(runId) && rel.every((x) => /^[A-Za-z0-9._-]+$/.test(x))
+    /^r\d{3,}$/.test(runId) && rel.every((x) => safeArtifactName(x) !== null)
       ? join(DATA, 'runs', runId, ...rel)
       : null;
   const runBinary = async (rel, type, missing) => {

@@ -24,7 +24,7 @@ import {
   type AssemblyManifest, type ManifestNode, type ManifestInterface, type OwnedInterface,
 } from './manifest.ts';
 import type { VersionStore } from './version.ts';
-import { readVersionDatums } from './version.ts';
+import { listVersions, readVersionDatums } from './version.ts';
 import type { RunEntry } from './runs.ts';
 
 type Vec3 = [number, number, number];
@@ -371,6 +371,23 @@ export async function runAssemblyCheck(
   const parts = new Map<string, PartWorld>();
   const partWarnings: AssemblyCheckReport['partWarnings'] = [];
 
+  // Evidence expires with the version it cites (DESGIGN §22): a cited run whose
+  // geometry predates the CURRENT version of any of its parts is not evidence.
+  const versionList = await listVersions(store);
+  const versionById = new Map(versionList.map((v) => [v.id, v]));
+  const newestOfPart = new Map<string, string>();
+  for (const v of versionList) {
+    if (!v.partId) continue;
+    const current = newestOfPart.get(v.partId);
+    if (!current || (versionById.get(current)?.timestamp ?? '') < v.timestamp) newestOfPart.set(v.partId, v.id);
+  }
+  const staleCitations = (run: RunEntry): string[] =>
+    run.sourceVersionIds.filter((id) => {
+      const version = versionById.get(id);
+      if (!version?.partId) return false;
+      return newestOfPart.get(version.partId) !== id;
+    });
+
   for (const flat of flattenParts(manifest.root)) {
     if (flat.node.source === 'stock') {
       partWarnings.push({ partId: flat.id, messages: ['stock part — skipped from geometric checks (v1)'] });
@@ -436,6 +453,14 @@ export async function runAssemblyCheck(
           } else if (run.status !== 'pass') {
             r.verdict = 'hard-violation';
             r.detail += ` — cited motion run ${cited} did not pass (${run.summary})`;
+          } else if (staleCitations(run).length > 0) {
+            // §22 hard gate: the run is green, but over geometry that parts have
+            // since replaced. Re-run it, or the evidence does not exist.
+            const stale = staleCitations(run);
+            r.verdict = 'hard-violation';
+            r.detail += ` — cited motion run ${cited} is STALE: it verified ${stale.join(', ')}, ` +
+              'which a part has since replaced. Re-run the motion over the current versions and cite that run ' +
+              '(evidence expires with the version it cites).';
           } else {
             r.detail += ` — motion evidenced by ${cited} (${run.summary}${run.supersededBy ? `, SUPERSEDED by ${run.supersededBy}` : ''})`;
           }

@@ -1,5 +1,6 @@
 /** React panel: product browser (versions + runs) with a preview-first Three.js viewport. */
 import React, { useEffect, useRef, useState } from 'react';
+import { browseCategories } from './browse';
 import {
   currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice,
   refreshProjectScope, withProject,
@@ -657,13 +658,9 @@ export function CadPanel(): React.ReactElement {
   const latestVersionId = currentPart?.versions[0]?.id ?? null;
 
   // Flat run pool across every part + the scene bucket, newest first.
-  const allRuns: (RunProduct & { owner?: string })[] = [
-    ...scene.map((r) => ({ ...r, owner: '跨零件场景' })),
-    ...parts.flatMap((p) => p.runs.map((r) => ({ ...r, owner: p.name }))),
-  ].sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
-  const simRuns = allRuns.filter((r) => r.kind === 'motion' || r.kind === 'physics' || r.kind === 'fluid');
-  const assemblyRuns = allRuns.filter((r) => r.kind === 'assembly' || r.kind === 'assembly-check');
-  const contractRuns = allRuns.filter((r) => r.kind === 'assembly-check');
+  // Category lists live in ./browse so the de-duplication and the category
+  // boundaries are testable without a DOM (accept-browse-categories.mjs).
+  const { sim: simRuns, assembly: assemblyRuns, contract: contractRuns } = browseCategories(parts, scene);
 
   /**
    * The subject's history: its revisions plus the runs that touched it. While
@@ -749,18 +746,25 @@ export function CadPanel(): React.ReactElement {
   // the revision you were working on every time the panel polls.
   const prevIdsRef = useRef<Set<string>>(new Set());
   const subjectRef = useRef<string>('');
-  const idsKey = records.map((r) => r.id).join('|');
+  const kindRef = useRef<BrowseKind | null>(null);
+  // The categories with a flat list (仿真 / 组件 / 装配契约) have no 零件 subject,
+  // so `records` is empty for them — the effect must follow their own list or
+  // switching category leaves the viewport blank (DESGIGN §20.4).
+  const activeList: PartRecord[] = flatCategoryRuns ?? records;
+  const idsKey = `${kind}|${activeList.map((r) => r.id).join('|')}`;
   useEffect(() => {
-    const ids = records.map((r) => r.id);
+    const ids = activeList.map((r) => r.id);
     const prev = prevIdsRef.current;
     const subjectChanged = subjectRef.current !== subjectId;
+    const kindChanged = kindRef.current !== kind;
     const first = prev.size === 0;
     prevIdsRef.current = new Set(ids);
     subjectRef.current = subjectId;
+    kindRef.current = kind;
     const land = latestVersionId ?? ids[0] ?? null;
 
-    if (subjectChanged || first) { setRecordId(land); return; }
-    const arrivals = records.filter((r) => !prev.has(r.id));
+    if (subjectChanged || first || kindChanged) { setRecordId(land); return; }
+    const arrivals = activeList.filter((r) => !prev.has(r.id));
     if (followRef.current && arrivals.length > 0) {
       setRecordId(arrivals.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))[0]!.id);
       return;
@@ -2074,6 +2078,11 @@ export function CadPanel(): React.ReactElement {
       kind === 'part' ? React.createElement(
         'select',
         {
+          // Distinct key per branch: React otherwise reconciles the flat-item
+          // select into the part select in place, and the native dropdown can
+          // show the previous category's options merged with the new ones
+          // (the "装配契约 + 零件" flicker, DESGIGN §20.4).
+          key: 'browse-subject',
           value: subjectId,
           onChange: (e: any) => {
             const next = e.target.value;
@@ -2096,6 +2105,7 @@ export function CadPanel(): React.ReactElement {
       ) : React.createElement(
         'select',
         {
+          key: `browse-flat-${kind}`,
           value: recordId ?? '',
           onChange: (e: any) => { setRecordId(e.target.value); },
           'aria-label': kind === 'contract' ? '契约检查' : kind === 'sim' ? '仿真运行' : '组件运行',

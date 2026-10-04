@@ -150,6 +150,68 @@ check('the model-facing text carries the ❌ prefix',
     /干涉|不可交付/.test(mc?.detail ?? ''), mc?.detail?.slice(0, 100) ?? '');
 }
 
+// ── 4. §22 hard gate: a GREEN run over geometry a part has replaced ──────────
+{
+  const { ensurePart, attachVersion } = await import('../src/host/parts.ts');
+  const slab = await compileStlOnly('cube([40,40,20]);\ndatum("顶面", [20,20,20]);');
+  const pin = await compileStlOnly('cube([10,10,60], center=true);\ndatum("底面", [0,0,-30]);');
+
+  // Two versions of the SAME part, plus a second part, all properly attached.
+  const partA = await ensurePart(project.partStore, '§22 支架', 'agent');
+  const a1 = await saveVersion(store, { scadCode: 'cube([40,40,20]);', stl: slab.stl, userIntent: '§22 A v1', datumSet: slab.datumSet, partId: partA.id });
+  await attachVersion(project.partStore, partA.id, a1);
+  const partB = await ensurePart(project.partStore, '§22 销', 'agent');
+  const b1 = await saveVersion(store, { scadCode: 'cube([10,10,60], center=true);', stl: pin.stl, userIntent: '§22 B v1', datumSet: pin.datumSet, partId: partB.id });
+  await attachVersion(project.partStore, partB.id, b1);
+
+  // A CLEAN motion run over those versions → status pass, sourceVersionIds set.
+  const cleanRun = await call('simulate_motion', {
+    cycles: 1,
+    parts: [
+      { name: 'bracket', versionId: a1, bodyType: 'fixed', position: [0, 0, 0] },
+      { name: 'pin', versionId: b1, bodyType: 'kinematic', position: [60, 0, 0] },
+    ],
+    joints: [],
+    drive: { body: 'bracket', axis: [0, 0, 1], omegaRadPerSec: 1 },
+    oscillators: [{ body: 'pin', axis: [1, 0, 0], amplitudeMm: 3, periodSec: 2 }],
+  });
+  check('the §22 fixture motion run is GREEN (so the gate is about staleness, not failure)',
+    cleanRun.value.overallStatus === 'pass', JSON.stringify(cleanRun.value.overallStatus));
+  const greenRunId = (await runsIndex()).at(-1).id;
+
+  // Now the part gets a NEW version → the run above cites geometry that no
+  // longer exists. It still says "pass".
+  const a2 = await saveVersion(store, { scadCode: 'cube([40,40,22]);', stl: slab.stl, userIntent: '§22 A v2', datumSet: slab.datumSet, partId: partA.id });
+  await attachVersion(project.partStore, partA.id, a2);
+
+  const staleManifest = {
+    schemaVersion: 1, name: 'sim-verdict-stale', unit: 'mm', up: 'z',
+    root: {
+      id: 'stale', name: '过期门禁', kind: 'assembly',
+      children: [
+        { id: 'bracket', name: '§22 支架', kind: 'part', version: a1 },
+        { id: 'pin', name: '§22 销', kind: 'part', version: b1 },
+      ],
+      interfaces: [{
+        id: 'if-stale', a: 'bracket.顶面', b: 'pin.底面',
+        type: '滑动副', severity: 'hard', layer: 'L1',
+        check: 'motion-clearance', params: { runId: greenRunId },
+      }],
+    },
+  };
+  const stalePath = join(project.root, 'assembly', 'stale-manifest.json');
+  writeFileSync(stalePath, JSON.stringify(staleManifest, null, 2));
+
+  const sr = await call('check_assembly', { manifestPath: stalePath });
+  const smc = [...sr.value.hardViolations, ...sr.value.intentFlags].find((x) => x.interfaceId === 'if-stale');
+  check('a GREEN run citing a version the part has replaced → hard-violation (the §22 gate)',
+    smc?.verdict === 'hard-violation',
+    JSON.stringify({ verdict: smc?.verdict, detail: smc?.detail?.slice(0, 90) }));
+  check('the violation says STALE and names the superseded version',
+    /STALE/.test(smc?.detail ?? '') && (smc?.detail ?? '').includes(a1),
+    (smc?.detail ?? '').slice(0, 120));
+}
+
 
 console.log(`\n${fail === 0 ? 'OK' : `${fail} FAILURE(S)`}`);
 process.exit(fail === 0 ? 0 : 1);
