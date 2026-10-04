@@ -2176,3 +2176,34 @@ E2E 截图证明全链路：scope → sessionOf ✓ → createDrafts → sendSes
 **教训（§13.13u 第五条加强版）**：升级删掉一个快照字段，散落各处的读法
 各自失效。判据：修一处读法时必须 `grep state?.current` 全仓清零，并为每种
 症状写 E2E。
+
+---
+
+## 22. 证据会随版本过期：整机产物必须随零件更新重跑（v2.25，2026-10-03）
+
+**用户报告的坏习惯**：零件更新出新版本后，整机刚体（`merge_parts`）、
+`simulate_physics` / `simulate_motion` / `validate_assembly` 的运行、
+`check_assembly` 报告都**不会自动更新**——它们钉在具体版本号上
+（run 的 `sourceVersionIds`、manifest 节点的 `version`、接口的 `params.runId`），
+于是一份"绿色通过"的结果描述着已经不存在的几何，却看起来仍然有效。
+
+### 22.1 交付纪律（已写入 skill 第 4 条）
+
+零件版本更新后：重跑所有整机级产物（或在结果里显式声明它基于哪个版本、
+为什么仍有效）；把 manifest 里指向旧版本的节点/接口更新到新版本并重跑
+`check_assembly`；**绝不把旧运行当作当前版本的证据——证据的有效期等于它引用
+的那个版本的有效期**。判据："说已通过之前，先问它验证的是哪个版本"。
+
+### 22.2 插件侧：让过期可见（纪律的前提）
+
+原来只有"同类同主题重跑"会标 `supersededBy`，零件出新版本不会让整机运行
+过期——这就是它隐形的原因。现在 `buildProducts` 为每个运行计算
+`staleVersionIds`（引用了**不再是该零件最新版**的版本），面板据此：
+
+- 运行行加 `⚠ 基于旧版本 vNNN` 标记；
+- 报告页签顶部琥珀色提示「此结果基于旧版本 vNNN — 零件已更新，需重跑后才能
+  作为当前版本的证据」。
+
+未知版本 id 不判定（不是我们该管的）；纯内联 SCAD 的场景运行不涉及版本，
+自然不标记。验收 `scripts/accept-stale-evidence.mjs` 6 项全 PASS；视觉存档
+`verification/shots/stale-evidence.png`。

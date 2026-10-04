@@ -169,7 +169,10 @@ const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
   // the timestamp alone does not say it (a run can be newer and still not
   // supersede a different subject).
   const replaced = r.supersededBy ? `已被 ${r.supersededBy} 取代 · ` : '';
-  return `${r.id} · ${RUN_KIND_LABEL[r.kind]} · ${replaced}${fmtTime(r.timestamp)} — ${r.summary || r.title}`.slice(0, 96);
+  // Evidence expires with the version it cites (DESGIGN §22): a run that still
+  // says "pass" over geometry a part has since replaced must say so in the row.
+  const stale = r.staleVersionIds?.length ? `⚠ 基于旧版本 ${r.staleVersionIds.join(', ')} · ` : '';
+  return `${r.id} · ${RUN_KIND_LABEL[r.kind]} · ${replaced}${stale}${fmtTime(r.timestamp)} — ${r.summary || r.title}`.slice(0, 96);
 };
 
 /** A version element for legacy callers that still build this shape. */
@@ -1521,6 +1524,7 @@ export function CadPanel(): React.ReactElement {
     const line = (text: string, color?: string) =>
       React.createElement('div', { style: { fontSize: 12, padding: '1px 0', color: color ?? '#374151' } }, text);
 
+
     if (r.kind === 'physics') {
       const fell = Object.entries((rep.metrics?.fellOver ?? {}) as Record<string, boolean>);
       return React.createElement('div', null,
@@ -1849,7 +1853,17 @@ export function CadPanel(): React.ReactElement {
     }
     if (id === 'runs' && version) return runsBody();
     if (id === 'export' && version) return exportRow();
-    if (id === 'report' && run) return runReportBody(run);
+    if (id === 'report' && run) {
+      const body = runReportBody(run);
+      const notice = run.staleVersionIds?.length
+        ? React.createElement('div', {
+            style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
+                     borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600,
+                     color: '#8a5a00', marginBottom: 4 },
+          }, `⚠ 此结果基于旧版本 ${run.staleVersionIds.join(', ')} — 零件已更新，需重跑后才能作为当前版本的证据`)
+        : null;
+      return React.createElement('div', null, notice, body);
+    }
     if (id === 'geometry' && run) {
       return React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
         ...run.parts.map((name) => React.createElement('button', {

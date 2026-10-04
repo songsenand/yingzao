@@ -269,6 +269,18 @@ near-touching pairs were never declared).
    findings get answered (fixed or argued), not ignored.
 3. "It compiles / it assembles / the report passes" are three different claims.
    Delivery requires all three PLUS eyes on the shape and a printability pass.
+4. **A part version update invalidates every whole-machine result that names the
+   old version.** 整机刚体（`merge_parts`）、`simulate_physics` / `simulate_motion`
+   / `validate_assembly` 的运行、以及 `check_assembly` 的报告，全部**钉在具体
+   版本号上**（run 的 `sourceVersionIds`、manifest 节点里的 `version`、接口引用的
+   `params.runId`）。零件更新出 `vNNN+1` 之后，旧结果不会自动跟着变——它们仍
+   显示"存在、绿色、通过"，但描述的是**已经不存在的几何**。交付前必须：
+   - 重跑所有整机级产物（合并刚体、物理/运动仿真、装配验证），或在结果里
+     显式声明它基于哪个版本、并说明为什么仍然有效；
+   - 把 manifest 里指向旧版本的节点/接口更新到新版本，再重跑 `check_assembly`
+     （引用已被取代的运行，检查会报 `SUPERSEDED`）；
+   - 绝不把"某次旧的绿色运行"当作当前版本的证据——**证据的有效期等于它引用的
+     那个版本的有效期**。判据：说"已通过"之前，先问一句"它验证的是哪个版本？"
 
 ## Still to add (deliberately open)
 

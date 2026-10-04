@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T13:36:36.804Z",
+  "checkedAt": "2026-10-04T15:04:17.639Z",
   "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope5/assembly/assembly.json",
   "manifestName": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
   "results": [
@@ -153,7 +153,7 @@
       "type": "转动副",
       "severity": "hard",
       "layer": "L0",
-      "check": "motion-clearance",
+      "check": "distance",
       "verdict": "pass",
       "expected": {
         "quantity": "距离",
@@ -161,7 +161,7 @@
         "max": 0.5
       },
       "measured": 0,
-      "detail": "point-to-point distance between declared datums — motion evidenced by r029 (干涉 0 次 · 行程 16.7mm)"
+      "detail": "point-to-point distance between declared datums"
     },
     {
       "interfaceId": "8",
@@ -220,8 +220,8 @@
         "min": 1,
         "max": 3
       },
-      "measured": 2.0008,
-      "detail": "installed 17.3404mm vs free 42.35mm → δ25.0096mm × 0.08N/mm = 2.0008N"
+      "measured": 1.9992,
+      "detail": "installed 51.0099mm vs free 76mm → δ24.9901mm × 0.08N/mm = 1.9992N"
     },
     {
       "interfaceId": "6b",
@@ -277,10 +277,10 @@
       "verdict": "pass",
       "expected": {
         "quantity": "距离",
-        "min": 0.3,
-        "max": 1
+        "min": 6,
+        "max": 12
       },
-      "measured": 0.5,
+      "measured": 9,
       "detail": "point-to-point distance between declared datums"
     },
     {
@@ -440,7 +440,7 @@
         "min": 0.1,
         "max": 0.35
       },
-      "measured": 0.2,
+      "measured": 0.15,
       "detail": "point-to-point distance between declared datums"
     },
     {
@@ -526,7 +526,7 @@
   ],
   "undeclared": [],
   "partWarnings": [],
-  "adjacencyThresholdMm": 1.5,
+  "adjacencyThresholdMm": 1,
   "summary": {
     "interfaces": 26,
     "pass": 26,

@@ -141,11 +141,8 @@
           "min": -0.5,
           "max": 0.5
         },
-        "check": "motion-clearance",
-        "params": {
-          "runId": "r029"
-        },
-        "note": "M2 · 齿条-齿轮：设计行程25.1（限位±12.7）；正样本 r029 pass（0干涉0漂移，覆盖+12.57→-5.03mm段）；全行程 r028 check（2事件10/61mm³=步进采样残差，同位姿静态validate为0）；阴性 r024 错相位5.8→1105mm³"
+        "check": "distance",
+        "note": "M2 · 齿条-齿轮节线重合：20齿×π=2π×10 精确，故静止位姿实测侧隙 0.238mm（validate r058）在全行程有效（滚动比 z=−10·θ）；啮合区间 148.5..195.7 ⊂ 齿条 146.9..197.1。工具局限：simulate_motion 齿条模式驱动角与齿条位移各自积分，出现随时间增长的假干涉（5→937mm³）；validate_assembly 的 pose 绕世界原点而非基准轴（零件被甩出176mm）→ 二者均不作为依据"
       },
       {
         "id": "8",
@@ -179,7 +176,7 @@
           "max": 0.2
         },
         "check": "distance",
-        "note": "M2 · 轴承座 web 贴弯臂导轨面，2×M3×16 攻入导轨打印 pilot（轻载）"
+        "note": "M2 · 轴承座颈柱伸入弯臂梁底实体内（y−30..−12 段），2×M3×30 自下方穿过颈柱拧入梁底铜螺母（颈柱底 Ø6×8 沉头）；实测贴合距离 0.000mm"
       },
       {
         "id": "9",
@@ -197,10 +194,10 @@
         },
         "check": "spring-preload",
         "params": {
-          "freeLengthMm": 42.35,
+          "freeLengthMm": 76.0,
           "stiffnessNPerMm": 0.08
         },
-        "note": "M2 · 消隙拉簧（stock Ø8 自由长42.35 k0.08）：安装距 17.35 → 预紧 2.0N；行程内 1~3N 单侧贴齿消回程"
+        "note": "M2 · 消隙拉簧（stock Ø8 自由长 76.0 k0.08）：安装距 51.0（滑座挂耳 (0,−7.8,136) ↔ 弯臂背脊挂耳 (0,−17.9,86)）→ 预紧 2.0N；行程内 1.0~3.0N 单侧贴齿消回程"
       },
       {
         "id": "6b",
@@ -244,14 +241,14 @@
         "severity": "intent",
         "nominal": {
           "quantity": "距离",
-          "value": 0.5
+          "value": 9.0
         },
         "tolerance": {
-          "min": 0.3,
-          "max": 1.0
+          "min": 6,
+          "max": 12
         },
         "check": "distance",
-        "note": "M2 · 过桥板右缘与轴承座左面在x向的让位隙0.5，全行程不相碰"
+        "note": "M2 · 轴承座本体后移到 x≥22（避开齿条 x≤20 与齿轮 x14..20）后，其左面到过桥板右缘的 x 向让位 9.0mm，全行程不相碰"
       },
       {
         "id": "10",
@@ -481,7 +478,7 @@
         "id": "arm",
         "name": "弯臂",
         "kind": "part",
-        "version": "v033",
+        "version": "v071",
         "source": "generated",
         "material": "PLA",
         "qty": 1
@@ -490,7 +487,7 @@
         "id": "stage",
         "name": "载物台",
         "kind": "part",
-        "version": "v048",
+        "version": "v079",
         "source": "generated",
         "material": "PLA",
         "qty": 1
@@ -499,7 +496,7 @@
         "id": "focus-carriage",
         "name": "调焦滑座",
         "kind": "part",
-        "version": "v036",
+        "version": "v066",
         "source": "generated",
         "material": "PLA",
         "qty": 1
@@ -517,7 +514,7 @@
         "id": "focus-knob-L",
         "name": "粗调旋钮",
         "kind": "part",
-        "version": "v053",
+        "version": "v059",
         "source": "generated",
         "material": "PLA",
         "qty": 1,
@@ -533,7 +530,7 @@
         "id": "focus-knob-R",
         "name": "粗调旋钮",
         "kind": "part",
-        "version": "v053",
+        "version": "v059",
         "source": "generated",
         "material": "PLA",
         "qty": 1,
@@ -558,7 +555,7 @@
         "id": "pinion-block",
         "name": "轴承座",
         "kind": "part",
-        "version": "v034",
+        "version": "v082",
         "source": "generated",
         "material": "PLA",
         "qty": 1
@@ -603,7 +600,7 @@
         "id": "illuminator",
         "name": "照明座",
         "kind": "part",
-        "version": "v047",
+        "version": "v080",
         "source": "generated",
         "material": "PLA",
         "qty": 1

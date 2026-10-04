@@ -36,6 +36,12 @@ export interface RunProduct {
   summary: string;
   /** Saved versions the geometry came from; empty = an inline-SCAD scene. */
   sourceVersionIds: string[];
+  /**
+   * Source versions that are NO LONGER the newest version of their part
+   * (DESGIGN §22): the run still says "pass", but it verified geometry that has
+   * since been replaced. Evidence expires with the version it cites.
+   */
+  staleVersionIds?: string[];
   hasGeometry: boolean;
   /** Geometry names available as parts/<name>.stl. */
   parts: string[];

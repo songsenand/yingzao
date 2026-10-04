@@ -50,11 +50,29 @@ export function buildProducts(
   const ownersOfRun = (r: RunEntry): string[] =>
     [...new Set(r.sourceVersionIds.map(partIdOfVersion))];
 
+  // Newest version per part — the yardstick for "is this run's evidence stale".
+  const newestOfPart = new Map<string, string>();
+  for (const [pid, list] of versionsOfPart) {
+    const newest = newestFirst(list)[0];
+    if (newest) newestOfPart.set(pid, newest.id);
+  }
+  /** Versions a run cites that a part has since replaced (DESGIGN §22). */
+  const staleSourceVersions = (r: RunEntry): string[] =>
+    r.sourceVersionIds.filter((id) => {
+      const version = versionById.get(id);
+      if (!version) return false; // unknown id: not our call to judge
+      return newestOfPart.get(version.partId) !== id;
+    });
+
   const runsOfPart = new Map<string, RunProduct[]>();
   const sceneRuns: RunProduct[] = [];
   for (const r of runs) {
     const owners = ownersOfRun(r);
-    const product: RunProduct = { type: 'run', ...r };
+    const stale = staleSourceVersions(r);
+    const product: RunProduct = {
+      type: 'run', ...r,
+      ...(stale.length ? { staleVersionIds: stale } : {}),
+    };
     if (owners.length !== 1) {
       // Zero owners (inline SCAD) or a multi-part scene: it belongs to no single
       // part, so it gets the cross-part bucket — and also shows under each part
