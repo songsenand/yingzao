@@ -2698,7 +2698,7 @@ export function registerCadTools(
       }],
     },
     timeoutMs: 30_000,
-    async execute(args: unknown): Promise<{ recalled: boolean; source: string; mediaType: string; bytes: number; attached: boolean }> {
+    async execute(args: unknown, exec: unknown): Promise<{ recalled: boolean; source: string; mediaType: string; bytes: number; attached: boolean }> {
       const a = args as RecallArgs;
       let data: Uint8Array;
       let source: string;

@@ -326,6 +326,64 @@ section('static invariants');
     'the migration script uses the runtime key function rather than a copy');
 }
 
+// ── client: which session is on stage (DESGIGN §18) ─────────────────────────
+// The 2026-10-03 dsh upgrade removed the list snapshot's `current` field; the
+// panel could no longer resolve the session on stage, every request lost its
+// `?project=`, and every project showed the host's own corpus. The fix mirrors
+// the shipped preset picker: current = live binding + mainView retention.
+{
+  const {
+    refreshProjectScope, currentSessionCwd, currentSessionPreset,
+    setProjectServices, withProject,
+  } = await import('../src/client/project.ts');
+
+  const A = '/home/songsenand/Project/ToyMarker';
+  const B = '/home/songsenand/Project/ToyMarker/examples/microscope4';
+  const newShapeStore = (activeId) => ({
+    list: {
+      getSnapshot: () => ({
+        byId: {
+          sA: { id: 'sA', cwd: A, projectionValues: { agentPreset: 'cad' }, blank: false },
+          sB: { id: 'sB', cwd: B, projectionValues: { agentPreset: 'standard' }, blank: true },
+        },
+        // deliberately NO `current` — the post-upgrade shape
+      }),
+      subscribe: () => () => {},
+    },
+    binding: (id) => (id === activeId ? { sessionId: activeId } : undefined),
+    retainInfo: (id) => ({ getSnapshot: () => ({ retainedBy: { mainView: id === activeId ? 1 : 0 } }) }),
+  });
+
+  setProjectServices({ sessions: newShapeStore('sA') });
+  refreshProjectScope();
+  check(currentSessionCwd() === A, 'client (new shape): the bound+retained session is on stage', currentSessionCwd());
+  check(currentSessionPreset() === 'cad', 'client (new shape): preset reads from the resolved id');
+  check(withProject('/api/cad/products') === `/api/cad/products?project=${encodeURIComponent(A)}`,
+    'client (new shape): requests carry ?project=<cwd>');
+
+  setProjectServices({ sessions: newShapeStore('sB') });
+  refreshProjectScope();
+  check(currentSessionCwd() === B && refreshProjectScope().cwd === B,
+    'client (new shape): switching the binding switches the project', currentSessionCwd());
+  check(currentSessionPreset() === 'standard', 'client (new shape): preset follows the switch');
+
+  setProjectServices({ sessions: newShapeStore(null) });
+  refreshProjectScope();
+  check(currentSessionCwd() === '' && withProject('/api/cad/products') === '/api/cad/products',
+    'client (new shape): no bound session → bare URL (host-side fallback), never a stale project');
+
+  setProjectServices({
+    sessions: { list: { getSnapshot: () => ({ current: 'sL', byId: { sL: { cwd: A } } }) } },
+  });
+  refreshProjectScope();
+  check(currentSessionCwd() === A, 'client (legacy shape): `current` still honored (older deployments)');
+
+  setProjectServices({ sessions: newShapeStore('sA') });
+  refreshProjectScope();
+  setProjectServices({ sessions: newShapeStore('sB') });
+  check(refreshProjectScope().switched === true, 'client: refreshProjectScope reports the switch');
+}
+
 rmSync(FAKE_HOME, { recursive: true, force: true });
 console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

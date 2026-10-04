@@ -26,15 +26,42 @@ export function currentProject(): string {
 }
 
 /**
- * The cwd of the session on stage, or '' when the list has not resolved yet.
+ * The id of the session shown in the main view, or '' when it cannot be told.
  *
- * `sessions.list` is the read face; `byId[current].cwd` is the durable creation
- * fact this project scope is keyed on.
+ * The list snapshot has NO `current` field (the pre-upgrade shape had one; the
+ * 2026-10-03 dsh upgrade removed it and silently broke per-project scoping —
+ * every panel fell back to the host's own cwd). The shipped preset picker
+ * (dsh-client-ui-agent-preset) determines "on stage" structurally instead:
+ * a session is current when the sessions service has a LIVE BINDING for it
+ * (`sessions.binding(id)`) AND the main view retains it
+ * (`retainInfo(id).retainedBy.mainView > 0`). Mirror exactly that.
+ */
+function currentSessionId(): string {
+  try {
+    const state = sessionsList();
+    if (!state?.byId) return '';
+    for (const id of Object.keys(state.byId)) {
+      try {
+        if (sessionsService?.binding?.(id) === undefined) continue;
+        const retained = sessionsService?.retainInfo?.(id)?.getSnapshot?.()?.retainedBy;
+        if ((retained?.mainView ?? 0) > 0) return id;
+      } catch { /* not the active one */ }
+    }
+  } catch { /* fall through */ }
+  return '';
+}
+
+/**
+ * The cwd of the session on stage, or '' when it cannot be told.
+ *
+ * Legacy fallback first: an older dsh exposed `state.current` directly, so
+ * deployments on that shape keep working. Otherwise resolve structurally (see
+ * `currentSessionId`).
  */
 export function currentSessionCwd(): string {
   try {
     const state = sessionsList();
-    const id = state?.current;
+    const id = state?.current ?? currentSessionId();
     const value = id ? state?.byId?.[id]?.cwd : '';
     return typeof value === 'string' ? value : '';
   } catch {
@@ -71,7 +98,7 @@ function sessionsList(): any {
 export function currentSessionPreset(): string | null {
   try {
     const state = sessionsList();
-    const id = state?.current;
+    const id = state?.current ?? currentSessionId();
     const value = id ? state?.byId?.[id]?.projectionValues?.agentPreset : undefined;
     return typeof value === 'string' && value ? value : null;
   } catch {
@@ -90,7 +117,7 @@ export function currentSessionPreset(): string | null {
 export function currentSessionBlank(): boolean | null {
   try {
     const state = sessionsList();
-    const id = state?.current;
+    const id = state?.current ?? currentSessionId();
     const value = id ? state?.byId?.[id]?.blank : undefined;
     return typeof value === 'boolean' ? value : null;
   } catch {
