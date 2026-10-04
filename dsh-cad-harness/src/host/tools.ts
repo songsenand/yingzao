@@ -17,7 +17,7 @@ import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
-import { parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl, type ParsedMesh } from './mesh.ts';
+import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl, type ParsedMesh } from './mesh.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { runMotion } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
@@ -505,6 +505,13 @@ export function registerCadTools(
         result.warnings.push(
           'mesh is NOT watertight (open surface) — every later geometric check ' +
           '(interference, clearance, closest-point) runs on a false premise until this is fixed',
+        );
+      }
+      if ((parsed ? shellCount(parsed) : 0) > 1) {
+        result.warnings.push(
+          `DISCIPLINE (DESGIGN §18): ${shellCount(parsed!)} disconnected bodies in one version — a part must be a ` +
+          'single connected solid. Either union the fragments in OpenSCAD, or model them as SEPARATE parts. ' +
+          'Run check_connectivity to see where each body sits.',
         );
       }
 
@@ -2438,6 +2445,60 @@ export function registerCadTools(
         overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
         findings,
         watertight,
+      };
+    },
+  }));
+
+  // --- check_connectivity: 零件必须是单一连通实体（DESGIGN §18）---------------
+  //
+  // 生成端已经报 `shells`（连通体数），但没有位置信息，模型无法判断"多出来的
+  // 体是什么、在哪"。本工具给出每个连通体的包围盒与尺寸，并把纪律落到结果
+  // 文本里：多体 = 要么 union 成一体，要么按多个零件分别建模。薄片检测
+  // （check_printability）回答"打不打得出来"，本工具回答"它是不是一个零件"。
+  registerTool(defineTool({
+    name: 'check_connectivity',
+    description:
+      'Connectivity check for a saved version: counts the mutually disconnected solids (bodies) in the mesh ' +
+      "and reports each body's bounding box and size. A part MUST be a single connected solid — run this " +
+      'when shells > 1 is reported at generation, when a part looks like floating fragments, or before ' +
+      'delivering. Multi-body means: either union the fragments into one solid, or model them as SEPARATE parts.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version id to check, e.g. "v012".' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          verdict: { type: 'string', required: true, description: '"single-body" | "multi-body".' },
+          bodies: { type: 'number', required: true },
+          bodySizes: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body: [dx, dy, dz] mm, largest first.' },
+          bodyCenters: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body: bbox center [x, y, z] mm.' },
+          watertight: { type: 'boolean', required: true },
+          triangles: { type: 'number', required: true },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string };
+      const { store } = await allStores(exec);
+      const bytes = new Uint8Array(await readFile(join(store.root, 'versions', a.versionId, 'model.stl'))
+        .catch(() => { throw new Error(`version ${a.versionId} has no model.stl`); }));
+      const mesh = parseBinaryStl(bytes);
+      const { count, bodies } = connectedBodies(mesh);
+      const size = (b: { min: number[]; max: number[] }) => b.max.map((n, i) => +(n - b.min[i]).toFixed(2));
+      const center = (b: { min: number[]; max: number[] }) => b.min.map((n, i) => +((n + b.max[i]) / 2).toFixed(2));
+      return {
+        versionId: a.versionId,
+        verdict: count === 1 ? 'single-body' : 'multi-body',
+        bodies: count,
+        bodySizes: bodies.map(size),
+        bodyCenters: bodies.map(center),
+        watertight: isWatertight(mesh).watertight,
+        triangles: mesh.triVerts.length / 3,
       };
     },
   }));

@@ -24,6 +24,7 @@ says **which one the question belongs to**, and what has already gone wrong.
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_closest` | `measure_distance` |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
 | "can this actually be printed", "is this wall too thin", "will this need supports" | `check_printability` | looking at renders |
+| "is this one part or floating fragments", "shells > 1 warning" | `check_connectivity` | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |
 | "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
@@ -221,6 +222,13 @@ near-touching pairs were never declared).
   points pass while one bore is tilted. Interfaces about alignment use
   `"check": "coaxial"` with `datum_axis`/`datum_cyl` endpoints — it measures
   axis-to-axis offset AND flags non-parallel axes.
+- **A part is ONE connected solid — always.** `generate_part` warns when a
+  version carries multiple disconnected bodies, and `check_connectivity` shows
+  where each body sits. Multi-body is NEVER acceptable as "one part": either
+  union the fragments in OpenSCAD (they must genuinely touch/overlap), or
+  model them as SEPARATE parts. Delivering a multi-body version as a single
+  part poisons every downstream number — assembly interference, mass, print
+  layout all assume one solid per part.
 - **Old images are pruned oldest-first, and the user's reference image is
   always the oldest.** When you see a block like
   `image omitted; 参考图.png; path=/…/attachments/…` and the task depends on

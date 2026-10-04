@@ -215,6 +215,62 @@ export function shellCount(mesh: ParsedMesh): number {
 }
 
 /**
+ * Connected-body analysis: how many mutually disconnected solids a mesh
+ * contains, each with its own bounding box (mm). Two cubes that share a face
+ * (a union) are ONE body — they share vertices, so the edge union-find joins
+ * them; two cubes apart in space are TWO.
+ *
+ * This is the truth behind the discipline "a part must be a single connected
+ * solid" (DESGIGN §18): `shells` above only counts; this locates each body so
+ * the model can tell which fragment is which.
+ */
+export function connectedBodies(mesh: ParsedMesh): {
+  count: number;
+  bodies: { min: [number, number, number]; max: [number, number, number] }[];
+} {
+  const triCount = mesh.triVerts.length / 3;
+  if (triCount === 0) return { count: 0, bodies: [] };
+  const parent = new Int32Array(triCount);
+  for (let i = 0; i < triCount; i++) parent[i] = i;
+  const find = (x: number): number => {
+    let r = x;
+    while (parent[r] !== r) r = parent[r]!;
+    while (parent[x] !== r) { const n = parent[x]!; parent[x] = r; x = n; }
+    return r;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+  const edgeOwner = new Map<string, number>();
+  for (let t = 0; t < triCount; t++) {
+    const a = mesh.triVerts[t * 3]!, b = mesh.triVerts[t * 3 + 1]!, c = mesh.triVerts[t * 3 + 2]!;
+    for (const [p, q] of [[a, b], [b, c], [c, a]] as [number, number][]) {
+      const key = p < q ? `${p}_${q}` : `${q}_${p}`;
+      const owner = edgeOwner.get(key);
+      if (owner === undefined) edgeOwner.set(key, t);
+      else union(owner, t);
+    }
+  }
+  const bodiesByRoot = new Map<number, { min: [number, number, number]; max: [number, number, number] }>();
+  for (let t = 0; t < triCount; t++) {
+    const root = find(t);
+    let body = bodiesByRoot.get(root);
+    if (!body) { body = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }; bodiesByRoot.set(root, body); }
+    for (let k = 0; k < 3; k++) {
+      const v = mesh.triVerts[t * 3 + k]!;
+      const x = mesh.vertProperties[v * 3]!, y = mesh.vertProperties[v * 3 + 1]!, z = mesh.vertProperties[v * 3 + 2]!;
+      body.min[0] = Math.min(body.min[0]!, x); body.min[1] = Math.min(body.min[1]!, y); body.min[2] = Math.min(body.min[2]!, z);
+      body.max[0] = Math.max(body.max[0]!, x); body.max[1] = Math.max(body.max[1]!, y); body.max[2] = Math.max(body.max[2]!, z);
+    }
+  }
+  const bodies = [...bodiesByRoot.values()]
+    .map((b) => ({ min: b.min.map((n) => +n.toFixed(3)) as [number, number, number], max: b.max.map((n) => +n.toFixed(3)) as [number, number, number] }))
+    .sort((a, b) => (b.max[0]! - b.min[0]!) * (b.max[1]! - b.min[1]!) - (a.max[0]! - a.min[0]!) * (a.max[1]! - a.min[1]!));
+  return { count: bodies.length, bodies };
+}
+
+/**
  * Watertight check: in a closed 2-manifold every directed edge appears exactly
  * once and every undirected edge is shared by exactly two triangles.
  */
