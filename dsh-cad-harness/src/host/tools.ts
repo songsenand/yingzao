@@ -341,15 +341,30 @@ export function registerCadTools(
     }
     motionRefsForFinalize = { refs };
     const followerList = Object.values(report.metrics.followers ?? {});
+    // DESGIGN §21: 干涉不是"黄牌提醒"，是交付阻塞。机构里两个零件在运动中
+    // 相互重叠 = 几何上不可制造（要么留间隙要么有过盈声明），直接 fail（红）。
+    const interferenceBlocking = report.metrics.interferenceCount > 0;
+    const motionStatus: 'pass' | 'check' | 'fail' =
+      interferenceBlocking ? 'fail' : report.overallStatus === 'pass' ? 'pass' : 'check';
     await run.commit({
       title: `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
       sourceVersionIds,
-      status: report.overallStatus === 'pass' ? 'pass' : 'check',
-      summary: `干涉 ${report.metrics.interferenceCount} 次` +
+      status: motionStatus,
+      summary: (interferenceBlocking ? '❌ 不可交付 · ' : '') +
+        `干涉 ${report.metrics.interferenceCount} 次` +
         (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : ''),
     });
+    const blocking = interferenceBlocking
+      ? report.metrics.interferenceEvents.slice(0, 6).map((e) =>
+          `${e.partA}↔${e.partB} ${e.volumeMm3.toFixed(1)}mm³ @ t=${e.timeSec}s`)
+      : [];
     return {
-      overallStatus: report.overallStatus,
+      overallStatus: motionStatus,
+      blocking,
+      ...(interferenceBlocking ? {
+        deliverability: '❌ NOT DELIVERABLE — 零件在运动中相互重叠。要么修改几何留出间隙，' +
+          '要么在装配契约中把该接口声明为有意过盈/预压（intent 严重级）。修复或声明之前，此机构不可交付。',
+      } : {}),
       followers: report.metrics.followers,
       interferenceCount: report.metrics.interferenceCount,
       interferenceEvents: report.metrics.interferenceEvents,
@@ -1864,6 +1879,8 @@ export function registerCadTools(
           followers: { type: 'object', required: true, additionalProperties: true },
           interferenceCount: { type: 'integer', required: true },
           interferenceEvents: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
+          deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
           jointViolations: { type: 'array', required: true, items: { type: 'string' } },
           pivots: { type: 'object', required: true, additionalProperties: true, description: 'Per part: the point its body rotates/slides about, in the part\'s own file frame. Geometry is re-based on it before the run.' },
@@ -1910,8 +1927,11 @@ export function registerCadTools(
       const events = (value.interferenceEvents ?? []).slice(0, 5).map((e) =>
         `t=${e.timeSec.toFixed(3)}s ${e.partA}↔${e.partB}${e.volumeMm3 ? ` ${e.volumeMm3.toFixed(2)}mm³` : ''}${e.label ? ` (${e.label})` : ''}`);
       const more = (value.interferenceEvents?.length ?? 0) - events.length;
+      const blockingEvents = (value as { blocking?: string[] }).blocking ?? [];
       const lines = [
-        `Motion ${value.overallStatus}. Ran ${value.stepsRun} steps / ${value.durationSec}s.`,
+        (blockingEvents.length
+          ? `❌ NOT DELIVERABLE — parts overlap during motion. Fix the geometry to leave clearance, or declare the interface as intentional interference in the assembly contract.`
+          : `Motion ${value.overallStatus}.`) + ` Ran ${value.stepsRun} steps / ${value.durationSec}s.`,
         `Interference: ${value.interferenceCount} event(s)` +
           (events.length ? ` — ${events.join('; ')}` : '') +
           (more > 0 ? ` (+${more} more in the run report)` : ''),

@@ -2137,3 +2137,28 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
   保留。截取时刻即记录 staleness（随图走，不因后续切换丢失）。
 - 视觉存档：`verification/shots/browse3-contract-table.png`、
   `browse3-stale-shot.png`。
+
+---
+
+## 21. 运动干涉 = 交付阻塞（v2.24，2026-10-03）
+
+**用户观察**：机构"能跑"就被宣布成功，零件间碰撞/重叠无人关注。取证：插件
+早有精确干涉检测（逐位姿 Manifold 布尔，干涉时间线含体积/时刻），判定也降
+`check`——但黄牌 + 纯数字对模型没有牙齿，这是呈现层问题，不是 LLM 能力问题
+也不是 skill 措辞问题（软约束会被跳过）。
+
+**修正（判定与门禁变硬）**：
+
+- `simulate_motion`：`interferenceCount > 0` → 运行状态直接 **`fail`（红）**；
+  结果带 `blocking`（每对零件、体积、时刻）与 `deliverability`（两条出路：
+  修几何留间隙，或在装配契约中声明为有意过盈/预压）；模型可见文本前置
+  `❌ NOT DELIVERABLE`；
+- **门禁自动连锁**：`check_assembly` 的 motion-clearance 本就要求引用的运行
+  pass——运动运行变红后，引用它的接口自动 hard-violation，detail 带上
+  "❌ 不可交付 · 干涉 N 次"。零新增门禁代码，验收已验证该链条；
+- 验收：`scripts/accept-sim-verdict.mjs` 9 项全 PASS（干净机构 pass、
+  穿越机构 fail+blocking+deliverability、运行落盘红色、门禁连锁 hard-violation）。
+
+**边界**：有意过盈/预压的合法出口是装配契约的 intent 严重级——不是放宽
+判定，而是把例外显式化。`simulate_physics` 的零件间瞬态穿透暂不进判定
+（对地穿透有 solver 伪影问题，注释在 physics.ts），保持现状。
