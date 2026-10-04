@@ -1,2 +1,0 @@
-dsh: [dsh-cad-harness] patch: name mismatch for "llm-deepseek" (expected "@deepseek-ai/dsh-llm-deepseek-api-key", got "@deepseek-ai/dsh-llm-deepseek"), skipping
-dsh: [dsh-cad-harness] patch: entry "agent-presets" not found

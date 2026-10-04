@@ -96,3 +96,31 @@ accept-image-budget 组合树确认 llm-deepseek UNPATCHED；三套验收全绿�
 
 **影响：** 造物会话预算完全依赖主动窗口（超窗首请求多付一次）；非 cad 会话若
 用户自行配置路由预算，得到现货处置（含用户图被裁——那是 dsh 默认）。
+
+## 2026-10-04：版本库卫生纪律——临时/构建产物、凭据、语料快照不入库
+
+**触发条件：** 第 1、4 条（用户拍板清理范围；作为后续语料与验证产物的版本管理前提）。
+
+**要解决的问题：** .gitignore 审计发现九组中间产物被跟踪入库：临时探针目录
+`.tmp-pyprobe/`、`.tmp-m4/`、一次性 `.scan.mjs`；验证截图 `verification/shots/`、
+`dsh-cad-harness/verification/{shots,tmp}/`（原 `verification/tmp/` 规则含斜杠
+只锚定仓库根）；7.2MB 的 esbuild 产物 `sandbox/preview/dist/bundle.js`（全仓
+最大文件）；运行时 `data/usage/usage.jsonl` 与生成的
+`assembly-check-report.json`；含凭据的 `examples/dsh-home/`；以及 52 个命中
+§19 忽略规则的 `examples/microscope/cad-data/` 残留跟踪文件。
+
+**决策内容：** .gitignore 追加 10 条规则；上述路径 `git rm -r --cached` 移出
+索引（工作区文件全部保留）。examples 语料 cad-data 按 §19 既定裁定整体不入库
+（比本轮问答中"仅 versions/"更宽，以已入库的 §19 为准）。
+
+**理由：** 生成物可由 scad/构建再生，符合 .gitignore"由语料 + 脚本再生"原则；
+凭据与本地运行实例禁止入库；消除"被跟踪却命中忽略规则"的永久矛盾状态
+（`git ls-files -i -c` 由 52 归零）。
+
+**依据：** 全量 `git ls-files` 审计 + `git check-ignore -v` 命中验证；§19.1
+用户裁定（"cad-data/ 默认进 .gitignore，STL 是生成物"）；bundle.js 7.2MB 为
+du 统计全仓最大跟踪文件。
+
+**影响：** 新克隆环境需 `pnpm build` 再生 preview/dist、按语料流程再生 STL 与
+dsh-home 实例；`.credentials.yaml` 在历史提交中仍存在，若仓库将外发需另行
+filter-repo 清史；后续新增验证截图/临时目录自动被忽略，无需逐次登记。
