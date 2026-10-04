@@ -2104,3 +2104,25 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 - `~/.dsh/cad/songsenand-45ce0cbd` 是指向 microscope4 语料的悬空符号链接
   （2026-10-04 出现），迁移脚本会自动清掉；
 - 沙盒对 `~/.dsh` 只读：源目录的删除需在真实环境完成（脚本会提示）。
+
+---
+
+## 20. 面板三栏浏览：种类 → 条目 → 版本（v2.23，2026-10-03）
+
+### 20.1 用户定义的语义
+
+第一栏**种类**：零件 / 组件（两个及以上零件的组装与验证）/ 整体及仿真（运动·
+物理·流体运行）/ 装配契约（assembly manifest 与 ICD 检查报告，名字由用户从
+候选中选定）。第二栏选具体条目；第三栏只有零件类有——**版本**，默认锁定
+最新。各类内容互不混列：零件页签下只有版本史，运行按性质归入组件/仿真。
+
+### 20.2 实现与验证
+
+- `panel.ts`：`kind` 状态 + 三类 run 池（simRuns/assemblyRuns/contractRuns，
+  从全部零件 runs + 跨零件场景拍平）；零件类 records 只含版本；旧版本选中时
+  视口顶部橙色横幅「⚠ 正在查看旧版本 vX（最新为 vY）」+ 回到最新按钮。
+- 沙盒视觉验证：`sandbox/shots/browse3-380x900.png`（三栏默认最新）、
+  `browse3-stale-banner.png`（选中 v001 时横幅出现），存档
+  `verification/shots/`。沙盒入口新增 `?kind=` 参数，select 索引更新为
+  种类/条目/版本三段。
+- 回归：accept-project-scope / accept-recall / accept-connectivity 全绿。

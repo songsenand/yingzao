@@ -38,9 +38,11 @@ function selectByIndex(index: number, value: string) {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }
-const selectSubject = (value: string) => selectByIndex(0, value);
-/** ?record=r003 — drive the 记录 select (2nd select) to a version or run id. */
-const selectRecord = (value: string) => selectByIndex(1, value);
+// The browse bar is now THREE selects (DESGIGN §20): [0] 种类, [1] 条目, [2] 版本.
+const selectKind = (value: string) => selectByIndex(0, value);
+const selectSubject = (value: string) => selectByIndex(1, value);
+/** ?record=r003 — drive the 版本 select (3rd select) to a version or run id. */
+const selectRecord = (value: string) => selectByIndex(2, value);
 
 // Surface page errors into the capture: with React unmounting the tree on a
 // render throw, the screenshot would otherwise just be an empty dock.
@@ -212,6 +214,8 @@ const openParam = q.get('open');
 const recordParam = q.get('record');
 const wheelParam = q.get('wheel');
 const resetParam = q.get('reset');
+const kindParam = q.get('kind');
+if (kindParam) setTimeout(() => selectKind(kindParam), 1200);
 if (subjectParam) setTimeout(() => selectSubject(subjectParam), 1400);
 // After the subject: the record list it renders only exists once that landed.
 if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);

@@ -155,7 +155,7 @@ function applyClip(
  * first so a narrow lane truncates the *description*, never the identity:
  * "v030 · 最新 · 09-28 16:08 — …" degrades to "v030 · 最新 · 09-…".
  */
-const recordLabel = (r: PartRecord, isLatestVersion: boolean): string => {
+const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
   if (r.type === 'version') {
     const tag = isLatestVersion ? '最新 · ' : '';
     // "导入" rides in the row, not only in the tooltip: which revisions came
@@ -638,20 +638,47 @@ export function CadPanel(): React.ReactElement {
   }, [sheet]);
 
   const SCENE = '__scene__';
-  const currentPart = subjectId && subjectId !== SCENE
+  /**
+   * The first browse column (DESGIGN §20): 零件 / 组件 / 整体及仿真 / 装配契约.
+   * 零件 keeps the part+version machinery below untouched; the other three
+   * categories flatten their runs into one list and hide the version column
+   * (runs have no versions).
+   */
+  type BrowseKind = 'part' | 'assembly' | 'sim' | 'contract';
+  const [kind, setKind] = useState<BrowseKind>('part');
+  const currentPart = kind === 'part' && subjectId && subjectId !== SCENE
     ? parts.find((p) => p.id === subjectId) ?? null
     : null;
   const latestVersionId = currentPart?.versions[0]?.id ?? null;
+
+  // Flat run pool across every part + the scene bucket, newest first.
+  const allRuns: (RunProduct & { owner?: string })[] = [
+    ...scene.map((r) => ({ ...r, owner: '跨零件场景' })),
+    ...parts.flatMap((p) => p.runs.map((r) => ({ ...r, owner: p.name }))),
+  ].sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
+  const simRuns = allRuns.filter((r) => r.kind === 'motion' || r.kind === 'physics' || r.kind === 'fluid');
+  const assemblyRuns = allRuns.filter((r) => r.kind === 'assembly' || r.kind === 'assembly-check');
+  const contractRuns = allRuns.filter((r) => r.kind === 'assembly-check');
+
   /**
    * The subject's history: its revisions plus the runs that touched it. While
    * the subject is still undecided (`''`) this is empty on purpose — otherwise
    * the first poll would briefly mount a scene run and then swap to the part,
    * burning a WebGL context and flashing the wrong thing.
    */
+  // 零件的记录列 = 版本 ONLY (DESGIGN §20): runs live in 仿真 / 组件 categories.
   const records: PartRecord[] = (
-    currentPart ? [...currentPart.versions, ...currentPart.runs] : (subjectId === SCENE ? scene : [])
-  ).slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
-  const record: PartRecord | null = records.find((r) => r.id === recordId) ?? null;
+    currentPart
+      ? currentPart.versions.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
+      : (subjectId === SCENE ? scene : [])
+  );
+  const flatCategoryRuns: PartRecord[] | null = kind === 'sim' ? simRuns
+    : kind === 'assembly' ? assemblyRuns
+    : kind === 'contract' ? contractRuns
+    : null;
+  const record: PartRecord | null = flatCategoryRuns
+    ? (flatCategoryRuns.find((r) => r.id === recordId) ?? null)
+    : (records.find((r) => r.id === recordId) ?? null);
   const version: VersionProduct | null = record?.type === 'version' ? record : null;
   const run: RunProduct | null = record?.type === 'run' ? record : null;
   const versionId = version?.id ?? null;
@@ -1956,14 +1983,32 @@ export function CadPanel(): React.ReactElement {
       ),
     ),
 
-    // ── the browse tree, on ONE line: 零件 → 记录 → 跟随 ──
-    // No text labels: each control is self-describing (a part reads
-    // "名字 · 5版 · 1验证", a record "v030 · 版本 · 最新 · 时间"), and the
-    // tooltips spell it out. Saving a row keeps the viewport that much taller.
+    // ── the browse tree, ONE line, THREE columns (DESGIGN §20): 种类 → 条目 → 版本 ──
+    // 种类: 零件 / 组件 / 整体及仿真 / 装配契约. 条目: the concrete part or run.
+    // 版本 exists only for 零件 and DEFAULTS to the newest — picking an older
+    // one raises the stale-version banner over the viewport.
     React.createElement(
       'div',
       { style: S.bar },
       React.createElement(
+        'select',
+        {
+          value: kind,
+          onChange: (e: any) => {
+            setKind(e.target.value as BrowseKind);
+            setSubjectId('');
+            setRecordId(null);
+            setFollowLatest(true);
+          },
+          'aria-label': '种类',
+          style: { ...S.select, flex: 'none', width: 108 },
+        },
+        React.createElement('option', { value: 'part' }, `零件 · ${parts.length}`),
+        React.createElement('option', { value: 'assembly' }, `组件 · ${assemblyRuns.length}`),
+        React.createElement('option', { value: 'sim' }, `仿真 · ${simRuns.length}`),
+        React.createElement('option', { value: 'contract' }, `装配契约 · ${contractRuns.length}`),
+      ),
+      kind === 'part' ? React.createElement(
         'select',
         {
           value: subjectId,
@@ -1976,50 +2021,60 @@ export function CadPanel(): React.ReactElement {
             setSubjectId(next);
           },
           title: currentPart
-            ? `零件「${currentPart.name}」· ${currentPart.versions.length} 个版本 · ${currentPart.runs.length} 次验证` +
+            ? `零件「${currentPart.name}」· ${currentPart.versions.length} 个版本` +
               (currentPart.nameSource === 'intent' ? '\n（名字由 userIntent 推导，Agent 未显式声明）' : '\n（名字由 Agent 声明）')
-            : '跨零件场景运行 — 几何来自多个零件或内联 SCAD',
+            : '选择一个零件',
           'aria-label': '零件',
-          // Equal halves: the part and its record are the same kind of choice,
-          // so neither should win the lane by content length.
           style: { ...S.select, flex: '1 1 0', minWidth: 0 },
         },
         parts.length === 0 && React.createElement('option', { value: '' }, projectLabel ? `暂无零件${projectLabel}` : '暂无零件'),
-        // Only the version count rides in the closed select: the run count and
-        // the name's provenance live in the tooltip, so the row stays legible
-        // at 320px and the descriptions are not the first thing truncated.
         parts.map((p) => React.createElement('option', { key: p.id, value: p.id },
           `${p.name} · ${p.versions.length}版`)),
-        scene.length > 0 && React.createElement('option', { value: SCENE },
-          `⚙ 跨零件场景 · ${scene.length}`),
+      ) : React.createElement(
+        'select',
+        {
+          value: recordId ?? '',
+          onChange: (e: any) => { setRecordId(e.target.value); },
+          'aria-label': kind === 'contract' ? '契约检查' : kind === 'sim' ? '仿真运行' : '组件运行',
+          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
+        },
+        (kind === 'sim' ? simRuns : kind === 'contract' ? contractRuns : assemblyRuns).length === 0 &&
+          React.createElement('option', { value: '' }, '暂无记录'),
+        (kind === 'sim' ? simRuns : kind === 'contract' ? contractRuns : assemblyRuns).map((r) =>
+          React.createElement('option', { key: r.id, value: r.id },
+            `${r.kind === 'motion' ? '运动' : r.kind === 'physics' ? '物理' : r.kind === 'fluid' ? '流体' : r.kind === 'assembly' ? '装配验证' : '契约检查'}` +
+            `${r.owner ? r.owner + ' · ' : ''}${recordLabel(r)}`,
+          )),
       ),
       // Names derived from the intent are marked, not silently passed off as declared.
-      currentPart?.nameSource === 'intent' && React.createElement('span', {
+      kind === 'part' && currentPart?.nameSource === 'intent' && React.createElement('span', {
         style: { fontSize: 11, color: '#b8860b', flex: 'none', cursor: 'help' },
         title: '零件名由 userIntent 推导（Agent 未显式声明）',
       }, '∗'),
-      React.createElement(
+      kind === 'part' && React.createElement(
         'select',
         {
           value: recordId ?? '',
           onChange: (e: any) => { setFollowLatest(false); setRecordId(e.target.value); },
           title: record
             ? `记录「${record.id}」· ${record.type === 'version' ? '版本' : '验证运行'}\n${record.title}`
-            : '该零件还没有记录',
-          'aria-label': '记录',
+            : '该零件还没有版本',
+          'aria-label': '版本',
           style: { ...S.select, flex: '1 1 0', minWidth: 0 },
         },
-        records.length === 0 && React.createElement('option', { value: '' }, '暂无记录'),
-        records.map((r) => React.createElement('option', { key: r.id, value: r.id },
+        // 零件的记录列 = 版本 ONLY (DESGIGN §20): runs live in 仿真 / 组件.
+        records.filter((r) => r.type === 'version').length === 0 &&
+          React.createElement('option', { value: '' }, '暂无版本'),
+        records.filter((r) => r.type === 'version').map((r) => React.createElement('option', { key: r.id, value: r.id },
           recordLabel(r, r.type === 'version' && r.id === latestVersionId))),
       ),
-      record && statusGlyph(record.status),
-      React.createElement('button', {
+      kind === 'part' && record && statusGlyph(record.status),
+      kind === 'part' && React.createElement('button', {
         type: 'button',
         onClick: () => setFollowLatest((f) => !f),
         title: followLatest
-          ? '跟随最新：进入零件默认看最新版本，此后一有新版本或新验证就自动切过去。点击钉住当前记录。'
-          : '已钉住当前记录（点击恢复跟随新记录）',
+          ? '跟随最新：进入零件默认看最新版本，此后一有新版本就自动切过去。点击钉住当前版本。'
+          : '已钉住当前版本（点击恢复跟随新版本）',
         'aria-label': followLatest ? '跟随最新' : '已钉住',
         style: {
           ...S.smallBtn,
@@ -2033,6 +2088,23 @@ export function CadPanel(): React.ReactElement {
     React.createElement(
       'div',
       { style: S.stage },
+      // Stale-version banner (DESGIGN §20): the user demanded it be obvious.
+      kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
+        React.createElement('div', {
+          style: {
+            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(184, 134, 11, 0.92)', color: '#fff',
+            padding: '4px 10px', fontSize: 12, fontWeight: 600,
+          },
+        },
+          `⚠ 正在查看旧版本 ${version.id}（最新为 ${latestVersionId}）— 讨论请以此为准或切回最新`,
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => { setFollowLatest(true); setRecordId(latestVersionId); },
+            style: { ...S.smallBtn, marginLeft: 'auto', padding: '1px 8px' },
+          }, '回到最新'),
+        ),
       version && React.createElement('div', {
         ref: mountRef,
         // Picking listens HERE, not on an overlay that swallows the pointer:
