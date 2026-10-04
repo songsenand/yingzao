@@ -76,7 +76,7 @@ section('project key = the session cwd');
   check(projectKey('/') .length > 0, 'a path with no basename still yields a key', projectKey('/'));
 }
 
-// --- 2. layout: one directory per project under DSH_HOME --------------------
+// --- 2. layout: one cad-data/ INSIDE each project (DESGIGN §19) --------------
 section('storage layout');
 {
   check(dshHome() === FAKE_HOME, 'DSH_HOME is honoured', dshHome());
@@ -84,13 +84,35 @@ section('storage layout');
   const b = join(FAKE_HOME, 'proj-b');
   const sa = projectStores(a);
   const sb = projectStores(b);
-  check(projectsHome() === join(FAKE_HOME, 'cad'), 'projects live under <DSH_HOME>/cad', projectsHome());
-  check(sa.root.startsWith(projectsHome()), 'store root is under the projects home', sa.root);
+  check(projectsHome() === join(FAKE_HOME, 'cad'), 'profile-level home stays at <DSH_HOME>/cad (telemetry)', projectsHome());
+  check(sa.root === join(a, 'cad-data'), 'store root is <cwd>/cad-data — the project owns its corpus', sa.root);
+  check(!sa.root.startsWith(projectsHome()), 'store root is NOT under DSH_HOME anymore', sa.root);
   check(sa.root !== sb.root, 'two projects never share a root');
   check(sa.store.root === sa.root && sa.runStore.root === join(sa.root, 'runs') && sa.partStore.root === join(sa.root, 'parts'),
     'all three stores are rooted at the project directory');
   check(sa === projectStores(join(a, '.')), 'one instance per project (memoised)');
   check(telemetryRoot() === join(projectsHome(), 'telemetry'), 'telemetry is a sibling, not a project');
+}
+
+// --- 2b. in-project semantics: delete the folder, lose the corpus ------------
+{
+  const { existsSync } = await import('node:fs');
+  const a = join(FAKE_HOME, 'proj-del');
+  const s1 = projectStores(a);
+  await ensureProjectDir(s1);
+  mkdirSync(join(s1.root, 'versions', 'v001'), { recursive: true });
+  writeFileSync(join(s1.root, 'versions', 'v001', 'model.stl'), 'stl-bytes');
+  check(existsSync(join(a, 'cad-data', 'versions', 'v001', 'model.stl')),
+    'artifacts land inside the project folder', join(a, 'cad-data'));
+
+  rmSync(join(a, 'cad-data'), { recursive: true, force: true });
+  const s2 = projectStores(a);
+  check(s2.root === join(a, 'cad-data') && !existsSync(s2.root),
+    'deleting cad-data deletes the corpus; the next read is empty (and not an error)');
+  mkdirSync(join(s2.root, 'versions', 'v001'), { recursive: true });
+  writeFileSync(join(s2.root, 'versions', 'v001', 'model.stl'), 'fresh');
+  check(readFileSync(join(s2.root, 'versions', 'v001', 'model.stl'), 'utf8') === 'fresh',
+    'recreating the project in place starts a FRESH corpus (no inheritance)');
 }
 
 // --- 3. the real routes isolate corpora -------------------------------------

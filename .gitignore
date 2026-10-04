@@ -17,6 +17,9 @@ panel.bak.ts
 # ---- 生成的工件（由语料 + 脚本再生）----
 # 各 example 的版本库渲染输出（STL/PNG，由 scad 重新编译可再生）
 examples/*/out/
+# 项目内 CAD 语料（cad-data/：版本库 STL、运行帧——生成物；要版本管理可自行移出忽略）
+cad-data/
+examples/*/cad-data/
 # 版本库生成的模型快照
 dsh-cad-harness/data/versions/
 # 截图与渲染输出

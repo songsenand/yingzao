@@ -38,9 +38,21 @@ export function dshHome(): string {
   return fromEnv && isAbsolute(fromEnv) ? fromEnv : join(homedir(), '.dsh');
 }
 
-/** Every project's data lives under here; `telemetry` is the one non-project sibling. */
+/** Profile-level siblings live here; `telemetry` is the one resident (DESGIGN §19). */
 export function projectsHome(): string {
   return join(dshHome(), 'cad');
+}
+
+/**
+ * Per-project data lives INSIDE the project: `<cwd>/cad-data/` (DESGIGN §19).
+ *
+ * The 2026-10-03 user decision: artifacts belong to the project folder, so
+ * deleting the folder deletes the corpus and recreating a same-named project
+ * in place starts fresh — no hash-directory archaeology, nothing to look up
+ * under $DSH_HOME. Route/telemetry data stays profile-level (above).
+ */
+export function projectDataDir(cwd: string): string {
+  return join(resolve(cwd), 'cad-data');
 }
 
 /**
@@ -90,7 +102,7 @@ export function projectStores(cwd: string): ProjectStores {
   const canonical = resolve(cwd);
   const hit = cache.get(canonical);
   if (hit) return hit;
-  const root = join(projectsHome(), projectKey(canonical));
+  const root = projectDataDir(canonical);
   const built: ProjectStores = {
     cwd: canonical,
     root,

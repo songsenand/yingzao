@@ -2064,3 +2064,43 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
   UNPATCHED、现货行 disabled、preset-cad 落地、pi-ai 任何常规规模都不预测
   裁剪、镜像对照真实实现 195 例全对；
 - `accept-recall.mjs` 回归 OK；tsc 干净；`lib/` 已重建。
+
+---
+
+## 18. 单一连通实体纪律（v2.21，2026-10-03）
+
+零件必须是**单一连通实体**。`generate_part` 在 `shells > 1` 时追加 §18 纪律
+警告；新工具 `check_connectivity(versionId)` 报告连通体数与**每个体的包围盒
+和尺寸**（最大体优先），把"多出来的体是什么、在哪"说清楚。多体只有两条
+正路：union 成一体（必须真实接触/重叠），或按多个零件分别建模。交付多体
+版本会毒化所有下游数字——装配干涉、质量、打印排版都假设一体一零件。
+验收：`scripts/accept-connectivity.mjs`（分离双立方=2 体、共面并集=1 体、
+真实 temp 项目库端到端、生成端警告与 skill 纪律静态检查）。
+
+## 19. 语料搬家：`<cwd>/cad-data/`（v2.22，2026-10-03）
+
+### 19.1 用户裁定与理由
+
+用户拍板：产物放进**项目文件夹**——删目录即删产物、原地重建同名项目即全新
+语料。§13.13 当年的弊端（"不往用户仓库里写东西"）在今天已消失：用户有 git
+可自行取舍（`cad-data/` 默认进 .gitignore，STL 是生成物）；CAD 会话只在
+用户主动的目录里开。
+
+### 19.2 落地
+
+- `projectStores` root 改为 `<cwd>/cad-data/`；`projectKey` 保留（迁移定位
+  旧目录用）；遥测**仍留在** `<DSH_HOME>/cad/telemetry/`（profile 级，量的是
+  请求不是设计）；
+- 迁移 `scripts/migrate-to-project-dir.mjs`：按 `project.json.cwd` 把
+  `<DSH_HOME>/cad/<hash>/` 搬到 `<cwd>/cad-data/`；按 id 合并、拒绝覆盖；
+  只读源降级为"复制+保留源"；悬空符号链接清扫。**幂等可重跑**。
+- 已迁移 4 份语料（ToyMarker / microscope2 / microscope3 / microscope4），
+  逐一 `diff -rq` 校验与源逐字节一致。
+
+### 19.3 边界
+
+- 活会话（重启前的旧代码）仍写旧路径：**重启 dsh 后重跑一次迁移**清扫
+  漂移（这正是幂等设计的目的）；
+- `~/.dsh/cad/songsenand-45ce0cbd` 是指向 microscope4 语料的悬空符号链接
+  （2026-10-04 出现），迁移脚本会自动清掉；
+- 沙盒对 `~/.dsh` 只读：源目录的删除需在真实环境完成（脚本会提示）。
