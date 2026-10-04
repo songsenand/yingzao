@@ -2126,3 +2126,14 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
   `verification/shots/`。沙盒入口新增 `?kind=` 参数，select 索引更新为
   种类/条目/版本三段。
 - 回归：accept-project-scope / accept-recall / accept-connectivity 全绿。
+
+### 20.3 补充（同日）：装配契约表格 + 旧版本截图双确认
+
+- **装配契约不用 three.js**：契约检查运行无几何，视口呈现 `reportOnlyCard`
+  摘要卡；「报告」页签渲染 **HTML 表格**（接口 / 零件对 / 要求 / 实测 / 判定，
+  pass 绿、hard-violation 红）——数据来自运行自带的 check 报告 JSON。
+- **旧版本截图双确认**：截图草稿带琥珀警告行「此截图来自旧版本 vX（最新为
+  vY）— 发送时会再次确认」；点「发送到会话」再弹一次原生确认，取消则草稿
+  保留。截取时刻即记录 staleness（随图走，不因后续切换丢失）。
+- 视觉存档：`verification/shots/browse3-contract-table.png`、
+  `browse3-stale-shot.png`。

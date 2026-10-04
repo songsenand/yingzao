@@ -992,6 +992,8 @@ export function CadPanel(): React.ReactElement {
     /** 用户自己的话，与自动说明合并成一条消息发出。 */
     text: string;
     noteOverride?: string;
+    /** Set when the capture came from a NON-latest version (DESGIGN §20). */
+    stale?: { version: string; latest: string };
   } | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -1389,7 +1391,13 @@ export function CadPanel(): React.ReactElement {
   /** Capture and open the compose dialog — nothing is sent until the user confirms. */
   const openShotDraft = (canvas: HTMLCanvasElement, label: string, noteOverride?: string) => {
     const auto = shotPrompt(label);
-    setShotDraft({ canvas, url: canvas.toDataURL('image/png'), label, auto, text: noteOverride ?? '', noteOverride });
+    // Capture-time staleness: a screenshot of an old revision that later gets
+    // sent as "this is the part" is exactly the confusion the banner exists
+    // for — carry the fact into the draft so the warning can follow the image.
+    const stale = kind === 'part' && version && latestVersionId && versionId !== latestVersionId
+      ? { version: version.id, latest: latestVersionId }
+      : undefined;
+    setShotDraft({ canvas, url: canvas.toDataURL('image/png'), label, auto, text: noteOverride ?? '', noteOverride, stale });
   };
 
   const onScreenshot = async () => {
@@ -1402,6 +1410,9 @@ export function CadPanel(): React.ReactElement {
   const sendShotDraft = async () => {
     const d = shotDraft;
     if (!d) return;
+    if (d.stale && !window.confirm(
+      `⚠ 这张截图来自旧版本 ${d.stale.version}（最新为 ${d.stale.latest}）。\n` +
+      '确认它就是你要让模型看的内容，并仍要发送？')) return;
     setShotDraft(null);
     const note = d.text.trim();
     const text = [d.auto, note].filter(Boolean).join('\n');
@@ -1532,6 +1543,38 @@ export function CadPanel(): React.ReactElement {
         line(`到达率 ${rep.metrics?.outletArrivalRatio ?? '—'} · 穿透 ${rep.metrics?.penetrationCount ?? '—'}`),
         line(`粒子 ${rep.metrics?.particleCount0 ?? '—'} · 逃逸 ${rep.metrics?.escaped ?? '—'} · 活动 ${rep.metrics?.active ?? '—'}`),
         line(`状态 ${rep.overallStatus ?? '—'}`),
+      );
+    }
+    if (r.kind === 'assembly-check') {
+      // 装配契约报告 = 表格（DESGIGN §20）：接口 × 要求 × 实测 × 判定。
+      const rows = (rep.results ?? rep.hardViolations ?? rep.intentFlags ?? []) as {
+        interfaceId?: string; a?: string; b?: string; type?: string;
+        expected?: { quantity?: string; min?: number; max?: number };
+        measured?: number; verdict?: string; detail?: string;
+      }[];
+      const color = (v?: string) => v === 'pass' ? '#27ae60' : v === 'intent-flag' ? '#b8860b' : '#c0392b';
+      const req = (e?: { quantity?: string; min?: number; max?: number }) =>
+        e ? `${e.quantity ?? ''} ${e.min ?? '≤'}–${e.max ?? ''}`.trim() : '—';
+      const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
+        React.createElement('td', {
+          style: { padding: '3px 6px', borderBottom: '1px solid #e5e7eb', fontSize: 11,
+                   fontWeight: opts.strong ? 600 : 400, color: opts.color ?? '#374151' },
+        }, text);
+      return React.createElement('div', { style: { overflowX: 'auto' } },
+        line(`清单「${rep.manifestName ?? '—'}」· ${rep.results?.length ?? rows.length} 个接口 · ` +
+             `通过 ${(rep.results ?? []).filter((x: any) => x.verdict === 'pass').length}`),
+        React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 4 } },
+          React.createElement('thead', null, React.createElement('tr', {},
+            ['接口', '零件对', '要求', '实测', '判定'].map((h) =>
+              React.createElement('th', { key: h, style: { padding: '3px 6px', fontSize: 11, textAlign: 'left',
+                borderBottom: '2px solid #d1d5db', color: '#6b7280' } }, h)))),
+          React.createElement('tbody', null, rows.map((row, i) =>
+            React.createElement('tr', { key: i },
+              cell(row.interfaceId ?? '—', { strong: true }),
+              cell(`${row.a ?? '?'} ↔ ${row.b ?? '?'}`),
+              cell(req(row.expected)),
+              cell(String(row.measured ?? '—')),
+              cell(row.verdict ?? '—', { strong: true, color: color(row.verdict) }))))),
       );
     }
     if (r.kind === 'assembly') {
@@ -1949,6 +1992,10 @@ export function CadPanel(): React.ReactElement {
             padding: '4px 6px', marginBottom: 6, whiteSpace: 'pre-wrap', userSelect: 'text',
           },
         }, shotDraft.auto),
+        shotDraft.stale && React.createElement('div', {
+          style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
+                   borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: '#8a5a00' },
+        }, `⚠ 此截图来自旧版本 ${shotDraft.stale.version}（最新为 ${shotDraft.stale.latest}）— 发送时会再次确认`),
         React.createElement('textarea', {
           value: shotDraft.text,
           onChange: (e: any) => setShotDraft((d) => d ? { ...d, text: e.target.value } : d),

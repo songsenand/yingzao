@@ -38,11 +38,16 @@ function selectByIndex(index: number, value: string) {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }
-// The browse bar is now THREE selects (DESGIGN §20): [0] 种类, [1] 条目, [2] 版本.
+// The browse bar is now THREE selects for 零件 (DESGIGN §20): [0] 种类,
+// [1] 条目, [2] 版本 — but only TWO for the run categories (条目 IS the record).
+// The record select is therefore the LAST one present.
 const selectKind = (value: string) => selectByIndex(0, value);
 const selectSubject = (value: string) => selectByIndex(1, value);
-/** ?record=r003 — drive the 版本 select (3rd select) to a version or run id. */
-const selectRecord = (value: string) => selectByIndex(2, value);
+const selectRecord = (value: string) => {
+  const selects = document.querySelectorAll('#root select');
+  const index = selects.length >= 3 ? 2 : 1;
+  return selectByIndex(index, value);
+};
 
 // Surface page errors into the capture: with React unmounting the tree on a
 // render throw, the screenshot would otherwise just be an empty dock.
@@ -216,7 +221,10 @@ const wheelParam = q.get('wheel');
 const resetParam = q.get('reset');
 const kindParam = q.get('kind');
 if (kindParam) setTimeout(() => selectKind(kindParam), 1200);
+const shotParam = q.get('shot');
 if (subjectParam) setTimeout(() => selectSubject(subjectParam), 1400);
+// ?shot=1 — click 📥截图 so a stale-version capture (and its warning) can be reviewed.
+if (shotParam) setTimeout(() => clickByText('截图'), 2100);
 // After the subject: the record list it renders only exists once that landed.
 if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);
 // `open` accepts a comma-separated sequence: `open=参数,⤢` clicks the tab, then
