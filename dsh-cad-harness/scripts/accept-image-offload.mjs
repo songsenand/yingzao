@@ -26,6 +26,7 @@ import {
   CAD_IMAGE_WINDOW,
   countRetainedImages,
   enforceSessionWindow,
+  presetOfSession,
   imageOffloadProjection,
   offloadMessageImages,
   offloadOldestProtected,
@@ -218,6 +219,31 @@ const fixture = [
   const std = makeSession('standard');
   check(enforceSessionWindow({ get: () => std }, { sessionId: 's1', messages: requestMessages }) === null,
     'a standard-mode session is NEVER proactively pruned (the fairness the user asked for)');
+
+  // microscope5's real shape: the session was BORN standard and then switched to
+  // 造物模式 while blank (the log has agent-preset/selected + 228 CAD tool
+  // calls). The live projection says cad; the frozen header still says standard.
+  // Reading the header disabled the window for exactly the sessions it exists
+  // for — so the reader must be the projection (§13.14's rule, repeated).
+  const switchedSession = makeSession('standard');
+  const overMessages = [...requestMessages, { role: 'user', content: Array.from({ length: 16 }, (_, i) => img('extra', 30, i)) }];
+  const headerOnly = enforceSessionWindow({ get: () => switchedSession }, { sessionId: 's1', messages: overMessages });
+  check(headerOnly === null,
+    'header-only reading (the bug): a switched-to-cad session is treated as standard');
+  const projectionService = {
+    stateOf: (session, key) => (key === 'agentPreset' ? 'cad' : undefined),
+  };
+  const viaProjection = enforceSessionWindow(
+    { get: () => switchedSession }, { sessionId: 's1', messages: overMessages },
+    (session) => presetOfSession(session, projectionService),
+  );
+  check(!!viaProjection && viaProjection.preset === 'cad' && viaProjection.appended === true,
+    'projection reading (the fix): the SAME session gets its cad window',
+    JSON.stringify(viaProjection));
+  check(presetOfSession(switchedSession, projectionService) === 'cad',
+    'presetOfSession prefers the live projection over the frozen header');
+  check(presetOfSession(switchedSession, undefined) === 'standard',
+    'presetOfSession falls back to the header when no projection service exists');
   check(enforceSessionWindow({}, { sessionId: 's1', messages: requestMessages }) === null,
     'no sessions service → not applicable');
 }

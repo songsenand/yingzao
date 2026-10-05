@@ -21,6 +21,7 @@ import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, bounding
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { runMotion } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
+import { auditDelivery } from './delivery-audit.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { measureDistance, closestPointsBetweenMeshes, closestPointsMeshVsSphere, buildMeshBvh, type MeshData } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
@@ -2465,6 +2466,74 @@ export function registerCadTools(
         overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
         findings,
         watertight,
+      };
+    },
+  }));
+
+  // --- delivery_audit: 交付前的"证据体检"（DESGIGN §23）------------------------
+  //
+  // microscope5 的教训：过期证据、红牌运行、未验证版本、契约缺机构接口、
+  // 重复运行——这些事实全都在语料里，但**没有任何一处把它们摆在一起**，于是
+  // 交付时没人看见。本工具一次读三个 store（+ 装配清单）算出结论。
+  registerTool(defineTool({
+    name: 'delivery_audit',
+    description:
+      'Audit the corpus before delivering: failing runs that are still the newest of their kind, ' +
+      'parts whose newest version no run ever checked, runs citing superseded geometry (stale evidence), ' +
+      'contract gaps (e.g. no motion-clearance interface while the assembly has several parts), ' +
+      'contract nodes pointing at replaced versions, and repeated runs that add no information. ' +
+      'Run this BEFORE any delivery claim; a blocked verdict means the corpus itself contradicts the claim.',
+    parameters: {
+      manifestPath: {
+        type: 'string',
+        description: 'Assembly manifest to audit against. Defaults to assembly/assembly.json in the session workspace.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          verdict: { type: 'string', required: true, description: '"blocked" | "attention" | "ok".' },
+          findings: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                severity: { type: 'string', required: true },
+                code: { type: 'string', required: true },
+                detail: { type: 'string', required: true },
+              },
+            },
+          },
+          summary: { type: 'string', required: true },
+          versions: { type: 'object', required: true, additionalProperties: true },
+          parts: { type: 'object', required: true, additionalProperties: true },
+          runs: { type: 'object', required: true, additionalProperties: true },
+          contract: { type: 'object', required: true, additionalProperties: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: [
+          `${value.verdict === 'blocked' ? '❌ BLOCKED' : value.verdict === 'attention' ? '⚠ NEEDS ATTENTION' : '✓ OK'} — ${value.summary}`,
+          ...(value.findings ?? []).map((f: any) => `  [${f.severity}] ${f.code}: ${f.detail}`),
+        ].join('\n'),
+      }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { manifestPath?: string };
+      const project = await allStores(exec);
+      const report = await auditDelivery(project, { manifestPath: a.manifestPath });
+      const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
+      const warn = report.findings.filter((f) => f.severity === 'warn').length;
+      const info = report.findings.filter((f) => f.severity === 'info').length;
+      return {
+        ...report,
+        summary: `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
+          `${blocked} blocked · ${warn} warn · ${info} info · ` +
+          `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}`,
       };
     },
   }));

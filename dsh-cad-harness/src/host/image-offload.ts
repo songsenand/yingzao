@@ -27,6 +27,33 @@
 /** The stable failure code the adapters raise when a request exceeds its image budget. */
 const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED';
 
+/**
+ * The preset a session EFFECTIVELY runs.
+ *
+ * `session.header.agentPreset` is a creation fact and stays frozen, so a session
+ * born 标准模式 and then switched to 造物模式 (allowed while blank) forever reads
+ * "standard" in its header. Reading the header therefore disabled the cad image
+ * window for exactly the sessions it was written for — microscope5's session
+ * switched to cad (228 CAD tool calls prove it) yet the window never fired,
+ * because this module asked the header (the §13.14 bug, repeated here; see
+ * tools-scope.ts `effectivePresetOf` for the same rule).
+ *
+ * The live `agentPreset` Session projection is authoritative; the header is only
+ * a fallback for profiles that do not compose dsh-agent-presets.
+ */
+export function presetOfSession(session: any, projectionService?: any): string | null {
+  try {
+    const read = projectionService?.stateOf;
+    if (typeof read === 'function') {
+      const value = read.call(projectionService, session, 'agentPreset');
+      if (typeof value === 'string' && value) return value;
+      if (value === null) return null;
+    }
+  } catch { /* projection unavailable — fall through to the header */ }
+  const header = session?.header?.agentPreset;
+  return typeof header === 'string' && header ? header : null;
+}
+
 import { DEEPSEEK_KEEP_IMAGES } from './image-budget.ts';
 
 /**
@@ -184,8 +211,13 @@ export const imageOffloadProjection = {
  * unmodified dsh. `true` means a decision was appended and the request should
  * retry.
  */
-export function offloadOldestProtected(session: any, sourceEventSeqs: readonly number[], count: number): boolean {
-  const cad = session?.header?.agentPreset === 'cad';
+export function offloadOldestProtected(
+  session: any,
+  sourceEventSeqs: readonly number[],
+  count: number,
+  projectionService?: any,
+): boolean {
+  const cad = presetOfSession(session, projectionService) === 'cad';
   const entries = [];
   for (const seq of sourceEventSeqs) {
     const event = session.eventAt(seq);
@@ -224,7 +256,8 @@ export function applyProtectedImageOffload(ctx: any): void {
   // Agent request waterfall: identical semantics to the stock executor.
   ctx.on('agent/request-error', ({ agent, failure }: any, next: () => unknown) => {
     if (failure?.code !== IMAGE_OFFLOAD_REQUIRED_CODE || failure?.offloadImages === undefined) return next();
-    if (!offloadOldestProtected(agent.session, agent.session.surface.nodes, failure.offloadImages)) return next();
+    if (!offloadOldestProtected(agent.session, agent.session.surface.nodes, failure.offloadImages,
+      ctx.reflect.get('sessionProjections'))) return next();
     return Promise.resolve({ kind: 'retry' });
   });
 
@@ -233,7 +266,8 @@ export function applyProtectedImageOffload(ctx: any): void {
   ctx.on('compaction/summary-error', ({ session, sourceEventSeqs, error, signal }: any, next: () => unknown) => {
     if ((error as any)?.code !== IMAGE_OFFLOAD_REQUIRED_CODE || (error as any)?.failure?.offloadImages === undefined) return next();
     signal?.throwIfAborted();
-    if (!offloadOldestProtected(session, sourceEventSeqs, error.failure.offloadImages)) return next();
+    if (!offloadOldestProtected(session, sourceEventSeqs, error.failure.offloadImages,
+      ctx.reflect.get('sessionProjections'))) return next();
     return true;
   });
 
@@ -249,7 +283,10 @@ export function applyProtectedImageOffload(ctx: any): void {
     if (sessionId && !options?.purpose && !windowInFlight.has(sessionId)) {
       windowInFlight.add(sessionId);
       void Promise.resolve()
-        .then(() => enforceSessionWindow(sessionsRef(ctx), options))
+        .then(() => enforceSessionWindow(
+          sessionsRef(ctx), options,
+          (session) => presetOfSession(session, ctx.reflect.get('sessionProjections')),
+        ))
         .catch((e) => ctx.logger?.warn?.(`cad-harness: image window check failed: ${String((e as Error)?.message ?? e)}`))
         .finally(() => windowInFlight.delete(sessionId));
     }
@@ -268,15 +305,18 @@ function sessionsRef(ctx: any): any {
  * `null` = not applicable (no session / not a cad session / under window),
  * otherwise `{ preset, retained, excess, appended }`.
  */
-export function enforceSessionWindow(sessions: any, options: { sessionId?: string; messages?: any[] }):
-  { preset: string | null; retained: number; excess: number; appended: boolean } | null {
+export function enforceSessionWindow(
+  sessions: any,
+  options: { sessionId?: string; messages?: any[] },
+  readPreset: (session: any) => string | null = (s) => presetOfSession(s),
+): { preset: string | null; retained: number; excess: number; appended: boolean } | null {
   const sessionId = options?.sessionId;
   if (!sessionId || typeof sessions?.get !== 'function') return null;
   const session = sessions.get(sessionId);
   if (!session) return null;
-  // The preset is a session CREATION fact (dsh accepts switching only while
-  // the session is blank), so the header is the authoritative source.
-  const preset: string | null = session.header?.agentPreset ?? null;
+  // The EFFECTIVE preset (live projection, header fallback) — never the header
+  // alone: a blank session may have switched to 造物模式 after creation.
+  const preset: string | null = readPreset(session);
   if (preset !== 'cad') return null;
   const retained = countRetainedImages(options?.messages);
   const excess = retained - CAD_IMAGE_WINDOW;

@@ -2236,3 +2236,43 @@ microscope5 的 69 次运行实测，抓到三个**互相独立**的原因：
 最新在前、三类不重叠、三类恰好划分全部运行、空语料四个空列表。
 视觉存档：`verification/shots/m5-sim.png`（仿真·28，自动落位 r069）、
 `m5-assembly.png`（组件·19，渲染真实 4 零件装配）、`m5-contract.png`（契约·22）。
+
+---
+
+## 23. 交付审计工具 + 窗口预设读取 bug（v2.27，2026-10-04）
+
+### 23.1 microscope5 取证（用户要求"从 LLM 视角列问题"）
+
+用其语料独立测得：**66/69 次运行引用了已被取代的版本**；全项目仅 3 条运行
+"全新鲜"，其中 2 条是**失败**的 motion；最后两次 motion（r057/r059）干涉
+3/9 次后 11 分钟即宣布交付；**19/19 次 validate_assembly 全部 fail**（重复
+签名 x5/x3）；交付 manifest 26 接口里 **0 个 motion-clearance**（机构未入契约），
+而交付文档却称"运动接口引 r029"；**83 版里 22 版从未被任何运行引用**；
+10 组重复运行（同 kind+同几何+同结果）白花 15 次；交付文档的版本区间
+（v001…v056）早于语料的 v083，且 6/15 个交付件版本已被取代。
+
+### 23.2 新增 `delivery_audit` 工具
+
+一次读三个 store + 装配清单，输出 verdict（blocked/attention/ok）与 findings：
+最新同类运行是否红牌、最新版本是否有人验证、过期证据统计、从未被引用的版本、
+契约是否缺 motion-clearance、manifest 节点是否指向旧版本、几何是否比契约检查
+更新、重复运行组。验收 `scripts/accept-delivery-audit.mjs` **直接用 microscope5
+真实语料**断言（复现上面每一个数字），并用一个"干净语料"防误报。
+
+### 23.3 纪律（skill 5–7 条）
+
+⑤ 整机结论必须有整机运行背书（microscope5 的"整体"证据含 7 次单件 physics，
+16 件装配体从未通过）；⑥ 机构必须写进契约（否则"26 接口 0 冲突"对机构毫无
+意义）；⑦ 任何交付声明前跑 `delivery_audit` 并回答其 findings。
+
+### 23.4 顺带修掉的真 bug：窗口读了会话头
+
+用户质疑"图片限制 24 应该已生效"。核对遥测：**deepseek 路由 41 次请求 max=24
+（生效）**，而 **glm 212 次请求 128 次超过 24、峰值 221（未生效）**。原因不是
+路由而是**预设判定**：会话日志显示 microscope5 会话头是 `standard`、但存在
+`agent-preset/selected {cad}` 事件且随后调用 **228 次 CAD 工具**——用户确实切到
+了造物模式，而 §16.4 的窗口代码读的是 `session.header.agentPreset`（创建事实，
+冻结），于是把这个会话当标准模式放行。这正是 §13.14 记过的"用会话头判预设"
+bug 的翻版。修法同 tool-scope.ts：以 `ctx.sessionProjections.stateOf(session,
+'agentPreset')` 为准、header 仅作回退（`presetOfSession`），错误瀑布同样修正；
+验收补 microscope5 形状的两条断言（同一会话：头读取=放行、投影读取=开窗）。

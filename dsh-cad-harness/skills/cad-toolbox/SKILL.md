@@ -282,6 +282,28 @@ near-touching pairs were never declared).
    - 绝不把"某次旧的绿色运行"当作当前版本的证据——**证据的有效期等于它引用的
      那个版本的有效期**。判据：说"已通过"之前，先问一句"它验证的是哪个版本？"
 
+5. **A whole-machine claim must be backed by a whole-machine run.** A physics or
+   assembly conclusion covers the parts that were IN that run and no more:
+   microscope5's delivered "整体" evidence included seven single-part physics
+   runs, while the 16-part assembly never once passed. Before saying "整机 /
+   the machine", check the run's part list — if it is not the full delivered
+   set, the claim is about a fragment, and you say so or you re-run it over
+   everything.
+6. **A mechanism must be an interface in the contract.** If parts move relative
+   to each other (gear/rack, slide, hinge, cam), the assembly manifest declares
+   `转动副` / `滑动副` interfaces with `check: "motion-clearance"` and cites the
+   motion run. microscope5 delivered 26 interfaces — **zero** of them
+   motion-clearance — so "26 interfaces, 0 hard violations" was a green light
+   that said nothing about the mechanism, which was in fact interfering.
+   A contract that cannot fail on the mechanism is not a contract.
+7. **Run `delivery_audit` before any delivery claim, and answer its findings.**
+   It reads the corpus (not your memory) and returns: failing runs that are
+   still newest of their kind, stale evidence, versions nobody checked,
+   contract gaps, replaced versions in the manifest, repeated runs. A
+   `blocked` verdict means the corpus contradicts the claim — fix it, or state
+   the exception explicitly to the user. Citing a green number that the audit
+   flags as stale is exactly the failure this step exists to prevent.
+
 ## Still to add (deliberately open)
 
 - Parameter sweet spots per tool (particle counts, step counts, what actually
