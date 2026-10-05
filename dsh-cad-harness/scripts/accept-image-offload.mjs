@@ -248,6 +248,101 @@ const fixture = [
     'no sessions service → not applicable');
 }
 
+// ── 4b. telemetry: every window observation is DATA (DESGIGN §23.5) ─────────
+// The microscope5 post-mortem could not answer "did the window run?" without
+// the session log; this block proves the answer is now in a jsonl file, with
+// the reason when it did NOT apply.
+{
+  const { mkdtempSync, readFileSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { applyProtectedImageOffload, presetOfSession } = await import('../src/host/image-offload.ts');
+
+  const home = mkdtempSync(join(tmpdir(), 'cad-window-tel-'));
+  process.env.DSH_HOME = home;
+
+  // A session born standard that switched to cad — the microscope5 shape.
+  const makeReal = () => {
+    const log = [];
+    return {
+      log,
+      header: { agentPreset: 'standard' },
+      surface: { nodes: fixture.map((f) => f.seq) },
+      eventAt: (seq) => fixture.find((f) => f.seq === seq),
+      deriveEventMessage: (event) => ({ role: 'user', content: structuredClone(event.content) }),
+      append: (type, data) => log.push({ type, data }),
+    };
+  };
+  const cadSession = makeReal();
+  const stdSession = makeReal();
+  const sessions = {
+    get: (id) => (id === 'cad-switched' ? cadSession : id === 'plain-std' ? stdSession : undefined),
+    registerMessageProjection: () => {},
+  };
+  const handlers = {};
+  const ctx = {
+    reflect: {
+      get: (name) => (name === 'sessions' ? sessions
+        // Session-aware: ONLY the switched session reports cad; the other one
+        // stays standard (a blanket 'cad' would hide the preset-not-cad path).
+        : name === 'sessionProjections' ? {
+            stateOf: (session, key) => (key === 'agentPreset'
+              ? (session === cadSession ? 'cad' : 'standard')
+              : undefined),
+          }
+        : undefined),
+    },
+    on: (event, cb) => { if (event === 'llm/stream') handlers.stream = cb; },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  applyProtectedImageOffload(ctx);
+  check(typeof handlers.stream === 'function', 'the executor registers an llm/stream observer');
+
+  // Same shape as the selection tests above (12 tool images + 16 fresh uploads).
+  const baseMessages = [
+    { role: 'user', content: [{ type: 'text', text: '照这个做' }] },
+    ...fixture.slice(1).map((f) => ({ role: 'user', content: [{ type: 'tool-result', content: structuredClone(f.content) }] })),
+  ];
+  const overMessages = [...baseMessages, { role: 'user', content: Array.from({ length: 16 }, (_, i) => img('extra', 30, i)) }];
+  const next = () => 'stream';
+  // One observation at a time: concurrent calls for the SAME session are
+  // deduplicated as in-flight (that is the guard, tested elsewhere).
+  const tick = () => new Promise((r) => setTimeout(r, 30));
+  handlers.stream({ sessionId: 'cad-switched', messages: overMessages }, next);   // applied
+  await tick();
+  handlers.stream({ sessionId: 'plain-std', messages: overMessages }, next);      // preset-not-cad
+  await tick();
+  handlers.stream({ sessionId: 'cad-switched', messages: baseMessages }, next);   // under-window (12 ≤ 24)
+  await tick();
+  handlers.stream({ purpose: 'session-title', sessionId: 'cad-switched', messages: overMessages }, next);
+  handlers.stream({ messages: overMessages }, next);
+  await new Promise((r) => setTimeout(r, 120));
+
+  const file = join(home, 'cad', 'telemetry', 'image-window.jsonl');
+  check(existsSync(file), 'window telemetry file is written', file);
+  const recs = existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  const outcomes = recs.map((r) => r.outcome);
+  check(outcomes.includes('applied'), 'an over-window cad session is recorded as applied', JSON.stringify(outcomes));
+  check(outcomes.includes('preset-not-cad'),
+    'a session that is NOT 造物模式 is recorded as preset-not-cad (the microscope5 case)', JSON.stringify(outcomes));
+  check(outcomes.includes('under-window'), 'an under-window cad session is recorded as under-window');
+  check(outcomes.includes('aux-purpose') && outcomes.includes('no-session'),
+    'auxiliary calls and session-less calls are recorded with their reasons', JSON.stringify(outcomes));
+  const applied = recs.find((r) => r.outcome === 'applied');
+  check(applied?.preset === 'cad' && applied?.window === CAD_IMAGE_WINDOW && applied?.pruned > 0,
+    'the applied record carries the window, the effective preset and what was pruned',
+    JSON.stringify({ preset: applied?.preset, window: applied?.window, pruned: applied?.pruned }));
+  check(cadSession.log.some((d) => d.type === 'image/offload'),
+    'the applied decision really appended an image/offload event');
+
+  const { imageWindowReport } = await import('../src/host/usage.ts');
+  const summary = imageWindowReport();
+  check(summary.records >= 5 && summary.byOutcome.applied >= 1,
+    'the in-memory summary (exposed by /api/cad/usage) counts every outcome',
+    JSON.stringify(summary.byOutcome));
+  delete process.env.DSH_HOME;
+}
+
 // ── 5. composed tree: exactly one executor owns the seam ────────────────────
 {
   const realHome = join(homedir(), '.dsh');

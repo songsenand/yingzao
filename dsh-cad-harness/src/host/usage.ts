@@ -161,6 +161,63 @@ export function measureUsage(
 const recent: UsageRecord[] = [];
 const MAX_RECENT = 300;
 
+/**
+ * One image-window decision, written by the offload executor (DESGIGN §23.5).
+ *
+ * WHY THIS EXISTS: the microscope5 post-mortem could not answer "did the cad
+ * image window even run?" from the corpus — the answer had to be reconstructed
+ * from the session log's preset events. Every decision and every skip is now
+ * data, including WHY it did not apply (`preset-not-cad`, `aux-purpose`, …),
+ * which is exactly the field that would have made that question a one-liner.
+ */
+export interface ImageWindowRecord {
+  ts: string;
+  sessionId?: string;
+  /** Outcome of the check: applied = pruned, under-window = nothing to do. */
+  outcome: 'applied' | 'under-window' | 'preset-not-cad' | 'no-session' | 'no-service'
+    | 'aux-purpose' | 'in-flight' | 'error';
+  /** The session's EFFECTIVE preset, as read (projection first, header fallback). */
+  preset: string | null;
+  /** Retained image occurrences seen in the request, and the excess over the window. */
+  retained?: number;
+  excess?: number;
+  window?: number;
+  /** Pairs/pruned occurrences when a decision was appended. */
+  pruned?: number;
+  targets?: { seq: number; images: number }[];
+  note?: string;
+}
+
+const windowRecent: ImageWindowRecord[] = [];
+const MAX_WINDOW_RECENT = 200;
+
+/** Append one window record; never throws, never blocks a request. */
+export function recordImageWindow(record: ImageWindowRecord): void {
+  windowRecent.push(record);
+  if (windowRecent.length > MAX_WINDOW_RECENT) windowRecent.shift();
+  if (process.env.CAD_TELEMETRY_DISABLE === '1') return;
+  void (async () => {
+    try {
+      const dir = telemetryRoot();
+      await mkdir(dir, { recursive: true });
+      await appendFile(join(dir, 'image-window.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
+    } catch { /* telemetry must never break the stream */ }
+  })();
+}
+
+/** The last window records, with counts per outcome (for the panel and scripts). */
+export function imageWindowReport(): Record<string, unknown> {
+  const byOutcome: Record<string, number> = {};
+  for (const r of windowRecent) byOutcome[r.outcome] = (byOutcome[r.outcome] ?? 0) + 1;
+  const applied = windowRecent.filter((r) => r.outcome === 'applied');
+  return {
+    records: windowRecent.length,
+    byOutcome,
+    lastApplied: applied.slice(-3),
+    note: 'applied = the cad window pruned; preset-not-cad = the session is not 造物模式 (the microscope5 case)',
+  };
+}
+
 export function registerUsageObserver(ctx: any): void {
   const usageDir = telemetryRoot();
 
@@ -210,6 +267,7 @@ export async function usageReport(): Promise<Record<string, unknown>> {
       piAi: { budget: 'none', note: 'factory defaults on every preset; the cad window is session-level (image-offload.ts)' },
       note: 'route knobs stay at dsh defaults for every preset; see DESGIGN §16–17',
     },
+    imageWindow: imageWindowReport(),
     note: `image token estimate = ${IMAGE_TOKEN_ESTIMATE}/image (set CAD_IMAGE_TOKEN_ESTIMATE to calibrate); `
       + '`images` counts what the route receives after old-turn images are replaced by text placeholders',
   };

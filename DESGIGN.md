@@ -2276,3 +2276,27 @@ microscope5 的 69 次运行实测，抓到三个**互相独立**的原因：
 bug 的翻版。修法同 tool-scope.ts：以 `ctx.sessionProjections.stateOf(session,
 'agentPreset')` 为准、header 仅作回退（`presetOfSession`），错误瀑布同样修正；
 验收补 microscope5 形状的两条断言（同一会话：头读取=放行、投影读取=开窗）。
+
+### 23.5 窗口遥测：让"窗口开没开"变成数据（v2.28）
+
+microscope5 复盘时，"cad 图片窗口到底有没有跑"这个问题**无法从数据回答**，只能
+靠解压会话日志翻 `agent-preset/selected` 事件反推。现在每次观察到请求都写一条
+记录到 `<DSH_HOME>/cad/telemetry/image-window.jsonl`：
+
+```json
+{"ts":"…","sessionId":"…","outcome":"applied","preset":"cad","retained":28,
+ "excess":4,"window":24,"pruned":4,"targets":[{"seq":1,"images":1}]}
+```
+
+- `outcome`：`applied`（裁剪了）/ `under-window` / **`preset-not-cad`**（就是
+  microscope5 那种情形）/ `no-session` / `no-service` / `aux-purpose`（会话标题、
+  压缩这类辅助调用）/ `in-flight`（同会话并发去重）/ `error`；
+- 决策与执行拆开：`decideSessionWindow()` 只算不写（可测、可记录），
+  `enforceSessionWindow()` 保留兼容形状。**hook 直接用决策函数做遥测与执行**——
+  兼容包装的 `null` 无法区分 not-cad / no-session / no-service，这正是当初
+  说不清的那个问题（写成 `no-service` 就是错的）。
+- `/api/cad/usage` 增加 `imageWindow` 汇总（各 outcome 计数 + 最近 3 次 applied）；
+  可用 `CAD_TELEMETRY_DISABLE=1` 关闭写入。
+- 验收 `accept-image-offload.mjs` 覆盖 4b 段：真实 hook + 假 ctx 驱动五种情形，
+  断言 jsonl 里出现 `applied`/`preset-not-cad`/`under-window`/`aux-purpose`/
+  `no-session` 与 applied 记录的 window/pruned 字段。

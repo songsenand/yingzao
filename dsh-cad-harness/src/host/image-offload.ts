@@ -55,6 +55,7 @@ export function presetOfSession(session: any, projectionService?: any): string |
 }
 
 import { DEEPSEEK_KEEP_IMAGES } from './image-budget.ts';
+import { recordImageWindow } from './usage.ts';
 
 /**
  * Images a 造物模式 (cad) session keeps in vision — the per-SESSION window
@@ -217,17 +218,27 @@ export function offloadOldestProtected(
   count: number,
   projectionService?: any,
 ): boolean {
+  const targets = planOffloadTargets(session, sourceEventSeqs, count, projectionService);
+  if (!targets) return false;
+  session.append('image/offload', { targets });
+  return true;
+}
+
+/** Plan (without appending) the protected offload for a session's occurrences. */
+export function planOffloadTargets(
+  session: any,
+  sourceEventSeqs: readonly number[],
+  count: number,
+  projectionService?: any,
+): OffloadTarget[] | null {
   const cad = presetOfSession(session, projectionService) === 'cad';
   const entries = [];
   for (const seq of sourceEventSeqs) {
     const event = session.eventAt(seq);
-    if (event.type !== 'user/message' && event.type !== 'tool/result') continue;
+    if (!event || (event.type !== 'user/message' && event.type !== 'tool/result')) continue;
     entries.push({ seq, type: event.type, content: session.deriveEventMessage(event).content });
   }
-  const targets = selectOffloadTargets(entries, count, cad);
-  if (!targets) return false;
-  session.append('image/offload', { targets });
-  return true;
+  return selectOffloadTargets(entries, count, cad);
 }
 
 /**
@@ -275,21 +286,60 @@ export function applyProtectedImageOffload(ctx: any): void {
   // sessionId; a 造物模式 session over the window gets a proactive offload
   // decision so the NEXT request fits. Standard-mode sessions are exempt —
   // that is the whole point of doing this here instead of in the route config.
+  //
+  // Every observation is recorded to the image-window telemetry (§23.5),
+  // including the reasons it did NOT apply, so "did the window run?" is a data
+  // question rather than an archaeology exercise.
   const windowInFlight = new Set<string>();
   ctx.on('llm/stream', (options: any, next: () => unknown) => {
     const sessionId: string | undefined = options?.sessionId;
-    // Auxiliary calls (session-title, compaction) neither carry the
-    // conversation's image load nor should drive the window.
-    if (sessionId && !options?.purpose && !windowInFlight.has(sessionId)) {
-      windowInFlight.add(sessionId);
-      void Promise.resolve()
-        .then(() => enforceSessionWindow(
-          sessionsRef(ctx), options,
-          (session) => presetOfSession(session, ctx.reflect.get('sessionProjections')),
-        ))
-        .catch((e) => ctx.logger?.warn?.(`cad-harness: image window check failed: ${String((e as Error)?.message ?? e)}`))
-        .finally(() => windowInFlight.delete(sessionId));
+    if (!sessionId) {
+      recordImageWindow({ ts: new Date().toISOString(), outcome: 'no-session', preset: null });
+      return next();
     }
+    if (options?.purpose) {
+      // Auxiliary calls (session-title, compaction) neither carry the
+      // conversation's image load nor should drive the window.
+      recordImageWindow({ ts: new Date().toISOString(), sessionId, outcome: 'aux-purpose', preset: null, note: String(options.purpose) });
+      return next();
+    }
+    if (windowInFlight.has(sessionId)) {
+      recordImageWindow({ ts: new Date().toISOString(), sessionId, outcome: 'in-flight', preset: null });
+      return next();
+    }
+    windowInFlight.add(sessionId);
+    void Promise.resolve()
+      .then(() => {
+        const sessions = sessionsRef(ctx);
+        const decision = decideSessionWindow(
+          sessions, options,
+          (session) => presetOfSession(session, ctx.reflect.get('sessionProjections')),
+        );
+        // Apply here (not through the compatibility wrapper) so the telemetry
+        // records the DECISION — the wrapper's `null` cannot tell
+        // preset-not-cad from no-service, which is precisely the question the
+        // microscope5 post-mortem could not answer.
+        if (decision.outcome === 'over-window' && decision.plan) {
+          sessions.get(options.sessionId).append('image/offload', { targets: decision.plan });
+        }
+        recordImageWindow({
+          ts: new Date().toISOString(), sessionId,
+          outcome: decision.outcome === 'over-window' ? 'applied' : decision.outcome,
+          preset: decision.preset,
+          retained: decision.retained,
+          excess: decision.excess,
+          window: CAD_IMAGE_WINDOW,
+          ...(decision.targets ? { pruned: decision.targets.reduce((a, t) => a + t.images, 0), targets: decision.targets } : {}),
+        });
+      })
+      .catch((e) => {
+        recordImageWindow({
+          ts: new Date().toISOString(), sessionId, outcome: 'error', preset: null,
+          note: String((e as Error)?.message ?? e),
+        });
+        ctx.logger?.warn?.(`cad-harness: image window check failed: ${String((e as Error)?.message ?? e)}`);
+      })
+      .finally(() => windowInFlight.delete(sessionId));
     return next();
   });
 }
@@ -299,28 +349,65 @@ function sessionsRef(ctx: any): any {
   return ctx.reflect.get('sessions');
 }
 
+/** What the window would do for one observed request (no side effects). */
+export interface WindowDecision {
+  outcome: 'over-window' | 'under-window' | 'preset-not-cad' | 'no-session' | 'no-service';
+  preset: string | null;
+  retained: number;
+  excess: number;
+  /** Telemetry shape: how many occurrences per message. */
+  targets?: { seq: number; images: number }[];
+  /** Executor shape: the exact occurrences to mark offloaded. */
+  plan?: OffloadTarget[];
+}
+
 /**
- * The per-preset window decision for one observed request. Returns what was
- * done so the acceptance can pin the behavior without a live dsh:
- * `null` = not applicable (no session / not a cad session / under window),
- * otherwise `{ preset, retained, excess, appended }`.
+ * Decide (but do not apply) the per-preset window for one request.
+ *
+ * Split from the executor so the decision is observable in telemetry and
+ * testable without a session that can be mutated.
+ */
+export function decideSessionWindow(
+  sessions: any,
+  options: { sessionId?: string; messages?: any[] },
+  readPreset: (session: any) => string | null = (s) => presetOfSession(s),
+): WindowDecision {
+  const sessionId = options?.sessionId;
+  if (!sessionId) return { outcome: 'no-session', preset: null, retained: 0, excess: 0 };
+  if (typeof sessions?.get !== 'function') return { outcome: 'no-service', preset: null, retained: 0, excess: 0 };
+  const session = sessions.get(sessionId);
+  if (!session) return { outcome: 'no-session', preset: null, retained: 0, excess: 0 };
+  // The EFFECTIVE preset (live projection, header fallback) — never the header
+  // alone: a blank session may have switched to 造物模式 after creation.
+  const preset = readPreset(session);
+  const retained = countRetainedImages(options?.messages);
+  const excess = retained - CAD_IMAGE_WINDOW;
+  if (preset !== 'cad') return { outcome: 'preset-not-cad', preset, retained, excess };
+  if (excess <= 0) return { outcome: 'under-window', preset, retained, excess };
+  const plan = planOffloadTargets(session, session.surface?.nodes ?? [], excess) ?? undefined;
+  const targets = plan?.map((t) => ({ seq: t.seq, images: t.imageIndexes.length }));
+  return { outcome: 'over-window', preset, retained, excess, ...(targets ? { targets, plan } : {}) };
+}
+
+/**
+ * Apply-or-report the window for one request. Returns the decision with
+ * `appended`, or `null` when the window does not apply (compatibility shape for
+ * callers/tests that only care about the cad case).
  */
 export function enforceSessionWindow(
   sessions: any,
   options: { sessionId?: string; messages?: any[] },
   readPreset: (session: any) => string | null = (s) => presetOfSession(s),
-): { preset: string | null; retained: number; excess: number; appended: boolean } | null {
-  const sessionId = options?.sessionId;
-  if (!sessionId || typeof sessions?.get !== 'function') return null;
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  // The EFFECTIVE preset (live projection, header fallback) — never the header
-  // alone: a blank session may have switched to 造物模式 after creation.
-  const preset: string | null = readPreset(session);
-  if (preset !== 'cad') return null;
-  const retained = countRetainedImages(options?.messages);
-  const excess = retained - CAD_IMAGE_WINDOW;
-  if (excess <= 0) return { preset, retained, excess, appended: false };
-  const appended = offloadOldestProtected(session, session.surface.nodes, excess);
-  return { preset, retained, excess, appended };
+): { preset: string | null; retained: number; excess: number; appended: boolean; targets?: { seq: number; images: number }[] } | null {
+  const decision = decideSessionWindow(sessions, options, readPreset);
+  if (decision.outcome === 'preset-not-cad' || decision.outcome === 'no-session' || decision.outcome === 'no-service') return null;
+  if (decision.outcome === 'under-window') {
+    return { preset: decision.preset, retained: decision.retained, excess: decision.excess, appended: false };
+  }
+  if (!decision.plan) return { preset: decision.preset, retained: decision.retained, excess: decision.excess, appended: false };
+  sessions.get(options.sessionId).append('image/offload', { targets: decision.plan });
+  return {
+    preset: decision.preset, retained: decision.retained, excess: decision.excess,
+    appended: true, targets: decision.targets,
+  };
 }
