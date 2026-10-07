@@ -19,7 +19,9 @@
 //   5. 检查该题需要的素材（02 的 608.stl、01b 的 dossier）
 //   6. 生成当轮的 model-overlay.yml（钉 provider/model）
 //   7. 逐段跑 dsh，事件流落 <run-root>/<stage>.events.jsonl
-//      多段共用同一个 --session-id → 各自的事件流天然就是分界
+//      **第一段不带 --session-id**（它只认领已存在的会话，未知 id 会报错），
+//      从第一段的事件流取回真正的 id，后续段用它继承同一会话
+//      → 每段一份事件流，天然就是分界
 //   8. 写 <run-root>/run-record.json：退出码、耗时、usage、sessionId、
 //      指纹核对结果、变体名、以及**每一步的原命令**（可原样重放）
 //
@@ -205,15 +207,19 @@ for (let r = 1; r <= args.repeat; r++) {
   const rec = {
     level, variant: variantName, run: r, runRoot, sessionId,
     model: args.model ?? null,
-    tier: variantName === 'headless' ? 'headless（不命名预设）' : 'GUI / 造物模式',
+    // tier 说的是"怎么跑的"（本 runner 一律走 headless），与变体是**两个维度**：
+    // 变体决定参考图怎么送（附件 / 文件），tier 决定会话命名不命名预设。
+    tier: 'headless（不命名预设）',
     stages: [], startedAt: new Date().toISOString(),
   };
 
   if (args.dryRun) {
-    rec.stages = taskFiles.map((t) => ({
+    rec.stages = taskFiles.map((t, i) => ({
       task: t.path,
       cmd: `dsh --profile headless --patch ${skillOverlay} --patch ${join(runRoot, 'model-overlay.yml')}`
-        + ` --json --session-id ${sessionId} < ${join(runRoot, t.path.replace(/^subjects\/[^/]+\//, ''))}`,
+        + ` --json`
+        + (i === 0 ? '' : ' --session-id <第一段事件流报出的 sessionId>')
+        + ` < ${join(runRoot, t.path.replace(/^subjects\/[^/]+\//, ''))}`,
       note: 'dry-run：未执行',
     }));
     records.push(rec);
@@ -265,11 +271,16 @@ for (let r = 1; r <= args.repeat; r++) {
     + `  config:\n    provider: ${provider}\n    model: ${model}\n`, 'utf8');
 
   // 6) 逐段跑
-  console.log(`\n[r${r}] ${runRoot}  session=${sessionId}`);
+  //    `--session-id` 是"**认领一个已存在**的会话"——未知 id 直接报错（实测）。
+  //    所以第一段**不带**它，让 dsh 新建；从第一段的事件流取回真正的 id，
+  //    后续段才用它继承同一个会话。
+  console.log(`\n[r${r}] ${runRoot}  label=${sessionId}`);
   let aborted = false;
+  let adoptedSessionId = null;
   for (const stage of rec.stages) {
     const eventsPath = join(runRoot, `${stage.local.replace(/\.md$/, '')}.events.jsonl`);
-    const argv = ['--profile', 'headless', '--patch', skillOverlay, '--patch', modelOverlay, '--json', '--session-id', sessionId];
+    const argv = ['--profile', 'headless', '--patch', skillOverlay, '--patch', modelOverlay, '--json'];
+    if (adoptedSessionId) argv.push('--session-id', adoptedSessionId);
     const shown = `dsh ${argv.join(' ')} < ${stage.local}`;
     console.log(`  · ${shown}`);
     const res = await run('dsh', argv, { cwd: runRoot, stdin: await readFile(join(runRoot, stage.local)) });
@@ -283,11 +294,18 @@ for (let r = 1; r <= args.repeat; r++) {
       toolCallCount: s.toolCalls.length, toolsUsed: [...new Set(s.toolCalls.map((t) => t.tool))],
       turnEnd: s.turnEnd, unparsableEvents: s.unparsable,
     });
+    // 第一段报出的才是真 id；后续段继承它
+    if (!adoptedSessionId && s.sessionId) adoptedSessionId = s.sessionId;
     if (stage.turns === 0) stage.note = '零轮次：可能是题面指纹/会话/凭据问题，先看 stderrTail';
     if (res.code !== 0) { aborted = true; console.error(`    退出码 ${res.code}，停止本轮后续段`); break; }
-    if (!rec.sessionIdFromStream) rec.sessionIdFromStream = s.sessionId;
+    if (!adoptedSessionId && rec.stages.length > 1) {
+      aborted = true;
+      console.error('    第一段的事件流没有报出 sessionId —— 后续段无法继承同一会话，停止');
+      break;
+    }
   }
   rec.aborted = aborted;
+  rec.sessionIdAdopted = adoptedSessionId;
   rec.finishedAt = new Date().toISOString();
   records.push(rec);
 
@@ -300,5 +318,5 @@ if (!args.dryRun) {
   await writeFile(index, JSON.stringify({ level, variant: variantName, model: args.model, repeat: args.repeat, records }, null, 2) + '\n', 'utf8');
   console.log(`\n索引 → ${index}`);
   console.log('下一步：按 graders/<level>/rubric.json 打六列（bench-score.mjs 待实现）。');
-  if (variantName !== 'headless') console.log(`⚠ 这一档属于「${records[0]?.tier}」，分数不要与 headless 档混算。`);
+  console.log(`档位：${records[0]?.tier}${names.length > 1 ? ` · 变体 ${variantName}` : ''}——分数不要与 GUI/造物模式档混算。`);
 }

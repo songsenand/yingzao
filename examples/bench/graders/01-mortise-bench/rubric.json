@@ -102,7 +102,7 @@
     },
     {
       "id": "c-across-grain-looser",
-      "desc": "横纹方向的配合间隙必须大于顺纹方向——本题的核心语义",
+      "desc": "横纹方向必须让得比顺纹多——两者胀缩量差一个数量级。只要求\"更大\"会被 0.11 vs 0.10 蒙混过去，所以要求至少 2 倍且横纹不小于 0.3mm",
       "via": "joinery.json.fits",
       "assert": {
         "op": "gt",
@@ -111,11 +111,12 @@
       },
       "weight": 4,
       "evidence": "座面在横纹方向胀缩会把榫眼挤裂；顺纹方向稳定，可以紧配",
-      "inSkill": false
+      "inSkill": false,
+      "expect": "fits.seatTenonAcrossGrain.gapMm >= 2 × fits.seatTenonAlongGrain.gapMm 且 横纹间隙 >= 0.3"
     },
     {
       "id": "c-gaps-in-range",
-      "desc": "两个间隙都要落在木工合理区间，不能靠'留 5mm 就永远不裂'蒙混",
+      "desc": "顺纹做紧配合（白乳胶胶线通常 0.05–0.2mm，越薄胶合越强）；横纹要吸收季节性胀缩——30mm 榫眼、280mm 宽板、约 6% 含水率波动下局部收缩量约 0.45mm，故下界取 0.30、上界取 1.00 以免松到失去定位",
       "via": "joinery.json.fits",
       "assert": {
         "op": "range",
@@ -124,7 +125,8 @@
         "max": 0.8
       },
       "weight": 2,
-      "inSkill": false
+      "inSkill": false,
+      "expect": "fits.seatTenonAlongGrain.gapMm ∈ [0.05, 0.20] 且 fits.seatTenonAcrossGrain.gapMm ∈ [0.30, 1.00]"
     },
     {
       "id": "c-shoulder-seats",
@@ -137,7 +139,7 @@
     },
     {
       "id": "c-blind-tenon-shorter",
-      "desc": "半榫榫头必须比孔浅，胶隙 1.5–3mm（榫头长 < 孔深）",
+      "desc": "半榫必须榫头短于孔深，否则榫端先顶到孔底、肩面坐不实，载荷改由最弱的横纹端面承担；余量也留作胶液储腔。**间距按本题原定的 1.5–3mm**（余量过大等于缩短有效胶合长度）",
       "via": "joinery.json.blindTenon + measure_distance",
       "assert": {
         "op": "range",
@@ -147,7 +149,8 @@
       },
       "weight": 3,
       "evidence": "孔底顶住榫头，肩面就合不拢",
-      "inSkill": false
+      "inSkill": false,
+      "expect": "blindTenon.tenonLengthMm < blindTenon.mortiseDepthMm 且 孔深 − 榫长 ∈ [1.5, 3.0]"
     },
     {
       "id": "c-protrusion",

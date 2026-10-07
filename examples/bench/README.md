@@ -311,10 +311,15 @@ RUN=$(mktemp -d /tmp/bench-01-XXXX)          # run root 在仓库外
 cp -r examples/bench/subjects/01-mortise-bench/. "$RUN"/
 
 cd "$RUN"
+# 第一段：**不要**带 --session-id —— 它只"认领已存在的会话"，未知 id 会直接报错。
+# 让 dsh 自己新建，它会在开头的 session 事件里报出真 id。
 dsh --profile headless \
     --patch /abs/path/examples/bench/tools/headless-overlay.yml \
-    --json --session-id "bench-01-$STAMP" \
-    < "$RUN/TASK.md" > "$RUN/events.jsonl"
+    --json < "$RUN/TASK.md" > "$RUN/A.events.jsonl"
+# 取回 id 后，第二段才用它继承同一会话：
+#   dsh --profile headless --patch … --json \
+#       --session-id "$(jq -r 'select(.type=="session").sessionId' "$RUN/A.events.jsonl" | head -1)" \
+#       < "$RUN/TASK-2.md" > "$RUN/B.events.jsonl"
 # exit 0 = 该段完成；1 = 中止或出错
 ```
 
@@ -409,5 +414,7 @@ preset-cad (@deepseek-ai/dsh-agent-preset): pending (waiting for service: agentP
    `Config = { task, sessionId, json }`（`files` 是 `filesystem` 的误命中）。
    **但 GUI 档不能丢**：只有附件档才会触发 `recall_reference_image`，那是插件的
    一条真实能力，丢了就没人测它了。
-3. **两段必须同一个 `--session-id`、同一个 cwd、同一个 profile。** 继承会话时
-   headless 会校验 cwd 与预设，不一致会在任务开始前就失败。
+3. **第一段不带 `--session-id`，第二段带第一段报出的那个 id。**
+   `--session-id` 是"**认领一个已存在的会话**"——未知 id 直接报错（实测踩过）。
+   两段还必须**同一个 cwd、同一个 profile**：继承会话时 headless 会校验这两项，
+   不一致会在任务开始前就失败。`bench-run.mjs` 已经把这个顺序写死了。
