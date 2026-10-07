@@ -22,8 +22,10 @@
 //      **第一段不带 --session-id**（它只认领已存在的会话，未知 id 会报错），
 //      从第一段的事件流取回真正的 id，后续段用它继承同一会话
 //      → 每段一份事件流，天然就是分界
-//   8. 写 <run-root>/run-record.json：退出码、耗时、usage、sessionId、
-//      指纹核对结果、变体名、以及**每一步的原命令**（可原样重放）
+//   8. 各段跑完后，逐个**探针轮**：用同一个会话发 rubric 里的 `ask`
+//      （长程记忆探针要问才知道；`when` 的适用性由打分器判，runner 只负责问）
+//   9. 写 <run-root>/run-record.json：退出码、耗时、usage、sessionId、
+//      指纹核对结果、变体名、探针答案、以及**每一步的原命令**（可原样重放）
 //
 // 纪律（写死在代码里）：
 //   * run root 绝不开在仓库内 —— `--root-dir` 若落在仓库里直接报错退出
@@ -70,6 +72,12 @@ const LEVELS = {
 
 const die = (msg) => { console.error(`bench-run: ${msg}`); process.exit(2); };
 
+/** 读 rubric 的探针表（探针要主动问，否则永远测不到）。 */
+async function loadProbes(level) {
+  const rubric = JSON.parse(await readFile(join(gradersDir, level, 'rubric.json'), 'utf8'));
+  return (rubric.probes ?? []).filter((p) => p.ask);
+}
+
 // ---------- argv ----------
 function parseArgs(argv) {
   const out = { repeat: 1, dryRun: false };
@@ -86,6 +94,7 @@ function parseArgs(argv) {
     else if (a === '--repeat') out.repeat = Number(next());
     else if (a === '--tag') out.tag = next();
     else if (a === '--root-dir') out.rootDir = next();
+    else if (a === '--no-probes') out.noProbes = true;
     else if (a === '--dry-run') out.dryRun = true;
     else die(`unknown flag ${a}`);
   }
@@ -222,9 +231,13 @@ for (let r = 1; r <= args.repeat; r++) {
         + ` < ${join(runRoot, t.path.replace(/^subjects\/[^/]+\//, ''))}`,
       note: 'dry-run：未执行',
     }));
+    // 探针轮也要列出来——否则操作者不知道跑完还会追问
+    const pv = args.noProbes ? [] : await loadProbes(level);
+    rec.probes = pv.map((pr) => ({ id: pr.id, ask: pr.ask, when: pr.when ?? null }));
     records.push(rec);
     console.log(`\n[r${r}] ${runRoot}`);
     for (const s of rec.stages) console.log(`  ${s.cmd}`);
+    for (const pr of rec.probes) console.log(`  [探针 ${pr.id}] ${pr.when ? `when ${pr.when} → ` : ''}“${pr.ask}”`);
     continue;
   }
 
@@ -304,6 +317,28 @@ for (let r = 1; r <= args.repeat; r++) {
       break;
     }
   }
+  // 7) 探针轮：同一个会话，逐个问
+  rec.probes = [];
+  const probes = args.noProbes ? [] : await loadProbes(level);
+  if (!aborted && adoptedSessionId && probes.length) {
+    for (const pr of probes) {
+      const evPath = join(runRoot, `probe-${pr.id}.events.jsonl`);
+      const pargv = ['--profile', 'headless', '--patch', skillOverlay, '--patch', modelOverlay,
+        '--json', '--session-id', adoptedSessionId];
+      const shown = `dsh ${pargv.join(' ')} <<${pr.id} 的 ask>>`;
+      console.log(`  · 探针 ${pr.id}: ${pr.ask.slice(0, 40)}…`);
+      const pres = await run('dsh', pargv, { cwd: runRoot, stdin: pr.ask + '\n' });
+      await writeFile(evPath, pres.stdout, 'utf8');
+      const ps = summarize(pres.stdout);
+      rec.probes.push({
+        id: pr.id, ask: pr.ask, when: pr.when ?? null,
+        cmd: shown, exitCode: pres.code, events: evPath.replace(runRoot + sep, ''),
+        answer: ps.finalText, toolCallCount: ps.toolCalls.length,
+        toolsUsed: [...new Set(ps.toolCalls.map((t) => t.tool))],
+      });
+    }
+  }
+
   rec.aborted = aborted;
   rec.sessionIdAdopted = adoptedSessionId;
   rec.finishedAt = new Date().toISOString();

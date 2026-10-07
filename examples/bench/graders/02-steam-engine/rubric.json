@@ -225,7 +225,11 @@
       "expect": "与版本库记录一致",
       "kind": "auto",
       "weight": 1,
-      "inSkill": false
+      "inSkill": false,
+      "answerValues": [
+        29.6
+      ],
+      "answerNote": "活塞共 3 版：v009（初版，环槽把盘切成 3 个断开体而废）→ v014（第 2 版，单件实体）→ v015（终版）。三版外径都是 Ø29.6 ⇒ 第 2 版外径 29.6mm。取自 manifest 的 userIntent 与 cad-data/versions/*/model.scad。"
     }
   ],
   "scoring": {

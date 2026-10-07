@@ -74,37 +74,44 @@ const toolCalls = allEvents.filter((e) => e.type === 'tool_call');
 const toolResults = allEvents.filter((e) => e.type === 'tool_result');
 const finalText = allEvents.filter((e) => e.type === 'final').map((e) => e.text ?? '').join('\n\n');
 
-// 语料
+// 语料：两种布局都要认
+//   * 实时语料（01/02/03）：<run>/cad-data/{manifest.json,runs/,versions/} + <run>/assembly/assembly.json
+//   * 证据目录（01b）：<run>/dossier/{cad-data-manifest.json,assembly.json,runs/}
+//     —— 01b 的考生读的是 dossier，不是实时语料；只认前一种会让它的语料类条目全判错。
+const pick = (...ps) => ps.find((x) => x && existsSync(x)) ?? null;
+const manifestPath = pick(join(runRoot, 'cad-data', 'manifest.json'), join(runRoot, 'dossier', 'cad-data-manifest.json'));
+const assemblyPath = pick(join(runRoot, 'assembly', 'assembly.json'), join(runRoot, 'dossier', 'assembly.json'));
+const runsDir = pick(join(runRoot, 'cad-data', 'runs'), join(runRoot, 'dossier', 'runs'));
+const versionsDir = pick(join(runRoot, 'cad-data', 'versions'));
+
 const corpus = {
-  manifest: await readJson(join(runRoot, 'cad-data', 'manifest.json')),
-  assembly: await readJson(join(runRoot, 'assembly', 'assembly.json')),
+  manifest: manifestPath ? await readJson(manifestPath) : null,
+  assembly: assemblyPath ? await readJson(assemblyPath) : null,
   runs: [],
+  datums: {},
   files: {},
 };
 corpus.root = corpus.assembly?.root ?? null;
 corpus.children = corpus.root?.children ?? [];
 corpus.interfaces = corpus.root?.interfaces ?? [];
 try {
-  for (const d of await readdir(join(runRoot, 'cad-data', 'runs'), { withFileTypes: true })) {
+  for (const d of await readdir(runsDir, { withFileTypes: true })) {
     if (!d.isDirectory()) continue;
-    const r = await readJson(join(runRoot, 'cad-data', 'runs', d.name, 'run.json'));
+    const r = await readJson(join(runsDir, d.name, 'run.json'));
     if (!r) continue;
     // 结构化报告优先：**别去正则中文 summary**（实测踩过——把故意的阴性对照
     // 当成失败，于是给一个本来通过的运行记了 P=0）
-    r.report = await readJson(join(runRoot, 'cad-data', 'runs', d.name, 'report.json'));
+    r.report = await readJson(join(runsDir, d.name, 'report.json'));
     corpus.runs.push(r);
   }
-} catch { /* 还没跑过 run */ }
-// 版本库的 datums（每个版本一个 datums.json）
-corpus.datums = {};
+} catch { /* 还没有 run */ }
 try {
-  for (const d of await readdir(join(runRoot, 'cad-data', 'versions'), { withFileTypes: true })) {
+  for (const d of await readdir(versionsDir, { withFileTypes: true })) {
     if (!d.isDirectory()) continue;
-    const dj = await readJson(join(runRoot, 'cad-data', 'versions', d.name, 'datums.json'));
+    const dj = await readJson(join(versionsDir, d.name, 'datums.json'));
     if (dj) corpus.datums[d.name] = dj;
   }
 } catch { /* 还没建版本 */ }
-
 // 考生产出的机读文件（rubric 的 via 直接点名，如 joinery.json）
 for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json']) {
   const v = await readJson(join(runRoot, f));
@@ -239,23 +246,44 @@ EV['c-blind-tenon-shorter'] = () => {
 };
 
 // —— run 级别（各题通用）——
-EV['c-whole-machine-runs'] = () => (() => {
-  const all = runsByKind('assembly-check');
-  const n = all.filter((r) => (r.parts ?? []).length >= 16).length;
-  return { ok: n === 2, detail: `覆盖 16 件的装配检查 ${n} 次（期望 2）；装配检查总计 ${all.length} 次` };
-})();
-EV['c-post-subset-sizes'] = () => (() => {
-  const all = runsByKind('assembly-check');
-  const i = all.findIndex((r) => (r.parts ?? []).length >= 16);
+// 注意两个 kind 是**两个不同的工具**：
+//   `assembly`       = validate_assembly（几何干涉/过紧，parts 是覆盖的件数）
+//   `assembly-check` = check_assembly（契约逐条判，parts 恒为 0）
+// 03 的 rubric 里明写 `kind === 'assembly'`；用错 kind 会让"整机验证"类条目全判错（踩过）。
+const wholeRuns = () => corpus.runs.filter((r) => r.kind === 'assembly');
+EV['c-whole-machine-runs'] = () => {
+  const n = wholeRuns().filter((r) => (r.parts ?? []).length >= 16).length;
+  return { ok: n === 2, detail: `覆盖 ≥16 件的 validate_assembly ${n} 次（期望 2）；validate_assembly 总计 ${wholeRuns().length} 次` };
+};
+EV['c-post-subset-sizes'] = () => {
+  const all = wholeRuns();
+  // 从**最后一次**整机运行算起：r046 与 r048 都是 16 件，用 findIndex 会把 r048
+  // 自己算进"之后"，于是报出 16 —— 那是我的 bug，不是考生的（踩过）。
+  let i = -1;
+  for (let k = 0; k < all.length; k++) if ((all[k].parts ?? []).length >= 16) i = k;
   const after = i < 0 ? [] : all.slice(i + 1).map((r) => (r.parts ?? []).length);
-  return { ok: after.length > 0 && after.every((n) => [4, 6].includes(n)), detail: `整机之后的覆盖数：${after.length ? after.join(', ') : '（无）'}` };
-})();
-EV['g-whole-machine-failed'] = () => (() => {
-  const whole = runsByKind('assembly-check').filter((r) => (r.parts ?? []).length >= 16);
+  return {
+    ok: after.length > 0 && after.every((n) => [4, 6].includes(n)),
+    detail: `整机之后的覆盖数：${after.length ? [...new Set(after)].sort().join(', ') : '（无）'}（要求 ⊆ {4,6}）`,
+  };
+};
+EV['g-whole-machine-failed'] = () => {
+  const whole = wholeRuns().filter((r) => (r.parts ?? []).length >= 16);
   const failed = whole.filter((r) => r.status === 'fail');
   const cited = ['r046', 'r048'].filter((id) => new RegExp(id).test(finalText));
-  return { ok: whole.length === 2 && failed.length === 2 && cited.length === 2, detail: `16 件装配检查 ${whole.length} 次、fail ${failed.length} 次；回答点名 ${cited.join('/') || '（无）'}` };
-})();
+  return {
+    ok: whole.length === 2 && failed.length === 2 && cited.length === 2,
+    detail: `≥16 件的 validate_assembly ${whole.length} 次、fail ${failed.length} 次；回答点名 ${cited.join('/') || '（无）'}`,
+  };
+};
+EV['g-whole-machine-verified'] = () => {
+  const want = corpus.children.length || null;   // 交付件数（契约里的 children）
+  const pass = wholeRuns().filter((r) => r.status === 'pass' && (want ? (r.parts ?? []).length === want : (r.parts ?? []).length >= 2));
+  return {
+    ok: pass.length > 0,
+    detail: pass.length ? `${pass[0].id}: ${(pass[0].parts ?? []).length} 件 · pass` : `没有"覆盖全部交付件且 pass"的 validate_assembly（交付件 ${want ?? '?'}）`,
+  };
+};
 
 // —— 版本库 datums ——
 EV['g-datums-declared'] = () => {
@@ -285,6 +313,190 @@ EV['c-protrusion'] = () => {
   return {
     ok: hit.length > 0,
     detail: hit.length ? `${dist.length} 次测量，出现落在 [4.5,5.5] 的值 ${hit[0]}mm` : `${dist.length} 次测量，但没有落在 [4.5,5.5] 的结果`,
+  };
+};
+
+// —— 02：运动 / 物理 / 流体 / 进口件 ——
+const lastRunOf = (k) => corpus.runs.filter((r) => r.kind === k).at(-1);
+const mOf = (r) => r?.report?.metrics ?? {};
+
+EV['g-motion-clean'] = () => {
+  const r = lastRunOf('motion');
+  if (!r) return { ok: 'unknown', detail: '没有 motion 运行' };
+  const m = mOf(r);
+  return {
+    ok: r.status === 'pass' && m.interferenceCount === 0 && (m.jointViolations ?? []).length === 0,
+    detail: `${r.id}: status=${r.status} · 干涉=${m.interferenceCount} · 关节违反=${(m.jointViolations ?? []).length}`,
+  };
+};
+EV['g-negative-rod-fires'] = () => {
+  const hit = corpus.runs.filter((r) => r.kind === 'motion' && (mOf(r).interferenceCount ?? 0) >= 1);
+  return { ok: hit.length >= 1, detail: hit.length ? `${hit.map((r) => r.id).join('/')} 报出干涉` : '无一次运动仿真报干涉（阴性对照没响）' };
+};
+EV['c-stroke'] = () => {
+  const r = lastRunOf('motion');
+  const travels = Object.values(mOf(r).followers ?? {}).map((f) => f.travelMm).filter((x) => typeof x === 'number');
+  const max = travels.length ? Math.max(...travels) : null;
+  return {
+    ok: max !== null && Math.abs(max - 40) <= 0.5,
+    detail: `运动仿真实测最大行程 ${max ?? '?'}mm（expect: 40）；motion.json 声明 ${corpus.files['motion.json']?.strokeMm ?? '?'}`,
+  };
+};
+EV['c-fluid-arrival'] = () => {
+  const r = lastRunOf('fluid');
+  if (!r) return { ok: 'unknown', detail: '没有 fluid 运行' };
+  const m = mOf(r);
+  return {
+    ok: (m.outletArrivalRatio ?? 0) > 0.6 && (m.penetrationCount ?? 1) === 0,
+    detail: `${r.id}: outletArrivalRatio=${m.outletArrivalRatio}（>0.6）· penetrationCount=${m.penetrationCount}（==0）`,
+  };
+};
+EV['g-motion-clearance-contract'] = () => needAssembly() ?? (() => {
+  const mc = corpus.interfaces.filter((i) => i.check === 'motion-clearance');
+  const passMotion = new Set(corpus.runs.filter((r) => r.kind === 'motion' && r.status === 'pass').map((r) => r.id));
+  const cited = mc.map((i) => i.params?.runId).filter(Boolean);
+  const good = cited.filter((id) => passMotion.has(id));
+  return {
+    ok: mc.length >= 2 && cited.length === mc.length && good.length === cited.length,
+    detail: `check=motion-clearance ${mc.length} 条；引用 runId ${cited.length} 个，其中指向 pass 的运动仿真 ${good.length} 个`,
+  };
+})();
+EV['g-import-not-generate'] = () => {
+  // 注意 source 是**对象** {kind:'imported', file}，不是字符串
+  const imported = (corpus.manifest?.versions ?? []).filter((v) => v.source?.kind === 'imported');
+  return {
+    ok: imported.length >= 1,
+    detail: imported.length ? `${imported.map((v) => v.id).join('/')} 为 imported（${imported[0].source?.file ?? ''}）` : '没有任何 source.kind === imported 的版本',
+  };
+};
+EV['g-no-false-coupling'] = () => {
+  const j = corpus.files['motion.json'];
+  if (!j) return { ok: 'unknown', detail: '没有 motion.json' };
+  return {
+    ok: j.fluidStructureCoupling === 'none' && (j.couplingReason ?? '').length > 20,
+    detail: `fluidStructureCoupling=${JSON.stringify(j.fluidStructureCoupling)}，理由 ${(j.couplingReason ?? '').length} 字`,
+  };
+};
+EV['c-topple-answered'] = () => {
+  const s = corpus.files['stability.json'];
+  if (!s) return { ok: 'unknown', detail: '没有 stability.json' };
+  return { ok: !!s.toppleAt5deg && !!s.toppleAt10deg, detail: `toppleAt5deg=${s.toppleAt5deg} · toppleAt10deg=${s.toppleAt10deg}` };
+};
+EV['c-counterweight'] = () => {
+  const s = corpus.files['stability.json'];
+  if (!s) return { ok: 'unknown', detail: '没有 stability.json' };
+  const ok = s.counterweightNeeded === 'no' ? typeof s.criticalTiltDeg === 'number' : typeof s.counterweightMassG === 'number';
+  return { ok, detail: `counterweightNeeded=${s.counterweightNeeded} · 临界倾角=${s.criticalTiltDeg}° · 配重=${s.counterweightMassG}g` };
+};
+EV['c-crosshead-hold'] = () => {
+  const s = corpus.files['stability.json'];
+  if (!s) return { ok: 'unknown', detail: '没有 stability.json' };
+  return { ok: ['holds', 'slides', 'not-expressible'].includes(s.crossheadHold), detail: `crossheadHold=${s.crossheadHold}` };
+};
+
+// —— 回答驱动的条目（01b 这类诊断题的判据落在回答文本上）——
+// 用关键词/引用计数做**代理**，并把命中证据打出来供人复核；不是语义判定。
+const A = () => finalText;
+const citedRunIds = () => [...new Set((A().match(/\br0\d\d\b/g) ?? []))];
+const citedPaths = () => [...new Set((A().match(/[\w./-]*runs\/r\d\d\d\/[\w.]+/g) ?? []))];
+const near = (a, b, win = 120) => {
+  const t = A();
+  for (let i = t.indexOf(a); i >= 0; i = t.indexOf(a, i + 1)) {
+    if (Math.abs(t.slice(Math.max(0, i - win), i + win).indexOf(b)) >= 0) return true;
+  }
+  return false;
+};
+
+EV['g-motion-never-checked'] = () => {
+  const t = A();
+  const mentionsZero = /motion-clearance[^\n]{0,80}(0|零|没有|未)/.test(t) || /(0|零|没有|未)[^\n]{0,40}motion-clearance/.test(t);
+  const saysSix = /(6|六)\s*条[^\n]{0,12}(运动|转动副|滑动副)|运动[^\n]{0,16}(6|六)\s*条/.test(t);
+  // 回答若列了 check 类型分布，把那份清单摘出来——"列了但没下结论"和"压根没看"
+  // 是两回事，人复核时要能分辨
+  const enumd = /check 类型([^\n]{0,120})/.exec(t);
+  const corpusTypes = [...new Set(corpus.interfaces.map((i) => i.check).filter(Boolean))];
+  const motionTyped = corpus.interfaces.filter((i) => /转动副|滑动副|螺旋副|齿轮副/.test(String(i.type ?? ''))).length;
+  return {
+    ok: mentionsZero && saysSix,
+    detail: `提到 motion-clearance 为 0 = ${mentionsZero}；点出运动类接口 ${motionTyped} 条 = ${saysSix}`
+      + (enumd ? `；回答里列的 check 类型：${enumd[1].trim().slice(0, 70)}（**列了但没下结论**）` : `；回答里没有 check 类型清单（语料里是 ${corpusTypes.join('/')}）`),
+  };
+};
+EV['g-evidence-cited'] = () => {
+  const p = citedPaths();
+  return { ok: p.length >= 3, detail: `引用可核对路径 ${p.length} 个${p.length ? `（例 ${p[0]}）` : ''}（要求 ≥3）` };
+};
+EV['c-evidence-depth'] = () => {
+  const ids = citedRunIds();
+  const wholeIds = wholeRuns().filter((r) => (r.parts ?? []).length >= 16).map((r) => r.id);
+  const hitWhole = ids.filter((i) => wholeIds.includes(i));
+  return { ok: ids.length >= 2 && hitWhole.length >= 1, detail: `引用 run id ${ids.length} 个（${ids.slice(0, 4).join(',')}…），其中覆盖全部交付件的 ${hitWhole.join('/') || '（无）'}` };
+};
+EV['c-stale-visual'] = () => ({
+  ok: /过期|陈旧|stale|superseded|已失效/.test(A()) && /视觉|截图|渲染|render|图像/.test(A()),
+  detail: '回答里同时出现"过期/失效"与"视觉/渲染"两类词（代理判定）',
+});
+EV['c-local-as-whole'] = () => ({
+  ok: /局部|单件|subset|子集/.test(A()) && /整机|全机|whole/.test(A()) && /契约|assembly-check|接口/.test(A()),
+  detail: '回答里同时出现"局部/单件"、"整机"与"契约"（代理判定）',
+});
+
+// —— 同一配合的两条测量路径（via: measure_distance + check_assembly）——
+EV['c-measured-vs-datum'] = () => {
+  const dist = toolCalls.filter((c) => /measure_distance|measure_closest/.test(String(c.tool)));
+  if (!dist.length) {
+    return { ok: false, detail: '零 measure_distance 调用——只有 check_assembly 一条路径，无从比对（"两条路径一致"未被演示）' };
+  }
+  const last = lastAsm();
+  if (!last) return { ok: 'unknown', detail: '没有装配检查报告' };
+  const routes = (last.report.results ?? []).filter((r) => r.check === 'distance' && typeof r.measured === 'number');
+  // 只在**能按面名配上**的时候比：拿调用参数里的 a/b 去对契约的 a/b。
+  // 不做"近似命中任意数字"的松散匹配——那会随机通过。
+  const paired = [];
+  for (const c of dist) {
+    const inp = c.input ?? {};
+    const blob = JSON.stringify(inp);
+    const hit = routes.find((r) => blob.includes(r.a) || blob.includes(r.b));
+    if (hit) {
+      const vals = (blob.match(/-?\d+\.\d+/g) ?? []).map(Number);
+      if (vals.length) paired.push({ id: hit.interfaceId, datum: hit.measured, mine: vals[0], d: Math.abs(vals[0] - hit.measured) });
+    }
+  }
+  if (!paired.length) {
+    return { ok: 'unknown', detail: `${dist.length} 次独立测量，但没有任何一次能按面名与契约条目配上——需人判` };
+  }
+  const worst = Math.max(...paired.map((x) => x.d));
+  return {
+    ok: worst < 0.05,
+    detail: `配上 ${paired.length} 对；最大差值 ${worst.toFixed(3)}mm（要求 < 0.05）例：${paired[0].id} 契约 ${paired[0].datum} vs 自测 ${paired[0].mine}`,
+  };
+};
+
+// —— 探针轮（由 bench-run 的探针轮次产出；没问过就记 UNKNOWN）——
+const probeRec = (id) => (record.probes ?? []).find((p) => p.id === id);
+const renderRounds = () => toolCalls.filter((c) => /generate_part|render_part/.test(String(c.tool))).length;
+
+EV['p-version-recall'] = () => {
+  const def = (rubric.probes ?? []).find((x) => x.id === 'p-version-recall');
+  const when = def?.when ?? '';
+  const m = /renderRounds\s*>=\s*(\d+)/.exec(when);
+  if (m && renderRounds() < Number(m[1])) {
+    return { ok: 'unknown', detail: `不适用：${when}（实测 renderRounds=${renderRounds()}）` };
+  }
+  const rec = probeRec('p-version-recall');
+  if (!rec) return { ok: 'unknown', detail: '本轮没问这条探针（runner 未跑探针轮，或用了 --no-probes）' };
+  if (!rec.answer) return { ok: 'unknown', detail: `问了但没拿到答案（exit=${rec.exitCode}）` };
+  const nums = (rec.answer.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+  const want = def?.answerValues ?? [];
+  const ans = rec.answer.replace(/\s+/g, ' ').slice(0, 90);
+  // rubric 里没记期望答案 → **不能判 FAIL**（"没记答案"是判据缺口，不是考生失败）
+  if (want.length === 0) {
+    return { ok: 'unknown', detail: `rubric 的 ${'`answerValues`'} 为空——判据缺口，需补期望值。原答：${ans}…` };
+  }
+  const hit = want.filter((w) => nums.includes(w));
+  return {
+    ok: hit.length === want.length,
+    detail: `期望 ${want.join('/')}（${def?.answerNote ?? ''}）；答案命中 ${hit.join('/') || '（无）'}。原答：${ans}…`,
   };
 };
 
@@ -360,7 +572,7 @@ if (AS_JSON) {
   for (const g of out.gates) console.log(`  ${mark(g.ok)}  ${g.id.padEnd(34)} ${g.detail}`);
   console.log('\n-- 数值判据 --');
   for (const c of out.checks) console.log(`  ${mark(c.ok)}  ${c.id.padEnd(34)} w=${c.weight} ${c.detail}`);
-  console.log('\n-- 探针（需人判）--');
+  console.log('\n-- 探针（长程记忆；由 runner 的探针轮问出）--');
   for (const p of out.probes) console.log(`  ${mark(p.ok)}  ${p.id.padEnd(34)} ${p.detail}`);
   const c = out.measured.cost;
   console.log('\n-- 成本（实测）--');

@@ -215,7 +215,11 @@
       "expect": "回答与版本库记录一致（允许用 measure_part / 版本记录取回）",
       "kind": "auto",
       "weight": 1,
-      "inSkill": false
+      "inSkill": false,
+      "answerValues": [
+        30
+      ],
+      "answerNote": "腿的第 2 版 = v004（p002 的 v002→v004→v005→v006 里的第 2 个），透榫截面 30×30 ⇒ 榫头厚度 30mm。**30.5 是阴性对照那一版（v005）**，答成 30.5 说明记错了版本。取值读自 cad-data/versions/*/model.scad 的 TEN。"
     }
   ],
   "scoring": {
