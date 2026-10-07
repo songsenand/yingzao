@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-10-04T11:54:28.157Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope5/assembly/assembly.json",
+  "manifestName": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
+  "results": [
+    {
+      "interfaceId": "1",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.法兰底面",
+      "b": "base.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "skipped",
+      "detail": "address \"column.法兰底面\": datum \"法兰底面\" not found in version v006"
+    },
+    {
+      "interfaceId": "2",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.底面",
+      "b": "column.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "skipped",
+      "detail": "address \"column.顶面\": datum \"顶面\" not found in version v006"
+    },
+    {
+      "interfaceId": "3",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "base.法兰孔",
+      "b": "column.止口",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "skipped",
+      "detail": "address \"column.止口\": datum \"止口\" not found in version v006"
+    },
+    {
+      "interfaceId": "5a",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.抱箍内孔",
+      "b": "column.柱身",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "skipped",
+      "detail": "address \"column.柱身\": datum \"柱身\" not found in version v006"
+    },
+    {
+      "interfaceId": "4",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.防转面",
+      "b": "column.防转面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "skipped",
+      "detail": "address \"column.防转面\": datum \"防转面\" not found in version v006"
+    },
+    {
+      "interfaceId": "5",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.槽壁A",
+      "b": "stage.槽壁B",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 25.2,
+        "max": 25.45
+      },
+      "measured": 25.3,
+      "detail": "point-to-point distance between declared datums"
+    }
+  ],
+  "undeclared": [],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 1.5,
+  "summary": {
+    "interfaces": 6,
+    "pass": 1,
+    "hardViolations": 0,
+    "intentFlags": 0,
+    "skipped": 5,
+    "undeclared": 0
+  },
+  "overallStatus": "pass"
+}

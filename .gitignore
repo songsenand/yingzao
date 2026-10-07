@@ -49,5 +49,21 @@ dsh-cad-harness/sandbox/preview/dist/
 dsh-cad-harness/data/usage/
 dsh-cad-harness/data/assembly/assembly-check-report.json
 
+# ---- 评测基准（examples/bench/）----
+# 结构：subjects/ = 考生侧（会话 cwd，只放工作区与题面要求它看的素材）
+#       graders/  = 评分方（题面、rubric、答案；绝不进会话）
+# 01b 的完整可跑语料由 tools/materialize-01b.mjs corpus 生成；
+# 其 dossier/（JSON 证据子集，约 1.1MB）是入库的，正是它让该题自包含可移植
+# （cad-data/ 已被上面的全局规则覆盖，无需重复）
+examples/bench/subjects/*/assembly/
+# 02 的导入件是生成物，不入库
+examples/bench/subjects/02-steam-engine/assets/608.stl
+# 每轮评测的打分输出（评分方侧）
+examples/bench/graders/*/scores/
+# 03 参考图的「净化输入」——原始产品照（含水印）留在本地，不入库。
+# 入库的是净化后的参考图 graders/03-microscope/参考图.png，那才是判据用的真值；
+# 原始图只在要重跑 tools/purify-reference.py 时才用得上。
+/显微镜参考图.png
+
 # ---- dsh home 本地实例（含凭据，禁止入库）----
 examples/dsh-home/

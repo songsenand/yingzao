@@ -1,0 +1,264 @@
+{
+  "checkedAt": "2026-10-04T12:41:33.287Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope5/assembly/assembly.json",
+  "manifestName": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
+  "results": [
+    {
+      "interfaceId": "1",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.法兰底面",
+      "b": "base.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "2",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.底面",
+      "b": "column.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "3",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "base.法兰孔",
+      "b": "column.止口",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.3
+      },
+      "measured": 0.15,
+      "detail": "diametral clearance Ø0.15 (hole Ø40.15 vs shaft Ø40)"
+    },
+    {
+      "interfaceId": "4",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.防转面",
+      "b": "column.防转面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "5",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.槽壁A",
+      "b": "stage.槽壁B",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 25.2,
+        "max": 25.45
+      },
+      "measured": 25.3,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "5a",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.抱箍内孔",
+      "b": "column.柱身",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.2,
+        "max": 0.6
+      },
+      "measured": 0.4,
+      "detail": "diametral clearance Ø0.4 (hole Ø22.4 vs shaft Ø22)"
+    },
+    {
+      "interfaceId": "6",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "pinion-block.轴承孔A",
+      "b": "focus-pinion-shaft.轴颈A",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.1,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø8.2 vs shaft Ø8)"
+    },
+    {
+      "interfaceId": "7",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "focus-carriage.齿条参考点",
+      "b": "focus-pinion-shaft.节圆点",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "motion-clearance",
+      "verdict": "hard-violation",
+      "expected": {
+        "quantity": "距离",
+        "min": 25,
+        "max": 26
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums — cited motion run r023 did not pass (干涉 1 次 · 行程 23.9mm)"
+    },
+    {
+      "interfaceId": "8",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "focus-carriage.导轨面",
+      "b": "arm.导轨面",
+      "type": "滑动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.1,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "8a",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "pinion-block.安装面",
+      "b": "arm.导轨面",
+      "type": "贴合",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "intent-flag",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 2,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "9",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "focus-carriage.弹簧座",
+      "b": "arm.弹簧座",
+      "type": "弹簧",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "spring-preload",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "预紧力",
+        "min": 1,
+        "max": 3
+      },
+      "measured": 2.0008,
+      "detail": "installed 17.3404mm vs free 42.35mm → δ25.0096mm × 0.08N/mm = 2.0008N"
+    }
+  ],
+  "undeclared": [
+    {
+      "partA": "focus-carriage",
+      "partB": "pinion-block",
+      "minDistance": 0,
+      "intersectionVolume": 6064.6517
+    },
+    {
+      "partA": "focus-pinion-shaft",
+      "partB": "focus-knob-L",
+      "minDistance": 0,
+      "intersectionVolume": 0
+    },
+    {
+      "partA": "focus-pinion-shaft",
+      "partB": "focus-knob-R",
+      "minDistance": 0,
+      "intersectionVolume": 0
+    },
+    {
+      "partA": "focus-knob-L",
+      "partB": "focus-knob-R",
+      "minDistance": 0,
+      "intersectionVolume": 2792.2961
+    }
+  ],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 1.5,
+  "summary": {
+    "interfaces": 11,
+    "pass": 9,
+    "hardViolations": 1,
+    "intentFlags": 1,
+    "skipped": 0,
+    "undeclared": 4
+  },
+  "overallStatus": "fail"
+}

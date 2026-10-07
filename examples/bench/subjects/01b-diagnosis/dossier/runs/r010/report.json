@@ -1,0 +1,123 @@
+{
+  "parts": [
+    {
+      "name": "底座",
+      "watertight": true,
+      "volume": 173893.73725941684,
+      "boundingBox": {
+        "min": [
+          -75,
+          -60,
+          0
+        ],
+        "max": [
+          75,
+          60,
+          12
+        ]
+      },
+      "triangles": 2332
+    },
+    {
+      "name": "立柱",
+      "watertight": true,
+      "volume": 96418.33322661108,
+      "boundingBox": {
+        "min": [
+          -28,
+          -60,
+          7
+        ],
+        "max": [
+          28,
+          -4,
+          218
+        ]
+      },
+      "triangles": 2332
+    },
+    {
+      "name": "弯臂",
+      "watertight": true,
+      "volume": 54607.14710266792,
+      "boundingBox": {
+        "min": [
+          -22,
+          -47,
+          117
+        ],
+        "max": [
+          22,
+          -12,
+          234
+        ]
+      },
+      "triangles": 1620
+    },
+    {
+      "name": "载物台",
+      "watertight": true,
+      "volume": 79792.3457187011,
+      "boundingBox": {
+        "min": [
+          -55,
+          -48.95087432861328,
+          46
+        ],
+        "max": [
+          55,
+          72,
+          60
+        ]
+      },
+      "triangles": 1912
+    }
+  ],
+  "pairs": [
+    {
+      "partA": "底座",
+      "partB": "立柱",
+      "intersectionVolume": 0,
+      "minDistance": 0,
+      "status": "too_tight"
+    },
+    {
+      "partA": "底座",
+      "partB": "弯臂",
+      "intersectionVolume": 0,
+      "minDistance": 105,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 34,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "弯臂",
+      "intersectionVolume": 408.6760052058127,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "立柱",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 0.19975624149530796,
+      "status": "too_tight"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 57,
+      "status": "ok"
+    }
+  ],
+  "overallStatus": "fail",
+  "thresholdMm": 1.5,
+  "interferenceEpsilonMm3": 0.001
+}

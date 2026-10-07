@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "example": "00-smoke",
+  "title": "工具链冒烟自检（仪器校准，无 LLM）",
+  "level": 0,
+  "driver": "script",
+  "lanes": [
+    "generate_part 编译与渲染",
+    "datum 声明与 set_datums",
+    "measure_part / measure_distance / measure_closest",
+    "check_connectivity / check_printability",
+    "validate_assembly / check_assembly 五算子",
+    "simulate_motion / simulate_physics / simulate_fluid",
+    "merge_parts / delivery_audit",
+    "BOSL2 标准库接线"
+  ],
+  "budget": {
+    "toolCalls": 60,
+    "wallClockMin": 30,
+    "images": 48
+  },
+  "budgetNote": "图片原值 24 是假设值，配方根本装不下：2026-10-07 首次全绿跑实测 43（4 张四视图 + 各 generate_part/render_part 单图 + validate_assembly 的装配渲染 3 张 + 三次仿真的关键帧）。已按实测回填 48（留少量余量）。工具调用实测 31/60、墙钟 63s/30min，两项原值仍成立。",
+  "calibration": "calibrated",
+  "calibrationNote": "阈值取自 2026-10-05 的实测，2026-10-07 由 bench-smoke.mjs 首次全绿跑验证（13/13 硬门 + 6/6 数值）。本级是脚本驱动、无 LLM，阈值不受模型行为影响，故可标 calibrated；图片预算据实测回填 48。流体步数受机器性能影响，其阈值单独放宽。",
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json",
+      "evidence": "目录分层只挡误触；这一条是检测层，见 README §四",
+      "inSkill": false
+    },
+    {
+      "id": "g-openSCADPATH",
+      "desc": "OPENSCADPATH 里必须有一层是 BOSL2 的父目录，而不是 BOSL2 自己",
+      "via": "process.env.OPENSCADPATH",
+      "expect": "existsSync(path.join(entry, 'BOSL2', 'std.scad')) 至少一项成立",
+      "evidence": "scripts/accept-bosl2.mjs 第 1 节",
+      "inSkill": false
+    },
+    {
+      "id": "g-watertight",
+      "desc": "每个交付版本都必须 watertight，否则所有下游数字都是谎话",
+      "via": "generate_part 返回值",
+      "expect": "watertight === true（薄壁反例除外）",
+      "evidence": "cad-toolbox SKILL「Watertight beats pretty」",
+      "inSkill": false
+    },
+    {
+      "id": "g-render-count",
+      "desc": "默认四视图、显式 views 时只出指定视图——图片预算机制必须生效",
+      "via": "generate_part 返回值",
+      "expect": "默认 4 张；views:['iso'] 时 1 张",
+      "evidence": "microscope5 会话的图片修剪窗口依赖此机制",
+      "inSkill": false
+    },
+    {
+      "id": "g-set-datums-no-version",
+      "desc": "set_datums 加锚点不能产生新版本",
+      "via": "版本库",
+      "expect": "版本数不变",
+      "evidence": "cad-toolbox SKILL：microscope2 语料里有三个只改锚点的废版本",
+      "inSkill": false
+    },
+    {
+      "id": "g-negative-control-fires",
+      "desc": "阴性对照：孔径改小 0.5 后 check_assembly 必须报 hard-violation",
+      "via": "check_assembly",
+      "expect": "hardViolations >= 1 且 overallStatus === 'fail'",
+      "evidence": "阴性对照不报 = 机检是空的，比报错严重",
+      "inSkill": false
+    },
+    {
+      "id": "g-motion-ratio",
+      "desc": "齿条必须按 pitchRadiusMm 严格比驱动，不能用正弦近似",
+      "via": "simulate_motion",
+      "expect": "|travel - r*omega*T| / (r*omega*T) < 0.05",
+      "evidence": "scripts/accept-p2.mjs",
+      "inSkill": false
+    },
+    {
+      "id": "g-pivot-rebased",
+      "desc": "simulate_motion 的 pivot 重基：pivots 报关节锚点，且 run 内 STL 真被平移",
+      "via": "simulate_motion + runs/<id>/parts/<name>.stl",
+      "expect": "pivots[part] === 关节锚点，且该 STL 的 bbox 中心 ≈ 原点（容差 0.5mm）",
+      "evidence": "scripts/accept-motion-pivot.mjs；microscope5 接口 7 note「零件被甩出 176mm」",
+      "inSkill": false
+    },
+    {
+      "id": "g-static-friction",
+      "desc": "prismatic 关节给 staticFriction 时，必须返回解析的 holds/slides 保持力分析",
+      "via": "simulate_physics",
+      "expect": "报告含保持力结论且明示为解析结果（非仿真）",
+      "evidence": "microscope5 缺口④；SKILL 明言 rapier 关节不带摩擦",
+      "inSkill": false
+    },
+    {
+      "id": "g-fluid-runs",
+      "desc": "simulate_fluid 必须跑完并给出到达率，而不是超时或报错",
+      "via": "simulate_fluid",
+      "expect": "overallStatus 为 pass/check 且有 metrics.outletArrivalRatio",
+      "evidence": "流体的边界在一次 run 内固定，这一点必须在报告里可读",
+      "inSkill": false
+    },
+    {
+      "id": "g-merge-shells",
+      "desc": "merge_parts 的 shells 数必须如实反映接触：相接=1，分离=2",
+      "via": "merge_parts",
+      "expect": "相接场景 shells === 1；分离场景 shells === 2",
+      "evidence": "SKILL：shells>1 意味着这不是一台机器，是一堆零件",
+      "inSkill": false
+    },
+    {
+      "id": "g-delivery-audit",
+      "desc": "delivery_audit 必须能识别被取代的版本引用（stale/superseded）",
+      "via": "delivery_audit",
+      "expect": "异议列表中至少命中一条 stale 或 superseded",
+      "evidence": "bench-smoke.mjs 第 19 步；accept-delivery-audit.mjs。机制：版本更新后，引用旧版本的绿灯仍在，但它描述的是已被取代的几何",
+      "inSkill": false
+    },
+    {
+      "id": "g-bosl2-gears",
+      "desc": "BOSL2 的 gears/screws 必须能出几何且无 include 警告",
+      "via": "compileStlOnly",
+      "expect": "spur_gear(mod=1,teeth=20) 外径 22±0.5mm；screw('M6',length=20) 出实体",
+      "evidence": "scripts/accept-bosl2.mjs（14/14）",
+      "inSkill": false
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-measure-part",
+      "desc": "measure_part 的 bbox 与体积要和解析值对得上",
+      "via": "measure_part",
+      "expect": {
+        "sizeMm": [
+          100,
+          60,
+          8
+        ],
+        "volumeTolerance": 0.01
+      },
+      "weight": 1,
+      "evidence": "两条独立路径（渲染 vs 测量）给出同一个数才算验过",
+      "inSkill": false
+    },
+    {
+      "id": "c-measure-close",
+      "desc": "measure_closest 不解坐标也能找出最近点对",
+      "via": "measure_closest",
+      "expect": "返回点对与间距，间距与两板实际间隙一致",
+      "weight": 1,
+      "inSkill": false
+    },
+    {
+      "id": "c-connectivity",
+      "desc": "单实体件报 single-body；故意做多实体件必须报 multi-body",
+      "via": "check_connectivity",
+      "expect": "正例 single-body；反例 multi-body 且列出各体位置",
+      "weight": 1,
+      "inSkill": false
+    },
+    {
+      "id": "c-printability-thin",
+      "desc": "0.5mm 薄壁必须被 check_printability 抓到",
+      "via": "check_printability",
+      "expect": "minWallMm < 1.2 且 thinSamples > 0",
+      "weight": 1,
+      "evidence": "microscope5 的调焦滑座 0.37mm 亚线宽是面板先发现、插件后知后觉",
+      "inSkill": false
+    },
+    {
+      "id": "c-interference",
+      "desc": "故意干涉 0.5mm 的两件，干涉体积要量出来",
+      "via": "validate_assembly",
+      "expect": "interferenceVolumeMm3 > 0 且与解析值同量级",
+      "weight": 1,
+      "inSkill": false
+    },
+    {
+      "id": "c-fluid-arrival",
+      "desc": "直管 MPM 的出口到达率与穿透计数",
+      "via": "simulate_fluid",
+      "expect": {
+        "outletArrivalRatio": "> 0.6",
+        "penetrationCount": "== 0"
+      },
+      "weight": 1,
+      "note": "机器性能影响耗时不影响结论；若因超时跳过，本项记 skip 并在结果里标注",
+      "inSkill": false
+    }
+  ],
+  "features": [],
+  "probes": [],
+  "scoring": {
+    "passScore": 1.0,
+    "columns": {
+      "P": 1.0,
+      "E": 0.0,
+      "H": 0.0,
+      "C": 0.0,
+      "R": 0.0
+    },
+    "gatePolicy": "any-fail => 整轮作废，先修插件再跑评测题"
+  },
+  "sSkill": {
+    "applicable": false,
+    "reason": "本级的 driver 是 script，没有 LLM 作答，因此 S0/S 不适用；这里统一填 inSkill:false 只为让 runner 的字段约定一致。",
+    "baselineSkillSha256": "8e2717f9694e6a1d5a5a18e26ced68fa9972f4e25304bcde476266618bc44da3"
+  },
+  "taskFile": {
+    "path": null,
+    "note": "本级的 driver 是 script，没有考生，也就没有考卷；prompt.md 是配方。"
+  }
+}

@@ -1,0 +1,417 @@
+{
+  "schemaVersion": 1,
+  "example": "03-microscope",
+  "title": "单目复式显微镜（外轮廓照图，内部光学自由）",
+  "level": 3,
+  "driver": "llm",
+  "lanes": [
+    "L0-几何",
+    "L1-运动",
+    "L1-刚体",
+    "可打印性",
+    "外观还原",
+    "长程记忆",
+    "交付纪律"
+  ],
+  "budget": {
+    "toolCalls": 150,
+    "wallClockMin": 150,
+    "images": 80
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "外观阈值（九段剖面 L1 距离）待首轮基线校准；其余为解析值或结构性判定。",
+  "attachment": "参考图.png",
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json",
+      "evidence": "目录分层只挡误触；这一条是检测层，见 README §四",
+      "inSkill": false,
+      "stage": "both"
+    },
+    {
+      "id": "g-negative-flange",
+      "desc": "阴性对照 M1：立柱止口直径改小 0.5mm 必须报 hard-violation",
+      "via": "check_assembly",
+      "expect": "hardViolations >= 1 && overallStatus === 'fail'",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "g-negative-gear-phase",
+      "desc": "阴性对照 M2：齿条与齿轮错相位必须出干涉或硬违反",
+      "via": "simulate_motion / check_assembly",
+      "expect": "interferenceCount >= 1 或 hardViolations >= 1",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "g-negative-chain",
+      "desc": "阴性对照 M3：光阑定位面 +1mm 必须出公差",
+      "via": "check_assembly",
+      "expect": "对应接口 measured 落在公差外",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "g-motion-clearance-contract",
+      "desc": "至少 1 条运动接口用 motion-clearance 并引用通过的 run",
+      "via": "assembly.json + runs",
+      "expect": "count(motion-clearance) >= 1 且其 params.runId 指向 status=pass 的 motion run",
+      "evidence": "microscope5 交付 26 条接口、0 条 motion-clearance",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md:294 + 交付纪律第 6 条：机构必须进契约",
+      "stage": "B"
+    },
+    {
+      "id": "g-whole-machine-verified",
+      "desc": "必须有一次覆盖**全部交付件**且通过的 validate_assembly",
+      "via": "runs/*/run.json",
+      "expect": "存在 kind==='assembly' && status==='pass' && parts.length === 交付件数",
+      "evidence": "microscope5 只有两次 16 件验证、两次都 fail，却以'26 接口 0 hard'交付",
+      "inSkill": true,
+      "inSkillNote": "交付纪律第 5 条：整机结论必须由整机运行支撑",
+      "stage": "B"
+    },
+    {
+      "id": "g-visual-evidence-current",
+      "desc": "整机渲染必须对应**最终交付版本**（不能拿改动前的旧图当交付证据）",
+      "via": "runs + 版本时间戳",
+      "expect": "最新整机渲染所引用的版本 == 交付版本",
+      "evidence": "microscope5 最新整机渲染早于当天最后一轮修正",
+      "inSkill": true,
+      "inSkillNote": "交付纪律第 1、4 条：交付前亲眼看，证据有效期等于所引版本的有效期",
+      "stage": "B"
+    },
+    {
+      "id": "g-delivery-audit-clean",
+      "desc": "交付前跑 delivery_audit 且未被判定 blocked",
+      "via": "delivery_audit",
+      "expect": "verdict !== 'blocked'",
+      "inSkill": true,
+      "inSkillNote": "交付纪律第 7 条：交付前跑 delivery_audit",
+      "stage": "B"
+    },
+    {
+      "id": "g-printability-no-unprintable",
+      "desc": "任何一件都不得是 unprintable；verdict=check 的必须逐条回应",
+      "via": "check_printability + printability.json",
+      "expect": "无 unprintable；check 项在回答中有处置说明",
+      "inSkill": true,
+      "inSkillNote": "交付纪律第 2 条：每件交付前都跑 check_printability",
+      "stage": "A"
+    },
+    {
+      "id": "g-no-turret",
+      "desc": "不得出现物镜转换器 / 台下聚光镜 / 反光镜（参考图清单明确不还原）",
+      "via": "零件清单 + 渲染",
+      "expect": "无对应零件",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "g-optics-self-consistent",
+      "desc": "optics.json 声明的像距/物距与 measure_distance 实测一致（±0.3mm）",
+      "via": "optics.json + measure_distance",
+      "expect": "|measured - declared| <= 0.3 两者都成立",
+      "evidence": "内部光学自由，所以考的是'说到做到'，不是考具体数值",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "g-hard-zero",
+      "desc": "最终交付态 check_assembly 0 hard violation",
+      "via": "check_assembly",
+      "expect": "hardViolations === 0",
+      "inSkill": false,
+      "stage": "A"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-stroke",
+      "desc": "调焦有效行程 ≥ 25mm",
+      "via": "simulate_motion",
+      "expect": ">= 25",
+      "weight": 3,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-motion-clean",
+      "desc": "调焦全程 0 干涉，齿条齿轮两端不脱开",
+      "via": "simulate_motion",
+      "expect": "interferenceCount === 0 && jointViolations.length === 0",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 干涉时间线才是真输出",
+      "stage": "A"
+    },
+    {
+      "id": "c-joint-drift",
+      "desc": "关节漂移 < 0.05mm",
+      "via": "simulate_motion",
+      "expect": "< 0.05",
+      "weight": 1,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-fine-focus-dof",
+      "desc": "精调量级必须与自算的焦深匹配，并说明如何消除回程间隙",
+      "via": "回答 + simulate_motion",
+      "expect": "给出焦深量级（µm 级）与消隙方案；量级错误或未给方案不得分",
+      "weight": 3,
+      "evidence": "打印件回程间隙约 0.2mm，比焦深大一个数量级",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-coaxial",
+      "desc": "光学链上的同轴关系用 coaxial（镜筒/镜头座/目镜筒/通光孔）",
+      "via": "assembly.json",
+      "expect": "count(coaxial) >= 2",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 同轴须用 coaxial 算子",
+      "stage": "A"
+    },
+    {
+      "id": "c-interface-count",
+      "desc": "接口数足以覆盖整机配合",
+      "via": "assembly.json",
+      "expect": "interfaces.length >= 12",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-undeclared-found",
+      "desc": "自己挑的那条未声明邻近配合必须被邻接发现抓出",
+      "via": "check_assembly.undeclared",
+      "expect": "undeclared.length >= 1",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-stability-answers",
+      "desc": "配重与压片簧两个设计问题都要有明确答案（含需要的质量/临界角）",
+      "via": "simulate_physics + 回答",
+      "expect": "两问都有结论且与 run 一致",
+      "weight": 3,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "c-printability-json",
+      "desc": "printability.json 覆盖全部交付件，且与 check_printability 的实测一致",
+      "via": "printability.json + check_printability",
+      "expect": "行数 == 交付件数，verdict 与实测一致",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "交付纪律第 2 条",
+      "stage": "A"
+    },
+    {
+      "id": "c-measured-vs-datum",
+      "desc": "清单走 datum 链、measure_distance 走表面吸附，两条路径同一个数",
+      "via": "check_assembly + measure_distance",
+      "expect": "同一配合两路径差 < 0.05mm",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 有公差的东西先量再判",
+      "stage": "A"
+    },
+    {
+      "id": "c-appearance-diff",
+      "stage": "B",
+      "desc": "第二段：逐项列出与参考图的像/不像，并修正最不像的两处",
+      "via": "回答 + render_part",
+      "inSkill": false,
+      "expect": "给出分项对照清单（至少 5 项），且修正动作落在 key.md 特征表判为 ❌ 的项上",
+      "weight": 3,
+      "evidence": "对照参考图是通用工程能力，手册未要求；考卷第一段也不提，只在第二段提出"
+    },
+    {
+      "id": "c-stdlib-used",
+      "stage": "A",
+      "desc": "齿轮/螺纹等必须走 BOSL2 模块，不是手搓",
+      "via": "generate_part 源码",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: use the library module instead of hand-rolling a thread, a gear or a fillet",
+      "expect": "include <BOSL2/gears.scad>（或 threading/screws）且用到对应模块；手写渐开线不得分",
+      "weight": 2,
+      "evidence": "microscope5 因 BOSL2 接线 bug 手搓了渐开线齿轮与螺纹；接线已于 2026-10-05 修复（accept-bosl2 14/14）"
+    }
+  ],
+  "features": [
+    {
+      "id": "f-silhouette-profile",
+      "desc": "九段归一化宽度剖面与参考图的 L1 距离（band4 已排除，见 landmarks.json）",
+      "kind": "auto",
+      "metric": "L1 distance over bands [0,1,2,3,5,6,7,8,9]",
+      "pass": 0.08,
+      "weight": 3,
+      "evidence": "两版参考图之间九段差值 ≤0.004，说明该度量可复现；band4 是转换器带，故排除",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-base-form",
+      "desc": "底座形态：马蹄形底座 + 两条前伸弧脚（不是矩形平板）",
+      "kind": "manual",
+      "pass": "matches",
+      "weight": 3,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-arm-form",
+      "desc": "弯臂形态：连续 C 形弧（不是独立立柱 + 矩形悬臂梁）",
+      "kind": "manual",
+      "pass": "matches",
+      "weight": 3,
+      "evidence": "microscope5 交付的正是'圆立柱 + 矩形臂'，这是与参考图最大的结构差异",
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-tube-and-eyepiece",
+      "desc": "筒体上下黑环 + 黑色目镜筒（上细、中部粗环、顶端喇叭口）",
+      "kind": "manual",
+      "pass": "matches",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-single-objective",
+      "desc": "单个物镜（黑身 + 银色滚花环），无转换器",
+      "kind": "manual",
+      "pass": "matches",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-stage-and-clips",
+      "desc": "黑色方形载物台前伸 + 两个压片夹 + 中心通光孔",
+      "kind": "manual",
+      "pass": "matches",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "f-side-knob",
+      "desc": "侧面大旋钮的直径与高度位置",
+      "kind": "manual",
+      "pass": "位置落在参考图对应高度带内（见 landmarks），直径比例合理",
+      "weight": 1,
+      "inSkill": false,
+      "stage": "A"
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-version-recall",
+      "desc": "长程记忆：窗口外版本的载物台槽深",
+      "when": "renderRounds >= 6",
+      "ask": "第 3 版载物台的槽深是多少？",
+      "expect": "与版本库记录一致（允许用占位路径取回）",
+      "kind": "auto",
+      "weight": 1,
+      "inSkill": false,
+      "stage": "A"
+    },
+    {
+      "id": "p-reference-recall",
+      "desc": "长程记忆（按变体二选一）：GUI 档查附件被裁剪后是否 recall_reference_image；headless 档查下结论前是否重新 read_image",
+      "when": "renderRounds >= 6 且 上下文出现 image omitted 占位",
+      "ask": "（被动观察）最终交付陈述前后的工具调用序列",
+      "expect": "GUI 档：存在 recall_reference_image 调用且发生在交付陈述之前；headless 档：存在对 参考图.png 的 read_image 调用且发生在第二阶段",
+      "kind": "auto",
+      "weight": 2,
+      "evidence": "cad-toolbox SKILL：图片按最老优先裁剪，用户的参考图永远是最老的",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 声称'与参考图一致'之前必须把参考图取回来",
+      "stage": "B"
+    }
+  ],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.3,
+      "E": 0.2,
+      "H": 0.25,
+      "C": 0.05,
+      "R": 0.1,
+      "S": 0.1
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "columnNote": "R 列权重最高的题：长程记忆与参考图取回是这条题独有的车道。",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A"
+  },
+  "sSkill": {
+    "S0": "skill 是否被加载（transcript 可观测）；false 时 S 记 N/A",
+    "S": "inSkill:true 条目的加权达成率",
+    "baselineSkillSha256": "8e2717f9694e6a1d5a5a18e26ced68fa9972f4e25304bcde476266618bc44da3"
+  },
+  "stages": {
+    "design": "第一段只给规格（做什么），第二段才给验收仪式（怎么算做完）。差值即“被要求去证明”的价值。同一会话两次发送，评分按第二段题面的时间戳事后切分。",
+    "A": {
+      "taskFile": "按变体取：gui → TASK.md；headless → TASK.headless.md",
+      "measures": "自发与交付物质量：几何、契约、运动、可打印性、阴性对照、外观特征；GUI 档另含 recall_reference_image 的附件回收"
+    },
+    "B": {
+      "taskFile": "TASK-2.md（两变体共用，措辞已档位中立）",
+      "measures": "被明确要求后能不能证明：外观对照、机构进契约、整机级验证、交付审计、参考图取回"
+    },
+    "boundary": "第二段题面文本固定且唯一，其 user 消息时间戳即分界；之前的 run 归 A，之后的归 B。",
+    "preconditionCheck": "B 开始时 transcript 必须已出现参考图的 image omitted 占位，否则 p-reference-recall 不成立，该探针记 N/A",
+    "delta": {
+      "formula": "delta = scoreB - scoreA",
+      "reading": "delta 大＝被要求去证明价值高，说明自发阶段准备不足；delta 小且 A 高＝自发就做全了；delta 小且 A 低＝两段都没做出来，问题在设计或工具"
+    }
+  },
+  "variants": {
+    "design": "03 有两档，唯一差别是参考图怎么送到考生手里；两档的 A 段考卷只差两行，TASK-2.md 共用。分数按档分别记，**不混算**。",
+    "gui": {
+      "taskFiles": [
+        "subjects/03-microscope/TASK.md",
+        "subjects/03-microscope/TASK-2.md"
+      ],
+      "sha256": [
+        "93f602114329f2be53e0244f366e1f4f04e784f2ecea2e4f0888846d7792ccdb",
+        "0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20"
+      ],
+      "referenceImage": "attachment：操作者把 graders/03-microscope/参考图.png 作为对话附件随 A 段发出；考生目录保持不放图",
+      "probeMeaning": "p-reference-recall = 附件被裁剪后，下结论前必须调用 recall_reference_image（**考插件的回收机制**）",
+      "howToRun": "GUI/造物模式手工跑（根 README §5–§7）；headless 没有附图通道，跑不了这一档",
+      "coversTools": [
+        "recall_reference_image"
+      ],
+      "tier": "GUI / 造物模式"
+    },
+    "headless": {
+      "taskFiles": [
+        "subjects/03-microscope/TASK.headless.md",
+        "subjects/03-microscope/TASK-2.md"
+      ],
+      "sha256": [
+        "c93d8db2054fb35310a9655ab1db8faa89c5789bdc35507a3d38a3f79e7a8d66",
+        "0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20"
+      ],
+      "referenceImage": "copied-into-run-root：runner 把同一个 参考图.png 复制进 run root，题面写“工作目录下的 参考图.png”",
+      "probeMeaning": "p-reference-recall = 下结论前是否重新 **read_image**（考自发行为，**不考**插件的回收机制）",
+      "howToRun": "node examples/bench/tools/bench-run.mjs --level 03-microscope --variant headless --model <provider>/<model>",
+      "coversTools": [
+        "read_image"
+      ],
+      "tier": "headless（不命名预设）"
+    }
+  }
+}

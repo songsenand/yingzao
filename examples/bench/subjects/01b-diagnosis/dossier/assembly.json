@@ -1,0 +1,619 @@
+{
+  "schemaVersion": 1,
+  "name": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "microscope",
+    "name": "显微镜",
+    "kind": "assembly",
+    "interfaces": [
+      {
+        "id": "1",
+        "a": "column.法兰底面",
+        "b": "base.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "check": "distance",
+        "note": "M1 · 4×M3×16 沉头紧固入底座热熔铜螺母"
+      },
+      {
+        "id": "2",
+        "a": "arm.底面",
+        "b": "column.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "check": "distance",
+        "note": "M1 · 2×M3×12 入柱顶热熔铜螺母"
+      },
+      {
+        "id": "3",
+        "a": "base.法兰孔",
+        "b": "column.止口",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.15
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "check": "diameter-match",
+        "note": "M1 · 隙=孔Ø40.15−止口Ø40.0（a=孔 b=轴）"
+      },
+      {
+        "id": "4",
+        "a": "arm.防转面",
+        "b": "column.防转面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "check": "distance",
+        "note": "M1 · 防转唇贴柱身防转平面 y=-22"
+      },
+      {
+        "id": "5",
+        "a": "stage.槽壁A",
+        "b": "stage.槽壁B",
+        "type": "间隙",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 25.3
+        },
+        "tolerance": {
+          "min": 25.2,
+          "max": 25.45
+        },
+        "check": "distance",
+        "note": "M1 · 玻片 25×(1.0~1.2) 单边隙 0.15"
+      },
+      {
+        "id": "5a",
+        "a": "stage.抱箍内孔",
+        "b": "column.柱身",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.4
+        },
+        "tolerance": {
+          "min": 0.2,
+          "max": 0.6
+        },
+        "check": "diameter-match",
+        "note": "M1 · 邻接发现后补声明：抱箍Ø22.4 套柱身Ø22，开口缝 M3 钳紧"
+      },
+      {
+        "id": "6",
+        "a": "pinion-block.轴承孔A",
+        "b": "focus-pinion-shaft.轴颈A",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "M2 · 孔Ø8.2−轴Ø8.0；A/B 两端同制"
+      },
+      {
+        "id": "7",
+        "a": "focus-carriage.齿条参考点",
+        "b": "focus-pinion-shaft.节圆点",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.5,
+          "max": 0.5
+        },
+        "check": "distance",
+        "note": "M2 · 齿条-齿轮节线重合：20齿×π=2π×10 精确，故静止位姿实测侧隙 0.238mm（validate r058）在全行程有效（滚动比 z=−10·θ）；啮合区间 148.5..195.7 ⊂ 齿条 146.9..197.1。工具局限：simulate_motion 齿条模式驱动角与齿条位移各自积分，出现随时间增长的假干涉（5→937mm³）；validate_assembly 的 pose 绕世界原点而非基准轴（零件被甩出176mm）→ 二者均不作为依据"
+      },
+      {
+        "id": "8",
+        "a": "focus-carriage.导轨面",
+        "b": "arm.导轨面",
+        "type": "滑动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "check": "distance",
+        "note": "M2 · 滑座抱孔 8.4 vs 导轨 8.0，单面隙 0.2"
+      },
+      {
+        "id": "8a",
+        "a": "pinion-block.安装面",
+        "b": "arm.梁底右",
+        "type": "贴合",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "check": "distance",
+        "note": "M2 · 轴承座颈柱伸入弯臂梁底实体内（y−30..−12 段），2×M3×30 自下方穿过颈柱拧入梁底铜螺母（颈柱底 Ø6×8 沉头）；实测贴合距离 0.000mm"
+      },
+      {
+        "id": "9",
+        "a": "focus-carriage.弹簧座",
+        "b": "arm.弹簧座",
+        "type": "弹簧",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "预紧力",
+          "value": 2.0
+        },
+        "tolerance": {
+          "min": 1,
+          "max": 3
+        },
+        "check": "spring-preload",
+        "params": {
+          "freeLengthMm": 76.0,
+          "stiffnessNPerMm": 0.08
+        },
+        "note": "M2 · 消隙拉簧（stock Ø8 自由长 76.0 k0.08）：安装距 51.0（滑座挂耳 (0,−7.8,136) ↔ 弯臂背脊挂耳 (0,−17.9,86)）→ 预紧 2.0N；行程内 1.0~3.0N 单侧贴齿消回程"
+      },
+      {
+        "id": "6b",
+        "a": "focus-knob-R.内孔",
+        "b": "focus-pinion-shaft.旋钮位R",
+        "type": "贴合",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "distance",
+        "note": "M2 · 右旋钮D孔套轴端+M3紧定"
+      },
+      {
+        "id": "6c",
+        "a": "focus-knob-L.内孔",
+        "b": "focus-pinion-shaft.旋钮位L",
+        "type": "贴合",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "distance",
+        "note": "M2 · 左旋钮同上（translate -56,0,0）"
+      },
+      {
+        "id": "8b",
+        "a": "focus-carriage.板缘",
+        "b": "pinion-block.左面",
+        "type": "间隙",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 9.0
+        },
+        "tolerance": {
+          "min": 6,
+          "max": 12
+        },
+        "check": "distance",
+        "note": "M2 · 轴承座本体后移到 x≥22（避开齿条 x≤20 与齿轮 x14..20）后，其左面到过桥板右缘的 x 向让位 9.0mm，全行程不相碰"
+      },
+      {
+        "id": "10",
+        "a": "body-tube.下口",
+        "b": "objective-mount.止口",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.15
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "check": "diameter-match",
+        "note": "M3 · 镜筒下口Ø26.10 ↔ 镜头座止口Ø25.95；M3 紧定锁 ±1 微调"
+      },
+      {
+        "id": "11",
+        "a": "body-tube.上口",
+        "b": "eyepiece-tube.下口插头",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.3
+        },
+        "check": "diameter-match",
+        "note": "M3 · 镜筒上口Ø26.10 ↔ 目镜筒插头Ø25.90"
+      },
+      {
+        "id": "12",
+        "a": "objective-mount.安装面",
+        "b": "eyepiece-tube.光阑定位面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 156.0
+        },
+        "tolerance": {
+          "min": 155.7,
+          "max": 156.3
+        },
+        "check": "distance",
+        "note": "M3 · 主尺寸链：座面→像面 156.0"
+      },
+      {
+        "id": "13",
+        "a": "objective-mount.安装面",
+        "b": "stage.标本面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 13.0
+        },
+        "tolerance": {
+          "min": 12.0,
+          "max": 14.0
+        },
+        "check": "distance",
+        "note": "M3 · 物距 u：标本面→座面 13.0（滑座名义位）"
+      },
+      {
+        "id": "14",
+        "a": "objective-mount.M12轴",
+        "b": "stage.通光孔轴",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "M3 · 镜头座 M12 轴 ↔ 载物台通光孔轴 ≤0.3"
+      },
+      {
+        "id": "15",
+        "a": "illuminator.LED轴",
+        "b": "stage.通光孔轴",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.5,
+          "max": 0.5
+        },
+        "check": "coaxial",
+        "note": "M3 · 照明座 LED 轴 ↔ 通光孔轴 ≤0.5"
+      },
+      {
+        "id": "12a",
+        "a": "camera-plate.传感器定位面",
+        "b": "eyepiece-tube.光阑定位面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "distance",
+        "note": "M3 · 双端口共像面：相机托板定位面与目镜光阑面重合"
+      },
+      {
+        "id": "15b",
+        "a": "illuminator.翼面",
+        "b": "stage.轨道面",
+        "type": "间隙",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "check": "distance",
+        "note": "M3 · 照明座滑翼与吊架导轨滑动隙 0.2/面"
+      },
+      {
+        "id": "16",
+        "a": "focus-carriage.抱环轴",
+        "b": "body-tube.轴线",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "M3 · 调焦滑座抱环孔Ø34.4 ↔ 镜筒Ø34 径向隙0.2/面"
+      },
+      {
+        "id": "16a",
+        "a": "fine-focus-ring.内孔",
+        "b": "objective-mount.抱环段",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.25
+        },
+        "tolerance": {
+          "min": 0.1,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "M3 · 精调环Ø40.25 ↔ 镜头座抱环段Ø40.0， slit+M3 抱紧（精调时同转）"
+      },
+      {
+        "id": "16b",
+        "a": "camera-plate.轴线",
+        "b": "body-tube.轴线",
+        "type": "转动副",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "M3 · 相机托板在镜筒上口内的通过间隙 1.45/面"
+      },
+      {
+        "id": "17",
+        "a": "slide-clip.脚底",
+        "b": "stage.顶面",
+        "type": "贴合",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "check": "distance",
+        "note": "M4 · 压片簧脚座 2×M3×8 自拧入台面 pilot（M3 紧定类，轻载）；低段压玻片顶 0.5 过盈由 M4 物理仿真佐证"
+      }
+    ],
+    "children": [
+      {
+        "id": "base",
+        "name": "底座",
+        "kind": "part",
+        "version": "v001",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "column",
+        "name": "立柱",
+        "kind": "part",
+        "version": "v013",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "arm",
+        "name": "弯臂",
+        "kind": "part",
+        "version": "v071",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "stage",
+        "name": "载物台",
+        "kind": "part",
+        "version": "v079",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "focus-carriage",
+        "name": "调焦滑座",
+        "kind": "part",
+        "version": "v066",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "focus-pinion-shaft",
+        "name": "齿轮轴",
+        "kind": "part",
+        "version": "v038",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "focus-knob-L",
+        "name": "粗调旋钮",
+        "kind": "part",
+        "version": "v059",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1,
+        "transform": {
+          "translate": [
+            -56,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "focus-knob-R",
+        "name": "粗调旋钮",
+        "kind": "part",
+        "version": "v059",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1,
+        "transform": {
+          "translate": [
+            12,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "fine-focus-ring",
+        "name": "精调环",
+        "kind": "part",
+        "version": "v052",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "pinion-block",
+        "name": "轴承座",
+        "kind": "part",
+        "version": "v082",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "body-tube",
+        "name": "镜筒",
+        "kind": "part",
+        "version": "v045",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "objective-mount",
+        "name": "镜头座",
+        "kind": "part",
+        "version": "v046",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "eyepiece-tube",
+        "name": "目镜筒",
+        "kind": "part",
+        "version": "v042",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "camera-plate",
+        "name": "相机托板",
+        "kind": "part",
+        "version": "v043",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "illuminator",
+        "name": "照明座",
+        "kind": "part",
+        "version": "v080",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      },
+      {
+        "id": "slide-clip",
+        "name": "压片簧",
+        "kind": "part",
+        "version": "v056",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 1
+      }
+    ]
+  }
+}

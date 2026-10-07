@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "example": "01-mortise-bench",
+  "title": "榫卯木长凳（木质，L0）",
+  "level": 1,
+  "driver": "llm",
+  "lanes": [
+    "L0-几何",
+    "datum 声明",
+    "装配契约",
+    "木工配合语义",
+    "多实例",
+    "阴性对照"
+  ],
+  "budget": {
+    "toolCalls": 60,
+    "wallClockMin": 45,
+    "images": 40
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "所有数值容差取自 key.md 的参考解；判据只对'顺序与方向'做强要求，具体取值只要求落在合理区间。首轮基线后收紧区间。",
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json",
+      "evidence": "目录分层只挡误触；这一条是检测层，见 README §四",
+      "inSkill": false
+    },
+    {
+      "id": "g-negative-control-fires",
+      "desc": "阴性对照：腿榫头厚 +0.5mm 后 check_assembly 必须报 hard-violation",
+      "via": "check_assembly",
+      "expect": "hardViolations >= 1 && overallStatus === 'fail'",
+      "evidence": "报不出来 = 机检是空的，比报错严重",
+      "inSkill": false
+    },
+    {
+      "id": "g-negative-reverted",
+      "desc": "改回原尺寸后必须回到 pass（证明不是靠把清单改宽蒙过去的）",
+      "via": "check_assembly",
+      "expect": "hardViolations === 0 && overallStatus === 'pass'",
+      "inSkill": false
+    },
+    {
+      "id": "g-hard-zero",
+      "desc": "最终交付态 0 hard violation",
+      "via": "check_assembly",
+      "expect": "hardViolations === 0",
+      "inSkill": false
+    },
+    {
+      "id": "g-undeclared-found",
+      "desc": "故意不声明的 端枨顶面↔座面底面 0.4mm 让位间隙必须被邻接发现抓出",
+      "via": "check_assembly.undeclared",
+      "expect": "存在一对 undeclared 且为 {端枨, 座面}",
+      "evidence": "邻接发现是唯一能抓住'没人想到要声明'的检查",
+      "inSkill": false
+    },
+    {
+      "id": "g-one-version-per-repeated-part",
+      "desc": "4 条腿必须同一个版本；2 条端枨同理",
+      "via": "assembly.json children",
+      "expect": "去重后 腿 的 version 数 === 1 且 端枨 的 version 数 === 1",
+      "evidence": "多实例复用；microscope5 的左右旋钮就是同一个版本 v059 两个节点",
+      "inSkill": false
+    },
+    {
+      "id": "g-coaxial-not-two-points",
+      "desc": "同轴类配合必须用 coaxial 算子，不能用两点 distance 糊过去",
+      "via": "assembly.json interfaces",
+      "expect": "至少 1 条 check === 'coaxial'",
+      "evidence": "cad-toolbox SKILL：'A coaxial claim checked as two points is not checked'",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 'A coaxial claim checked as two points is not checked'"
+    },
+    {
+      "id": "g-datums-declared",
+      "desc": "每个交付零件都要有 datum 锚点（点/轴/面）",
+      "via": "版本库 datums",
+      "expect": "每个 part 的 datum 数 >= 1",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 全篇 18 处讲 datum 约定，声明锚点是硬要求"
+    },
+    {
+      "id": "g-no-metal-fasteners",
+      "desc": "木质榫卯，不得引入螺钉/螺母等金属紧固件",
+      "via": "assembly.json children.material 与 BOM",
+      "expect": "无 M3/M4 等紧固件条目",
+      "inSkill": false
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-grain-axis-correct",
+      "desc": "座面长纹轴判为 x（1200 方向）",
+      "via": "joinery.json.seatGrainAxis",
+      "expect": "=== 'x'",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-across-grain-looser",
+      "desc": "横纹方向的配合间隙必须大于顺纹方向——本题的核心语义",
+      "via": "joinery.json.fits",
+      "assert": {
+        "op": "gt",
+        "lhs": "fits.seatTenonAcrossGrain.gapMm",
+        "rhs": "fits.seatTenonAlongGrain.gapMm"
+      },
+      "weight": 4,
+      "evidence": "座面在横纹方向胀缩会把榫眼挤裂；顺纹方向稳定，可以紧配",
+      "inSkill": false
+    },
+    {
+      "id": "c-gaps-in-range",
+      "desc": "两个间隙都要落在木工合理区间，不能靠'留 5mm 就永远不裂'蒙混",
+      "via": "joinery.json.fits",
+      "assert": {
+        "op": "range",
+        "lhs": "both gaps",
+        "min": 0.05,
+        "max": 0.8
+      },
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-shoulder-seats",
+      "desc": "榫肩必须坐实：肩面↔座面底面 名义 0，公差 ±0.2",
+      "via": "check_assembly",
+      "expect": "measured ∈ [-0.2, 0.2]",
+      "weight": 3,
+      "evidence": "肩面是承力面，也是遮缝面；不坐实则整条凳子靠榫头剪切受力",
+      "inSkill": false
+    },
+    {
+      "id": "c-blind-tenon-shorter",
+      "desc": "半榫榫头必须比孔浅，胶隙 1.5–3mm（榫头长 < 孔深）",
+      "via": "joinery.json.blindTenon + measure_distance",
+      "assert": {
+        "op": "range",
+        "lhs": "mortiseDepthMm - tenonLengthMm",
+        "min": 1.5,
+        "max": 3.0
+      },
+      "weight": 3,
+      "evidence": "孔底顶住榫头，肩面就合不拢",
+      "inSkill": false
+    },
+    {
+      "id": "c-protrusion",
+      "desc": "出榫 5mm（透榫露在座面上表面之上）",
+      "via": "measure_distance",
+      "expect": "measured ∈ [4.5, 5.5]",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-interface-count",
+      "desc": "接口数足够覆盖每一组真实配合（腿↔座面 3 组、腿↔端枨 2 组、同轴 1 组）",
+      "via": "assembly.json",
+      "expect": "interfaces.length >= 6 且覆盖 x/y 两个方向",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-measured-vs-datum",
+      "desc": "清单走 datum 链、measure_distance 走表面吸附，两条独立路径给出同一个数",
+      "via": "measure_distance + check_assembly",
+      "expect": "同一配合的两条路径差值 < 0.05mm",
+      "weight": 2,
+      "evidence": "microscope5 M3 的交叉核对做法",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 'Renders are seductive... anything with a tolerance in it gets a measure_* call before it gets a verdict'"
+    }
+  ],
+  "features": [
+    {
+      "id": "f-grain-reasoning",
+      "desc": "明确说出哪个方向是横纹、为什么该留更大间隙（不是只给数字）",
+      "kind": "manual",
+      "pass": "fits.*.reason 字段给出与 key.md §1 一致的物理依据",
+      "weight": 3,
+      "inSkill": false
+    },
+    {
+      "id": "f-blind-tenon-reasoning",
+      "desc": "说出榫头为何必须比孔浅（肩面坐实的必要条件）",
+      "kind": "manual",
+      "pass": "joinery.json.blindTenon.reason 命中'肩面合不拢/孔底顶住'这一因果",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "f-subassembly",
+      "desc": "子装配层级：正确嵌套 或 明确指出当前层级只支持 translate 并给出平铺替代",
+      "kind": "manual",
+      "pass": "两者任一；默默平铺且不作说明算不过",
+      "weight": 1,
+      "evidence": "缺口⑤；microscope5 PROJECT.md §6 记载层级树 v1 只组合 translate",
+      "inSkill": false
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-version-recall",
+      "desc": "长程记忆：窗口外版本的榫头厚度",
+      "when": "renderRounds >= 6",
+      "ask": "第 2 版腿的榫头厚度是多少？",
+      "expect": "回答与版本库记录一致（允许用 measure_part / 版本记录取回）",
+      "kind": "auto",
+      "weight": 1,
+      "inSkill": false
+    }
+  ],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.35,
+      "E": 0.2,
+      "H": 0.2,
+      "C": 0.05,
+      "R": 0.1,
+      "S": 0.1
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A"
+  },
+  "sSkill": {
+    "S0": "skill 是否被加载（transcript 可观测）；false 时 S 记 N/A",
+    "S": "inSkill:true 条目的加权达成率",
+    "baselineSkillSha256": "8e2717f9694e6a1d5a5a18e26ced68fa9972f4e25304bcde476266618bc44da3"
+  },
+  "taskFile": {
+    "path": "subjects/01-mortise-bench/TASK.md",
+    "sha256": "3c2a285a61c27b4f9131c3d47cd120e56811b1408be56619a424dff90f94ad89",
+    "note": "考卷在考生侧，是唯一权威副本；runner 逐字读出作为首条消息。每轮核对 sha256。"
+  }
+}

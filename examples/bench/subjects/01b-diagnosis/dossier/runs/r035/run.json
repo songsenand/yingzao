@@ -1,0 +1,31 @@
+{
+  "id": "r035",
+  "kind": "assembly-check",
+  "timestamp": "2026-10-04T13:14:25.507Z",
+  "title": "装配清单检查 · 显微镜 · 单目复式（M12 物镜，单物镜方案）",
+  "status": "pass",
+  "summary": "25 接口 · 通过 25 · 硬冲突 0 · 未声明 0",
+  "sourceVersionIds": [
+    "v001",
+    "v013",
+    "v017",
+    "v018",
+    "v033",
+    "v034",
+    "v036",
+    "v038",
+    "v042",
+    "v043",
+    "v045",
+    "v046",
+    "v047",
+    "v048"
+  ],
+  "hasGeometry": false,
+  "parts": [],
+  "subject": "manifest:assembly/assembly.json",
+  "supersedes": [
+    "r034"
+  ],
+  "supersededBy": "r036"
+}

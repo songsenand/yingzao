@@ -156,13 +156,24 @@ async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
 }
 
 // --- bundled standard-parts library (BOSL2) ---
-// Generated SCAD may `include <BOSL2/std.scad>` etc.; OPENSCADPATH makes the
-// include resolve for every openscad invocation we spawn.
-const bosl2Dir = join(pluginRoot, '..', 'lib', 'BOSL2');
-if (existsSync(bosl2Dir)) {
+// Generated SCAD writes `include <BOSL2/std.scad>`, so OPENSCADPATH must list the
+// directory that CONTAINS the `BOSL2/` folder. Pointing it at `lib/BOSL2` itself
+// made every include resolve to `lib/BOSL2/BOSL2/std.scad` and fail — silently,
+// because OpenSCAD only warns, the top-level object comes out empty, and the
+// compile still reports success. That is why microscope5 recorded "BOSL2 在编译
+// 环境不可用" and hand-rolled its gears and threads; a wiring bug was scored as a
+// model weakness. `pluginRoot` is `<plugin>` when bundled but `<plugin>/src` when
+// the TypeScript sources are run directly, so accept either depth. The BOSL2 dir
+// itself is also listed so a bare `include <std.scad>` keeps working.
+const bosl2Roots = [
+  join(pluginRoot, '..', 'lib'), // bundled: <plugin>/../lib/BOSL2
+  join(pluginRoot, '..', '..', 'lib'), // sources: <plugin>/src/../../lib/BOSL2
+].filter((libDir) => existsSync(join(libDir, 'BOSL2')));
+const bosl2Path = bosl2Roots.flatMap((libDir) => [libDir, join(libDir, 'BOSL2')]);
+if (bosl2Path.length > 0) {
   process.env.OPENSCADPATH = process.env.OPENSCADPATH
-    ? `${bosl2Dir}:${process.env.OPENSCADPATH}`
-    : bosl2Dir;
+    ? `${bosl2Path.join(':')}:${process.env.OPENSCADPATH}`
+    : bosl2Path.join(':');
 }
 
 // --- shared headless X server ---

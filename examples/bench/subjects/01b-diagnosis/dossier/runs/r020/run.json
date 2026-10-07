@@ -1,0 +1,30 @@
+{
+  "id": "r020",
+  "kind": "assembly",
+  "timestamp": "2026-10-04T12:31:16.519Z",
+  "title": "装配间隙 · v014+v028+v025",
+  "status": "fail",
+  "summary": "3 对 · 干涉 0 · 过紧 1",
+  "sourceVersionIds": [
+    "v014",
+    "v025",
+    "v028"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "弯臂",
+    "调焦滑座",
+    "齿轮轴"
+  ],
+  "subject": "parts:弯臂+调焦滑座+齿轮轴",
+  "placements": {
+    "调焦滑座": {
+      "translate": [
+        0,
+        0,
+        6.793
+      ]
+    }
+  },
+  "supersededBy": "r021"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "r022",
+  "kind": "motion",
+  "timestamp": "2026-10-04T12:33:38.731Z",
+  "title": "机构运动 · v014+v025+v029",
+  "status": "check",
+  "summary": "干涉 3 次 · 行程 23.9mm",
+  "sourceVersionIds": [
+    "v014",
+    "v025",
+    "v029"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "弯臂",
+    "调焦滑座",
+    "齿轮轴"
+  ]
+}

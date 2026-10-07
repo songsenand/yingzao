@@ -1,0 +1,15 @@
+{
+  "id": "r052",
+  "kind": "physics",
+  "timestamp": "2026-10-04T14:12:59.485Z",
+  "title": "刚体物理 · v060",
+  "status": "pass",
+  "summary": "稳态穿透 0.00mm",
+  "sourceVersionIds": [
+    "v060"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "整机"
+  ]
+}

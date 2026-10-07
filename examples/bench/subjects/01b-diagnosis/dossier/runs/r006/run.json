@@ -1,0 +1,23 @@
+{
+  "id": "r006",
+  "kind": "assembly",
+  "timestamp": "2026-10-04T11:56:02.960Z",
+  "title": "装配间隙 · v001+v002+v003+v005",
+  "status": "fail",
+  "summary": "6 对 · 干涉 1 · 过紧 2",
+  "sourceVersionIds": [
+    "v001",
+    "v002",
+    "v003",
+    "v005"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "底座",
+    "弯臂",
+    "立柱",
+    "载物台"
+  ],
+  "subject": "parts:底座+弯臂+立柱+载物台",
+  "supersededBy": "r008"
+}

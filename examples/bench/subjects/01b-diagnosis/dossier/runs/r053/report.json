@@ -1,0 +1,222 @@
+{
+  "parts": [
+    {
+      "name": "弯臂",
+      "watertight": true,
+      "volume": 57862.830223123165,
+      "boundingBox": {
+        "min": [
+          -22,
+          -47,
+          79
+        ],
+        "max": [
+          30,
+          -12,
+          234
+        ]
+      },
+      "triangles": 2676
+    },
+    {
+      "name": "调焦滑座",
+      "watertight": true,
+      "volume": 45065.29919401321,
+      "boundingBox": {
+        "min": [
+          -20.5,
+          -23,
+          133
+        ],
+        "max": [
+          20.5,
+          56.95087432861328,
+          205
+        ]
+      },
+      "triangles": 2634
+    },
+    {
+      "name": "齿轮轴",
+      "watertight": true,
+      "volume": 5160.443151295572,
+      "boundingBox": {
+        "min": [
+          -32,
+          -3.546809434890747,
+          161.00318908691406
+        ],
+        "max": [
+          44,
+          18.446809768676758,
+          182.99681091308594
+        ]
+      },
+      "triangles": 1876
+    },
+    {
+      "name": "轴承座",
+      "watertight": true,
+      "volume": 14718.540545832297,
+      "boundingBox": {
+        "min": [
+          13.5,
+          -30,
+          157
+        ],
+        "max": [
+          33.5,
+          12,
+          218.5
+        ]
+      },
+      "triangles": 1500
+    },
+    {
+      "name": "载物台",
+      "watertight": true,
+      "volume": 81543.9713962589,
+      "boundingBox": {
+        "min": [
+          -55,
+          -48.95087432861328,
+          13.5
+        ],
+        "max": [
+          55,
+          72,
+          60
+        ]
+      },
+      "triangles": 2748
+    },
+    {
+      "name": "照明座",
+      "watertight": true,
+      "volume": 19169.937790772798,
+      "boundingBox": {
+        "min": [
+          -40,
+          17,
+          16
+        ],
+        "max": [
+          40,
+          57,
+          31
+        ]
+      },
+      "triangles": 1680
+    }
+  ],
+  "pairs": [
+    {
+      "partA": "弯臂",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 0.14999961853027344,
+      "status": "too_tight"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 8.453190565109253,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "轴承座",
+      "intersectionVolume": 53.00130488415849,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 19,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 57.982756057296896,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 0.23773083652116517,
+      "status": "too_tight"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "轴承座",
+      "intersectionVolume": 379.40926054975,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 73,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 104.09918346469561,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 0.09999739005375125,
+      "status": "too_tight"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 101.00318908691406,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 130.49363435537182,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 97,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 126.28053884326951,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "照明座",
+      "intersectionVolume": 230.4000244140625,
+      "minDistance": 0,
+      "status": "interference"
+    }
+  ],
+  "overallStatus": "fail",
+  "thresholdMm": 1,
+  "interferenceEpsilonMm3": 0.001
+}

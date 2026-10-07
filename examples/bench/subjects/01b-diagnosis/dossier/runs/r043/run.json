@@ -1,0 +1,17 @@
+{
+  "id": "r043",
+  "kind": "physics",
+  "timestamp": "2026-10-04T13:23:58.802Z",
+  "title": "刚体物理 · v033+v036",
+  "status": "pass",
+  "summary": "稳态穿透 0.00mm",
+  "sourceVersionIds": [
+    "v033",
+    "v036"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "弯臂",
+    "调焦滑座"
+  ]
+}

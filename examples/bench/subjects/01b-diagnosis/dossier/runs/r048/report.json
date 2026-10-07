@@ -1,0 +1,1137 @@
+{
+  "parts": [
+    {
+      "name": "底座",
+      "watertight": true,
+      "volume": 173893.73725941684,
+      "boundingBox": {
+        "min": [
+          -75,
+          -60,
+          0
+        ],
+        "max": [
+          75,
+          60,
+          12
+        ]
+      },
+      "triangles": 2332
+    },
+    {
+      "name": "立柱",
+      "watertight": true,
+      "volume": 95262.35471925075,
+      "boundingBox": {
+        "min": [
+          -28,
+          -59.925,
+          7
+        ],
+        "max": [
+          28,
+          -3.925,
+          218
+        ]
+      },
+      "triangles": 2326
+    },
+    {
+      "name": "弯臂",
+      "watertight": true,
+      "volume": 58727.14710266792,
+      "boundingBox": {
+        "min": [
+          -22,
+          -47,
+          117
+        ],
+        "max": [
+          30,
+          -12,
+          234
+        ]
+      },
+      "triangles": 1620
+    },
+    {
+      "name": "载物台",
+      "watertight": true,
+      "volume": 80611.93250221979,
+      "boundingBox": {
+        "min": [
+          -55,
+          -48.75087432861328,
+          13.5
+        ],
+        "max": [
+          55,
+          72.2,
+          60
+        ]
+      },
+      "triangles": 2106
+    },
+    {
+      "name": "调焦滑座",
+      "watertight": true,
+      "volume": 37602.6887672626,
+      "boundingBox": {
+        "min": [
+          -20.5,
+          -20.000000762939454,
+          133
+        ],
+        "max": [
+          20.5,
+          57.150874328613284,
+          205
+        ]
+      },
+      "triangles": 1538
+    },
+    {
+      "name": "齿轮轴",
+      "watertight": true,
+      "volume": 5160.4431512955725,
+      "boundingBox": {
+        "min": [
+          -32,
+          -3.646809434890747,
+          161.00318908691406
+        ],
+        "max": [
+          44,
+          18.346809768676756,
+          182.99681091308594
+        ]
+      },
+      "triangles": 1876
+    },
+    {
+      "name": "粗调旋钮L",
+      "watertight": true,
+      "volume": 2779.147001152564,
+      "boundingBox": {
+        "min": [
+          -32,
+          -7.550000190734863,
+          157
+        ],
+        "max": [
+          -24,
+          22.450000762939453,
+          187
+        ]
+      },
+      "triangles": 810
+    },
+    {
+      "name": "粗调旋钮R",
+      "watertight": true,
+      "volume": 2779.147001152564,
+      "boundingBox": {
+        "min": [
+          36,
+          -7.550000190734863,
+          157
+        ],
+        "max": [
+          44,
+          22.450000762939453,
+          187
+        ]
+      },
+      "triangles": 810
+    },
+    {
+      "name": "精调环",
+      "watertight": true,
+      "volume": 13297.51882033543,
+      "boundingBox": {
+        "min": [
+          -31,
+          6.275,
+          85
+        ],
+        "max": [
+          31,
+          68.275,
+          97
+        ]
+      },
+      "triangles": 1088
+    },
+    {
+      "name": "轴承座",
+      "watertight": true,
+      "volume": 7363.8068863564085,
+      "boundingBox": {
+        "min": [
+          13.5,
+          0,
+          157
+        ],
+        "max": [
+          33.5,
+          12,
+          218.0500030517578
+        ]
+      },
+      "triangles": 786
+    },
+    {
+      "name": "镜筒",
+      "watertight": true,
+      "volume": 44670.62305614765,
+      "boundingBox": {
+        "min": [
+          -17,
+          12.4,
+          113
+        ],
+        "max": [
+          17,
+          54.4,
+          231
+        ]
+      },
+      "triangles": 804
+    },
+    {
+      "name": "镜头座",
+      "watertight": true,
+      "volume": 37558.511732086,
+      "boundingBox": {
+        "min": [
+          -19.925,
+          17.4,
+          72.87000274658203
+        ],
+        "max": [
+          20.075,
+          57.4,
+          118
+        ]
+      },
+      "triangles": 1020
+    },
+    {
+      "name": "目镜筒",
+      "watertight": true,
+      "volume": 9494.12816635455,
+      "boundingBox": {
+        "min": [
+          -16,
+          21.3,
+          216.8699951171875
+        ],
+        "max": [
+          16,
+          53.3,
+          238.8699951171875
+        ]
+      },
+      "triangles": 764
+    },
+    {
+      "name": "相机托板",
+      "watertight": true,
+      "volume": 4978.458218989922,
+      "boundingBox": {
+        "min": [
+          -12.9,
+          24.3,
+          228.8699951171875
+        ],
+        "max": [
+          13.1,
+          50.3,
+          243.47000122070312
+        ]
+      },
+      "triangles": 1020
+    },
+    {
+      "name": "照明座",
+      "watertight": true,
+      "volume": 19169.937790772798,
+      "boundingBox": {
+        "min": [
+          -39.8,
+          17,
+          16
+        ],
+        "max": [
+          40.2,
+          57,
+          31
+        ]
+      },
+      "triangles": 1680
+    },
+    {
+      "name": "压片簧",
+      "watertight": true,
+      "volume": 819.3328342568125,
+      "boundingBox": {
+        "min": [
+          -37,
+          -26,
+          59.20000076293945
+        ],
+        "max": [
+          -30,
+          56,
+          62.5
+        ]
+      },
+      "triangles": 490
+    }
+  ],
+  "pairs": [
+    {
+      "partA": "底座",
+      "partB": "立柱",
+      "intersectionVolume": 2.720863532274659e-7,
+      "minDistance": 0,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "弯臂",
+      "intersectionVolume": 0,
+      "minDistance": 105,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 1.5,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 121,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 149.00318908691406,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 0,
+      "minDistance": 145,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 145,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 73,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 145,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 101,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 60.87000274658203,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 204.8699951171875,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 216.8699951171875,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 4,
+      "status": "ok"
+    },
+    {
+      "partA": "底座",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 47.20000076293945,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "弯臂",
+      "intersectionVolume": 5.399999999999949,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "立柱",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 0.07490692529273116,
+      "status": "too_tight"
+    },
+    {
+      "partA": "立柱",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 10.425836426579151,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 19.38169344667801,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 0,
+      "minDistance": 25.38817895539898,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 32.47602353493196,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 28.19999933242798,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 23.680077745396932,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 34.32499885559082,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 39.32499885559082,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 45.100302298368256,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 48.84974142380619,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 20.925955725023137,
+      "status": "ok"
+    },
+    {
+      "partA": "立柱",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 19.579512370129617,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "载物台",
+      "intersectionVolume": 0,
+      "minDistance": 57,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 0.14999961853027344,
+      "status": "too_tight"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 8.353190660476685,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 0,
+      "minDistance": 8.294727138517562,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 16.607302559490503,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 27.091984580050234,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 12,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 24.399999618530273,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 34.47259748799878,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 33.29999923706055,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 36.94437409837628,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 90.75791976461338,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 58.0538543078752,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 73,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 101.00318908691406,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 0,
+      "minDistance": 97,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 97,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 25,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 97,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 53,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 12.870002746582031,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 156.8699951171875,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 168.87266729573633,
+      "status": "ok"
+    },
+    {
+      "partA": "载物台",
+      "partB": "照明座",
+      "intersectionVolume": 120.00002441406245,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "载物台",
+      "partB": "压片簧",
+      "intersectionVolume": 0.2800018691996211,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0.15584297229833824,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 0,
+      "minDistance": 4.944354146477443,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 15.5,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 37.32982219352243,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 0.5,
+      "status": "too_tight"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "镜筒",
+      "intersectionVolume": 0.000023910255317063572,
+      "minDistance": 0,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 31.786798783329846,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 12.572900442984638,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 24.484709735203577,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 104.05940609128452,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 74.2429121586589,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "粗调旋钮L",
+      "intersectionVolume": 13.711945877071406,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 13.711953631310415,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 64.00668957598963,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "轴承座",
+      "intersectionVolume": 5.942924457517826e-7,
+      "minDistance": 0,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 5.0180734345422175,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 46.32740401219731,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 37.83950646101092,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 49.45899348882299,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 130.49595639000685,
+      "status": "ok"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 106.46919666175317,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "粗调旋钮R",
+      "intersectionVolume": 0,
+      "minDistance": 60,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 60.62646293609451,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 37.900225267672866,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 13.86678783763869,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 46.444169478859564,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 38.75275135027877,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 49.591905525925256,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 127.51067863436346,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮L",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 95.29999923706055,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "精调环",
+      "intersectionVolume": 0,
+      "minDistance": 61.87898868983065,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 2.5,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 21.980808608829722,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 50.32155068875579,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 43.36721456729958,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 53.39844549025733,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 128.29865408948967,
+      "status": "ok"
+    },
+    {
+      "partA": "粗调旋钮R",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 115.92277539199853,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 60,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 16.278154986545086,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "镜头座",
+      "intersectionVolume": 3.5727712046474296,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "精调环",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 120.08253493544592,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 132.138001886637,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 54,
+      "status": "ok"
+    },
+    {
+      "partA": "精调环",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 24.68686011841456,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 11.76484884604448,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 42.06204793954858,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 20.921738713030926,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 24.699058854653185,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 126.27424783336552,
+      "status": "ok"
+    },
+    {
+      "partA": "轴承座",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 104.75848344923547,
+      "status": "ok"
+    },
+    {
+      "partA": "镜筒",
+      "partB": "镜头座",
+      "intersectionVolume": 0,
+      "minDistance": 0,
+      "status": "too_tight"
+    },
+    {
+      "partA": "镜筒",
+      "partB": "目镜筒",
+      "intersectionVolume": 34.94458855689032,
+      "minDistance": 0,
+      "status": "interference"
+    },
+    {
+      "partA": "镜筒",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 1.3070011474642917,
+      "status": "ok"
+    },
+    {
+      "partA": "镜筒",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 82,
+      "status": "ok"
+    },
+    {
+      "partA": "镜筒",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 53.478235998809105,
+      "status": "ok"
+    },
+    {
+      "partA": "镜头座",
+      "partB": "目镜筒",
+      "intersectionVolume": 0,
+      "minDistance": 98.8699951171875,
+      "status": "ok"
+    },
+    {
+      "partA": "镜头座",
+      "partB": "相机托板",
+      "intersectionVolume": 0,
+      "minDistance": 110.8699951171875,
+      "status": "ok"
+    },
+    {
+      "partA": "镜头座",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 41.87000274658203,
+      "status": "ok"
+    },
+    {
+      "partA": "镜头座",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 17.72671921632713,
+      "status": "ok"
+    },
+    {
+      "partA": "目镜筒",
+      "partB": "相机托板",
+      "intersectionVolume": 0.0000015303004898825634,
+      "minDistance": 0,
+      "status": "ok"
+    },
+    {
+      "partA": "目镜筒",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 185.87765433197623,
+      "status": "ok"
+    },
+    {
+      "partA": "目镜筒",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 156.35166452089135,
+      "status": "ok"
+    },
+    {
+      "partA": "相机托板",
+      "partB": "照明座",
+      "intersectionVolume": 0,
+      "minDistance": 197.8939611091131,
+      "status": "ok"
+    },
+    {
+      "partA": "相机托板",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 168.43801087051202,
+      "status": "ok"
+    },
+    {
+      "partA": "照明座",
+      "partB": "压片簧",
+      "intersectionVolume": 0,
+      "minDistance": 28.33866684862443,
+      "status": "ok"
+    }
+  ],
+  "overallStatus": "fail",
+  "thresholdMm": 1.2,
+  "interferenceEpsilonMm3": 0.001
+}

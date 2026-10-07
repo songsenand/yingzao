@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "example": "02-steam-engine",
+  "title": "往复式蒸汽机（刚体运动 + 流道几何，不含热力学）",
+  "level": 2,
+  "driver": "llm",
+  "lanes": [
+    "L1-运动",
+    "L1-刚体",
+    "L2-流体",
+    "import_part",
+    "可打印性",
+    "阴性对照"
+  ],
+  "budget": {
+    "toolCalls": 120,
+    "wallClockMin": 120,
+    "images": 70
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "流体与物理的耗时受机器性能影响大，其阈值单独放宽；运动与几何类阈值取自解析值（行程 = 2r = 40mm）。",
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json",
+      "evidence": "目录分层只挡误触；这一条是检测层，见 README §四",
+      "inSkill": false
+    },
+    {
+      "id": "g-motion-clean",
+      "desc": "整机运动两圈全程 0 干涉，两端不脱开",
+      "via": "simulate_motion",
+      "expect": "interferenceCount === 0 && jointViolations.length === 0",
+      "evidence": "干涉时间线是判定机构会不会打的主要输出，不是关键帧",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 干涉时间线才是真输出，关键帧不可靠"
+    },
+    {
+      "id": "g-negative-rod-fires",
+      "desc": "阴性对照：连杆孔中心距 97mm（短 3mm）时，上死点必须报干涉",
+      "via": "simulate_motion",
+      "expect": "interferenceCount >= 1",
+      "evidence": "报不出来 = 干涉检查是空的",
+      "inSkill": false
+    },
+    {
+      "id": "g-negative-printability-fires",
+      "desc": "阴性对照：进汽口壁 0.8mm 必须被 check_printability 报出",
+      "via": "check_printability",
+      "expect": "verdict ∈ {check, unprintable} 且 thinSamples > 0",
+      "weight": 1,
+      "inSkill": false
+    },
+    {
+      "id": "g-motion-clearance-contract",
+      "desc": "至少 2 条运动接口用 motion-clearance，且引用一次通过的 run",
+      "via": "assembly.json",
+      "expect": "count(check === 'motion-clearance') >= 2 且每条 params.runId 指向 status=pass 的 motion run",
+      "evidence": "microscope5 交付 26 条接口、0 条 motion-clearance，'0 hard' 与机构是否卡死无关",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md:294-296 运动接口必须走 motion-clearance"
+    },
+    {
+      "id": "g-import-not-generate",
+      "desc": "608 轴承必须走 import_part，不是自己画一个",
+      "via": "版本库 provenance",
+      "expect": "存在一个 source === 'imported' 的轴承版本",
+      "evidence": "import 车道：STL 无单位、无 datum，两件事都得自己声明",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 路由表: 买来的件 → import_part"
+    },
+    {
+      "id": "g-import-dimensions-sane",
+      "desc": "导入后必须核对尺寸：22 × 8 × 7（单位声明错误的经典后果是差 25.4 倍）",
+      "via": "measure_part",
+      "expect": "sizeMm ≈ [22, 22, 7]（轴向 7，径向 22），容差 ±0.5",
+      "evidence": "cad-toolbox SKILL：'A 25.4x wrong part is the classic failure here'",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 'STL has no unit... check the reported sizeMm before trusting anything else'"
+    },
+    {
+      "id": "g-merge-shells-one",
+      "desc": "整机 merge_parts 后 shells 必须为 1",
+      "via": "merge_parts",
+      "expect": "shells === 1",
+      "evidence": "shells > 1 意味着这不是一台机器，是一堆零件",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: merge_parts 报 shells，>1 说明这不是一台机器"
+    },
+    {
+      "id": "g-no-false-coupling",
+      "desc": "不得声称流体推动活塞 / 流固耦合；必须如实报告耦合不存在",
+      "via": "motion.json.fluidStructureCoupling + 回答",
+      "expect": "=== 'none' 且给出理由；出现耦合声明即本题 P 归零",
+      "evidence": "simulate_fluid 的固体边界整轮固定；两个模拟器都不推动对方",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 'Fluid–structure coupling does not exist... say the limitation out loud'"
+    },
+    {
+      "id": "g-hard-zero",
+      "desc": "最终交付态 check_assembly 0 hard violation",
+      "via": "check_assembly",
+      "expect": "hardViolations === 0",
+      "inSkill": false
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-stroke",
+      "desc": "行程 = 2r = 40mm",
+      "via": "simulate_motion.followers",
+      "expect": 40,
+      "tolerance": 1.0,
+      "weight": 3,
+      "inSkill": false
+    },
+    {
+      "id": "c-joint-drift",
+      "desc": "关节锚点漂移在全程内足够小",
+      "via": "simulate_motion.maxJointDriftMm",
+      "expect": "<= 0.5",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-fluid-arrival",
+      "desc": "流道出口到达率与穿透计数",
+      "via": "simulate_fluid.metrics",
+      "expect": {
+        "outletArrivalRatio": "> 0.6",
+        "penetrationCount": "== 0"
+      },
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-topple-answered",
+      "desc": "5° 与 10° 两个倾角都要有明确结论（倒 / 不倒）",
+      "via": "stability.json + simulate_physics",
+      "expect": "toppleAt5deg 与 toppleAt10deg 都非空，且与 run 的 fellOver 一致",
+      "weight": 3,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 'Slopes are tiltDeg, not a hand-computed gravity vector'"
+    },
+    {
+      "id": "c-counterweight",
+      "desc": "要不要配重必须是一个**算出来的**量（重心 vs 支撑多边形），不是随手试",
+      "via": "stability.json + merge_parts 的质量/质心",
+      "expect": "给出配重决策与依据；若判'需要'，给出所需质量或倒临界角",
+      "weight": 2,
+      "inSkill": false
+    },
+    {
+      "id": "c-crosshead-hold",
+      "desc": "十字头保持力必须有结论，且注明是否为解析结果",
+      "via": "simulate_physics（prismatic + staticFriction）",
+      "expect": "结论 ∈ {holds, slides, not-expressible}，且与 run 的保持力分析一致",
+      "weight": 3,
+      "evidence": "缺口④ 的回归项：不给 staticFriction 时滑块必然下滑，那个结果不构成设计结论",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 保持力由 staticFriction 回答，不由求解器回答"
+    },
+    {
+      "id": "c-coaxial-used",
+      "desc": "活塞-缸孔、轴承-轴承座这类同轴关系用 coaxial，不用两点距离",
+      "via": "assembly.json",
+      "expect": "count(check === 'coaxial') >= 2",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 同轴须用 coaxial 算子"
+    },
+    {
+      "id": "c-interface-count",
+      "desc": "接口数覆盖每一组真实配合（含导入件作为端点）",
+      "via": "assembly.json",
+      "expect": "interfaces.length >= 8 且至少 1 条的端点是导入的轴承",
+      "weight": 2,
+      "inSkill": false
+    }
+  ],
+  "features": [
+    {
+      "id": "f-valve-drive-reasoned",
+      "desc": "滑阀为什么只能 prescribed（只有一个曲柄驱动 + 预置往复件，偏心轮配气无法作为独立机构仿真）",
+      "kind": "manual",
+      "pass": "motion.json.valveDrive 与理由自洽，且指出了工具的单驱动限制",
+      "weight": 3,
+      "inSkill": false
+    },
+    {
+      "id": "f-fluid-scope-honest",
+      "desc": "说清这次流体跑的是'气道几何通不通'，不是'蒸汽推活塞'（边界整轮固定）",
+      "kind": "manual",
+      "pass": "明确界定流体结论的适用范围",
+      "weight": 3,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 需要两者时拆开跑，或明说局限"
+    },
+    {
+      "id": "f-printability-volunteered",
+      "desc": "主动交代打印约束（悬垂、层向、螺纹、床面），不等被问",
+      "kind": "manual",
+      "pass": "在方案里主动给出，而非事后补",
+      "weight": 2,
+      "inSkill": true,
+      "inSkillNote": "SKILL.md: 打印约束要主动交代，不等被问"
+    },
+    {
+      "id": "f-reused-versions",
+      "desc": "2 个轴承座是同一个版本的实例，不是两个几乎一样的件",
+      "kind": "auto",
+      "pass": "去重后 version 数 === 1",
+      "weight": 1,
+      "inSkill": false
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-version-recall",
+      "desc": "长程记忆：窗口外版本的活塞直径",
+      "when": "renderRounds >= 6",
+      "ask": "第 2 版活塞的外径是多少？",
+      "expect": "与版本库记录一致",
+      "kind": "auto",
+      "weight": 1,
+      "inSkill": false
+    }
+  ],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.3,
+      "E": 0.2,
+      "H": 0.3,
+      "C": 0.05,
+      "R": 0.05,
+      "S": 0.1
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "columnNote": "本题 H 列权重高：'能不能如实说表达不了'是这条题最想测的东西。",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A"
+  },
+  "sSkill": {
+    "S0": "skill 是否被加载（transcript 可观测）；false 时 S 记 N/A",
+    "S": "inSkill:true 条目的加权达成率",
+    "baselineSkillSha256": "8e2717f9694e6a1d5a5a18e26ced68fa9972f4e25304bcde476266618bc44da3"
+  },
+  "taskFile": {
+    "path": "subjects/02-steam-engine/TASK.md",
+    "sha256": "e3768a0dff1aa916e7122fb6af8e4b1a40fb2b80ccfc6a9f7bc662bf3f2bcd48",
+    "note": "考卷在考生侧，是唯一权威副本；runner 逐字读出作为首条消息。每轮核对 sha256。"
+  },
+  "stdlibNote": "本卷规格里没有齿轮/螺纹件，因此不设标准库判据——BOSL2 那条车道由 03 承担（其交付物含直齿轮与螺纹口）。"
+}

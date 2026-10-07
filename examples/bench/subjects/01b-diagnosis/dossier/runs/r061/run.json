@@ -1,0 +1,35 @@
+{
+  "id": "r061",
+  "kind": "assembly",
+  "timestamp": "2026-10-04T14:56:44.150Z",
+  "title": "装配间隙 · v071+v066+v038+v074",
+  "status": "fail",
+  "summary": "6 对 · 干涉 0 · 过紧 2",
+  "sourceVersionIds": [
+    "v038",
+    "v066",
+    "v071",
+    "v074"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "弯臂",
+    "调焦滑座",
+    "轴承座",
+    "齿轮轴"
+  ],
+  "subject": "parts:弯臂+调焦滑座+轴承座+齿轮轴",
+  "supersedes": [
+    "r060"
+  ],
+  "placements": {
+    "调焦滑座": {
+      "translate": [
+        0,
+        0,
+        -12.5
+      ]
+    }
+  },
+  "supersededBy": "r062"
+}

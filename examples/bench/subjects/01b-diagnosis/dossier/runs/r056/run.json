@@ -1,0 +1,30 @@
+{
+  "id": "r056",
+  "kind": "assembly",
+  "timestamp": "2026-10-04T14:52:51.379Z",
+  "title": "装配间隙 · v071+v066+v038+v074+v077+v078",
+  "status": "fail",
+  "summary": "15 对 · 干涉 1 · 过紧 4",
+  "sourceVersionIds": [
+    "v038",
+    "v066",
+    "v071",
+    "v074",
+    "v077",
+    "v078"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "弯臂",
+    "照明座",
+    "调焦滑座",
+    "轴承座",
+    "载物台",
+    "齿轮轴"
+  ],
+  "subject": "parts:弯臂+照明座+调焦滑座+轴承座+载物台+齿轮轴",
+  "supersedes": [
+    "r055"
+  ],
+  "supersededBy": "r058"
+}

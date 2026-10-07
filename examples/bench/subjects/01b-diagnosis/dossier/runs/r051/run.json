@@ -1,0 +1,18 @@
+{
+  "id": "r051",
+  "kind": "physics",
+  "timestamp": "2026-10-04T13:46:24.990Z",
+  "title": "刚体物理 · v048+v056",
+  "status": "pass",
+  "summary": "稳态穿透 0.00mm",
+  "sourceVersionIds": [
+    "v048",
+    "v056"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "压片簧",
+    "玻片",
+    "载物台"
+  ]
+}

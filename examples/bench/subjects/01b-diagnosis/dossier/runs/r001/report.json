@@ -1,0 +1,126 @@
+{
+  "checkedAt": "2026-10-04T11:52:42.952Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope5/assembly/assembly.json",
+  "manifestName": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
+  "results": [
+    {
+      "interfaceId": "1",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.法兰底面",
+      "b": "base.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "2",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.底面",
+      "b": "column.顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "3",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "column.止口",
+      "b": "base.法兰孔",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "hard-violation",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.3
+      },
+      "measured": -0.15,
+      "detail": "diametral clearance Ø-0.15 (hole Ø40 vs shaft Ø40.15)"
+    },
+    {
+      "interfaceId": "4",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "arm.防转面",
+      "b": "column.防转面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.2,
+        "max": 0.2
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "5",
+      "ownerPath": [
+        "microscope"
+      ],
+      "a": "stage.槽壁A",
+      "b": "stage.槽壁B",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 25.2,
+        "max": 25.45
+      },
+      "measured": 25.3,
+      "detail": "point-to-point distance between declared datums"
+    }
+  ],
+  "undeclared": [
+    {
+      "partA": "column",
+      "partB": "stage",
+      "minDistance": 0.1998,
+      "intersectionVolume": 0
+    }
+  ],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 1.5,
+  "summary": {
+    "interfaces": 5,
+    "pass": 4,
+    "hardViolations": 1,
+    "intentFlags": 0,
+    "skipped": 0,
+    "undeclared": 1
+  },
+  "overallStatus": "fail"
+}

@@ -6,12 +6,15 @@
 //   2. The glue: `ctx.tools.restrict` is called on the AGENT's own context (the
 //      registry refuses a context-global restriction) with exactly the names
 //      this plugin registers — no hard-coded list to drift.
-//   3. The bundle patch lands: the roster points at this repository, the CAD row
-//      asks for preset scope, and no patch was skipped (a patch that matches
-//      nothing warns and is dropped — an unverified patch is an unverified
-//      feature).
-//   4. The preset directory passes the harness's OWN discovery and carries the
-//      CAD-only skill root.
+//   3. The bundle patch lands: the CAD row asks for preset scope and no patch was
+//      skipped (a patch that matches nothing warns and is dropped — an
+//      unverified patch is an unverified feature).
+//   4. The preset DECLARATION is the current mechanism, not the removed roster:
+//      upstream replaced the `@deepseek-ai/dsh-agent-presets` package (config-side
+//      `roots`) with a `@deepseek-ai/dsh-agent-preset` declaration row, so this
+//      section reads the row this repository ships and checks it carries the
+//      CAD-only skill root. Checking the old roster made this section SKIP and
+//      silently stopped covering the skill root.
 //
 //   node scripts/accept-tool-scope.mjs             # checks
 //   node scripts/accept-tool-scope.mjs --catalogs  # + real per-session evidence
@@ -154,27 +157,27 @@ function fakeCtx() {
   check(/ADOPTION COST/.test(scopeSrc), 'the adoption cost is documented where it is implemented');
 }
 
-// --- 4. the harness's own discovery accepts our preset -----------------------
-let discovery = null;
-for (const spec of [join(DSH, 'dsh-agent-presets/lib/types/discovery.js'), '@deepseek-ai/dsh-agent-presets']) {
-  try { discovery = await import(spec); break; } catch { /* next */ }
-}
-if (!discovery?.scanRoot) {
-  skip('the preset directory passes the harness\'s discovery', 'dsh-agent-presets not importable');
-} else {
-  const found = await discovery.scanRoot({ path: join(ROOT, 'presets'), trust: 'user' }, `file://${DSH}/`);
-  const cad = found.find((p) => p.id === 'cad');
-  check(!!cad, 'discovery finds a `cad` preset in this repository', found.map((p) => p.id).join(', ') || '(none)');
-  if (cad) {
-    const text = readFileSync(cad.path, 'utf8');
-    const rows = text.split('\n').filter((l) => /^- /.test(l)).length;
-    check(cad.broken === undefined, 'the preset is mountable', cad.broken ?? 'no blocker');
-    check(rows > 10, 'the cad preset composes the full agent plane', `${rows} top-level rows`);
-    check((cad.name ?? '').length > 0 && (cad.description ?? '').length > 0, 'it publishes display metadata', cad.name ?? '(none)');
-    check(cad.trust === 'user', 'it carries the root\'s trust', cad.trust);
-    check(/id: cad-skill-filesystem[\s\S]*customSkillDirs:[\s\S]*\/skills/.test(text),
-      'it mounts the CAD-only skill root', 'customSkillDirs -> dsh-cad-harness/skills');
-  }
+// --- 4. the preset declaration this repository ships ------------------------
+// Upstream moved from a roster package (`@deepseek-ai/dsh-agent-presets`, with
+// config-side `roots`) to a `@deepseek-ai/dsh-agent-preset` DECLARATION row. The
+// old check imported the removed package, SKIPped, and thereby stopped covering
+// the skill root entirely — a green suite that had quietly lost an assertion.
+{
+  const presetFile = join(ROOT, 'presets', 'cad', 'preset.patch.yml');
+  check(existsSync(presetFile), 'the cad preset declaration ships from this repository',
+    'presets/cad/preset.patch.yml');
+  const text = existsSync(presetFile) ? readFileSync(presetFile, 'utf8') : '';
+  check(/- id: preset-cad\n\s+name: '@deepseek-ai\/dsh-agent-preset'/.test(text),
+    'it inserts a @deepseek-ai/dsh-agent-preset declaration row', 'id: preset-cad');
+  check(/\n {8}id: cad\n/.test(text), 'the declaration names the `cad` preset');
+  const named = /\n {8}name: "?([^"\n]+)"?\n/.exec(text);
+  const described = /\n {8}description: "?([^"\n]+)/.exec(text);
+  check(!!named?.[1] && !!described?.[1], 'it publishes display metadata',
+    `${named?.[1] ?? '(none)'} / ${(described?.[1] ?? '(none)').slice(0, 24)}…`);
+  const rows = (text.match(/\n {10}- id: /g) ?? []).length;
+  check(rows > 10, 'the declaration composes the full agent plane', `${rows} plugin rows`);
+  check(/id: cad-skill-filesystem[\s\S]*?customSkillDirs:[\s\S]*?\/skills/.test(text),
+    'it mounts the CAD-only skill root', 'customSkillDirs -> dsh-cad-harness/skills');
 }
 
 // --- 5. the patch lands on the composed profile tree -------------------------
@@ -203,11 +206,17 @@ function checkPatchComposition() {
       env: { ...process.env, DSH_HOME: home },
       encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 180_000,
     });
-    const row = /- id: agent-presets\n(?:.*\n)*? {2}config:\n(?:.*\n)*? {6}- path: (\S+)\n {8}trust: (\S+)/.exec(out);
-    check(!!row, 'the preset roster carries our root after composition', row ? `${row[1]} (trust ${row[2]})` : 'root missing');
-    if (row) check(row[1] === join(ROOT, 'presets'), 'the root path is this repository\'s presets directory');
-    check(/- id: agent-presets\n(?:.*\n)*? {4}default: standard/.test(out),
-      'the roster default is restated (a config patch replaces the whole config)');
+    // The composed tree must carry OUR declaration row — that is what makes
+    // 造物模式 selectable. (The old roster-row assertions were removed upstream.)
+    const at = out.indexOf('- id: preset-cad');
+    const block = at < 0 ? '' : out.slice(at, at + 8000);
+    check(at >= 0, 'the composed tree carries the cad preset declaration',
+      at >= 0 ? 'preset-cad' : 'row missing');
+    check(/name: '@deepseek-ai\/dsh-agent-preset'/.test(block),
+      'the declaration row uses the current preset package', '@deepseek-ai/dsh-agent-preset');
+    check(/\n {4}id: cad\n/.test(block), 'the composed declaration names the `cad` preset');
+    check(block.includes(join(ROOT, 'skills')),
+      'the composed declaration mounts this repository\'s skill root', join(ROOT, 'skills'));
     check(/- id: cad-harness-host\n(?:.*\n)*? {4}toolScope: preset/.test(out), 'the CAD plugin row asks for preset scope');
     check(!/patch: entry .* not found|patch: name mismatch/.test(out), 'no patch was skipped (id and name both matched)');
   } finally {

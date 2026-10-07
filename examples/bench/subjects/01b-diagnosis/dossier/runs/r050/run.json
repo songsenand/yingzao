@@ -1,0 +1,16 @@
+{
+  "id": "r050",
+  "kind": "physics",
+  "timestamp": "2026-10-04T13:45:33.312Z",
+  "title": "刚体物理 · v057",
+  "status": "check",
+  "summary": "稳态穿透 5.20mm",
+  "sourceVersionIds": [
+    "v057"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "整机",
+    "配重块"
+  ]
+}

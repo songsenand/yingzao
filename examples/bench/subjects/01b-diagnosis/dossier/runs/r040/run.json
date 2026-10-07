@@ -1,0 +1,16 @@
+{
+  "id": "r040",
+  "kind": "physics",
+  "timestamp": "2026-10-04T13:21:18.699Z",
+  "title": "刚体物理 · v048",
+  "status": "pass",
+  "summary": "稳态穿透 0.00mm",
+  "sourceVersionIds": [
+    "v048"
+  ],
+  "hasGeometry": true,
+  "parts": [
+    "玻片",
+    "载物台"
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "parts": [
+    {
+      "name": "弯臂",
+      "watertight": true,
+      "volume": 58727.14710266792,
+      "boundingBox": {
+        "min": [
+          -22,
+          -47,
+          117
+        ],
+        "max": [
+          30,
+          -12,
+          234
+        ]
+      },
+      "triangles": 1620
+    },
+    {
+      "name": "调焦滑座",
+      "watertight": true,
+      "volume": 37602.688767262596,
+      "boundingBox": {
+        "min": [
+          -20.5,
+          -20.200000762939453,
+          133
+        ],
+        "max": [
+          20.5,
+          56.95087432861328,
+          205
+        ]
+      },
+      "triangles": 1538
+    },
+    {
+      "name": "齿轮轴",
+      "watertight": true,
+      "volume": 5160.443438329811,
+      "boundingBox": {
+        "min": [
+          -32,
+          -176.88070678710938,
+          -57.06236267089844
+        ],
+        "max": [
+          44,
+          -154.8870849609375,
+          -35.06874084472656
+        ]
+      },
+      "triangles": 1876
+    },
+    {
+      "name": "轴承座",
+      "watertight": true,
+      "volume": 7363.8068863564085,
+      "boundingBox": {
+        "min": [
+          13.5,
+          0,
+          157
+        ],
+        "max": [
+          33.5,
+          12,
+          218.0500030517578
+        ]
+      },
+      "triangles": 786
+    }
+  ],
+  "pairs": [
+    {
+      "partA": "弯臂",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 0.19999980926513672,
+      "status": "too_tight"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 207.50036855605802,
+      "status": "ok"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 12,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 224.94332281530043,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 0.5,
+      "status": "too_tight"
+    },
+    {
+      "partA": "齿轮轴",
+      "partB": "轴承座",
+      "intersectionVolume": 0,
+      "minDistance": 251.2141797027238,
+      "status": "ok"
+    }
+  ],
+  "overallStatus": "fail",
+  "thresholdMm": 1.5,
+  "interferenceEpsilonMm3": 0.001
+}

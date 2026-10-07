@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "subject": "单目复式显微镜（参考图，物镜转换器已由用户从原图移除）",
+  "source": "显微镜参考图.png",
+  "purifiedBy": "examples/bench/tools/purify-reference.py",
+  "purifiedTo": "参考图.png",
+  "method": {
+    "mask": "not-background: sum(RGB) >= 720 and channel spread <= 12",
+    "component": "largest connected component (watermark specks dropped)",
+    "marginPx": 60,
+    "droppedSpecks": true
+  },
+  "measuredOnSource": {
+    "objectWPx": 410,
+    "objectHPx": 767,
+    "aspectHW": 1.871
+  },
+  "silhouetteProfile": {
+    "bands": 10,
+    "normalizedBy": "subject pixel height",
+    "values": [
+      0.104,
+      0.153,
+      0.289,
+      0.349,
+      0.36,
+      0.51,
+      0.512,
+      0.507,
+      0.503,
+      0.253
+    ],
+    "excludedBands": [
+      4
+    ],
+    "excludedReason": "band 4 (40%-50% height) is the objective-turret band; the prompt forbids a turret, so scoring this band would penalise compliance"
+  },
+  "howToUse": "Render front and side at the frozen camera (azimuth ≈ 35°, elevation ≈ 15°) with an empty background, threshold the same way, take the ten-band profile, drop the excluded bands, and compare L1 distance against this profile."
+}

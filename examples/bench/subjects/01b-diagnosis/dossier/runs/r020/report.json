@@ -1,0 +1,84 @@
+{
+  "parts": [
+    {
+      "name": "弯臂",
+      "watertight": true,
+      "volume": 54247.14710266793,
+      "boundingBox": {
+        "min": [
+          -22,
+          -47,
+          117
+        ],
+        "max": [
+          22,
+          -12,
+          234
+        ]
+      },
+      "triangles": 1620
+    },
+    {
+      "name": "调焦滑座",
+      "watertight": true,
+      "volume": 41058.9069613346,
+      "boundingBox": {
+        "min": [
+          -20.5,
+          -20.200000762939453,
+          139.793
+        ],
+        "max": [
+          20.5,
+          56.95087432861328,
+          211.793
+        ]
+      },
+      "triangles": 1538
+    },
+    {
+      "name": "齿轮轴",
+      "watertight": true,
+      "volume": 3704.23541765273,
+      "boundingBox": {
+        "min": [
+          -24,
+          -179.06304931640625,
+          -48.31632995605469
+        ],
+        "max": [
+          24,
+          -157.07183837890625,
+          -26.32512664794922
+        ]
+      },
+      "triangles": 1980
+    }
+  ],
+  "pairs": [
+    {
+      "partA": "弯臂",
+      "partB": "调焦滑座",
+      "intersectionVolume": 0,
+      "minDistance": 0.19999980926513672,
+      "status": "too_tight"
+    },
+    {
+      "partA": "弯臂",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 202.54025597324517,
+      "status": "ok"
+    },
+    {
+      "partA": "调焦滑座",
+      "partB": "齿轮轴",
+      "intersectionVolume": 0,
+      "minDistance": 225.1984037485796,
+      "status": "ok"
+    }
+  ],
+  "overallStatus": "fail",
+  "thresholdMm": 0.75,
+  "interferenceEpsilonMm3": 0.001
+}

@@ -1,0 +1,1018 @@
+{
+  "versions": [
+    {
+      "id": "v001",
+      "timestamp": "2026-10-04T11:48:11.497Z",
+      "userIntent": "底座 150×120×12：配重腔底凹、立柱法兰孔Ø40.15、4×铜螺母沉孔、四角橡胶垫位",
+      "parentVersion": null,
+      "partId": "p001",
+      "status": "draft"
+    },
+    {
+      "id": "v002",
+      "timestamp": "2026-10-04T11:48:11.933Z",
+      "userIntent": "立柱 Ø22×200，根部 Ø40 止口+Ø56 法兰 4×M3，柱顶 2×铜螺母孔",
+      "parentVersion": null,
+      "partId": "p002",
+      "status": "draft"
+    },
+    {
+      "id": "v003",
+      "timestamp": "2026-10-04T11:48:12.353Z",
+      "userIntent": "弯臂：梁+前端竖直导轨，底面贴立柱顶、防转唇贴立柱侧面，抱箍座中心(0,0,196)",
+      "parentVersion": null,
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v004",
+      "timestamp": "2026-10-04T11:48:12.758Z",
+      "userIntent": "载物台 110×90×8：玻片槽75.4×25.3×1.5、通光孔Ø12、立柱抱箍环带钳紧耳、照明座导耳",
+      "parentVersion": null,
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v005",
+      "timestamp": "2026-10-04T11:49:41.404Z",
+      "userIntent": "载物台修正版：钳紧耳并入抱箍环实体，消除双体；其余不变",
+      "parentVersion": "v004",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v006",
+      "timestamp": "2026-10-04T11:54:03.344Z",
+      "userIntent": "阴性对照件：止口 Ø39.5（应使接口3间隙0.65出界报hard-violation，验证后不作为交付件）",
+      "parentVersion": "v002",
+      "partId": "p002",
+      "status": "draft"
+    },
+    {
+      "id": "v007",
+      "timestamp": "2026-10-04T12:01:04.069Z",
+      "userIntent": "弯臂修正：导轨移出立柱体积（y-20..-12），抱箍座中心随光轴移到(0,37,196)",
+      "parentVersion": "v003",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v008",
+      "timestamp": "2026-10-04T12:01:04.450Z",
+      "userIntent": "载物台修正：光轴移到 y=37（孔/槽/导耳随动），高度链不变",
+      "parentVersion": "v005",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v009",
+      "timestamp": "2026-10-04T12:01:28.855Z",
+      "userIntent": "载物台：台面后缘延到 y=-18 与抱箍环实体重叠，单实体",
+      "parentVersion": "v008",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v010",
+      "timestamp": "2026-10-04T12:05:54.822Z",
+      "userIntent": "立柱：柱身前开 y=-22 防转平面，消除与弯臂防转唇的圆柱包裹干涉",
+      "parentVersion": "v002",
+      "partId": "p002",
+      "status": "draft"
+    },
+    {
+      "id": "v011",
+      "timestamp": "2026-10-04T12:05:55.210Z",
+      "userIntent": "弯臂：防转唇收窄贴立柱平面，消除圆柱包裹干涉",
+      "parentVersion": "v007",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v012",
+      "timestamp": "2026-10-04T12:06:40.756Z",
+      "userIntent": "弯臂：防转唇加深越过止口坑半径，单实体且贴立柱防转平面",
+      "parentVersion": "v011",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v013",
+      "timestamp": "2026-10-04T12:07:51.355Z",
+      "userIntent": "立柱：修正防转平面切削位置（y=-22），法兰无缺口",
+      "parentVersion": "v010",
+      "partId": "p002",
+      "status": "draft"
+    },
+    {
+      "id": "v014",
+      "timestamp": "2026-10-04T12:07:51.747Z",
+      "userIntent": "弯臂：防转唇贴在立柱平面 y=-22 前方，零重叠",
+      "parentVersion": "v012",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v015",
+      "timestamp": "2026-10-04T12:14:08.486Z",
+      "userIntent": "调焦滑座：C抱导轨+前壁mod1齿条16齿+镜筒抱环(0,37)+弹簧挂耳",
+      "parentVersion": null,
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v016",
+      "timestamp": "2026-10-04T12:14:08.870Z",
+      "userIntent": "齿轮轴 Ø8×48 + mod1 z=20 直齿轮，两端D平面装旋钮",
+      "parentVersion": null,
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v017",
+      "timestamp": "2026-10-04T12:14:09.267Z",
+      "userIntent": "粗调旋钮 Ø30×8，D形轴孔+M3紧定（左右各一件，同一零件）",
+      "parentVersion": null,
+      "partId": "p007",
+      "status": "draft"
+    },
+    {
+      "id": "v018",
+      "timestamp": "2026-10-04T12:14:09.655Z",
+      "userIntent": "精调环 Ø48 抱镜头座外圆，M3 开缝钳紧（与镜头座同转实现 M12×0.5 精调）",
+      "parentVersion": null,
+      "partId": "p008",
+      "status": "draft"
+    },
+    {
+      "id": "v019",
+      "timestamp": "2026-10-04T12:14:10.045Z",
+      "userIntent": "轴承座 40×30×12 双Ø8.2 轴孔+齿轮让坑，web 固定于弯臂导轨面",
+      "parentVersion": null,
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v020",
+      "timestamp": "2026-10-04T12:16:44.967Z",
+      "userIntent": "调焦滑座修正：齿条/挂耳实体嵌入，单实体；齿制节线 y=-2.55 背隙0.15",
+      "parentVersion": "v015",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v021",
+      "timestamp": "2026-10-04T12:16:45.357Z",
+      "userIntent": "齿轮轴：自绘 mod1 z=20 梯形齿（20°压力角，背隙0.15），相位对准齿条",
+      "parentVersion": "v016",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v022",
+      "timestamp": "2026-10-04T12:18:17.266Z",
+      "userIntent": "调焦滑座：挂耳嵌前壁底修正连接，单实体",
+      "parentVersion": "v020",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v023",
+      "timestamp": "2026-10-04T12:18:17.639Z",
+      "userIntent": "齿轮轴：齿根坯 r8.9 嵌合齿圈，单实体",
+      "parentVersion": "v021",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v024",
+      "timestamp": "2026-10-04T12:21:54.297Z",
+      "userIntent": "齿轮轴：真渐开线齿形（20°PA，rb9.397），与 20° 直齿条正确啮合",
+      "parentVersion": "v023",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v025",
+      "timestamp": "2026-10-04T12:22:33.230Z",
+      "userIntent": "齿轮轴：渐开线齿形修 NaN（齿根切线延长），20 齿完整",
+      "parentVersion": "v024",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v026",
+      "timestamp": "2026-10-04T12:24:06.273Z",
+      "userIntent": "调焦滑座：齿条压力角修正为 20°，消除与渐开线齿轮的恒定楔入",
+      "parentVersion": "v022",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v027",
+      "timestamp": "2026-10-04T12:28:55.944Z",
+      "userIntent": "调焦滑座：齿条加长到 18 齿保证全行程啮合余量",
+      "parentVersion": "v026",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v028",
+      "timestamp": "2026-10-04T12:30:01.421Z",
+      "userIntent": "调焦滑座：18 齿半整数相位（齿槽对准齿轮静止齿位）",
+      "parentVersion": "v027",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v029",
+      "timestamp": "2026-10-04T12:33:15.364Z",
+      "userIntent": "调焦滑座：齿条背隙 0.33（打印松配），消除末段齿侧楔入",
+      "parentVersion": "v028",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v030",
+      "timestamp": "2026-10-04T12:37:31.937Z",
+      "userIntent": "调焦滑座：过桥板收窄避开齿轮扫掠区",
+      "parentVersion": "v029",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v031",
+      "timestamp": "2026-10-04T12:37:32.338Z",
+      "userIntent": "齿轮轴：齿轮偏置 x-17，轴颈 datum 移到单长孔两段",
+      "parentVersion": "v025",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v032",
+      "timestamp": "2026-10-04T12:37:32.723Z",
+      "userIntent": "轴承座：左延+左开口让坑，单长轴孔支承偏置齿轮轴",
+      "parentVersion": "v019",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v033",
+      "timestamp": "2026-10-04T12:48:25.466Z",
+      "userIntent": "弯臂：梁右延至 x30 并加轴承座颈柱紧固孔",
+      "parentVersion": "v014",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v034",
+      "timestamp": "2026-10-04T12:48:25.840Z",
+      "userIntent": "轴承座：右侧吊装（颈柱上引贴梁底），左开口让坑承偏置齿轮",
+      "parentVersion": "v032",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v035",
+      "timestamp": "2026-10-04T12:48:26.262Z",
+      "userIntent": "齿轮轴：长轴 x-32..44，齿轮右置 x14..20，两端D平面",
+      "parentVersion": "v031",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v036",
+      "timestamp": "2026-10-04T12:48:26.680Z",
+      "userIntent": "调焦滑座：过桥板 x-9..13 避让右置齿轮",
+      "parentVersion": "v030",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v037",
+      "timestamp": "2026-10-04T12:51:40.543Z",
+      "userIntent": "齿轮轴：齿根 relieve 消除与齿条齿尖角的赛擦干涉",
+      "parentVersion": "v035",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v038",
+      "timestamp": "2026-10-04T12:52:09.072Z",
+      "userIntent": "齿轮轴：齿根嵌入基坯+relieve，单实体",
+      "parentVersion": "v037",
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v039",
+      "timestamp": "2026-10-04T13:06:57.719Z",
+      "userIntent": "载物台：照明座 Z 滑轨吊架（内外轨+锁紧槽+铜螺母孔），替代原导耳",
+      "parentVersion": "v009",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v040",
+      "timestamp": "2026-10-04T13:06:58.108Z",
+      "userIntent": "镜筒 Ø34/Ø26.1×118，下口紧定凸耳（座±1微调），主尺寸链载体",
+      "parentVersion": null,
+      "partId": "p010",
+      "status": "draft"
+    },
+    {
+      "id": "v041",
+      "timestamp": "2026-10-04T13:06:58.720Z",
+      "userIntent": "镜头座：M12×0.5 内螺纹口（打印）+Ø40 精调环位+Ø25.95 止口，座面=高度链基准 72.87",
+      "parentVersion": null,
+      "partId": "p011",
+      "status": "draft"
+    },
+    {
+      "id": "v042",
+      "timestamp": "2026-10-04T13:07:00.009Z",
+      "userIntent": "目镜筒：Ø23.4 孔，光阑定位面距镜头座安装面 156.0",
+      "parentVersion": null,
+      "partId": "p012",
+      "status": "draft"
+    },
+    {
+      "id": "v043",
+      "timestamp": "2026-10-04T13:07:00.384Z",
+      "userIntent": "相机托板：环形插头，PCB 传感器面落位 228.87 与目镜光阑面重合",
+      "parentVersion": null,
+      "partId": "p013",
+      "status": "draft"
+    },
+    {
+      "id": "v044",
+      "timestamp": "2026-10-04T13:07:00.782Z",
+      "userIntent": "照明座：Ø10 光阑+匀光片槽+LED 底插，两翼滑入载物台吊架做 Z 调节（+20/−3）",
+      "parentVersion": null,
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v045",
+      "timestamp": "2026-10-04T13:11:31.423Z",
+      "userIntent": "镜筒：凸耳 z115..127 咬入筒壁，单实体",
+      "parentVersion": "v040",
+      "partId": "p010",
+      "status": "draft"
+    },
+    {
+      "id": "v046",
+      "timestamp": "2026-10-04T13:11:31.866Z",
+      "userIntent": "镜头座：M12×0.5 内螺纹弧段法修复水密性",
+      "parentVersion": null,
+      "partId": "p011",
+      "status": "draft"
+    },
+    {
+      "id": "v047",
+      "timestamp": "2026-10-04T13:11:32.272Z",
+      "userIntent": "照明座：全宽顶桥焊合两翼与机体，单实体",
+      "parentVersion": "v044",
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v048",
+      "timestamp": "2026-10-04T13:13:59.066Z",
+      "userIntent": "载物台：吊架轨道底抬到 z13.5，消除与底座的插入",
+      "parentVersion": "v039",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v049",
+      "timestamp": "2026-10-04T13:14:52.391Z",
+      "userIntent": "阴性对照：光阑面 +1mm（验证后不作交付件）",
+      "parentVersion": "v042",
+      "partId": "p012",
+      "status": "draft"
+    },
+    {
+      "id": "v050",
+      "timestamp": "2026-10-04T13:18:41.370Z",
+      "userIntent": "压片簧：平面压紧式，0.5 过盈预压 ~0.17N 防玻片滑出",
+      "parentVersion": null,
+      "partId": "p015",
+      "status": "draft"
+    },
+    {
+      "id": "v051",
+      "timestamp": "2026-10-04T13:19:07.796Z",
+      "userIntent": "M4 稳定性仿真用整机刚体：16 件按装配位姿贴合合并",
+      "parentVersion": null,
+      "partId": "p016",
+      "status": "draft",
+      "source": {
+        "kind": "merged",
+        "from": [
+          {
+            "name": "底座",
+            "versionId": "v001"
+          },
+          {
+            "name": "立柱",
+            "versionId": "v013"
+          },
+          {
+            "name": "弯臂",
+            "versionId": "v033"
+          },
+          {
+            "name": "载物台",
+            "versionId": "v048"
+          },
+          {
+            "name": "调焦滑座",
+            "versionId": "v036"
+          },
+          {
+            "name": "齿轮轴",
+            "versionId": "v038"
+          },
+          {
+            "name": "粗调旋钮L",
+            "versionId": "v017"
+          },
+          {
+            "name": "粗调旋钮R",
+            "versionId": "v017"
+          },
+          {
+            "name": "精调环",
+            "versionId": "v018"
+          },
+          {
+            "name": "轴承座",
+            "versionId": "v034"
+          },
+          {
+            "name": "镜筒",
+            "versionId": "v045"
+          },
+          {
+            "name": "镜头座",
+            "versionId": "v046"
+          },
+          {
+            "name": "目镜筒",
+            "versionId": "v042"
+          },
+          {
+            "name": "相机托板",
+            "versionId": "v043"
+          },
+          {
+            "name": "照明座",
+            "versionId": "v047"
+          },
+          {
+            "name": "压片簧",
+            "versionId": "v050"
+          }
+        ],
+        "at": "2026-10-04T13:19:07.794Z"
+      }
+    },
+    {
+      "id": "v052",
+      "timestamp": "2026-10-04T13:30:24.188Z",
+      "userIntent": "精调环：两层环+孔外钳紧耳，修复耳落入孔腔的不可打印缺陷",
+      "parentVersion": null,
+      "partId": "p008",
+      "status": "draft"
+    },
+    {
+      "id": "v053",
+      "timestamp": "2026-10-04T13:30:24.599Z",
+      "userIntent": "粗调旋钮：紧定明沟消除薄片缺陷",
+      "parentVersion": "v017",
+      "partId": "p007",
+      "status": "draft"
+    },
+    {
+      "id": "v054",
+      "timestamp": "2026-10-04T13:34:27.521Z",
+      "userIntent": "压片簧：台阶落地式，低段入槽压玻片 0.5 过盈，高段跨台面不嵌入",
+      "parentVersion": "v050",
+      "partId": "p015",
+      "status": "draft"
+    },
+    {
+      "id": "v055",
+      "timestamp": "2026-10-04T13:34:44.761Z",
+      "userIntent": "压片簧：段间咬合修正，单实体",
+      "parentVersion": "v054",
+      "partId": "p015",
+      "status": "draft"
+    },
+    {
+      "id": "v056",
+      "timestamp": "2026-10-04T13:35:32.902Z",
+      "userIntent": "压片簧：分段双向咬合修正，单实体",
+      "parentVersion": "v055",
+      "partId": "p015",
+      "status": "draft"
+    },
+    {
+      "id": "v057",
+      "timestamp": "2026-10-04T13:44:41.163Z",
+      "userIntent": "M4 稳定性仿真用整机刚体 v2：16 件全部为最终交付版本（替换含旧精调环/旋钮/压片簧的 v051）",
+      "parentVersion": null,
+      "partId": "p016",
+      "status": "draft",
+      "source": {
+        "kind": "merged",
+        "from": [
+          {
+            "name": "底座",
+            "versionId": "v001"
+          },
+          {
+            "name": "立柱",
+            "versionId": "v013"
+          },
+          {
+            "name": "弯臂",
+            "versionId": "v033"
+          },
+          {
+            "name": "载物台",
+            "versionId": "v048"
+          },
+          {
+            "name": "调焦滑座",
+            "versionId": "v036"
+          },
+          {
+            "name": "齿轮轴",
+            "versionId": "v038"
+          },
+          {
+            "name": "粗调旋钮L",
+            "versionId": "v053"
+          },
+          {
+            "name": "粗调旋钮R",
+            "versionId": "v053"
+          },
+          {
+            "name": "精调环",
+            "versionId": "v052"
+          },
+          {
+            "name": "轴承座",
+            "versionId": "v034"
+          },
+          {
+            "name": "镜筒",
+            "versionId": "v045"
+          },
+          {
+            "name": "镜头座",
+            "versionId": "v046"
+          },
+          {
+            "name": "目镜筒",
+            "versionId": "v042"
+          },
+          {
+            "name": "相机托板",
+            "versionId": "v043"
+          },
+          {
+            "name": "照明座",
+            "versionId": "v047"
+          },
+          {
+            "name": "压片簧",
+            "versionId": "v056"
+          }
+        ],
+        "at": "2026-10-04T13:44:41.162Z"
+      }
+    },
+    {
+      "id": "v058",
+      "timestamp": "2026-10-04T14:10:07.852Z",
+      "userIntent": "粗调旋钮：D 切削限制在孔周圆柱域，消除盘面开窗与薄片",
+      "parentVersion": null,
+      "partId": "p007",
+      "status": "draft"
+    },
+    {
+      "id": "v059",
+      "timestamp": "2026-10-04T14:11:19.232Z",
+      "userIntent": "粗调旋钮：紧定沟槽让开毂肩曲面，消除刀口膜",
+      "parentVersion": "v058",
+      "partId": "p007",
+      "status": "draft"
+    },
+    {
+      "id": "v060",
+      "timestamp": "2026-10-04T14:12:30.388Z",
+      "userIntent": "M4 仿真用整机刚体 v3：旋钮更新为 v059（替换 v057 内的 v053）",
+      "parentVersion": null,
+      "partId": "p016",
+      "status": "draft",
+      "source": {
+        "kind": "merged",
+        "from": [
+          {
+            "name": "底座",
+            "versionId": "v001"
+          },
+          {
+            "name": "立柱",
+            "versionId": "v013"
+          },
+          {
+            "name": "弯臂",
+            "versionId": "v033"
+          },
+          {
+            "name": "载物台",
+            "versionId": "v048"
+          },
+          {
+            "name": "调焦滑座",
+            "versionId": "v036"
+          },
+          {
+            "name": "齿轮轴",
+            "versionId": "v038"
+          },
+          {
+            "name": "粗调旋钮L",
+            "versionId": "v059"
+          },
+          {
+            "name": "粗调旋钮R",
+            "versionId": "v059"
+          },
+          {
+            "name": "精调环",
+            "versionId": "v052"
+          },
+          {
+            "name": "轴承座",
+            "versionId": "v034"
+          },
+          {
+            "name": "镜筒",
+            "versionId": "v045"
+          },
+          {
+            "name": "镜头座",
+            "versionId": "v046"
+          },
+          {
+            "name": "目镜筒",
+            "versionId": "v042"
+          },
+          {
+            "name": "相机托板",
+            "versionId": "v043"
+          },
+          {
+            "name": "照明座",
+            "versionId": "v047"
+          },
+          {
+            "name": "压片簧",
+            "versionId": "v056"
+          }
+        ],
+        "at": "2026-10-04T14:12:30.386Z"
+      }
+    },
+    {
+      "id": "v061",
+      "timestamp": "2026-10-04T14:35:31.711Z",
+      "userIntent": "弯臂：导轨收窄 34 + 背脊梁/弹簧挂架移到 |x|≤8 中央通道，为滑座厚壁与可调紧定让位",
+      "parentVersion": "v033",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v062",
+      "timestamp": "2026-10-04T14:35:32.158Z",
+      "userIntent": "调焦滑座：导轨孔收窄到 34.3 使侧壁 3.35，假 C 口改为 4×M3 可调紧定定位（背梁压 Y、侧壁压 X）",
+      "parentVersion": "v036",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v063",
+      "timestamp": "2026-10-04T14:38:28.398Z",
+      "userIntent": "弯臂：轴承座紧固孔移到梁底实体（原孔悬空），保留 34 导轨与背脊梁",
+      "parentVersion": "v061",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v064",
+      "timestamp": "2026-10-04T14:38:28.835Z",
+      "userIntent": "轴承座：颈柱深延至梁底实体内，真正固定到弯臂",
+      "parentVersion": "v034",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v065",
+      "timestamp": "2026-10-04T14:38:29.305Z",
+      "userIntent": "载物台：滑轨加宽到 8mm 使锁紧槽两侧各 2.4 壁，消除 0.4 亚线宽薄壁",
+      "parentVersion": "v048",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v066",
+      "timestamp": "2026-10-04T14:41:41.974Z",
+      "userIntent": "调焦滑座：紧定孔改盲孔消除击穿薄边",
+      "parentVersion": "v062",
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v067",
+      "timestamp": "2026-10-04T14:41:42.653Z",
+      "userIntent": "弯臂：弹簧挂耳加厚并居中开孔，消除 0.5 薄壁",
+      "parentVersion": "v063",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v068",
+      "timestamp": "2026-10-04T14:41:43.368Z",
+      "userIntent": "轴承座：体前伸使让坑不掏穿端面，消除 0.077 薄片",
+      "parentVersion": "v064",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v069",
+      "timestamp": "2026-10-04T14:41:43.829Z",
+      "userIntent": "载物台：吊架改单钉+铜螺母坑，消除螺母坑到外轨的亚线宽壁",
+      "parentVersion": "v065",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v070",
+      "timestamp": "2026-10-04T14:44:54.722Z",
+      "userIntent": "轴承座：本体后移避开齿条/齿轮，轴孔直通，颈柱贴梁底",
+      "parentVersion": "v068",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v071",
+      "timestamp": "2026-10-04T14:44:55.433Z",
+      "userIntent": "弯臂：轴承座螺钉孔内移，消除螺母坑到梁前面的 0.85 壁",
+      "parentVersion": "v067",
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v072",
+      "timestamp": "2026-10-04T14:44:56.096Z",
+      "userIntent": "载物台：吊架单钉无沉头，消除沉头与锁紧槽相交的薄壁",
+      "parentVersion": "v069",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v073",
+      "timestamp": "2026-10-04T14:44:56.504Z",
+      "userIntent": "照明座：顶桥改窄梁穿过外轨锁紧槽，消除与外轨的干涉",
+      "parentVersion": "v047",
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v074",
+      "timestamp": "2026-10-04T14:49:51.702Z",
+      "userIntent": "轴承座：过孔口下移到颈柱底面以下，消除 0.2 孔口膜",
+      "parentVersion": "v070",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v075",
+      "timestamp": "2026-10-04T14:49:52.174Z",
+      "userIntent": "载物台：吊架孔内移，消除与锁紧槽之间的亚线宽壁",
+      "parentVersion": "v072",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v076",
+      "timestamp": "2026-10-04T14:50:59.177Z",
+      "userIntent": "照明座：窄梁缩短，只穿外轨槽不碰内轨，消除 62mm³ 干涉",
+      "parentVersion": "v073",
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v077",
+      "timestamp": "2026-10-04T14:51:57.723Z",
+      "userIntent": "载物台：内轨增设过梁槽，使照明座成为单一实体",
+      "parentVersion": "v075",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v078",
+      "timestamp": "2026-10-04T14:51:58.205Z",
+      "userIntent": "照明座：窄梁贯穿内外轨槽接通本体与垫板，恢复单一实体",
+      "parentVersion": "v076",
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v079",
+      "timestamp": "2026-10-04T14:53:41.227Z",
+      "userIntent": "载物台：过梁槽居中于内外轨，彻底消除与照明座的 41.6mm³ 干涉",
+      "parentVersion": "v077",
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v080",
+      "timestamp": "2026-10-04T14:58:47.554Z",
+      "userIntent": "照明座：滑翼收窄 0.15/侧，保证在载物台导槽内可滑动",
+      "parentVersion": "v078",
+      "partId": "p014",
+      "status": "draft"
+    },
+    {
+      "id": "v081",
+      "timestamp": "2026-10-04T15:01:43.026Z",
+      "userIntent": "M4 仿真用整机刚体 v4：全部为 2026-10-04 修正后的终版（滑座厚壁+真紧定、轴承座真正固定、照明座单实体、载物台轨槽居中）",
+      "parentVersion": null,
+      "partId": "p016",
+      "status": "draft",
+      "source": {
+        "kind": "merged",
+        "from": [
+          {
+            "name": "底座",
+            "versionId": "v001"
+          },
+          {
+            "name": "立柱",
+            "versionId": "v013"
+          },
+          {
+            "name": "弯臂",
+            "versionId": "v071"
+          },
+          {
+            "name": "载物台",
+            "versionId": "v079"
+          },
+          {
+            "name": "调焦滑座",
+            "versionId": "v066"
+          },
+          {
+            "name": "齿轮轴",
+            "versionId": "v038"
+          },
+          {
+            "name": "粗调旋钮L",
+            "versionId": "v059"
+          },
+          {
+            "name": "粗调旋钮R",
+            "versionId": "v059"
+          },
+          {
+            "name": "精调环",
+            "versionId": "v052"
+          },
+          {
+            "name": "轴承座",
+            "versionId": "v074"
+          },
+          {
+            "name": "镜筒",
+            "versionId": "v045"
+          },
+          {
+            "name": "镜头座",
+            "versionId": "v046"
+          },
+          {
+            "name": "目镜筒",
+            "versionId": "v042"
+          },
+          {
+            "name": "相机托板",
+            "versionId": "v043"
+          },
+          {
+            "name": "照明座",
+            "versionId": "v080"
+          },
+          {
+            "name": "压片簧",
+            "versionId": "v056"
+          }
+        ],
+        "at": "2026-10-04T15:01:43.025Z"
+      }
+    },
+    {
+      "id": "v082",
+      "timestamp": "2026-10-04T15:03:35.140Z",
+      "userIntent": "轴承座：本体加深使轴孔侧壁 2.45，消除 0.46 亚线宽壁",
+      "parentVersion": "v074",
+      "partId": "p009",
+      "status": "draft"
+    },
+    {
+      "id": "v083",
+      "timestamp": "2026-10-04T15:04:18.491Z",
+      "userIntent": "M4 仿真用整机刚体 v5：轴承座加厚至 v082 后的最终合并",
+      "parentVersion": null,
+      "partId": "p016",
+      "status": "draft",
+      "source": {
+        "kind": "merged",
+        "from": [
+          {
+            "name": "底座",
+            "versionId": "v001"
+          },
+          {
+            "name": "立柱",
+            "versionId": "v013"
+          },
+          {
+            "name": "弯臂",
+            "versionId": "v071"
+          },
+          {
+            "name": "载物台",
+            "versionId": "v079"
+          },
+          {
+            "name": "调焦滑座",
+            "versionId": "v066"
+          },
+          {
+            "name": "齿轮轴",
+            "versionId": "v038"
+          },
+          {
+            "name": "粗调旋钮L",
+            "versionId": "v059"
+          },
+          {
+            "name": "粗调旋钮R",
+            "versionId": "v059"
+          },
+          {
+            "name": "精调环",
+            "versionId": "v052"
+          },
+          {
+            "name": "轴承座",
+            "versionId": "v082"
+          },
+          {
+            "name": "镜筒",
+            "versionId": "v045"
+          },
+          {
+            "name": "镜头座",
+            "versionId": "v046"
+          },
+          {
+            "name": "目镜筒",
+            "versionId": "v042"
+          },
+          {
+            "name": "相机托板",
+            "versionId": "v043"
+          },
+          {
+            "name": "照明座",
+            "versionId": "v080"
+          },
+          {
+            "name": "压片簧",
+            "versionId": "v056"
+          }
+        ],
+        "at": "2026-10-04T15:04:18.489Z"
+      }
+    }
+  ]
+}
