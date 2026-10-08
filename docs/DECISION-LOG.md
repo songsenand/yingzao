@@ -1097,3 +1097,83 @@ Python 领域能力都挂在它上面，换路要重下重装）；第 4 条（�
 - DESIGN 增记运行时章节；本仓库没有 README.md（环境变量因此记进 DESIGN）；新增验收
   脚本进 `dsh-cad-harness/scripts/`。
 - `.tmp-pyprobe/`（2026-09-28 python-engine 试探遗留）的存档价值至此结束，可清理。
+
+## 2026-10-08：判据修正——对 LLM，Python 是第一语言；能迁的默认迁 Python
+
+**触发条件：** 第 1 条（用户拍板）；第 4 条（决定后续所有工具的归属、批次与验收方式）。
+
+**要解决的问题：** 同一天先落地的运行时决策只解决了"有没有 Python"，没解决"**哪些工具
+该用 Python**"。我在 `docs/TOOL-RUNTIME-MATRIX.md` v1 里用**性能/精度**当判据，把大多数
+工具判成"保留 TS"。用户指出这是判据错误，并且承认自己在先前决策里**没有把依据说清楚**：
+
+> "多数 llm 对 python 明显有更强的编码能力，部分库有更新的版本，在部分领域明显有更好
+> 生态等等原因，所以我坚持对 llm，python 是第一语言。"
+> "能迁移到 python 的应当优先迁移到 python，只有明确负收益的才不做。"
+
+**决策内容：**
+
+1. **判据**：**领域逻辑默认迁 Python**。保留 TS 只有三类理由，每条都要写出来：
+   ① **平台接线**（DSH 规定的宿主面：cordis 生命周期、`ctx.tools.register`、
+   `ctx.attachments`、`connection.fetch` 路由、面板/回放、会话与项目路径解析、
+   `llm/stream` 遥测）；② **明确负收益**（必须**用实测数据**证明，不许用直觉）；
+   ③ **canonical 冲突**（同一问题域只能有一个权威实现，换边需重定基线）。
+2. **Q1 = B：领域数据"文件即契约"。** `parts/versions/runs/assembly.json` 保持磁盘
+   JSON + 固定 schema，两侧读写；TS 的 HTTP 路由直读文件。理由：面板保持零 IPC，
+   迁移可以**逐工具**进行，不必一次性搬存储。
+3. **Q2 = A：canonical 随迁 Python。** 物理的权威实现迁到 Python `rapier3d`，
+   **darwin-x64 例外**（无 wheel，继续用 TS `rapier3d-compat`，已在前一条决策落地）。
+   代价明确：TS 侧现有物理验收（17/17 + 24/24）**必须在 Python 侧重跑**才算数。
+4. **前置条件**：**batch 0 = 常驻 worker + JSON-lines（HARNESS §12.3）**。它是"能迁就迁"
+   的开关——见下方依据里的冷启动数据。
+5. **"明确负收益"必须数据化**：本条目**不预先认定任何工具是负收益**；清单见
+   `docs/TOOL-RUNTIME-MATRIX.md`，每一项都要有实测数字（冷启动/worker 往返、空间索引、
+   路由 IPC、平台 API 可达性），测量结果落 `experiments/`。
+
+**依据：**
+
+**(a) LLM 与语言——证据盘点（含反向证据，不美化）：**
+
+| 说法 | 证据 | 结论 |
+|---|---|---|
+| 评测与语料以 Python 为锚 | HumanEval / MBPP 是 Python 基准；MultiPL-E 的做法就是**把它们翻译**到 18 种语言（[arXiv:2208.08227](https://arxiv.org/abs/2208.08227) 摘要："can generate semantically correct **Python** code, little is known about their abilities with other languages"） | ✅ 支持"Python 是重心" |
+| "多数 LLM 对 Python 明显更强" | **同一篇** MultiPL-E 的结论是 "Codex **matches or even exceeds** its performance on Python for several other languages" | ⚠️ **这条要打折**：至少对 Codex 一代的多语言基准，Python 不是绝对最强；不能拿它当普适结论 |
+| 训练语料分布决定下游表现 | Magicoder 论文讨论语料分布与表现的关联（[ar5iv 2312.02120](https://ar5iv.labs.arxiv.org/html/2312.02120)） | ✅ 支持"语料重力在 Python" |
+| 部分库版本更新 | manifold3d(PyPI) **3.5.4** vs npm manifold-3d **3.5.4**（同日核实，**同版本**）；`@dimforge/rapier3d-compat` 最新 **0.21.0** vs PyPI `rapier3d` **0.36.1**（版本号体系不同，不可直接比大小） | ⚠️ 对 manifold 不成立；rapier 的差异是**能力**不是版本 |
+| 部分领域生态更好 | 可核实：`scikit-fem`（Python 独有，JS 侧只有杆系）、`build123d`/`cadquery-OCP`/`FreeCAD`（B-rep/STEP 的 Python 优先路线）、`mujoco`/`pybullet`；且 **`rapier3d` Python 绑定有 JS 绑定没有的软体 API**（HARNESS §12.4 实测） | ✅ 强支持 |
+
+⇒ **判据成立的理由不是"Python pass@1 更高"这一条**（它不普适），而是：
+**评测/语料重心 + 领域库生态 + 绑定能力 + LLM 写 Python 时的可读/可自建**。这条要在
+文档里如实写成"生态与语料依据"，不要替用户把它说成"基准证明 Python 更强"。
+
+**(b) 冷启动（本机实测，2026-10-08）：**
+
+| 场景 | 实测 |
+|---|---|
+| 裸解释器 `python3 -c pass` | **11 ms** |
+| `import numpy, scipy` | **~80 ms** |
+| 再加 manifold3d / trimesh / scikit-fem | 估 0.1–0.3 s（待 batch 0 实测） |
+
+⇒ 每次调用起新进程 = 给所有小工具加 0.1–0.3 s。这不是"某工具不该迁"的结论，
+而是"**worker 必须先落地**"的结论（常驻进程把每次调用压到 IPC 量级）。
+
+**影响：**
+
+- `docs/TOOL-RUNTIME-MATRIX.md` 重写为 v2（判据换成"默认迁"）；"明确负收益"清单降级为
+  **待测项**，每条都要有数字。
+- 后续批次：batch 0（worker）→ batch 1（纯计算域：fluid/FEM/measure/check）→
+  batch 2（生成/渲染/导入/合并的领域部分）→ batch 3（存储，按 Q1=B 保持文件契约）。
+- 物理迁移（Q2=A）会换绑定版本，**必须重跑物理验收基线**；darwin-x64 永远走 TS。
+- `HARNESS.md §12.1`（"TS 是平台接线层，Python 是领域运行时"）从原则变成**执行判据**：
+  它此前只是记录，从未被用来裁决单个工具的归属。
+
+**同日实测补充（2026-10-08，报告 `experiments/20261008_python_migration_measurements.md`）：**
+
+| 我原先猜的"负收益" | 实测 | 判定 |
+|---|---|---|
+| 每次调用起一个新进程 | 全工具集冷启动 **443.7 ms**；常驻 worker 往返 **0.02 ms**（比 Node 直读磁盘 0.9 ms 还便宜） | **成立，但解法是 worker**，不是保留 TS |
+| `measure_closest` 没有 Python 空间索引 | 无索引 4.6–7.1 ms/点（慢 224–350×）；**加 `rtree` 后 0.61 ms/点（慢 30×）**；精度与 TS **Δ=0 mm**；200 点共 122 ms | **撤回**：可迁，代价是锁里加 `rtree 1.4.1`（七平台全有 py3 wheel） |
+| 面板载荷/渲染图片过 IPC | 34 KiB 面板载荷 **0.25 ms**（直读磁盘 0.9 ms）；178 KiB 图片 **0.82 ms** | **撤回**：传输从来不是瓶颈 |
+| ①类平台接线 | `ctx.tools.register` / `ctx.attachments` / `connection.fetch.register` 是宿主进程内服务 | 不是性能问题，是 **API 边界事实**（不需要 benchmark，需要代码位置作证） |
+
+⇒ **② 类（明确负收益）目前为空**：按现有数据，**没有任何工具因为性能被排除在 Python 之外**。
+唯一阻塞迁移的是 batch 0 的常驻 worker 尚未落地。

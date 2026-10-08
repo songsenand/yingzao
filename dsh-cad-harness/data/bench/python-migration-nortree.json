@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-10-08T15:29:56.445Z",
+  "venvPython": "/home/songsenand/Project/ToyMarker/.tmp-measure-runtime/venv/bin/python",
+  "stl": "/home/songsenand/Project/ToyMarker/examples/microscope4/cad-data/runs/r024/parts/整机.stl",
+  "e1": {
+    "bareInterpreter": {
+      "n": 10,
+      "medianMs": 11.69,
+      "minMs": 9.49,
+      "maxMs": 14.45
+    },
+    "numpyScipy": {
+      "n": 10,
+      "medianMs": 90.24,
+      "minMs": 81.92,
+      "maxMs": 133.65
+    },
+    "fullToolSet": {
+      "n": 10,
+      "medianMs": 443.69,
+      "minMs": 423.97,
+      "maxMs": 479.46
+    },
+    "workerPing": {
+      "n": 200,
+      "medianMs": 0.02,
+      "minMs": 0.02,
+      "maxMs": 0.79
+    },
+    "workerPingAfterHeavyImport": {
+      "n": 200,
+      "medianMs": 0.02,
+      "minMs": 0.02,
+      "maxMs": 0.15
+    }
+  },
+  "e2": {
+    "triangles": 28830,
+    "points": 200,
+    "tsBvh": {
+      "buildMs": 15,
+      "queryMs": 4.9,
+      "perQueryMs": 0.0247
+    },
+    "pyTrimesh": {
+      "engine": "none",
+      "indexed": {
+        "error": "ModuleNotFoundError: No module named 'rtree'"
+      },
+      "naive": {
+        "queryMs": 1425.9,
+        "perQueryMs": 7.1296,
+        "maxDistanceDeltaMm": 0
+      }
+    }
+  },
+  "e3": {
+    "payloadBytes": 35066,
+    "directDiskRead": {
+      "n": 20,
+      "medianMs": 0.9,
+      "minMs": 0.81,
+      "maxMs": 1.76
+    },
+    "workerRoundTrip": {
+      "n": 20,
+      "medianMs": 0.25,
+      "minMs": 0.22,
+      "maxMs": 0.41
+    }
+  }
+}

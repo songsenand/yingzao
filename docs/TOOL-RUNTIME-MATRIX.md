@@ -16,11 +16,14 @@
 | ③ canonical 冲突 | 同一问题域只能有一个权威实现，换边需要重新定基线 | 物理（TS `rapier3d-compat` 0.20 ↔ Python `rapier3d` 0.36） |
 
 **前置条件：常驻 worker（HARNESS §12.3）必须先落地。**
-实测冷启动（本机，2026-10-08）：解释器本身 **11 ms**；`import numpy, scipy` 后 **~80 ms**；
-再算上 manifold3d/trimesh/scikit-fem 的导入，**每次调用起一个新进程 ≈ 0.1–0.3 s**。
-`measure_distance` 这类毫秒级工具，冷启动会把它放大 10–100×——那就是"负收益"，
-但它**只是时序问题**：常驻 worker 把每次调用压到 IPC 量级（~ms）之后，这条理由消失。
-⇒ **batch 0 = worker + JSON-lines**，它是"能迁就迁"的开关，不是可选项。
+**实测**（本机，2026-10-08，脚本 `dsh-cad-harness/scripts/measure-python-migration.mjs`，
+报告 `experiments/20261008_python_migration_measurements.md`）：
+裸解释器 **11.7 ms**；`import numpy, scipy` **90.2 ms**；**全工具集
+（+manifold3d/trimesh/skfem）443.7 ms** —— 这是"每次调用起一个新进程"的真实代价；
+而**常驻 worker 往返 0.02 ms**（200 次中位数，比 Node 直读磁盘的 0.9 ms 还便宜）。
+443.7 ms → 0.02 ms ≈ **2×10⁴**。
+⇒ **这是唯一被数据证实的"负收益"，而它的解法是 worker，不是把工具留在 TS。**
+batch 0 不是优化项，是让"能迁就迁"成立的前提。
 
 ## 1. 分层：接线 vs 领域
 
@@ -46,7 +49,7 @@
 | 9 | `check_printability` | 壁厚/悬垂（可顺带从采样升级为精确） | schema | **P** | 精度是附带收益 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
 | 11 | `measure_distance` | 点/球距离 | schema | **P** | 依赖 batch 0（否则冷启动负收益） |
-| 12 | `measure_closest` | 最近点/最小间隙 | schema | **P（条件）** | 需要 Python 空间索引：`rtree`/`embree`，或 manifold 自带距离查询；**先验证再迁** |
+| 12 | `measure_closest` | 最近点/最小间隙 | schema | **P** | 已实测：加 `rtree` 后 0.61 ms/点（TS 的 three-mesh-bvh 是 0.02 ms/点，慢 30×）**但精度完全一致（Δ=0 mm）**，200 点 122 ms 可接受 ⇒ 可迁；代价是锁里加 `rtree 1.4.1`（七平台全有 py3 wheel，无需编译器） |
 | 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
 | 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
@@ -59,16 +62,30 @@
 **非工具车道**：体素 FEM（现为 `scripts/probe-*.mjs`，手写 matrix-free CG）→ **P + 工具化**，
 实现直接落 Python/scikit-fem（已在锁里）。
 
-## 3. 明确不做（②类，逐条给理由）
+## 3. "明确负收益"的实测判定（2026-10-08）
 
-| 项 | 为什么是负收益 |
-|---|---|
-| 面板/回放/缩略图/版本列表的 HTTP 路由 | 逐请求热路径；数据是磁盘 JSON，TS 直读即可，引入 IPC 只会变慢、变脆 |
-| 图片窗口与裁剪策略 | DSH 平台事件（`IMAGE_OFFLOAD_REQUIRED` 等），Python 够不着 |
-| usage 遥测 | `llm/stream` 宿主钩子 |
-| `recall_reference_image` | DSH attachments 是平台 API |
-| darwin-x64 的物理 | 用户已拍板：该平台继续用 TS（无 wheel） |
-| 任何工具在 **worker 落地之前**的迁移 | 冷启动 0.1–0.3s 会把小工具全部变成负收益；这是时序问题，不是结论 |
+v2 初稿凭直觉列了三条"负收益"，用户要求**用数据说话**。实测结果**推翻了其中两条**，
+详见 `experiments/20261008_python_migration_measurements.md`：
+
+| 我原先的说法 | 实测 | 判定 |
+|---|---|---|
+| 每次调用起新进程 = 0.1–0.3 s，小工具负收益 | 全工具集冷启动 **443.7 ms**；常驻 worker 往返 **0.02 ms** | ✅ **成立，但解法是 worker**，不是保留 TS |
+| `measure_closest` 没有 Python 空间索引 → 负收益 | 无索引 4.6–7.1 ms/点（慢 224–350×）；**加 rtree 0.61 ms/点（慢 30×）**；精度 **Δ=0 mm**；200 点共 122 ms | ❌ 撤回：可接受，代价是加 `rtree` |
+| 面板载荷/渲染图片过 IPC → 负收益 | 34 KiB 面板载荷 **0.25 ms**（直读磁盘 0.9 ms）；178 KiB 图片 **0.82 ms** | ❌ 撤回：传输从来不是瓶颈 |
+
+**因此当前没有任何工具因性能被排除在 Python 之外。** 仍然保留 TS 的只有：
+
+| 保留项 | 理由类别 | 具体依据 |
+|---|---|---|
+| 工具 schema 与注册、预设可见性过滤 | ① 平台接线 | `ctx.tools.register` 是宿主进程内服务 |
+| 图片附件与裁剪策略 | ① 平台接线 | `ctx.attachments.saveImages(...)` 只能在宿主调用（tools.ts）；图片**必须**经它交付 |
+| HTTP 路由、面板、回放 | ① 平台接线 | `connection.fetch.register` / `connection.rpc.intercept` 在宿主进程内（index.ts） |
+| 会话/项目路径解析、usage 遥测 | ① 平台接线 | 读的是 DSH 会话与 `llm/stream` 钩子 |
+| `recall_reference_image` | ① 平台接线 | DSH attachments API |
+| darwin-x64 的物理 | ③ canonical | 用户已拍板：无 wheel，该平台继续用 TS |
+
+> ① 类不是性能问题，是 **API 边界事实**（跨进程够不着），所以它不需要 benchmark，
+> 需要的是代码位置作证。② 类才是要数字的，而目前 **② 类为空**。
 
 ## 4. 两个结构性裁决（比单个工具更重要）
 
@@ -77,26 +94,26 @@
 - 方案 B：**文件即契约**（schema 固定，两侧读写；TS 路由直读文件）← **建议 B**
   理由：面板保持零 IPC，迁移可以**逐工具**进行，不必一次性搬存储。
 
-**Q2：物理 canonical 是否随迁？** Python 的 `rapier3d` 是同一 Rust 内核的官方绑定，
-但版本是 0.36，TS 侧是 `rapier3d-compat` 0.20——**换边要重新定基线**（TS 侧现有
-17/17 + 24/24 验收）。
-- 方案 A：canonical 随迁 Python（darwin-x64 例外）——符合"Python 第一语言"，但要重跑物理基线
-- 方案 B：canonical 留 TS，Python 只做交叉验证（现状）
+**Q2：物理 canonical 是否随迁？—— 用户裁决：方案 A（随迁 Python，darwin-x64 例外）。**
+Python 的 `rapier3d` 是同一 Rust 内核的官方绑定（TS 侧是 `rapier3d-compat` 0.20，
+Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 24/24 验收）。
 
 ## 5. 批次（batch 0 是前提）
 
 | 批次 | 内容 | 解锁什么 |
 |---|---|---|
-| **0** | 常驻 worker + JSON-lines 协议（§12.3）+ 冷启动前后对照 | 让"能迁就迁"成立 |
-| 1 | 纯计算域：`simulate_fluid`、FEM（工具化）、`measure_*`、`check_*` | 收益最大、无 UI 耦合 |
+| **0** | 常驻 worker + JSON-lines 协议（§12.3）；验收写进"worker 往返 < 1 ms、冷启动 400+ ms"这对数字 | 让"能迁就迁"成立 |
+| 1 | 纯计算域：`simulate_fluid`、FEM（工具化）、`measure_*`（含 `measure_closest` + `rtree`）、`check_*` | 收益最大、无 UI 耦合 |
 | 2 | 生成/渲染/导入/合并的领域部分（1、4、5、6、13） | 领域代码集中到 Python |
-| 3 | 存储与装配清单（取决于 Q1） | 收尾 |
-| 条件 | `measure_closest`（空间索引验证）、`simulate_physics`/`simulate_motion`（Q2） | 验证/裁决后进批次 |
+| 3 | 存储与装配清单（Q1=B：保持"文件即契约"） | 收尾 |
+| 4 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 
 ## 6. 单个工具"迁移完成"的定义
 
 1. **工具名不变**，模型无感（`run_python` 才是开放场地，工具是窄接口）；
 2. 领域逻辑在 `python/cad_worker/`，TS 侧只剩 schema + 转发；
 3. **有前后对照**：同输入同输出 + 耗时对比，写进验收脚本；
+   对照口径见 `experiments/20261008_python_migration_measurements.md`（E1 冷启动/worker、
+   E2 最近点、E3 面板载荷、E4 图片载荷）；
 4. 现有验收（`scripts/accept-*.mjs`）更新并通过；
-5. canonical 归属在决策记录里写明（Q2 裁决后）。
+5. canonical 归属在决策记录里写明。

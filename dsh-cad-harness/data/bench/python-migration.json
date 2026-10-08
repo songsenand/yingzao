@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-10-08T15:30:41.384Z",
+  "venvPython": "/home/songsenand/Project/ToyMarker/.tmp-measure-runtime/venv/bin/python",
+  "stl": "/home/songsenand/Project/ToyMarker/examples/microscope4/cad-data/runs/r024/parts/整机.stl",
+  "e1": {
+    "bareInterpreter": {
+      "n": 10,
+      "medianMs": 11.69,
+      "minMs": 9.49,
+      "maxMs": 14.45
+    },
+    "numpyScipy": {
+      "n": 10,
+      "medianMs": 90.24,
+      "minMs": 81.92,
+      "maxMs": 133.65
+    },
+    "fullToolSet": {
+      "n": 10,
+      "medianMs": 443.69,
+      "minMs": 423.97,
+      "maxMs": 479.46
+    },
+    "workerPing": {
+      "n": 200,
+      "medianMs": 0.02,
+      "minMs": 0.02,
+      "maxMs": 0.79
+    },
+    "workerPingAfterHeavyImport": {
+      "n": 200,
+      "medianMs": 0.02,
+      "minMs": 0.02,
+      "maxMs": 0.15
+    }
+  },
+  "e2": {
+    "triangles": 28830,
+    "points": 200,
+    "tsBvh": {
+      "buildMs": 14.7,
+      "queryMs": 4.1,
+      "perQueryMs": 0.0204
+    },
+    "pyTrimesh": {
+      "engine": "rtree",
+      "indexed": {
+        "queryMs": 122.2,
+        "perQueryMs": 0.6111,
+        "maxDistanceDeltaMm": 0
+      },
+      "naive": {
+        "queryMs": 915.2,
+        "perQueryMs": 4.5762,
+        "maxDistanceDeltaMm": 0
+      }
+    }
+  },
+  "e3": {
+    "payloadBytes": 35066,
+    "directDiskRead": {
+      "n": 20,
+      "medianMs": 0.9,
+      "minMs": 0.81,
+      "maxMs": 1.76
+    },
+    "workerRoundTrip": {
+      "n": 20,
+      "medianMs": 0.25,
+      "minMs": 0.22,
+      "maxMs": 0.41
+    }
+  },
+  "e4": {
+    "file": "/home/songsenand/Project/ToyMarker/dsh-cad-harness/sandbox/shots/browse3-stale-shot.png",
+    "bytes": 181912,
+    "base64Bytes": 242552,
+    "hostReadAndEncode": {
+      "n": 10,
+      "medianMs": 0.15,
+      "minMs": 0.1,
+      "maxMs": 0.71
+    },
+    "workerRoundTrip": {
+      "n": 10,
+      "medianMs": 0.82,
+      "minMs": 0.45,
+      "maxMs": 1.13
+    }
+  }
+}
