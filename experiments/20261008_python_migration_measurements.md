@@ -144,3 +144,42 @@ node scripts/measure-python-migration.mjs --runtime ../.tmp-measure-runtime --on
 > 3. **面板路由与图片处理不因性能留 TS**：传输实测 0.25/0.82 ms。它们留在 TS 的唯一理由是
 >    ①类 API 边界（`connection.fetch.register`、`ctx.attachments`）。
 > 4. 本实验推翻了 v2 矩阵里两条"明确负收益"猜测，矩阵相应更新；**目前没有任何工具因性能被排除**。
+
+---
+
+## 补充：batch 0 协议原型实测（同日，脚本 `scripts/proto-python-worker.mjs`）
+
+上面 E1 只回答了"要不要常驻 worker"。这一节回答"**协议本身该怎么写**"——特别是
+HARNESS §12.3 那句"大载荷走文件路径"，此前只是断言，没有阈值也没有数字。
+
+原型：Python 侧 hello 握手 + `for line in sys.stdin` 单线程循环，帧为
+`{id, op, params}` → `{id, ok, result}` / `{id, ok:false, error, traceback, ms}`。
+
+| 测点 | 结果 |
+|---|---|
+| P1 spawn → hello（`protocolVersion` 握手） | **15.64 ms**（n=5） |
+| P2 ping 往返（冷 / 重库导入后） | **0.023 / 0.019 ms**（各 200 次） |
+| P3 **参数侧** 1M float64：inline JSON **5.6 MiB** vs 文件 **7.6 MiB** raw | **106.4 ms vs 0.72 ms（148×）** |
+| P4 **结果侧** 100k×3 float32：inline JSON 2.1 MiB / inline base64 1.5 MiB / 文件 1.1 MiB | **98.2 / 16.3 / 0.92 ms**（+宿主读文件 0.16 ms） |
+| P5 失败帧 | `ok:false` + `ValueError: …` + **7 行完整 traceback**（含 worker 内帧） |
+| P6 两个请求同时发出 | **140.5 ms = 串行**（120+20）；`serialized: true`；**id 关联正确** |
+
+**分析：**
+
+1. **§12.3 的"大载荷走文件路径"被证实，而且阈值比想象的更低。** 参数侧差 **148×**、结果侧
+   inline JSON 差 **107×**、连 base64 inline 也差 **18×**。结论：**1 MiB 量级就该走文件**，
+   不要等"大"载荷；base64 只适合小结果（几十 KiB）。
+2. 帧形状与握手可用：启动 15.6 ms、之后每次调用 **~20 µs**，`protocolVersion` 在 hello 里带上。
+3. **worker 是单线程串行的**：两个并发请求的耗时等于串行和。batch 0 必须写明：
+   ① 宿主侧的并发工具调用会在 worker 里**排队**，**超时预算要把排队算进去**；
+   ② 要真并行只有两条路——Python 侧异步分派（IO 型）或 worker 池（CPU 型）。
+   v1 建议**先串行 + 明确记录**：几何/仿真都是 CPU 密集，多开进程抢同一颗核没有收益。
+4. 失败帧带完整 traceback（P5）⇒ §12.3 的"错误返回完整 traceback"可验证，且不需要额外机制。
+
+**产物：** `dsh-cad-harness/scripts/proto-python-worker.mjs`（原型 + 六个测点）、
+`dsh-cad-harness/data/bench/python-worker-protocol.json`（原始数据）。
+
+```bash
+cd dsh-cad-harness
+node scripts/proto-python-worker.mjs --runtime ../.tmp-measure-runtime
+```

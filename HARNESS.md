@@ -373,6 +373,16 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 - **协议**：`{id, op, params}` → `{id, ok, result}` / `{id, ok:false, error, traceback}`，带 `protocolVersion`；**大载荷（STL/帧）走文件路径**，不走 stdio
 - **运维**：venv 锁定（`requirements.lock` 含 hash）+ health check + 自动重启；worker 崩溃不带崩插件
 - **错误反馈**：返回完整 traceback（Python 侧核心优势）
+- **2026-10-08 实测（原型 `dsh-cad-harness/scripts/proto-python-worker.mjs`，报告
+  `experiments/20261008_python_migration_measurements.md`）**：
+  spawn→hello 握手 **15.6 ms**，之后每次调用 **~20 µs**；
+  **"大载荷走文件路径"被证实且阈值更低**——参数侧 1M float64：inline JSON 5.6 MiB
+  **106 ms** vs 文件 7.6 MiB **0.72 ms（148×）**；结果侧 100k×3 float32：inline JSON 98 ms /
+  inline base64 16 ms / 文件 **0.92 ms**。**1 MiB 量级就该走文件**，base64 只适合几十 KiB。
+  失败帧带完整 traceback（7 行，含 worker 内帧）。
+  ⚠️ **v1 的 worker 是单线程串行**（两个并发请求耗时 = 串行和 140.5 ms）：宿主侧并发工具调用
+  会**排队**，**超时预算必须把排队算进去**；要真并行只能靠 Python 侧异步分派（IO 型）
+  或 worker 池（CPU 型）——几何/仿真都是 CPU 密集，v1 先串行并明确记录。
 
 ### 12.4 pip 生态（实测 2026-09-28）
 

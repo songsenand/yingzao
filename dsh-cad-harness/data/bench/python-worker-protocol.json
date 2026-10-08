@@ -1,0 +1,90 @@
+{
+  "generatedAt": "2026-10-08T15:36:34.259Z",
+  "protocolVersion": 1,
+  "venvPython": "/home/songsenand/Project/ToyMarker/.tmp-measure-runtime/venv/bin/python",
+  "p1StartupHello": {
+    "n": 5,
+    "medianMs": 15.635,
+    "minMs": 14.916,
+    "maxMs": 15.889
+  },
+  "hello": {
+    "type": "hello",
+    "protocolVersion": 1,
+    "python": "3.13.16"
+  },
+  "p2Ping": {
+    "beforeHeavyImport": {
+      "n": 200,
+      "medianMs": 0.023,
+      "minMs": 0.018,
+      "maxMs": 0.591
+    },
+    "afterHeavyImport": {
+      "n": 200,
+      "medianMs": 0.019,
+      "minMs": 0.018,
+      "maxMs": 0.172
+    }
+  },
+  "p3Args": {
+    "payloadBytes": 5888012,
+    "inlineJson": {
+      "n": 5,
+      "medianMs": 106.448,
+      "minMs": 103.625,
+      "maxMs": 108.459,
+      "sum": 499500,
+      "count": 1000000
+    },
+    "byFile": {
+      "n": 5,
+      "medianMs": 0.722,
+      "minMs": 0.679,
+      "maxMs": 9.648,
+      "sum": 499500,
+      "count": 1000000,
+      "bytes": 8000000
+    }
+  },
+  "p4Results": {
+    "vertices": 100000,
+    "inlineJson": {
+      "n": 5,
+      "medianMs": 98.177,
+      "minMs": 93.645,
+      "maxMs": 109.508,
+      "payloadBytes": 2188904
+    },
+    "inlineBase64": {
+      "n": 5,
+      "medianMs": 16.335,
+      "minMs": 11.403,
+      "maxMs": 18.09,
+      "payloadBytes": 1600000
+    },
+    "byFile": {
+      "n": 5,
+      "medianMs": 0.922,
+      "minMs": 0.757,
+      "maxMs": 1.641,
+      "payloadBytes": 1200000,
+      "hostReadMs": 0.164
+    }
+  },
+  "p5Failure": {
+    "ok": false,
+    "error": "ValueError: intentional failure for traceback passthrough",
+    "tracebackHasValueError": true,
+    "tracebackHasWorkerLine": true,
+    "tracebackLines": 7
+  },
+  "p6Concurrency": {
+    "elapsedMs": 140.5,
+    "serialWouldBeMs": 140,
+    "serialized": true,
+    "aIsLong": true,
+    "bIsShort": true,
+    "correlatedById": true
+  }
+}
