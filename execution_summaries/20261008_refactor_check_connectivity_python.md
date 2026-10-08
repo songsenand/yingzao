@@ -46,3 +46,18 @@
 >   node scripts/accept-python-worker.mjs --runtime ../.tmp-measure-runtime       # 8/8
 >   node scripts/accept-tool-scope.mjs && node esbuild.mjs
 >   ```
+
+## 补充：运行时未就绪时的快速失败（2026-10-08 同日）
+
+迁移后工具需要运行时，但 `ensurePythonWorker()` 原先会直接触发 provisioning——冷装实测
+**6–11 分钟**，而这两个工具的 timeout 只有 60 s / 180 s，等于必然超时且没有任何有用信息。
+
+现在 `ensurePythonWorker()` 先查 `pythonRuntimeStatus()`：状态不是 `ready` 就**立刻**抛出
+可执行的指引（实测 3 ms 返回）：
+
+> the bundled Python runtime is not ready (state: absent) — run the python_runtime tool with
+> action "provision" (it reports progress and is not bound by this tool's timeout), then call
+> this tool again
+
+`DSH_CAD_PYTHON=eager` 在启动时供给，因此这条路径只在 `auto` 且从未供给过时出现；
+`DSH_CAD_PYTHON=off` 仍然是"明确失败、不悄悄退回 TS"。

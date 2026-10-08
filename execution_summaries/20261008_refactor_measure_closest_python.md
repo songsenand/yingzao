@@ -54,3 +54,9 @@
 >   node scripts/accept-tool-scope.mjs && node scripts/accept-python.mjs --quick
 >   node esbuild.mjs
 >   ```
+
+## 补充：运行时未就绪时的快速失败（2026-10-08 同日）
+
+`ensurePythonWorker()` 现在先查 `pythonRuntimeStatus()`，状态不是 `ready` 就立刻抛出可执行
+指引（实测 3 ms），而不是触发 6–11 分钟的冷装后撞上工具的 60/180 s 超时。详见
+`execution_summaries/20261008_refactor_check_connectivity_python.md` 的同名小节。

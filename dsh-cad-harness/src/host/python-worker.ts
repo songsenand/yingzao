@@ -22,7 +22,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { PYTHON_LOCK_PROTOCOL } from './python-lock.ts';
-import { ensurePythonRuntime, pythonRuntimeRoot, runProcess, type PythonRuntimePaths } from './python-runtime.ts';
+import { ensurePythonRuntime, pythonRuntimeRoot, pythonRuntimeStatus, runProcess, type PythonRuntimePaths } from './python-runtime.ts';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
@@ -390,6 +390,17 @@ let sharedWorker: PythonWorker | null = null;
 export async function ensurePythonWorker(options: PythonWorkerOptions = {}): Promise<PythonWorker> {
   if (sharedWorker?.alive) return sharedWorker;
   sharedWorker = null;
+  // A migrated TOOL must not spend its 60–180 s timeout installing a runtime that
+  // measured 6–11 minutes cold. Refuse with something actionable instead: the
+  // python_runtime tool provisions with progress and is not bound by the caller's
+  // deadline. (Eager mode provisions at startup, so this never fires there.)
+  const status = await pythonRuntimeStatus();
+  if (status.state !== 'ready') {
+    throw new Error(
+      `the bundled Python runtime is not ready (state: ${status.state}) — run the python_runtime tool with action "provision" ` +
+        '(it reports progress and is not bound by this tool\'s timeout), then call this tool again',
+    );
+  }
   const runtime = await ensurePythonRuntime({ onProgress: options.onLog });
   const child = spawn(runtime.venvPython, ['-I', resolveWorkerScript()], {
     stdio: ['pipe', 'pipe', 'pipe'],
