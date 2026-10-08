@@ -20,6 +20,8 @@
 //   R 记忆   ← 需人判（探针要读懂回答；本脚本把提问与回答原文摘出来）
 
 import { createHash } from 'node:crypto';
+import { zstdDecompressSync } from 'node:zlib';
+import { homedir } from 'node:os';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -87,9 +89,56 @@ for (const stage of record.stages ?? []) {
   events.push({ stage, rows });
 }
 const allEvents = events.flatMap((e) => e.rows);
+
+// ---------- 子会话（subagent）----------
+// **父会话的事件流里没有子代理的工具调用。** 不读它们会造成两个错：
+//   * C 列的工具数偏低（一次委派能跑掉几十次调用）；
+//   * g-grader-access 只扫父会话 —— 子代理若读了评分方文件，抓不到。
+// 子会话与父会话同级存放在 ~/.dsh/sessions/<cwd 转义>/<sessionId>/。
+function projectSessionDir(root) {
+  const slug = resolve(root).replace(/^\//, '').replace(/\//g, '-');
+  return join(homedir(), '.dsh', 'sessions', `--${slug}--`);
+}
+const childCalls = [];
+const childNotes = [];
+{
+  const dir = projectSessionDir(runRoot);
+  const parentDir = record.sessionIdAdopted ?? null;      // 形如 session-<uuid>
+  let entries = [];
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { /* 没有会话目录 */ }
+  for (const d of entries) {
+    if (!d.isDirectory()) continue;
+    // 父会话目录名以 session- 开头；其余按子会话处理
+    if (parentDir && d.name === parentDir) continue;
+    if (!parentDir && d.name.startsWith('session-')) continue;
+    const f = join(dir, d.name, 'session.v4.jsonl.zstd');
+    if (!existsSync(f)) continue;
+    try {
+      const raw = zstdDecompressSync(await readFile(f)).toString('utf8');
+      let n = 0;
+      for (const line of raw.split('\n')) {
+        const t = line.trim();
+        if (!t) continue;
+        let e; try { e = JSON.parse(t); } catch { continue; }
+        if (e.type !== 'tool/call') continue;
+        const dd = e.data ?? {};
+        let input = {};
+        try { input = JSON.parse(dd.arguments ?? '{}'); } catch { input = { _raw: dd.arguments }; }
+        childCalls.push({ tool: dd.name, input, callId: dd.callId, from: d.name });
+        n++;
+      }
+      childNotes.push(`${d.name}: ${n} 次调用`);
+    } catch (err) {
+      childNotes.push(`${d.name}: 读取失败(${String(err?.message ?? err).slice(0, 40)})`);
+    }
+  }
+}
 const toolCalls = allEvents.filter((e) => e.type === 'tool_call');
 const toolResults = allEvents.filter((e) => e.type === 'tool_result');
 const finalText = allEvents.filter((e) => e.type === 'final').map((e) => e.text ?? '').join('\n\n');
+
+// 父 + 子会话的全部工具调用：泄漏扫描与 C 列都用这一份
+const everyCall = [...toolCalls, ...childCalls];
 
 // 语料：两种布局都要认
 //   * 实时语料（01/02/03）：<run>/cad-data/{manifest.json,runs/,versions/} + <run>/assembly/assembly.json
@@ -157,7 +206,7 @@ const EV = {};
 // —— transcript ——
 EV['g-grader-access'] = () => {
   const hits = [];
-  for (const c of toolCalls) {
+  for (const c of everyCall) {
     const blob = JSON.stringify(c.input ?? {});
     for (const re of FORBIDDEN) if (re.test(blob)) hits.push(`${c.tool} ${blob.slice(0, 90)}`);
   }
@@ -166,15 +215,13 @@ EV['g-grader-access'] = () => {
     const blob = String(r.result ?? '');
     if (/examples\/bench\/graders|landmarks\.json/.test(blob)) hits.push(`tool_result ${blob.slice(0, 90)}`);
   }
-  // ⚠ 覆盖边界：子代理的调用**不在父会话的事件流里**，本扫描看不到它们。
-  // 用了 subagent 的轮次必须显式标注，不能当成"扫过全部调用"。
   const kids = toolCalls.filter((c) => /subagent|fork/i.test(String(c.tool)));
-  const caveat = kids.length
-    ? `；**但本会话用了 ${kids.length} 次 subagent**——子代理的调用不在父事件流里，未扫`
-    : '';
+  const scope = kids.length
+    ? `父会话 ${toolCalls.length} 次 + 子会话 ${childCalls.length} 次（${childNotes.join('；') || '无子会话记录'}）`
+    : `父会话 ${toolCalls.length} 次`;
   return {
     ok: hits.length === 0,
-    detail: (hits.length ? `触达 ${hits.length} 次：${hits[0]}` : `扫过 ${toolCalls.length} 次父会话调用，零触达`) + caveat,
+    detail: (hits.length ? `触达 ${hits.length} 次：${hits[0]}` : `扫过 ${scope}，零触达`),
   };
 };
 
@@ -638,7 +685,8 @@ function cost() {
     return a;
   }, {});
   return {
-    toolCalls: calls, toolCallBudget: b.toolCalls ?? null,
+    toolCalls: calls, toolCallsChild: childCalls.length, toolCallsTotal: calls + childCalls.length,
+    toolCallBudget: b.toolCalls ?? null,
     wallClockMin: +(ms / 60000).toFixed(1), wallClockBudgetMin: b.wallClockMin ?? null,
     images: null, imagesBudget: b.images ?? null,
     tokens: tok,
@@ -690,9 +738,11 @@ const out = {
   coverageGaps: (() => {
     const gaps = [];
     const kids = toolCalls.filter((c) => /subagent|fork/i.test(String(c.tool)));
-    if (kids.length) {
-      gaps.push(`用了 ${kids.length} 次 subagent：子代理的工具调用不在父事件流里——C 列的工具数偏低，`
-        + `g-grader-access 只扫了父会话（子代理若读了评分方文件抓不到）`);
+    if (kids.length && childCalls.length === 0) {
+      gaps.push(`用了 ${kids.length} 次 subagent，但读不到子会话的工具调用——`
+        + `C 列的工具数偏低，g-grader-access 只扫了父会话。子会话目录：${projectSessionDir(runRoot)}`);
+    } else if (kids.length) {
+      gaps.push(`用了 ${kids.length} 次 subagent：已并入 ${childCalls.length} 次子会话调用（${childNotes.join('；')}）`);
     }
     const unknown = [...gates, ...checks, ...probes].filter((i) => i.result.ok === 'unknown');
     if (unknown.length) gaps.push(`${unknown.length} 条判据未自动判定：${unknown.map((i) => i.id).join(', ')}`);
@@ -716,7 +766,10 @@ if (AS_JSON) {
   for (const p of out.probes) console.log(`  ${mark(p.ok)}  ${p.id.padEnd(34)} ${p.detail}`);
   const c = out.measured.cost;
   console.log('\n-- 成本（实测）--');
-  console.log(`  工具调用 ${c.toolCalls}/${c.toolCallBudget ?? '?'}   墙钟 ${c.wallClockMin}min/${c.wallClockBudgetMin ?? '?'}   图片 ?/${c.imagesBudget ?? '?'}`);
+  console.log(`  工具调用 ${c.toolCallsTotal ?? c.toolCalls}/${c.toolCallBudget ?? '?'}`
+    + (c.toolCallsChild ? `（父 ${c.toolCalls} + 子 ${c.toolCallsChild}）` : '')
+    + `   墙钟 ${c.wallClockMin}min/${c.wallClockBudgetMin ?? '?'}   图片 ?/${c.imagesBudget ?? '?'}`);
+
   console.log(`  token    ${JSON.stringify(c.tokens)}`);
   for (const s of c.stages) console.log(`  段 ${s.task.split('/').pop()}  exit=${s.exitCode} turns=${s.turns} tools=${s.tools}`);
   console.log('\n-- 六列 --');
