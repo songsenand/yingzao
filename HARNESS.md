@@ -422,7 +422,10 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   跨项目共享；运行时**不进项目目录、不进 git**。
 - **依赖**：numpy / scipy / trimesh / manifold3d / networkx / **scikit-fem** / rapier3d 0.36，全部
   `--require-hashes --only-binary=:all:` 锁定，因此**任何平台都不需要编译器**。
-  **rapier3d 没有 darwin-x64 wheel**，该平台用 marker 排除（宁可少一个库，也不要 Rust 构建）。
+  **rapier3d 没有 darwin-x64 wheel**：用户 2026-10-08 拍板——该平台**物理继续用 TS 引擎**，
+  Python 侧不装它。锁里的 `# cad-exclude: darwin-x64 | <原因>` 指令负责裁剪，**原因随包走**：
+  安装期写进 `state.json.skipped`，`python_runtime` 明说"这台机器上没有 rapier3d，因为没有
+  wheel、物理留在 TS canonical"——**安装时就要确认下来**，不能让缺包看起来像坏包。
 - **工具面**：`run_python`（内联 `code` 或既有 `.py` 脚本、超时、stdout/stderr、完整 traceback）
   与 `python_runtime`（status / provision / repair）。两者随 CAD 预设做可见性过滤，与其余
   CAD 工具同一条纪律。§12.3 的**常驻 worker + JSON-lines 协议仍待做**，届时挂在同一接线点

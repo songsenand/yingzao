@@ -1058,6 +1058,12 @@ Python 领域能力都挂在它上面，换路要重下重装）；第 4 条（�
    （状态/修复）。领域 worker 的 JSON-lines 协议（HARNESS §12.3）随后长在同一接线点上。
 8. **网络可配**：`DSH_CAD_PYTHON_MIRROR`（解释器镜像）、`DSH_CAD_PYTHON_INDEX_URL`
    （pip 索引），官方源 + 国内镜像兜底；`DSH_CAD_PYTHON=off` 关闭自动供给。
+9. **rapier3d 的平台规则（用户拍板，2026-10-08 同日）**：darwin-x64 没有 wheel，
+   **该平台物理继续用 TS 引擎**（`rapier3d-compat` 的 canonical 地位不变），Python 侧
+   不装它；而且**这一条必须在安装期确认并明说**——锁里的
+   `# cad-exclude: darwin-x64 | <原因>` 负责裁剪，`state.json.skipped` 记录，
+   `python_runtime` 报出原因。理由：静默缺包会被读成"库坏了"，而真相是"平台差异 +
+   物理留在 TS"。
 
 **理由：**
 

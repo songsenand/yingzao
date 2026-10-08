@@ -34,7 +34,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractTarGz } from '../src/host/tar-extract.ts';
-import { detectPythonTarget, lockForTarget } from '../src/host/python-runtime.ts';
+import { detectPythonTarget, lockForTarget, lockPlanForTarget } from '../src/host/python-runtime.ts';
 import { PIP_INDEXES, PYTHON_BUILD, REQUIREMENTS_LOCK, REQUIREMENTS_LOCK_SHA256 } from '../src/host/python-lock.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +76,7 @@ const requirementLines = REQUIREMENTS_LOCK.split('\n').filter((line) => line && 
 const pinned = requirementLines.filter((line) => /^[a-z0-9_.-]+==[0-9]/.test(line));
 check(pinned.length === 7, 'seven dependencies are pinned with ==', `${pinned.length} found`);
 check(
-  REQUIREMENTS_LOCK.includes('# cad-exclude-targets: darwin-x64') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
+  REQUIREMENTS_LOCK.includes('# cad-exclude: darwin-x64 |') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
   'rapier3d carries the darwin-x64 exclude directive',
 );
 check(!lockForTarget('darwin-x64').includes('rapier3d'), 'the darwin-x64 lock drops rapier3d (no wheel for that platform)');
@@ -85,6 +85,17 @@ check(
   lockForTarget('darwin-x64').includes('numpy==2.5.3') && lockForTarget('darwin-x64').includes('--hash=sha256:'),
   'dropping one block keeps the rest of the lock intact',
 );
+// The skip must be CONFIRMED, not silent: the platform decision (physics stays
+// on the TS engine there) has to reach the model, not just the pip log.
+const darwinPlan = lockPlanForTarget('darwin-x64');
+check(
+  darwinPlan.skipped.length === 1 &&
+    darwinPlan.skipped[0].name === 'rapier3d' &&
+    /TS .*rapier3d-compat|TS rapier3d-compat/.test(darwinPlan.skipped[0].reason),
+  'the darwin-x64 plan reports rapier3d as skipped, with the TS-canonical reason',
+  darwinPlan.skipped.map((entry) => `${entry.name}: ${entry.reason}`).join(' | '),
+);
+check(lockPlanForTarget('linux-x64-gnu').skipped.length === 0, 'a supported target skips nothing');
 check(
   (REQUIREMENTS_LOCK.match(/--hash=sha256:/g) ?? []).length >= 30,
   'the lock carries per-wheel hashes',
@@ -254,6 +265,7 @@ try {
 
     const status = await pythonRuntimeStatus();
     check(status.state === 'ready', 'status reports ready', status.state);
+    check(status.skipped.length === 0, 'a supported platform reports no skipped packages', `${status.skipped.length} skipped`);
     check(status.occupiedBytes > 100 * 1024 * 1024, 'status reports the real disk footprint', `${(status.occupiedBytes / 1048576).toFixed(0)} MiB`);
 
     // The work this runtime exists to serve: the repository's own independent

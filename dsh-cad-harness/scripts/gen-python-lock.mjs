@@ -63,7 +63,15 @@ const PACKAGES = [
   {
     name: 'rapier3d',
     version: '0.36.1',
-    excludeTargets: ['darwin-x64'],
+    // No darwin-x64 wheel exists. The 2026-10-08 decision is to keep the TS
+    // canonical there instead of building Rust on a user's machine — so the
+    // package is dropped for that target AND the reason travels with it: a
+    // silently missing physics library is how a model concludes "rapier3d is
+    // broken" instead of "this platform uses the TS engine".
+    exclude: {
+      targets: ['darwin-x64'],
+      reason: 'no darwin-x64 wheel — physics canonical stays the TS rapier3d-compat (HARNESS 12.5)',
+    },
   },
 ];
 
@@ -143,7 +151,7 @@ async function packageHashes(pkg) {
     hashes,
     wheelCount: wheels.length,
     platforms,
-    excludeTargets: pkg.excludeTargets ?? [],
+    exclude: pkg.exclude ?? null,
   };
 }
 
@@ -154,12 +162,14 @@ function requirementsText(entries) {
     '# Every wheel that can match CPython 3.13 on a supported platform is listed;',
     '# pip checks only the hash of the file it actually selects.',
     '#',
-    '# `# cad-exclude-targets: <key,...>` drops the block that follows on those',
-    '# lock targets; the host runtime applies it while writing the lock it feeds pip.',
+    '# `# cad-exclude: <target,...> | <reason>` drops the block that follows on those',
+    '# lock targets; the host runtime applies it while writing the lock it feeds pip',
+    '# AND reports the skip, with the reason, in python_runtime status — so a package',
+    '# that is absent by design is never mistaken for one that is broken.',
     '',
   ];
   for (const entry of entries) {
-    if (entry.excludeTargets.length) lines.push(`# cad-exclude-targets: ${entry.excludeTargets.join(', ')}`);
+    if (entry.exclude) lines.push(`# cad-exclude: ${entry.exclude.targets.join(', ')} | ${entry.exclude.reason}`);
     lines.push(`# ${entry.name}==${entry.version}: ${entry.wheelCount} wheels (${entry.platforms.length} platform tags)`);
     lines.push(`${entry.name}==${entry.version} \\`);
     entry.hashes.forEach((hash, index) => {

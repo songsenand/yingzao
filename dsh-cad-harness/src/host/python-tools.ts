@@ -83,7 +83,17 @@ function statusFields(status: PythonRuntimeStatus) {
     error: status.error ?? undefined,
     occupiedBytes: status.occupiedBytes,
     occupied: humanBytes(status.occupiedBytes),
+    skipped: status.skipped.map((entry) => `${entry.name}==${entry.version} (${entry.reason})`),
   };
+}
+
+/**
+ * The one line that keeps a platform-specific omission from reading as a bug.
+ * On darwin-x64 rapier3d is absent by design and physics stays on the TS engine.
+ */
+function skipSummary(status: PythonRuntimeStatus): string | null {
+  if (!status.skipped.length) return null;
+  return `not installed on this platform: ${status.skipped.map((entry) => `${entry.name} — ${entry.reason}`).join('; ')}`;
 }
 
 function renderRunResult(value: RunPythonValue): unknown[] {
@@ -122,6 +132,8 @@ function renderRuntimeStatus(status: PythonRuntimeStatus): string {
   if (status.venvPython) lines.push(`venv python: ${status.venvPython}`);
   if (status.installedAt) lines.push(`installed: ${status.installedAt}`);
   lines.push(`disk: ${humanBytes(status.occupiedBytes)}`);
+  const skip = skipSummary(status);
+  if (skip) lines.push(skip);
   if (status.phase) lines.push(`phase: ${status.phase}`);
   if (status.error) lines.push(`error: ${status.error}`);
   return lines.join('\n');
@@ -145,7 +157,7 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
   register(defineTool({
     name: 'run_python',
     description:
-      'Run Python in the plugin\'s own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d — not the host\'s system interpreter. ' +
+      'Run Python in the plugin\'s own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host\'s system interpreter. ' +
       'Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). ' +
       'Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. ' +
       'The process runs with your user\'s full filesystem access (no sandbox), in the project directory, and is killed at the timeout. ' +
@@ -281,6 +293,11 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
           error: { type: 'string' },
           occupiedBytes: { type: 'integer', required: true },
           occupied: { type: 'string', required: true },
+          skipped: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Packages this platform\'s lock deliberately omits, with the reason (e.g. rapier3d on darwin-x64: no wheel, physics stays on the TS engine).',
+          },
           provisionLog: { type: 'array', items: { type: 'string' } },
           summary: { type: 'string', required: true, description: 'Human-readable rendering of the same facts.' },
         },
@@ -306,11 +323,13 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
           ? await repairPythonRuntime({ onProgress })
           : await ensurePythonRuntime({ onProgress });
         const status = await pythonRuntimeStatus();
+        const skip = skipSummary(status);
         const summary = [
           `Python runtime ${action === 'repair' ? 'repaired' : 'ready'} at ${paths.root}`,
           `python ${paths.pythonVersion} (${paths.source})`,
           `venv: ${paths.venvPython}`,
           `disk: ${humanBytes(status.occupiedBytes)}`,
+          ...(skip ? [skip] : []),
         ].join('\n');
         return {
           action,

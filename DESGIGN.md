@@ -2537,8 +2537,10 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   不是隔离；把它说成沙箱才是真的撒谎。
 - **§12.3 的常驻 worker 尚未实现**：v1 每次调用一个全新进程（无残留状态、超时可靠、
   traceback 干净）。领域 worker（几何/仿真库的常驻进程 + JSON-lines）后续挂在同一接线点旁。
-- **rapier3d 无 darwin-x64 wheel**：该平台用锁里的 `cad-exclude-targets` 指令排除，
-  宁可少一个库也不在用户机上编译 Rust。
+- **rapier3d 无 darwin-x64 wheel → 该平台物理继续用 TS**（用户 2026-10-08 拍板）。
+  锁里 `# cad-exclude: darwin-x64 | <原因>` 裁剪该块，**原因随包走**：写进
+  `state.json.skipped`，由 `python_runtime` 明确报出（"没有 wheel，物理留在 TS canonical"）。
+  这是**安装期确认**，不是静默缺包——静默缺包会让模型把"平台差异"读成"库坏了"。
 - **离线/内网**：可用 `DSH_CAD_PYTHON_INDEX_URL` 指向内网索引；整仓离线镜像（wheelhouse）
   尚未做，需要时再加 `--find-links` 通道。
 

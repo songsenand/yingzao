@@ -66,6 +66,8 @@ export interface PythonRuntimeStatus {
   phase: string | null;
   error: string | null;
   occupiedBytes: number;
+  /** Packages this platform's lock deliberately leaves out, with reasons. */
+  skipped: LockSkip[];
 }
 
 export interface ProvisionOptions {
@@ -88,6 +90,7 @@ interface RuntimeStateFile {
   installedAt: string | null;
   phase: string | null;
   error: string | null;
+  skipped: LockSkip[];
 }
 
 const DEFAULT_PIP_TIMEOUT_MS = 20 * 60 * 1000;
@@ -289,6 +292,7 @@ async function writeState(root: string, patch: Partial<RuntimeStateFile>): Promi
     installedAt: null,
     phase: null,
     error: null,
+    skipped: [],
   };
   const next: RuntimeStateFile = { ...previous, ...patch, protocol: PYTHON_LOCK_PROTOCOL };
   await mkdir(root, { recursive: true });
@@ -341,6 +345,9 @@ export async function pythonRuntimeStatus(): Promise<PythonRuntimeStatus> {
     phase: state?.phase ?? null,
     error: state?.error ?? null,
     occupiedBytes: await directorySize(root),
+    // A warm venv still has to explain what it does not contain, so this comes
+    // from the lock plan rather than only from the recorded install.
+    skipped: state?.skipped ?? lockPlanForTarget(target).skipped,
   };
   if (mode === 'off' || !target) return base;
   if (state?.interpreter && state?.venvPython && existsSync(state.interpreter) && existsSync(state.venvPython)) {
@@ -540,31 +547,65 @@ async function venvIsCurrent(root: string, target: string, source: string): Prom
   }
 }
 
+export interface LockSkip {
+  name: string;
+  version: string;
+  targets: string[];
+  reason: string;
+}
+
+export interface LockPlan {
+  /** The requirements text pip will read. */
+  text: string;
+  /** Packages this target's lock drops, each with the reason it carries. */
+  skipped: LockSkip[];
+}
+
 /**
- * The locked requirements for one target.
+ * Resolve the lock for one target.
  *
- * The lock is a single file so a review sees the whole dependency set, but
- * rapier3d has no darwin-x64 wheel and would fail there. Rather than a PEP 508
- * marker — pip's requirements-file parser rejected that form next to `--hash`
- * continuations, measured 2026-10-08 — a generated comment directive drops the
- * block for a named target. Explicit beats clever: the rule is visible in the
- * lock and testable without pip.
+ * The lock is a single file so a review sees the whole dependency set, but some
+ * packages have no wheel for some platforms — rapier3d has none for darwin-x64.
+ * Rather than a PEP 508 marker (pip's requirements-file parser rejected that
+ * form next to `--hash` continuations, measured 2026-10-08), a generated
+ * directive drops the block AND carries the reason, because the user decision
+ * for that case is "keep the TS engine there", not "physics is unavailable".
+ * A skip that is only visible as a missing import is a skip nobody understands.
  */
-export function lockForTarget(target: string | null): string {
+export function lockPlanForTarget(target: string | null): LockPlan {
   const out: string[] = [];
+  const skipped: LockSkip[] = [];
+  let pending: { targets: string[]; reason: string } | null = null;
   let dropping = false;
   for (const line of REQUIREMENTS_LOCK.split('\n')) {
-    const directive = /^#\s*cad-exclude-targets:\s*(.+)$/.exec(line.trim());
+    const directive = /^#\s*cad-exclude:\s*([^|]+)\|\s*(.+)$/.exec(line.trim());
     if (directive) {
-      dropping = directive[1]!.split(',').map((part) => part.trim()).includes(target ?? '');
-      if (dropping) continue;
-    } else if (dropping) {
-      if (line.trim() === '') dropping = false;
+      pending = {
+        targets: directive[1]!.split(',').map((part) => part.trim()).filter(Boolean),
+        reason: directive[2]!.trim(),
+      };
+      dropping = pending.targets.includes(target ?? '');
+      continue;
+    }
+    if (dropping) {
+      const requirement = /^([A-Za-z0-9_.-]+)==([^\s\\]+)/.exec(line.trim());
+      if (requirement && pending && !skipped.some((entry) => entry.name === requirement[1])) {
+        skipped.push({ name: requirement[1]!, version: requirement[2]!, targets: pending.targets, reason: pending.reason });
+      }
+      if (line.trim() === '') {
+        dropping = false;
+        pending = null;
+      }
       continue;
     }
     out.push(line);
   }
-  return out.join('\n');
+  return { text: out.join('\n'), skipped };
+}
+
+/** Convenience: the requirements text for one target. */
+export function lockForTarget(target: string | null): string {
+  return lockPlanForTarget(target).text;
 }
 
 async function installDependencies(
@@ -573,9 +614,13 @@ async function installDependencies(
   target: string | null,
   onProgress: (message: string) => void,
   timeoutMs: number,
-): Promise<string> {
+): Promise<{ index: string; skipped: LockSkip[] }> {
+  const plan = lockPlanForTarget(target);
   const lockPath = join(root, 'requirements.lock');
-  await writeFile(lockPath, lockForTarget(target));
+  await writeFile(lockPath, plan.text);
+  for (const skip of plan.skipped) {
+    onProgress(`not installed on ${target}: ${skip.name}==${skip.version} — ${skip.reason}`);
+  }
 
   const override = envValue('DSH_CAD_PYTHON_INDEX_URL');
   const indexes = override ? [override] : [...PIP_INDEXES];
@@ -602,7 +647,7 @@ async function installDependencies(
         },
       },
     );
-    if (result.code === 0) return index;
+    if (result.code === 0) return { index, skipped: plan.skipped };
     const reason = result.timedOut
       ? `timed out after ${Math.round(timeoutMs / 60000)} min`
       : (result.stderr.trim().split('\n').slice(-3).join(' | ') || `exit ${result.code}`);
@@ -703,6 +748,9 @@ async function prepareVenv(
 ): Promise<PythonRuntimePaths> {
   const venvPython = venvPythonPath(root);
   const current = !options.force && (await venvIsCurrent(root, target, source)) && existsSync(venvPython);
+  // The lock plan is what "installed on this platform" means; on a warm venv it
+  // still has to be reported, so the skip list survives a no-op provisioning.
+  let skipped: LockSkip[] = lockPlanForTarget(target).skipped;
 
   if (!current) {
     await writeState(root, { phase: 'venv', error: null, target, source, interpreter });
@@ -715,7 +763,7 @@ async function prepareVenv(
     if (created.code !== 0) {
       throw new Error(`python -m venv failed: ${created.stderr.trim().split('\n').slice(-3).join(' | ')}`);
     }
-    const installedVia = await installDependencies(
+    const installed = await installDependencies(
       venvPython,
       root,
       target,
@@ -731,7 +779,10 @@ async function prepareVenv(
       createdAt: new Date().toISOString(),
     };
     await writeFile(markerPath(root), `${JSON.stringify(marker, null, 2)}\n`);
-    progress(`dependencies installed via ${new URL(installedVia).host}`);
+    progress(`dependencies installed via ${new URL(installed.index).host}`);
+    if (installed.skipped.length) {
+      skipped = installed.skipped;
+    }
   }
 
   const state = await writeState(root, {
@@ -741,6 +792,7 @@ async function prepareVenv(
     source,
     interpreter,
     venvPython,
+    skipped,
     installedAt: new Date().toISOString(),
   });
   return {
