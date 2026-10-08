@@ -1,0 +1,148 @@
+# 实验报告：`simulate_fluid` 厚壁下符号判据失效（SDF 的 inside 投票）
+
+## 目标
+> 坐实一个已经在两处影响判分的插件侧问题：
+> ① `00-smoke` 那轮记录过"厚壁件下到达率从 0.93 掉到 0.097"；
+> ② `02-steam-engine` 首轮的 `c-fluid-arrival` FAIL（到达率 0.3554，判据要求 >0.6）。
+>
+> 要回答的是：**这到底是模型的短板，还是插件的缺陷？** 以及缺陷的确切机制与范围。
+
+## 假设
+> 原记录的机制是"种子大面积落进实体壁内"。按代码读，`seedPositions`
+> （`src/host/fluid.ts:89`）只按 `sdfAt(...) < WALL_CLEARANCE_MM(0.75)` 拒绝，
+> 而 `deriveFluidPreset`（同文件 `:343`）的横截面区域是按**包围盒**内缩
+> `1.5 * dxMm` 推的、不是按腔体推的。假设：厚壁 ⇒ 区域远大于腔体 ⇒
+> 种子落进壁内 ⇒ 到达率塌。
+
+## 方法
+用插件自己的编译入口造**同内腔（Ø30）、不同壁厚**的直管，走与工具完全相同的路径
+（`compileStlOnly` → `deriveFluidPreset` → `runFluid`），对比：
+
+- 区域截面 vs 腔体截面；
+- 接受/拒绝的种子数，以及落在 `solidMask` 里的比例；
+- `outletArrivalRatio` / `penetrationCount` / `stepsRun` / `diverged`；
+- 显式把区域设成腔体大小、把种子推离壁面、把网格加密，做变量隔离；
+- 最后在已知点上同时打印 `sdfAt` 与 `solidMask`，直接查符号。
+
+夹具：`difference(){ rotate([0,90,0]) cylinder(h=100,d=OD); rotate([0,90,0]) cylinder(h=110,d=30); }`，
+`$fn=64`。全部脚本为一次性复现用，已删除。
+
+## 结果
+
+### 1. 区域确实是按包围盒推的，不是按腔体
+| 外径 | 壁厚 | 默认区域截面 | 区域/腔体 面积比 |
+|---|---|---|---|
+| Ø34 | 2mm | 28 × 28 | 1.11× |
+| Ø60 | 15mm | 54 × 54 | **4.13×** |
+| Ø100 | 35mm | 94 × 94 | 12.5× |
+
+区域越大，被浪费的格点越多，**接受种子数随外径从 9823 涨到 29735**——而流道截面
+一寸没变。
+
+### 2. 同一内腔、同一区域、同一粒子数，**只改外径**就改变答案
+| 外径 | 壁厚 | 到达率 | 穿透 |
+|---|---|---|---|
+| Ø34 | 2mm | **0.7568** | **0** |
+| Ø60 | 15mm | **0.443** | 970 |
+| Ø100 | 35mm | 0.4663 | 1964 |
+
+**没建模为流体的那层金属，改变了流体的答案。**
+
+### 3. 变量隔离
+- **把区域显式设成腔体大小**（半径 14）：Ø60 反而更差（0.6458 → **0.443**，穿透 970）。
+  ⇒ "区域太大"不是主因。
+- **把种子推离壁面**（Ø60，离壁 1→5mm）：到达 0.443 → 0.554，穿透 970 → 376。
+  ⇒ 近壁种子是**贡献者之一**，但远不是全部。
+- **网格加密**（dxMm 2→1）：穿透 970 → 423，到达 0.443 → 0.504。有改善，仍不恢复。
+
+### 4. 根因：`solidMask` 在厚实体里是**反的**
+在已知点上直接采样（Ø60 内腔半径 15、外半径 30）：
+
+| 采样点 | Ø34（壁厚 2mm） | Ø60（壁厚 15mm） |
+|---|---|---|
+| 腔心 | sdf 13.57 · mask **0** ✓ | sdf 14.98 · mask **0** ✓ |
+| 腔壁旁 y=14 | sdf 0.95 · mask 0 ✓ | sdf 1.00 · mask 0 ✓ |
+| **壁内** | sdf −0.00 · mask **1** ✓ | **sdf +6.75 · mask 0 ✗** |
+| **件外空气** | sdf 0.05 · mask 0 ✓ | **sdf 0.00 · mask 1 ✗** |
+
+`src/host/sdf.ts:106-113` 用**三向奇偶投票**定符号：
+
+```js
+let inside = 0;
+for (const ray of rays) { ray.origin.copy(point); if (bvh.raycast(ray, DoubleSide).length % 2 === 1) inside++; }
+const sign = inside >= 2 ? -1 : 1;
+```
+
+厚壁下这个投票给出**相反**的结论：壁内被判为"流体"（还带着 +6.75mm 的"间隙"），
+件外空气被判为"实体"。薄壁（2mm < 一个网格 2mm）反而因欠分辨读到 ≈0 而侥幸落在
+正确一侧——**所以这个 bug 只在壁厚超过约一个网格时才显形**，正是"厚壁件"。
+
+### 5. 影响面（两个下游）
+- **`seedPositions`**（`fluid.ts:109`）只查 `sdfAt < 0.75`，**从不查 `solidMask`**。
+  壁内点的 sdf 是 +6.75 ⇒ **通过检查、被种成粒子**。
+  （用**已经反了的** mask 去数，仍数到 1.7%–7.9% 的接受种子落在"实体"格里；
+  真实比例更高，因为 mask 本身把壁内标成了 0。）
+- **求解器**：`fluid.ts:158` 把 `solidMask: sdf.solidMask` 交给 MPM 世界配置。
+  mask 反了 ⇒ **金属被当流体、空腔外被当固体**，边界条件整体错位。
+  这解释了穿透计数（970 / 1964）与到达率塌陷。
+
+## 分析
+- **原记录的机制方向是对的**（种子落进壁内），但**量级（0.93→0.097）没复现**：
+  我实测最差 0.7568 → 0.443。而且真因不在"区域按包围盒推"，
+  而在**符号判据本身**——区域只是放大了暴露面。
+- **`c-fluid-arrival > 0.6` 目前不是一个公平的判据**：一根普通直管（Ø30 内腔）
+  仅因外面那层金属的厚度就能得 0.44–0.79。所以 `02` 那条 FAIL **不能归给模型**。
+- 修复方向（插件侧，三条）：
+  1. **符号判据换成稳健的包含性测试**（单向奇偶、或 three-mesh-bvh 的包含性测试），
+     并对"厚实体"加一条回归钉子；
+  2. **`seedPositions` 查 `solidMask`**，不要只信距离——距离场在实体内部两侧都是正的，
+     单靠阈值无法区分"腔内离壁 0.75mm"与"壁内离表面 6.75mm"；
+  3. **种子区域按腔体推，不按包围盒推**（或至少把区域/腔体面积比与落在实体里的
+     种子比例**写进报告**，让调用方看得见自己仿真了什么）。
+- 另有一条独立的敏感性问题：同一区域、同一内腔，仅因**网格对齐**不同（外径不同 ⇒
+  网格格数不同 ⇒ 格点相位不同），到达率就差 0.32。种子相位敏感性本身也值得记录。
+
+## 遇到的问题
+1. 第一版零穿越探针判错了语义（以为 sdf 在固体内为负，且遇负即停），
+   得到自相矛盾的结果（Ø34/Ø50 找得到、Ø40/Ø60 找不到）。改为**打印原始剖面**
+   才看清 sdf 是"到表面的距离"、两侧同号，符号只由 mask 承担。
+2. 用 mask 统计"落在实体里的种子"时，用的正是**已经反了的** mask，
+   所以那个比例是**下界**，不能当作真实值引用。
+
+## 产物列表
+本次为纯调查，**未改动任何插件代码**。复现所需的一切都在这份报告里：
+
+**代码与脚本（一次性，已删）：**
+- 造管 + `deriveFluidPreset` + `runFluid` 的对比脚本
+- 显式区域 / 推离壁面 / 加密网格 的隔离脚本
+- 已知点 `sdfAt` + `solidMask` 采样脚本
+
+**数据：** 无外部数据；夹具由 OpenSCAD 现场生成（`$fn=64`）。
+
+**运行命令（复现骨架）：**
+```js
+import { compileStlOnly } from './dsh-cad-harness/src/host/compile.ts';
+import { deriveFluidPreset, runFluid } from './dsh-cad-harness/src/host/fluid.ts';
+import { sdfAt } from './dsh-cad-harness/src/host/sdf.ts';
+const stl = (await compileStlOnly(`$fn=64; difference(){
+  rotate([0,90,0]) cylinder(h=100,d=60,center=true);
+  rotate([0,90,0]) cylinder(h=110,d=30,center=true); }`)).stl;
+const p = deriveFluidPreset(stl, 2, 100);
+const { report, sdf } = await runFluid({ pipeStl: stl, gridCells: p.gridCells,
+  gridOriginMm: p.gridOriginMm, dxMm: p.dxMm, fluidRegionMm: p.fluidRegionMm,
+  inlet: { axis: p.axis, bandMm: p.inletBandMm, velocityMmPerSec: 100 },
+  outletPlaneMm: p.outletPlaneMm, particlesPerCell: 6, steps: p.steps, snapshotCount: 2 });
+console.log(report.metrics.outletArrivalRatio, report.metrics.penetrationCount);
+console.log(sdfAt(sdf, 0, 22.5, 0), sdf.solidMask[/* 该点所在格 */]);  // 期望 sdf<0、mask=1
+```
+
+**环境依赖：** Node v26.10.0（原生 TS 剥离）；OpenSCAD 2021.01（`compileStlOnly` 内部调用）。
+
+## 结论与下一步
+- **结论：这是插件缺陷，不是模型短板。** `sdf.ts` 的三向奇偶投票在壁厚超过约一个
+  网格时给出相反符号，`solidMask` 因此把金属当流体、把空腔外当固体；
+  `seedPositions` 又不查 mask，于是粒子被种进金属。
+- **对评测的影响**：`02` 的 `c-fluid-arrival` FAIL 应记为**仪器问题**；
+  在修复之前，该条判据（>0.6）不应用于评价模型。
+- **下一步**：按上面三条修插件 → 加"厚壁符号"回归钉子（放进 `accept-*` 与
+  `00-smoke`）→ 再重跑 `02` 的流体那一步。
