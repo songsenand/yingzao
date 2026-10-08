@@ -2532,6 +2532,14 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   worker **单线程串行**（两个并发请求 = 串行和，实测 116 ms → 230 ms）——宿主必须把排队
   算进超时预算。验收 `scripts/accept-python-worker.mjs`：最近点结果与 TS 的 three-mesh-bvh
   **Δ=0**，kill 后能重启。
+- **第一个迁移的工具：`measure_closest`（2026-10-08）。** 求解在 worker 的
+  `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与
+  标注渲染（渲染与附件是 ① 平台接线，不迁）。TS 的最近点实现保留为 **parity oracle**，
+  由 `scripts/accept-measure-closest.mjs` 驱动：三组真实网格距离 **Δ=0**，解析真值
+  （1 mm 间隙、4 mm 球间隙、吞面报 0）也命中。**耗时 1.02×–8.91×**（剪枝前最坏 107×）。
+  **行为上唯一的放松**：多个点并列取得最小值时返回其中任意一对（旧实现返回扫描序第一个）；
+  最小值唯一时点对完全一致。`measure_closest` 因此需要一个可用的运行时——`DSH_CAD_PYTHON=off`
+  会让它明确失败，而不是悄悄退回 TS。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

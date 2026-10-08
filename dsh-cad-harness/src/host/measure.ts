@@ -5,6 +5,14 @@
 // M2 clearance). Reports the exact distance, the snapped coordinates, how far
 // the raw input was from the surface (guess quality), and whether each input
 // point was inside the solid (face-normal sign test).
+//
+// PARITY ORACLE (2026-10-08): `closestPointsBetweenMeshes` / `closestMeshVsSphere`
+// are no longer the production path for `measure_closest` — that solve moved to
+// the Python worker (`python/cad_worker/worker.py`). They stay here because
+// `scripts/accept-measure-closest.mjs` compares the Python answer against them on
+// real meshes, which is what makes "the numbers did not change" checkable instead
+// of merely asserted. `measureDistance` and `buildMeshBvh` below are still live
+// for `measure_distance`.
 
 import { BufferAttribute, BufferGeometry, Vector3 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';

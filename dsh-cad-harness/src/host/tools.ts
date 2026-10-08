@@ -24,7 +24,8 @@ import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { registerPythonTools } from './python-tools.ts';
-import { measureDistance, closestPointsBetweenMeshes, closestPointsMeshVsSphere, buildMeshBvh, type MeshData } from './measure.ts';
+import { ensurePythonWorker } from './python-worker.ts';
+import { measureDistance, buildMeshBvh, type MeshData } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
   deriveNameFromFile, importGeometry, normalizeDatums, type DatumInput, type Unit,
@@ -92,6 +93,24 @@ let assemblyRefsForFinalize: { refs: { view: string; ref: unknown }[]; views: nu
 const registeredCadTools: string[] = [];
 
 /** Names of every CAD tool registered so far, in registration order. */
+/** Payloads of the worker's closest-point ops (`python/cad_worker/worker.py`). */
+interface MeshMeshSolve {
+  distanceMm: number;
+  pointA: [number, number, number];
+  pointB: [number, number, number];
+  method: string;
+  watertightA: boolean;
+  watertightB: boolean;
+}
+interface MeshSphereSolve {
+  distanceMm: number;
+  meshPoint: [number, number, number];
+  spherePoint: [number, number, number];
+  method: string;
+  intersected: boolean;
+  watertight: boolean;
+}
+
 export function cadToolNames(): readonly string[] {
   return registeredCadTools;
 }
@@ -2225,6 +2244,14 @@ export function registerCadTools(
   }));
 
   // --- measure_closest: solved closest-point pair between two solids (no coordinates from the model) ---
+  //
+  // The SOLVE is Python's (DECISION-LOG 2026-10-08: 能迁就迁 + rtree in the lock).
+  // The worker op reproduces the TS reference method exactly — every stride-th
+  // vertex of A projected onto B and vice versa, minimum wins — so the numbers are
+  // unchanged (parity asserted in scripts/accept-measure-closest.mjs against the
+  // TS implementation, which stays in measure.ts as the oracle). What stays here
+  // is wiring: schema, version→path resolution, the warning text, and the
+  // annotated render (OpenSCAD + ctx.attachments are ① platform services).
   registerTool(defineTool({
     name: 'measure_closest',
     description:
@@ -2274,37 +2301,53 @@ export function registerCadTools(
         bSphere?: { center: number[]; radius: number };
       };
       const { store } = await allStores(exec);
-      const loadMesh = async (v: string): Promise<MeshData> => {
-        const bytes = await readFile(join(store.root, 'versions', v, 'model.stl'));
-        return parseBinaryStl(new Uint8Array(bytes));
-      };
       const exactlyOne = (x?: unknown, y?: unknown) => (x ? 1 : 0) + (y ? 1 : 0) === 1;
       if (!exactlyOne(a.aVersionId, a.aSphere)) throw new Error('specify exactly one of aVersionId / aSphere');
       if (!exactlyOne(a.bVersionId, a.bSphere)) throw new Error('specify exactly one of bVersionId / bSphere');
+      if (a.aSphere && a.bSphere) throw new Error('sphere-vs-sphere: subtract the centres yourself — distance is analytic');
 
-      // solve
-      let distanceMm: number, pointA: [number, number, number], pointB: [number, number, number], method: string;
+      const versionStl = (id: string) => join(store.root, 'versions', id, 'model.stl');
+
+      // solve (Python worker; the meshes travel as PATHS — no copying at all)
+      let distanceMm: number;
+      let pointA: [number, number, number];
+      let pointB: [number, number, number];
+      let method: string;
       const wtWarnings: string[] = [];
-      const checkWt = async (v: string, label: string) => {
-        const m = parseBinaryStl(new Uint8Array(await readFile(join(store.root, 'versions', v, 'model.stl'))));
-        if (!isWatertight(m).watertight) {
+      const warnIfOpen = (v: string, label: string, watertight: boolean) => {
+        if (!watertight) {
           wtWarnings.push(`part ${label} (${v}) is NOT watertight — a closest-point pair on an open surface is not a clearance between solids (microscope3: this exact tool reported a fake 0.05mm margin on a broken mesh)`);
         }
       };
-      if (a.aVersionId) await checkWt(a.aVersionId, 'a');
-      if (a.bVersionId) await checkWt(a.bVersionId, 'b');
-      if (a.aSphere && a.bSphere) throw new Error('sphere-vs-sphere: subtract the centres yourself — distance is analytic');
+      const worker = await ensurePythonWorker();
       if (a.aSphere && a.bVersionId) {
-        ({ distanceMm, pointA, pointB } = closestPointsMeshVsSphere(await loadMesh(a.bVersionId), a.aSphere.center as [number, number, number], a.aSphere.radius));
-        [pointA, pointB] = [pointB, pointA]; // sphere branch returns mesh point first
-        method = 'sphere-analytic';
+        const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
+          mesh: versionStl(a.bVersionId), center: a.aSphere.center, radius: a.aSphere.radius,
+        });
+        distanceMm = solved.distanceMm;
+        pointA = solved.spherePoint;
+        pointB = solved.meshPoint;
+        method = solved.method;
+        warnIfOpen(a.bVersionId, 'b', solved.watertight);
       } else if (a.bSphere && a.aVersionId) {
-        ({ distanceMm, pointA, pointB } = closestPointsMeshVsSphere(await loadMesh(a.aVersionId), a.bSphere.center as [number, number, number], a.bSphere.radius));
-        method = 'sphere-analytic';
+        const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
+          mesh: versionStl(a.aVersionId), center: a.bSphere.center, radius: a.bSphere.radius,
+        });
+        distanceMm = solved.distanceMm;
+        pointA = solved.meshPoint;
+        pointB = solved.spherePoint;
+        method = solved.method;
+        warnIfOpen(a.aVersionId, 'a', solved.watertight);
       } else {
-        const [ma, mb] = await Promise.all([loadMesh(a.aVersionId!), loadMesh(a.bVersionId!)]);
-        ({ distanceMm, pointA, pointB } = closestPointsBetweenMeshes(ma, mb));
-        method = 'mesh-vertex-exact';
+        const solved = await worker.request<MeshMeshSolve>('closest_mesh_mesh', {
+          meshA: versionStl(a.aVersionId!), meshB: versionStl(a.bVersionId!),
+        });
+        distanceMm = solved.distanceMm;
+        pointA = solved.pointA;
+        pointB = solved.pointB;
+        method = solved.method;
+        warnIfOpen(a.aVersionId!, 'a', solved.watertightA);
+        warnIfOpen(a.bVersionId!, 'b', solved.watertightB);
       }
 
       // annotated render: parts + marker spheres + connector

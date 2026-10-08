@@ -31,6 +31,8 @@ drives:
     versions        versions of the pinned packages that actually import here
     stl_stats       parse a binary STL (path in) and summarise it
     closest_points  exact closest-point-on-surface; points in by file, out by file
+    closest_mesh_mesh    solved closest pair between two solids (measure_closest)
+    closest_mesh_sphere  solved closest pair between a solid and an analytic sphere
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -43,6 +45,7 @@ needed it belongs in a worker pool, decided with data.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 import time
@@ -52,7 +55,21 @@ PROTOCOL_VERSION = 1
 
 # Ops are imported lazily: `ping` must stay cheap, and a missing optional library
 # should break one op, not the worker.
-OPS = ["ping", "versions", "stl_stats", "closest_points", "crash"]
+OPS = [
+    "ping",
+    "versions",
+    "stl_stats",
+    "closest_points",
+    "closest_mesh_mesh",
+    "closest_mesh_sphere",
+    "crash",
+]
+
+# The reference implementation samples at most ~20k vertices per side and projects
+# each exactly onto the other solid (src/host/measure.ts). The same rule is used
+# here so the two answers can be compared directly, and the parity script asserts
+# they are equal.
+MAX_QUERY_POINTS = 20000
 
 
 def _send(frame: dict) -> None:
@@ -138,11 +155,161 @@ def op_crash(_params: dict) -> dict:
     raise ValueError("intentional failure for traceback passthrough")
 
 
+def _load(path: str):
+    import trimesh
+
+    return trimesh.load(path, process=True)
+
+
+def _aabb_lower_bound(points, target):
+    """Rigorous lower bound on the distance from each point to the target surface.
+
+    The surface is inside the bounding box, so the distance to the box can never
+    exceed the distance to the surface. That is what makes the pruning below
+    sound rather than an approximation.
+    """
+    import numpy as np
+
+    bounds = np.asarray(target.bounds, dtype=float)
+    gap = np.maximum(0.0, np.maximum(bounds[0] - points, points - bounds[1]))
+    return np.linalg.norm(gap, axis=1)
+
+
+def _project(target, points):
+    import numpy as np
+    import trimesh
+
+    closest, distance, _ = trimesh.proximity.ProximityQuery(target).on_surface(points)
+    return np.asarray(closest, dtype=float), np.asarray(distance, dtype=float)
+
+
+def _closest_side(vertices, target, seed_count: int = 64, chunk: int = 2048) -> dict:
+    """Closest pair between one vertex set and a target solid (branch and bound).
+
+    WHY NOT A PLAIN FULL SCAN (measured 2026-10-08): `trimesh`'s candidate search
+    widens with the query distance, so points far from the target cost ~0.45 ms
+    each. 底座 ↔ 上半机 took **15 s** against the TS reference's 141 ms purely
+    because most of 上半机's vertices are ~150 mm away from 底座. Pruning by the
+    bounding-box lower bound skips every point that cannot win, and a seed taken
+    from the points nearest the box gives the bound something to bite on.
+
+    The answer is the same as a full scan by construction: a point whose lower
+    bound already exceeds the best exact distance found cannot be the minimum.
+    When several points tie exactly, any of them is returned (the TS reference
+    keeps the first in scan order; that tie-break is not reproduced).
+    """
+    import numpy as np
+
+    points = np.asarray(vertices, dtype=float)
+    stride = max(1, int(math.ceil(len(points) / MAX_QUERY_POINTS)))
+    sampled = points[::stride]
+    lower = _aabb_lower_bound(sampled, target)
+    order = np.argsort(lower, kind="stable")
+
+    state = {"value": float("inf"), "query": (0.0, 0.0, 0.0), "hit": (0.0, 0.0, 0.0), "queries": 0}
+
+    def consider(indices) -> None:
+        if len(indices) == 0:
+            return
+        closest, distance = _project(target, sampled[indices])
+        state["queries"] += len(indices)
+        index = int(np.argmin(distance))
+        value = float(distance[index])
+        if value < state["value"]:
+            state["value"] = value
+            state["query"] = tuple(float(x) for x in sampled[indices][index])
+            state["hit"] = tuple(float(x) for x in closest[index])
+
+    consider(order[:seed_count])
+    cursor = seed_count
+    while cursor < len(order):
+        remaining = order[cursor:]
+        candidates = remaining[lower[remaining] < state["value"]]
+        if len(candidates) == 0:
+            break
+        consider(candidates[:chunk])
+        cursor += chunk
+    return state
+
+
+def _closest_between_meshes(mesh_a, mesh_b) -> dict:
+    """Solved closest pair between two solids.
+
+    Same method as the TS reference (src/host/measure.ts): up to ~20k vertices per
+    side projected exactly onto the other solid, global minimum wins; `pointA`
+    always belongs to A's surface, `pointB` to B's. Ties across the two scan
+    directions resolve to the A side, exactly like the reference.
+    """
+    side_a = _closest_side(mesh_a.vertices, mesh_b)
+    side_b = _closest_side(mesh_b.vertices, mesh_a)
+    if side_a["value"] <= side_b["value"]:
+        point_a, point_b, value = side_a["query"], side_a["hit"], side_a["value"]
+    else:
+        point_a, point_b, value = side_b["hit"], side_b["query"], side_b["value"]
+    return {
+        "distanceMm": round(value, 4),
+        "pointA": list(point_a),
+        "pointB": list(point_b),
+        "method": "mesh-vertex-exact",
+        "queries": side_a["queries"] + side_b["queries"],
+        "queriesWithoutPruning": min(len(mesh_a.vertices), MAX_QUERY_POINTS) + min(len(mesh_b.vertices), MAX_QUERY_POINTS),
+    }
+
+
+def op_closest_mesh_mesh(params: dict) -> dict:
+    mesh_a = _load(params["meshA"])
+    mesh_b = _load(params["meshB"])
+    result = _closest_between_meshes(mesh_a, mesh_b)
+    result["watertightA"] = bool(mesh_a.is_watertight)
+    result["watertightB"] = bool(mesh_b.is_watertight)
+    return result
+
+
+def op_closest_mesh_sphere(params: dict) -> dict:
+    """Exact distance between a solid and an analytic sphere.
+
+    One exact projection of the sphere centre; the sphere-side point lies on the
+    centre→hit direction. An intersecting sphere reports 0 and collapses both
+    points onto the hit, exactly like the TS reference.
+    """
+    import numpy as np
+    import trimesh
+
+    mesh = _load(params["mesh"])
+    center = np.asarray(params["center"], dtype=float).reshape(3)
+    radius = float(params["radius"])
+    closest, _distance, _ = trimesh.proximity.ProximityQuery(mesh).on_surface(center.reshape(1, 3))
+    hit = np.asarray(closest[0], dtype=float)
+    direction = hit - center
+    center_distance = float(np.linalg.norm(direction))
+    if center_distance <= radius:
+        return {
+            "distanceMm": 0,
+            "meshPoint": [float(x) for x in hit],
+            "spherePoint": [float(x) for x in hit],
+            "method": "sphere-analytic",
+            "intersected": True,
+            "watertight": bool(mesh.is_watertight),
+        }
+    unit = direction / center_distance
+    sphere_point = center + unit * radius
+    return {
+        "distanceMm": round(center_distance - radius, 4),
+        "meshPoint": [float(x) for x in hit],
+        "spherePoint": [float(x) for x in sphere_point],
+        "method": "sphere-analytic",
+        "intersected": False,
+        "watertight": bool(mesh.is_watertight),
+    }
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
     "stl_stats": op_stl_stats,
     "closest_points": op_closest_points,
+    "closest_mesh_mesh": op_closest_mesh_mesh,
+    "closest_mesh_sphere": op_closest_mesh_sphere,
     "crash": op_crash,
 }
 

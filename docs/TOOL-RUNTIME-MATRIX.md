@@ -49,7 +49,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 9 | `check_printability` | 壁厚/悬垂（可顺带从采样升级为精确） | schema | **P** | 精度是附带收益 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
 | 11 | `measure_distance` | 点/球距离 | schema | **P** | 依赖 batch 0（否则冷启动负收益） |
-| 12 | `measure_closest` | 最近点/最小间隙 | schema | **P** | 已实测：加 `rtree` 后 0.61 ms/点（TS 的 three-mesh-bvh 是 0.02 ms/点，慢 30×）**但精度完全一致（Δ=0 mm）**，200 点 122 ms 可接受 ⇒ 可迁；代价是锁里加 `rtree 1.4.1`（七平台全有 py3 wheel，无需编译器） |
+| 12 | `measure_closest` | 最近点/最小间隙 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | 求解在 `worker.py` 的 `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与标注渲染。**parity：距离与 TS 逐位一致（Δ=0）**，解析真值也对（1 mm 间隙测成 1 mm、球探针 4 mm 间隙、吞掉顶面的球报 0 而非负间隙）。耗时 **1.02×–8.91×**（三个真实用例：101→103 ms、124→465 ms、17→147 ms）；剪枝前最坏 **107×**（15.0 s，因为 trimesh 对远离目标的查询点代价高），改用包围盒下界做分支定界后降到 **3.7×** |
 | 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
 | 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
@@ -135,7 +135,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | 批次 | 内容 | 为什么排这个位置 |
 |---|---|---|
 | **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
-| 1 | **Python 更快的那些**：`merge_parts`/`validate_assembly`（Manifold 3×）、`check_connectivity`（1.7×）、STL 解析零拷贝、`measure_closest`（`rtree` 已进锁） | 数据支持"迁了更好" |
+| 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅ 已迁移（2026-10-08）、`merge_parts`/`validate_assembly`（Manifold 3×）、`check_connectivity`（1.7×）、STL 解析零拷贝 | 数据支持"迁了更好"；`measure_closest` 是第一个，parity 与解析真值都过 |
 | 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 | 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |
