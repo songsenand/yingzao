@@ -9,14 +9,28 @@
 //   solidMask   (per-cell 0/1)
 //   solidNormal (dominant axis code 0 = none, 1..6 = -x,+x,-y,+y,-z,+z)
 //
-// Sign is decided by ray-parity majority over three axis rays (watertight
-// mesh assumed — Manifold merge() runs first); distance comes from the
-// three-mesh-bvh closest-point query (same dependency M2 uses for clearance).
+// Sign is decided by ray-parity majority over three DIVERSE, non-axis-aligned
+// rays with coincident hits deduped (watertight mesh assumed — Manifold merge()
+// runs first); distance comes from the three-mesh-bvh closest-point query (same
+// dependency M2 uses for clearance).
 
 import { BufferAttribute, BufferGeometry, DoubleSide, Ray, Vector3 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import ManifoldModule from 'manifold-3d';
 import { parseBinaryStl } from './mesh.ts';
+
+/**
+ * Directions for the sign probe. Deliberately **not** axis-aligned and not
+ * coplanar: axis-aligned rays travel along the grid planes, where a mesh's
+ * radial seams also live, so a ray can exit exactly through a shared edge and
+ * have one crossing counted twice (measured: a point 7.5mm inside a 15mm wall
+ * read as fluid). See the parity note in `buildSdfFromStl`.
+ */
+const SIGN_RAYS = [
+  new Vector3(0.5773502692, 0.5773502692, 0.5773502692),
+  new Vector3(0.7071067812, -0.7071067812, 0),
+  new Vector3(0.2672612419, 0.5345224838, 0.8017837257),
+];
 
 export interface SdfField {
   /** Grid resolution in cells per axis. */
@@ -84,13 +98,9 @@ export async function buildSdfFromStl(
   const sdf = new Float32Array(total);
   const solidMask = new Uint8Array(total);
 
-  // ray units (directions) and scratch vectors — allocated once
+  // ray used for the sign probe; directions live in SIGN_RAYS
   const point = new Vector3();
-  const rays = [
-    new Ray(new Vector3(), new Vector3(1, 0, 0)),
-    new Ray(new Vector3(), new Vector3(0, 1, 0)),
-    new Ray(new Vector3(), new Vector3(0, 0, 1)),
-  ];
+  const ray = new Ray(new Vector3(), new Vector3(1, 0, 0));
 
   for (let ix = 0; ix < nx; ix++) {
     const wx = ox + ix * dx;
@@ -103,12 +113,31 @@ export async function buildSdfFromStl(
 
         const dist = bvh.closestPointToPoint(point)?.distance ?? 0;
 
-        // parity vote: odd crossings = inside solid
+        // Sign by ray parity over three DIVERSE, non-axis-aligned directions.
+        //
+        // Two traps this avoids — both measured on a Ø60/Ø30 annulus (2026-10-08),
+        // where the stock axis-ray vote called a point 7.5mm INSIDE a 15mm wall
+        // "fluid" (sdf +6.75, solidMask 0) and a point outside the part "solid":
+        //   * axis-aligned rays run along the grid planes, and a cap's radial
+        //     seam lies in those very planes — a ray exiting through a shared
+        //     edge hits BOTH triangles, so one crossing counts twice and the
+        //     parity flips;
+        //   * three axis rays leave no tie-breaker when one is degenerate.
+        // Coincident hits (same distance) are therefore deduped to one crossing.
         let inside = 0;
-        for (const ray of rays) {
+        for (const dir of SIGN_RAYS) {
           ray.origin.copy(point);
+          ray.direction.copy(dir);
           const hits = bvh.raycast(ray, DoubleSide);
-          if (hits.length % 2 === 1) inside++;
+          let crossings = 0;
+          let last = -Infinity;
+          for (const d of hits.map((h) => h.distance).sort((a, b) => a - b)) {
+            if (d - last > 1e-6) {
+              crossings++;
+              last = d;
+            }
+          }
+          if (crossings % 2 === 1) inside++;
         }
         const sign = inside >= 2 ? -1 : 1;
         sdf[cell] = sign * dist;
@@ -166,6 +195,25 @@ export async function buildSdfFromStl(
     solidNormal,
     stats: { cells: total, solidCells, boundaryCells, minSdf, maxSdf, buildMs: performance.now() - t0 },
   };
+}
+
+/**
+ * Nearest-cell solid lookup (1 = solid material, 0 = fluid/void).
+ *
+ * A 0/1 mask cannot be interpolated, so this snaps to the containing cell.
+ * Callers MUST use it alongside {@link sdfAt}: the SDF stores the distance to
+ * the nearest surface and is therefore POSITIVE ON BOTH SIDES of a wall, so a
+ * distance threshold alone cannot tell "0.75mm of clearance inside the cavity"
+ * from "6.75mm deep inside the wall".
+ */
+export function solidMaskAt(field: SdfField, xMm: number, yMm: number, zMm: number): 0 | 1 {
+  const [nx, ny, nz] = field.cells;
+  const [ox, oy, oz] = field.originMm;
+  const dx = field.dxMm;
+  const cx = Math.min(nx - 1, Math.max(0, Math.floor((xMm - ox) / dx)));
+  const cy = Math.min(ny - 1, Math.max(0, Math.floor((yMm - oy) / dx)));
+  const cz = Math.min(nz - 1, Math.max(0, Math.floor((zMm - oz) / dx)));
+  return field.solidMask[cx * ny * nz + cy * nz + cz] ? 1 : 0;
 }
 
 /** Trilinear SDF sample at a world position (mm). Out-of-grid clamps to the edge. */

@@ -5,7 +5,7 @@
 // cells/s); mm enter/exit only via dxMm: v_cells = v_mm / dxMm.
 
 import { createMpmWorld, type MpmWorld, type MpmWorldConfig } from './mpm.ts';
-import { buildSdfFromStl, sdfAt, type SdfField } from './sdf.ts';
+import { buildSdfFromStl, sdfAt, solidMaskAt, type SdfField } from './sdf.ts';
 import { parseBinaryStl, boundingBox } from './mesh.ts';
 
 export interface FluidScenario {
@@ -43,6 +43,16 @@ export interface FluidReport {
   overallStatus: 'pass' | 'check';
   metrics: {
     particleCount0: number;
+    /**
+     * Seed-lattice accounting. `solidFraction` is the share of the seed region
+     * that is METAL: `deriveFluidPreset` sizes the cross-section from the
+     * bounding box, so a thick-walled part gives a region far larger than its
+     * cavity (measured 4.1x on a Ø60/Ø30 annulus). Those points are now
+     * rejected, but the ratio tells the caller how loosely the region fits —
+     * and it is the number to look at when arrival looks low for no visible
+     * reason.
+     */
+    seedStats: { accepted: number; rejectedWall: number; rejectedSolid: number; solidFraction: number };
     escaped: number;
     active: number;
     /** Audit: |count0 − escaped − active| / count0 (≈0 by construction; guards kernel bugs). */
@@ -85,14 +95,21 @@ export function deriveGridFromStl(pipeStl: Uint8Array, dxMm: number): {
 /**
  * Seed a deterministic lattice over the region (cell units), rejecting points
  * inside the walls or closer than WALL_CLEARANCE_MM to them.
+ *
+ * BOTH tests are required. The SDF stores the distance to the nearest surface,
+ * so it is positive on both sides of a wall: a distance threshold alone cannot
+ * tell "0.75mm of clearance inside the cavity" from "6.75mm deep inside the
+ * wall", and the latter used to be seeded as fluid (measured 2026-10-08 on a
+ * Ø60/Ø30 annulus). `solidMaskAt` supplies the missing sign.
  */
 function seedPositions(
   sdf: SdfField,
   region: { min: [number, number, number]; max: [number, number, number] },
   ppc: number,
-): [number, number, number][] {
+): { seeds: [number, number, number][]; rejectedWall: number; rejectedSolid: number } {
   const s = Math.pow(ppc, -1 / 3); // lattice spacing in cells for `ppc` particles/cell
   const out: [number, number, number][] = [];
+  let rejectedWall = 0, rejectedSolid = 0;
   const perAxis = [0, 1, 2].map((a) => {
     const lo = (region.min[a]! - sdf.originMm[a]!) / sdf.dxMm;
     const hi = (region.max[a]! - sdf.originMm[a]!) / sdf.dxMm;
@@ -106,12 +123,15 @@ function seedPositions(
         const cy = perAxis[1].lo + (iy + 0.5) * perAxis[1].step;
         const cz = perAxis[2].lo + (iz + 0.5) * perAxis[2].step;
         const wm = [cx * sdf.dxMm + sdf.originMm[0], cy * sdf.dxMm + sdf.originMm[1], cz * sdf.dxMm + sdf.originMm[2]];
-        if (sdfAt(sdf, wm[0]!, wm[1]!, wm[2]!) < WALL_CLEARANCE_MM) continue; // wall rejection
+        // solid first: inside metal the distance is large and positive, so the
+        // clearance test below would wave it through
+        if (solidMaskAt(sdf, wm[0]!, wm[1]!, wm[2]!)) { rejectedSolid++; continue; }
+        if (sdfAt(sdf, wm[0]!, wm[1]!, wm[2]!) < WALL_CLEARANCE_MM) { rejectedWall++; continue; }
         out.push([cx, cy, cz]);
       }
     }
   }
-  return out;
+  return { seeds: out, rejectedWall, rejectedSolid };
 }
 
 export async function runFluid(scenario: FluidScenario): Promise<{
@@ -129,7 +149,8 @@ export async function runFluid(scenario: FluidScenario): Promise<{
   const flowAxis = scenario.inlet?.axis ?? scenario.outletAxis ?? 0;
   const escapeAxis = scenario.outletAxis ?? scenario.inlet?.axis ?? flowAxis;
   const ppc = scenario.particlesPerCell ?? 6;
-  const seeds = seedPositions(sdf, scenario.fluidRegionMm, ppc);
+  const seeded = seedPositions(sdf, scenario.fluidRegionMm, ppc);
+  const seeds = seeded.seeds;
   const count = scenario.particleCount ?? seeds.length;
 
   const speedCells = (scenario.inlet?.velocityMmPerSec ?? 100) / scenario.dxMm;
@@ -299,6 +320,12 @@ export async function runFluid(scenario: FluidScenario): Promise<{
     overallStatus: clean ? 'pass' : 'check',
     metrics: {
       particleCount0: count0,
+      seedStats: {
+        accepted: seeds.length,
+        rejectedWall: seeded.rejectedWall,
+        rejectedSolid: seeded.rejectedSolid,
+        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid)).toFixed(4),
+      },
       escaped: world.escaped,
       active,
       massConservationError: +massConservationError.toFixed(6),

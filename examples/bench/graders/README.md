@@ -400,7 +400,15 @@ examples/bench/
   的版本号（v036→v046 之类），而 `data/versions/` 是不入库的。
   **提交前要 `git checkout -- dsh-cad-harness/data/`**，否则提交里混进与本次工作
   无关的夹具漂移。正解是让它改用临时目录，属插件侧改动，另开一次。
-- **`simulate_fluid` 在厚壁下符号判据失效（已坐实，插件缺陷）**：
+- ✅ **`simulate_fluid` 在厚壁下符号判据失效（已修，2026-10-08）**：
+  真因是射线出口落在三角剖分的**共享棱**上，一次穿越被两个三角形各记一次、
+  奇偶翻转；网格轴对齐、接缝也在那些网格平面上 ⇒ 系统性失效。
+  已修 `sdf.ts`（互不平行的三向探测 + 同距离去重）与 `fluid.ts`
+  （`seedPositions` 同时查 `solidMask`），并新增 `metrics.seedStats` 让调用方
+  看得见种子区域里金属的占比。回归钉子 `scripts/accept-fluid-sign.mjs`（13/13）、
+  全套 accept 26/26。详见 `DESGIGN.md` §24 与实验报告。
+  **注意：修复前的 `02` 流体结果已失效，需重跑。**
+  以下是当时的记录（保留作对照）：
   `src/host/sdf.ts:106-113` 用三向奇偶投票定 `inside`，**壁厚超过约一个网格时给出
   相反符号**——实测 Ø60 壁内 `sdf=+6.75 / solidMask=0`（当流体），件外空气
   `sdf=0.00 / solidMask=1`（当固体）。两个下游一起错：`seedPositions` 只查距离、
