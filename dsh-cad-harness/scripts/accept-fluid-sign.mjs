@@ -62,6 +62,28 @@ for (const od of [34, 60, 100]) {
   arrivals.push(m.outletArrivalRatio);
 }
 
+// 6. 粒子数超过种子格点时必须**出声**（2026-10-08 补）
+//    放置循环是 `seeds[idx++ % seeds.length]`：多出来的粒子是同一位置的副本，
+//    逃逸**比例**不变（副本同命），但报告看起来比实际采样密得多。
+{
+  const stl = (await compileStlOnly(tube(44, 30, 30))).stl;
+  const p = deriveFluidPreset(stl, 2, 100);
+  const run = (particleCount) => runFluid({
+    pipeStl: stl, gridCells: p.gridCells, gridOriginMm: p.gridOriginMm, dxMm: p.dxMm,
+    fluidRegionMm: p.fluidRegionMm,
+    inlet: { axis: p.axis, bandMm: p.inletBandMm, velocityMmPerSec: 100 },
+    outletPlaneMm: p.outletPlaneMm, particlesPerCell: 6, particleCount, steps: p.steps, snapshotCount: 2,
+  });
+  const auto = (await run(undefined)).report;
+  const stacked = (await run(80000)).report;
+  check('粒子数超过种子格点时报 stacksPerSeed', (stacked.metrics.seedStats?.stacksPerSeed ?? 0) > 1.5,
+    `自动 ${auto.metrics.seedStats.accepted} 种子 ×${auto.metrics.seedStats.stacksPerSeed}；显式 80000 ×${stacked.metrics.seedStats.stacksPerSeed}`);
+  check('堆叠时给出 warnings', (stacked.warnings ?? []).some((w) => /STACK/.test(w)),
+    (stacked.warnings ?? [])[0]?.slice(0, 70) ?? '(无警告)');
+  check('未堆叠时不误报', (auto.warnings ?? []).every((w) => !/STACK/.test(w)),
+    `自动那次的 warnings=${JSON.stringify((auto.warnings ?? []).map((w) => w.slice(0, 40)))}`);
+}
+
 // 同内腔、不同壁厚：到达率不应再随外径大幅漂移（缺陷时 0.443 vs 0.757）
 const spread = Math.max(...arrivals) - Math.min(...arrivals);
 check('同内腔不同壁厚，到达率不再大幅漂移', spread < 0.15,

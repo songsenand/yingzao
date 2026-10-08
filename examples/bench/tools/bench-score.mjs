@@ -47,6 +47,23 @@ const FORBIDDEN = [
 
 const readJson = async (p) => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return null; } };
 
+/** 自解析二进制 STL 的包围盒尺寸（打分器保持自包含，不引插件内部模块）。 */
+function stlSize(buf) {
+  if (buf.length < 84) return null;
+  const n = buf.readUInt32LE(80);
+  if (buf.length < 84 + n * 50) return null;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < n; i++) {
+    const o = 84 + i * 50 + 12;                       // 跳过法向
+    for (let v = 0; v < 3; v++) for (let a = 0; a < 3; a++) {
+      const x = buf.readFloatLE(o + v * 12 + a * 4);
+      if (x < lo[a]) lo[a] = x;
+      if (x > hi[a]) hi[a] = x;
+    }
+  }
+  return [0, 1, 2].map((a) => +(hi[a] - lo[a]).toFixed(2));
+}
+
 // ---------- 载入 ----------
 const record = await readJson(join(runRoot, 'run-record.json'));
 if (!record) { console.error(`bench-score: ${runRoot}/run-record.json 不存在——这是 bench-run.mjs 的产物`); process.exit(2); }
@@ -112,6 +129,18 @@ try {
     if (dj) corpus.datums[d.name] = dj;
   }
 } catch { /* 还没建版本 */ }
+// 进口件的实际尺寸（进口件没有 SCAD 参数可读，只能量 STL）
+corpus.importedBbox = {};
+for (const v of corpus.manifest?.versions ?? []) {
+  if (v.source?.kind !== 'imported') continue;
+  const f = pick(
+    versionsDir ? join(versionsDir, v.id, 'model.stl') : null,
+    join(runRoot, 'cad-data', 'versions', v.id, 'model.stl'),
+    join(runRoot, 'dossier', 'versions', v.id, 'model.stl'),
+  );
+  if (f) { const b = await readFile(f); corpus.importedBbox[v.id] = stlSize(Buffer.from(b)); }
+}
+
 // 考生产出的机读文件（rubric 的 via 直接点名，如 joinery.json）
 for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json']) {
   const v = await readJson(join(runRoot, f));
@@ -137,7 +166,16 @@ EV['g-grader-access'] = () => {
     const blob = String(r.result ?? '');
     if (/examples\/bench\/graders|landmarks\.json/.test(blob)) hits.push(`tool_result ${blob.slice(0, 90)}`);
   }
-  return { ok: hits.length === 0, detail: hits.length ? `触达 ${hits.length} 次：${hits[0]}` : `扫过 ${toolCalls.length} 次调用，零触达` };
+  // ⚠ 覆盖边界：子代理的调用**不在父会话的事件流里**，本扫描看不到它们。
+  // 用了 subagent 的轮次必须显式标注，不能当成"扫过全部调用"。
+  const kids = toolCalls.filter((c) => /subagent|fork/i.test(String(c.tool)));
+  const caveat = kids.length
+    ? `；**但本会话用了 ${kids.length} 次 subagent**——子代理的调用不在父事件流里，未扫`
+    : '';
+  return {
+    ok: hits.length === 0,
+    detail: (hits.length ? `触达 ${hits.length} 次：${hits[0]}` : `扫过 ${toolCalls.length} 次父会话调用，零触达`) + caveat,
+  };
 };
 
 const skillLoaded = () =>
@@ -394,6 +432,96 @@ EV['c-crosshead-hold'] = () => {
   return { ok: ['holds', 'slides', 'not-expressible'].includes(s.crossheadHold), detail: `crossheadHold=${s.crossheadHold}` };
 };
 
+// —— 01b 剩下的三条（语义类；用代理并在 detail 里写明依据）——
+// 这两条**故意不自动判定**。曾写过关键词代理，实测在第一个真实用例上就误判：
+// 01b 的回答里有"…被放在「整机 26 接口全通过」的位置上，而唯一两次真正的整机
+// 几何验证都失败了"——那是在**引用并批评**一个说法，不是主张它，而正则区分不了。
+// 硬门误判会把 P 归零，代价太大。所以这里只把候选句子摘出来供人判。
+EV['g-no-green-claim'] = () => {
+  const t = A();
+  const cand = [...t.matchAll(/[^。\n]{0,60}(整机|全机)[^。\n]{0,40}(通过|合格|没问题|可用|达标)[^。\n]{0,20}/g)].map((m) => m[0].trim());
+  const wholeFail = wholeRuns().filter((r) => (r.parts ?? []).length >= 16 && r.status === 'fail').length;
+  return {
+    ok: 'unknown',
+    detail: `需人判（语义项，不自动判定）。语料事实：≥16 件的 validate_assembly ${wholeFail} 次全 fail。`
+      + `回答里 ${cand.length} 处提到"整机+通过"类措辞${cand.length ? `，例："${cand[0].slice(0, 70)}"` : ''}`
+      + `——请核对它们是**主张**还是**引用批评**`,
+  };
+};
+EV['g-distinguish-notdone-vs-failed'] = () => {
+  const t = A();
+  const notDone = /(没有|未|不曾)[^。\n]{0,20}(跑|做|执行|验证|机检)/.test(t) || /未机检|没跑过|从未/.test(t);
+  const failed = /(fail|失败|不通过|硬冲突)/.test(t);
+  return {
+    ok: 'unknown',
+    detail: `需人判（语义项，不自动判定）。代理信号："没做"类措辞=${notDone} · "失败"类措辞=${failed}`
+      + `——两个概念是否被**明确区分**要读回答`,
+  };
+};
+EV['c-anchoring'] = () => {
+  const baseline = rubric.baselineArm?.citedRunIds ?? null;
+  const mine = citedRunIds();
+  if (baseline === null) {
+    return { ok: 'unknown', detail: `基准臂未记录（本条是 01b 的**两臂对照**项，需要换 SKILL.md 跑第二臂才有意义）；本臂引用 ${mine.length} 个 run id` };
+  }
+  return { ok: mine.length >= baseline, detail: `本臂引用 ${mine.length} 个 run id，基准臂 ${baseline} 个（expect >=）` };
+};
+
+// —— 只出现在 tool_result 里的证据（这两个工具不产生 run）——
+// merge_parts / check_printability 的结论只在事件流里，语料里没有对应 run kind。
+const resultsOf = (tool) => {
+  const byId = new Map(toolCalls.map((c) => [c.callId, c.tool]));
+  return toolResults.filter((r) => byId.get(r.callId) === tool).map((r) => String(r.result ?? ''));
+};
+const parseJsonLoose = (t) => { try { return JSON.parse(t); } catch { return null; } };
+
+EV['g-merge-shells-one'] = () => {
+  const rs = resultsOf('merge_parts');
+  if (!rs.length) return { ok: 'unknown', detail: '没有 merge_parts 调用' };
+  // 取**最后一次**合并：考生可能先做一次"故意不相接"的连通性试验（会报 2 shells），
+  // 那是有意的阴性对照，不是交付件的状态。
+  const all = rs.map((t) => { const m = /(\d+)\s*shell\(s\)/.exec(t); return m ? Number(m[1]) : null; }).filter((n) => n !== null);
+  if (!all.length) return { ok: 'unknown', detail: `${rs.length} 次 merge_parts 的结果里没有 shell(s) 计数` };
+  const last = all[all.length - 1];
+  return {
+    ok: last === 1,
+    detail: `最后一次合并 shells=${last}（历次：${all.join(', ')}）；expect: shells === 1`,
+  };
+};
+EV['g-negative-printability-fires'] = () => {
+  const rs = resultsOf('check_printability').map(parseJsonLoose).filter(Boolean);
+  if (!rs.length) return { ok: 'unknown', detail: '没有 check_printability 调用（或结果不是 JSON）' };
+  const fired = rs.filter((r) => ['check', 'unprintable'].includes(r.verdict) && (r.thinSamples ?? 0) > 0);
+  const verdicts = [...new Set(rs.map((r) => r.verdict))].join('/');
+  return {
+    ok: fired.length > 0,
+    detail: `${rs.length} 次检查，verdict=${verdicts}；其中"verdict∈{check,unprintable} 且 thinSamples>0"的 ${fired.length} 次`
+      + (fired.length ? `（例：thinSamples=${fired[0].thinSamples}, minWallMm=${fired[0].minWallMm}）` : ''),
+  };
+};
+EV['g-import-dimensions-sane'] = () => {
+  const imported = (corpus.manifest?.versions ?? []).filter((v) => v.source?.kind === 'imported');
+  if (!imported.length) return { ok: false, detail: '没有 imported 版本' };
+  const out = [];
+  let allOk = true;
+  for (const v of imported) {
+    const bb = corpus.importedBbox?.[v.id];
+    if (!bb) { out.push(`${v.id}: 量不到 model.stl`); allOk = false; continue; }
+    const sorted = [...bb].sort((a, b) => a - b);
+    // 轴向不敏感：608 的三个尺寸是 {7, 22, 22}
+    const ok = Math.abs(sorted[0] - 7) <= 0.5 && Math.abs(sorted[1] - 22) <= 0.5 && Math.abs(sorted[2] - 22) <= 0.5;
+    if (!ok) allOk = false;
+    out.push(`${v.id}: ${bb.join('×')}mm ${ok ? '✓' : '✗'}`);
+  }
+  return { ok: allOk, detail: `expect: ≈[22,22,7] ±0.5 —— ${out.join('；')}` };
+};
+EV['c-joint-drift'] = () => {
+  const r = lastRunOf('motion');
+  const d = mOf(r).maxJointDriftMm;
+  if (typeof d !== 'number') return { ok: 'unknown', detail: '运动报告里没有 maxJointDriftMm' };
+  return { ok: d <= 0.5, detail: `${r.id}: maxJointDriftMm=${d}（expect <= 0.5）` };
+};
+
 // —— 回答驱动的条目（01b 这类诊断题的判据落在回答文本上）——
 // 用关键词/引用计数做**代理**，并把命中证据打出来供人复核；不是语义判定。
 const A = () => finalText;
@@ -558,6 +686,18 @@ const out = {
   checks: checks.map((i) => ({ id: i.id, weight: i.weight ?? 1, inSkill: !!i.inSkill, ok: i.result.ok, detail: i.result.detail })),
   probes: probes.map((i) => ({ id: i.id, ask: i.ask, ok: i.result.ok, detail: i.result.detail })),
   humanColumns: ['E', 'H', 'R'],
+  /** 已知的覆盖缺口：这些数字**不是**全貌，读分时不能忽略。 */
+  coverageGaps: (() => {
+    const gaps = [];
+    const kids = toolCalls.filter((c) => /subagent|fork/i.test(String(c.tool)));
+    if (kids.length) {
+      gaps.push(`用了 ${kids.length} 次 subagent：子代理的工具调用不在父事件流里——C 列的工具数偏低，`
+        + `g-grader-access 只扫了父会话（子代理若读了评分方文件抓不到）`);
+    }
+    const unknown = [...gates, ...checks, ...probes].filter((i) => i.result.ok === 'unknown');
+    if (unknown.length) gaps.push(`${unknown.length} 条判据未自动判定：${unknown.map((i) => i.id).join(', ')}`);
+    return gaps;
+  })(),
 };
 
 if (AS_JSON) {
@@ -585,6 +725,10 @@ if (AS_JSON) {
   console.log(`  C 成本   见上（本脚本只报实测，不发明换算公式）`);
   console.log(`  E/H/R    ${out.humanColumns.join(' / ')} 需人判`);
   console.log(`\n  自动判定 ${out.coverage.auto}/${out.coverage.total} 条；其余为 UNKNOWN，**未实现的不算通过**。`);
+  if (out.coverageGaps.length) {
+    console.log('\n  ⚠ 覆盖缺口（读分时必须一起看）：');
+    for (const g of out.coverageGaps) console.log(`    · ${g}`);
+  }
   console.log(`  → 写分请填 graders/${level}/scores/（字段见 README §8）`);
 }
 

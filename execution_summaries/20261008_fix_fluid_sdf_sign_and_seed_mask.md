@@ -51,3 +51,36 @@
 > - **附带**：跑 accept 套件会改写 `dsh-cad-harness/data/` 下三个**已入库**的夹具
 >   （`accept-assembly.mjs` 把它当版本库），提交前已 `git restore --staged
 >   --worktree` 还原。该 wart 已记在 `graders/README.md` §九。
+
+---
+
+## 追加（同日）：粒子堆叠警告 + 打分器的子代理覆盖缺口
+
+**起因**：用修好的工具在沙箱重跑 `02`，全部 10 条硬门通过、`P = 0.895`，
+但 `c-fluid-arrival` 仍 FAIL（0.4173）。追查发现该次流体仿真**由子代理执行**
+（父会话 139 次调用里没有 `simulate_fluid`），且 `seedStats.accepted = 280`
+而 `particleCount0 = 80000`。
+
+**两处改动：**
+
+1. **`fluid.ts` / `tools.ts`：粒子数超过种子格点必须出声。**
+   放置循环是 `seeds[idx++ % seeds.length]`——显式要 80000 个粒子而格点只有 3906 时，
+   多出来的粒子是**同一位置的副本**（实测堆叠 ×20.48），报告却看起来采样很密。
+   现在 `seedStats` 增加 `requested` 与 `stacksPerSeed`，报告顶层增加 `warnings`，
+   工具 summary 里会标 `⚠ 粒子堆叠 ×N`。`particleCount` 的参数文档号称默认
+   "typically 50k-300k"，实际是格点数——这个不符也一并暴露。
+   **重要更正**：实测堆叠**不改变到达率**（副本同命，0.0054 vs 0.0054），
+   所以它**解释不了** 02 那条 0.4173，不能过度归因。
+
+2. **`bench-score.mjs`：标出"用了子代理"这个覆盖缺口。**
+   子代理的工具调用**不在父会话的事件流里** ⇒ C 列工具数偏低、
+   `g-grader-access` 只扫了父会话（子代理若读评分方文件抓不到）。
+   现在 `g-grader-access` 的 detail 会带上这个保留，输出末尾新增
+   `⚠ 覆盖缺口` 段。**这是打分器的真实漏洞，需后续从子会话读**。
+
+**验证**：`accept-fluid-sign.mjs` **16/16**（新增 3 条堆叠检查）；全套 accept
+**26/26**；`00-smoke` 全绿。`lib/` 已重建。
+
+**仍未解决**：02-fix1 的 `c-fluid-arrival = 0.4173` **无法归因**——那次调用的参数
+在子代理的会话里（`~/.dsh/sessions/--home-songsenand-bench-runs-02-fix1--/473df905-…`），
+父事件流看不到。要判断它是模型问题还是仪器问题，必须先能读子会话。

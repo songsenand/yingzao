@@ -52,7 +52,25 @@ export interface FluidReport {
      * and it is the number to look at when arrival looks low for no visible
      * reason.
      */
-    seedStats: { accepted: number; rejectedWall: number; rejectedSolid: number; solidFraction: number };
+    seedStats: {
+      accepted: number;
+      rejectedWall: number;
+      rejectedSolid: number;
+      solidFraction: number;
+      /** Particle count actually placed (explicit `particleCount`, else the lattice size). */
+      requested: number;
+      /** How many particles share each seed position. >1 means the lattice was NOT refined. */
+      stacksPerSeed: number;
+    };
+    /**
+     * Non-fatal problems the caller must know about. Currently raised when the
+     * requested particle count exceeds the seed lattice: the placer cycles
+     * `seeds[idx++ % seeds.length]`, so extra particles STACK on existing seed
+     * positions instead of densifying the lattice — the arrival ratio then
+     * describes those few positions rather than the flow field. Raise
+     * `particlesPerCell` (or widen `fluidRegionMm`) to get a real denser lattice.
+     */
+    warnings: string[];
     escaped: number;
     active: number;
     /** Audit: |count0 − escaped − active| / count0 (≈0 by construction; guards kernel bugs). */
@@ -316,8 +334,39 @@ export async function runFluid(scenario: FluidScenario): Promise<{
   const clean = !divergedOf(world) && penetrationCount === 0 && massConservationError < 1e-6
     && (!hasEscape || outletArrivalRatio >= 0.5);
 
+  // Non-fatal problems the caller must know about. The stacking case matters:
+  // the placer cycles `seeds[idx++ % seeds.length]`, so asking for more
+  // particles than the lattice holds STACKS them on existing seed positions
+  // instead of densifying. (Measured 2026-10-08: 80,000 particles on 3,906
+  // seeds = 20.5-deep stacks. The escaped FRACTION is unchanged — duplicates
+  // share a fate — but the run then looks far better sampled than it is, and
+  // `particleCount0` no longer means "particles in the field".)
+  const stacksPerSeed = +(count / Math.max(1, seeds.length)).toFixed(2);
+  const warnings: string[] = [];
+  if (seeds.length === 0) {
+    warnings.push('no seed positions survived the wall/solid rejection — nothing to simulate');
+  }
+  if (stacksPerSeed > 1.5) {
+    warnings.push(
+      `particleCount ${count} exceeds the ${seeds.length} seed positions: particles STACK ` +
+      `${stacksPerSeed}-deep on the same spots instead of densifying the lattice. ` +
+      `The escaped fraction is unaffected (duplicates share a fate), but the field is far ` +
+      `coarser than particleCount0 suggests — raise particlesPerCell (or widen fluidRegionMm) ` +
+      `for a real denser lattice.`,
+    );
+  }
+  if (seeded.rejectedSolid > 0 && seeds.length + seeded.rejectedSolid > 0
+      && seeded.rejectedSolid / (seeds.length + seeded.rejectedSolid) > 0.5) {
+    warnings.push(
+      `${(100 * seeded.rejectedSolid / (seeds.length + seeded.rejectedSolid)).toFixed(0)}% of the seed region ` +
+      `is solid metal — the region is derived from the bounding box, so a thick-walled part gives a ` +
+      `region much larger than its cavity. Those points are rejected, but the lattice is coarse where it counts.`,
+    );
+  }
+
   const report: FluidReport = {
     overallStatus: clean ? 'pass' : 'check',
+    warnings,
     metrics: {
       particleCount0: count0,
       seedStats: {
@@ -325,6 +374,8 @@ export async function runFluid(scenario: FluidScenario): Promise<{
         rejectedWall: seeded.rejectedWall,
         rejectedSolid: seeded.rejectedSolid,
         solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid)).toFixed(4),
+        requested: count,
+        stacksPerSeed,
       },
       escaped: world.escaped,
       active,

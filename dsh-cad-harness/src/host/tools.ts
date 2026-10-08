@@ -1778,7 +1778,8 @@ export function registerCadTools(
       title: `流体仿真 · ${provenanceLabel(sourceVersionIds)}`,
       sourceVersionIds,
       status: report.overallStatus === 'pass' ? 'pass' : 'check',
-      summary: `到达率 ${m.outletArrivalRatio ?? '—'} · 穿透 ${m.penetrationCount ?? '—'} · 粒子 ${m.particleCount0 ?? '—'}`,
+      summary: `到达率 ${m.outletArrivalRatio ?? '—'} · 穿透 ${m.penetrationCount ?? '—'} · 粒子 ${m.particleCount0 ?? '—'}`
+        + ((m.seedStats?.stacksPerSeed ?? 1) > 1.5 ? ` · ⚠ 粒子堆叠 ×${m.seedStats!.stacksPerSeed}` : ''),
     });
 
     const keep = frames.slice(-2);
