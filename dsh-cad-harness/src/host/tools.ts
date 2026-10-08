@@ -30,6 +30,7 @@ import { Ray, Vector3, DoubleSide } from 'three';
 import {
   deriveNameFromFile, importGeometry, normalizeDatums, type DatumInput, type Unit,
 } from './import.ts';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -109,6 +110,13 @@ interface MeshSphereSolve {
   method: string;
   intersected: boolean;
   watertight: boolean;
+}
+/** Payload of the worker's `connectivity` op. */
+interface ConnectivitySolve {
+  count: number;
+  bodies: { min: number[]; max: number[] }[];
+  watertight: boolean;
+  triangles: number;
 }
 
 export function cadToolNames(): readonly string[] {
@@ -2619,20 +2627,23 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { versionId: string };
       const { store } = await allStores(exec);
-      const bytes = new Uint8Array(await readFile(join(store.root, 'versions', a.versionId, 'model.stl'))
-        .catch(() => { throw new Error(`version ${a.versionId} has no model.stl`); }));
-      const mesh = parseBinaryStl(bytes);
-      const { count, bodies } = connectedBodies(mesh);
-      const size = (b: { min: number[]; max: number[] }) => b.max.map((n, i) => +(n - b.min[i]).toFixed(2));
-      const center = (b: { min: number[]; max: number[] }) => b.min.map((n, i) => +((n + b.max[i]) / 2).toFixed(2));
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) throw new Error(`version ${a.versionId} has no model.stl`);
+      // Connectivity is Python's (batch 1). Two things had to survive the move:
+      // connectivity by SHARED EDGE, and the strict manifold watertight test
+      // (every directed edge exactly once, its reverse present) — trimesh's own
+      // `is_watertight` is laxer and would have silently loosened this warning.
+      const solved = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
+      const size = (b: { min: number[]; max: number[] }) => b.max.map((n, i) => +(n - b.min[i]!).toFixed(2));
+      const center = (b: { min: number[]; max: number[] }) => b.min.map((n, i) => +((n + b.max[i]!) / 2).toFixed(2));
       return {
         versionId: a.versionId,
-        verdict: count === 1 ? 'single-body' : 'multi-body',
-        bodies: count,
-        bodySizes: bodies.map(size),
-        bodyCenters: bodies.map(center),
-        watertight: isWatertight(mesh).watertight,
-        triangles: mesh.triVerts.length / 3,
+        verdict: solved.count === 1 ? 'single-body' : 'multi-body',
+        bodies: solved.count,
+        bodySizes: solved.bodies.map(size),
+        bodyCenters: solved.bodies.map(center),
+        watertight: solved.watertight,
+        triangles: solved.triangles,
       };
     },
   }));

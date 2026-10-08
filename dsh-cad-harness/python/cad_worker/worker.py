@@ -33,6 +33,7 @@ drives:
     closest_points  exact closest-point-on-surface; points in by file, out by file
     closest_mesh_mesh    solved closest pair between two solids (measure_closest)
     closest_mesh_sphere  solved closest pair between a solid and an analytic sphere
+    connectivity    connected bodies + strict watertight test (check_connectivity)
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -62,6 +63,7 @@ OPS = [
     "closest_points",
     "closest_mesh_mesh",
     "closest_mesh_sphere",
+    "connectivity",
     "crash",
 ]
 
@@ -303,6 +305,82 @@ def op_closest_mesh_sphere(params: dict) -> dict:
     }
 
 
+def op_connectivity(params: dict) -> dict:
+    """Connected bodies + strict watertight test for one saved version.
+
+    Two details are reproduced deliberately, because "26 bodies" is only half the
+    answer and the ORDER of the bodies is part of the tool's output:
+
+    * connectivity is by SHARED EDGE (two triangles that meet only at a vertex are
+      separate bodies), which is what `face_adjacency` gives;
+    * bodies are ordered by their XY bounding-box area, descending, ties broken by
+      the first triangle each body was seen at — the same order the TS
+      union-find produced, so `bodySizes`/`bodyCenters` stay comparable between
+      runs of the two implementations.
+    """
+    import numpy as np
+    import trimesh
+
+    mesh = trimesh.load(params["path"], process=True)
+    faces = np.asarray(mesh.faces)
+    if len(faces) == 0:
+        return {"bodies": [], "count": 0, "watertight": False, "triangles": 0}
+
+    vertices = np.asarray(mesh.vertices, dtype=float)
+    adjacency = trimesh.graph.face_adjacency(faces)
+    components = trimesh.graph.connected_components(adjacency, nodes=np.arange(len(faces)))
+
+    bodies = []
+    for component in components:
+        indices = np.asarray(component, dtype=np.int64)
+        used = np.unique(faces[indices].reshape(-1))
+        points = vertices[used]
+        low = points.min(axis=0)
+        high = points.max(axis=0)
+        bodies.append(
+            {
+                "min": [round(float(x), 3) for x in low],
+                "max": [round(float(x), 3) for x in high],
+                "firstFace": int(indices.min()),
+            }
+        )
+    bodies.sort(key=lambda body: (-(body["max"][0] - body["min"][0]) * (body["max"][1] - body["min"][1]), body["firstFace"]))
+    for body in bodies:
+        body.pop("firstFace", None)
+
+    return {
+        "bodies": bodies,
+        "count": len(bodies),
+        "watertight": _is_watertight(faces),
+        "triangles": int(len(faces)),
+    }
+
+
+def _is_watertight(faces) -> bool:
+    """Strict manifold test, identical to the TS `isWatertight`.
+
+    Every DIRECTED edge must occur exactly once and its reverse must exist. That
+    is stricter than trimesh's `is_watertight` (which only counts undirected
+    edge-sharing), and the tool reports this flag next to a "this part must be a
+    single connected solid" verdict — so the stricter definition is the one that
+    must survive the migration.
+    """
+    import numpy as np
+
+    if faces.size == 0:
+        return False
+    edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0).astype(np.int64)
+    directed = edges[:, 0] * 4294967296 + edges[:, 1]
+    unique, counts = np.unique(directed, return_counts=True)
+    if len(unique) == 0:
+        return False
+    bad = int(np.count_nonzero(counts != 1))
+    reverse = edges[:, 1] * 4294967296 + edges[:, 0]
+    has_reverse = np.isin(unique, np.unique(reverse))
+    bad += int(np.count_nonzero(~has_reverse))
+    return bad == 0
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
@@ -310,6 +388,7 @@ HANDLERS = {
     "closest_points": op_closest_points,
     "closest_mesh_mesh": op_closest_mesh_mesh,
     "closest_mesh_sphere": op_closest_mesh_sphere,
+    "connectivity": op_connectivity,
     "crash": op_crash,
 }
 

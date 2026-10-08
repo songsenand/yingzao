@@ -60,6 +60,9 @@ const check = (ok, label, detail = '') => {
 const maxAbsDiff = (p, q) => Math.max(...p.map((value, index) => Math.abs(value - q[index])));
 
 const worker = await ensurePythonWorker({ onLog: (line) => console.log(`      [worker] ${line}`) });
+// Warm-up: the FIRST request pays trimesh/numpy imports (~0.3 s). Without this the
+// first timing would be an import measurement dressed up as a comparison.
+await worker.request('stl_stats', { path: CASES[1].b });
 
 console.log('--- mesh vs mesh: worker (Python) vs oracle (TS three-mesh-bvh) ---');
 for (const testCase of CASES) {
