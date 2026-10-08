@@ -42,10 +42,10 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 2 | `create_part` | 零件命名/唯一化 | schema | **P** | 小 |
 | 3 | `set_datums` | datum 读写 | schema | **P** | 小 |
 | 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | **P** | numpy 解析比 JS 快 |
-| 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | **P** | Python 侧 `manifold3d` 是**同一个 C++ 内核**，不丢性能 |
+| 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | **P** | 实测 Python 侧更快（3.06×），**同一个 C++ 内核**、体积 Δ=0 |
 | 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | **P** | 同上 |
 | 7 | `check_assembly` | 接口契约判定、距离查询 | schema | **P** | 纯领域规则 |
-| 8 | `check_connectivity` | 连通分量/壳数 | schema | **P** | numpy/trimesh |
+| 8 | `check_connectivity` | 连通分量/壳数 | schema | **P** | 实测 Python 快 1.7×，且 26 体/watertight 判定与 TS 完全一致 |
 | 9 | `check_printability` | 壁厚/悬垂（可顺带从采样升级为精确） | schema | **P** | 精度是附带收益 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
 | 11 | `measure_distance` | 点/球距离 | schema | **P** | 依赖 batch 0（否则冷启动负收益） |
@@ -53,14 +53,34 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
 | 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
-| 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **P** | 收益最大（实测 564k 粒子 600 步 114s） |
+| 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **暂留 TS（有数据）** | ⚠️ **实测反转**：Python 版比现役 TS 内核**慢 2.5–4×**（见 §2.1），是第一条有数据的性能负收益；SDF 依赖 BVH 最近点也慢 30×（但绝对量可接受）。**原生路径属中后期**（用户 2026-10-08 阶段决定），到那时再定归属 |
 | 17 | `recall_reference_image` | —（查 DSH 附件） | 全部 | **T** | 这是平台 API，不是领域 |
 | 18 | `delivery_audit` | 交付规则、文件与网格核对 | schema | **P** | |
 | 19 | `run_python` | 已落地 | — | 已落地 | |
 | 20 | `python_runtime` | 已落地 | — | 已落地 | |
 
 **非工具车道**：体素 FEM（现为 `scripts/probe-*.mjs`，手写 matrix-free CG）→ **P + 工具化**，
-实现直接落 Python/scikit-fem（已在锁里）。
+但**实测有前提**：scikit-fem 的稀疏组装比 TS 全过程慢 3–17×（求解本身反而快）——要么照搬
+scikit-fem 路线接受组装成本，要么在 Python 里写 matrix-free（见 §2.1）。
+
+### 2.1 已实测的 TS ↔ Python 差异（2026-10-08）
+
+用户阶段决定：**现在只比 JS/TS 与 Python 实现**，原生留中后期。方法、原始数据与完整讨论见
+`experiments/20261008_python_migration_measurements.md` 补充 2
+（脚本 `scripts/measure-python-gains.mjs`，数据 `data/bench/python-gains.json`）。
+
+| 车道 | TS 现役 | Python | 比值 | 一致性 |
+|---|---|---|---|---|
+| MPM 内核（每步） | 3.1 / 23.4 / 88.3 ms | 11.4–12.7 / 59–71 / 230–263 ms | **慢 2.5–4×** | 同一算式 |
+| 体素 FEM（悬臂梁） | 0.1 / 1.7 / 27.8 s（总） | 组装 1.7 / 10.7 / 80.1 s + CG 0.04 / 1.2 / 4.9 s | **组装慢 3–17×**；CG 求解快 1.5–2.3× | δ 一致（n=4/8）；n=16 CG 未收敛，作废 |
+| Manifold 布尔+体积 | 134.6 ms | 44.0 ms | **快 3.06×** | 体积 Δ=0 |
+| 最近点（200 点） | 0.0204 ms/点 | 0.61 ms/点（rtree） | 慢 30×，绝对 122 ms | Δ=0 mm |
+| STL 解析+焊接 | 18.9 ms | 21.7 ms（trimesh）／≈0（零拷贝） | 0.87× / 更快 | 面数一致 |
+| 连通体+水密 | 85.2 + 18.4 ms | 30.2 + 24.0 ms | **快 1.7× / 慢 1.3×** | 都 26 体、watertight |
+| （原生 C 参考，中后期） | — | — | 快 3.7–4.6× | 同一算式 |
+
+⇒ **"Python 一定更快"是错的**（MPM/FEM 组装），**"Python 一定更慢"也是错的**（Manifold/连通体）。
+矩阵里的"收益"列现在只以这张表为准。
 
 ## 3. "明确负收益"的实测判定（2026-10-08）
 
@@ -72,8 +92,16 @@ v2 初稿凭直觉列了三条"负收益"，用户要求**用数据说话**。�
 | 每次调用起新进程 = 0.1–0.3 s，小工具负收益 | 全工具集冷启动 **443.7 ms**；常驻 worker 往返 **0.02 ms** | ✅ **成立，但解法是 worker**，不是保留 TS |
 | `measure_closest` 没有 Python 空间索引 → 负收益 | 无索引 4.6–7.1 ms/点（慢 224–350×）；**加 rtree 0.61 ms/点（慢 30×）**；精度 **Δ=0 mm**；200 点共 122 ms | ❌ 撤回：可接受，代价是加 `rtree` |
 | 面板载荷/渲染图片过 IPC → 负收益 | 34 KiB 面板载荷 **0.25 ms**（直读磁盘 0.9 ms）；178 KiB 图片 **0.82 ms** | ❌ 撤回：传输从来不是瓶颈 |
+| "MPM Python 化 5–20×""FEM 迁 Python 更快"（我在 v2 收益列里写的） | MPM：Python 慢 **2.5–4×**；FEM：scikit-fem 组装慢 **3–17×**（求解反而快） | ✅ **撤回原预期**：这两条是**新增的、有数据的负收益**（见 §2.1） |
 
-**因此当前没有任何工具因性能被排除在 Python 之外。** 仍然保留 TS 的只有：
+**当前因性能保留 TS 的（②类，有数据）：**
+
+| 保留项 | 数据 |
+|---|---|
+| `simulate_fluid` 的 MPM 内核 | Python 版比现役 TS 慢 2.5–4×（564k 粒子 600 步：TS 114 s → Python 约 290–390 s）；原生属**中后期** |
+| 体素 FEM 若照搬 scikit-fem 路线 | 组装 1.7/10.7/80.1 s vs TS 全过程 0.1/1.7/27.8 s；**若在 Python 写 matrix-free 则此条不成立（未测）** |
+
+**其余保留 TS 的（①/③类，非性能）：**
 
 | 保留项 | 理由类别 | 具体依据 |
 |---|---|---|
@@ -85,7 +113,10 @@ v2 初稿凭直觉列了三条"负收益"，用户要求**用数据说话**。�
 | darwin-x64 的物理 | ③ canonical | 用户已拍板：无 wheel，该平台继续用 TS |
 
 > ① 类不是性能问题，是 **API 边界事实**（跨进程够不着），所以它不需要 benchmark，
-> 需要的是代码位置作证。② 类才是要数字的，而目前 **② 类为空**。
+> 需要的是代码位置作证。② 类才是要数字的——现在 ② 类**不再是空的**（MPM/FEM 两条），
+> 而且这两条都来自同一次测量，不是直觉。
+> **原生（C/C++/Rust）是 ② 类的解法，但那是中后期的事**（用户 2026-10-08 阶段决定：
+> "用 C/C++ 或 Rust 替代性能不够的 Python 代码，现在做太早"）；本阶段只做 TS ↔ Python 对比。
 
 ## 4. 两个结构性裁决（比单个工具更重要）
 
@@ -98,22 +129,22 @@ v2 初稿凭直觉列了三条"负收益"，用户要求**用数据说话**。�
 Python 的 `rapier3d` 是同一 Rust 内核的官方绑定（TS 侧是 `rapier3d-compat` 0.20，
 Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 24/24 验收）。
 
-## 5. 批次（batch 0 是前提）
+## 5. 批次（batch 0 是前提；排序依据 = §2.1 的实测）
 
-| 批次 | 内容 | 解锁什么 |
+| 批次 | 内容 | 为什么排这个位置 |
 |---|---|---|
-| **0** | 常驻 worker + JSON-lines 协议（§12.3）；验收写进"worker 往返 < 1 ms、冷启动 400+ ms"这对数字 | 让"能迁就迁"成立 |
-| 1 | 纯计算域：`simulate_fluid`、FEM（工具化）、`measure_*`（含 `measure_closest` + `rtree`）、`check_*` | 收益最大、无 UI 耦合 |
-| 2 | 生成/渲染/导入/合并的领域部分（1、4、5、6、13） | 领域代码集中到 Python |
-| 3 | 存储与装配清单（Q1=B：保持"文件即契约"） | 收尾 |
-| 4 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
+| **0** | 常驻 worker + JSON-lines 协议（§12.3）；验收写进"worker 往返 < 1 ms、冷启动 400+ ms"这对数字 | 让"能迁就迁"成立，是所有迁移的前提 |
+| 1 | **Python 更快的那些**：`merge_parts`/`validate_assembly`（Manifold 3×）、`check_connectivity`（1.7×）、STL 解析零拷贝、`measure_closest`（+`rtree`，慢 30× 但绝对量可接受） | 数据支持"迁了更好" |
+| 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
+| 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
+| ⏸ | `simulate_fluid`（MPM 内核）、体素 FEM 的组装路线 | **实测为负收益（慢 2.5–4× / 3–17×）**；等**中后期**原生路线，或先用 Python 写 matrix-free 再测（未做） |
 
 ## 6. 单个工具"迁移完成"的定义
 
 1. **工具名不变**，模型无感（`run_python` 才是开放场地，工具是窄接口）；
 2. 领域逻辑在 `python/cad_worker/`，TS 侧只剩 schema + 转发；
 3. **有前后对照**：同输入同输出 + 耗时对比，写进验收脚本；
-   对照口径见 `experiments/20261008_python_migration_measurements.md`（E1 冷启动/worker、
-   E2 最近点、E3 面板载荷、E4 图片载荷）；
+   对照口径见 `experiments/20261008_python_migration_measurements.md`
+   （E1 冷启动/worker、E2 最近点、E3 面板载荷、E4 图片载荷、M1–M5 TS↔Python）；
 4. 现有验收（`scripts/accept-*.mjs`）更新并通过；
 5. canonical 归属在决策记录里写明。

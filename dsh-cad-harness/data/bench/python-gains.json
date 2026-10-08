@@ -1,0 +1,163 @@
+{
+  "generatedAt": "2026-10-08T16:11:36.688Z",
+  "venvPython": "/home/songsenand/Project/ToyMarker/.tmp-measure-runtime/venv/bin/python",
+  "m1MpmKernel": [
+    {
+      "particles": 8820,
+      "tsMsPerStepP50": 3.1,
+      "numpyBincountMsPerStep": 12.73,
+      "numpySparseMsPerStep": 11.35,
+      "bincountSpeedup": 0.24,
+      "sparseSpeedup": 0.27
+    },
+    {
+      "particles": 70560,
+      "tsMsPerStepP50": 23.4,
+      "numpyBincountMsPerStep": 71.19,
+      "numpySparseMsPerStep": 59.06,
+      "bincountSpeedup": 0.33,
+      "sparseSpeedup": 0.4
+    },
+    {
+      "particles": 261950,
+      "tsMsPerStepP50": 88.3,
+      "numpyBincountMsPerStep": 263.24,
+      "numpySparseMsPerStep": 230.07,
+      "bincountSpeedup": 0.34,
+      "sparseSpeedup": 0.38
+    }
+  ],
+  "m2VoxelFem": [
+    {
+      "n": 4,
+      "elements": 640,
+      "dof": 3075,
+      "tsMatrixFreeCgMs": 100,
+      "pyAssembleMs": 1723.2,
+      "pyCgMs": 44.1,
+      "directSpeedup": null,
+      "cgSpeedup": 2.27,
+      "delta": 0.193,
+      "deltaErrorPct": -3.5
+    },
+    {
+      "n": 8,
+      "elements": 5120,
+      "dof": 19683,
+      "tsMatrixFreeCgMs": 1700,
+      "pyAssembleMs": 10669.4,
+      "pyCgMs": 1161.7,
+      "directSpeedup": null,
+      "cgSpeedup": 1.46,
+      "delta": 0.1982,
+      "deltaErrorPct": -0.9
+    },
+    {
+      "n": 16,
+      "elements": 40960,
+      "dof": 139587,
+      "tsMatrixFreeCgMs": 27800,
+      "pyAssembleMs": 80102.7,
+      "pyCgMs": 4905.9,
+      "directSpeedup": null,
+      "cgSpeedup": 5.67,
+      "delta": 0.0333,
+      "deltaErrorPct": -83.35
+    }
+  ],
+  "m3Stl": {
+    "triangles": 28830,
+    "weldBverts": 14413,
+    "bytes": 1441584,
+    "tsParseAndWeld": {
+      "n": 10,
+      "medianMs": 18.932,
+      "minMs": 15.472,
+      "maxMs": 25.302
+    },
+    "pyRawParse": {
+      "n": 10,
+      "medianMs": 0.001,
+      "minMs": 0.001,
+      "maxMs": 0.011
+    },
+    "pyTrimeshWeld": {
+      "n": 10,
+      "medianMs": 21.722,
+      "minMs": 20.679,
+      "maxMs": 27.378
+    }
+  },
+  "m1cNative": [
+    {
+      "particles": 8820,
+      "tsMsPerStepP50": 3.1,
+      "nativeMsPerStep": 0.68,
+      "nativeSpeedupVsTs": 4.56
+    },
+    {
+      "particles": 70560,
+      "tsMsPerStepP50": 23.4,
+      "nativeMsPerStep": 5.75,
+      "nativeSpeedupVsTs": 4.07
+    },
+    {
+      "particles": 261950,
+      "tsMsPerStepP50": 88.3,
+      "nativeMsPerStep": 24.08,
+      "nativeSpeedupVsTs": 3.67
+    }
+  ],
+  "m4Manifold": {
+    "parts": [
+      "底座.stl",
+      "上半机.stl"
+    ],
+    "tsBuildUnion": {
+      "n": 5,
+      "medianMs": 134.61,
+      "minMs": 131.289,
+      "maxMs": 189.015
+    },
+    "pyBuildUnion": {
+      "n": 5,
+      "medianMs": 44.011,
+      "minMs": 39.772,
+      "maxMs": 46.331
+    },
+    "tsVolumeMm3": 710012.998,
+    "pyVolumeMm3": 710012.998,
+    "volumeDeltaMm3": 0,
+    "tsUnionTriangles": 28812
+  },
+  "m5Connectivity": {
+    "tsParseAndWatertight": {
+      "n": 10,
+      "medianMs": 85.162,
+      "minMs": 71.483,
+      "maxMs": 129.045
+    },
+    "tsConnectedBodies": {
+      "n": 10,
+      "medianMs": 18.399,
+      "minMs": 15.776,
+      "maxMs": 28.556
+    },
+    "tsBodies": 26,
+    "tsWatertight": true,
+    "pyLoadAndWatertight": {
+      "n": 10,
+      "medianMs": 30.209,
+      "minMs": 24.363,
+      "maxMs": 34.085
+    },
+    "pySplitMs": {
+      "n": 10,
+      "medianMs": 23.996,
+      "minMs": 22.903,
+      "maxMs": 29.793
+    },
+    "pyBodies": 26,
+    "pyWatertight": true
+  }
+}

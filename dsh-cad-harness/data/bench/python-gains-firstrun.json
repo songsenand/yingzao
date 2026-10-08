@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-10-08T15:53:06.793Z",
+  "venvPython": "/home/songsenand/Project/ToyMarker/.tmp-measure-runtime/venv/bin/python",
+  "m1MpmKernel": [
+    {
+      "particles": 8820,
+      "tsMsPerStepP50": 3.1,
+      "numpyBincountMsPerStep": 12.73,
+      "numpySparseMsPerStep": 11.35,
+      "bincountSpeedup": 0.24,
+      "sparseSpeedup": 0.27
+    },
+    {
+      "particles": 70560,
+      "tsMsPerStepP50": 23.4,
+      "numpyBincountMsPerStep": 71.19,
+      "numpySparseMsPerStep": 59.06,
+      "bincountSpeedup": 0.33,
+      "sparseSpeedup": 0.4
+    },
+    {
+      "particles": 261950,
+      "tsMsPerStepP50": 88.3,
+      "numpyBincountMsPerStep": 263.24,
+      "numpySparseMsPerStep": 230.07,
+      "bincountSpeedup": 0.34,
+      "sparseSpeedup": 0.38
+    }
+  ],
+  "m2VoxelFem": [
+    {
+      "n": 4,
+      "elements": 640,
+      "dof": 3075,
+      "tsCgMs": 100,
+      "pyScikitFemMs": 1800,
+      "speedup": 0.1,
+      "delta": 0.193,
+      "deltaErrorPct": -3.51
+    },
+    {
+      "n": 8,
+      "elements": 5120,
+      "dof": 19683,
+      "tsCgMs": 1700,
+      "pyScikitFemMs": 10506.6,
+      "speedup": 0.2,
+      "delta": 0.1982,
+      "deltaErrorPct": -0.88
+    },
+    {
+      "n": 16,
+      "elements": 40960,
+      "dof": 139587,
+      "tsCgMs": 27800,
+      "pyScikitFemMs": 541175,
+      "speedup": 0.1,
+      "delta": 0.1997,
+      "deltaErrorPct": -0.17
+    }
+  ],
+  "m3Stl": {
+    "triangles": 28830,
+    "weldBverts": 14413,
+    "bytes": 1441584,
+    "tsParseAndWeld": {
+      "n": 10,
+      "medianMs": 18.932,
+      "minMs": 15.472,
+      "maxMs": 25.302
+    },
+    "pyRawParse": {
+      "n": 10,
+      "medianMs": 0.001,
+      "minMs": 0.001,
+      "maxMs": 0.011
+    },
+    "pyTrimeshWeld": {
+      "n": 10,
+      "medianMs": 21.722,
+      "minMs": 20.679,
+      "maxMs": 27.378
+    }
+  },
+  "m1cNative": [
+    {
+      "particles": 8820,
+      "tsMsPerStepP50": 3.1,
+      "nativeMsPerStep": 0.68,
+      "nativeSpeedupVsTs": 4.56
+    },
+    {
+      "particles": 70560,
+      "tsMsPerStepP50": 23.4,
+      "nativeMsPerStep": 5.57,
+      "nativeSpeedupVsTs": 4.2
+    },
+    {
+      "particles": 261950,
+      "tsMsPerStepP50": 88.3,
+      "nativeMsPerStep": 24.16,
+      "nativeSpeedupVsTs": 3.65
+    }
+  ]
+}

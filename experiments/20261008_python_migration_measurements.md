@@ -183,3 +183,49 @@ HARNESS §12.3 那句"大载荷走文件路径"，此前只是断言，没有阈
 cd dsh-cad-harness
 node scripts/proto-python-worker.mjs --runtime ../.tmp-measure-runtime
 ```
+
+---
+
+## 补充 2：TS ↔ Python 实现差异（同工作量对拍）
+
+用户 2026-10-08 阶段决定：**现在只做 JS/TS 与 Python 实现的差异对比**；"用 C/C++/Rust
+替代性能不够的 Python 代码"属于**中后期**，现在做太早；原生基准正在做的那一件补完即止。
+
+方法：`scripts/measure-python-gains.mjs`（M1–M5）。每个用例同输入、同工作量、同机器：
+TS 侧直接 import 插件**现役模块**，Python 侧用供给运行时里的库。原始数据
+`data/bench/python-gains.json`。
+
+| 车道 | TS 现役实现 | Python 实现 | 比值 | 结果一致性 |
+|---|---|---|---|---|
+| **MPM 内核**（P2G→格点→G2P，27 邻域，每步） | 3.1 / 23.4 / 88.3 ms @ 8.8k / 70.6k / 262k 粒子 | numpy+bincount 12.7 / 71.2 / 263.2 ms；scipy CSR 11.4 / 59.1 / 230.1 ms | **Python 慢 2.5–4×**（0.24–0.40×） | 同一算式 |
+| **体素 FEM**（悬臂梁 100×10×10，端部 100 N） | 0.1 / 1.7 / 27.8 s（**总**，含组装；@640/5120/40960 单元） | scikit-fem：**组装 1.7 / 10.7 / 80.1 s** + CG 求解 0.044 / 1.16 / 4.91 s | **组装是瓶颈：Python 的组装单项就比 TS 全过程慢 3–17×**；**CG 求解本身反而快 1.5–2.3×** | n=4/8 的 δ 与 TS 一致（−3.5% / −0.9%）；**n=16 的 CG 未收敛（δ=−83%），该点作废** |
+| **Manifold 布尔 + 体积**（两件并集） | 134.6 ms | 44.0 ms | **Python 快 3.06×** | 体积 Δ = 0 mm³ |
+| **最近点查询**（28,830 面，200 点） | 0.0204 ms/点（three-mesh-bvh） | 0.61 ms/点（trimesh + rtree） | Python 慢 30×，但 **200 点共 122 ms** | Δ = 0 mm |
+| **STL 解析 + 焊接**（1.4 MB） | 18.9 ms | trimesh 21.7 ms；numpy 零拷贝视图 ≈ 0 ms | 0.87× / 更快 | 三角面数一致 |
+| **连通体 + 水密**（整机 STL） | 解析+水密 85.2 ms，连通体 18.4 ms | trimesh 30.2 ms，split 24.0 ms | **Python 快 1.7× / 略慢 1.3×** | 都判 watertight=true、**都是 26 个连通体** |
+| （原生 C 参考，**中后期**用） | — | — | 原生 C 比 TS 快 **3.7–4.6×** | 同一算式 |
+
+**分析：**
+
+- 我此前在矩阵里写的"MPM Python 化 **5–20×**""FEM 更快"**都被数据推翻**。真实情况分三类：
+  1. **Python 更快**：Manifold 布尔（3×）、连通体判定（1.7×）、STL 零拷贝解析——
+     "Python 生态里现成的高质量实现"赢过我们的手写版本。
+  2. **打平但可接受**：最近点查询（慢 30×，绝对量 0.61 ms/点、200 点 122 ms）。
+  3. **Python 更慢**：MPM 内核（2.5–4×）、FEM 的**稀疏组装**（3–17×）。
+- **FEM 的结论要拆开看**：慢的是 scikit-fem 的组装，不是求解；CG 求解比我们的 matrix-free
+  还快。所以"FEM 迁 Python"的真实成本取决于是否照搬 scikit-fem 的组装路线——若在 Python 里
+  写同样的 matrix-free 内核，组装成本就不存在（但那等于用 numpy 重写 TS 的算法，而 MPM 的
+  数据提示这未必划算）。
+- **n=16 那个点作废是这套测量最重要的副产品**：CG 在 139k DOF 上没收敛（δ 偏 −83%），
+  是"结果一致性"列把它抓出来的。只盯耗时会把一个错误的解当成 5.7× 的胜利。
+
+**产物：** `dsh-cad-harness/scripts/measure-python-gains.mjs`（M1–M5）、
+`scripts/native/mpm-kernel-bench.c`（原生参考，中后期决策用，**不参与构建**）、
+`data/bench/python-gains.json`（最终）、`data/bench/python-gains-firstrun.json`（含第一版
+scikit-fem 直接解的时间，供对照）。
+
+```bash
+cd dsh-cad-harness
+node scripts/measure-python-gains.mjs --runtime ../.tmp-measure-runtime              # 全部
+node scripts/measure-python-gains.mjs --runtime ../.tmp-measure-runtime --only m4    # 单段
+```
