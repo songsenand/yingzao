@@ -383,6 +383,14 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   ⚠️ **v1 的 worker 是单线程串行**（两个并发请求耗时 = 串行和 140.5 ms）：宿主侧并发工具调用
   会**排队**，**超时预算必须把排队算进去**；要真并行只能靠 Python 侧异步分派（IO 型）
   或 worker 池（CPU 型）——几何/仿真都是 CPU 密集，v1 先串行并明确记录。
+- **2026-10-08 batch 0 已落地**：worker 在 `dsh-cad-harness/python/cad_worker/worker.py`，
+  宿主侧 `src/host/python-worker.ts` 的 `PythonWorker` / `ensurePythonWorker()`（单例 + 崩溃重启）
+  + `resolveWorkerScript()`（源码与打包两种深度）；`package.json.files` 加了 `python/`。
+  v1 ops：`ping` / `versions` / `stl_stats` / `closest_points` / `crash`。
+  验收 `scripts/accept-python-worker.mjs`（8 组断言全绿）：握手 **14.8 ms**、ping **0.026 ms**
+  中位数（200 次）、**大载荷按文件往返并与 TS 结果 Δ=0**、失败带完整 traceback、
+  kill 后重启、**并发请求严格串行（116 ms → 230 ms）**、打包检查。
+  `run_python` 的一次性进程保持不变——两种形态共用一个接线点。
 
 ### 12.4 pip 生态（实测 2026-09-28）
 
@@ -430,7 +438,8 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   pnpm 11 会拦依赖脚本并要求 GUI 批准后重试，失败还回滚 `package.json`，安装期供给不成立。
 - **落点**：`$DSH_HOME/cad/runtime/`（`python/<版本>`、`venv/`、`cache/`、`state.json`），
   跨项目共享；运行时**不进项目目录、不进 git**。
-- **依赖**：numpy / scipy / trimesh / manifold3d / networkx / **scikit-fem** / rapier3d 0.36，全部
+- **依赖**：numpy / scipy / trimesh / manifold3d / networkx / **scikit-fem** / **rtree** /
+  rapier3d 0.36，全部
   `--require-hashes --only-binary=:all:` 锁定，因此**任何平台都不需要编译器**。
   **rapier3d 没有 darwin-x64 wheel**：用户 2026-10-08 拍板——该平台**物理继续用 TS 引擎**，
   Python 侧不装它。锁里的 `# cad-exclude: darwin-x64 | <原因>` 指令负责裁剪，**原因随包走**：
@@ -452,7 +461,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 | `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试/多实例用） | `$DSH_HOME/cad/runtime` |
 
 **实测（本机 Arch Linux，2026-10-08）**：归档 33.4MiB 压缩 / 105MB 展开 / 下载 3.5s；venv +
-七个依赖全部命中预编译 wheel；**冷启动（下载归档 + 装约 230MB 依赖）实测 353–476 秒**，
+八个依赖全部命中预编译 wheel；**冷启动（下载归档 + 装约 230MB 依赖）实测 353–476 秒**，
 视镜像与网络而定；总占用 **381–383 MiB**；**默认 PyPI 直连同一批依赖用了 11m44s**，
 故索引必须可配且默认带镜像兜底，供给过程必须有进度（`python_runtime` 与 `run_python`
 都会回报阶段与错误）。

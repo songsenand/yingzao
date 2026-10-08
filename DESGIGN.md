@@ -2524,9 +2524,19 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 
 ### 26.4 工具面与用法
 
+- **常驻 worker（batch 0，2026-10-08 落地）**：`python/cad_worker/worker.py` + 宿主侧
+  `PythonWorker` / `ensurePythonWorker()`（单例、崩溃重启）。协议 `{id, op, params}` →
+  `{id, ok, result|error+traceback}`，hello 带 `protocolVersion`；**大载荷走文件路径**
+  （实测 1M float64 参数：inline 106 ms vs 文件 0.72 ms；100k×3 结果：JSON 98 ms /
+  base64 16 ms / 文件 0.92 ms）。v1 ops：ping / versions / stl_stats / closest_points / crash。
+  worker **单线程串行**（两个并发请求 = 串行和，实测 116 ms → 230 ms）——宿主必须把排队
+  算进超时预算。验收 `scripts/accept-python-worker.mjs`：最近点结果与 TS 的 three-mesh-bvh
+  **Δ=0**，kill 后能重启。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。
+  它与常驻 worker 是**同一接线点上的两种形态**：`run_python` 是"跑一段任意代码"的开放场地
+  （一次性进程，无残留状态），worker 是迁移后的工具使用的常驻后端。
 - `python_runtime`：`status`（是否就绪、路径、来源、占用、上次错误）/ `provision`（现在装）
   / `repair`（重建依赖环境）。冷启动看起来像"卡住"是最糟的体验，所以进度与状态都是一等输出。
 - 两者与其余 CAD 工具同受预设可见性过滤（非 CAD 会话看不到），避免给纯编码会话增加 schema。
@@ -2546,7 +2556,7 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 
 ### 26.6 实测与验收
 
-本机（Arch Linux）实测：归档 33.4MiB / 展开 105MB / 下载 3.5s；七个依赖全部命中预编译
+本机（Arch Linux）实测：归档 33.4MiB / 展开 105MB / 下载 3.5s；八个依赖全部命中预编译
 wheel（`cp313-*-manylinux_2_27_x86_64`、`py3-none-any`、`cp39-abi3`），**不需要编译器**；
 冷启动（下载归档 + 装约 230MB 依赖）**353–476 秒**，venv 就绪后总占用 **381–383 MiB**；
 默认 PyPI 直连同一批依赖 **11m44s** → 索引默认带镜像兜底（同日实测：npmmirror 的 PyPI

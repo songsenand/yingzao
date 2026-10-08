@@ -1,25 +1,28 @@
-// The one place model-written Python is executed.
+// The one place model-written Python is executed — and, since batch 0, the one
+// place the resident domain worker lives.
 //
-// WHY ONE-SHOT PROCESSES (for now). HARNESS §12.3 specifies a resident worker
-// with a JSON-lines protocol for the *domain* ops (geometry, simulation) where
-// per-call startup cost and shared state matter. `run_python` is the general
-// escape hatch: "run this analysis script with the real runtime". A fresh
-// process per call is what makes its failure story honest — no poisoned state
-// from the previous run, a guaranteed timeout, and the full traceback of the
-// code the model actually wrote. When the domain worker lands, it mounts beside
-// this (same wiring point, same venv) rather than replacing it.
+// TWO SHAPES, ONE WIRING POINT (HARNESS §12.3):
+//   * `runPython` — a fresh process per call, for `run_python`. The escape hatch
+//     stays honest: no poisoned state, a guaranteed timeout, the real traceback.
+//   * `PythonWorker` / `ensurePythonWorker` — the resident worker the migrated
+//     tools call. Measured (2026-10-08): a fresh process costs 443.7 ms with the
+//     tool set imported, a worker round trip 0.02 ms, and payloads beyond ~1 MiB
+//     must travel by file path (1M float64: 106.4 ms inline vs 0.72 ms by file).
 //
-// WHAT IT DOES NOT DO: no confinement. The subprocess runs as the host user with
+// WHAT NEITHER DOES: no confinement. The subprocess runs as the host user with
 // whatever filesystem access that user has, exactly like `bash`. The plugin's
 // claim is reproducibility (a pinned interpreter and dependency set), not
 // sandboxing — pretending otherwise would be the kind of lie this harness exists
 // to refuse.
 
+import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { PYTHON_LOCK_PROTOCOL } from './python-lock.ts';
-import { ensurePythonRuntime, runProcess, type PythonRuntimePaths } from './python-runtime.ts';
+import { ensurePythonRuntime, pythonRuntimeRoot, runProcess, type PythonRuntimePaths } from './python-runtime.ts';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
@@ -175,4 +178,235 @@ export async function runPython(request: RunPythonRequest, onProgress?: (message
     truncated: stdout.truncated || stderr.truncated,
     protocolVersion: PYTHON_LOCK_PROTOCOL,
   };
+}
+
+// ---------------------------------------------------------------------------
+// batch 0: the resident domain worker (HARNESS §12.3)
+// ---------------------------------------------------------------------------
+
+export interface PythonWorkerHello {
+  protocolVersion: number;
+  python: string;
+  pid: number;
+  ops: string[];
+}
+
+export interface PythonWorkerOptions {
+  onLog?: (line: string) => void;
+  /** Handshake budget; measured startup is ~16 ms, so this only catches a hang. */
+  startupTimeoutMs?: number;
+}
+
+interface PendingRequest {
+  op: string;
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
+const DEFAULT_WORKER_TIMEOUT_MS = 120_000;
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 30_000;
+
+/**
+ * `python/cad_worker/worker.py`, from the bundle or from the sources.
+ *
+ * The same module is loaded two ways: `<plugin>/lib/index.js` when bundled and
+ * `<plugin>/src/host/python-worker.ts` when run from source, so the walk up has
+ * to accept both depths rather than assume one.
+ */
+export function resolveWorkerScript(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, '..', '..', 'python', 'cad_worker', 'worker.py'), // src/host → <plugin>
+    join(here, '..', 'python', 'cad_worker', 'worker.py'), // lib/ → <plugin>
+    join(here, 'python', 'cad_worker', 'worker.py'),
+  ];
+  for (const candidate of candidates) if (existsSync(candidate)) return candidate;
+  throw new Error(`cad_worker/worker.py not found; looked in ${candidates.join(', ')}`);
+}
+
+/** Scratch directory for by-file payloads (STL bytes, point arrays, results). */
+export async function workerScratchDir(): Promise<string> {
+  const dir = join(pythonRuntimeRoot(), 'tmp', 'worker');
+  await mkdir(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * A resident worker: one process, JSON-lines frames, id-correlated replies.
+ *
+ * Single-threaded by design (the worker answers one frame at a time), so the
+ * host must budget for QUEUEING when it issues concurrent requests — the
+ * acceptance measures two in-flight requests finishing in the serial sum. A
+ * deadline that expires therefore marks the worker unusable and forces a
+ * restart: the request may still be running, and reusing a half-broken worker
+ * is how a timeout turns into a corrupted answer.
+ */
+export class PythonWorker {
+  hello: PythonWorkerHello | null = null;
+  private readonly child: ChildProcess;
+  private readonly onLog?: (line: string) => void;
+  private buffer = '';
+  private nextId = 1;
+  private readonly pending = new Map<number, PendingRequest>();
+  private failure: Error | null = null;
+  private helloWaiter: { resolve: (hello: PythonWorkerHello) => void; reject: (error: Error) => void } | null = null;
+
+  // NOTE: no TypeScript parameter properties here (`constructor(private x)`) —
+  // the sources are loaded by Node's strip-only type stripping in tests, which
+  // rejects that syntax outright.
+  constructor(child: ChildProcess, onLog?: (line: string) => void) {
+    this.child = child;
+    this.onLog = onLog;
+    child.stdout?.on('data', (chunk: Buffer) => this.ingest(chunk));
+    child.stderr?.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split('\n')) if (line.trim()) this.onLog?.(line.trim());
+    });
+    child.once('error', (error: Error) => this.fail(new Error(`python worker failed: ${error.message}`)));
+    child.once('exit', (code, signal) => this.fail(new Error(`python worker exited (code ${code ?? 'null'}, signal ${signal ?? 'none'})`)));
+  }
+
+  get alive(): boolean {
+    return this.failure === null;
+  }
+
+  get processId(): number | undefined {
+    return this.child.pid;
+  }
+
+  private ingest(chunk: Buffer): void {
+    this.buffer += chunk.toString('utf8');
+    let index = this.buffer.indexOf('\n');
+    while (index >= 0) {
+      const line = this.buffer.slice(0, index).trim();
+      this.buffer = this.buffer.slice(index + 1);
+      index = this.buffer.indexOf('\n');
+      if (!line) continue;
+      let frame: Record<string, unknown>;
+      try {
+        frame = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        this.onLog?.(`unparsable worker frame: ${line.slice(0, 200)}`);
+        continue;
+      }
+      if (frame.type === 'hello') {
+        this.hello = frame as unknown as PythonWorkerHello;
+        const waiter = this.helloWaiter;
+        this.helloWaiter = null;
+        waiter?.resolve(this.hello);
+        continue;
+      }
+      const id = Number(frame.id);
+      const entry = this.pending.get(id);
+      if (!entry) {
+        this.onLog?.(`unsolicited worker frame id=${String(frame.id)}`);
+        continue;
+      }
+      this.pending.delete(id);
+      clearTimeout(entry.timer);
+      if (frame.ok) entry.resolve(frame.result);
+      else {
+        const traceback = typeof frame.traceback === 'string' ? `\n${frame.traceback}` : '';
+        entry.reject(new Error(`${entry.op} failed: ${String(frame.error)}${traceback}`));
+      }
+    }
+  }
+
+  private fail(error: Error): void {
+    if (this.failure) return;
+    this.failure = error;
+    const waiter = this.helloWaiter;
+    this.helloWaiter = null;
+    waiter?.reject(error);
+    for (const entry of this.pending.values()) {
+      clearTimeout(entry.timer);
+      entry.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  async waitForHello(timeoutMs = DEFAULT_HANDSHAKE_TIMEOUT_MS): Promise<PythonWorkerHello> {
+    if (this.hello) return this.hello;
+    if (this.failure) throw this.failure;
+    return await new Promise<PythonWorkerHello>((resolvePromise, rejectPromise) => {
+      const timer = setTimeout(() => {
+        this.helloWaiter = null;
+        rejectPromise(new Error(`python worker handshake timed out after ${timeoutMs} ms`));
+      }, timeoutMs);
+      this.helloWaiter = {
+        resolve: (hello) => {
+          clearTimeout(timer);
+          resolvePromise(hello);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          rejectPromise(error);
+        },
+      };
+    });
+  }
+
+  /** Send one request. Replies are correlated by id, not by order. */
+  request<T = unknown>(op: string, params: Record<string, unknown> = {}, options: { timeoutMs?: number } = {}): Promise<T> {
+    if (this.failure) return Promise.reject(this.failure);
+    const id = this.nextId++;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
+    return new Promise<T>((resolvePromise, rejectPromise) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        const error = new Error(`python worker ${op} timed out after ${timeoutMs} ms`);
+        this.fail(error);
+        rejectPromise(error);
+      }, timeoutMs);
+      this.pending.set(id, {
+        op,
+        resolve: resolvePromise as (value: unknown) => void,
+        reject: rejectPromise,
+        timer,
+      });
+      this.child.stdin?.write(`${JSON.stringify({ id, op, params })}\n`);
+    });
+  }
+
+  stop(): void {
+    this.fail(new Error('python worker stopped'));
+    if (this.child.pid === undefined) return;
+    try {
+      if (process.platform === 'win32') this.child.kill('SIGKILL');
+      else process.kill(-this.child.pid, 'SIGKILL');
+    } catch {
+      try {
+        this.child.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+}
+
+let sharedWorker: PythonWorker | null = null;
+
+/** The process-wide worker; starts it on first use and restarts it after a death. */
+export async function ensurePythonWorker(options: PythonWorkerOptions = {}): Promise<PythonWorker> {
+  if (sharedWorker?.alive) return sharedWorker;
+  sharedWorker = null;
+  const runtime = await ensurePythonRuntime({ onProgress: options.onLog });
+  const child = spawn(runtime.venvPython, ['-I', resolveWorkerScript()], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+  });
+  const worker = new PythonWorker(child, options.onLog);
+  try {
+    await worker.waitForHello(options.startupTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS);
+  } catch (error) {
+    worker.stop();
+    throw error;
+  }
+  sharedWorker = worker;
+  return worker;
+}
+
+export function resetPythonWorker(): void {
+  sharedWorker?.stop();
+  sharedWorker = null;
 }

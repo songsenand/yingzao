@@ -74,7 +74,7 @@ check(
 );
 const requirementLines = REQUIREMENTS_LOCK.split('\n').filter((line) => line && !line.startsWith('#') && !line.startsWith(' '));
 const pinned = requirementLines.filter((line) => /^[a-z0-9_.-]+==[0-9]/.test(line));
-check(pinned.length === 7, 'seven dependencies are pinned with ==', `${pinned.length} found`);
+check(pinned.length === 8, 'eight dependencies are pinned with ==', `${pinned.length} found`);
 check(
   REQUIREMENTS_LOCK.includes('# cad-exclude: darwin-x64 |') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
   'rapier3d carries the darwin-x64 exclude directive',
@@ -232,11 +232,11 @@ try {
     const imports = await runPython(
       {
         code: [
-          'import numpy, scipy, trimesh, manifold3d, networkx, skfem, rapier3d, sys',
+          'import numpy, scipy, trimesh, manifold3d, networkx, skfem, rtree, rapier3d, sys',
           'print("python", sys.version.split()[0])',
           'print("numpy", numpy.__version__, "scipy", scipy.__version__)',
           'print("trimesh", trimesh.__version__, "networkx", networkx.__version__)',
-          'print("scikit-fem", skfem.__version__)',
+          'print("scikit-fem", skfem.__version__, "rtree", rtree.__version__)',
           'print("rapier3d", rapier3d.__name__)',
           'print("manifold3d", manifold3d.__name__)',
         ].join('\n'),
@@ -245,7 +245,7 @@ try {
       },
       (message) => console.log(`      … ${message}`),
     );
-    check(imports.ok, 'all seven dependencies import in the venv', imports.stderr.trim().split('\n').slice(-2).join(' | '));
+    check(imports.ok, 'all eight dependencies import in the venv', imports.stderr.trim().split('\n').slice(-2).join(' | '));
     check(/^python 3\.13/.test(imports.stdout.trim()), 'the interpreter is the pinned 3.13', imports.stdout.trim().split('\n')[0]);
 
     const crash = await runPython({

@@ -53,15 +53,16 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
 | 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
-| 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **暂留 TS（有数据）** | ⚠️ **实测反转**：Python 版比现役 TS 内核**慢 2.5–4×**（见 §2.1），是第一条有数据的性能负收益；SDF 依赖 BVH 最近点也慢 30×（但绝对量可接受）。**原生路径属中后期**（用户 2026-10-08 阶段决定），到那时再定归属 |
+| 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **P（批次 4；接受慢）** | ⚠️ **实测**：Python 版比现役 TS 内核**慢 2.5–4×**；用户 2026-10-08 拍板**仍迁 Python**，并在工具上**标记"后续 Rust/C 加速"**（原生按阶段决定留中后期） |
 | 17 | `recall_reference_image` | —（查 DSH 附件） | 全部 | **T** | 这是平台 API，不是领域 |
 | 18 | `delivery_audit` | 交付规则、文件与网格核对 | schema | **P** | |
 | 19 | `run_python` | 已落地 | — | 已落地 | |
 | 20 | `python_runtime` | 已落地 | — | 已落地 | |
 
-**非工具车道**：体素 FEM（现为 `scripts/probe-*.mjs`，手写 matrix-free CG）→ **P + 工具化**，
-但**实测有前提**：scikit-fem 的稀疏组装比 TS 全过程慢 3–17×（求解本身反而快）——要么照搬
-scikit-fem 路线接受组装成本，要么在 Python 里写 matrix-free（见 §2.1）。
+**非工具车道**：体素 FEM（现为 `scripts/probe-*.mjs`，手写 matrix-free CG）→ **P + 工具化**
+（批次 4）。**实测前提**：scikit-fem 的稀疏组装比 TS 全过程慢 3–17×（求解本身反而快）。
+用户 2026-10-08 拍板：**接受慢，仍迁 Python，并在工具上标记"后续 Rust/C 加速"**；
+若未来改用 Python 侧 matrix-free（而非照搬 scikit-fem 组装），该成本前提需重新实测（见 §2.1）。
 
 ### 2.1 已实测的 TS ↔ Python 差异（2026-10-08）
 
@@ -133,11 +134,11 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 
 | 批次 | 内容 | 为什么排这个位置 |
 |---|---|---|
-| **0** | 常驻 worker + JSON-lines 协议（§12.3）；验收写进"worker 往返 < 1 ms、冷启动 400+ ms"这对数字 | 让"能迁就迁"成立，是所有迁移的前提 |
-| 1 | **Python 更快的那些**：`merge_parts`/`validate_assembly`（Manifold 3×）、`check_connectivity`（1.7×）、STL 解析零拷贝、`measure_closest`（+`rtree`，慢 30× 但绝对量可接受） | 数据支持"迁了更好" |
+| **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
+| 1 | **Python 更快的那些**：`merge_parts`/`validate_assembly`（Manifold 3×）、`check_connectivity`（1.7×）、STL 解析零拷贝、`measure_closest`（`rtree` 已进锁） | 数据支持"迁了更好" |
 | 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
-| ⏸ | `simulate_fluid`（MPM 内核）、体素 FEM 的组装路线 | **实测为负收益（慢 2.5–4× / 3–17×）**；等**中后期**原生路线，或先用 Python 写 matrix-free 再测（未做） |
+| 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |
 
 ## 6. 单个工具"迁移完成"的定义
 

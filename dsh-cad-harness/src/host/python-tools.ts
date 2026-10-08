@@ -263,7 +263,7 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
   register(defineTool({
     name: 'python_runtime',
     description:
-      'Status and repair for the plugin\'s bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rapier3d). ' +
+      'Status and repair for the plugin\'s bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). ' +
       'action "status" (default) reports where it is, whether it is usable, its size and the last error; ' +
       '"provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment. ' +
       'Use it when run_python reports a runtime problem, or to warm the runtime before a long batch of Python work.',

@@ -1216,3 +1216,51 @@ Python 领域能力都挂在它上面，换路要重下重装）；第 4 条（�
 - 原生基准脚本 `scripts/native/mpm-kernel-bench.c` **保留但不参与构建**（编译产物不进仓库），
   数字作为**中后期**决策的输入；不再扩展原生工作。
 - batch 0（常驻 worker）仍是所有迁移的前提，顺序不变。
+
+## 2026-10-08：batch 0 落地 + rtree 进锁 + MPM/FEM 迁 Python（接受慢，标记后续原生）
+
+**触发条件：** 第 1 条（用户逐条拍板）；第 4 条（决定批次内容与依赖集）。
+
+**用户决定（三条）：**
+1. **batch 0（常驻 worker + JSON-lines）开工**。
+2. **`rtree 1.4.1` 进锁**。
+3. **MPM/FEM 迁 Python**（**接受 2.5–4× 的慢**），**同时标记后续用 Rust/C 加速**。
+
+**落地内容（batch 0 + rtree）：**
+
+- `python/cad_worker/worker.py`：常驻 worker。帧 `{id, op, params}` →
+  `{id, ok, result}` / `{id, ok:false, error, traceback}`；hello 带 `protocolVersion` 与 ops；
+  v1 ops = `ping` / `versions` / `stl_stats` / `closest_points` / `crash`；
+  **大载荷走文件路径**（点集 in `.f64`，距离与最近点 out `.f64`）。
+- `src/host/python-worker.ts`：新增 `PythonWorker` 类 + `ensurePythonWorker()`（进程内单例、
+  崩溃后重启）+ `resolveWorkerScript()`（源码与打包两种目录深度）+ `workerScratchDir()`。
+  `runPython` 保持不变——`run_python` 的一次性进程与常驻 worker 是**同一接线点上的两种形态**。
+- `package.json` 的 `files` 加入 `python/`（不发布 = 对别人不存在）。
+- 依赖集 **7 → 8**：加 `rtree 1.4.1`（七平台全有 py3 wheel，0.37–1.48 MB，无依赖、无编译器）。
+- 验收 `dsh-cad-harness/scripts/accept-python-worker.mjs`，8 组断言全绿：
+  握手 **14.8 ms**、ping **0.026 ms** 中位数（200 次）、八个依赖可导入、
+  **参数与结果都走文件**（1600 + 4800 字节）、
+  **最近点距离与 TS 的 three-mesh-bvh 完全一致（max |Δ| = 0 mm，engine=rtree）**、
+  失败帧带完整 traceback、kill 后重启（pid 17 → 48）、
+  **两个并发请求 116 ms → 230 ms（严格串行）**、打包检查。
+- 顺带实测到一个既有机制：**锁变化会通过 venv marker 触发重建**——本次加 rtree 后，
+  旧 venv 被自动重建并装上 rtree，无需人工干预。
+
+**MPM/FEM 的决定与它的数据（不冲突，是取舍）：**
+
+| 车道 | 实测（TS ↔ Python） | 决定 |
+|---|---|---|
+| MPM 内核 | Python 慢 **2.5–4×** | **迁 Python**（接受），**标记后续 Rust/C 加速** |
+| 体素 FEM | scikit-fem 组装慢 **3–17×**（求解反而快） | 同上 |
+
+理由：判据（**Python 是第一语言**）优先于该量级的性能差；而"性能兜底"已按用户既有阶段
+决定排到**中后期**，所以此处只**标记**待办，不在本阶段做原生实现。
+⇒ 矩阵里 MPM / FEM 由"⏸ 暂留 TS"改为"迁 Python（中后期原生加速）"。
+
+**影响：**
+
+- `docs/TOOL-RUNTIME-MATRIX.md`：batch 0 标为已落地；批次表按新决定重排（迁移队列纳入
+  MPM/FEM），每个相关工具的"完成定义"附**原生加速后续标记**。
+- `HARNESS.md §12.3` 补上 worker 的落地事实与验收；`DESGIGN.md §26` 补 worker 形态。
+- 依赖集 8 个，锁与 `requirementsSha` 已更新；用法与验收命令不变。
+- **工具实现仍未改动**：batch 0 只新增基建；具体工具的迁移从下一步开始。

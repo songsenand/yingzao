@@ -60,6 +60,12 @@ const PACKAGES = [
   // the work already in the repo is not the runtime this project asked for.
   // Pure-python wheel, numpy+scipy only — no platform matrix, no compiler.
   { name: 'scikit-fem', version: '12.0.2' },
+  // Spatial index for trimesh's exact closest-point queries. Without it
+  // `closest_point_naive` is 224–350× slower than three-mesh-bvh; with it the gap
+  // is 30× at 0.61 ms/query (200 points = 122 ms), which the user accepted as the
+  // price of moving measure_closest to Python (2026-10-08).
+  // No dependencies; py3 wheels for all seven targets; no compiler.
+  { name: 'rtree', version: '1.4.1' },
   {
     name: 'rapier3d',
     version: '0.36.1',

@@ -30,6 +30,7 @@
   },
   "files": [
     "lib/",
+    "python/",
     "cordis.patch.yml"
   ],
   "scripts": {
