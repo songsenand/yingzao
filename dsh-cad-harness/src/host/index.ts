@@ -10,6 +10,7 @@ import type { ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection';
 import { registerCadTools } from './tools.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
+import { configurePythonRuntime, ensurePythonRuntime, pythonRuntimeMode, recordRuntimeFailure } from './python-runtime.ts';
 
 export const name = 'cad-harness';
 
@@ -53,6 +54,17 @@ function cubeBinaryStl(size = 20): Uint8Array {
 
 export function apply(ctx: any, config: ToolScopeConfig = {}) {
   const cadTools = registerCadTools(ctx, config);
+
+  // The bundled Python runtime (DECISION-LOG 2026-10-08). The mode comes from
+  // the profile patch and is overridden by DSH_CAD_PYTHON. Default 'auto' costs
+  // nothing at startup and installs on the first run_python call; 'eager' is the
+  // opt-in for deployments that would rather pay the one-time download now than
+  // during a session. Nothing here blocks plugin activation.
+  configurePythonRuntime({ mode: config?.pythonRuntime });
+  if (pythonRuntimeMode() === 'eager') {
+    void ensurePythonRuntime({ onProgress: (message) => ctx.logger?.info?.(`cad-harness: python runtime: ${message}`) })
+      .catch((error) => recordRuntimeFailure(error, { onProgress: (message) => ctx.logger?.warn?.(`cad-harness: ${message}`) }));
+  }
 
   // Keep the CAD catalog out of sessions that did not ask for it (see
   // tool-scope.ts for the measurement and for the adoption cost).

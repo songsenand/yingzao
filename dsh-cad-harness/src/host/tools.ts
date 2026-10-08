@@ -23,6 +23,7 @@ import { runMotion } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
+import { registerPythonTools } from './python-tools.ts';
 import { measureDistance, closestPointsBetweenMeshes, closestPointsMeshVsSphere, buildMeshBvh, type MeshData } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -3464,6 +3465,14 @@ export function registerCadTools(
       },
     });
   };
+  // --- run_python / python_runtime: the bundled Python runtime --------------
+  //
+  // Registered through the same helper as every other CAD tool, so the preset
+  // scope filter hides them from sessions that never named the CAD preset. The
+  // runtime itself is an artifact this plugin ships (DECISION-LOG 2026-10-08),
+  // not a capability we assume the host machine has.
+  registerPythonTools(registerTool, ctx.logger);
+
   registerWhenReady();
   return registered;
 }

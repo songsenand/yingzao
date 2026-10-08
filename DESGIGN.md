@@ -1352,7 +1352,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 权威编辑通道 | 约束保持的精确编辑 + 可追溯（HARNESS.md §4 生产力缺口；Customizer 只改顶层标量） | 待办 |
 | skill 化 | 三层判据选型、参数甜点、陷阱清单写成 skill（HARNESS.md §6；判据：删掉 skill 读源码仍可达成 = 合格导览） | 待办 |
 | python-engine 集成 | ~~试探已完成并确认可用~~ **已取消（v2.13）**：架构 A 不用 OpenSCAD 内嵌 Python（ABI 绑死 3.10 + 无 pip 生态）；试探结论存档 HARNESS.md §7.1 | ❌ 取消 |
-| **Python 领域运行时落地** | v2.13 裁决：worker（Python 3.13）+ JSON-lines 协议 + 唯一接线点 `src/host/python-worker.ts`；第一步接 M4R 支柱 A 的 `examples/` 场景脚本（零风险纯新增）。规范见 HARNESS.md §12 | 待办（新） |
+| **Python 领域运行时落地** | **供给 v1 已交付（v2.30，2026-10-08，§26）**：插件自带独立 CPython（python-build-standalone，pin 3.13.16）+ 锁定 venv + `run_python` / `python_runtime`；时机是运行期（首次调用/`eager` 预热），不是 postinstall（pnpm 11 拦脚本）。**待做**：§12.3 的常驻 worker + JSON-lines 协议，第一步接 M4R 支柱 A 的 `examples/` 场景脚本。规范见 HARNESS.md §12 | 🚧 v1 完成 / worker 待办 |
 | 草稿 chip 渲染调查 | 与 A 路径同源 | 与 A 合并 |
 
 ### 12.4 长期与中期储备
@@ -2475,3 +2475,82 @@ MPM 纯流体且无 F 路径）。但 `sdf.ts` 的**逐格体素化**（`solidMa
 规则网格）恰好是 hex8 线弹性 FEM 所需的网格，绕开了体网格剖分与稀疏矩阵组装。
 ⇒ 走**小体素 FEM 车道**，第一条验证用**悬臂梁 vs 梁理论**。
 详见 `M4-M5-REVIEW.md §7`。
+
+---
+
+## 26. 自带 Python 运行时：供给、工具与边界（v2.30，2026-10-08）
+
+**一句话**：解释器与依赖是**插件供给的产物**，不是宿主机器的能力。决策与实测见
+`docs/DECISION-LOG.md` 2026-10-08；规范与变量表见 `HARNESS.md §12.7`。
+
+### 26.1 为什么不是"用系统的 Python"
+
+目标机器上"有 Python"这件事不可靠：发行版 3.8~3.14 不等，PEP 668 禁止往系统解释器
+装包，conda/pyenv 各有各的世界。而我们需要的是一套**确定的**解释器 + 依赖（含 abi3 的
+rapier3d），否则同一个插件在不同机器上会跑出不同的数。所以：**把运行时当成版本化产物**，
+用 python-build-standalone 的可重定位构建 + 带 hash 的依赖锁。
+
+### 26.2 为什么供给发生在运行期
+
+pnpm 11 默认拦下依赖构建脚本：postinstall 下载器会让 `dsh plugin install` 失败并把待批
+脚本交给用户在插件页批准重试，取消还回滚 `package.json`。而**宿主代码不受工作区沙箱
+限制、也不需要这道许可**。因此：
+
+| `pythonRuntime` / `DSH_CAD_PYTHON` | 行为 |
+|---|---|
+| `auto`（默认） | 启动只做健康检查；首次 `run_python` 阻塞供给（带进度） |
+| `eager` | 启动即后台预热（适合批量 Python 工作前的部署） |
+| `off` | 完全不碰 Python（`run_python` 明确报错） |
+| `system` | 用系统 CPython 3.10+（`DSH_CAD_PYTHON_BIN` 可指定），仍建自己的 venv |
+
+### 26.3 链路与落点
+
+```
+python-lock.ts（生成物）          解释器归档名 + sha256（七平台）、依赖 wheel hash、索引表
+  → 下载/校验 → 解包（纯 JS tar.gz）  $DSH_HOME/cad/runtime/cache、python/<版本>
+  → python -m venv                   $DSH_HOME/cad/runtime/venv
+  → pip install --require-hashes     $DSH_HOME/cad/runtime/requirements.lock（按目标裁剪）
+  → 状态                              $DSH_HOME/cad/runtime/state.json
+```
+
+- 生成器 `scripts/gen-python-lock.mjs` 从官方 `SHA256SUMS` 与 PyPI JSON 重算锁；`--check`
+  供 CI 检漂移。**锁变了，venv marker 就对不上，自动重装**（`repair` 是显式入口）。
+- **解包器自研**（`tar-extract.ts`）：不依赖系统 tar、不引 npm 依赖，拒绝绝对路径、
+  `..` 越界与逃逸符号链接；实测 pbs 归档只含普通文件与符号链接两种成员，另带 9 个顶层
+  LICENSE（**保留**，随解释器一起落盘——我们在再分发 CPython）。
+- **平台矩阵**：linux gnu/musl × x64/arm64、darwin arm64/x64、win32-x64。Windows 用 pbs
+  的 `install_only` 而不是官方 embeddable：后者没有 `venv`/`ensurepip`，要改 `._pth`，
+  会把"一条代码路径"拆成两条。
+
+### 26.4 工具面与用法
+
+- `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
+  `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
+  失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。
+- `python_runtime`：`status`（是否就绪、路径、来源、占用、上次错误）/ `provision`（现在装）
+  / `repair`（重建依赖环境）。冷启动看起来像"卡住"是最糟的体验，所以进度与状态都是一等输出。
+- 两者与其余 CAD 工具同受预设可见性过滤（非 CAD 会话看不到），避免给纯编码会话增加 schema。
+
+### 26.5 边界（明确不做的）
+
+- **不是沙箱**：子进程以宿主用户身份运行，文件访问与 `bash` 同级。本插件的主张是**可复现**，
+  不是隔离；把它说成沙箱才是真的撒谎。
+- **§12.3 的常驻 worker 尚未实现**：v1 每次调用一个全新进程（无残留状态、超时可靠、
+  traceback 干净）。领域 worker（几何/仿真库的常驻进程 + JSON-lines）后续挂在同一接线点旁。
+- **rapier3d 无 darwin-x64 wheel**：该平台用锁里的 `cad-exclude-targets` 指令排除，
+  宁可少一个库也不在用户机上编译 Rust。
+- **离线/内网**：可用 `DSH_CAD_PYTHON_INDEX_URL` 指向内网索引；整仓离线镜像（wheelhouse）
+  尚未做，需要时再加 `--find-links` 通道。
+
+### 26.6 实测与验收
+
+本机（Arch Linux）实测：归档 33.4MiB / 展开 105MB / 下载 3.5s；七个依赖全部命中预编译
+wheel（`cp313-*-manylinux_2_27_x86_64`、`py3-none-any`、`cp39-abi3`），**不需要编译器**；
+冷启动（下载归档 + 装约 230MB 依赖）**353–476 秒**，venv 就绪后总占用 **381–383 MiB**；
+默认 PyPI 直连同一批依赖 **11m44s** → 索引默认带镜像兜底（同日实测：npmmirror 的 PyPI
+路径 404、TUNA 403、阿里云索引可用）。
+
+```bash
+node dsh-cad-harness/scripts/accept-python.mjs          # 全量：锁 / 解包器 / 真实供给 / 执行 / 开关
+node dsh-cad-harness/scripts/accept-python.mjs --quick  # 跳过网络段
+```

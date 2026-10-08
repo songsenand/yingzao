@@ -344,7 +344,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 4. **权威编辑通道**——约束保持的精确编辑 + 可追溯（§4 缺口）
 5. ~~**python-engine 集成**~~ **取消（2026-09-28）**——架构 A 不用 OpenSCAD 内嵌 Python（§12.2）；试探结论存档备查（§7.1）
 6. **Replicad/STEP 桥**（后置，内核可插拔是防御性储备，不是当前目标）
-7. **Python 领域运行时落地**（§12）：worker + 协议 + 唯一接线点；第一步接 M4R 支柱 A 的 `examples/` 场景脚本（零风险纯新增）
+7. **Python 领域运行时落地**（§12）：**供给 v1 已落地 2026-10-08**（独立解释器 + 锁定 venv + `run_python` / `python_runtime`，见 §12.7）；**待做**：常驻 worker + JSON-lines 协议（§12.3），第一步接 M4R 支柱 A 的 `examples/` 场景脚本
 7. 每季度：竞态追踪（§9 最后一项）
 
 **2026-10-01 插队交付并已落盘**：**外部 STL 导入（`import_part`）**——不在上面 1-7 的任何一条里，因为它是被错误归因（§7.3）掩盖的缺口，由"多人协作 + 拼装"的真实需求裁决出来的。它同时把第 2 条代码面的"零件文件化"补上了外部来源那一半：现在版本库里有几何是别人给的。**未做的邻接面**：按版本号把已有件布尔合成新件（真正的"拼接"），它需要版本图记住自己的来源版本（§8 映射表的"版本模型零件级 → 版本图"）。
@@ -402,6 +402,51 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 - 裁决：B-rep/STEP **继续后置**（本就排在装配与视觉表达之后）；将来真要 STEP 时按此顺序评估：**FreeCAD headless（Python，成熟 STEP 双向）→ cadquery-ocp → Replicad(JS/WASM)**
 - 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy；OCCT 只在 B-rep 任务里出现，可 lazy import 或独立 worker
 - **2026-10-01 补充**：**STL 导入已交付，且不需要 OCCT**（§7.3）——"导入既有件"这条缺口的一半被证明与 B-rep 无关。STEP 导入的评估顺序不变，但已手头核实 `replicad` + `replicad-opencascadejs` 1.1.0 的 API（`importSTEP` / `exportSTEP` / `setOC`）与体量（~55MB wasm，无传递依赖），它是"留在 Node 栈"的那条路，且能顺带提供 B-rep→精确 datum。**引入与否是内核可插拔线上的决定，未做出。**
+
+---
+
+### 12.7 Python 运行时供给（2026-10-08 落地 v1）
+
+**决策与实测依据**见 `docs/DECISION-LOG.md` 2026-10-08 条目。一句话：**解释器是随插件
+供给的产物，不是宿主机器的能力**——"别人机器上一定有可用的 Python"不成立（发行版 3.8~3.14
+不等、PEP 668 禁装包、conda/pyenv 各说各话）。
+
+- **来源**：python-build-standalone `install_only_stripped`，pin `cpython-3.13.16+20261003`。
+  七个目标（linux gnu/musl × x64/arm64、darwin arm64/x64、win32-x64）的归档名与 sha256 锁在
+  `dsh-cad-harness/src/host/python-lock.ts`，由 `scripts/gen-python-lock.mjs` 从官方
+  `SHA256SUMS` 与 PyPI JSON 生成（`--check` 供 CI 校验漂移）。
+- **时机**：**运行期**，不是安装期。`auto`（默认）启动只做健康检查、首次 `run_python`
+  阻塞供给；`eager` 启动即后台预热；`off` / `system` 见下表。**没有 postinstall**——
+  pnpm 11 会拦依赖脚本并要求 GUI 批准后重试，失败还回滚 `package.json`，安装期供给不成立。
+- **落点**：`$DSH_HOME/cad/runtime/`（`python/<版本>`、`venv/`、`cache/`、`state.json`），
+  跨项目共享；运行时**不进项目目录、不进 git**。
+- **依赖**：numpy / scipy / trimesh / manifold3d / networkx / **scikit-fem** / rapier3d 0.36，全部
+  `--require-hashes --only-binary=:all:` 锁定，因此**任何平台都不需要编译器**。
+  **rapier3d 没有 darwin-x64 wheel**，该平台用 marker 排除（宁可少一个库，也不要 Rust 构建）。
+- **工具面**：`run_python`（内联 `code` 或既有 `.py` 脚本、超时、stdout/stderr、完整 traceback）
+  与 `python_runtime`（status / provision / repair）。两者随 CAD 预设做可见性过滤，与其余
+  CAD 工具同一条纪律。§12.3 的**常驻 worker + JSON-lines 协议仍待做**，届时挂在同一接线点
+  `src/host/python-runtime.ts` 旁（`python-worker.ts` 已经是它的执行面）。
+- **不做沙箱**：子进程以宿主用户身份运行，与 `bash` 同级。本插件的主张是**可复现**
+  （锁定的解释器与依赖），不是隔离——把它说成沙箱才是真的撒谎。
+
+| 变量 | 作用 | 默认 |
+|---|---|---|
+| `DSH_CAD_PYTHON` | `auto` / `eager` / `off` / `system` | `auto` |
+| `DSH_CAD_PYTHON_BIN` | `system` 模式下的解释器绝对路径 | PATH 上的 `python3`（须 CPython ≥3.10） |
+| `DSH_CAD_PYTHON_MIRROR` | 解释器归档的下载根（替代官方源） | 官方 GitHub，失败依次转镜像 |
+| `DSH_CAD_PYTHON_INDEX_URL` | pip 索引 | PyPI → 阿里云 依次尝试（同日实测 npmmirror 的 PyPI 路径 404、TUNA 403） |
+| `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试/多实例用） | `$DSH_HOME/cad/runtime` |
+
+**实测（本机 Arch Linux，2026-10-08）**：归档 33.4MiB 压缩 / 105MB 展开 / 下载 3.5s；venv +
+七个依赖全部命中预编译 wheel；**冷启动（下载归档 + 装约 230MB 依赖）实测 353–476 秒**，
+视镜像与网络而定；总占用 **381–383 MiB**；**默认 PyPI 直连同一批依赖用了 11m44s**，
+故索引必须可配且默认带镜像兜底，供给过程必须有进度（`python_runtime` 与 `run_python`
+都会回报阶段与错误）。
+
+**验收**：`node dsh-cad-harness/scripts/accept-python.mjs`——锁完整性、解包器安全
+（拒绝路径穿越/绝对路径/逃逸符号链接）、真实供给（建 venv + 装锁 + 六库导入）、执行与
+traceback、关闭开关。`--quick` 跳过网络段。
 
 ---
 

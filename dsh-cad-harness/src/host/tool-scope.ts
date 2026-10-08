@@ -56,6 +56,14 @@ export interface ToolScopeConfig {
   toolScope?: 'global' | 'preset';
   /** Preset ids that keep the CAD tools when `toolScope` is `'preset'`. */
   presets?: readonly string[];
+  /**
+   * How the bundled Python runtime is provisioned (DECISION-LOG 2026-10-08).
+   * `'auto'` (default) health-checks at startup and installs on first use;
+   * `'eager'` starts the one-time install in the background at startup;
+   * `'off'` disables it; `'system'` uses a system CPython 3.10+ instead.
+   * `DSH_CAD_PYTHON` overrides this value.
+   */
+  pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
 }
 
 /** What the scope decided for one agent, for logging and for the acceptance test. */

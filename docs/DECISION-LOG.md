@@ -1018,3 +1018,76 @@ node + dsh + 插件 + OpenSCAD）。
 - MPM 相关的复核议程（§24 的工况表达与物性）**排到后期**。
 - 后续所有仿真产物需带 provenance；自建产物落在 `<cwd>/sim/`。
 - 新增 FEM 车道是**比修流体更大的决策**，本次只确认方向与前置检查，**尚未拍板实现**。
+
+## 2026-10-08：插件自带 Python 运行时——宿主首次运行供给独立 CPython
+
+**触发条件：** 第 1 条（用户拍板）；第 3 条（供给策略、落点与锁一旦落地，后续所有
+Python 领域能力都挂在它上面，换路要重下重装）；第 4 条（波及 host 接线、工具目录、
+分发方式、文档与验收）。
+
+**要解决的问题：** 插件要给别人用，而"别人机器上一定有可用的 Python"不成立——
+发行版 Python 从 3.8 到 3.14 都有、PEP 668 禁止直接装包、conda/pyenv 各说各话。
+用户原话："不仅仅要加，而且要能够别人安装插件的时候也能够自动安装一个 python
+运行时；Windows 下应该好解决，用一个嵌入式的 python 运行时即可，但是 Linux 下
+应该怎么解决……关键是优雅的解决。"同时要回答：放在哪个时机、走哪条路径。
+
+**决策内容：**
+
+1. **供给方式 = 宿主自行供给独立 CPython。** 从 python-build-standalone 取
+   `install_only_stripped` 归档（pin `3.13.16+20261003`），校验 sha256 后解包，
+   再用它建 venv、按带 hash 的锁装依赖。**不做 npm postinstall。**
+2. **时机 = 运行期而非安装期。** 默认 `auto`：启动只做健康检查，**首次调用阻塞供给**
+   （带进度）；`eager` 才在启动时后台预热（不阻塞激活）；`python_runtime` 工具可显式
+   provision/repair/status。
+3. **来源优先级：** ① DSH 载体自带的 primary runtime（`DSH_PRIMARY_RUNTIME` /
+   `DSH_BUNDLED_PRIMARY_RUNTIME`，有就直接用它建 venv，省一次下载）→ ② 自供给
+   pbs 运行时 → ③ 显式 opt-in 的系统 python。
+4. **Windows 不用官方 embeddable。** 它没有 `venv`/`ensurepip`，`python._pth` 默认关
+   site，装依赖要自己补 pip/改 `._pth`；pbs 的 windows `install_only` 与 Linux/macOS
+   是同一类产物（自带 pip + venv）。**"五平台一条代码路径"优先于省那 15MB。**
+5. **依赖集 v1** = `numpy` `scipy` `trimesh` `manifold3d` `networkx` + `rapier3d 0.36`
+   （HARNESS §12.4 的数值/网格档 + 物理交叉验证档）；OCP/build123d 仍后置。
+   **同日补充**：把 `scikit-fem 12.0.2` 也钉进锁——本仓库已有
+   `scripts/xval-cantilever-scikitfem.py`（同日 scikit-fem 交叉验证提交 256674a），
+   而"跑不了仓库里已有 Python 工作"的运行时不算交付；它是纯 Python wheel、
+   只依赖 numpy+scipy，不增加平台矩阵与编译负担。
+6. **落点** `$DSH_HOME/cad/runtime/`（跨项目共享，与 `telemetry/` 同级）：
+   `python/<版本>/` 解释器、`venv/` 依赖、`runtime.lock.json` 与 `requirements.lock`
+   锁、`state.json` 状态。
+7. **工具面 v1** = `run_python`（内联/脚本、超时、完整 traceback）+ `python_runtime`
+   （状态/修复）。领域 worker 的 JSON-lines 协议（HARNESS §12.3）随后长在同一接线点上。
+8. **网络可配**：`DSH_CAD_PYTHON_MIRROR`（解释器镜像）、`DSH_CAD_PYTHON_INDEX_URL`
+   （pip 索引），官方源 + 国内镜像兜底；`DSH_CAD_PYTHON=off` 关闭自动供给。
+
+**理由：**
+
+- postinstall 方案不成立：pnpm 11 拦依赖脚本，`installBundle` 会失败并把待批脚本交给
+  用户在插件页批准重试，失败/取消还要回滚 `package.json` 与 `pnpm-lock.yaml`
+  （`dsh-plugin-manager` README）。"装完就有"只能由宿主在运行期做。
+- 不把二进制塞进 npm（平台包方案）是**先不做而非不做**：每平台 ~35MB、升一次 Python
+  要重发五个包；留给将来"零下载发行版"。
+- 用系统 python 不满足可复现：同一插件在不同发行版上会跑在不同解释器/ABI 上。
+- 借用 DSH 载体自带的 Python 是零成本快路径，但它只带 Office 那套库
+  （numpy/pandas/docx/pptx/openpyxl/Pillow/lxml/XlsxWriter），CAD 依赖仍要我们装。
+
+**依据（2026-10-08 实测，本机 Arch Linux / Node 26.10.0 / uv 0.12.22）：**
+
+| 验证项 | 结果 |
+|---|---|
+| pbs 供给 | `uv python install 3.13` → `cpython-3.13.16-linux-x86_64-gnu`，33.4MiB 压缩 / 105MB 展开 / **3.5s**，自带 pip 26.2.1 + `venv` |
+| 免编译器 | venv 内装 numpy/scipy/trimesh/manifold3d/networkx：全部命中预编译 wheel（`cp313-cp313-manylinux_2_27_x86_64`、`py3-none-any`） |
+| 网络现实 | 默认 PyPI 下这批 ~200MB 用了 **11m44s**（直连慢）→ 索引必须可配、默认给镜像、过程必须有进度 |
+| 镜像可用 | `--mirror https://registry.npmmirror.com/-/binary/python-build-standalone` 3.2s 装好 |
+| rapier3d wheel | 0.36.1 有 macos-arm64、manylinux x86_64/aarch64、musllinux x86_64/aarch64、win_amd64（`cp39-abi3`，3.13 可用，~5–6MB）；**无 darwin-x64 wheel** → Intel Mac 上不装 rapier3d |
+| 锁数据 | tag `20261003` 的 `cpython-3.13.16+20261003-<target>-install_only_stripped.tar.gz` 七个目标（linux gnu/musl × x64/arm64、darwin ×2、win-x64）sha256 已取 |
+
+**影响：**
+
+- **明确推翻** `experiments/20261008_hole_kt_voxel_fem_probe.md` 补充 2 里"引入 Python
+  运行时违背'工具自包含'"的结论：自包含从"不引入运行时"重定义为"运行时由插件自带、
+  不依赖宿主发行版"。该实验报告**不改写**（历史留痕），本条决策覆盖其结论。
+- HARNESS §12 的"Python 领域运行时落地"由待办转主线；§12.3 的 worker 规范成为后续
+  实现的接口约定。
+- DESIGN 增记运行时章节；本仓库没有 README.md（环境变量因此记进 DESIGN）；新增验收
+  脚本进 `dsh-cad-harness/scripts/`。
+- `.tmp-pyprobe/`（2026-09-28 python-engine 试探遗留）的存档价值至此结束，可清理。
