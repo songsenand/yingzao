@@ -19,7 +19,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { compileStlOnly } from '../src/host/compile.ts';
-import { buildSdfFromStl } from '../src/host/sdf.ts';
+import { buildSdfFromStl, sdfAt } from '../src/host/sdf.ts';
 
 // ---------- 算例 ----------
 const WP = 40, LP = 50, TP = 5;        // 宽(y) 长(x) 厚(z)，mm
@@ -106,6 +106,12 @@ async function runCase(dx) {
   }
 
   const { KE, Dm } = elementStiffness(dx);
+  // ① 填充比加权：中心在实体内但部分是空气的格点，按 SDF 线性估占比
+  //    α = clamp(0.5 − d_center/dx, 0.05, 1)；深部实体 α=1。α 只是标量 ⇒ KE 仍全局共用。
+  const alpha = solid.map(([ix, iy, iz]) => {
+    const dc = sdfAt(sdf, (ix + 0.5) * dx, (iy + 0.5) * dx, (iz + 0.5) * dx);
+    return dc < -dx / 2 ? 1 : Math.min(1, Math.max(0.05, 0.5 - dc / dx));
+  });
   const elemDofs = solid.map(([ix, iy, iz]) => {
     const nds = [[ix,iy,iz],[ix+1,iy,iz],[ix+1,iy+1,iz],[ix,iy+1,iz],[ix,iy,iz+1],[ix+1,iy,iz+1],[ix+1,iy+1,iz+1],[ix,iy+1,iz+1]];
     const d = new Int32Array(24);
@@ -119,10 +125,11 @@ async function runCase(dx) {
     for (let e = 0; e < elemDofs.length; e++) {
       const d = elemDofs[e];
       for (let a = 0; a < 24; a++) ue[a] = d[a] >= 0 ? x[d[a]] : 0;
+      const al = alpha[e];
       for (let a = 0; a < 24; a++) {
         const row = a * 24; let s = 0;
         for (let b = 0; b < 24; b++) s += KE[row + b] * ue[b];
-        fe[a] = s;
+        fe[a] = s * al;
       }
       for (let a = 0; a < 24; a++) if (d[a] >= 0) y[d[a]] += fe[a];
     }
@@ -131,7 +138,7 @@ async function runCase(dx) {
   const diag = new Float64Array(nFree);
   for (let e = 0; e < elemDofs.length; e++) {
     const d = elemDofs[e];
-    for (let a = 0; a < 24; a++) if (d[a] >= 0) diag[d[a]] += KE[a * 24 + a];
+    for (let a = 0; a < 24; a++) if (d[a] >= 0) diag[d[a]] += KE[a * 24 + a] * alpha[e];
   }
 
   // 载荷：x=LP 面均布拉伸 σ（+x）
