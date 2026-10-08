@@ -1,112 +1,102 @@
-# 工具运行时矩阵：哪些保持 TS、哪些迁 Python、哪些需要原生
+# 工具运行时矩阵（v2：判据是"Python 是第一语言"）
 
-> 2026-10-08 起草。用户要求"**先拉列表，再实现**"。**本文件是提案**：除
-> "rapier3d 在 darwin-x64 的安装期确认"已落地外，下面没有任何迁移已实施。
-> 决策依据（引擎归属、实测耗时）全部可在本仓库复核。
+> **v1 作废**。v1 用"性能/精度"当判据，把大部分工具判成"保留 TS"——判据错了。
+> 用户 2026-10-08 修正：**Python 是 LLM 的第一语言，能迁到 Python 的应当优先迁移，
+> 只有明确负收益的才不做**。本文件是**提案**，未实施任何迁移。
 
-## 0. 判定方法：先问三个问题，再谈语言
+## 0. 判据与前置条件
 
-1. **热活现在由谁干？**
-   若已经是外部二进制（OpenSCAD）或原生 WASM（manifold = C++、rapier = Rust），
-   迁 Python 只会**多一层进程边界并丢掉那层原生性能** → 保持 TS 接线。
-2. **热循环是不是手写 JS 的数组/粒子循环？**
-   是 → numpy/scipy 向量化通常有 5–50× 的空间，是迁移的首选。
-3. **Python 之后还够快吗？**
-   只有**实测仍不达标**才上 Rust/C++；而且"上原生"多半是换成现成 WASM 包
-   （我们已经这么做了两次：CSG 用 manifold，刚体用 rapier），不是自己写内核。
+**默认**：领域逻辑 → Python。
+**保留 TS 只有三类理由**（每条都要写出来）：
 
-> 反例警告：`measure_closest` 走 three-mesh-bvh（已高度优化的 JS BVH）。
-> 把逐点最近点查询搬进 numpy 的 Python 循环**会更慢**——这类"看起来数值、
-> 实际是空间索引"的活不适用第 2 条。
-
-## 1. 现有 20 个工具的清点
-
-| # | 工具 | 实现位置 | 热活在哪 | 现状耗时证据 | 判定 |
-|---|---|---|---|---|---|
-| 1 | `generate_part` | compile.ts | OpenSCAD CLI（C++）+ Manifold | 秒级（渲染 4 视图） | 保持 TS |
-| 2 | `create_part` | parts.ts | 元数据 | 毫秒 | 保持 TS |
-| 3 | `set_datums` | version.ts | 元数据 | 毫秒 | 保持 TS |
-| 4 | `import_part` | import.ts + mesh.ts | STL 解析 + Manifold 校验 | 秒级 | 保持 TS |
-| 5 | `merge_parts` | assembly.ts | Manifold 布尔（C++/WASM） | 秒级 | 保持 TS |
-| 6 | `validate_assembly` | assembly.ts + assembly-render.ts | Manifold 布尔 + OpenSCAD 渲染 | 16 件 union+渲染实测 **2m27s**（瓶颈是 OpenSCAD，不是 JS） | 保持 TS |
-| 7 | `check_assembly` | assembly-check.ts + measure.ts | BVH 距离查询（JS） | 秒级 | 保持 TS |
-| 8 | `check_connectivity` | mesh.ts | 三角形并查集（JS） | 秒级 | 保持 TS（精度可另议） |
-| 9 | `check_printability` | tools.ts + mesh.ts | BVH 射线**采样**（600–4000 样本） | 亚秒 | 保持 TS（精度可另议） |
-| 10 | `measure_part` | inspect.ts + manifold | Manifold 体积/质心/惯性 | 秒级 | 保持 TS |
-| 11 | `measure_distance` | measure.ts | 点/球距离 | 毫秒 | 保持 TS |
-| 12 | `measure_closest` | measure.ts | BVH 最近点（JS） | 亚秒–秒级 | 保持 TS |
-| 13 | `render_part` | inspect.ts + compile.ts | OpenSCAD CLI | 秒级 | 保持 TS |
-| 14 | `simulate_physics` | physics.ts | rapier3d-compat（Rust/WASM） | 秒级（canonical） | 保持 TS |
-| 15 | `simulate_motion` | motion.ts | rapier3d-compat（Rust/WASM） | 秒级（canonical） | 保持 TS |
-| 16 | **`simulate_fluid`** | fluid.ts + **mpm.ts** + sdf.ts | **手写 JS 粒子循环** + BVH SDF | 实测线性：8.8k 粒子 **3.1ms/步**（600 步 2s）→ 564k 粒子 **189ms/步**（600 步 **114s**）；SDF 6.9 万格 260ms | **迁 Python（batch 2）** |
-| 17 | `recall_reference_image` | attachments | IO | 毫秒 | 保持 TS |
-| 18 | `delivery_audit` | delivery-audit.ts | 文件系统 + 网格检查 | 秒级 | 保持 TS |
-| 19 | `run_python` | python-worker.ts | CPython 子进程 | — | 已落地 |
-| 20 | `python_runtime` | python-runtime.ts | 供给/状态 | 冷启动 353–476s | 已落地 |
-
-**非工具但同样在算的活**（决定 batch 1 的顺序）：
-
-| 车道 | 实现 | 实测 | 判定 |
-|---|---|---|---|
-| 体素 FEM（承力与加强主线） | 仅 `scripts/probe-*.mjs`（手写 matrix-free CG） | 9.7k 单元 **5.7s** / 78k 单元 **16.1s** | **迁 Python + 工具化（batch 1）** |
-| scikit-fem 交叉验证 | `scripts/xval-cantilever-scikitfem.py` | 5120 单元秒级 | 已在锁里，直接复用 |
-
-## 2. 分类结论
-
-### A. 迁 Python（有明确数量级或能力收益）
-
-| 项 | 为什么 | 预期收益 | 验收对照 |
-|---|---|---|---|
-| **A1. 体素 FEM 工具化 + Python 实现** | 现在是脚本不是工具；scikit-fem 已在锁里；sparse 组装/直接解是 numpy/scipy 的主场 | 同算例预期 **5–20×**，且拿到 scikit-fem 的独立实现做对拍 | 悬臂梁 δ/σ vs 梁理论（已有基线 5.7s/16.1s 与 −3.5%/−0.9%） |
-| **A2. MPM 内核 numpy 化** | 540 行手写粒子循环，P2G/G2P 是纯数组运算；线性扩展说明算法没问题、只是每步常数大 | 预期 **5–20×**（564k 粒子 600 步从 114s 降到个位数~十几秒） | `data/bench/mpm-scaling.json` 的阶梯可直接复用（同场景、同 ms/step 口径） |
-| **A3. `check_connectivity` / `check_printability` 精度升级** | 现在分别是"并查集+壳数"与"射线采样估计"；numpy 可给**精确**面积/厚度场 | 质量 > 性能（采样误差 → 精确值） | 现有验收（accept-connectivity）+ 显微镜语料对照 |
-| **A4. `measure_part` 扩展** | manifold 已够快，但 trimesh 提供惯性张量/剖面/水密修复等更全的量 | 能力 > 性能 | 现有质量特性数值对照（microscope2 的 864.2cm³/907.5g） |
-
-### B. 需要原生（Rust/C++）——**先量后写，且优先换现成包**
-
-| 项 | 触发条件（实测门槛） | 首选做法 |
+| 类别 | 含义 | 例子 |
 |---|---|---|
-| B1. MPM 内核 | A2 之后仍 >10 万粒子 × 600 步 > 10s | Rust 内核（napi/wasm）或直接换成已有的并行 MPM 实现 |
-| B2. 空间索引密集查询 | `measure_closest`/SDF 在**百万级**格点或面片上成为瓶颈 | 先试 manifold 自带距离查询 / parry3d / embree 绑定；不自己写 BVH |
-| B3. CSG / 刚体 | 已经是原生（manifold / rapier） | **不重复造**：这两个领域的"高性能"已解决 |
+| ① 平台接线 | DSH 规定的宿主面，Python 根本够不着 | cordis 生命周期、`ctx.tools.register`、`ctx.attachments`、`connection.fetch` 路由、面板/回放、会话与项目路径解析、`llm/stream` 遥测 |
+| ② 明确负收益 | 迁移让某件事确定变差，且理由可复核 | 逐请求热路径引入 IPC；缺少必要的 Python 依赖导致退化 |
+| ③ canonical 冲突 | 同一问题域只能有一个权威实现，换边需要重新定基线 | 物理（TS `rapier3d-compat` 0.20 ↔ Python `rapier3d` 0.36） |
 
-### C. 保持 TS（14 项，理由见 §1 表）
+**前置条件：常驻 worker（HARNESS §12.3）必须先落地。**
+实测冷启动（本机，2026-10-08）：解释器本身 **11 ms**；`import numpy, scipy` 后 **~80 ms**；
+再算上 manifold3d/trimesh/scikit-fem 的导入，**每次调用起一个新进程 ≈ 0.1–0.3 s**。
+`measure_distance` 这类毫秒级工具，冷启动会把它放大 10–100×——那就是"负收益"，
+但它**只是时序问题**：常驻 worker 把每次调用压到 IPC 量级（~ms）之后，这条理由消失。
+⇒ **batch 0 = worker + JSON-lines**，它是"能迁就迁"的开关，不是可选项。
 
-工具 1–15、17、18：热活是 OpenSCAD 二进制、manifold、rapier 或纯 IO。
-迁移它们只会增加进程边界、丢掉原生性能，并把已经验收过的路径重新打开一遍。
+## 1. 分层：接线 vs 领域
 
-### D. 迁移规则（**需要你确认**）
+| 层 | 内容 | 归属 |
+|---|---|---|
+| 平台接线 | 工具 schema 与注册、预设可见性过滤、图片附件与裁剪策略、HTTP 路由、面板与回放数据、会话/项目路径、usage 遥测 | **TS**（§12.1，不可动） |
+| 领域逻辑 | 几何生成与解析、测量、装配契约、仿真、导入/合并、交付审计、版本与零件记录 | **Python**（默认） |
 
-1. **工具名不变，换的是后端实现。** 模型不应在 `simulate_fluid` 和
-   `simulate_fluid_py` 之间做选择；`run_python` 才是"开放场地"，工具是"窄接口"。
-2. **canonical 唯一**：同一问题域只能有一个 canonical（HARNESS §12.5）。
-   物理 canonical 仍是 TS 的 `rapier3d-compat`；Python `rapier3d` 只做交叉验证，
-   且在 **darwin-x64 上根本不装**——该平台物理继续用 TS 引擎（**已实现**：
-   锁里 `# cad-exclude: darwin-x64 | …`，安装期写进 `state.json`，
-   `python_runtime` 会明说"这台机器上没有 rapier3d，原因是没有 wheel、物理留在 TS"）。
-3. **先量后迁**：每个迁移都带前后对照数字（上表的"验收对照"列），
-   没有对照就不算完成。
+目标形态：`tools.ts` 收缩成"schema + 转发到 worker"，领域代码进 `python/cad_worker/`。
 
-## 3. 建议批次
+## 2. 逐工具：拆开"领域部分"与"接线部分"
 
-| 批次 | 内容 | 为什么排这个顺序 | 预估 |
-|---|---|---|---|
-| **1** | A1：体素 FEM 工具化 + Python/scikit-fem 实现 | 是你当前主线（承力与加强）；Python 生态现成；有现成对拍 | 1 个工具 + 1 个验收 |
-| **2** | A2：MPM numpy 化（工具名仍是 `simulate_fluid`） | 收益最大；有现成 bench 阶梯做对照 | 内核重写 + bench 对照 |
-| **3** | A3/A4：精度与能力迁移 | 质量收益，不紧急 | 两个工具的增量 |
-| 4（条件触发） | B1/B2：原生内核 | 只有实测不达标才做 | 待量 |
+| # | 工具 | 领域部分（迁 Python） | 接线部分（留 TS） | 判定 | 代价/备注 |
+|---|---|---|---|---|---|
+| 1 | `generate_part` | SCAD 预置（datum 模块、BOSL2 路径）、编译调用与结果解析、版本落盘 | schema、四视图附件 | **P** | OpenSCAD 仍是外部二进制，Python 一样调 |
+| 2 | `create_part` | 零件命名/唯一化 | schema | **P** | 小 |
+| 3 | `set_datums` | datum 读写 | schema | **P** | 小 |
+| 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | **P** | numpy 解析比 JS 快 |
+| 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | **P** | Python 侧 `manifold3d` 是**同一个 C++ 内核**，不丢性能 |
+| 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | **P** | 同上 |
+| 7 | `check_assembly` | 接口契约判定、距离查询 | schema | **P** | 纯领域规则 |
+| 8 | `check_connectivity` | 连通分量/壳数 | schema | **P** | numpy/trimesh |
+| 9 | `check_printability` | 壁厚/悬垂（可顺带从采样升级为精确） | schema | **P** | 精度是附带收益 |
+| 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
+| 11 | `measure_distance` | 点/球距离 | schema | **P** | 依赖 batch 0（否则冷启动负收益） |
+| 12 | `measure_closest` | 最近点/最小间隙 | schema | **P（条件）** | 需要 Python 空间索引：`rtree`/`embree`，或 manifold 自带距离查询；**先验证再迁** |
+| 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
+| 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
+| 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
+| 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **P** | 收益最大（实测 564k 粒子 600 步 114s） |
+| 17 | `recall_reference_image` | —（查 DSH 附件） | 全部 | **T** | 这是平台 API，不是领域 |
+| 18 | `delivery_audit` | 交付规则、文件与网格核对 | schema | **P** | |
+| 19 | `run_python` | 已落地 | — | 已落地 | |
+| 20 | `python_runtime` | 已落地 | — | 已落地 | |
 
-## 4. 明确不做
+**非工具车道**：体素 FEM（现为 `scripts/probe-*.mjs`，手写 matrix-free CG）→ **P + 工具化**，
+实现直接落 Python/scikit-fem（已在锁里）。
 
-- 不迁 OpenSCAD 驱动的工具（1、6、13）：瓶颈在外部渲染器，迁了更慢。
-- 不迁 manifold/rapier 驱动的工具（5、7、10、14、15）：已经是原生。
-- 不为"用上 Python"而迁元数据/IO 工具（2、3、17、18）。
-- 不在没有前后对照数字的情况下宣称"迁移完成"。
+## 3. 明确不做（②类，逐条给理由）
 
-## 5. 待拍板
+| 项 | 为什么是负收益 |
+|---|---|
+| 面板/回放/缩略图/版本列表的 HTTP 路由 | 逐请求热路径；数据是磁盘 JSON，TS 直读即可，引入 IPC 只会变慢、变脆 |
+| 图片窗口与裁剪策略 | DSH 平台事件（`IMAGE_OFFLOAD_REQUIRED` 等），Python 够不着 |
+| usage 遥测 | `llm/stream` 宿主钩子 |
+| `recall_reference_image` | DSH attachments 是平台 API |
+| darwin-x64 的物理 | 用户已拍板：该平台继续用 TS（无 wheel） |
+| 任何工具在 **worker 落地之前**的迁移 | 冷启动 0.1–0.3s 会把小工具全部变成负收益；这是时序问题，不是结论 |
 
-1. 上面的分类（A/B/C）是否同意？
-2. batch 1 是否就做 **A1（FEM 工具化 + Python）**？工具名叫什么
-   （`check_stress` / `simulate_stress` / 别的）？
-3. §2.D 的三条规则（工具名不变、canonical 唯一、先量后迁）是否确认？
-4. 原生（Rust/C++）是否只作为"实测不足"的后备，而不是并行推进？
+## 4. 两个结构性裁决（比单个工具更重要）
+
+**Q1：领域数据归谁？** `parts/versions/runs/assembly.json` 现在是 TS 代码 + 磁盘 JSON。
+- 方案 A：Python 拥有领域存储，TS 只代理（彻底；但面板路由要么走 worker，要么继续读文件）
+- 方案 B：**文件即契约**（schema 固定，两侧读写；TS 路由直读文件）← **建议 B**
+  理由：面板保持零 IPC，迁移可以**逐工具**进行，不必一次性搬存储。
+
+**Q2：物理 canonical 是否随迁？** Python 的 `rapier3d` 是同一 Rust 内核的官方绑定，
+但版本是 0.36，TS 侧是 `rapier3d-compat` 0.20——**换边要重新定基线**（TS 侧现有
+17/17 + 24/24 验收）。
+- 方案 A：canonical 随迁 Python（darwin-x64 例外）——符合"Python 第一语言"，但要重跑物理基线
+- 方案 B：canonical 留 TS，Python 只做交叉验证（现状）
+
+## 5. 批次（batch 0 是前提）
+
+| 批次 | 内容 | 解锁什么 |
+|---|---|---|
+| **0** | 常驻 worker + JSON-lines 协议（§12.3）+ 冷启动前后对照 | 让"能迁就迁"成立 |
+| 1 | 纯计算域：`simulate_fluid`、FEM（工具化）、`measure_*`、`check_*` | 收益最大、无 UI 耦合 |
+| 2 | 生成/渲染/导入/合并的领域部分（1、4、5、6、13） | 领域代码集中到 Python |
+| 3 | 存储与装配清单（取决于 Q1） | 收尾 |
+| 条件 | `measure_closest`（空间索引验证）、`simulate_physics`/`simulate_motion`（Q2） | 验证/裁决后进批次 |
+
+## 6. 单个工具"迁移完成"的定义
+
+1. **工具名不变**，模型无感（`run_python` 才是开放场地，工具是窄接口）；
+2. 领域逻辑在 `python/cad_worker/`，TS 侧只剩 schema + 转发；
+3. **有前后对照**：同输入同输出 + 耗时对比，写进验收脚本；
+4. 现有验收（`scripts/accept-*.mjs`）更新并通过；
+5. canonical 归属在决策记录里写明（Q2 裁决后）。
