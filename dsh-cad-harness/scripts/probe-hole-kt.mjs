@@ -23,7 +23,7 @@ import { buildSdfFromStl } from '../src/host/sdf.ts';
 
 // ---------- 算例 ----------
 const WP = 40, LP = 50, TP = 5;        // 宽(y) 长(x) 厚(z)，mm
-const D = 8;                            // 孔径 mm
+const D = Number(process.env.HOLE_D ?? 8);   // 孔径 mm（可用 HOLE_D 扫参）
 const E = 200_000, NU = 0.3;            // MPa
 const SIG = 10;                         // 毛截面应力 MPa
 const DW = D / WP;
@@ -220,7 +220,8 @@ console.log(`d/W = ${DW.toFixed(3)} ⇒ Kt(毛截面) = ${KT.toFixed(4)}`);
 console.log(`参考：峰值 = ${SIG_PEAK_REF.toFixed(2)} MPa · 过孔净截面均值 = ${SIG_NET_REF.toFixed(2)} MPa · 远场 = ${SIG} MPa · 总拉力 = ${F_TOTAL} N\n`);
 
 const rows = [];
-for (const dx of [1.0, 0.5]) rows.push(await runCase(dx));
+const DXS = (process.env.HOLE_DX ?? '1.0,0.5').split(',').map(Number);
+for (const dx of DXS) rows.push(await runCase(dx));
 
 console.log('dx(mm)  单元数   自由DOF  CG迭代 残差     耗时s | ①反力/参考  ②远场/参考  ②净截面/参考 | ③最大σxx  比值  (位置)');
 for (const r of rows) {
@@ -240,5 +241,5 @@ for (const r of rows) {
   console.log(`  dx=${r.dx}  y=${y.toFixed(2)}（孔边在 ${(WP / 2 + D / 2).toFixed(1)}）  σ_xx=${s.toFixed(2)} MPa`
     + `  ⇒ 占参考峰值 ${(100 * s / r.peakRef).toFixed(1)}%`);
 }
-writeFileSync(new URL('./probe-hole-kt.json', import.meta.url), JSON.stringify({ kt: KT, peakRef: SIG_PEAK_REF, netRef: SIG_NET_REF, rows }, null, 2));
-console.log('\n→ scripts/probe-hole-kt.json');
+writeFileSync(new URL(`./probe-hole-kt-d${D}.json`, import.meta.url), JSON.stringify({ d: D, kt: KT, peakRef: SIG_PEAK_REF, netRef: SIG_NET_REF, rows }, null, 2));
+console.log(`\n→ scripts/probe-hole-kt-d${D}.json`);
