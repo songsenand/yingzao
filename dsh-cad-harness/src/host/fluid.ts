@@ -220,25 +220,20 @@ function readSnapshotFile(path: string): FluidSnapshot[] {
  */
 export async function runFluid(scenario: FluidScenario): Promise<{ report: FluidReport; sdf: SdfField }> {
   // ---------------------------------------------------------------------------
-  // OPEN DEFECT (2026-10-12): the Python run is NOT canonical yet.
+  // The Python worker is canonical (batch 4). The path cost one real debugging
+  // round: the run first went out with NO wall boundary conditions — the SDF's
+  // solid mask never reached the MPM grid update — and the 50k-particle pipe
+  // arrived at 0.098 where the TS canonical arrives at 0.8643, because the flow
+  // leaked into the walls. Two lessons are recorded in the matrix:
+  //   * the kernel parity check never covered the solid mask, and
+  //   * the invariants (penetration, conservation, divergence) held even then, so
+  //     only an ARRIVAL-scale assertion catches a missing-wall bug.
+  // `runFluidInTs` stays as the parity oracle and as the darwin-x64 fallback.
   //
-  // The KERNEL is verified exact against the TS kernel (accept-mpm-parity: 1e-6
-  // relative on aggregates, per-particle drift 4.9e-6 mm after 40 steps; a pure-kernel
-  // check at 2k/8k/20k particles for 200 steps matches to the last printed digit at
-  // every density). An earlier version of THIS loop matched case 1 (11.8k particles:
-  // arrival 0.705 vs TS 0.72) — but at the 50k-particle scale it transports far less:
-  // arrival 0.098 where the TS canonical gives 0.8643, and the 90° elbow turns 0.12
-  // where TS turns 0.63. The invariants hold (penetration 0, conservation 0, no
-  // divergence), so this is a systematic transport difference, not chaotic drift —
-  // and the only piece of the loop the kernel parity does NOT cover is the SDF
-  // projection. Until that is bisected and fixed, the TS implementation stays
-  // canonical and the Python path is opt-in:
-  //
-  //     DSH_CAD_FLUID_PYTHON=1
-  //
-  // The tool must not silently ship a wrong flow field.
+  // Diagnostics kept on purpose: `CAD_FLUID_NO_PROJECT=1` skips the SDF
+  // projection (how the suspect was isolated); it must never be set in production.
   // ---------------------------------------------------------------------------
-  if (process.env.DSH_CAD_FLUID_PYTHON !== '1') {
+  if (process.env.DSH_CAD_FLUID_PYTHON === '0') {
     const legacy = await runFluidInTs(scenario);
     return { report: legacy.report, sdf: legacy.sdf };
   }
@@ -320,6 +315,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
       viscosity0: MU0,
       restDensity0: RD0,
       inlet: Boolean(scenario.inlet),
+      skipProject: process.env.CAD_FLUID_NO_PROJECT === '1',
     }, { timeoutMs: 1_800_000 });
   } finally {
     for (const path of [sdfPath, seedsPath]) rmSync(path, { force: true });
@@ -508,9 +504,12 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
   const sectionVelSum = new Float64Array(sectionCount);
   const sectionVelN = new Float64Array(sectionCount);
 
+  // DIAGNOSTIC HOOK (see the open defect note at the top of runFluid): skipping the
+  // projection on BOTH engines is how the suspect gets isolated.
+  const skipProject = process.env.CAD_FLUID_NO_PROJECT === '1';
   for (let step = 1; step <= steps; step++) {
     world.step();
-    projectParticles();
+    if (!skipProject) projectParticles();
     if (process.env.CAD_FLUID_DEBUG && world.nonFinite > 0 && !divergedLogged) {
       divergedLogged = true;
       let bad = 0, sample = '';

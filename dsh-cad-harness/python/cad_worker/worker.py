@@ -995,6 +995,22 @@ _MpmWorlds: dict = {}
 _MpmNextId: int = 0
 
 
+def _ipc_uint8(value):
+    """A Uint8Array that crossed the JSON-lines pipe arrives as {"0":1,"1":0,...}.
+
+    JSON has no typed arrays, so the worker has to put it back. (This cost a
+    debugging round: a mask that silently became a dict made `np.asarray` raise, and
+    an earlier version that swallowed it left the fluid run with NO wall boundary
+    conditions — the whole flow field differed at high particle density.)
+    """
+    import numpy as np
+
+    if isinstance(value, dict):
+        ordered = [value[key] for key in sorted(value, key=lambda k: int(k))]
+        return np.asarray(ordered, dtype=np.uint8)
+    return np.asarray(value, dtype=np.uint8)
+
+
 def _mpm_drop(world_id: str) -> None:
     _MpmWorlds.pop(world_id, None)
 
@@ -1044,10 +1060,10 @@ def op_mpm_create(params: dict) -> dict:
         "solidMask": None,
         "solidNormal": None,
     }
-    if config.get("solidMask"):
-        world["solidMask"] = np.asarray(config["solidMask"], dtype=bool)
-    if config.get("solidNormal"):
-        world["solidNormal"] = np.asarray(config["solidNormal"], dtype=np.int64)
+    if config.get("solidMask") is not None:
+        world["solidMask"] = _ipc_uint8(config["solidMask"]).astype(bool)
+    if config.get("solidNormal") is not None:
+        world["solidNormal"] = _ipc_uint8(config["solidNormal"]).astype(np.int64)
     if config.get("restDensity") is None:
         world["restDensity"] = _mpm_calibrate(world)
     _MpmWorlds[world_id] = world
@@ -1535,6 +1551,14 @@ def op_fluid_run(params: dict) -> dict:
         }
     )
     world = _MpmWorlds[created["worldId"]]
+    # THE WALLS. The SDF file carries the solid mask + dominant normals, and the
+    # MPM grid update needs them (they zero the normal velocity at wall cells and
+    # the G2P excludes those cells from the interpolation). Without this the run
+    # has NO boundary conditions at all — measured: arrival 0.098 where the TS
+    # canonical gives 0.8643 on the same 50k-particle pipe, because the flow leaked
+    # into the walls.
+    world["solidMask"] = sdf["solidMask"].astype(bool)
+    world["solidNormal"] = sdf["solidNormal"].astype(np.int64)
     world["activeN"] = count
     rest_density = _mpm_calibrate(world)
     world["restDensity"] = rest_density
@@ -1602,9 +1626,11 @@ def op_fluid_run(params: dict) -> dict:
     snapshots = []
     snapshot_steps = []
 
+    skip_project = bool(params.get("skipProject"))
     for step in range(1, steps + 1):
         _mpm_step_once(world)
-        project_particles()
+        if not skip_project:
+            project_particles()
         if time_to_outlet is None and world["escaped"] > escaped_before:
             time_to_outlet = step
         escaped_before = world["escaped"]
