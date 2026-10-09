@@ -9,6 +9,7 @@ import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { ensurePythonWorker } from './python-worker.ts';
 
 export interface CompileResult {
   success: boolean;
@@ -37,21 +38,6 @@ export interface CompileResult {
  * The module is PREPENDED: OpenSCAD requires definition before use. Error-trace
  * line numbers shift by the prelude length — accepted.
  */
-const DATUM_PRELUDE = `
-// ---- harness datum anchors (do not remove) ----
-module datum(name, p = [0, 0, 0]) {
-  echo(str("__DATUM__", name, "=", p[0], ",", p[1], ",", p[2]));
-}
-module datum_axis(name, p = [0, 0, 0], dir = [0, 0, 1]) {
-  echo(str("__DATUM_AXIS__", name, "=", p[0], ",", p[1], ",", p[2], "|", dir[0], ",", dir[1], ",", dir[2]));
-}
-module datum_plane(name, p = [0, 0, 0], n = [0, 0, 1]) {
-  echo(str("__DATUM_PLANE__", name, "=", p[0], ",", p[1], ",", p[2], "|", n[0], ",", n[1], ",", n[2]));
-}
-module datum_cyl(name, p = [0, 0, 0], dir = [0, 0, 1], r = 0) {
-  echo(str("__DATUM_CYL__", name, "=", p[0], ",", p[1], ",", p[2], "|", dir[0], ",", dir[1], ",", dir[2], "|", r));
-}
-`;
 
 export interface DatumPoint { name: string; point: [number, number, number] }
 export interface DatumAxis { name: string; point: [number, number, number]; dir: [number, number, number] }
@@ -70,40 +56,49 @@ export function emptyDatumSet(): DatumSet {
   return { points: [], axes: [], planes: [], cylinders: [] };
 }
 
-/** Extract __DATUM__ echo lines from openscad output. */
-export function parseDatums(raw: string): DatumPoint[] {
-  const out: DatumPoint[] = [];
-  for (const line of raw.split('\n')) {
-    const m = /ECHO:\s*"__DATUM__([^"=]+)=(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)"/.exec(line);
-    if (m) out.push({ name: m[1]!.trim(), point: [Number(m[2]), Number(m[3]), Number(m[4])] });
-  }
-  return out;
+// ---------------------------------------------------------------------------
+// The SCAD text protocol is the DOMAIN RUNTIME's (2026-10-08, batch 2).
+//
+// The datum prelude is the WRITER half of the interface contract and the echo
+// parser is the READER half; keeping them in one place is the point. What stays
+// here is the OpenSCAD PROCESS — binary discovery (including the bundled snapshot
+// and xvfb), timeouts, temp files and image handling — because that is about this
+// machine's toolchain, not about geometry.
+// ---------------------------------------------------------------------------
+
+interface ScadParseSolve {
+  errors: string[];
+  warnings: string[];
+  datumSet: DatumSet;
 }
 
-/**
- * Extract axis/plane/cylinder datum echo lines. Point datums are NOT included
- * here — parseDatums owns them; combine via makeDatumSet.
- */
-export function parseDatumFeatures(raw: string): { axes: DatumAxis[]; planes: DatumPlane[]; cylinders: DatumCylinder[] } {
-  const axes: DatumAxis[] = [];
-  const planes: DatumPlane[] = [];
-  const cylinders: DatumCylinder[] = [];
-  for (const line of raw.split('\n')) {
-    let m: RegExpExecArray | null;
-    if ((m = /ECHO:\s*"__DATUM_AXIS__([^"=]+)=(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)\|(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)"/.exec(line))) {
-      axes.push({ name: m[1]!.trim(), point: [Number(m[2]), Number(m[3]), Number(m[4])], dir: [Number(m[5]), Number(m[6]), Number(m[7])] });
-    } else if ((m = /ECHO:\s*"__DATUM_PLANE__([^"=]+)=(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)\|(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)"/.exec(line))) {
-      planes.push({ name: m[1]!.trim(), point: [Number(m[2]), Number(m[3]), Number(m[4])], normal: [Number(m[5]), Number(m[6]), Number(m[7])] });
-    } else if ((m = /ECHO:\s*"__DATUM_CYL__([^"=]+)=(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)\|(-?[\d.eE+-]+),(-?[\d.eE+-]+),(-?[\d.eE+-]+)\|(-?[\d.eE+-]+)"/.exec(line))) {
-      cylinders.push({ name: m[1]!.trim(), point: [Number(m[2]), Number(m[3]), Number(m[4])], dir: [Number(m[5]), Number(m[6]), Number(m[7])], radius: Number(m[8]) });
-    }
-  }
-  return { axes, planes, cylinders };
+let preludePromise: Promise<string> | null = null;
+
+/** The datum prelude injected into every part (authored by the worker). */
+export function datumPrelude(): Promise<string> {
+  const cached = preludePromise;
+  if (cached) return cached;
+  const pending = ensurePythonWorker()
+    .then((worker) => worker.request<{ source: string }>('scad_prelude'))
+    .then((solved) => solved.source)
+    .catch((error) => {
+      preludePromise = null;
+      throw error;
+    });
+  preludePromise = pending;
+  return pending;
 }
 
-/** Combine point + feature datums into one set. */
-export function makeDatumSet(points: DatumPoint[], features: ReturnType<typeof parseDatumFeatures>): DatumSet {
-  return { points, ...features };
+/** One OpenSCAD run's errors, warnings and echoed datum anchors. */
+export async function scadParseOutput(raw: string): Promise<ScadParseSolve> {
+  const worker = await ensurePythonWorker();
+  return await worker.request<ScadParseSolve>('scad_parse_output', { raw });
+}
+
+/** Extract ERROR:/WARNING: lines from openscad output. */
+export async function parseMessages(raw: string): Promise<{ errors: string[]; warnings: string[] }> {
+  const { errors, warnings } = await scadParseOutput(raw);
+  return { errors, warnings };
 }
 
 const TIMEOUT_MS = 30_000;
@@ -314,13 +309,10 @@ export interface ScadParam {
  * assignment annotated with `// PARAMS <description>`:
  *   wall = 3; // PARAMS 壁厚
  */
-export function parseParams(scad: string): ScadParam[] {
-  const params: ScadParam[] = [];
-  for (const line of scad.split('\n')) {
-    const m = /^\s*([A-Za-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?)\s*;\s*\/\/\s*PARAMS\s*(.*)$/.exec(line);
-    if (m) params.push({ name: m[1]!, value: Number(m[2]), desc: (m[3] ?? '').trim() });
-  }
-  return params;
+export async function parseParams(scad: string): Promise<ScadParam[]> {
+  const worker = await ensurePythonWorker();
+  const solved = await worker.request<{ params: ScadParam[] }>('scad_parse_params', { scad });
+  return solved.params;
 }
 
 /**
@@ -342,18 +334,6 @@ export async function exportScad(scadPath: string, outPath: string, format: stri
 }
 
 /** Extract ERROR:/WARNING: lines from openscad output. */
-export function parseMessages(raw: string): { errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  for (const line of raw.split('\n')) {
-    const t = line.trim();
-    if (t.startsWith('ERROR:')) errors.push(t.slice(6).trim());
-    else if (t.startsWith('WARNING:')) warnings.push(t.slice(8).trim());
-    else if (t.startsWith('Trace:') || t.startsWith('In file')) errors.push(t);
-  }
-  return { errors, warnings };
-}
-
 /** Camera rotations for the four fixed views: [rx, ry, rz]. */
 // z-up convention: [0,0,0] looks at the xy plane from +z = TOP view.
 const VIEWS: Record<string, [number, number, number]> = {
@@ -373,16 +353,15 @@ export async function compileAndRender(scadCode: string): Promise<CompileResult>
   try {
     const scadPath = join(dir, 'model.scad');
     const stlPath = join(dir, 'model.stl');
-    await writeFile(scadPath, DATUM_PRELUDE + scadCode, 'utf8');
+    await writeFile(scadPath, (await datumPrelude()) + scadCode, 'utf8');
 
     const compile = await runOpenscad(
       ['-o', stlPath, '--export-format', 'binstl', '-D', '$fn=64', scadPath],
       dir,
     );
     const rawOutput = `${compile.stderr}\n${compile.stdout}`;
-    const { errors, warnings } = parseMessages(rawOutput);
-    const datums = parseDatums(rawOutput);
-    const datumSet = makeDatumSet(datums, parseDatumFeatures(rawOutput));
+    const { errors, warnings, datumSet } = await scadParseOutput(rawOutput);
+    const datums = datumSet.points;
     if (compile.code !== 0) {
       return {
         success: false,
@@ -409,7 +388,7 @@ export async function compileAndRender(scadCode: string): Promise<CompileResult>
         scadPath,
       ], dir);
       if (res.code !== 0) {
-        warnings.push(`render ${view} failed: ${parseMessages(res.stderr).errors.join('; ') || `exit ${res.code}`}`);
+        warnings.push(`render ${view} failed: ${(await parseMessages(res.stderr)).errors.join('; ') || `exit ${res.code}`}`);
         continue;
       }
       renders.push({ view, png: await readFile(pngPath) });
@@ -431,15 +410,14 @@ export async function compileStlOnly(scadCode: string): Promise<CompileResult> {
   try {
     const scadPath = join(dir, 'model.scad');
     const stlPath = join(dir, 'model.stl');
-    await writeFile(scadPath, DATUM_PRELUDE + scadCode, 'utf8');
+    await writeFile(scadPath, (await datumPrelude()) + scadCode, 'utf8');
     const compile = await runOpenscad(
       ['-o', stlPath, '--export-format', 'binstl', '-D', '$fn=64', scadPath],
       dir,
     );
     const rawOutput = `${compile.stderr}\n${compile.stdout}`;
-    const { errors, warnings } = parseMessages(rawOutput);
-    const datums = parseDatums(rawOutput);
-    const datumSet = makeDatumSet(datums, parseDatumFeatures(rawOutput));
+    const { errors, warnings, datumSet } = await scadParseOutput(rawOutput);
+    const datums = datumSet.points;
     if (compile.code !== 0) {
       return {
         success: false,

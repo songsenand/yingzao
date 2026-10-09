@@ -2571,6 +2571,12 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   **这一件有意不留 TS oracle**：旧实现数了退化面却把计数丢掉（`degenerate: 0` 恒成立），
   留作 oracle 会把缺陷固化成契约；改用**解析真值**验收（20 mm 立方体 = 8000 mm³、
   1 inch = 25.4 且体积 ×25.4³、整机 710012.998 mm³ / 28830 面 / 26 壳）。
+- **批次 2 收尾：SCAD 文本协议归 Python（2026-10-08）。** datum 预置（写方）、OpenSCAD
+  输出的 ERROR/WARNING 与四种 datum echo（读方）、`// PARAMS` 约定都进了 worker
+  （`scad_prelude` / `scad_parse_output` / `scad_parse_params`）。**留在 TS 的是 OpenSCAD
+  进程与图片**（二进制发现、内置快照、xvfb、超时、附件、存版）——那是这台机器的工具链与
+  平台服务（①），与"领域用 Python"无关。`render_part` 因此判定为 **① 平台系留**：领域内容
+  只剩四行相机常量，搬过去只多一次往返而无领域收益。**批次 2 完成。**
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

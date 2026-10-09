@@ -38,6 +38,9 @@ drives:
     merge_solids    union of placed solids → merged STL on disk + facts
     measure_distance   two-point distance with surface snapping (measure_distance)
     import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
+    scad_prelude        the datum prelude injected into every part
+    scad_parse_output   errors/warnings/datums from one OpenSCAD run
+    scad_parse_params   the `// PARAMS` convention
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -52,6 +55,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import sys
 import time
 import traceback
@@ -72,6 +76,9 @@ OPS = [
     "merge_solids",
     "measure_distance",
     "import_mesh",
+    "scad_prelude",
+    "scad_parse_output",
+    "scad_parse_params",
     "crash",
 ]
 
@@ -676,6 +683,120 @@ def _round_js(value: float, digits: int = 3) -> float:
     return 0.0 if rounded == 0 else rounded
 
 
+# ---------------------------------------------------------------------------
+# The SCAD-side text protocol: the datum prelude and what OpenSCAD echoes back.
+#
+# WHY THIS IS THE DOMAIN RUNTIME'S BUSINESS. Datums are the harness's interface
+# contract — a part declares an anchor, an assembly cites it. The WRITER (the
+# prelude injected into every part) and the READER (the echo parser) therefore
+# belong together, or a format change has two homes and one of them will lag.
+# What stays in TypeScript is the OpenSCAD PROCESS (binary discovery, the bundled
+# snapshot, xvfb, timeouts) and everything that touches images and the store.
+# ---------------------------------------------------------------------------
+
+DATUM_PRELUDE = """
+// ---- harness datum anchors (do not remove) ----
+module datum(name, p = [0, 0, 0]) {
+  echo(str("__DATUM__", name, "=", p[0], ",", p[1], ",", p[2]));
+}
+module datum_axis(name, p = [0, 0, 0], dir = [0, 0, 1]) {
+  echo(str("__DATUM_AXIS__", name, "=", p[0], ",", p[1], ",", p[2], "|", dir[0], ",", dir[1], ",", dir[2]));
+}
+module datum_plane(name, p = [0, 0, 0], n = [0, 0, 1]) {
+  echo(str("__DATUM_PLANE__", name, "=", p[0], ",", p[1], ",", p[2], "|", n[0], ",", n[1], ",", n[2]));
+}
+module datum_cyl(name, p = [0, 0, 0], dir = [0, 0, 1], r = 0) {
+  echo(str("__DATUM_CYL__", name, "=", p[0], ",", p[1], ",", p[2], "|", dir[0], ",", dir[1], ",", dir[2], "|", r));
+}
+"""
+
+_NUMBER = r"(-?[\d.eE+-]+)"
+_DATUM_POINT = re.compile(r'ECHO:\s*"__DATUM__([^"=]+)=' + ",".join([_NUMBER] * 3) + '"')
+_DATUM_AXIS = re.compile(r'ECHO:\s*"__DATUM_AXIS__([^"=]+)=' + ",".join([_NUMBER] * 3) + r"\|" + ",".join([_NUMBER] * 3) + '"')
+_DATUM_PLANE = re.compile(r'ECHO:\s*"__DATUM_PLANE__([^"=]+)=' + ",".join([_NUMBER] * 3) + r"\|" + ",".join([_NUMBER] * 3) + '"')
+_DATUM_CYL = re.compile(
+    r'ECHO:\s*"__DATUM_CYL__([^"=]+)=' + ",".join([_NUMBER] * 3) + r"\|" + ",".join([_NUMBER] * 3) + r"\|" + _NUMBER + '"'
+)
+_PARAM_LINE = re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?)\s*;\s*//\s*PARAMS\s*(.*)$")
+
+
+def op_scad_prelude(_params: dict) -> dict:
+    return {"source": DATUM_PRELUDE}
+
+
+def op_scad_parse_output(params: dict) -> dict:
+    """What one OpenSCAD run said: errors, warnings and the datum anchors it echoed.
+
+    The error/warning rule is the TS `parseMessages`: `ERROR:` / `WARNING:` lines are
+    unwrapped, and `Trace:`/`In file` lines count as errors because that is where the
+    useful part of an OpenSCAD failure lives.
+    """
+    raw = params["raw"]
+    errors = []
+    warnings = []
+    for line in raw.split("\n"):
+        text = line.strip()
+        if text.startswith("ERROR:"):
+            errors.append(text[6:].strip())
+        elif text.startswith("WARNING:"):
+            warnings.append(text[8:].strip())
+        elif text.startswith("Trace:") or text.startswith("In file"):
+            errors.append(text)
+
+    points = []
+    axes = []
+    planes = []
+    cylinders = []
+    for line in raw.split("\n"):
+        match = _DATUM_POINT.search(line)
+        if match:
+            points.append({"name": match.group(1).strip(), "point": [float(match.group(i)) for i in (2, 3, 4)]})
+        match = _DATUM_AXIS.search(line)
+        if match:
+            axes.append(
+                {
+                    "name": match.group(1).strip(),
+                    "point": [float(match.group(i)) for i in (2, 3, 4)],
+                    "dir": [float(match.group(i)) for i in (5, 6, 7)],
+                }
+            )
+        match = _DATUM_PLANE.search(line)
+        if match:
+            planes.append(
+                {
+                    "name": match.group(1).strip(),
+                    "point": [float(match.group(i)) for i in (2, 3, 4)],
+                    "normal": [float(match.group(i)) for i in (5, 6, 7)],
+                }
+            )
+        match = _DATUM_CYL.search(line)
+        if match:
+            cylinders.append(
+                {
+                    "name": match.group(1).strip(),
+                    "point": [float(match.group(i)) for i in (2, 3, 4)],
+                    "dir": [float(match.group(i)) for i in (5, 6, 7)],
+                    "radius": float(match.group(8)),
+                }
+            )
+    return {
+        "errors": errors,
+        "warnings": warnings,
+        "datumSet": {"points": points, "axes": axes, "planes": planes, "cylinders": cylinders},
+    }
+
+
+def op_scad_parse_params(params: dict) -> dict:
+    """The `// PARAMS <description>` convention: a top-level numeric assignment that
+    the Customizer can turn, e.g. `wall = 3; // PARAMS 壁厚`."""
+    found = []
+    for line in params["scad"].split("\n"):
+        match = _PARAM_LINE.match(line)
+        if match:
+            found.append({"name": match.group(1), "value": float(match.group(2)), "desc": (match.group(3) or "").strip()})
+    return {"params": found}
+
+
 def op_import_mesh(params: dict) -> dict:
     """Parse → shells → scale → weld → solid verdict for `import_part`.
 
@@ -852,6 +973,9 @@ HANDLERS = {
     "merge_solids": op_merge_solids,
     "measure_distance": op_measure_distance,
     "import_mesh": op_import_mesh,
+    "scad_prelude": op_scad_prelude,
+    "scad_parse_output": op_scad_parse_output,
+    "scad_parse_params": op_scad_parse_params,
     "crash": op_crash,
 }
 

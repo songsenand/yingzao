@@ -38,7 +38,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 
 | # | 工具 | 领域部分（迁 Python） | 接线部分（留 TS） | 判定 | 代价/备注 |
 |---|---|---|---|---|---|
-| 1 | `generate_part` | SCAD 预置（datum 模块、BOSL2 路径）、编译调用与结果解析、版本落盘 | schema、四视图附件 | **P** | OpenSCAD 仍是外部二进制，Python 一样调 |
+| 1 | `generate_part` | SCAD 预置（datum 模块、BOSL2 路径）、编译调用与结果解析、版本落盘 | schema、四视图附件 | **领域半区已迁移（2026-10-08，批次 2）** | **SCAD 文本协议归 Python**：datum 预置（写方）、OpenSCAD 输出的 ERROR/WARNING + 四种 datum echo（读方）、`// PARAMS` 解析都在 worker（`scad_prelude`/`scad_parse_output`/`scad_parse_params`）。**OpenSCAD 进程留 TS**（二进制发现、内置快照与 xvfb、超时、临时文件）——那是这台机器的工具链，不是几何。验收：合成输出逐字段精确、预置含四个模块与四个 echo 标记、真实编译里四种 datum 全部原值返回、语法错误仍可读 |
 | 2 | `create_part` | 零件命名/唯一化 | schema | **P** | 小 |
 | 3 | `set_datums` | datum 读写 | schema | **P** | 小 |
 | 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | ✅ **已迁移（2026-10-08，批次 2）** | worker 的 `import_mesh` op：二进制/ASCII 解析、壳数、单位缩放、焊接、Manifold 实体判定与诊断都在 Python，**焊接后的网格由 Python 写出**（那就是存进版本的东西）；TS 侧只剩路径/扩展名检查、sha256、unit 校验、datum 与存版。**真值验收**（不是 oracle）：20 mm 立方体 = 8000 mm³、1 inch = 25.4 且体积 ×25.4³、ASCII 与二进制同结果、两个不相接体 = 2 壳 + 警告、开口网格被拒并给边诊断、绕向反转被单独识别、整机 710012.998 mm³ / 28830 面 / 26 壳逐项对上。**顺带修掉一个真实缺陷**：TS 的 `parseStl` 数了退化面却把计数丢掉（恒返回 0），所以"退化三角形被丢弃"这句从未出现过；Python 报真数 |
@@ -50,7 +50,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
 | 11 | `measure_distance` | 点/球距离 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `measure_distance` op：吸附（精确最近点 + 命中三角面法线定内外）、吸附距离、分量、水密标志都在 Python；TS 侧只剩 datum 解析、警告文案与 datum 侧的后处理。**parity**：6 个用例（表面/内部/远处/跨件/关吸附/只吸附 a）全字段一致，真实零件 230 mm 一致；**并列最小点**（立方体正中心距六面都是 10 mm）显式作为"平局"用例：吸附距离与内外判定必须一致，具体坐标允许不同（TS 取 −Z 面、trimesh 取 −X 面，两者都正确）。水密标志仍是**严格判据**（绕向翻转的立方体：严格判据 false、trimesh true）。绝对耗时 0.6–3.0 ms（比值 5–8.7×，两边都是亚毫秒级，比值意义有限） |
 | 12 | `measure_closest` | 最近点/最小间隙 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | 求解在 `worker.py` 的 `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与标注渲染。**parity：距离与 TS 逐位一致（Δ=0）**，解析真值也对（1 mm 间隙测成 1 mm、球探针 4 mm 间隙、吞掉顶面的球报 0 而非负间隙）。耗时 **0.89× / 8.43× / 0.98×**（TS 114/17/106 ms → Python 101/141/104 ms；8.43× 那次目标网格只有 12 个面，两边绝对量都是百毫秒级）。剪枝前最坏 **107×**（15.0 s，trimesh 对远离目标的查询点代价高），改包围盒下界分支定界后降到 **0.89×** |
-| 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
+| 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **① 平台系留（2026-10-08 判定）** | 迁完 `generate_part` 的文本协议后复查：这里剩下的领域内容只有**四视图相机约定**（4 行常量）与 **OpenSCAD 调用**，其余是 PNG 附件与面板载荷。把 4 行常量搬到 Python 只多一次往返（实测 0.25 ms）而无领域收益 ⇒ 按①（平台/工具链）保留，不单列迁移项 |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
 | 15 | `simulate_motion` | 同上 | schema | **待裁决** | 同上 |
 | 16 | `simulate_fluid` | MPM 内核 + SDF 场 | schema | **P（批次 4；接受慢）** | ⚠️ **实测**：Python 版比现役 TS 内核**慢 2.5–4×**；用户 2026-10-08 拍板**仍迁 Python**，并在工具上**标记"后续 Rust/C 加速"**（原生按阶段决定留中后期） |
@@ -136,7 +136,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 |---|---|---|
 | **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
 | 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅、~~`merge_parts`~~ ✅、~~`measure_distance`~~ ✅（均 2026-10-08）。**批次 1 完成**（STL 零拷贝解析随这些工具一并落地：`closest_points`/`stl_stats` 用 numpy 视图，不再整份拷贝） | 数据支持"迁了更好"；五个已迁移，parity + 解析真值 + 反证/平局用例都过 |
-| 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约）：~~`import_part`~~ ✅（2026-10-08）；`generate_part`、`render_part` 待做 | 无性能争议，纯搬家 |
+| 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约）：~~`import_part`~~ ✅、~~`generate_part` 的 SCAD 文本协议~~ ✅（2026-10-08）；`render_part` 判定为 ① 平台系留（理由见 row 13）。**批次 2 完成** | 无性能争议，纯搬家；文本协议是唯一真正的领域半区 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 | 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |
 

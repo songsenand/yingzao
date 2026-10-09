@@ -3247,7 +3247,7 @@ export function registerCadTools(
         try {
           const scad = await readFile(join(store.root, 'versions', v, 'model.scad'), 'utf8');
           const { parseParams } = await import('./compile.ts');
-          return new Response(JSON.stringify({ versionId: v, params: parseParams(scad) }), {
+          return new Response(JSON.stringify({ versionId: v, params: await parseParams(scad) }), {
             status: 200, headers: { 'content-type': 'application/json' },
           });
         } catch {
@@ -3270,7 +3270,7 @@ export function registerCadTools(
           // Apply overrides by substituting values into the source text (the
           // saved STL/bbox stay as-authored; only the preview geometry changes).
           let source = scad;
-          for (const p of parseParams(scad)) {
+          for (const p of await parseParams(scad)) {
             const o = body.overrides?.[p.name];
             if (o !== undefined && o !== p.value) {
               source = source.replace(new RegExp(`(\\b${p.name}\\s*=\\s*)-?\\d+(?:\\.\\d+)?\\s*;`), `$1${o};`);
