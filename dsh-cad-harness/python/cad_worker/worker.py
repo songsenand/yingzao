@@ -1573,9 +1573,9 @@ def op_fluid_run(params: dict) -> dict:
     band = 2.5 * dx_mm
     near_surface = (grid_cells > -band) & (grid_cells < band)
 
-    projection_stats = {"calls": 0, "moved": 0, "pushSum": 0.0}
+    projection_stats = {"calls": 0, "moved": 0, "pushSum": 0.0, "last": None}
 
-    def project_particles() -> None:
+    def project_particles(is_last: bool = False) -> None:
         active = world["activeN"]
         if active == 0:
             return
@@ -1614,13 +1614,36 @@ def op_fluid_run(params: dict) -> dict:
         projection_stats["moved"] += int(index.size)
         projection_stats["pushSum"] += float(push.sum())
         pos[index] = pos[index] + normals * push[:, None]
-        # A particle deep inside a wall gets a large push, which can throw it out of
-        # the box. The kernel clamps during ADVECTION only, so clamp here as well:
-        # an out-of-range position makes the 27-cell stencil negative, and JS array
-        # semantics silently swallow that (the writes land on non-index properties,
-        # reads give undefined → NaN → the NaN guard resets the particle) while numpy
-        # raises. Clamping is the behaviour the box clamp already intends.
-        pos[index] = np.clip(pos[index], 1.5, np.array([nx - 1.5, ny - 1.5, nz - 1.5]))
+        if is_last:
+            # THE decisive reading: after the final projection of the run, how many
+            # particles are STILL inside the wall? If this is non-zero the projection's
+            # post-condition does not hold; if it is zero while the reported
+            # penetration is not, the final-state sampling or the active set is at fault.
+            after_mm = pos[index] * dx_mm + np.asarray(origin, dtype=np.float64)[None, :]
+            after_depths = _sdf_at_many(sdf, after_mm)
+            # Also the GLOBAL state right here: if this says zero penetrating while
+            # the reported metric (computed after the loop) says otherwise, then
+            # something between the last projection and the metric moves particles.
+            global_depths = _sdf_at_many(sdf, pos * dx_mm + np.asarray(origin, dtype=np.float64)[None, :])
+            projection_stats["last"] = {
+                "insideBefore": int(index.size),
+                "depthAfterMinMm": float(after_depths.min()),
+                "depthAfterMeanMm": float(after_depths.mean()),
+                "stillInside": int((after_depths < -tol).sum()),
+                "globalPenetratingAfter": int((global_depths < -penetration_tol).sum()),
+                "globalDepthMinMm": float(global_depths.min()),
+                "posSumAfter": float(pos.sum()),
+                "activeAfter": int(active),
+            }
+        # NO box clamp here. A projected particle can leave the box, and an earlier
+        # defensive clamp pulled it back to the box FACE — which is inside the wall
+        # for a pipe whose outer surface sits close to the grid boundary. Measured:
+        # that clamp put 167(Ø60)/888(Ø100) particles ~0.9mm inside the wall at the
+        # end of the run while the projection itself left none (its post-condition
+        # holds: depthAfterMin +0.29mm, stillInside 0). The out-of-range stencil that
+        # motivated the clamp is handled where it belongs — `_mpm_step_once` clips the
+        # stencil base — and the kernel's own advection clamp brings the particle back
+        # into the box on the next step, exactly as the TS implementation does.
         # kill the into-wall velocity component (free slip)
         vn = np.einsum("pa,pa->p", vel[index], normals)
         drag = vn < 0
@@ -1641,10 +1664,14 @@ def op_fluid_run(params: dict) -> dict:
     snapshot_steps = []
 
     skip_project = bool(params.get("skipProject"))
+    debug_enabled = bool(params.get("debugPenetration"))
+    block_checksums = []
     for step in range(1, steps + 1):
         _mpm_step_once(world)
         if not skip_project:
-            project_particles()
+            project_particles(is_last=(debug_enabled and step == steps))
+        if debug_enabled and step == steps:
+            block_checksums.append(("afterProject", float(world["pos"][: world["activeN"]].sum())))
         if time_to_outlet is None and world["escaped"] > escaped_before:
             time_to_outlet = step
         escaped_before = world["escaped"]
@@ -1660,6 +1687,8 @@ def op_fluid_run(params: dict) -> dict:
                 np.add.at(section_vel_sum, bins[valid], vel[valid, flow_axis] * dx_mm)
                 np.add.at(section_vel_n, bins[valid], 1.0)
 
+        if debug_enabled and step == steps:
+            block_checksums.append(("afterSections", float(world["pos"][: world["activeN"]].sum())))
         if step % snapshot_every == 0 and len(snapshots) < snapshot_count:
             active = world["activeN"]
             pos_mm = (world["pos"][:active] * dx_mm + np.asarray(origin)[None, :]).astype(np.float32)
@@ -1667,6 +1696,8 @@ def op_fluid_run(params: dict) -> dict:
             snapshots.append((step, round(step * float(config["dt"]), 3), pos_mm, speed))
             snapshot_steps.append(step)
 
+    if debug_enabled:
+        block_checksums.append(("beforeMetrics", float(world["pos"][: world["activeN"]].sum())))
     # ---- metrics: penetration + speed stats over the final state ----
     active = world["activeN"]
     penetration_count = 0
@@ -1675,6 +1706,8 @@ def op_fluid_run(params: dict) -> dict:
     if active:
         pos_mm = world["pos"][:active] * dx_mm + np.asarray(origin)[None, :]
         penetration_count = int((_sdf_at_many(sdf, pos_mm) < -penetration_tol).sum())
+        metric_pos_sum = float(world["pos"][:active].sum())
+        metric_depth_min = float(_sdf_at_many(sdf, pos_mm).min())
         speeds = np.linalg.norm(world["vel"][:active], axis=1) * dx_mm
         max_v = float(speeds.max())
         sum_v = float(speeds.sum())
@@ -1720,12 +1753,17 @@ def op_fluid_run(params: dict) -> dict:
                 "projectionMoved": projection_stats["moved"],
                 "projectionCalls": projection_stats["calls"],
                 "projectionPushSum": round(projection_stats["pushSum"], 2),
+                **(projection_stats["last"] or {}),
                 "depthMinMm": float(depths[penetrating].min()),
                 "depthMaxMm": float(depths[penetrating].max()),
                 "depthMeanMm": float(depths[penetrating].mean()),
                 "withinBand": int(in_band.sum()),
                 "outsideBand": int((~in_band).sum()),
                 "cellDepthMinMm": float(cell_depth.min()),
+                "metricPosSum": round(metric_pos_sum, 3),
+                "metricDepthMinMm": round(metric_depth_min, 6),
+                "metricActive": int(active),
+                "blockChecksums": block_checksums,
             }
 
     count0 = count
