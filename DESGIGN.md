@@ -2577,6 +2577,14 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   进程与图片**（二进制发现、内置快照、xvfb、超时、附件、存版）——那是这台机器的工具链与
   平台服务（①），与"领域用 Python"无关。`render_part` 因此判定为 **① 平台系留**：领域内容
   只剩四行相机常量，搬过去只多一次往返而无领域收益。**批次 2 完成。**
+- **批次 3 第一件：`simulate_physics`（2026-10-08，Q2=A）。** worker 的 `simulate_physics` op
+  逐行镜像 `runPhysics`（世界/关节/接触采样/指标/关键帧/时间线），TS 侧只剩 schema、parts
+  落盘与关键帧渲染。`runPhysicsInTs` 保留为 parity oracle，**也是 darwin-x64 的 canonical**
+  （锁里没有该平台 wheel，必须明确走它而不是报错）。重新定基线按探针分层：解析量精确、
+  定性判定一致、数值落带内、接触主导的只打印。**`accept-p2` / `accept-p3` /
+  `accept-sim-verdict` 在 Python 侧重跑全过，未改阈值。**
+  顺带发现一个真缺陷（未修）：TS 的碰撞事件从未开启 `ActiveEvents.COLLISION_EVENTS`，
+  所以 `接触:` 关键帧标签是死代码；Python 侧照现状镜像，开启它属于行为变更。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

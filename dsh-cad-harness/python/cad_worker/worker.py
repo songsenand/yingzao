@@ -41,6 +41,7 @@ drives:
     scad_prelude        the datum prelude injected into every part
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
     scad_parse_params   the `// PARAMS` convention
+    simulate_physics    step a rigid-body scenario and report what happened
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -79,6 +80,7 @@ OPS = [
     "scad_prelude",
     "scad_parse_output",
     "scad_parse_params",
+    "simulate_physics",
     "crash",
 ]
 
@@ -797,6 +799,421 @@ def op_scad_parse_params(params: dict) -> dict:
     return {"params": found}
 
 
+# ---------------------------------------------------------------------------
+# Rigid-body simulation (Q2=A: the physics canonical moved here).
+#
+# This mirrors `runPhysics` in src/host/physics.ts step for step. The probe
+# (experiments/20261008_python_rapier_probe.md) established what to expect from the
+# engine-version difference:
+#   * joint/constraint-dominated quantities agree to ~0.01–0.05 mm,
+#   * free flight and light contact to ~1 mm,
+#   * contact-dominated trajectories diverge by millimetres to tens of millimetres.
+# So this reproduces the ALGORITHM exactly; the thresholds that judge its output
+# are the caller's business (and were re-baselined per that report).
+#
+# Units are millimetres and seconds throughout (gravity -9810 mm/s², densities
+# ~1e-6 kg/mm³), which is why nothing here converts anything.
+# ---------------------------------------------------------------------------
+
+
+def _quat_to_matrix3(q) -> list:
+    x, y, z, w = (float(v) for v in q)
+    return [
+        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+    ]
+
+
+def _up_tilt_degrees(q) -> float:
+    """Angle between world up and the body's local +Z, in degrees (z-up world)."""
+    matrix = _quat_to_matrix3(q)
+    uz = max(-1.0, min(1.0, matrix[2][2]))
+    return math.acos(uz) * 180 / math.pi
+
+
+def _euler_to_quat(deg) -> tuple:
+    """Euler XYZ degrees → quaternion (x, y, z, w), same composition as TS."""
+    rx, ry, rz = (float(d) * math.pi / 180 for d in deg)
+    cx, sx = math.cos(rx / 2), math.sin(rx / 2)
+    cy, sy = math.cos(ry / 2), math.sin(ry / 2)
+    cz, sz = math.cos(rz / 2), math.sin(rz / 2)
+    return (
+        sx * cy * cz - cx * sy * sz,
+        cx * sy * cz + sx * cy * sz,
+        cx * cy * sz - sx * sy * cz,
+        cx * cy * cz + sx * sy * sz,
+    )
+
+
+def _is_convex(path: str) -> bool:
+    """True when the mesh encloses the same volume as its convex hull (±1%) — the
+    TS `isConvexStl`. A non-manifold input counts as NOT convex (trimesh path)."""
+    from manifold3d import Manifold, Mesh
+
+    try:
+        vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(path))
+        mesh = Mesh(vertices, faces)
+        mesh.merge()
+        solid = Manifold(mesh)
+        hull = solid.hull()
+        volume = float(solid.volume())
+        if hull.is_empty() or volume <= 0:
+            return False
+        return abs(float(hull.volume()) - volume) / volume < 0.01
+    except BaseException:  # noqa: BLE001 - mirror the TS catch-all
+        return False
+
+
+def op_simulate_physics(params: dict) -> dict:
+    """Step a rigid-body scenario and report what happened.
+
+    Everything about the WORLD (gravity, timestep, bodies, joints, contact sampling)
+    and the REPORT (penetration, toppled, settled, joint violations, keyframes,
+    trajectory) lives here; the caller keeps schema, rendering and storage.
+    """
+    import numpy as np
+    import rapier3d as R
+
+    scenario = params["scenario"]
+    gravity = [float(v) for v in (scenario.get("gravity") or [0.0, 0.0, -9810.0])]
+    dt = float(scenario.get("timestepSec") or 1 / 60)
+    duration = float(scenario.get("durationSec") or 2)
+    steps = max(1, int(round(duration / dt)))
+    keyframe_budget = int(scenario.get("keyframeCount") or 6)
+    keyframe_every = max(1, int(steps // keyframe_budget))
+
+    world = R.PhysicsWorld(tuple(gravity))
+    world.integration_parameters.dt = dt
+
+    bodies: dict = {}
+    colliders: dict = {}
+    fell_over_checks: list = []
+    initial_pos: dict = {}
+
+    for part in scenario["parts"]:
+        name = part["name"]
+        if part["bodyType"] == "fixed":
+            builder = R.RigidBody.fixed()
+        else:
+            builder = R.RigidBody.dynamic().can_sleep(False).ccd_enabled(True)
+        builder = builder.translation(tuple(float(v) for v in part["position"]))
+        if part.get("rotation"):
+            builder = builder.rotation(R.Rotation3.from_quaternion(_euler_to_quat(part["rotation"])))
+        body = world.add_body(builder)
+        raw = _parse_stl_raw(part["path"])
+        if part["bodyType"] == "dynamic":
+            collider = world.add_collider(
+                R.Collider.convex_hull(raw.reshape(-1, 3)).density(float(part.get("density") or 1.05e-6)), body
+            )
+            if part.get("initialAngularVelocity"):
+                world.rigid_bodies[body].angvel = tuple(float(v) for v in part["initialAngularVelocity"])
+            if part.get("fellOverCheck", True) is not False:
+                fell_over_checks.append(name)
+        elif _is_convex(part["path"]):
+            # CCD does not help a fixed body against a trimesh collider, so convex
+            # fixed geometry MUST be a convex hull (robust + fast).
+            collider = world.add_collider(R.Collider.convex_hull(raw.reshape(-1, 3)), body)
+        else:
+            vertices, faces, _degenerate = _weld_raw(raw)
+            collider = world.add_collider(
+                R.Collider.trimesh(np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32)), body
+            )
+        bodies[name] = body
+        colliders[name] = collider
+        initial_pos[name] = [float(v) for v in part["position"]]
+
+    joint_anchors = []
+    for joint in scenario.get("joints") or []:
+        a = bodies.get(joint["bodyA"])
+        b = bodies.get(joint["bodyB"])
+        if a is None:
+            raise ValueError(f"joint references unknown part: {joint['bodyA']}")
+        if b is None:
+            raise ValueError(f"joint references unknown part: {joint['bodyB']}")
+        anchor_a = tuple(float(v) for v in joint["anchorA"])
+        anchor_b = tuple(float(v) for v in joint["anchorB"])
+        axis = tuple(float(v) for v in joint["axis"])
+        if joint["type"] == "prismatic":
+            builder = R.PrismaticJoint.builder(axis=axis).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            if joint.get("limits"):
+                builder = builder.limits(float(joint["limits"][0]), float(joint["limits"][1]))
+        else:
+            builder = R.RevoluteJoint.builder(axis=axis).local_anchor1(anchor_a).local_anchor2(anchor_b)
+        world.impulse_joints.insert(a, b, builder.build())
+        joint_anchors.append(
+            {
+                "name": f"{joint['bodyA']}~{joint['bodyB']}",
+                "type": joint["type"],
+                "a": a,
+                "b": b,
+                "anchorA": anchor_a,
+                "anchorB": anchor_b,
+                "axis": axis,
+            }
+        )
+
+    dynamic_names = [p["name"] for p in scenario["parts"] if p["bodyType"] == "dynamic"]
+    fixed_names = [p["name"] for p in scenario["parts"] if p["bodyType"] == "fixed"]
+    pair_colliders = []
+    for i, first in enumerate(dynamic_names):
+        for second in dynamic_names[i + 1 :]:
+            pair_colliders.append((colliders[first], colliders[second]))
+        for fixed in fixed_names:
+            pair_colliders.append((colliders[first], colliders[fixed]))
+
+    max_penetration = 0.0
+    settled_penetration = 0.0
+    settle_from = int(steps * 0.9)
+
+    def pose_of(name: str) -> dict:
+        body = world.rigid_bodies[bodies[name]]
+        translation = body.translation
+        rotation = body.rotation.quaternion
+        return {
+            "position": [float(translation[0]), float(translation[1]), float(translation[2])],
+            "rotation": [float(rotation[0]), float(rotation[1]), float(rotation[2]), float(rotation[3])],
+        }
+
+    event_steps: dict = {}
+
+    def note_step(step: int, reason: str) -> None:
+        previous = event_steps.get(step)
+        event_steps[step] = f"{previous}|{reason}" if previous else reason
+
+    note_step(0, "start")
+
+    max_pen_step = -1
+    topple_noted = set()
+    traj_every = max(1, int(math.ceil(steps / 160)))
+    traj_times: list = []
+    traj_poses: list = []
+
+    def record_traj(step: int) -> None:
+        traj_times.append(round(step * dt, 4))
+        traj_poses.append({p["name"]: pose_of(p["name"]) for p in scenario["parts"]})
+
+    for step in range(steps + 1):
+        if not params.get("skipContacts"):
+            for first, second in pair_colliders:
+                pair = world.narrow_phase.contact_pair(first, second)
+                if not pair:
+                    continue
+                for manifold in pair.manifolds:
+                    for point in manifold.points:
+                        distance = float(point.dist)
+                        if distance < max_penetration:
+                            max_penetration = distance
+                            max_pen_step = step
+                        if step >= settle_from and distance < settled_penetration:
+                            settled_penetration = distance
+
+        # Collision events would label first contacts here, but the TS incumbent
+        # never enables ActiveEvents.COLLISION_EVENTS, so its EventQueue is always
+        # empty and this label was unreachable. Mirroring that keeps keyframes
+        # identical; enabling it is a behaviour change, not a migration, and is
+        # left as an explicit follow-up (see the execution summary).
+        for name in fell_over_checks:
+            if name in topple_noted:
+                continue
+            rotation = pose_of(name)["rotation"]
+            if _up_tilt_degrees(rotation) > 30:
+                topple_noted.add(name)
+                note_step(step, f"倾倒:{name}")
+
+        if step % traj_every == 0:
+            record_traj(step)
+        if step < steps:
+            world.step()
+
+    if traj_times[-1] != round(steps * dt, 4):
+        record_traj(steps)
+    if max_pen_step >= 0:
+        note_step(max_pen_step, "最大穿透")
+    note_step(steps, "final")
+
+    budget = keyframe_budget
+    min_gap = max(1, int(steps // (budget * 4)))
+    chosen: dict = {}
+    for step in sorted(event_steps.keys()):
+        if len(chosen) >= budget:
+            break
+        if not any(abs(k - step) < min_gap for k in chosen):
+            chosen[step] = event_steps[step]
+    if len(chosen) < budget:
+        step = 0
+        while step <= steps and len(chosen) < budget:
+            if step not in chosen and not any(abs(k - step) < min_gap for k in chosen):
+                chosen[step] = "context"
+            step += keyframe_every
+    if steps not in chosen:
+        best = None
+        for key, label in chosen.items():
+            if label == "context" and (best is None or abs(key - steps) < abs(best - steps)):
+                best = key
+        if best is not None:
+            del chosen[best]
+        chosen[steps] = "final"
+
+    def pose_at(step: int) -> dict:
+        index = min(len(traj_poses) - 1, max(0, int(round(step / traj_every))))
+        return traj_poses[index]
+
+    keyframes = [
+        {"step": step, "timeSec": round(step * dt, 3), "label": label, "poses": pose_at(step)}
+        for step, label in sorted(chosen.items())
+    ]
+
+    fell_over = {}
+    max_horizontal = {}
+    final_positions = {}
+    any_moving = False
+    for name in fell_over_checks:
+        fell_over[name] = _up_tilt_degrees(pose_of(name)["rotation"]) > 60
+    for part in scenario["parts"]:
+        name = part["name"]
+        pose = pose_of(name)
+        final_positions[name] = pose["position"]
+        start = initial_pos[name]
+        max_horizontal[name] = round(math.hypot(pose["position"][0] - start[0], pose["position"][2] - start[2]), 3)
+        if part["bodyType"] == "dynamic":
+            velocity = world.rigid_bodies[bodies[name]].linvel
+            if math.hypot(float(velocity[0]), float(velocity[1]), float(velocity[2])) > 5:
+                any_moving = True
+
+    def world_point(handle, local) -> list:
+        body = world.rigid_bodies[handle]
+        matrix = _quat_to_matrix3(body.rotation.quaternion)
+        translation = body.translation
+        return [
+            float(translation[i]) + matrix[i][0] * local[0] + matrix[i][1] * local[1] + matrix[i][2] * local[2]
+            for i in range(3)
+        ]
+
+    joint_violations = []
+    for joint in joint_anchors:
+        point_a = world_point(joint["a"], joint["anchorA"])
+        point_b = world_point(joint["b"], joint["anchorB"])
+        delta = [point_a[i] - point_b[i] for i in range(3)]
+        if joint["type"] == "prismatic":
+            # A slider is SUPPOSED to let the anchors separate along its axis; only
+            # motion ACROSS the axis is a violation.
+            matrix = _quat_to_matrix3(world.rigid_bodies[joint["a"]].rotation.quaternion)
+            axis = [sum(matrix[i][j] * joint["axis"][j] for j in range(3)) for i in range(3)]
+            length = math.hypot(*axis) or 1.0
+            unit = [value / length for value in axis]
+            along = sum(delta[i] * unit[i] for i in range(3))
+            perpendicular = math.hypot(*[delta[i] - along * unit[i] for i in range(3)])
+            if perpendicular > 2:
+                joint_violations.append(f"{joint['name']}: slide left its axis by {perpendicular:.2f}mm")
+            continue
+        drift = math.hypot(*delta)
+        if drift > 2:
+            joint_violations.append(f"{joint['name']}: anchor drift {drift:.2f}mm")
+
+    trajectory = {
+        "times": traj_times,
+        "parts": [
+            {
+                "name": part["name"],
+                "bodyType": part["bodyType"],
+                "frames": [
+                    [
+                        poses[part["name"]]["position"][0],
+                        poses[part["name"]]["position"][1],
+                        poses[part["name"]]["position"][2],
+                        poses[part["name"]]["rotation"][0],
+                        poses[part["name"]]["rotation"][1],
+                        poses[part["name"]]["rotation"][2],
+                        poses[part["name"]]["rotation"][3],
+                    ]
+                    for poses in traj_poses
+                ],
+            }
+            for part in scenario["parts"]
+        ],
+        "events": [
+            {"timeSec": round(step * dt, 3), "label": label}
+            for step, label in sorted(chosen.items())
+            if label != "context"
+        ],
+    }
+
+    # Honest-input diagnostics: a many-shell body with sparse ground contact reports
+    # a settled penetration that is a solver artefact, not a fit measurement.
+    notes = []
+    total_shells = 0
+    for part in scenario["parts"]:
+        try:
+            _vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(part["path"]))
+            total_shells += _shell_count(faces)
+        except BaseException:  # noqa: BLE001 - truth is best-effort
+            pass
+    if total_shells >= 4:
+        notes.append(
+            f"input has {total_shells} disconnected shells across {len(scenario['parts'])} part(s); "
+            "with sparse ground contacts the settled-penetration figure is a solver artefact, not a fit measurement — "
+            "cross-check part fit with check_assembly / validate_assembly instead"
+        )
+
+    hold_analysis = []
+    for joint in scenario.get("joints") or []:
+        friction = joint.get("staticFriction")
+        if joint["type"] != "prismatic" or not isinstance(friction, (int, float)) or friction <= 0:
+            continue
+        body = bodies.get(joint["bodyB"])
+        if body is None:
+            continue
+        mass_kg = float(world.rigid_bodies[body].mass)
+        matrix = _quat_to_matrix3(world.rigid_bodies[body].rotation.quaternion)
+        axis_world = [sum(matrix[i][j] * float(joint["axis"][j]) for j in range(3)) for i in range(3)]
+        axis_length = math.hypot(*axis_world) or 1.0
+        unit = [value / axis_length for value in axis_world]
+        g_parallel = sum(gravity[i] * unit[i] for i in range(3))
+        g_perp = [gravity[i] - g_parallel * unit[i] for i in range(3)]
+        axial_drive = abs(g_parallel) * mass_kg
+        normal = math.hypot(*g_perp) * mass_kg
+        friction_cap = float(friction) * normal
+        holds = friction_cap >= axial_drive
+        hold_analysis.append(
+            {
+                "joint": f"{joint['bodyA']}~{joint['bodyB']}",
+                "mu": float(friction),
+                "massKg": round(mass_kg, 4),
+                "axialDriveN": round(axial_drive, 4),
+                "frictionCapN": round(friction_cap, 4),
+                "holds": holds,
+            }
+        )
+        notes.append(
+            f"hold analysis for {joint['bodyA']}~{joint['bodyB']} is a QUASI-STATIC analytic estimate "
+            f"(μ·m·|g⊥| = {friction_cap:.3f}N vs m·|g∥| = {axial_drive:.3f}N → "
+            f"{'HOLDS (self-locking under gravity)' if holds else 'SLIDES (gravity drives it along the axis)'}); "
+            "the rigid-body solver did not simulate friction"
+        )
+
+    metrics = {
+        "maxPenetrationMm": round(abs(min(0.0, max_penetration)), 4),
+        "settledPenetrationMm": round(abs(min(0.0, settled_penetration)), 4),
+        "fellOver": fell_over,
+        "maxHorizontalDisplacementMm": max_horizontal,
+        "jointViolations": joint_violations,
+        "settled": not any_moving,
+        "notes": notes,
+    }
+    if hold_analysis:
+        metrics["holdAnalysis"] = hold_analysis
+
+    return {
+        "metrics": metrics,
+        "finalPositions": final_positions,
+        "keyframes": keyframes[: budget + 1],
+        "trajectory": trajectory,
+        "stepsRun": steps,
+        "durationSec": duration,
+    }
+
+
 def op_import_mesh(params: dict) -> dict:
     """Parse → shells → scale → weld → solid verdict for `import_part`.
 
@@ -976,6 +1393,7 @@ HANDLERS = {
     "scad_prelude": op_scad_prelude,
     "scad_parse_output": op_scad_parse_output,
     "scad_parse_params": op_scad_parse_params,
+    "simulate_physics": op_simulate_physics,
     "crash": op_crash,
 }
 

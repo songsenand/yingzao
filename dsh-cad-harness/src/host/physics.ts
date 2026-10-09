@@ -4,9 +4,11 @@
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import ManifoldModule from 'manifold-3d';
-import { parseBinaryStl, shellCount } from './mesh.ts';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
+import { parseBinaryStl, shellCount } from './mesh.ts';
 import { spawn } from 'node:child_process';
 
 export interface PhysicsPartInput {
@@ -170,7 +172,66 @@ function trimeshOf(stl: Uint8Array): { vertices: Float32Array; indices: Uint32Ar
 /**
  * Run the scenario. Never renders — see renderKeyframes for visuals.
  */
+/** Darwin-x64 has no `rapier3d` wheel (the lock excludes it), so physics stays on
+ * the TS canonical there. Everywhere else the worker owns the solve. */
+const PYTHON_PHYSICS_UNAVAILABLE = process.platform === 'darwin' && process.arch === 'x64';
+
+/**
+ * Step a rigid-body scenario (Q2=A: the Python worker is canonical).
+ *
+ * The parts travel as PATH (the scenario already carries STL bytes, so they are
+ * written to the worker's scratch directory), and the report comes back in the
+ * same shape the tool has always seen. The engine versions differ (TS
+ * `rapier3d-compat` 0.20 vs Python `rapier3d` 0.36), and the probe measured what
+ * that means: joint/constraint quantities agree to ~0.05 mm, free flight and light
+ * contact to ~1 mm, contact-dominated trajectories by millimetres to tens of
+ * millimetres — see experiments/20261008_python_rapier_probe.md.
+ */
 export async function runPhysics(scenario: PhysicsScenario): Promise<PhysicsReport> {
+  if (PYTHON_PHYSICS_UNAVAILABLE) return runPhysicsInTs(scenario);
+
+  const scratch = await workerScratchDir();
+  const written: string[] = [];
+  const parts = [];
+  for (const part of scenario.parts) {
+    const path = join(scratch, `physics-${randomUUID()}.stl`);
+    await writeFile(path, part.stl);
+    written.push(path);
+    parts.push({
+      name: part.name,
+      path,
+      bodyType: part.bodyType,
+      position: part.position,
+      ...(part.rotation ? { rotation: part.rotation } : {}),
+      ...(part.density !== undefined ? { density: part.density } : {}),
+      ...(part.initialAngularVelocity ? { initialAngularVelocity: part.initialAngularVelocity } : {}),
+      ...(part.fellOverCheck !== undefined ? { fellOverCheck: part.fellOverCheck } : {}),
+    });
+  }
+  try {
+    const worker = await ensurePythonWorker();
+    return await worker.request<PhysicsReport>('simulate_physics', {
+      scenario: {
+        parts,
+        ...(scenario.joints ? { joints: scenario.joints } : {}),
+        ...(scenario.gravity ? { gravity: scenario.gravity } : {}),
+        ...(scenario.durationSec !== undefined ? { durationSec: scenario.durationSec } : {}),
+        ...(scenario.timestepSec !== undefined ? { timestepSec: scenario.timestepSec } : {}),
+        ...(scenario.keyframeCount !== undefined ? { keyframeCount: scenario.keyframeCount } : {}),
+      },
+    });
+  } finally {
+    await Promise.all(written.map((path) => rm(path, { force: true }).catch(() => {})));
+  }
+}
+
+/**
+ * The TS implementation — the CANONICAL only on darwin-x64, where the lock ships
+ * no `rapier3d` wheel (HARNESS §12.7). Everywhere else it is the parity oracle for
+ * the Python worker (`scripts/accept-physics-parity.mjs`), exactly like
+ * `validateAssemblyInTs` / `importGeometry`'s predecessor.
+ */
+export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<PhysicsReport> {
   const RAPIER_ = await R();
   const gravity = scenario.gravity ?? [0, 0, -9810];
   const dt = scenario.timestepSec ?? 1 / 60;
