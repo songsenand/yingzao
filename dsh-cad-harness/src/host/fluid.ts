@@ -235,16 +235,26 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
   // Diagnostics kept on purpose: `CAD_FLUID_NO_PROJECT=1` skips the SDF
   // projection (how the suspect was isolated); it must never be set in production.
   // ---------------------------------------------------------------------------
-  // STILL OPT-IN (2026-10-12, second pass). The wall-mask fix below took the
-  // 50k-particle pipe from arrival 0.098 to 0.8488 and `accept-m4` passes on this
-  // path — but `accept-fluid-sign` (thick-wall cavities) disagrees on a HARD
-  // invariant: the Python realization ends with 167/888 particles more than 0.3mm
-  // inside the wall where TS ends with 0, and its active set is 20% larger with a
-  // 2x higher mean speed. Both runs report diverged=false, so this is not NaN
-  // hiding. Until the penetrating particles' depth distribution is explained
-  // (projection post-condition? band edge?), the TS implementation stays canonical
-  // and the Python path needs the explicit opt-in.
-  if (process.env.DSH_CAD_FLUID_PYTHON !== '1') {
+  // ---------------------------------------------------------------------------
+  // The Python worker is canonical (batch 4, 2026-10-12).
+  //
+  // The path cost three debugging rounds and taught three things worth keeping:
+  //   1. the SDF's solid mask never reached the MPM grid update (no wall boundary
+  //      conditions at all — the 50k pipe arrived at 0.098 instead of 0.864);
+  //   2. a defensive box clamp inside the projection pulled particles back onto the
+  //      grid FACE, which is inside the wall for a pipe that hugs the boundary;
+  //   3. the kernel's float64 state made every step differ from TS's Float32Array
+  //      by ~1e-6, and the projection/inlet feedback loop amplified that into a 20%
+  //      macroscopic difference over 600 steps. Matching TS's dtypes (float32 state,
+  //      float64 grid accumulation) plus reusing work buffers fixed BOTH the
+  //      acceptance spread and the memory (941 MB → 229 MB peak) and the runtime
+  //      (7.2x → 4.2x of TS).
+  //
+  // `runFluidInTs` stays as the parity oracle; `DSH_CAD_FLUID_PYTHON=0` selects it.
+  // Diagnostics: `CAD_FLUID_NO_PROJECT=1`, `CAD_FLUID_DEBUG_PENETRATION=1`,
+  // `CAD_FLUID_DEBUG_PROJECT=1` (never in production).
+  // ---------------------------------------------------------------------------
+  if (process.env.DSH_CAD_FLUID_PYTHON === '0') {
     const legacy = await runFluidInTs(scenario);
     return { report: legacy.report, sdf: legacy.sdf };
   }
@@ -478,6 +488,9 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
   }
 
   /** Push particles that ended up inside the wall back to the surface (free-slip). */
+  // DIAGNOSTIC (CAD_FLUID_DEBUG_PROJECT=1): the projection's effect on velocity,
+  // so the two engines' projections can be compared quantity by quantity.
+  const projectionCounters = { candidate: 0, inside: 0, killed: 0, killedSpeedSum: 0, pushSum: 0 };
   const projectParticles = () => {
     const dx = scenario.dxMm;
     const tol = 0.05;
@@ -485,11 +498,14 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
       const cx = world.pos[p * 3]!, cy = world.pos[p * 3 + 1]!, cz = world.pos[p * 3 + 2]!;
       const cell = (cx | 0) * gnyz + (cy | 0) * gnz + (cz | 0);
       if (!nearSurface[cell]) continue;
+      projectionCounters.candidate++;
       const wx = cx * dx + scenario.gridOriginMm[0];
       const wy = cy * dx + scenario.gridOriginMm[1];
       const wz = cz * dx + scenario.gridOriginMm[2];
       const d = sdfAt(sdf, wx, wy, wz);
       if (d >= -tol) continue;
+      projectionCounters.inside++;
+      projectionCounters.pushSum += -d + 0.15 * dx;
       // outward gradient via central differences on the grid SDF
       const gx = sdfAt(sdf, wx + dx, wy, wz) - sdfAt(sdf, wx - dx, wy, wz);
       const gy = sdfAt(sdf, wx, wy + dx, wz) - sdfAt(sdf, wx, wy - dx, wz);
@@ -503,6 +519,8 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
       // kill the into-wall velocity component (free slip)
       const vn = world.vel[p * 3]! * nx + world.vel[p * 3 + 1]! * ny + world.vel[p * 3 + 2]! * nz;
       if (vn < 0) {
+        projectionCounters.killed++;
+        projectionCounters.killedSpeedSum += -vn;
         world.vel[p * 3] -= nx * vn;
         world.vel[p * 3 + 1] -= ny * vn;
         world.vel[p * 3 + 2] -= nz * vn;
@@ -649,6 +667,12 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
     snapshots,
     durationSec: +((performance.now() - t0) / 1000).toFixed(1),
   };
+  if (process.env.CAD_FLUID_DEBUG_PROJECT === '1') {
+    (report as unknown as { debugProjection?: unknown }).debugProjection = {
+      ...projectionCounters,
+      inlet: world.inletCounters,
+    };
+  }
   return { report, sdf, world };
 }
 

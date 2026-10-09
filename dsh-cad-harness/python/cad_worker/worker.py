@@ -1048,15 +1048,16 @@ def op_mpm_create(params: dict) -> dict:
         "config": config,
         "cells": cells,
         "n": count,
-        "pos": positions,
-        "vel": np.zeros((count, 3), dtype=np.float64),
-        "C": np.zeros((count, 3, 3), dtype=np.float64),
+        "pos": positions.astype(np.float32),
+        "vel": np.zeros((count, 3), dtype=np.float32),
+        "C": np.zeros((count, 3, 3), dtype=np.float32),
         "transits": 0,
         "escaped": 0,
         "activeN": count,
         "nonFinite": 0,
         "restDensity": float(config["restDensity"]) if config.get("restDensity") is not None else 0.0,
         "lastStep": {"maxSpeed": 0.0, "clampedFraction": 0.0},
+        "inletCounters": {"band": 0, "floored": 0, "injected": 0.0},
         "solidMask": None,
         "solidNormal": None,
     }
@@ -1172,6 +1173,57 @@ def weights_of(base, pos, i, j, k):
     return out
 
 
+def _mpm_scratch(world) -> dict:
+    """Per-world work buffers, allocated ONCE.
+
+    The first version allocated everything per step (and per tap), which at the
+    564k-particle scale peaked at 941 MB for a 68 MB state and churned ~1.6 GB of
+    temporaries per step — that churn IS the runtime. Buffers are reused here, the
+    particle state is float32 exactly like the TS kernel (Float32Array), and the
+    grid mass/momentum stay float64 exactly like the TS kernel (Float64Array).
+    """
+    import numpy as np
+
+    cells = world["cells"]
+    total = cells[0] * cells[1] * cells[2]
+    scratch = world.get("scratch")
+    if scratch is None or scratch["total"] != total or scratch["capacity"] < world["n"]:
+        capacity = world["n"]
+        scratch = {
+            "total": total,
+            "capacity": capacity,
+            "grid_mass": np.zeros(total, dtype=np.float64),
+            "grid_mom": np.zeros((total, 3), dtype=np.float64),
+            "grid_vel": np.zeros((total, 3), dtype=np.float32),
+            "cell": np.zeros(capacity, dtype=np.int32),
+            "weight": np.zeros(capacity, dtype=np.float32),
+            "d0": np.zeros(capacity, dtype=np.float32),
+            "d1": np.zeros(capacity, dtype=np.float32),
+            "d2": np.zeros(capacity, dtype=np.float32),
+            "g0": np.zeros(capacity, dtype=np.float32),
+            "g1": np.zeros(capacity, dtype=np.float32),
+            "g2": np.zeros(capacity, dtype=np.float32),
+            "gathered": np.zeros((capacity, 3), dtype=np.float32),
+            "wsum": np.zeros(capacity, dtype=np.float32),
+            "b": np.zeros((capacity, 9), dtype=np.float32),
+            "C_new": np.zeros((capacity, 3, 3), dtype=np.float32),
+        }
+        world["scratch"] = scratch
+    return scratch
+
+
+def _weights32(coord, tap):
+    """One quadratic B-spline tap along one axis, float32 (matches the TS kernel)."""
+    import numpy as np
+
+    frac = (coord - np.floor(coord) - 0.5).astype(np.float32)
+    if tap == 0:
+        return (0.5 * (0.5 - frac) * (0.5 - frac)).astype(np.float32)
+    if tap == 1:
+        return (0.75 - frac * frac).astype(np.float32)
+    return (0.5 * (0.5 + frac) * (0.5 + frac)).astype(np.float32)
+
+
 def _mpm_step_once(world) -> None:
     import numpy as np
 
@@ -1179,6 +1231,7 @@ def _mpm_step_once(world) -> None:
     cells = world["cells"]
     nx, ny, nz = cells
     total = nx * ny * nz
+    nyz = ny * nz
     dt = float(config["dt"])
     stiffness = float(config.get("stiffness", 50))
     viscosity = float(config.get("viscosity", 0.1))
@@ -1187,50 +1240,72 @@ def _mpm_step_once(world) -> None:
     pos = world["pos"][:active]
     vel = world["vel"][:active]
     C = world["C"][:active]
+    scratch = _mpm_scratch(world)
+    grid_mass = scratch["grid_mass"]
+    grid_mom = scratch["grid_mom"]
+    grid_vel = scratch["grid_vel"]
+    grid_mass.fill(0.0)
+    grid_mom.fill(0.0)
 
-    # The stencil base is clipped so a (rare) out-of-range position cannot produce a
-    # negative flat cell index — see the projection's clamp for where those come from.
-    base = np.clip(np.floor(pos).astype(np.int64) - 1, 0, np.asarray(cells) - 2)
-    taps = _mpm_taps(base, pos, cells)
+    maximum = np.asarray(cells, dtype=np.int32) - 2
+    base0 = np.clip(np.floor(pos[:, 0]).astype(np.int32) - 1, 0, maximum[0])
+    base1 = np.clip(np.floor(pos[:, 1]).astype(np.int32) - 1, 0, maximum[1])
+    base2 = np.clip(np.floor(pos[:, 2]).astype(np.int32) - 1, 0, maximum[2])
+    wx = [_weights32(pos[:, 0], t) for t in range(3)]
+    wy = [_weights32(pos[:, 1], t) for t in range(3)]
+    wz = [_weights32(pos[:, 2], t) for t in range(3)]
+    c00, c01, c02, c10, c11, c12, c20, c21, c22 = (C[:, a, b] for a in range(3) for b in range(3))
 
     # --- P2G pass 1: mass + APIC momentum ---
-    grid_mass = np.zeros(total, dtype=np.float64)
-    grid_mom = np.zeros((total, 3), dtype=np.float64)
-    # One bincount per tap for all three axes at once (index = cell*3 + axis):
-    # 27 calls per step instead of 81, and it was the dominant cost.
-    axis_offsets = np.arange(3, dtype=np.int64)
-    for tap in taps:
-        cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
-        q = np.einsum("pab,pb->pa", C, dist)
-        grid_mass += np.bincount(cell, weights=weight, minlength=total)
-        contribution = weight[:, None] * (vel + q)
-        flat = np.bincount((cell[:, None] * 3 + axis_offsets).ravel(), weights=contribution.ravel(), minlength=total * 3)
-        grid_mom += flat.reshape(total, 3)
+    for i in range(3):
+        d0 = ((base0 + i + 0.5) - pos[:, 0]).astype(np.float32)
+        for j in range(3):
+            d1 = ((base1 + j + 0.5) - pos[:, 1]).astype(np.float32)
+            for k in range(3):
+                d2 = ((base2 + k + 0.5) - pos[:, 2]).astype(np.float32)
+                cell = (base0 + i) * nyz + (base1 + j) * nz + (base2 + k)
+                w = wx[i] * wy[j] * wz[k]
+                grid_mass += np.bincount(cell, weights=w, minlength=total)
+                # Q = C @ cellDist, then scatter the three components (no (n,3) temp)
+                q0 = c00 * d0 + c01 * d1 + c02 * d2
+                q1 = c10 * d0 + c11 * d1 + c12 * d2
+                q2 = c20 * d0 + c21 * d1 + c22 * d2
+                grid_mom[:, 0] += np.bincount(cell, weights=w * (vel[:, 0] + q0), minlength=total)
+                grid_mom[:, 1] += np.bincount(cell, weights=w * (vel[:, 1] + q1), minlength=total)
+                grid_mom[:, 2] += np.bincount(cell, weights=w * (vel[:, 2] + q2), minlength=total)
 
-    # --- P2G pass 2: stress (weakly-compressible EOS + viscosity), vectorized ---
+    # --- P2G pass 2: stress (weakly-compressible EOS + viscosity) ---
     density = np.zeros(active, dtype=np.float64)
-    for tap in taps:
-        density += tap["weight"] * grid_mass[tap["cell"]]
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                cell = (base0 + i) * nyz + (base1 + j) * nz + (base2 + k)
+                density += (wx[i] * wy[j] * wz[k]) * grid_mass[cell]
     volume = 1.0 / np.where(density != 0, density, 1.0)
     dr = density / rest_density if rest_density else np.zeros(active)
     pressure = stiffness * np.maximum(0.0, dr ** 5 - 1) if rest_density else np.zeros(active)
-    stress = np.empty((active, 3, 3), dtype=np.float64)
-    stress[:, 0, 0] = -pressure + viscosity * 2 * C[:, 0, 0]
-    stress[:, 1, 1] = -pressure + viscosity * 2 * C[:, 1, 1]
-    stress[:, 2, 2] = -pressure + viscosity * 2 * C[:, 2, 2]
-    stress[:, 0, 1] = stress[:, 1, 0] = viscosity * (C[:, 0, 1] + C[:, 1, 0])
-    stress[:, 0, 2] = stress[:, 2, 0] = viscosity * (C[:, 0, 2] + C[:, 2, 0])
-    stress[:, 1, 2] = stress[:, 2, 1] = viscosity * (C[:, 1, 2] + C[:, 2, 1])
-    stress *= (volume * -4 * dt)[:, None, None]
-    for tap in taps:
-        cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
-        momentum = np.einsum("pab,pb->pa", stress, dist) * weight[:, None]
-        flat = np.bincount((cell[:, None] * 3 + axis_offsets).ravel(), weights=momentum.ravel(), minlength=total * 3)
-        grid_mom += flat.reshape(total, 3)
+    scale = (volume * -4 * dt).astype(np.float64)
+    s00 = (scale * (-pressure + viscosity * 2 * c00)).astype(np.float32)
+    s11 = (scale * (-pressure + viscosity * 2 * c11)).astype(np.float32)
+    s22 = (scale * (-pressure + viscosity * 2 * c22)).astype(np.float32)
+    s01 = (scale * (viscosity * (c01 + c10))).astype(np.float32)
+    s02 = (scale * (viscosity * (c02 + c20))).astype(np.float32)
+    s12 = (scale * (viscosity * (c12 + c21))).astype(np.float32)
+    for i in range(3):
+        d0 = ((base0 + i + 0.5) - pos[:, 0]).astype(np.float32)
+        for j in range(3):
+            d1 = ((base1 + j + 0.5) - pos[:, 1]).astype(np.float32)
+            for k in range(3):
+                d2 = ((base2 + k + 0.5) - pos[:, 2]).astype(np.float32)
+                cell = (base0 + i) * nyz + (base1 + j) * nz + (base2 + k)
+                w = wx[i] * wy[j] * wz[k]
+                grid_mom[:, 0] += np.bincount(cell, weights=w * (s00 * d0 + s01 * d1 + s02 * d2), minlength=total)
+                grid_mom[:, 1] += np.bincount(cell, weights=w * (s01 * d0 + s11 * d1 + s12 * d2), minlength=total)
+                grid_mom[:, 2] += np.bincount(cell, weights=w * (s02 * d0 + s12 * d1 + s22 * d2), minlength=total)
 
     # --- grid update: v = momentum/mass + boundary conditions ---
     mass_safe = np.where(grid_mass > 0, grid_mass, 1.0)
-    grid_vel = grid_mom / mass_safe[:, None]
+    grid_vel[:] = (grid_mom / mass_safe[:, None]).astype(np.float32)
     grid_vel[grid_mass <= 0] = 0.0
     grid_vel = grid_vel.reshape(nx, ny, nz, 3)
     if nx > 2:
@@ -1248,42 +1323,59 @@ def _mpm_step_once(world) -> None:
         grid_vel[:, :, :, 0] = np.where(mask & ((code == 1) | (code == 2)), 0.0, grid_vel[:, :, :, 0])
         grid_vel[:, :, :, 1] = np.where(mask & ((code == 3) | (code == 4)), 0.0, grid_vel[:, :, :, 1])
         grid_vel[:, :, :, 2] = np.where(mask & ((code == 5) | (code == 6)), 0.0, grid_vel[:, :, :, 2])
-    flat_vel = grid_vel.reshape(total, 3)
+    flat_vel = scratch["grid_vel"]
 
     # --- G2P: gather velocity + affine, advect, drives, clamps ---
     vmax = float(config["vmax"])
     gravity = np.asarray(config.get("gravity") or [0.0, 0.0, 0.0], dtype=np.float64)
-    gathered = np.zeros((active, 3), dtype=np.float64)
-    B = np.zeros((active, 3, 3), dtype=np.float64)
-    wsum = np.zeros(active, dtype=np.float64)
+    gathered = scratch["gathered"][:active]
+    wsum = scratch["wsum"][:active]
+    b = scratch["b"][:active]
+    gathered.fill(0.0)
+    wsum.fill(0.0)
+    b.fill(0.0)
     mask_flat = world["solidMask"]
-    for tap in taps:
-        cells_of_tap = tap["cell"]
-        weight = tap["weight"]
-        if mask_flat is not None:
-            # free-slip renormalization: solid cells (v ≡ 0) are EXCLUDED, otherwise
-            # near-wall particles get dragged by the zeros (artificial boundary layer).
-            solid = mask_flat[cells_of_tap]
-            weight = np.where(solid, 0.0, weight)
-        contribution = weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax)
-        gathered += contribution
-        wsum += weight
-        B += contribution[:, :, None] * tap["dist"][:, None, :]
+    for i in range(3):
+        d0 = ((base0 + i + 0.5) - pos[:, 0]).astype(np.float32)
+        for j in range(3):
+            d1 = ((base1 + j + 0.5) - pos[:, 1]).astype(np.float32)
+            for k in range(3):
+                d2 = ((base2 + k + 0.5) - pos[:, 2]).astype(np.float32)
+                cell = (base0 + i) * nyz + (base1 + j) * nz + (base2 + k)
+                w = wx[i] * wy[j] * wz[k]
+                if mask_flat is not None:
+                    # free-slip renormalization: solid cells are EXCLUDED, otherwise
+                    # near-wall particles get dragged by the zeros.
+                    w = np.where(mask_flat[cell], np.float32(0.0), w)
+                g0 = np.clip(flat_vel[cell, 0], -vmax, vmax).astype(np.float32)
+                g1 = np.clip(flat_vel[cell, 1], -vmax, vmax).astype(np.float32)
+                g2 = np.clip(flat_vel[cell, 2], -vmax, vmax).astype(np.float32)
+                t0 = w * g0
+                t1 = w * g1
+                t2 = w * g2
+                gathered[:, 0] += t0
+                gathered[:, 1] += t1
+                gathered[:, 2] += t2
+                wsum += w
+                b[:, 0] += t0 * d0; b[:, 1] += t0 * d1; b[:, 2] += t0 * d2
+                b[:, 3] += t1 * d0; b[:, 4] += t1 * d1; b[:, 5] += t1 * d2
+                b[:, 6] += t2 * d0; b[:, 7] += t2 * d1; b[:, 8] += t2 * d2
 
-    scale = np.where(wsum > 0.5, 1.0 / np.where(wsum == 0.0, 1.0, wsum), 1.0)
+    scale = np.where(wsum > 0.5, 1.0 / np.where(wsum == 0.0, 1.0, wsum), 1.0).astype(np.float32)
     gathered *= scale[:, None]
-    B *= scale[:, None, None]
-    bad = ~np.isfinite(B[:, 0, 0] + B[:, 1, 1] + B[:, 2, 2])
+    b *= scale[:, None]
+    bad = ~np.isfinite(b[:, 0] + b[:, 4] + b[:, 8])
     if bad.any():
-        B[bad] = 0.0
+        b[bad] = 0.0
         gathered[bad] = 0.0
-    C_new = 4.0 * B
+    C_new = scratch["C_new"][:active]
+    C_new[:] = (4.0 * b).reshape(-1, 3, 3)
 
-    gathered += gravity[None, :] * dt
+    gathered += (gravity[None, :] * dt).astype(np.float32)
     speed2 = np.einsum("pa,pa->p", gathered, gathered)
     over = speed2 > vmax * vmax
     safe_speed2 = np.where(speed2 > 0, speed2, 1.0)
-    gathered *= np.where(over, vmax / np.sqrt(safe_speed2), 1.0)[:, None]
+    gathered *= np.where(over, vmax / np.sqrt(safe_speed2), 1.0)[:, None].astype(np.float32)
     max_speed = vmax if over.any() else (float(np.sqrt(speed2.max())) if active else 0.0)
     clamped = int(over.sum())
 
@@ -1292,6 +1384,10 @@ def _mpm_step_once(world) -> None:
         axis = int(inlet["axis"])
         in_band = (pos[:, axis] >= float(inlet["band"][0])) & (pos[:, axis] <= float(inlet["band"][1]))
         below = in_band & (gathered[:, axis] < float(inlet["speed"]))
+        world["inletCounters"]["band"] += int(in_band.sum())
+        world["inletCounters"]["floored"] += int(below.sum())
+        if below.any():
+            world["inletCounters"]["injected"] += float((float(inlet["speed"]) - gathered[below, axis]).sum())
         gathered[below, axis] = float(inlet["speed"])
 
     nan = ~np.isfinite(gathered).all(axis=1)
@@ -1304,12 +1400,12 @@ def _mpm_step_once(world) -> None:
 
     # advection + box clamp with normal-velocity kill (free-slip walls)
     new_pos = pos + gathered * dt
-    high = np.array([nx - 1.5, ny - 1.5, nz - 1.5])
-    below = new_pos < 1.5
-    above = new_pos > high[None, :]
+    high = np.array([nx - 1.5, ny - 1.5, nz - 1.5], dtype=np.float32)
+    below_box = new_pos < 1.5
+    above_box = new_pos > high[None, :]
     new_pos = np.clip(new_pos, 1.5, high[None, :])
-    gathered = np.where(below & (gathered < 0), 0.0, gathered)
-    gathered = np.where(above & (gathered > 0), 0.0, gathered)
+    gathered = np.where(below_box & (gathered < 0), 0.0, gathered)
+    gathered = np.where(above_box & (gathered > 0), 0.0, gathered)
 
     recycle = config.get("recycle")
     if recycle:
@@ -1573,7 +1669,10 @@ def op_fluid_run(params: dict) -> dict:
     band = 2.5 * dx_mm
     near_surface = (grid_cells > -band) & (grid_cells < band)
 
-    projection_stats = {"calls": 0, "moved": 0, "pushSum": 0.0, "last": None}
+    projection_stats = {
+        "calls": 0, "moved": 0, "pushSum": 0.0, "last": None,
+        "candidate": 0, "inside": 0, "killed": 0, "killedSpeedSum": 0.0,
+    }
 
     def project_particles(is_last: bool = False) -> None:
         active = world["activeN"]
@@ -1613,6 +1712,8 @@ def op_fluid_run(params: dict) -> dict:
         push = (-distances + 0.15 * dx_mm) / dx_mm
         projection_stats["moved"] += int(index.size)
         projection_stats["pushSum"] += float(push.sum())
+        projection_stats["inside"] += int(index.size)
+        projection_stats["candidate"] += int(candidates.sum())
         pos[index] = pos[index] + normals * push[:, None]
         if is_last:
             # THE decisive reading: after the final projection of the run, how many
@@ -1647,6 +1748,8 @@ def op_fluid_run(params: dict) -> dict:
         # kill the into-wall velocity component (free slip)
         vn = np.einsum("pa,pa->p", vel[index], normals)
         drag = vn < 0
+        projection_stats["killed"] += int(drag.sum())
+        projection_stats["killedSpeedSum"] += float(-vn[drag].sum()) if drag.any() else 0.0
         if drag.any():
             target = index[drag]
             vel[target] = vel[target] - normals[drag] * vn[drag][:, None]
@@ -1723,12 +1826,25 @@ def op_fluid_run(params: dict) -> dict:
             )
 
     debug_penetration = None
+    if params.get("debugPenetration"):
+        debug_penetration = {
+            "projectionCalls": projection_stats["calls"],
+            "projectionMoved": projection_stats["moved"],
+            "projectionCandidate": projection_stats["candidate"],
+            "projectionInside": projection_stats["inside"],
+            "projectionKilled": projection_stats["killed"],
+            "projectionKilledSpeedSum": round(projection_stats["killedSpeedSum"], 2),
+            "projectionPushSum": round(projection_stats["pushSum"], 2),
+            "inlet": dict(world["inletCounters"]),
+        }
     if params.get("debugPenetration") and active:
         import numpy as _np
 
         pos_mm_all = world["pos"][:active] * dx_mm + _np.asarray(origin)[None, :]
         depths = _sdf_at_many(sdf, pos_mm_all)
         penetrating = depths < -penetration_tol
+        debug_penetration["penetrating"] = int(penetrating.sum())
+        debug_penetration["depthMinMm"] = round(float(depths.min()), 6)
         if penetrating.any():
             cells_of = _np.clip(_np.floor(world["pos"][:active]).astype(_np.int64), 0, _np.array([nx - 1, ny - 1, nz - 1]))
             cell_depth = grid_cells[cells_of[penetrating][:, 0], cells_of[penetrating][:, 1], cells_of[penetrating][:, 2]]
@@ -1745,7 +1861,7 @@ def op_fluid_run(params: dict) -> dict:
             offset[0, 2] = dx_mm
             gz = _sdf_at_many(sdf, pos_mm_all[penetrating] + offset) - _sdf_at_many(sdf, pos_mm_all[penetrating] - offset)
             gradient_norm = np.sqrt(gx * gx + gy * gy + gz * gz)
-            debug_penetration = {
+            debug_penetration.update({
                 "count": int(penetrating.sum()),
                 "gradMin": float(gradient_norm.min()),
                 "gradMax": float(gradient_norm.max()),
@@ -1753,6 +1869,10 @@ def op_fluid_run(params: dict) -> dict:
                 "projectionMoved": projection_stats["moved"],
                 "projectionCalls": projection_stats["calls"],
                 "projectionPushSum": round(projection_stats["pushSum"], 2),
+                "projectionCandidate": projection_stats.get("candidate", 0),
+                "projectionInside": projection_stats.get("inside", 0),
+                "projectionKilled": projection_stats.get("killed", 0),
+                "projectionKilledSpeedSum": round(projection_stats.get("killedSpeedSum", 0.0), 2),
                 **(projection_stats["last"] or {}),
                 "depthMinMm": float(depths[penetrating].min()),
                 "depthMaxMm": float(depths[penetrating].max()),
@@ -1764,7 +1884,7 @@ def op_fluid_run(params: dict) -> dict:
                 "metricDepthMinMm": round(metric_depth_min, 6),
                 "metricActive": int(active),
                 "blockChecksums": block_checksums,
-            }
+            })
 
     count0 = count
     mass_error = abs(count0 - world["escaped"] - active) / count0 if count0 else 0.0

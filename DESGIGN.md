@@ -2650,6 +2650,14 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   入口/出口规则**已证明等价**，差异**只在投影效果**；③ 开投影时 Python 末态平均速率 63.7 vs TS 22.5
   ⇒ **Python 的投影少杀了法向速度**。下一步：给"投影每步移除的速度量"插桩与 TS 对拍。
   **不采用"重定阈值"**——那会掩盖一个真实差异。
+  **根因找到并修复（2026-10-12 第五轮）：不是逻辑错误，是数值 dtype。** 两侧计数器在**步数 10/30 逐位相同**
+  （入口 band/floored/injected、投影 inside/killed、avgV），约 100 步开始分叉，600 步差到 0.674 vs 0.544；
+  **去掉入口后 600 步又一致**（0.5018 vs 0.5226）⇒ 放大器是"**投影 × 入口速度下限**"的正反馈，
+  种子是**我的 float64 状态与 TS 的 `Float32Array` 每步 ~1e-6 的差**。改成 float32 后差异落到带内，
+  **`accept-fluid-sign` 在 Python 路径 16/16 通过**。同一次重写还解决了内存与性能：**峰值 941 MB → 229 MB**
+  （564k 粒子；状态只有 68 MB，其余全是不必要的临时数组）、**7.2× → 4.22×**，
+  逐粒子漂移 9.8e-6 → **1.9e-6 格**。**simulate_fluid 现为 Python canonical**（`DSH_CAD_FLUID_PYTHON=0` 回 TS oracle）。
+  做法：float32 状态 + 每世界复用 scratch + 按轴 (n,) 散射（不造 (n,3) 索引）+ 秩 1 累加（不造 (n,3,3)）。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

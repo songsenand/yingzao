@@ -84,6 +84,8 @@ export interface MpmWorld {
   restDensity: number;
   /** Per-step diagnostics from the most recent step. */
   lastStep: { maxSpeed: number; clampedFraction: number };
+  /** DIAGNOSTIC (CAD_FLUID_DEBUG_PROJECT): what the inlet drive actually did. */
+  inletCounters: { band: number; floored: number; injected: number };
   step(): void;
   /** Seed pass used at construction; exposed for tests. */
   calibrateRestDensity(): number;
@@ -91,9 +93,14 @@ export interface MpmWorld {
 
 /** Deterministic tiny jitter — no RNG dependency, reproducible runs. */
 function jitter(i: number): number {
-  // Low-amplitude additive mix; keeps lattice alignment fromaliasing weights.
+  // Low-amplitude additive mix; keeps lattice alignment from aliasing weights.
+  // DIAGNOSTIC (CAD_MPM_JITTER_AMP): the amplitude can be nudged to measure how
+  // sensitive the run's OUTCOME is to a ~1e-9 relative numerical change — the same
+  // kind of change that separates two implementations which are equivalent but not
+  // bit-identical (numpy summation order, np.sin vs Math.sin).
+  const amplitude = process.env.CAD_MPM_JITTER_AMP ? Number(process.env.CAD_MPM_JITTER_AMP) : 0.04;
   const s = Math.sin(i * 12.9898) * 43758.5453;
-  return (s - Math.floor(s) - 0.5) * 0.04;
+  return (s - Math.floor(s) - 0.5) * amplitude;
 }
 
 /**
@@ -124,6 +131,7 @@ export function createMpmWorld(
     nonFinite: 0,
     restDensity: cfg.restDensity ?? 0,
     lastStep: { maxSpeed: 0, clampedFraction: 0 },
+    inletCounters: { band: 0, floored: 0, injected: 0 },
     step: () => stepWorld(world),
     calibrateRestDensity: () => {
       world.restDensity = cfg.restDensity ?? calibrate(world);
@@ -321,8 +329,11 @@ export function stepWorld(w: MpmWorld): void {
     if (inlet) {
       const ax = inlet.axis === 0 ? px : inlet.axis === 1 ? py : pz;
       if (ax >= inlet.band[0] && ax <= inlet.band[1]) {
+        w.inletCounters.band++;
         const cur = inlet.axis === 0 ? vpx : inlet.axis === 1 ? vpy : vpz;
         if (cur < inlet.speed) {
+          w.inletCounters.floored++;
+          w.inletCounters.injected += inlet.speed - cur;
           if (inlet.axis === 0) vpx = inlet.speed;
           else if (inlet.axis === 1) vpy = inlet.speed;
           else vpz = inlet.speed;
