@@ -474,6 +474,17 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 | `DSH_CAD_PYTHON_INDEX_URL` | pip 索引 | PyPI → 阿里云 依次尝试（同日实测 npmmirror 的 PyPI 路径 404、TUNA 403） |
 | `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试/多实例用） | `$DSH_HOME/cad/runtime` |
 
+**诊断开关（只用于定位，**绝不可在生产设置**；全部只影响日志/对照，不改变工具 schema）：**
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_CAD_FLUID_PYTHON=0` | 让 `simulate_fluid` 回退到 TS oracle（默认走 Python canonical） |
+| `CAD_FLUID_NO_PROJECT=1` | 跳过流场的 SDF 投影（二分"投影 vs 内核"用） |
+| `CAD_FLUID_DEBUG_PENETRATION=1` | `fluid_run` 返回穿透深度分布、梯度、投影/入口计数器 |
+| `CAD_FLUID_DEBUG_PROJECT=1` | TS 侧返回投影/入口计数器（与上一条对拍用） |
+| `CAD_FLUID_DT` | 覆盖流场时间步（量"离散化 vs 舍入"用；步数需同步调整） |
+| `CAD_MPM_JITTER_AMP` | 覆盖 MPM 初始抖动的幅度（量结果对输入扰动的敏感度用） |
+
 **实测（本机 Arch Linux，2026-10-08）**：归档 33.4MiB 压缩 / 105MB 展开 / 下载 3.5s；venv +
 八个依赖全部命中预编译 wheel；**冷启动（下载归档 + 装约 230MB 依赖）实测 353–476 秒**，
 视镜像与网络而定；总占用 **381–383 MiB**；**默认 PyPI 直连同一批依赖用了 11m44s**，
