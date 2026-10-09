@@ -36,6 +36,7 @@ drives:
     connectivity    connected bodies + strict watertight test (check_connectivity)
     validate_assembly  per-part solid facts + pairwise interference/clearance
     merge_solids    union of placed solids → merged STL on disk + facts
+    measure_distance   two-point distance with surface snapping (measure_distance)
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -68,6 +69,7 @@ OPS = [
     "connectivity",
     "validate_assembly",
     "merge_solids",
+    "measure_distance",
     "crash",
 ]
 
@@ -548,6 +550,62 @@ def op_validate_assembly(params: dict) -> dict:
     }
 
 
+def _snap_to_surface(mesh, point):
+    """Closest surface point + inside/outside by the hit triangle's geometric normal
+    — the TS `snapToSurface`. Returns the snapped point, how far the input was from
+    the surface, and whether it sat on the outward side of that face."""
+    import numpy as np
+    import trimesh
+
+    closest, distance, face_ids = trimesh.proximity.ProximityQuery(mesh).on_surface(np.asarray(point, dtype=float).reshape(1, 3))
+    snapped = np.asarray(closest[0], dtype=float)
+    vertices = np.asarray(mesh.vertices, dtype=float)
+    face = np.asarray(mesh.faces[int(face_ids[0])], dtype=np.int64)
+    va, vb, vc = vertices[face[0]], vertices[face[1]], vertices[face[2]]
+    normal = np.cross(vb - va, vc - va)
+    length = float(np.linalg.norm(normal))
+    if length > 0:
+        normal = normal / length
+    return {
+        "snapped": snapped,
+        "distance": float(distance[0]),
+        "outside": bool(float(np.dot(np.asarray(point, dtype=float) - snapped, normal)) > 0),
+    }
+
+
+def op_measure_distance(params: dict) -> dict:
+    """Two-point distance with optional surface snapping (the `measure_distance`
+    tool). Both parts travel as paths; the watertight flags come back with the
+    numbers so the caller's warning keeps its teeth — and they use the STRICT
+    manifold test, not trimesh's laxer one."""
+    import numpy as np
+
+    mesh_a = _load(params["meshA"])
+    mesh_b = _load(params["meshB"]) if params.get("meshB") else mesh_a
+    point_a = np.asarray(params["a"], dtype=float)
+    point_b = np.asarray(params["b"], dtype=float)
+
+    snap_a = _snap_to_surface(mesh_a, point_a) if params.get("snapA", True) else {"snapped": point_a, "distance": 0.0, "outside": False}
+    snap_b = _snap_to_surface(mesh_b, point_b) if params.get("snapB", True) else {"snapped": point_b, "distance": 0.0, "outside": False}
+    pa = np.asarray(snap_a["snapped"], dtype=float)
+    pb = np.asarray(snap_b["snapped"], dtype=float)
+    delta = pb - pa
+    return {
+        "distanceMm": round(float(np.linalg.norm(delta)), 4),
+        "dxMm": round(float(delta[0]), 4),
+        "dyMm": round(float(delta[1]), 4),
+        "dzMm": round(float(delta[2]), 4),
+        "aSnapped": [float(x) for x in pa],
+        "bSnapped": [float(x) for x in pb],
+        "aSnapDistanceMm": round(float(snap_a["distance"]), 4),
+        "bSnapDistanceMm": round(float(snap_b["distance"]), 4),
+        "aOutside": bool(snap_a["outside"]),
+        "bOutside": bool(snap_b["outside"]),
+        "watertightA": _is_watertight(np.asarray(mesh_a.faces)),
+        "watertightB": _is_watertight(np.asarray(mesh_b.faces)),
+    }
+
+
 def _shell_count(faces) -> int:
     """Edge-connected components of a mesh — the TS `shellCount` (undirected edge
     keys), which drives the "the parts you merged do not all touch" warning."""
@@ -636,6 +694,7 @@ HANDLERS = {
     "connectivity": op_connectivity,
     "validate_assembly": op_validate_assembly,
     "merge_solids": op_merge_solids,
+    "measure_distance": op_measure_distance,
     "crash": op_crash,
 }
 

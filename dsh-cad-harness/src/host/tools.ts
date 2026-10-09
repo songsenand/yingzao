@@ -26,7 +26,7 @@ import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
-import { measureDistance, buildMeshBvh, type MeshData } from './measure.ts';
+import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
   deriveNameFromFile, importGeometry, normalizeDatums, type DatumInput, type Unit,
@@ -125,6 +125,21 @@ interface MergeSolve {
   sizeMm: number[];
   shells: number;
   outBytes: number;
+}
+/** Payload of the worker's `measure_distance` op. */
+interface MeasureDistanceSolve {
+  distanceMm: number;
+  dxMm: number;
+  dyMm: number;
+  dzMm: number;
+  aSnapped: [number, number, number];
+  bSnapped: [number, number, number];
+  aSnapDistanceMm: number;
+  bSnapDistanceMm: number;
+  aOutside: boolean;
+  bOutside: boolean;
+  watertightA: boolean;
+  watertightB: boolean;
 }
 
 export function cadToolNames(): readonly string[] {
@@ -2221,10 +2236,6 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { versionId: string; aPoint?: number[]; bPoint?: number[]; aDatum?: string; bDatum?: string; bVersionId?: string; snap?: boolean };
       const { store } = await allStores(exec);
-      const loadMesh = async (v: string): Promise<MeshData> => {
-        const bytes = await readFile(join(store.root, 'versions', v, 'model.stl'));
-        return parseBinaryStl(new Uint8Array(bytes));
-      };
       const loadDatums = (v: string): Promise<Record<string, [number, number, number]>> =>
         readVersionDatumPoints(store, v);
       const resolve = async (side: 'a' | 'b', datumName?: string, point?: number[]): Promise<[number, number, number]> => {
@@ -2242,25 +2253,30 @@ export function registerCadTools(
       };
       const aPt = await resolve('a', a.aDatum, a.aPoint);
       const bPt = await resolve('b', a.bDatum, a.bPoint);
-      const meshA = await loadMesh(a.versionId);
-      const meshB = a.bVersionId ? await loadMesh(a.bVersionId) : null;
-      // A snapped distance on an open surface is a number about a mesh that
-      // does not describe a solid (microscope3: measure_closest reported
-      // 0.05mm "clearance" on exactly such a mesh). Never refuse — datums
-      // still resolve exactly — but roar.
-      const warnings: string[] = [];
-      for (const [label, m, v] of [['a', meshA, a.versionId], ['b', meshB, a.bVersionId ?? a.versionId]] as const) {
-        if (m && !isWatertight(m).watertight) {
-          warnings.push(`part ${label} (${v}) is NOT watertight — surface snapping on an open mesh is unreliable, fix the mesh before trusting this number`);
-        }
-      }
-      // datum-resolved points are exact declarations — never snap them;
-      // raw coordinate inputs snap to the nearest surface by default
+      const versionStl = (v: string) => join(store.root, 'versions', v, 'model.stl');
+      if (!existsSync(versionStl(a.versionId))) throw new Error(`version ${a.versionId} has no model.stl`);
+      // The solve is Python's (batch 1); the parts travel as paths. datum-resolved
+      // points are exact declarations — never snap them; raw coordinate inputs snap
+      // to the nearest surface by default.
       const snapRaw = a.snap ?? true;
-      const out = measureDistance(meshA, meshB, aPt, bPt, {
+      const out = await (await ensurePythonWorker()).request<MeasureDistanceSolve>('measure_distance', {
+        meshA: versionStl(a.versionId),
+        meshB: a.bVersionId ? versionStl(a.bVersionId) : null,
+        a: aPt,
+        b: bPt,
         snapA: snapRaw && !a.aDatum,
         snapB: snapRaw && !a.bDatum,
       });
+      // A snapped distance on an open surface is a number about a mesh that does
+      // not describe a solid (microscope3: measure_closest reported 0.05mm
+      // "clearance" on exactly such a mesh). Never refuse — datums still resolve
+      // exactly — but roar. The flag is the STRICT manifold verdict, not trimesh's.
+      const warnings: string[] = [];
+      for (const [label, watertight, v] of [['a', out.watertightA, a.versionId], ['b', out.watertightB, a.bVersionId ?? a.versionId]] as const) {
+        if (!watertight) {
+          warnings.push(`part ${label} (${v}) is NOT watertight — surface snapping on an open mesh is unreliable, fix the mesh before trusting this number`);
+        }
+      }
       const aSnapDistanceMm = a.aDatum ? 0 : out.aSnapDistanceMm;
       const bSnapDistanceMm = a.bDatum ? 0 : out.bSnapDistanceMm;
       const aOutside = a.aDatum ? false : out.aOutside;

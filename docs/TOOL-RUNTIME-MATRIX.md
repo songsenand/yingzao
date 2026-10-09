@@ -48,7 +48,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 8 | `check_connectivity` | 连通分量/壳数 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `connectivity` op：**按共享边**判连通（只共顶点算两块）、体序为 XY 包围盒面积降序（平局按首个三角形）。耗时 **0.68×/0.74×/0.76×**（Python 更快：92→62、72→53、6→5 ms）。**关键保真点**：水密用 TS 的严格判据（每条有向边恰好一次且反向边存在），**没有**换成 trimesh 更宽松的 `is_watertight`——反证用例：把一个立方体某个三角面绕向翻转，严格判据说"不水密"，trimesh 自己会说"水密" |
 | 9 | `check_printability` | 壁厚/悬垂（可顺带从采样升级为精确） | schema | **P** | 精度是附带收益 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | **P** | manifold3d + trimesh |
-| 11 | `measure_distance` | 点/球距离 | schema | **P** | 依赖 batch 0（否则冷启动负收益） |
+| 11 | `measure_distance` | 点/球距离 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `measure_distance` op：吸附（精确最近点 + 命中三角面法线定内外）、吸附距离、分量、水密标志都在 Python；TS 侧只剩 datum 解析、警告文案与 datum 侧的后处理。**parity**：6 个用例（表面/内部/远处/跨件/关吸附/只吸附 a）全字段一致，真实零件 230 mm 一致；**并列最小点**（立方体正中心距六面都是 10 mm）显式作为"平局"用例：吸附距离与内外判定必须一致，具体坐标允许不同（TS 取 −Z 面、trimesh 取 −X 面，两者都正确）。水密标志仍是**严格判据**（绕向翻转的立方体：严格判据 false、trimesh true）。绝对耗时 0.6–3.0 ms（比值 5–8.7×，两边都是亚毫秒级，比值意义有限） |
 | 12 | `measure_closest` | 最近点/最小间隙 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | 求解在 `worker.py` 的 `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与标注渲染。**parity：距离与 TS 逐位一致（Δ=0）**，解析真值也对（1 mm 间隙测成 1 mm、球探针 4 mm 间隙、吞掉顶面的球报 0 而非负间隙）。耗时 **0.89× / 8.43× / 0.98×**（TS 114/17/106 ms → Python 101/141/104 ms；8.43× 那次目标网格只有 12 个面，两边绝对量都是百毫秒级）。剪枝前最坏 **107×**（15.0 s，trimesh 对远离目标的查询点代价高），改包围盒下界分支定界后降到 **0.89×** |
 | 13 | `render_part` | 渲染调用、视图拼接 | schema、图片附件 | **P** | |
 | 14 | `simulate_physics` | 场景构建、报告 | schema | **待裁决** | ③ canonical：Python 绑定是 0.36，TS 是 0.20，数值可能微差；darwin-x64 必须 TS（已拍板） |
@@ -135,7 +135,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | 批次 | 内容 | 为什么排这个位置 |
 |---|---|---|
 | **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
-| 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅、~~`merge_parts`~~ ✅（均 2026-10-08）、STL 解析零拷贝 | 数据支持"迁了更好"；四个已迁移，parity + 解析真值 + 反证用例都过 |
+| 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅、~~`merge_parts`~~ ✅、~~`measure_distance`~~ ✅（均 2026-10-08）。**批次 1 完成**（STL 零拷贝解析随这些工具一并落地：`closest_points`/`stl_stats` 用 numpy 视图，不再整份拷贝） | 数据支持"迁了更好"；五个已迁移，parity + 解析真值 + 反证/平局用例都过 |
 | 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 | 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |
