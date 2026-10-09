@@ -89,6 +89,8 @@ export interface FluidReport {
     stepsRun: number;
   };
   snapshots: FluidSnapshot[];
+  /** DIAGNOSTIC ONLY (CAD_FLUID_DEBUG_PENETRATION=1); not in the tool schema. */
+  debugPenetration?: Record<string, number>;
   durationSec: number;
 }
 
@@ -325,6 +327,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
       restDensity0: RD0,
       inlet: Boolean(scenario.inlet),
       skipProject: process.env.CAD_FLUID_NO_PROJECT === '1',
+      debugPenetration: process.env.CAD_FLUID_DEBUG_PENETRATION === '1',
     }, { timeoutMs: 1_800_000 });
   } finally {
     for (const path of [sdfPath, seedsPath]) rmSync(path, { force: true });
@@ -387,6 +390,9 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
       stepsRun: solved.stepsRun,
     },
     snapshots,
+    // DIAGNOSTIC ONLY (CAD_FLUID_DEBUG_PENETRATION=1): where the penetrating
+    // particles sit relative to the projection band. Not part of the tool schema.
+    ...(solved.debugPenetration ? { debugPenetration: solved.debugPenetration } : {}),
     durationSec: +((performance.now() - t0) / 1000).toFixed(1),
   };
   return { report, sdf };

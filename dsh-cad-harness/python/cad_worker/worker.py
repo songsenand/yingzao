@@ -1573,10 +1573,13 @@ def op_fluid_run(params: dict) -> dict:
     band = 2.5 * dx_mm
     near_surface = (grid_cells > -band) & (grid_cells < band)
 
+    projection_stats = {"calls": 0, "moved": 0, "pushSum": 0.0}
+
     def project_particles() -> None:
         active = world["activeN"]
         if active == 0:
             return
+        projection_stats["calls"] += 1
         pos = world["pos"][:active]
         vel = world["vel"][:active]
         cells = np.clip(np.floor(pos).astype(np.int64), 0, np.array([nx - 1, ny - 1, nz - 1]))
@@ -1608,6 +1611,8 @@ def op_fluid_run(params: dict) -> dict:
         lengths = np.where((magnitude := np.sqrt(gx * gx + gy * gy + gz * gz)) > 0, magnitude, 1.0)
         normals = np.stack([gx / lengths, gy / lengths, gz / lengths], axis=1)
         push = (-distances + 0.15 * dx_mm) / dx_mm
+        projection_stats["moved"] += int(index.size)
+        projection_stats["pushSum"] += float(push.sum())
         pos[index] = pos[index] + normals * push[:, None]
         # A particle deep inside a wall gets a large push, which can throw it out of
         # the box. The kernel clamps during ADVECTION only, so clamp here as well:
@@ -1684,6 +1689,45 @@ def op_fluid_run(params: dict) -> dict:
                 }
             )
 
+    debug_penetration = None
+    if params.get("debugPenetration") and active:
+        import numpy as _np
+
+        pos_mm_all = world["pos"][:active] * dx_mm + _np.asarray(origin)[None, :]
+        depths = _sdf_at_many(sdf, pos_mm_all)
+        penetrating = depths < -penetration_tol
+        if penetrating.any():
+            cells_of = _np.clip(_np.floor(world["pos"][:active]).astype(_np.int64), 0, _np.array([nx - 1, ny - 1, nz - 1]))
+            cell_depth = grid_cells[cells_of[penetrating][:, 0], cells_of[penetrating][:, 1], cells_of[penetrating][:, 2]]
+            in_band = (cell_depth > -band) & (cell_depth < band)
+            # gradient magnitude at the penetrating positions: a zero gradient
+            # means the projection's push has NO direction to work with.
+            offset = np.zeros((1, 3), dtype=np.float64)
+            offset[0, 0] = dx_mm
+            gx = _sdf_at_many(sdf, pos_mm_all[penetrating] + offset) - _sdf_at_many(sdf, pos_mm_all[penetrating] - offset)
+            offset[0, 0] = 0.0
+            offset[0, 1] = dx_mm
+            gy = _sdf_at_many(sdf, pos_mm_all[penetrating] + offset) - _sdf_at_many(sdf, pos_mm_all[penetrating] - offset)
+            offset[0, 1] = 0.0
+            offset[0, 2] = dx_mm
+            gz = _sdf_at_many(sdf, pos_mm_all[penetrating] + offset) - _sdf_at_many(sdf, pos_mm_all[penetrating] - offset)
+            gradient_norm = np.sqrt(gx * gx + gy * gy + gz * gz)
+            debug_penetration = {
+                "count": int(penetrating.sum()),
+                "gradMin": float(gradient_norm.min()),
+                "gradMax": float(gradient_norm.max()),
+                "gradZero": int((gradient_norm < 1e-9).sum()),
+                "projectionMoved": projection_stats["moved"],
+                "projectionCalls": projection_stats["calls"],
+                "projectionPushSum": round(projection_stats["pushSum"], 2),
+                "depthMinMm": float(depths[penetrating].min()),
+                "depthMaxMm": float(depths[penetrating].max()),
+                "depthMeanMm": float(depths[penetrating].mean()),
+                "withinBand": int(in_band.sum()),
+                "outsideBand": int((~in_band).sum()),
+                "cellDepthMinMm": float(cell_depth.min()),
+            }
+
     count0 = count
     mass_error = abs(count0 - world["escaped"] - active) / count0 if count0 else 0.0
     arrival = (world["escaped"] / count0) if count0 else 0.0
@@ -1714,6 +1758,7 @@ def op_fluid_run(params: dict) -> dict:
         "diverged": bool(world["nonFinite"] > 0),
         "stepsRun": steps,
         "snapshotSteps": snapshot_steps,
+        **({"debugPenetration": debug_penetration} if debug_penetration is not None else {}),
     }
     op_mpm_destroy({"worldId": created["worldId"]})
     return result
