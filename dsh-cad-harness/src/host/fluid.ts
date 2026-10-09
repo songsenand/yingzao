@@ -95,7 +95,9 @@ export interface FluidReport {
 }
 
 const K0 = 50, MU0 = 0.1, RD0 = 1.5;      // reference constants (see bench)
-const DT = 0.004;                          // s, cell-unit time — fixed by design
+// s, cell-unit time — fixed by design. DIAGNOSTIC (CAD_FLUID_DT) can override it
+// to measure how much of the outcome is DISCRETISATION rather than round-off.
+const DT = process.env.CAD_FLUID_DT ? Number(process.env.CAD_FLUID_DT) : 0.004;
 const WALL_CLEARANCE_MM = 0.75;            // seed rejection margin near walls
 const PENETRATION_TOL_MM = 0.3;            // sdf below this counts as penetration
 
