@@ -1,6 +1,6 @@
 ---
 name: cad-toolbox
-description: Use when a task involves 3D geometry at all — designing or changing a part, importing an STL, checking whether parts fit together, verifying a mechanism moves, testing fluid flow, or measuring a model. Contains the tool-selection map, the conventions every CAD tool assumes, and the traps that have cost real iterations. Load it before choosing among generate_part / import_part / measure_* / simulate_* / check_assembly; the tool descriptions are deliberately terse.
+description: Use when a task involves 3D geometry at all — designing or changing a part, importing an STL, checking whether parts fit together, verifying a mechanism moves, testing fluid flow, or measuring a model. Contains the tool-selection map, each tool's boundary (what it cannot answer), the conventions every CAD tool assumes, and the traps that have cost real iterations. Load it before choosing among generate_part / import_part / measure_* / simulate_* / check_assembly; the tool descriptions are deliberately terse.
 ---
 
 # CAD toolbox: which tool, when, and how not to waste a round
@@ -372,8 +372,9 @@ near-touching pairs were never declared).
 
 ## Still to add (deliberately open)
 
-- Parameter sweet spots per tool (particle counts, step counts, what actually
-  changes the answer vs what only changes the runtime).
-- Cost model: which call is seconds and which is minutes, and how to bound a
-  simulation before launching it.
+- Parameter sweet spots per tool: what actually changes the answer vs what only
+  changes the runtime. Partly answered above (`check_printability`'s `samples`,
+  `simulate_fluid`'s `particlesPerCell`/`stacksPerSeed`), still open for
+  `simulate_motion`'s cycles/samplePerCycle and for bounding a fluid run before
+  launching it.
 - Assembly-specific guidance (when a flat root is enough and when to nest).
