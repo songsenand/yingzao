@@ -66,15 +66,6 @@ export interface FluidReport {
       /** How many particles share each seed position. >1 means the lattice was NOT refined. */
       stacksPerSeed: number;
     };
-    /**
-     * Non-fatal problems the caller must know about. Currently raised when the
-     * requested particle count exceeds the seed lattice: the placer cycles
-     * `seeds[idx++ % seeds.length]`, so extra particles STACK on existing seed
-     * positions instead of densifying the lattice — the arrival ratio then
-     * describes those few positions rather than the flow field. Raise
-     * `particlesPerCell` (or widen `fluidRegionMm`) to get a real denser lattice.
-     */
-    warnings: string[];
     escaped: number;
     active: number;
     /** Audit: |count0 − escaped − active| / count0 (≈0 by construction; guards kernel bugs). */
@@ -88,6 +79,20 @@ export interface FluidReport {
     diverged: boolean;
     stepsRun: number;
   };
+  /**
+   * Non-fatal problems the caller must know about. Currently raised when the
+   * requested particle count exceeds the seed lattice: the placer cycles
+   * `seeds[idx++ % seeds.length]`, so extra particles STACK on existing seed
+   * positions instead of densifying the lattice — the arrival ratio then
+   * describes those few positions rather than the flow field. Raise
+   * `particlesPerCell` (or widen `fluidRegionMm`) to get a real denser lattice.
+   *
+   * NOTE: this sits on the REPORT, not inside `metrics` — which is where both
+   * implementations have always put it and where every caller reads it. The type
+   * said `metrics.warnings`, so `tsc` had two standing errors in this file that a
+   * `grep -v fluid.ts` in the verification commands had been hiding.
+   */
+  warnings: string[];
   snapshots: FluidSnapshot[];
   /** DIAGNOSTIC ONLY (CAD_FLUID_DEBUG_PENETRATION=1); not in the tool schema. */
   debugPenetration?: Record<string, number>;
@@ -307,6 +312,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
     penetrationCount: number; outletArrivalRatio: number; timeToOutletSteps: number | null;
     sectionAvgVelocity: { positionMm: number; velocityMmPerSec: number }[];
     maxVelocityMmPerSec: number; avgVelocityMmPerSec: number; diverged: boolean; stepsRun: number;
+    debugPenetration?: Record<string, number>;
   };
   try {
     const worker = await ensurePythonWorker();
