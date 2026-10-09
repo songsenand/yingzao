@@ -240,12 +240,20 @@ near-touching pairs were never declared).
   for that version (the description after `PARAMS` is the label). Keep them
   top-level and numeric; a tagged assignment nested inside a module body is
   still picked up, which is almost never what you meant.
-- **The geometric tools run on the plugin's bundled Python runtime** (pinned
-  CPython 3.13 + numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree;
-  `rapier3d` everywhere a wheel exists). The first call on a machine provisions it
-  once — hundreds of MB and minutes, with progress — and `python_runtime` reports,
-  provisions or repairs it; `run_python` is the escape hatch for anything the CAD
-  tools do not cover (pinned deps, full filesystem access, **no sandbox**).
+- **The measuring, checking and simulating tools run on the plugin's bundled
+  Python runtime** — `generate_part` (its SCAD text protocol), `import_part`,
+  `merge_parts`, `validate_assembly`, `measure_part`, `measure_distance`,
+  `measure_closest`, `check_printability`, `check_connectivity`,
+  `simulate_physics`, `simulate_motion`, `simulate_fluid`. That runtime is pinned
+  (CPython 3.13 + numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree;
+  `rapier3d` everywhere a wheel exists), and the first call on a machine
+  provisions it once — hundreds of MB and minutes, with progress.
+  **`check_assembly`, `delivery_audit`, `create_part`, `set_datums`, `render_part`
+  and `recall_reference_image` do not need it** (they read the corpus, the store or
+  the panel), so they keep working with the runtime off. `python_runtime` reports,
+  provisions or repairs the runtime; `run_python` is the escape hatch for anything
+  the CAD tools do not cover (same pinned deps, full filesystem access, **no
+  sandbox**) and it installs the runtime on its own first call.
   If a tool comes back saying the runtime is not ready, that message already names
   the fix: `python_runtime` with `action: "provision"`, then call the tool again.
   With `DSH_CAD_PYTHON=off` every Python-backed tool is **unavailable by design**
