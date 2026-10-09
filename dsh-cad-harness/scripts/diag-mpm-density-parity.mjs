@@ -1,3 +1,7 @@
+// DIAGNOSTIC (kept as evidence, not an acceptance): the Python MPM kernel matches the
+// TS kernel at 2k/8k/20k particles for 200 steps with no SDF, no inlet and no gravity —
+// i.e. the kernel is faithful and the fluid_run gap is in the run loop.
+// NOTE: this one needs DSH_CAD_PYTHON_ROOT to point at a provisioned runtime.
 // Pure kernel at increasing density, no SDF / no inlet / no gravity:
 // does the Python kernel drift systematically as particles per cell rises?
 import { createMpmWorld, stepWorld } from '../src/host/mpm.ts';
