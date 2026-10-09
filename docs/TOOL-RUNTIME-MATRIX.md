@@ -149,3 +149,37 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
    （E1 冷启动/worker、E2 最近点、E3 面板载荷、E4 图片载荷、M1–M5 TS↔Python）；
 4. 现有验收（`scripts/accept-*.mjs`）更新并通过；
 5. canonical 归属在决策记录里写明。
+
+## 7. 迁移现状与剩余工作（2026-10-12 收官盘点）
+
+**已迁移并在 Python 侧验收通过（工具名/schema 未变，TS 侧保留 oracle）：**
+
+| 工具 | worker op | 验收证据 |
+|---|---|---|
+| `measure_closest` | `closest_mesh_mesh` / `closest_mesh_sphere` | parity 距离逐位一致（Δ=0）+ 解析真值 |
+| `check_connectivity` | `connectivity` | 按共享边判连通；耗时 0.68–0.76×（Python 更快） |
+| `validate_assembly` | `validate_assembly` | parity（`validateAssemblyInTs` 为 oracle） |
+| `merge_parts` | `merge_solids` | 合并 STL 字节一致（1.44 MB 真实件） |
+| `measure_distance` | `measure_distance` | 6 用例 + 平局用例 |
+| `import_part` | `import_mesh` | 体积/几何精确；解析真值 |
+| `generate_part`（SCAD 文本协议） | `scad_prelude` / `scad_parse_output` / `scad_parse_params` | 合成输出逐字段 + 真实编译 datum 全值 |
+| `simulate_physics` | `simulate_physics` | parity + **`accept-p2`/`accept-p3`/`accept-sim-verdict` 在 Python 侧全过、未改阈值** |
+| `simulate_motion` | `simulate_motion` | parity（干涉计数逐位相同）+ **`accept-m36` 17/17 在 Python 侧通过** |
+| `measure_part` | `measure_part` | 5 件逐字段一致（含真实件 710012.998 mm³/亏格 -2） |
+| `check_printability` | `check_printability` | 悬垂面积逐位一致；**修掉两个真缺陷**（BVH 就地重排索引、raycast 遍历序当距离序） |
+
+**未完成（明确交接）：**
+
+| 项 | 现状 | 下一步 |
+|---|---|---|
+| `simulate_fluid` 运行环 | 内核已迁并验证；两个真缺陷已修（无壁面边界条件、投影箱体夹紧）；`accept-m4` 在 Python 路径 24/24 | `accept-fluid-sign` 剩一项**统计断言**（不同壁厚到达率跨度 0.1815 vs 阈值 0.15，TS 0.0829）⇒ 需要一次"重定阈值"的用户决定，或继续追查 Ø100 的输运差异 |
+| 体素 FEM | **未开始** | 用户已裁决迁 Python（接受慢）；若照搬 scikit-fem 路线组装慢 3–17×，**matrix-free 路线未测**，应先量 |
+| `check_assembly` | 未迁移（P） | 领域半区=接口契约规则 + `axisLineDistance`；store/manifest 读写与证据时效留在 TS |
+| `delivery_audit` | 未迁移（P） | 交付规则 + 文件/网格核对 |
+| `render_part` | 判定为 ① 平台系留（理由见 row 13） | 无需动作 |
+| `recall_reference_image` | ① 平台（DSH attachments） | 无需动作 |
+| darwin-x64 物理 | ③ canonical：TS 分支 | 已在 `runPhysics`/`runMotion` 落地 |
+
+**性能仍需关注的一项**：`simulate_fluid` 实测 **5–7×** 慢于 TS（超出用户批准的 2.5–4×），
+瓶颈是内核内存流量；原生 Rust/C 内核实测比 TS **快 3.7–4.6×** ⇒ 已是该工具的**实际必需项**，
+不再是"中后期再说"。
