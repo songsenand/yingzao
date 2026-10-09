@@ -2554,6 +2554,11 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 - **worker 是子进程，生命周期归插件管**：`ctx.effect` 里注册 `resetPythonWorker()`，
   卸载即停。这不是理论担忧——迁移 `validate_assembly` 后 `accept-m2.mjs` 实测**挂住不退出**
   （worker 的 stdio 句柄让事件循环一直活着），验收脚本因此也要显式收尾。
+- **第四个迁移的工具：`merge_parts`（2026-10-08）。** worker 的 `merge_solids` op 做 Manifold
+  并集并**由 Python 写出合并后的 STL**（谁算谁交付），TS 侧只剩解析、provenance、渲染与存版。
+  **两件并集与真实零件的 STL 逐字节相同**；三件带共面接触时仅三角形**顺序**不同（几何指纹与
+  顶点集相同，已实测非我方代码所致）。踩坑记录：`np.unique` 返回排序后的唯一顶点，而 TS 按
+  **首次出现**编号——顺序会传播到交付物，必须还原。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

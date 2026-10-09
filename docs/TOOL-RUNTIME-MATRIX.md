@@ -42,7 +42,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 2 | `create_part` | 零件命名/唯一化 | schema | **P** | 小 |
 | 3 | `set_datums` | datum 读写 | schema | **P** | 小 |
 | 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | **P** | numpy 解析比 JS 快 |
-| 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | **P** | 实测 Python 侧更快（3.06×），**同一个 C++ 内核**、体积 Δ=0 |
+| 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | worker 的 `merge_solids` op：各件以**路径**进，**合并后的 STL 由 Python 写出**（谁算谁交付），TS 侧只剩解析、provenance、渲染与存版。**parity**：三角数/体积/尺寸/壳数与 TS 完全一致；**两件并集与真实零件（1.44 MB）的 STL 逐字节相同**；三件带共面接触时仅**三角形顺序**不同（几何指纹与顶点集完全相同，已实测非我方代码所致——Python 侧 `(a+b)+c`、`a+(b+c)`、`batch_boolean` 三种写法字节都一样）。耗时 0.56×–1.2× |
 | 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | ✅ **已迁移（2026-10-08）** | 求解在 worker 的 `validate_assembly` op（parts 以**路径**进，报告原样回）；TS 侧只剩 schema、part 解析/位姿拼装、run 持久化与渲染。`validateAssemblyInTs` 保留为 parity oracle。**8 个用例全字段一致**（含真实零件、rotate、matrix/pose 路径、干涉、too_tight、非实体拒绝）；耗时 0.54×–1.78×，真实零件对 274→177 ms（0.65×）与 274→407 ms（1.48×） |
 | 7 | `check_assembly` | 接口契约判定、距离查询 | schema | **P** | 纯领域规则 |
 | 8 | `check_connectivity` | 连通分量/壳数 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `connectivity` op：**按共享边**判连通（只共顶点算两块）、体序为 XY 包围盒面积降序（平局按首个三角形）。耗时 **0.68×/0.74×/0.76×**（Python 更快：92→62、72→53、6→5 ms）。**关键保真点**：水密用 TS 的严格判据（每条有向边恰好一次且反向边存在），**没有**换成 trimesh 更宽松的 `is_watertight`——反证用例：把一个立方体某个三角面绕向翻转，严格判据说"不水密"，trimesh 自己会说"水密" |
@@ -135,7 +135,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | 批次 | 内容 | 为什么排这个位置 |
 |---|---|---|
 | **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
-| 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅（均 2026-10-08）、`merge_parts`（Manifold 3×）、STL 解析零拷贝 | 数据支持"迁了更好"；前三个已迁移，parity + 解析真值 + 反证用例都过 |
+| 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅、~~`merge_parts`~~ ✅（均 2026-10-08）、STL 解析零拷贝 | 数据支持"迁了更好"；四个已迁移，parity + 解析真值 + 反证用例都过 |
 | 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 | 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |

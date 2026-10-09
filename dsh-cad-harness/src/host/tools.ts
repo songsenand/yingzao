@@ -10,21 +10,22 @@ import {
 } from './parts.ts';
 import { buildProducts } from './products.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
-import { validateAssembly, buildSolid, type AssemblyPartInput } from './assembly.ts';
+import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
 import type { InterfaceCheckResult } from './assembly-check.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
-import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl, type ParsedMesh } from './mesh.ts';
+import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { runMotion } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
+import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
-import { ensurePythonWorker } from './python-worker.ts';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { measureDistance, buildMeshBvh, type MeshData } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -33,7 +34,6 @@ import {
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
 import { basename, join, relative } from 'node:path';
 
 interface GeneratePartArgs {
@@ -117,6 +117,14 @@ interface ConnectivitySolve {
   bodies: { min: number[]; max: number[] }[];
   watertight: boolean;
   triangles: number;
+}
+/** Payload of the worker's `merge_solids` op. */
+interface MergeSolve {
+  triangles: number;
+  volumeMm3: number;
+  sizeMm: number[];
+  shells: number;
+  outBytes: number;
 }
 
 export function cadToolNames(): readonly string[] {
@@ -955,28 +963,51 @@ export function registerCadTools(
     const warnings: string[] = [];
     const sources: { name: string; versionId?: string }[] = [];
     const provenance: { name: string; versionId: string | null }[] = [];
-    let union: Awaited<ReturnType<typeof buildSolid>>['solid'] | null = null;
+    // The union is Python's (batch 1). Each part's STL goes to the worker's
+    // scratch directory and travels as a PATH; the worker writes the merged STL
+    // itself, so the deliverable is produced on the side that computed it. What
+    // stays here is resolution, provenance, renders and version storage.
+    const scratch = await workerScratchDir();
+    const inputs: string[] = [];
+    const payload: { name: string; path: string; transform?: { translate?: number[]; rotate?: number[] } }[] = [];
     for (const p of a.parts) {
       const g = await resolvePartGeometry(p, project);
       sources.push({ name: p.name, ...(g.versionId ? { versionId: g.versionId } : {}) });
       provenance.push({ name: p.name, versionId: g.versionId });
-      let solid: Awaited<ReturnType<typeof buildSolid>>['solid'];
-      try {
-        ({ solid } = await buildSolid(g.stl, {
-          translate: p.translate as [number, number, number] | undefined,
-          rotate: p.rotate as [number, number, number] | undefined,
-        }));
-      } catch (e) {
-        throw new Error(`merge_parts: part "${p.name}" is not a usable solid — ${(e as Error).message}`);
-      }
-      union = union ? union.add(solid) : solid;
+      const path = join(scratch, `merge-${randomUUID()}.stl`);
+      await writeFile(path, g.stl);
+      inputs.push(path);
+      payload.push({
+        name: p.name,
+        path,
+        transform: {
+          translate: p.translate as number[] | undefined,
+          rotate: p.rotate as number[] | undefined,
+        },
+      });
     }
-    if (!union) throw new Error('merge_parts produced nothing');
+    const mergedPath = join(scratch, `merged-${randomUUID()}.stl`);
+    let solved: MergeSolve;
+    try {
+      solved = await (await ensurePythonWorker()).request<MergeSolve>('merge_solids', {
+        parts: payload,
+        out: mergedPath,
+        header: `dsh-cad-harness merge of ${a.parts.length} parts`,
+      });
+    } catch (e) {
+      // The worker names the failing part; keep that attribution and drop the
+      // protocol prefix so the message reads like it always did.
+      const message = String((e as Error).message ?? e)
+        .replace(/^[a-z_]+ failed: /, '')
+        .replace(/^ValueError: /, '');
+      throw new Error(`merge_parts: ${message}`);
+    } finally {
+      await Promise.all(inputs.map((path) => rm(path, { force: true }).catch(() => {})));
+    }
+    const stl = new Uint8Array(await readFile(mergedPath));
+    await rm(mergedPath, { force: true }).catch(() => {});
 
-    const gm = union.getMesh();
-    const mesh: ParsedMesh = { vertProperties: gm.vertProperties, triVerts: gm.triVerts };
-    const stl = writeBinaryStl(mesh, `dsh-cad-harness merge of ${a.parts.length} parts`);
-    const shells = shellCount(mesh);
+    const shells = solved.shells;
     if (shells > 1) {
       warnings.push(
         `the merged body has ${shells} disjoint shells — the parts you merged do not all touch. ` +
@@ -984,8 +1015,7 @@ export function registerCadTools(
         'is the sum over all shells, and a physics run will treat them as one rigid body.',
       );
     }
-    const bb = boundingBoxOf(mesh);
-    const sizeMm = [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]];
+    const sizeMm = solved.sizeMm;
 
     // Renders come from the very bytes that are about to be stored.
     let renders: { view: string; png: Uint8Array }[] = [];
@@ -1027,8 +1057,8 @@ export function registerCadTools(
     return {
       versionId,
       part: part.name,
-      triangles: mesh.triVerts.length / 3,
-      volumeMm3: union.volume(),
+      triangles: solved.triangles,
+      volumeMm3: solved.volumeMm3,
       sizeMm,
       shells,
       sources,

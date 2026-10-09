@@ -35,6 +35,7 @@ drives:
     closest_mesh_sphere  solved closest pair between a solid and an analytic sphere
     connectivity    connected bodies + strict watertight test (check_connectivity)
     validate_assembly  per-part solid facts + pairwise interference/clearance
+    merge_solids    union of placed solids → merged STL on disk + facts
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -66,6 +67,7 @@ OPS = [
     "closest_mesh_sphere",
     "connectivity",
     "validate_assembly",
+    "merge_solids",
     "crash",
 ]
 
@@ -407,15 +409,24 @@ def _parse_stl_raw(path: str):
 def _weld_raw(raw):
     """Mirror of the TS `MeshBuilder`: coordinates are keyed at 1e-5 mm, the FIRST
     occurrence's exact values survive, and triangles with a repeated vertex are
-    dropped as degenerate. Welding is what lets Manifold see shared edges."""
+    dropped as degenerate. Welding is what lets Manifold see shared edges.
+
+    ORDER MATTERS. `np.unique` hands back unique keys SORTED, while the TS builder
+    assigns indices in FIRST-ENCOUNTER order — and vertex order propagates into the
+    merged STL, so a sorted rebuild produced byte-different (though geometrically
+    identical) deliverables. `remap` restores the encounter order.
+    """
     import numpy as np
 
     vertices = raw.reshape(-1, 3)
     keys = np.round(vertices * 1e5).astype(np.int64)
-    _, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
-    faces = inverse.reshape(-1, 3)
+    unique_keys, first_index, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    encounter = np.argsort(first_index, kind="stable")
+    remap = np.empty(len(unique_keys), dtype=np.int64)
+    remap[encounter] = np.arange(len(unique_keys), dtype=np.int64)
+    faces = remap[inverse].reshape(-1, 3)
     keep = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])
-    return vertices[first].astype(np.float32), faces[keep].astype(np.uint32)
+    return vertices[first_index[encounter]].astype(np.float32), faces[keep].astype(np.uint32)
 
 
 def _solid_from_stl(path: str, transform) -> dict:
@@ -537,6 +548,84 @@ def op_validate_assembly(params: dict) -> dict:
     }
 
 
+def _shell_count(faces) -> int:
+    """Edge-connected components of a mesh — the TS `shellCount` (undirected edge
+    keys), which drives the "the parts you merged do not all touch" warning."""
+    import numpy as np
+    import trimesh
+
+    if len(faces) == 0:
+        return 0
+    adjacency = trimesh.graph.face_adjacency(faces)
+    return len(trimesh.graph.connected_components(adjacency, nodes=np.arange(len(faces))))
+
+
+def _write_binary_stl(path: str, verts, faces, header: str = "dsh-cad-harness export") -> int:
+    """Byte-for-byte mirror of the TS `writeBinaryStl`: 80-byte header, uint32
+    triangle count, then per triangle a winding-derived normal (advisory, but
+    written) and its three vertices, little-endian float32."""
+    import numpy as np
+
+    triangle_count = len(faces)
+    buffer = np.zeros(84 + triangle_count * 50, dtype=np.uint8)
+    text = header[:79].ljust(80)[:80].encode("utf-8", "replace")
+    buffer[0 : len(text)] = np.frombuffer(text, dtype=np.uint8)
+    buffer[80:84] = np.frombuffer(np.uint32(triangle_count).tobytes(), dtype=np.uint8)
+
+    triangles = np.asarray(verts, dtype=np.float64)[faces]  # normals in float64, like JS numbers
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    normal = np.cross(b - a, c - a)
+    length = np.linalg.norm(normal, axis=1)
+    length[length == 0] = 1.0
+    normal = normal / length[:, None]
+    records = np.concatenate([normal, a, b, c], axis=1).astype("<f4")  # (n, 12)
+    body = np.zeros((triangle_count, 50), dtype=np.uint8)
+    body[:, 0:48] = records.view(np.uint8).reshape(triangle_count, 48)
+    buffer[84:] = body.reshape(-1)
+    with open(path, "wb") as handle:
+        handle.write(buffer.tobytes())
+    return int(len(buffer))
+
+
+def op_merge_solids(params: dict) -> dict:
+    """Union of placed solids → one merged binary STL on disk plus its facts.
+
+    The union is Manifold's (the same C++ kernel the TS version used), so the
+    merged body is the same; what moved is which process does the work and which
+    side writes the deliverable. A part that is not a usable solid is NAMED in the
+    error — `merge_parts` used to say which part failed, and that is part of what
+    the model needs in order to fix it.
+    """
+    import numpy as np
+
+    parts = params["parts"]
+    out_path = params["out"]
+    header = params.get("header", "dsh-cad-harness export")
+
+    union = None
+    for part in parts:
+        try:
+            info = _solid_from_stl(part["path"], part.get("transform"))
+        except ValueError as exc:
+            raise ValueError(f'part "{part.get("name", "?")}" is not a usable solid — {exc}') from exc
+        union = info["solid"] if union is None else union + info["solid"]
+    if union is None:
+        raise ValueError("merge_solids produced nothing")
+
+    mesh = union.to_mesh()
+    verts = np.asarray(mesh.vert_properties, dtype=np.float32)[:, :3]
+    faces = np.asarray(mesh.tri_verts, dtype=np.uint32)
+    written = _write_binary_stl(out_path, verts, faces, header)
+    box = [float(x) for x in union.bounding_box()]
+    return {
+        "triangles": int(len(faces)),
+        "volumeMm3": float(union.volume()),
+        "sizeMm": [box[3] - box[0], box[4] - box[1], box[5] - box[2]],
+        "shells": _shell_count(faces),
+        "outBytes": written,
+    }
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
@@ -546,6 +635,7 @@ HANDLERS = {
     "closest_mesh_sphere": op_closest_mesh_sphere,
     "connectivity": op_connectivity,
     "validate_assembly": op_validate_assembly,
+    "merge_solids": op_merge_solids,
     "crash": op_crash,
 }
 
