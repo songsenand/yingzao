@@ -1188,7 +1188,9 @@ def _mpm_step_once(world) -> None:
     vel = world["vel"][:active]
     C = world["C"][:active]
 
-    base = np.floor(pos).astype(np.int64) - 1
+    # The stencil base is clipped so a (rare) out-of-range position cannot produce a
+    # negative flat cell index — see the projection's clamp for where those come from.
+    base = np.clip(np.floor(pos).astype(np.int64) - 1, 0, np.asarray(cells) - 2)
     taps = _mpm_taps(base, pos, cells)
 
     # --- P2G pass 1: mass + APIC momentum ---
@@ -1607,6 +1609,13 @@ def op_fluid_run(params: dict) -> dict:
         normals = np.stack([gx / lengths, gy / lengths, gz / lengths], axis=1)
         push = (-distances + 0.15 * dx_mm) / dx_mm
         pos[index] = pos[index] + normals * push[:, None]
+        # A particle deep inside a wall gets a large push, which can throw it out of
+        # the box. The kernel clamps during ADVECTION only, so clamp here as well:
+        # an out-of-range position makes the 27-cell stencil negative, and JS array
+        # semantics silently swallow that (the writes land on non-index properties,
+        # reads give undefined → NaN → the NaN guard resets the particle) while numpy
+        # raises. Clamping is the behaviour the box clamp already intends.
+        pos[index] = np.clip(pos[index], 1.5, np.array([nx - 1.5, ny - 1.5, nz - 1.5]))
         # kill the into-wall velocity component (free slip)
         vn = np.einsum("pa,pa->p", vel[index], normals)
         drag = vn < 0

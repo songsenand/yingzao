@@ -2624,6 +2624,12 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   弯管 0.7054）。**三条教训值得记住**：① 内核级 parity 未覆盖实体掩码，逐特性二分才是定位手段；
   ② **不变量是必要不充分**——"根本没有墙"时穿透/守恒/不分叉全都成立，只有**输运量断言**抓得住；
   ③ **JSON 管线没有 typed array**，`Uint8Array` 过管道变成 `{...}`，边界必须显式还原（`_ipc_uint8`）。
+- **第二个差异仍未关闭（2026-10-12 第二轮）。** 掩码修好后 `accept-m4` 在 Python 路径**全过**，
+  但 `accept-fluid-sign`（厚壁腔）在**硬不变量**上分歧：Python 末态有 **167(Ø60)/888(Ø100)** 个粒子
+  在壁内 >0.3mm（TS 为 0），active 多 20%、平均速率高 2×，而两侧 `diverged=false`（不是 NaN 掩盖）。
+  **穿透是硬不变量，不能用重定阈值绕过**。⇒ `runFluid` **默认仍走 TS canonical**
+  （`DSH_CAD_FLUID_PYTHON=1` 才走 Python）。下一步：统计这些粒子的**穿透深度分布**，
+  判断是投影后置条件问题（0.3–0.5mm 聚集在 0.15·dx 余量附近）还是从 ±5mm 近表面带之外进入。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

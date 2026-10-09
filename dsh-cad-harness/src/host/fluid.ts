@@ -233,7 +233,16 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
   // Diagnostics kept on purpose: `CAD_FLUID_NO_PROJECT=1` skips the SDF
   // projection (how the suspect was isolated); it must never be set in production.
   // ---------------------------------------------------------------------------
-  if (process.env.DSH_CAD_FLUID_PYTHON === '0') {
+  // STILL OPT-IN (2026-10-12, second pass). The wall-mask fix below took the
+  // 50k-particle pipe from arrival 0.098 to 0.8488 and `accept-m4` passes on this
+  // path — but `accept-fluid-sign` (thick-wall cavities) disagrees on a HARD
+  // invariant: the Python realization ends with 167/888 particles more than 0.3mm
+  // inside the wall where TS ends with 0, and its active set is 20% larger with a
+  // 2x higher mean speed. Both runs report diverged=false, so this is not NaN
+  // hiding. Until the penetrating particles' depth distribution is explained
+  // (projection post-condition? band edge?), the TS implementation stays canonical
+  // and the Python path needs the explicit opt-in.
+  if (process.env.DSH_CAD_FLUID_PYTHON !== '1') {
     const legacy = await runFluidInTs(scenario);
     return { report: legacy.report, sdf: legacy.sdf };
   }
