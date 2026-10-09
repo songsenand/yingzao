@@ -44,6 +44,7 @@ drives:
     simulate_physics    step a rigid-body scenario and report what happened
     simulate_motion     drive a mechanism + exact interference timeline
     measure_part        whole-part ground truth (volume/area/centroid/genus)
+    check_printability  wall thickness + overhang screen
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -85,6 +86,7 @@ OPS = [
     "simulate_physics",
     "simulate_motion",
     "measure_part",
+    "check_printability",
     "crash",
 ]
 
@@ -944,6 +946,145 @@ def _transform_points(vertices, matrix, translation):
     return source @ np.asarray(matrix, dtype=np.float64).T + np.asarray(translation, dtype=np.float64)
 
 
+def _js_round(value: float) -> int:
+    """`Math.round` (ties toward +∞), which is NOT Python's banker's rounding."""
+    return int(math.floor(value + 0.5))
+
+
+def _js_to_fixed(value: float, digits: int) -> str:
+    """`Number.prototype.toFixed`: the closest decimal, ties picking the LARGER
+    value. Python's f-string uses banker's rounding, so 0.125 would print "0.12"
+    where JS prints "0.13" — and these strings end up in the tool's findings.
+
+    `Decimal(float)` is the exact binary value, which is what the spec operates on.
+    """
+    from decimal import Decimal, ROUND_HALF_UP
+
+    quantum = Decimal(1).scaleb(-digits)
+    rounded = Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP)
+    return f"{rounded:.{digits}f}"
+
+
+def op_check_printability(params: dict) -> dict:
+    """Manufacturability screen (FDM bias): sampled wall thickness by a ray along the
+    inward normal, plus down-facing overhang area — the `checkPrintabilityInTs` of
+    src/host/inspect.ts.
+
+    The overhang half is pure arithmetic on a deterministic triangle sample, so it is
+    expected to match the TS version exactly. The wall half is a spatial-index ray
+    cast; the matrix's negative-return table flagged the index as a risk, so it was
+    measured before porting (601 rays on the 28,830-triangle real part: 0.121 s
+    against a 120 s budget).
+    """
+    import numpy as np
+    import trimesh
+
+    wall_min_mm = float(params.get("wallMinMm") or 1.2)
+    overhang_deg = float(params.get("overhangDeg") or 45)
+    target_samples = max(100, min(int(params.get("samples") or 600), 4000))
+
+    vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(params["path"]))
+    points = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    watertight = _is_watertight(triangles)
+
+    tri_count = len(triangles)
+    step = max(1, tri_count // target_samples)
+    sampled_index = np.arange(0, tri_count, step)
+    corners = points[triangles[sampled_index]]
+    centroids = corners.mean(axis=1)
+    edge_u = corners[:, 1] - corners[:, 0]
+    edge_v = corners[:, 2] - corners[:, 0]
+    cross = np.cross(edge_u, edge_v)
+    lengths = np.linalg.norm(cross, axis=1)
+    safe = np.where(lengths[:, None] == 0, 1.0, lengths[:, None])
+    normals = cross / safe
+    areas = lengths / 2
+    sampled = int(len(sampled_index))
+    z_floor = float(points[:, 2].min())
+
+    # down-facing overhang: normal points below horizontal by overhangDeg
+    overhang_sin = math.sin(overhang_deg * math.pi / 180)
+    overhang_mask = (normals[:, 2] < -overhang_sin) & (centroids[:, 2] - z_floor > 0.8)
+    overhang_area = float(np.sum(areas[overhang_mask]))
+    overhang_z_min = float(np.min(centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("inf")
+    overhang_z_max = float(np.max(centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("-inf")
+
+    # wall thickness: from 0.05 outside the surface, march along -n; the FIRST hit is
+    # the sample triangle's own plane (at ≈0.05, skipped), the SECOND is the opposite
+    # wall → wall = distance − 0.05.
+    min_wall = float("inf")
+    min_wall_at = None
+    thin_samples = 0
+    mesh = trimesh.Trimesh(vertices=points, faces=triangles, process=False)
+    origins = centroids + normals * 0.05
+    directions = -normals
+    try:
+        locations, index_ray, _index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=True)
+        distances = np.linalg.norm(locations - origins[index_ray], axis=1) if len(locations) else np.zeros(0)
+    except BaseException:  # noqa: BLE001 - degenerate region: fall back to per-ray
+        locations, index_ray, distances = [], [], []
+        for ray_index in range(sampled):
+            try:
+                hit, hit_ray, _hit_tri = mesh.ray.intersects_location(origins[ray_index : ray_index + 1], directions[ray_index : ray_index + 1], multiple_hits=True)
+                for point in hit:
+                    locations.append(point)
+                    index_ray.append(ray_index)
+                    distances.append(float(np.linalg.norm(point - origins[ray_index])))
+            except BaseException:  # noqa: BLE001
+                continue
+        index_ray = np.asarray(index_ray, dtype=np.int64)
+        distances = np.asarray(distances, dtype=np.float64)
+
+    order = np.argsort(distances, kind="stable") if len(distances) else np.zeros(0, dtype=np.int64)
+    for ray_index in range(sampled):
+        hits = distances[index_ray == ray_index]
+        hits = hits[hits > 0.075]
+        if hits.size == 0:
+            continue
+        wall = float(hits.min()) - 0.05
+        if wall < min_wall:
+            min_wall = wall
+            min_wall_at = [float(v) for v in centroids[ray_index]]
+        if wall < wall_min_mm:
+            thin_samples += 1
+
+    findings = []
+    if not watertight:
+        findings.append(
+            "mesh is NOT watertight — printability numbers below are computed on an open surface and are unreliable; fix the mesh first"
+        )
+    if min_wall_at is not None and min_wall < wall_min_mm:
+        where = ",".join(_js_to_fixed(v, 1) for v in min_wall_at)
+        findings.append(
+            f"最薄壁 {_js_to_fixed(min_wall, 2)}mm @ [{where}]（阈值 {wall_min_mm}mm；"
+            f"{sampled} 个采样面中 {thin_samples} 个低于阈值）— 薄壁打印要么断要么翘，加厚、加筋或改朝向"
+        )
+    if overhang_area > 20:
+        findings.append(
+            f"{_js_to_fixed(overhang_area, 0)}mm² 朝下悬垂面比 {overhang_deg}° 更平"
+            f"（z ∈ [{_js_to_fixed(overhang_z_min, 0)}, {_js_to_fixed(overhang_z_max, 0)}]）"
+            " — 需要支撑、改打印朝向、或改成 45° 以内/桥接"
+        )
+
+    severe = math.isfinite(min_wall) and min_wall < wall_min_mm * 0.4
+    verdict = "unprintable" if severe else ("check" if findings else "ok")
+    return {
+        "verdict": verdict,
+        **({"minWallMm": float(_js_to_fixed(min_wall, 3))} if math.isfinite(min_wall) else {}),
+        "thinSamples": thin_samples,
+        "sampled": sampled,
+        "overhangAreaMm2": float(_js_to_fixed(overhang_area, 1)),
+        "overhangZRange": (
+            [float(_js_to_fixed(overhang_z_min, 1)), float(_js_to_fixed(overhang_z_max, 1))]
+            if math.isfinite(overhang_z_min)
+            else []
+        ),
+        "findings": findings,
+        "watertight": watertight,
+    }
+
+
 def op_measure_part(params: dict) -> dict:
     """Whole-part ground truth: bbox, volume, surface area, centre of mass, triangle
     count, watertightness, genus — the `measureVersion` of src/host/inspect.ts.
@@ -1008,8 +1149,13 @@ def op_measure_part(params: dict) -> dict:
 
 
 def _round3(value: float) -> float:
-    """Round to the reported 0.001mm and normalise -0 to 0 (see op_measure_part)."""
-    rounded = round(value * 1000) / 1000
+    """Round to the reported 0.001mm and normalise -0 to 0 (see op_measure_part).
+
+    Uses JS `Math.round` semantics (ties toward +∞), not Python's banker's rounding:
+    the TS version is `Math.round(v * 1000) / 1000`, and a coordinate landing exactly
+    on a half must round the same way on both sides.
+    """
+    rounded = _js_round(value * 1000) / 1000
     return 0.0 if rounded == 0 else rounded
 
 
@@ -1937,6 +2083,7 @@ HANDLERS = {
     "simulate_physics": op_simulate_physics,
     "simulate_motion": op_simulate_motion,
     "measure_part": op_measure_part,
+    "check_printability": op_check_printability,
     "crash": op_crash,
 }
 

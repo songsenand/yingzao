@@ -67,3 +67,7 @@ examples/bench/graders/*/scores/
 
 # ---- dsh home 本地实例（含凭据，禁止入库）----
 examples/dsh-home/
+
+# ---- Python 字节码（worker 的构建产物，禁止入库）----
+__pycache__/
+*.pyc

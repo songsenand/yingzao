@@ -16,7 +16,7 @@ import type { InterfaceCheckResult } from './assembly-check.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
-import { measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
+import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { runMotion } from './motion.ts';
@@ -2480,92 +2480,7 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number };
       const { store } = await allStores(exec);
-      const wallMinMm = a.wallMinMm ?? 1.2;
-      const overhangDeg = a.overhangDeg ?? 45;
-      const targetSamples = Math.max(100, Math.min(a.samples ?? 600, 4000));
-
-      const bytes = new Uint8Array(await readFile(join(store.root, 'versions', a.versionId, 'model.stl')));
-      const mesh = parseBinaryStl(bytes);
-      const watertight = isWatertight(mesh).watertight;
-      const bvh = buildMeshBvh(mesh);
-
-      const triCount = mesh.triVerts.length / 3;
-      const step = Math.max(1, Math.floor(triCount / targetSamples));
-      const v = (i: number) => new Vector3(mesh.vertProperties[i * 3]!, mesh.vertProperties[i * 3 + 1]!, mesh.vertProperties[i * 3 + 2]!);
-      const bb = boundingBoxOf(mesh);
-      const zFloor = bb.min[2];
-
-      let minWall = Infinity;
-      let minWallAt: [number, number, number] | null = null;
-      let thinSamples = 0;
-      let sampled = 0;
-      let overhangArea = 0;
-      let overhangZMin = Infinity;
-      let overhangZMax = -Infinity;
-      const overhangSin = Math.sin((overhangDeg * Math.PI) / 180);
-
-      for (let t = 0; t < triCount; t += step) {
-        const ia = mesh.triVerts[t * 3]!, ib = mesh.triVerts[t * 3 + 1]!, ic = mesh.triVerts[t * 3 + 2]!;
-        const va = v(ia), vb = v(ib), vc = v(ic);
-        const centroid = va.clone().add(vb).add(vc).multiplyScalar(1 / 3);
-        const n = vb.clone().sub(va).cross(vc.clone().sub(va)).normalize();
-        const area = vb.clone().sub(va).cross(vc.clone().sub(va)).length() / 2;
-        sampled++;
-
-        // down-facing overhang: normal points below horizontal by overhangDeg
-        if (n.z < -overhangSin && centroid.z - zFloor > 0.8) {
-          overhangArea += area;
-          overhangZMin = Math.min(overhangZMin, centroid.z);
-          overhangZMax = Math.max(overhangZMax, centroid.z);
-        }
-
-        // wall thickness: from 0.05 outside the surface, march along -n; the
-        // FIRST hit is the sample triangle's own plane (DoubleSide backface at
-        // ≈0.05), the SECOND is the opposite wall → wall = dist − 0.05.
-        const ray = new Ray(centroid.clone().addScaledVector(n, 0.05), n.clone().negate());
-        let wall: number | null = null;
-        try {
-          const hits = bvh.raycast(ray, DoubleSide) as { distance: number }[];
-          for (const h of hits) {
-            if (h.distance > 0.075) { wall = h.distance - 0.05; break; }
-          }
-        } catch { /* degenerate region — skip this sample */ }
-        if (wall !== null && Number.isFinite(wall)) {
-          if (wall < minWall) { minWall = wall; minWallAt = [centroid.x, centroid.y, centroid.z]; }
-          if (wall < wallMinMm) thinSamples++;
-        }
-      }
-
-      const findings: string[] = [];
-      if (!watertight) {
-        findings.push('mesh is NOT watertight — printability numbers below are computed on an open surface and are unreliable; fix the mesh first');
-      }
-      if (minWallAt && minWall < wallMinMm) {
-        findings.push(
-          `最薄壁 ${minWall.toFixed(2)}mm @ [${minWallAt.map((x) => x.toFixed(1)).join(',')}]（阈值 ${wallMinMm}mm；` +
-          `${sampled} 个采样面中 ${thinSamples} 个低于阈值）— 薄壁打印要么断要么翘，加厚、加筋或改朝向`,
-        );
-      }
-      if (overhangArea > 20) {
-        findings.push(
-          `${overhangArea.toFixed(0)}mm² 朝下悬垂面比 ${overhangDeg}° 更平（z ∈ [${overhangZMin.toFixed(0)}, ${overhangZMax.toFixed(0)}]）` +
-          ' — 需要支撑、改打印朝向、或改成 45° 以内/桥接',
-        );
-      }
-
-      const severe = Number.isFinite(minWall) && minWall < wallMinMm * 0.4;
-      const verdict = severe ? 'unprintable' : findings.length > 0 ? 'check' : 'ok';
-      return {
-        versionId: a.versionId,
-        verdict,
-        ...(Number.isFinite(minWall) ? { minWallMm: +minWall.toFixed(3) } : {}),
-        thinSamples,
-        sampled,
-        overhangAreaMm2: +overhangArea.toFixed(1),
-        overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
-        findings,
-        watertight,
-      };
+      return checkPrintability(store, a);
     },
   }));
 

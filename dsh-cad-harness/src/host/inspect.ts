@@ -6,6 +6,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensurePythonWorker } from './python-worker.ts';
+import { buildMeshBvh } from './measure.ts';
+import { Vector3, Ray, DoubleSide } from 'three';
 import { parseBinaryStl, isWatertight, boundingBox } from './mesh.ts';
 import { renderScadPng } from './compile.ts';
 import type { VersionStore } from './version.ts';
@@ -27,6 +29,161 @@ export interface MeasureReport {
 }
 
 /** Geometry fields the worker computes (everything but the caller's versionId). */
+/** Options the printability screen takes (all optional except the version). */
+export interface PrintabilityOptions {
+  versionId: string;
+  wallMinMm?: number;
+  overhangDeg?: number;
+  samples?: number;
+}
+
+/** The screen's report — the tool's output schema, field for field. */
+export interface PrintabilityReport {
+  versionId: string;
+  verdict: 'ok' | 'check' | 'unprintable';
+  minWallMm?: number;
+  thinSamples: number;
+  sampled: number;
+  overhangAreaMm2: number;
+  overhangZRange: number[];
+  findings: string[];
+  watertight: boolean;
+}
+
+/**
+ * The TS implementation — the parity oracle for the worker's `check_printability`.
+ *
+ * The overhang area is pure arithmetic over a deterministic sample of triangles, so
+ * it must match the worker's bit for bit; only the ray cast (a spatial-index query)
+ * can differ in the last digits.
+ */
+export async function checkPrintabilityInTs(store: VersionStore, options: PrintabilityOptions): Promise<PrintabilityReport> {
+      const wallMinMm = options.wallMinMm ?? 1.2;
+      const overhangDeg = options.overhangDeg ?? 45;
+      const targetSamples = Math.max(100, Math.min(options.samples ?? 600, 4000));
+
+      const bytes = new Uint8Array(await readFile(join(store.root, 'versions', options.versionId, 'model.stl')));
+      const mesh = parseBinaryStl(bytes);
+      const watertight = isWatertight(mesh).watertight;
+      // Sample the mesh AS PARSED. `buildMeshBvh` hands three-mesh-bvh the live index
+      // array and the library REORDERS that index in place for cache locality — so
+      // building the BVH first silently changed which triangles the sample visited
+      // (244.1 vs 647.6 mm² of overhang on the same part, and 34 vs 18 thin samples).
+      // The screen is documented as "every Nth triangle", so the parse order is the
+      // contract; the BVH gets its own copy to reorder as it likes.
+      const bvh = buildMeshBvh({ vertProperties: mesh.vertProperties, triVerts: mesh.triVerts.slice() });
+
+      const triCount = mesh.triVerts.length / 3;
+      const step = Math.max(1, Math.floor(triCount / targetSamples));
+      const v = (i: number) => new Vector3(mesh.vertProperties[i * 3]!, mesh.vertProperties[i * 3 + 1]!, mesh.vertProperties[i * 3 + 2]!);
+      const bb = boundingBox(mesh);
+      const zFloor = bb.min[2];
+
+      let minWall = Infinity;
+      let minWallAt: [number, number, number] | null = null;
+      let thinSamples = 0;
+      let sampled = 0;
+      let overhangArea = 0;
+      let overhangZMin = Infinity;
+      let overhangZMax = -Infinity;
+      const overhangSin = Math.sin((overhangDeg * Math.PI) / 180);
+
+      for (let t = 0; t < triCount; t += step) {
+        const ia = mesh.triVerts[t * 3]!, ib = mesh.triVerts[t * 3 + 1]!, ic = mesh.triVerts[t * 3 + 2]!;
+        const va = v(ia), vb = v(ib), vc = v(ic);
+        const centroid = va.clone().add(vb).add(vc).multiplyScalar(1 / 3);
+        const n = vb.clone().sub(va).cross(vc.clone().sub(va)).normalize();
+        const area = vb.clone().sub(va).cross(vc.clone().sub(va)).length() / 2;
+        sampled++;
+
+        // down-facing overhang: normal points below horizontal by overhangDeg
+        if (n.z < -overhangSin && centroid.z - zFloor > 0.8) {
+          overhangArea += area;
+          overhangZMin = Math.min(overhangZMin, centroid.z);
+          overhangZMax = Math.max(overhangZMax, centroid.z);
+        }
+
+        // wall thickness: from 0.05 outside the surface, march along -n; the
+        // FIRST hit is the sample triangle's own plane (DoubleSide backface at
+        // ≈0.05), the SECOND is the opposite wall → wall = dist − 0.05.
+        const ray = new Ray(centroid.clone().addScaledVector(n, 0.05), n.clone().negate());
+        let wall: number | null = null;
+        try {
+          const hits = bvh.raycast(ray, DoubleSide) as { distance: number }[];
+          // The NEAREST hit above the skip distance. This used to take the first
+          // hit in the returned order, on the assumption it was the nearest — but
+          // `MeshBVH.raycast` returns hits in BVH TRAVERSAL order, not distance
+          // order (measured on a real part: [292.93, 289.92, …, 11.05, 3.06]), so
+          // the old loop picked the FAR wall and under-reported thin walls: 0.2mm
+          // reported instead of the true 0.026mm, and 15 thin samples instead of
+          // 34, on 整机.stl. The migration to Python (which takes the minimum)
+          // surfaced it.
+          let nearest = Infinity;
+          for (const h of hits) if (h.distance > 0.075 && h.distance < nearest) nearest = h.distance;
+          if (Number.isFinite(nearest)) wall = nearest - 0.05;
+        } catch { /* degenerate region — skip this sample */ }
+        if (wall !== null && Number.isFinite(wall)) {
+          if (wall < minWall) { minWall = wall; minWallAt = [centroid.x, centroid.y, centroid.z]; }
+          if (wall < wallMinMm) thinSamples++;
+        }
+      }
+
+      const findings: string[] = [];
+      if (!watertight) {
+        findings.push('mesh is NOT watertight — printability numbers below are computed on an open surface and are unreliable; fix the mesh first');
+      }
+      if (minWallAt && minWall < wallMinMm) {
+        findings.push(
+          `最薄壁 ${minWall.toFixed(2)}mm @ [${minWallAt.map((x) => x.toFixed(1)).join(',')}]（阈值 ${wallMinMm}mm；` +
+          `${sampled} 个采样面中 ${thinSamples} 个低于阈值）— 薄壁打印要么断要么翘，加厚、加筋或改朝向`,
+        );
+      }
+      if (overhangArea > 20) {
+        findings.push(
+          `${overhangArea.toFixed(0)}mm² 朝下悬垂面比 ${overhangDeg}° 更平（z ∈ [${overhangZMin.toFixed(0)}, ${overhangZMax.toFixed(0)}]）` +
+          ' — 需要支撑、改打印朝向、或改成 45° 以内/桥接',
+        );
+      }
+
+      const severe = Number.isFinite(minWall) && minWall < wallMinMm * 0.4;
+      const verdict = severe ? 'unprintable' : findings.length > 0 ? 'check' : 'ok';
+      return {
+        versionId: options.versionId,
+        verdict,
+        ...(Number.isFinite(minWall) ? { minWallMm: +minWall.toFixed(3) } : {}),
+        thinSamples,
+        sampled,
+        overhangAreaMm2: +overhangArea.toFixed(1),
+        overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
+        findings,
+        watertight,
+      };
+}
+
+/** The geometry half of the worker's answer (everything but the versionId). */
+type PrintabilitySolve = Omit<PrintabilityReport, 'versionId'>;
+
+/**
+ * Manufacturability screen (Q1=B: the stored STL is the contract).
+ *
+ * Wall thickness is a ray cast along the inward normal — a spatial-index query,
+ * which the matrix's negative-return table flagged as a risk. It was measured
+ * BEFORE porting: 601 rays against the 28,830-triangle real part take 0.121 s with
+ * trimesh's RayMeshIntersector, against this tool's 120 s budget — so the query is
+ * not a reason to keep the screen in TypeScript.
+ */
+export async function checkPrintability(store: VersionStore, options: PrintabilityOptions): Promise<PrintabilityReport> {
+  const path = join(store.root, 'versions', options.versionId, 'model.stl');
+  const worker = await ensurePythonWorker();
+  const solved = await worker.request<PrintabilitySolve>('check_printability', {
+    path,
+    wallMinMm: options.wallMinMm ?? 1.2,
+    overhangDeg: options.overhangDeg ?? 45,
+    samples: Math.max(100, Math.min(options.samples ?? 600, 4000)),
+  });
+  return { versionId: options.versionId, ...solved };
+}
+
 interface MeasureSolve {
   watertight: boolean;
   triangles: number;

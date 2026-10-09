@@ -2594,6 +2594,13 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   `Rotation3.from_quaternion(w,x,y,z).scaled_axis`（注意参数序 w,x,y,z）；
   `additional_mass_properties()` 只收**一个 `MassProperties` 对象**，而它只能用关键字构造。
   **批次 3 完成。**
+- **`check_printability` 迁 Python，并修掉两个被暴露的真缺陷（2026-10-08）。** 悬垂面积是纯算术
+  （逐位相同），壁厚是一次空间索引查询（实测 0.121 s/601 根，无②类负收益）。迁移过程中暴露：
+  **① `buildMeshBvh` 会就地重排索引**，先建 BVH 再采样会让"每第 N 个面"随库的内部策略改变
+  （真实件 647.6 vs 244.1 mm²）⇒ BVH 改用索引拷贝、采样固定解析序；
+  **② `MeshBVH.raycast` 返回遍历序而非距离序**，原写法取"第一个 >0.075 的命中"会取到对面远壁，
+  **低估薄壁**（真实件报 0.2mm，真值 0.026mm；薄壁 15 vs 34，暴力法确认）⇒ 两侧改为取最近命中。
+  修完两侧逐位一致；修法只会更保守。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。
