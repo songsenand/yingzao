@@ -172,7 +172,6 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 
 | 项 | 现状 | 下一步 |
 |---|---|---|
-| `simulate_fluid` 运行环 | ✅ **完成（2026-10-12）**：三个真缺陷已修（无壁面边界条件、投影箱体夹紧、float64 状态与 TS dtype 差被正反馈放大）；`accept-m4` + `accept-fluid-sign` 在 Python 路径全过；内存 941→229 MB、性能 7.2×→4.22× | — |
 | 体素 FEM | **未开始** | 用户已裁决迁 Python（接受慢）；若照搬 scikit-fem 路线组装慢 3–17×，**matrix-free 路线未测**，应先量 |
 | `check_assembly` | 未迁移（P）——**已排期（用户 2026-10-12：前两项完成后即排）** | 领域半区=接口契约规则 + `axisLineDistance`；store/manifest 读写与证据时效留在 TS。先切载荷边界：parts 路径+世界位姿+interfaces+阈值进，判定+未声明+相邻出 |
 | `delivery_audit` | 未迁移（P）——**已排期**（紧随 `check_assembly`） | 先做"规则 vs store I/O"切分，再迁规则 |
