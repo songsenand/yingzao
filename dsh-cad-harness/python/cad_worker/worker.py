@@ -37,6 +37,7 @@ drives:
     validate_assembly  per-part solid facts + pairwise interference/clearance
     merge_solids    union of placed solids → merged STL on disk + facts
     measure_distance   two-point distance with surface snapping (measure_distance)
+    import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -70,6 +71,7 @@ OPS = [
     "validate_assembly",
     "merge_solids",
     "measure_distance",
+    "import_mesh",
     "crash",
 ]
 
@@ -367,29 +369,38 @@ def op_connectivity(params: dict) -> dict:
     }
 
 
-def _is_watertight(faces) -> bool:
-    """Strict manifold test, identical to the TS `isWatertight`.
-
-    Every DIRECTED edge must occur exactly once and its reverse must exist. That
-    is stricter than trimesh's `is_watertight` (which only counts undirected
-    edge-sharing), and the tool reports this flag next to a "this part must be a
-    single connected solid" verdict — so the stricter definition is the one that
-    must survive the migration.
+def _watertight_bad_edges(faces) -> int:
+    """How many directed-edge keys violate the strict manifold rule — the TS
+    `isWatertight`'s `undirectedBad`: a directed edge must appear exactly once AND
+    its reverse must exist. trimesh's own `is_watertight` only counts undirected
+    edge sharing, which is laxer and would silence real warnings.
     """
     import numpy as np
 
+    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     if faces.size == 0:
-        return False
+        return 1
     edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0).astype(np.int64)
     directed = edges[:, 0] * 4294967296 + edges[:, 1]
     unique, counts = np.unique(directed, return_counts=True)
     if len(unique) == 0:
-        return False
+        return 1
     bad = int(np.count_nonzero(counts != 1))
     reverse = edges[:, 1] * 4294967296 + edges[:, 0]
     has_reverse = np.isin(unique, np.unique(reverse))
-    bad += int(np.count_nonzero(~has_reverse))
-    return bad == 0
+    return bad + int(np.count_nonzero(~has_reverse))
+
+
+def _is_watertight(faces) -> bool:
+    """Strict manifold test, identical to the TS `isWatertight`: every DIRECTED edge
+    occurs exactly once and its reverse exists. The tool reports this flag next to a
+    "this part must be a single connected solid" verdict, so the stricter definition
+    is the one that had to survive the migration.
+    """
+    import numpy as np
+
+    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    return bool(faces.size > 0 and _watertight_bad_edges(faces) == 0)
 
 
 def _parse_stl_raw(path: str):
@@ -408,27 +419,77 @@ def _parse_stl_raw(path: str):
     return triangles["vertices"].reshape(count, 3, 3).astype(np.float64)
 
 
-def _weld_raw(raw):
-    """Mirror of the TS `MeshBuilder`: coordinates are keyed at 1e-5 mm, the FIRST
-    occurrence's exact values survive, and triangles with a repeated vertex are
-    dropped as degenerate. Welding is what lets Manifold see shared edges.
+def _weld(vertices, faces):
+    """Mirror of the TS `MeshBuilder` + welding step.
+
+    Coordinates are keyed at 1e-5 mm, the FIRST occurrence's exact values survive,
+    and triangles with a repeated vertex are dropped as degenerate (their count is
+    returned — the TS parser counts them too, it just never reports them).
 
     ORDER MATTERS. `np.unique` hands back unique keys SORTED, while the TS builder
     assigns indices in FIRST-ENCOUNTER order — and vertex order propagates into the
-    merged STL, so a sorted rebuild produced byte-different (though geometrically
+    stored STL, so a sorted rebuild produced byte-different (though geometrically
     identical) deliverables. `remap` restores the encounter order.
     """
     import numpy as np
 
-    vertices = raw.reshape(-1, 3)
+    vertices = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     keys = np.round(vertices * 1e5).astype(np.int64)
     unique_keys, first_index, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
     encounter = np.argsort(first_index, kind="stable")
     remap = np.empty(len(unique_keys), dtype=np.int64)
     remap[encounter] = np.arange(len(unique_keys), dtype=np.int64)
-    faces = remap[inverse].reshape(-1, 3)
-    keep = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])
-    return vertices[first_index[encounter]].astype(np.float32), faces[keep].astype(np.uint32)
+    mapped = remap[inverse][faces]
+    keep = (mapped[:, 0] != mapped[:, 1]) & (mapped[:, 1] != mapped[:, 2]) & (mapped[:, 0] != mapped[:, 2])
+    degenerate = int(np.count_nonzero(~keep))
+    return vertices[first_index[encounter]].astype(np.float32), mapped[keep].astype(np.uint32), degenerate
+
+
+def _weld_raw(raw):
+    """Weld a raw (n,3,3) triangle array: flat vertices + implicit faces."""
+    import numpy as np
+
+    vertices = np.asarray(raw, dtype=np.float64).reshape(-1, 3)
+    return _weld(vertices, np.arange(len(vertices), dtype=np.int64).reshape(-1, 3))
+
+
+def _detect_stl_format(data: bytes) -> str:
+    """The TS `detectStlFormat`: the binary test is the exact length identity, so a
+    binary file whose header starts with "solid" is not mistaken for ASCII."""
+    import re
+
+    if len(data) >= 84:
+        count = int.from_bytes(data[80:84], "little")
+        if 84 + count * 50 == len(data):
+            return "binary"
+    head = data[: min(len(data), 2048)].decode("utf-8", "replace").lstrip()
+    if re.match(r"^solid\b", head) and re.search(r"\bfacet\b", head):
+        return "ascii"
+    return "unknown"
+
+
+def _parse_ascii_vertices(data: bytes):
+    """The TS `parseAsciiStl`: only `vertex x y z` lines carry geometry, and a
+    dangling vertex count is an error rather than a silently partial mesh."""
+    import numpy as np
+
+    vertices = []
+    for raw_line in data.decode("utf-8", "replace").split("\n"):
+        line = raw_line.strip()
+        if not line.startswith("vertex"):
+            continue
+        parts = line.split()
+        try:
+            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+        except (IndexError, ValueError) as exc:
+            raise ValueError(f'ASCII STL: unparseable vertex line "{line[:60]}"') from exc
+        if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+            raise ValueError(f'ASCII STL: unparseable vertex line "{line[:60]}"')
+        vertices.append((x, y, z))
+    if len(vertices) % 3 != 0:
+        raise ValueError(f"ASCII STL: {len(vertices) % 3} dangling vertex/vertices (not a multiple of 3)")
+    return np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
 
 
 def _solid_from_stl(path: str, transform) -> dict:
@@ -443,7 +504,7 @@ def _solid_from_stl(path: str, transform) -> dict:
     import numpy as np
     from manifold3d import Error, Manifold, Mesh
 
-    vertices, faces = _weld_raw(_parse_stl_raw(path))
+    vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(path))
     if transform and transform.get("matrix"):
         matrix = np.asarray(transform["matrix"], dtype=np.float64)
         vertices = (vertices.astype(np.float64) @ matrix.T).astype(np.float32)
@@ -606,6 +667,101 @@ def op_measure_distance(params: dict) -> dict:
     }
 
 
+def _round_js(value: float, digits: int = 3) -> float:
+    """JS `Math.round(v * 10**d) / 10**d` — half away from zero TOWARD +∞, which is
+    not Python's banker's rounding. The TS import path rounds this way, so the
+    numbers it reported are the numbers that must come back."""
+    factor = 10 ** digits
+    rounded = math.floor(value * factor + 0.5) / factor
+    return 0.0 if rounded == 0 else rounded
+
+
+def op_import_mesh(params: dict) -> dict:
+    """Parse → shells → scale → weld → solid verdict for `import_part`.
+
+    Mirrors the domain half of `importGeometry` in src/host/import.ts. What stays in
+    TS: path resolution, extension checks, hashing, unit/scale validation, datums
+    and version storage. The welded, scaled mesh is WRITTEN to `out` — that file is
+    what the version store holds — and its facts come back with it.
+    """
+    import numpy as np
+    from manifold3d import Error, Manifold, Mesh
+
+    path = params["path"]
+    scale = float(params.get("scale", 1.0))
+    out = params["out"]
+
+    data = open(path, "rb").read()
+    fmt = _detect_stl_format(data)
+    if fmt == "unknown":
+        raise ValueError(
+            f'not an STL I can read ({len(data)} bytes; neither binary — 84+n*50 — nor an ASCII "solid/facet" file). '
+            "If this is STEP/3MF/OBJ, see the import notes."
+        )
+    vertices = _parse_stl_raw(path).reshape(-1, 3) if fmt == "binary" else _parse_ascii_vertices(data)
+    if len(vertices) == 0:
+        raise ValueError("no triangles")
+
+    welded, faces, degenerate = _weld(vertices, np.arange(len(vertices), dtype=np.int64).reshape(-1, 3))
+    raw_triangles = int(len(faces))
+    raw_vertices = int(len(welded))
+    # Shells are counted on the file AS DELIVERED (welded, pre-scale): welding can
+    # only merge what touches, and a multi-body file is something the caller must know.
+    shells = _shell_count(faces)
+    # The declared unit/scale is applied ONCE, before anything is measured, so every
+    # number this op returns is already in mm.
+    if scale != 1.0:
+        welded = (welded.astype(np.float64) * scale).astype(np.float32)
+
+    mesh = Mesh(welded, faces)
+    mesh.merge()
+    solid = Manifold(mesh)
+    status = solid.status()
+    ok = status == Error.NoError
+    volume = float(solid.volume())
+    inverted = bool(ok and volume < 0)
+    out_mesh = solid.to_mesh()
+    merged_verts = np.asarray(out_mesh.vert_properties, dtype=np.float32)[:, :3]
+    merged_faces = np.asarray(out_mesh.tri_verts, dtype=np.uint32)
+    bad_edges = _watertight_bad_edges(merged_faces)
+    _write_binary_stl(out, merged_verts, merged_faces, f"imported {os.path.basename(path)}")
+    # The bbox comes from the MERGED MESH VERTICES, which is what the TS
+    # `boundingBox(result.mesh)` measured — not from Manifold's own box.
+    low = merged_verts.min(axis=0) if len(merged_verts) else np.zeros(3)
+    high = merged_verts.max(axis=0) if len(merged_verts) else np.zeros(3)
+    box = [float(x) for x in low] + [float(x) for x in high]
+    reason = None
+    if not ok:
+        reason = (
+            f"Manifold rejected the mesh despite watertight edges: {status.name}"
+            if bad_edges == 0
+            else f"{bad_edges} edge(s) are not shared by exactly two triangles — the surface has holes or T-junctions"
+        )
+    return {
+        "format": "stl-binary" if fmt == "binary" else "stl-ascii",
+        "solid": bool(ok and not inverted),
+        "inverted": inverted,
+        "signedVolumeMm3": _round_js(volume),
+        "volumeMm3": _round_js(abs(volume)),
+        "triangles": int(len(merged_faces)),
+        "vertices": int(len(merged_verts)),
+        "rawTriangles": raw_triangles,
+        "rawVertices": raw_vertices,
+        "shells": int(shells),
+        "degenerate": int(degenerate),
+        "badEdges": int(bad_edges),
+        "genus": int(solid.genus()) if (ok and not inverted) else 0,
+        "reason": reason,
+        "bbox": {
+            "min": [_round_js(v) for v in box[0:3]],
+            "max": [_round_js(v) for v in box[3:6]],
+            "size": [_round_js(box[3] - box[0]), _round_js(box[4] - box[1]), _round_js(box[5] - box[2])],
+        },
+        "appliedScale": scale,
+        "outBytes": os.path.getsize(out),
+    }
+
+
 def _shell_count(faces) -> int:
     """Edge-connected components of a mesh — the TS `shellCount` (undirected edge
     keys), which drives the "the parts you merged do not all touch" warning."""
@@ -695,6 +851,7 @@ HANDLERS = {
     "validate_assembly": op_validate_assembly,
     "merge_solids": op_merge_solids,
     "measure_distance": op_measure_distance,
+    "import_mesh": op_import_mesh,
     "crash": op_crash,
 }
 

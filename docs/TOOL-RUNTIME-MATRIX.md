@@ -41,7 +41,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 1 | `generate_part` | SCAD 预置（datum 模块、BOSL2 路径）、编译调用与结果解析、版本落盘 | schema、四视图附件 | **P** | OpenSCAD 仍是外部二进制，Python 一样调 |
 | 2 | `create_part` | 零件命名/唯一化 | schema | **P** | 小 |
 | 3 | `set_datums` | datum 读写 | schema | **P** | 小 |
-| 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | **P** | numpy 解析比 JS 快 |
+| 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | ✅ **已迁移（2026-10-08，批次 2）** | worker 的 `import_mesh` op：二进制/ASCII 解析、壳数、单位缩放、焊接、Manifold 实体判定与诊断都在 Python，**焊接后的网格由 Python 写出**（那就是存进版本的东西）；TS 侧只剩路径/扩展名检查、sha256、unit 校验、datum 与存版。**真值验收**（不是 oracle）：20 mm 立方体 = 8000 mm³、1 inch = 25.4 且体积 ×25.4³、ASCII 与二进制同结果、两个不相接体 = 2 壳 + 警告、开口网格被拒并给边诊断、绕向反转被单独识别、整机 710012.998 mm³ / 28830 面 / 26 壳逐项对上。**顺带修掉一个真实缺陷**：TS 的 `parseStl` 数了退化面却把计数丢掉（恒返回 0），所以"退化三角形被丢弃"这句从未出现过；Python 报真数 |
 | 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | worker 的 `merge_solids` op：各件以**路径**进，**合并后的 STL 由 Python 写出**（谁算谁交付），TS 侧只剩解析、provenance、渲染与存版。**parity**：三角数/体积/尺寸/壳数与 TS 完全一致；**两件并集与真实零件（1.44 MB）的 STL 逐字节相同**；三件带共面接触时仅**三角形顺序**不同（几何指纹与顶点集完全相同，已实测非我方代码所致——Python 侧 `(a+b)+c`、`a+(b+c)`、`batch_boolean` 三种写法字节都一样）。耗时 0.56×–1.2× |
 | 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | ✅ **已迁移（2026-10-08）** | 求解在 worker 的 `validate_assembly` op（parts 以**路径**进，报告原样回）；TS 侧只剩 schema、part 解析/位姿拼装、run 持久化与渲染。`validateAssemblyInTs` 保留为 parity oracle。**8 个用例全字段一致**（含真实零件、rotate、matrix/pose 路径、干涉、too_tight、非实体拒绝）；耗时 0.54×–1.78×，真实零件对 274→177 ms（0.65×）与 274→407 ms（1.48×） |
 | 7 | `check_assembly` | 接口契约判定、距离查询 | schema | **P** | 纯领域规则 |
@@ -136,7 +136,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 |---|---|---|
 | **0** | ✅ **已落地（2026-10-08）**：常驻 worker + JSON-lines（`python/cad_worker/worker.py`、`PythonWorker`、验收 `accept-python-worker.mjs` 8 组断言全绿：握手 14.8 ms、ping 0.026 ms、大载荷按文件且 Δ=0、kill 后重启、并发串行） | 让"能迁就迁"成立，是所有迁移的前提 |
 | 1 | **Python 更快的那些**：~~`measure_closest`~~ ✅、~~`check_connectivity`~~ ✅、~~`validate_assembly`~~ ✅、~~`merge_parts`~~ ✅、~~`measure_distance`~~ ✅（均 2026-10-08）。**批次 1 完成**（STL 零拷贝解析随这些工具一并落地：`closest_points`/`stl_stats` 用 numpy 视图，不再整份拷贝） | 数据支持"迁了更好"；五个已迁移，parity + 解析真值 + 反证/平局用例都过 |
-| 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约） | 无性能争议，纯搬家 |
+| 2 | 生成/渲染/导入的领域部分（1、4、13）与存储（Q1=B 文件即契约）：~~`import_part`~~ ✅（2026-10-08）；`generate_part`、`render_part` 待做 | 无性能争议，纯搬家 |
 | 3 | 物理随迁（Q2=A）：`simulate_physics`/`simulate_motion` 换 Python `rapier3d`，**重跑物理基线**；darwin-x64 永远走 TS | canonical 换边 |
 | 4 | `simulate_fluid`（MPM 内核）、体素 FEM：**迁 Python（用户 2026-10-08 拍板：接受 2.5–4× 的慢）**，并在每个工具上**标记"后续 Rust/C 加速"** | 判据优先于该量级性能差；原生按阶段决定留中后期 |
 

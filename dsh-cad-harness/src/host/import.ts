@@ -32,13 +32,11 @@
 //    render_part, validate_assembly, check_assembly and the simulate_* family
 //    need no knowledge that the geometry came from outside.
 
-import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
-import { basename, extname, isAbsolute, resolve } from 'node:path';
-import {
-  boundingBox, parseStl, shellCount, writeBinaryStl, type ParsedMesh,
-} from './mesh.ts';
-import { weldToSolid } from './solidify.ts';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile, rm, stat } from 'node:fs/promises';
+import { basename, extname, isAbsolute, join, resolve } from 'node:path';
+import { parseBinaryStl, type ParsedMesh } from './mesh.ts';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import type { DatumSet, DatumPoint, DatumAxis, DatumPlane, DatumCylinder } from './compile.ts';
 
 // ---------- units ----------
@@ -177,6 +175,27 @@ export interface ImportRequest {
   allowNonSolid?: boolean;
 }
 
+/** Payload of the worker's `import_mesh` op (see python/cad_worker/worker.py). */
+interface ImportSolve {
+  format: string;
+  solid: boolean;
+  inverted: boolean;
+  signedVolumeMm3: number;
+  volumeMm3: number;
+  triangles: number;
+  vertices: number;
+  rawTriangles: number;
+  rawVertices: number;
+  shells: number;
+  degenerate: number;
+  badEdges: number;
+  genus: number;
+  reason: string | null;
+  bbox: { min: number[]; max: number[]; size: number[] };
+  appliedScale: number;
+  outBytes: number;
+}
+
 export interface ImportedGeometry {
   /** Welded, unit-scaled, ready for `saveVersion`. */
   stl: Uint8Array;
@@ -206,11 +225,6 @@ export interface ImportedGeometry {
   bytes: number;
   warnings: string[];
 }
-
-const round = (v: number): number => {
-  const r = Math.round(v * 1000) / 1000;
-  return r === 0 ? 0 : r;
-};
 
 /**
  * Read one external file and turn it into geometry the version store can hold.
@@ -246,39 +260,35 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
   if (!Number.isFinite(declared) || declared <= 0) throw new Error(`scale must be a positive number, got ${String(req.scale)}`);
   const appliedScale = unitToMm(unit) * declared;
 
-  // 1. Parse (throws with what was actually seen when the bytes are not STL).
-  let parsed;
+  // 1–5. Parse, count shells, apply the declared scale, weld and ask Manifold
+  //      whether this is a body at all — all of that is Python's (batch 2). The
+  //      worker WRITES the welded, scaled mesh; that file is what the store holds,
+  //      so the picture and the version can never disagree.
+  const scratch = await workerScratchDir();
+  const weldedPath = join(scratch, `import-${randomUUID()}.stl`);
+  let solved: ImportSolve;
   try {
-    parsed = parseStl(bytes);
+    solved = await (await ensurePythonWorker()).request<ImportSolve>('import_mesh', {
+      path: resolvedPath,
+      scale: appliedScale,
+      out: weldedPath,
+    });
   } catch (e) {
-    throw new Error(`${basename(resolvedPath)}: ${(e as Error).message}`);
+    const message = String((e as Error).message ?? e)
+      .replace(/^[a-z_]+ failed: /, '')
+      .replace(/^ValueError: /, '');
+    throw new Error(`${basename(resolvedPath)}: ${message}`);
   }
-  const { mesh: rawMesh, format } = parsed;
-  if (rawMesh.triVerts.length === 0) throw new Error(`${basename(resolvedPath)}: no triangles`);
+  const stl = new Uint8Array(await readFile(weldedPath));
+  await rm(weldedPath, { force: true }).catch(() => {});
+  const mesh = parseBinaryStl(stl);
 
-  // 2. Shells are counted on the file as delivered — welding can only merge
-  //    what touches, and a multi-body file is something the caller must know.
-  const shells = shellCount(rawMesh);
-
-  // 3. Apply the declared unit/scale ONCE, before anything is measured, so
-  //    every number this function returns is already in mm.
-  const mesh = applyScale(rawMesh, appliedScale);
-
-  // 4. Weld and ask Manifold whether this is a body at all.
-  const result = await weldToSolid(mesh);
-  const volume = result.signedVolumeMm3;
-  // Inverted winding is a separate failure from "Manifold rejected it": the
-  // mesh closes, but every face points inward, so a boolean with it produces the
-  // complement of what was meant. It is NOT a solid for anyone's purposes, and
-  // collapsing the two into one boolean here is how `solid:true` would end up on
-  // a version the geometric tools then quietly misevaluate.
-  const inverted = result.ok && volume < 0;
-  const solid = result.ok && !inverted;
-
+  const volume = solved.signedVolumeMm3;
+  const solid = solved.solid;
   if (!solid) {
-    const reason = inverted
-      ? `its faces are wound inside-out (signed volume ${round(volume)} mm³)`
-      : (result.reason ?? 'Manifold rejected it');
+    const reason = solved.inverted
+      ? `its faces are wound inside-out (signed volume ${volume} mm³)`
+      : (solved.reason ?? 'Manifold rejected it');
     if (!req.allowNonSolid) {
       throw new Error(
         `${basename(resolvedPath)} is not a closed solid: ${reason}. ` +
@@ -291,42 +301,42 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
     warnings.push(`NOT A SOLID (${reason}) — stored because allowNonSolid was set; the geometric tools will refuse this version.`);
   }
 
-  // 5. Report what welding changed, in words a human can check.
+  // Report what welding changed, in words a human can check.
   const repaired: string[] = [];
-  const droppedTris = Math.max(0, rawMesh.triVerts.length / 3 - result.diagnostics.triangles);
-  const droppedVerts = Math.max(0, rawMesh.vertProperties.length / 3 - result.diagnostics.vertices);
+  const droppedTris = Math.max(0, solved.rawTriangles - solved.triangles);
+  const droppedVerts = Math.max(0, solved.rawVertices - solved.vertices);
   if (droppedVerts > 0) repaired.push(`${droppedVerts} coincident vertices merged`);
   if (droppedTris > 0) repaired.push(`${droppedTris} degenerate/unused triangles dropped`);
-  if (parsed.degenerate > 0) repaired.push(`${parsed.degenerate} degenerate triangles discarded during parse`);
+  // The TS parser counted these and then dropped the count on the way out
+  // (`parseStl` returned `degenerate: 0`), so this line never fired. The worker
+  // reports the real number: a file with degenerate facets now says so.
+  if (solved.degenerate > 0) repaired.push(`${solved.degenerate} degenerate triangles discarded during parse`);
 
-  const bb = boundingBox(result.mesh);
-  const size: [number, number, number] = [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]];
-
-  if (shells > 1) {
+  if (solved.shells > 1) {
     warnings.push(
-      `the file contains ${shells} separate bodies (edge-disjoint). That is legal for a solid, but if you ` +
+      `the file contains ${solved.shells} separate bodies (edge-disjoint). That is legal for a solid, but if you ` +
       `expected one part, the imported geometry is not what you think it is.`,
     );
   }
 
   return {
-    stl: writeBinaryStl(result.mesh, `imported ${basename(resolvedPath)}`),
-    mesh: result.mesh,
-    format: format === 'binary' ? 'stl-binary' : 'stl-ascii',
+    stl,
+    mesh,
+    format: solved.format,
     solid,
     watertight: solid,
     repaired,
-    triangles: result.diagnostics.triangles,
-    shells,
-    degenerate: parsed.degenerate,
-    signedVolumeMm3: round(volume),
-    volumeMm3: round(Math.abs(volume)),
+    triangles: solved.triangles,
+    shells: solved.shells,
+    degenerate: solved.degenerate,
+    signedVolumeMm3: solved.signedVolumeMm3,
+    volumeMm3: solved.volumeMm3,
     boundingBoxMm: {
-      min: bb.min.map(round) as [number, number, number],
-      max: bb.max.map(round) as [number, number, number],
-      size: size.map(round) as [number, number, number],
+      min: solved.bbox.min as [number, number, number],
+      max: solved.bbox.max as [number, number, number],
+      size: solved.bbox.size as [number, number, number],
     },
-    genus: solid && result.solid ? result.solid.genus() : 0,
+    genus: solved.genus,
     unit,
     appliedScale,
     resolvedPath,
@@ -336,10 +346,4 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
   };
 }
 
-/** Scale a mesh's vertices into a fresh buffer (never mutates the input). */
-function applyScale(mesh: ParsedMesh, scale: number): ParsedMesh {
-  if (scale === 1) return mesh;
-  const verts = new Float32Array(mesh.vertProperties.length);
-  for (let i = 0; i < verts.length; i++) verts[i] = mesh.vertProperties[i]! * scale;
-  return { vertProperties: verts, triVerts: mesh.triVerts };
-}
+
