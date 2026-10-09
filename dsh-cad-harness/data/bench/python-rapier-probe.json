@@ -1,0 +1,171 @@
+{
+  "generatedAt": "2026-10-09T02:19:05.355Z",
+  "tsEngine": "rapier3d-compat (physics.ts)",
+  "pyEngine": "rapier3d 0.36",
+  "results": [
+    {
+      "scenario": "topple: a 40×40×100 box on the ground, kicked about Y",
+      "parts": {
+        "ground": {
+          "tsFinal": [
+            0,
+            0,
+            0
+          ],
+          "pyFinal": [
+            0,
+            0,
+            0
+          ],
+          "finalDeltaMm": 0,
+          "maxTrajectoryDeltaMm": 0,
+          "lastStepDeltaMm": 0,
+          "tsFrames": 121,
+          "pySamples": 120
+        },
+        "box": {
+          "tsFinal": [
+            -0.276,
+            -0.464,
+            49.968
+          ],
+          "pyFinal": [
+            -0.245,
+            -0.51,
+            49.968
+          ],
+          "finalDeltaMm": 0.056,
+          "maxTrajectoryDeltaMm": 0.919,
+          "lastStepDeltaMm": 0.056,
+          "tsFrames": 121,
+          "pySamples": 120
+        }
+      },
+      "steps": 120,
+      "dtSec": 0.016666666666666666
+    },
+    {
+      "scenario": "pendulum: 120mm arm hinged about X on a fixed base",
+      "parts": {
+        "base": {
+          "tsFinal": [
+            0,
+            0,
+            0
+          ],
+          "pyFinal": [
+            0,
+            0,
+            0
+          ],
+          "finalDeltaMm": 0,
+          "maxTrajectoryDeltaMm": 0,
+          "lastStepDeltaMm": 0,
+          "tsFrames": 121,
+          "pySamples": 120
+        },
+        "arm": {
+          "tsFinal": [
+            70.057,
+            0,
+            0.737
+          ],
+          "pyFinal": [
+            68.894,
+            0.012,
+            -2.823
+          ],
+          "finalDeltaMm": 3.745,
+          "maxTrajectoryDeltaMm": 27.49,
+          "lastStepDeltaMm": 3.855,
+          "tsFrames": 121,
+          "pySamples": 120
+        }
+      },
+      "steps": 120,
+      "dtSec": 0.016666666666666666
+    },
+    {
+      "scenario": "free pendulum: 120mm arm, nothing in its path",
+      "parts": {
+        "base": {
+          "tsFinal": [
+            -10,
+            0,
+            60
+          ],
+          "pyFinal": [
+            -10,
+            0,
+            60
+          ],
+          "finalDeltaMm": 0,
+          "maxTrajectoryDeltaMm": 0,
+          "lastStepDeltaMm": 0,
+          "tsFrames": 121,
+          "pySamples": 120
+        },
+        "arm": {
+          "tsFinal": [
+            60.26,
+            -0.002,
+            56.374
+          ],
+          "pyFinal": [
+            58.538,
+            0,
+            66.198
+          ],
+          "finalDeltaMm": 9.973,
+          "maxTrajectoryDeltaMm": 35.213,
+          "lastStepDeltaMm": 16.347,
+          "tsFrames": 121,
+          "pySamples": 120
+        }
+      },
+      "steps": 120,
+      "dtSec": 0.016666666666666666
+    },
+    {
+      "scenario": "slider: a box on a prismatic joint along Z, limited, under gravity",
+      "parts": {
+        "rail": {
+          "tsFinal": [
+            0,
+            0,
+            0
+          ],
+          "pyFinal": [
+            0,
+            0,
+            0
+          ],
+          "finalDeltaMm": 0,
+          "maxTrajectoryDeltaMm": 0,
+          "lastStepDeltaMm": 0,
+          "tsFrames": 121,
+          "pySamples": 120
+        },
+        "carriage": {
+          "tsFinal": [
+            0,
+            0,
+            56.644
+          ],
+          "pyFinal": [
+            0,
+            0,
+            56.644
+          ],
+          "finalDeltaMm": 0,
+          "maxTrajectoryDeltaMm": 0.05,
+          "lastStepDeltaMm": 0.05,
+          "tsFrames": 121,
+          "pySamples": 120
+        }
+      },
+      "steps": 120,
+      "dtSec": 0.016666666666666666
+    }
+  ]
+}
