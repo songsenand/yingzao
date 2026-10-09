@@ -213,7 +213,12 @@ function readSnapshotFile(path: string): FluidSnapshot[] {
     const n = data.readInt32LE(offset); offset += 4;
     const posMm = new Float32Array(data.buffer.slice(data.byteOffset + offset, data.byteOffset + offset + n * 12));
     offset += n * 12;
-    const speedMmPerSec = new Float32Array(data.buffer.slice(data.byteOffset + offset, data.byteOffset + n * 4));
+    // NOTE: the end of this slice needs the running `offset` as well — omitting it
+    // (as the first version did) makes the slice empty from the second snapshot on
+    // and silently SHORT on the first: the rendered frames lost their speeds and the
+    // playback buffer overflowed. `00-smoke` caught it because it runs the tool path
+    // with snapshots; the parity acceptances all passed snapshotCount 0.
+    const speedMmPerSec = new Float32Array(data.buffer.slice(data.byteOffset + offset, data.byteOffset + offset + n * 4));
     offset += n * 4;
     snapshots.push({ step, timeSec, posMm, speedMmPerSec });
   }

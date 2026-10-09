@@ -65,6 +65,34 @@ check('c1 sections carry flow', m.sectionAvgVelocity.filter((s) => s.velocityMmP
   `${m.sectionAvgVelocity.filter((s) => s.velocityMmPerSec > 10).length}/20 bins > 10mm/s`);
 check('c1 overall pass', report.overallStatus === 'pass', report.overallStatus);
 
+// Snapshot INTEGRITY. These arrays feed the rendered frames and the playback
+// buffers, and the first version of the Python snapshot reader silently dropped
+// the speeds (the slice's end was missing the running offset), which no metric
+// check could see: `00-smoke` found it as a RangeError in the playback buffer.
+check('c1 snapshots requested', report.snapshots.length === 4, `${report.snapshots.length}`);
+{
+  let bad = 0, minSpeed = Infinity, maxSpeed = 0, outOfGrid = 0;
+  for (const snap of report.snapshots) {
+    if (snap.posMm.length !== 3 * snap.speedMmPerSec.length) bad++;
+    for (let p = 0; p < snap.speedMmPerSec.length; p++) {
+      const s = snap.speedMmPerSec[p];
+      if (!Number.isFinite(s) || s < 0) bad++;
+      if (s < minSpeed) minSpeed = s;
+      if (s > maxSpeed) maxSpeed = s;
+    }
+    for (let p = 0; p < snap.posMm.length; p += 3) {
+      for (let a = 0; a < 3; a++) {
+        const lo = originMm[a] - 1, hi = originMm[a] + cells[a] * 2 + 1;
+        const v = snap.posMm[p + a];
+        if (!Number.isFinite(v) || v < lo || v > hi) outOfGrid++;
+      }
+    }
+  }
+  check('c1 snapshot arrays consistent (pos = 3x speed)', bad === 0, `${bad} bad entries`);
+  check('c1 snapshot speeds alive (max > 0)', maxSpeed > 0, `min=${minSpeed.toFixed(3)} max=${maxSpeed.toFixed(3)} mm/s`);
+  check('c1 snapshot positions inside the grid', outOfGrid === 0, `${outOfGrid} out of range`);
+}
+
 // ---------------- case 2: snapshot renderer ----------------
 console.log('--- case 2: snapshot renderer ---');
 {
