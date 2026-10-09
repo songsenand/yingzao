@@ -45,6 +45,7 @@ drives:
     simulate_motion     drive a mechanism + exact interference timeline
     measure_part        whole-part ground truth (volume/area/centroid/genus)
     check_printability  wall thickness + overhang screen
+    mpm_create/step/state/destroy   MLS-MPM fluid kernel (stateful, keyed by id)
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -87,6 +88,10 @@ OPS = [
     "simulate_motion",
     "measure_part",
     "check_printability",
+    "mpm_create",
+    "mpm_step",
+    "mpm_state",
+    "mpm_destroy",
     "crash",
 ]
 
@@ -963,6 +968,400 @@ def _js_to_fixed(value: float, digits: int) -> str:
     quantum = Decimal(1).scaleb(-digits)
     rounded = Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP)
     return f"{rounded:.{digits}f}"
+
+
+# ---------------------------------------------------------------------------
+# MLS-MPM fluid kernel (M4) — the port of src/host/mpm.ts.
+#
+# WHY THIS IS THE DOMAIN RUNTIME'S JOB: it is arithmetic on arrays, all of it —
+# P2G scatter, the weakly-compressible EOS, the grid update with boundary
+# conditions, G2P with affine momentum transfer, advection and the outlet rules.
+# Nothing here talks to a host service.
+#
+# The measured cost of doing it in Python is REAL and known: 2.5–4× slower than the
+# TS kernel (the user accepted that on 2026-10-08 and asked for the tools to be
+# marked as candidates for a later Rust/C kernel — the native ceiling measured
+# 3.7–4.6× FASTER than TS, so that is where the performance work belongs).
+#
+# The state lives HERE, keyed by id, not in the IPC payload: pos/vel/C are
+# 28 bytes per particle, which is 15 MB for the 564k-particle acceptance case —
+# far past the "big payloads go by file" line. The caller sends a seed once and
+# asks for statistics afterwards.
+# ---------------------------------------------------------------------------
+
+_MpmWorlds: dict = {}
+_MpmNextId: int = 0
+
+
+def _mpm_drop(world_id: str) -> None:
+    _MpmWorlds.pop(world_id, None)
+
+
+def op_mpm_create(params: dict) -> dict:
+    """Create a world and seed particles. `seeds` are positions in cells."""
+    import numpy as np
+
+    global _MpmNextId
+
+    config = params["config"]
+    seeds = np.asarray(params["seeds"], dtype=np.float64).reshape(-1, 3)
+    count = int(config.get("particleCount") or len(seeds))
+    cells = [int(v) for v in config["cells"]]
+    index = np.arange(count, dtype=np.float64)
+
+    # Same jitter as the TS `jitter(i)`: a deterministic sine hash, no RNG.
+    def jitter(offset: int) -> np.ndarray:
+        s = np.sin((index + offset) * 12.9898) * 43758.5453
+        return (s - np.floor(s) - 0.5) * 0.04
+
+    positions = np.zeros((count, 3), dtype=np.float64)
+    source = seeds[np.arange(count) % len(seeds)] if len(seeds) else np.zeros((count, 3))
+    limits = np.array([cells[0] - 1.5, cells[1] - 1.5, cells[2] - 1.5])
+    for axis in range(3):
+        # The TS version clamps, then adds jitter for axis-specific offsets.
+        positions[:, axis] = np.clip(source[:, axis], 1.5, limits[axis])
+    positions[:, 0] += jitter(0)
+    positions[:, 1] += jitter(7_000_000)
+    positions[:, 2] += jitter(14_000_000)
+
+    world_id = f"mpm{_MpmNextId}"
+    _MpmNextId += 1
+    world = {
+        "config": config,
+        "cells": cells,
+        "n": count,
+        "pos": positions,
+        "vel": np.zeros((count, 3), dtype=np.float64),
+        "C": np.zeros((count, 3, 3), dtype=np.float64),
+        "transits": 0,
+        "escaped": 0,
+        "activeN": count,
+        "nonFinite": 0,
+        "restDensity": float(config["restDensity"]) if config.get("restDensity") is not None else 0.0,
+        "lastStep": {"maxSpeed": 0.0, "clampedFraction": 0.0},
+        "solidMask": None,
+        "solidNormal": None,
+    }
+    if config.get("solidMask"):
+        world["solidMask"] = np.asarray(config["solidMask"], dtype=bool)
+    if config.get("solidNormal"):
+        world["solidNormal"] = np.asarray(config["solidNormal"], dtype=np.int64)
+    if config.get("restDensity") is None:
+        world["restDensity"] = _mpm_calibrate(world)
+    _MpmWorlds[world_id] = world
+    return {
+        "worldId": world_id,
+        "particles": count,
+        "restDensity": world["restDensity"],
+        "activeN": world["activeN"],
+    }
+
+
+def _mpm_stencil(positions, cells):
+    """The 27-cell quadratic B-spline stencil: per-axis base cell, fractions and the
+    three weights. Mirrors the TS weight block exactly (0.5(0.5-f)², 0.75-f², 0.5(0.5+f)²)."""
+    import numpy as np
+
+    base = np.floor(positions).astype(np.int64) - 1
+    frac = positions - np.floor(positions) - 0.5
+    weights = np.stack(
+        [0.5 * (0.5 - frac) ** 2, 0.75 - frac ** 2, 0.5 * (0.5 + frac) ** 2], axis=2
+    )  # (n, 3 axes, 3 taps)
+    return base, frac, weights
+
+
+def _mpm_cell_index(base, offsets, cells):
+    """Flat cell index for a stencil tap, matching the TS `(x*ny + y)*nz + z` order."""
+    import numpy as np
+
+    x = base[:, 0] + offsets[0]
+    y = base[:, 1] + offsets[1]
+    z = base[:, 2] + offsets[2]
+    return (x * cells[1] + y) * cells[2] + z
+
+
+def _mpm_calibrate(world) -> float:
+    """Mass-only P2G pass; median density over occupied cells (first 8192 with m > 0.2)."""
+    import numpy as np
+
+    cells = world["cells"]
+    total = cells[0] * cells[1] * cells[2]
+    base, _frac, weights = _mpm_stencil(world["pos"][: world["activeN"]], cells)
+    grid_mass = np.zeros(total, dtype=np.float64)
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                w = weights[:, 0, i] * weights[:, 1, j] * weights[:, 2, k]
+                cell = _mpm_cell_index(base, (i, j, k), cells)
+                grid_mass += np.bincount(cell, weights=w, minlength=total)
+    occupied = grid_mass[grid_mass > 0.2]
+    if occupied.size == 0:
+        return 1.0
+    samples = np.sort(occupied[:8192])
+    return float(samples[samples.size // 2])
+
+
+def _mpm_taps(base, pos, cells):
+    """The 27-cell stencil as flat cell ids, weights and per-tap cell offsets.
+
+    One quadratic B-spline per axis, same as the TS kernel:
+    w = (0.5(0.5-f)², 0.75-f², 0.5(0.5+f)²) with f = frac - 0.5.
+    """
+    import numpy as np
+
+    dx = [(base[:, 0] + i + 0.5) - pos[:, 0] for i in range(3)]
+    dy = [(base[:, 1] + j + 0.5) - pos[:, 1] for j in range(3)]
+    dz = [(base[:, 2] + k + 0.5) - pos[:, 2] for k in range(3)]
+    taps = []
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                cell = (base[:, 0] + i) * cells[1] * cells[2] + (base[:, 1] + j) * cells[2] + (base[:, 2] + k)
+                taps.append(
+                    {
+                        "cell": cell,
+                        "weight": weights_of(base, pos, i, j, k),
+                        "dist": np.stack([dx[i], dy[j], dz[k]], axis=1),
+                    }
+                )
+    return taps
+
+
+def weights_of(base, pos, i, j, k):
+    """Quadratic B-spline weight for stencil tap (i, j, k)."""
+    import numpy as np
+
+    out = None
+    for axis, tap in ((0, i), (1, j), (2, k)):
+        frac = pos[:, axis] - np.floor(pos[:, axis]) - 0.5
+        w = (0.5 * (0.5 - frac) ** 2, 0.75 - frac ** 2, 0.5 * (0.5 + frac) ** 2)[tap]
+        out = w if out is None else out * w
+    return out
+
+
+def _mpm_step_once(world) -> None:
+    import numpy as np
+
+    config = world["config"]
+    cells = world["cells"]
+    nx, ny, nz = cells
+    total = nx * ny * nz
+    dt = float(config["dt"])
+    stiffness = float(config.get("stiffness", 50))
+    viscosity = float(config.get("viscosity", 0.1))
+    rest_density = world["restDensity"]
+    active = world["activeN"]
+    pos = world["pos"][:active]
+    vel = world["vel"][:active]
+    C = world["C"][:active]
+
+    base = np.floor(pos).astype(np.int64) - 1
+    taps = _mpm_taps(base, pos, cells)
+
+    # --- P2G pass 1: mass + APIC momentum ---
+    grid_mass = np.zeros(total, dtype=np.float64)
+    grid_mom = np.zeros((total, 3), dtype=np.float64)
+    for tap in taps:
+        cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
+        q = np.einsum("pab,pb->pa", C, dist)
+        grid_mass += np.bincount(cell, weights=weight, minlength=total)
+        for axis in range(3):
+            grid_mom[:, axis] += np.bincount(cell, weights=weight * (vel[:, axis] + q[:, axis]), minlength=total)
+
+    # --- P2G pass 2: stress (weakly-compressible EOS + viscosity), vectorized ---
+    density = np.zeros(active, dtype=np.float64)
+    for tap in taps:
+        density += tap["weight"] * grid_mass[tap["cell"]]
+    volume = 1.0 / np.where(density != 0, density, 1.0)
+    dr = density / rest_density if rest_density else np.zeros(active)
+    pressure = stiffness * np.maximum(0.0, dr ** 5 - 1) if rest_density else np.zeros(active)
+    stress = np.empty((active, 3, 3), dtype=np.float64)
+    stress[:, 0, 0] = -pressure + viscosity * 2 * C[:, 0, 0]
+    stress[:, 1, 1] = -pressure + viscosity * 2 * C[:, 1, 1]
+    stress[:, 2, 2] = -pressure + viscosity * 2 * C[:, 2, 2]
+    stress[:, 0, 1] = stress[:, 1, 0] = viscosity * (C[:, 0, 1] + C[:, 1, 0])
+    stress[:, 0, 2] = stress[:, 2, 0] = viscosity * (C[:, 0, 2] + C[:, 2, 0])
+    stress[:, 1, 2] = stress[:, 2, 1] = viscosity * (C[:, 1, 2] + C[:, 2, 1])
+    stress *= (volume * -4 * dt)[:, None, None]
+    for tap in taps:
+        cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
+        momentum = np.einsum("pab,pb->pa", stress, dist) * weight[:, None]
+        for axis in range(3):
+            grid_mom[:, axis] += np.bincount(cell, weights=momentum[:, axis], minlength=total)
+
+    # --- grid update: v = momentum/mass + boundary conditions ---
+    mass_safe = np.where(grid_mass > 0, grid_mass, 1.0)
+    grid_vel = grid_mom / mass_safe[:, None]
+    grid_vel[grid_mass <= 0] = 0.0
+    grid_vel = grid_vel.reshape(nx, ny, nz, 3)
+    if nx > 2:
+        grid_vel[0, :, :, 0] = 0.0
+        grid_vel[nx - 1, :, :, 0] = 0.0
+    if ny > 2:
+        grid_vel[:, 0, :, 1] = 0.0
+        grid_vel[:, ny - 1, :, 1] = 0.0
+    if nz > 2:
+        grid_vel[:, :, 0, 2] = 0.0
+        grid_vel[:, :, nz - 1, 2] = 0.0
+    if world["solidMask"] is not None and world["solidNormal"] is not None:
+        mask = world["solidMask"].reshape(nx, ny, nz)
+        code = world["solidNormal"].reshape(nx, ny, nz)
+        grid_vel[:, :, :, 0] = np.where(mask & ((code == 1) | (code == 2)), 0.0, grid_vel[:, :, :, 0])
+        grid_vel[:, :, :, 1] = np.where(mask & ((code == 3) | (code == 4)), 0.0, grid_vel[:, :, :, 1])
+        grid_vel[:, :, :, 2] = np.where(mask & ((code == 5) | (code == 6)), 0.0, grid_vel[:, :, :, 2])
+    flat_vel = grid_vel.reshape(total, 3)
+
+    # --- G2P: gather velocity + affine, advect, drives, clamps ---
+    vmax = float(config["vmax"])
+    gravity = np.asarray(config.get("gravity") or [0.0, 0.0, 0.0], dtype=np.float64)
+    gathered = np.zeros((active, 3), dtype=np.float64)
+    B = np.zeros((active, 3, 3), dtype=np.float64)
+    wsum = np.zeros(active, dtype=np.float64)
+    mask_flat = world["solidMask"]
+    for tap in taps:
+        cells_of_tap = tap["cell"]
+        weight = tap["weight"]
+        if mask_flat is not None:
+            # free-slip renormalization: solid cells (v ≡ 0) are EXCLUDED, otherwise
+            # near-wall particles get dragged by the zeros (artificial boundary layer).
+            solid = mask_flat[cells_of_tap]
+            weight = np.where(solid, 0.0, weight)
+        gathered += weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax)
+        wsum += weight
+        B += (weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax))[:, :, None] * tap["dist"][:, None, :]
+
+    scale = np.where(wsum > 0.5, 1.0 / np.where(wsum == 0.0, 1.0, wsum), 1.0)
+    gathered *= scale[:, None]
+    B *= scale[:, None, None]
+    bad = ~np.isfinite(B[:, 0, 0] + B[:, 1, 1] + B[:, 2, 2])
+    if bad.any():
+        B[bad] = 0.0
+        gathered[bad] = 0.0
+    C_new = 4.0 * B
+
+    gathered += gravity[None, :] * dt
+    speed2 = np.einsum("pa,pa->p", gathered, gathered)
+    over = speed2 > vmax * vmax
+    safe_speed2 = np.where(speed2 > 0, speed2, 1.0)
+    gathered *= np.where(over, vmax / np.sqrt(safe_speed2), 1.0)[:, None]
+    max_speed = vmax if over.any() else (float(np.sqrt(speed2.max())) if active else 0.0)
+    clamped = int(over.sum())
+
+    inlet = config.get("inlet")
+    if inlet:
+        axis = int(inlet["axis"])
+        in_band = (pos[:, axis] >= float(inlet["band"][0])) & (pos[:, axis] <= float(inlet["band"][1]))
+        below = in_band & (gathered[:, axis] < float(inlet["speed"]))
+        gathered[below, axis] = float(inlet["speed"])
+
+    nan = ~np.isfinite(gathered).all(axis=1)
+    if nan.any():
+        world["nonFinite"] += int(nan.sum())
+        gathered[nan] = 0.0
+        if inlet and int(inlet["axis"]) == 0:
+            gathered[nan, 0] = float(inlet["speed"])
+        C_new[nan] = 0.0
+
+    # advection + box clamp with normal-velocity kill (free-slip walls)
+    new_pos = pos + gathered * dt
+    high = np.array([nx - 1.5, ny - 1.5, nz - 1.5])
+    below = new_pos < 1.5
+    above = new_pos > high[None, :]
+    new_pos = np.clip(new_pos, 1.5, high[None, :])
+    gathered = np.where(below & (gathered < 0), 0.0, gathered)
+    gathered = np.where(above & (gathered > 0), 0.0, gathered)
+
+    recycle = config.get("recycle")
+    if recycle:
+        axis = int(recycle["axis"])
+        crossed = new_pos[:, axis] > float(recycle["at"])
+        if crossed.any():
+            new_pos[crossed, axis] = float(recycle["respawn"])
+            world["transits"] += int(crossed.sum())
+
+    escape = config.get("escape")
+    if escape:
+        axis = int(escape["axis"])
+        removed_mask = new_pos[:, axis] > float(escape["at"])
+        removed = int(removed_mask.sum())
+        if removed:
+            keep = ~removed_mask
+            new_pos = new_pos[keep]
+            gathered = gathered[keep]
+            C_new = C_new[keep]
+            world["escaped"] += removed
+        world["activeN"] = active - removed
+
+    world["pos"][: world["activeN"]] = new_pos
+    world["vel"][: world["activeN"]] = gathered
+    world["C"][: world["activeN"]] = C_new
+    world["lastStep"] = {
+        "maxSpeed": max_speed,
+        "clampedFraction": (clamped / active) if active else 0.0,
+    }
+
+
+def op_mpm_step(params: dict) -> dict:
+    """Advance a world by `steps` (default 1) and return its diagnostics."""
+    world = _MpmWorlds.get(params["worldId"])
+    if world is None:
+        raise ValueError(f"unknown mpm world: {params['worldId']}")
+    for _ in range(int(params.get("steps") or 1)):
+        _mpm_step_once(world)
+    return _mpm_stats(world)
+
+
+    """Advance a world by `steps` (default 1) and return its diagnostics."""
+    world = _MpmWorlds.get(params["worldId"])
+    if world is None:
+        raise ValueError(f"unknown mpm world: {params['worldId']}")
+    for _ in range(int(params.get("steps") or 1)):
+        _mpm_step_once(world)
+    return _mpm_stats(world)
+
+
+def _mpm_stats(world) -> dict:
+    import numpy as np
+
+    active = world["activeN"]
+    pos = world["pos"][:active]
+    vel = world["vel"][:active]
+    speeds = np.linalg.norm(vel, axis=1) if active else np.zeros(0)
+    return {
+        "activeN": active,
+        "escaped": world["escaped"],
+        "transits": world["transits"],
+        "nonFinite": world["nonFinite"],
+        "restDensity": world["restDensity"],
+        "maxSpeed": world["lastStep"]["maxSpeed"],
+        "clampedFraction": world["lastStep"]["clampedFraction"],
+        "meanSpeed": float(speeds.mean()) if active else 0.0,
+        "massTotal": float(active),
+        "positionSum": [float(v) for v in (pos.sum(axis=0) if active else np.zeros(3))],
+        "velocitySum": [float(v) for v in (vel.sum(axis=0) if active else np.zeros(3))],
+        "positionMagnitude": float(np.abs(pos).sum()) if active else 0.0,
+    }
+
+
+def op_mpm_state(params: dict) -> dict:
+    """Diagnostics for a world, plus the per-particle arrays when asked (test-sized
+    worlds only — the production path never ships the state through the pipe)."""
+    world = _MpmWorlds.get(params["worldId"])
+    if world is None:
+        raise ValueError(f"unknown mpm world: {params['worldId']}")
+    state = _mpm_stats(world)
+    if params.get("particles"):
+        active = world["activeN"]
+        state["pos"] = [float(v) for v in world["pos"][:active].reshape(-1)]
+        state["vel"] = [float(v) for v in world["vel"][:active].reshape(-1)]
+    return state
+
+
+def op_mpm_destroy(params: dict) -> dict:
+    world = _MpmWorlds.get(params["worldId"])
+    existed = world is not None
+    _mpm_drop(params["worldId"])
+    return {"destroyed": existed, "worlds": len(_MpmWorlds)}
 
 
 def op_check_printability(params: dict) -> dict:
@@ -2084,6 +2483,10 @@ HANDLERS = {
     "simulate_motion": op_simulate_motion,
     "measure_part": op_measure_part,
     "check_printability": op_check_printability,
+    "mpm_create": op_mpm_create,
+    "mpm_step": op_mpm_step,
+    "mpm_state": op_mpm_state,
+    "mpm_destroy": op_mpm_destroy,
     "crash": op_crash,
 }
 
