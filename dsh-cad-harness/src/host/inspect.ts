@@ -5,6 +5,7 @@ import ManifoldModule from 'manifold-3d';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ensurePythonWorker } from './python-worker.ts';
 import { parseBinaryStl, isWatertight, boundingBox } from './mesh.ts';
 import { renderScadPng } from './compile.ts';
 import type { VersionStore } from './version.ts';
@@ -25,7 +26,37 @@ export interface MeasureReport {
   genus: number;
 }
 
+/** Geometry fields the worker computes (everything but the caller's versionId). */
+interface MeasureSolve {
+  watertight: boolean;
+  triangles: number;
+  boundingBoxMm: MeasureReport['boundingBoxMm'];
+  volumeMm3: number;
+  surfaceAreaMm2: number;
+  centerOfMassMm: [number, number, number];
+  genus: number;
+}
+
+/**
+ * Whole-part ground truth (Q1=B: the stored STL is the contract).
+ *
+ * The worker reads the stored file BY PATH — nothing is copied — and returns every
+ * measured field; this side only adds the versionId. The geometry is Manifold +
+ * trimesh work, which is domain, not platform.
+ */
 export async function measureVersion(store: VersionStore, versionId: string): Promise<MeasureReport> {
+  const path = join(store.root, 'versions', versionId, 'model.stl');
+  const worker = await ensurePythonWorker();
+  const solved = await worker.request<MeasureSolve>('measure_part', { path });
+  return { versionId, ...solved };
+}
+
+/**
+ * The TS implementation — the parity oracle for the worker's `measure_part` (and
+ * the darwin-x64 fallback, which needs no special branch here: this half is pure
+ * TypeScript and only the WORKER half is platform-dependent).
+ */
+export async function measureVersionInTs(store: VersionStore, versionId: string): Promise<MeasureReport> {
   const stl = await readFile(join(store.root, 'versions', versionId, 'model.stl'));
   const mesh = parseBinaryStl(stl);
   const M = await ManifoldModule(); M.setup();

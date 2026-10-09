@@ -43,6 +43,7 @@ drives:
     scad_parse_params   the `// PARAMS` convention
     simulate_physics    step a rigid-body scenario and report what happened
     simulate_motion     drive a mechanism + exact interference timeline
+    measure_part        whole-part ground truth (volume/area/centroid/genus)
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -83,6 +84,7 @@ OPS = [
     "scad_parse_params",
     "simulate_physics",
     "simulate_motion",
+    "measure_part",
     "crash",
 ]
 
@@ -940,6 +942,75 @@ def _transform_points(vertices, matrix, translation):
 
     source = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
     return source @ np.asarray(matrix, dtype=np.float64).T + np.asarray(translation, dtype=np.float64)
+
+
+def op_measure_part(params: dict) -> dict:
+    """Whole-part ground truth: bbox, volume, surface area, centre of mass, triangle
+    count, watertightness, genus — the `measureVersion` of src/host/inspect.ts.
+
+    Two details are contract, not implementation:
+
+    * `-0` IS NOT REPORTED. A symmetric part's centroid coordinate rounds to `-0`,
+      and `JSON.stringify(-0)` is `"0"`, so a `-0` used to make the tool result fail
+      the harness's lossless-JSON check and `measure_part` errored on *every*
+      symmetric part. `_round3` normalises it.
+    * The Manifold CONSTRUCTOR is a validity gate: the TS version throws on a
+      non-manifold mesh. This binding does not raise, so the status is checked
+      explicitly — otherwise a broken mesh would report a plausible-looking volume.
+    """
+    import numpy as np
+    from manifold3d import Error, Manifold, Mesh
+
+    vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(params["path"]))
+    points = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+
+    mesh = Mesh(np.asarray(points, dtype=np.float32), np.asarray(triangles, dtype=np.uint32))
+    mesh.merge()
+    solid = Manifold(mesh)
+    status = solid.status()
+    if status != Error.NoError:
+        raise ValueError(f"STL is not a valid manifold solid: {status}")
+
+    corners = points[triangles]
+    # Surface area from triangle cross products (not from Manifold: the TS version
+    # computes it on the parsed mesh, and the two must agree to the last digit).
+    edge_u = corners[:, 1] - corners[:, 0]
+    edge_v = corners[:, 2] - corners[:, 0]
+    cross = np.cross(edge_u, edge_v)
+    area = float(np.sum(np.linalg.norm(cross, axis=1) / 2))
+
+    # Volume-weighted centroid: the signed tetrahedron sum about the origin.
+    a, b, c = corners[:, 0], corners[:, 1], corners[:, 2]
+    vol6 = np.einsum("ij,ij->i", a, np.cross(b, c))
+    total = float(np.sum(vol6))
+    if total != 0:
+        centre = np.sum((a + b + c) * vol6[:, None], axis=0) / (4 * total)
+        center_of_mass = [float(centre[0]), float(centre[1]), float(centre[2])]
+    else:
+        center_of_mass = [0.0, 0.0, 0.0]
+
+    low = points.min(axis=0)
+    high = points.max(axis=0)
+    return {
+        "watertight": _is_watertight(triangles),
+        "triangles": int(len(triangles)),
+        "boundingBoxMm": {
+            "min": [_round3(float(v)) for v in low],
+            "max": [_round3(float(v)) for v in high],
+            "size": [_round3(float(high[i] - low[i])) for i in range(3)],
+        },
+        "volumeMm3": _round3(float(solid.volume())),
+        "surfaceAreaMm2": _round3(area),
+        "centerOfMassMm": [_round3(v) for v in center_of_mass],
+        "genus": int(solid.genus()),
+    }
+
+
+def _round3(value: float) -> float:
+    """Round to the reported 0.001mm and normalise -0 to 0 (see op_measure_part)."""
+    rounded = round(value * 1000) / 1000
+    return 0.0 if rounded == 0 else rounded
 
 
 def op_simulate_motion(params: dict) -> dict:
@@ -1865,6 +1936,7 @@ HANDLERS = {
     "scad_parse_params": op_scad_parse_params,
     "simulate_physics": op_simulate_physics,
     "simulate_motion": op_simulate_motion,
+    "measure_part": op_measure_part,
     "crash": op_crash,
 }
 
