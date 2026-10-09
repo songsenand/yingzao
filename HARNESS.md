@@ -447,8 +447,18 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   wheel、物理留在 TS canonical"——**安装时就要确认下来**，不能让缺包看起来像坏包。
 - **工具面**：`run_python`（内联 `code` 或既有 `.py` 脚本、超时、stdout/stderr、完整 traceback）
   与 `python_runtime`（status / provision / repair）。两者随 CAD 预设做可见性过滤，与其余
-  CAD 工具同一条纪律。§12.3 的**常驻 worker + JSON-lines 协议仍待做**，届时挂在同一接线点
-  `src/host/python-runtime.ts` 旁（`python-worker.ts` 已经是它的执行面）。
+  CAD 工具同一条纪律。§12.3 的**常驻 worker 已于 2026-10-08 落地**（batch 0）：
+  `python/cad_worker/worker.py` + `src/host/python-worker.ts`，同一接线点旁的第二种形态；
+  由它驱动的**已迁移工具**（首批 `measure_closest`、`check_connectivity`）**要求运行时已就绪**，
+  未就绪时 `ensurePythonWorker()` **3 ms 内**抛出可执行指引，而不是在工具的 60–180 s 超时里
+  冷装（冷装实测 6–11 分钟）。
+- **第一次用之前要做一次供给**：调用 `python_runtime` 工具 `action: "provision"`（有进度日志、
+  不受其他工具超时限制），或设 `DSH_CAD_PYTHON=eager` 让启动时自动装。**代价（实测）**：
+  归档 33 MiB → 解包约 105 MB + 依赖约 230 MB ≈ **380–400 MB**（本机实测 `state.json`
+  报 **402,590,642 B**），全部在 `$DSH_HOME` 下、
+  不进项目与 git；耗时 **3–11 分钟**（同一台机器两次实测：走 npmmirror + 阿里云 **174.6 s**
+  与 683 s；GitHub 直连曾 >20 分钟）。本机若有 CPython ≥3.10，可用 `DSH_CAD_PYTHON=system`
+  跳过解释器下载（依赖仍按 hash 锁定，但解释器不再是那个 pin 住的构建）。
 - **不做沙箱**：子进程以宿主用户身份运行，与 `bash` 同级。本插件的主张是**可复现**
   （锁定的解释器与依赖），不是隔离——把它说成沙箱才是真的撒谎。
 
