@@ -2545,6 +2545,15 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   并查集顺序一致）、水密沿用 TS 的**严格**判据（每条有向边恰好一次且反向边存在）——
   没有换成 trimesh 宽松的 `is_watertight`；反证用例（绕向翻转的立方体）在
   `scripts/accept-connectivity-parity.mjs` 里显式断言了这个差异。耗时 0.68×–0.76×。
+- **第三个迁移的工具：`validate_assembly`（2026-10-08）。** worker 的 `validate_assembly`
+  op 逐行镜像 `solidify.ts`（1e-5 mm 取整焊接 → `Mesh.merge()` → Manifold；status 与
+  体积是硬闸门，非实体/绕向反转一律拒绝）与 `validateAssembly`（交集定干涉、只有不接触的
+  对才做 1200 三角形抽样距离）。parts 以**路径**进 worker，报告形状不变；
+  `validateAssemblyInTs` 留作 parity oracle。**8 个用例全字段一致**（真实零件、rotate、
+  matrix/pose、干涉、too_tight、非实体拒绝）。
+- **worker 是子进程，生命周期归插件管**：`ctx.effect` 里注册 `resetPythonWorker()`，
+  卸载即停。这不是理论担忧——迁移 `validate_assembly` 后 `accept-m2.mjs` 实测**挂住不退出**
+  （worker 的 stdio 句柄让事件循环一直活着），验收脚本因此也要显式收尾。
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

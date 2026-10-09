@@ -34,6 +34,7 @@ drives:
     closest_mesh_mesh    solved closest pair between two solids (measure_closest)
     closest_mesh_sphere  solved closest pair between a solid and an analytic sphere
     connectivity    connected bodies + strict watertight test (check_connectivity)
+    validate_assembly  per-part solid facts + pairwise interference/clearance
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -64,6 +65,7 @@ OPS = [
     "closest_mesh_mesh",
     "closest_mesh_sphere",
     "connectivity",
+    "validate_assembly",
     "crash",
 ]
 
@@ -185,7 +187,7 @@ def _project(target, points):
     return np.asarray(closest, dtype=float), np.asarray(distance, dtype=float)
 
 
-def _closest_side(vertices, target, seed_count: int = 64, chunk: int = 2048) -> dict:
+def _closest_side(vertices, target, seed_count: int = 64, chunk: int = 2048, max_points=None) -> dict:
     """Closest pair between one vertex set and a target solid (branch and bound).
 
     WHY NOT A PLAIN FULL SCAN (measured 2026-10-08): `trimesh`'s candidate search
@@ -203,8 +205,13 @@ def _closest_side(vertices, target, seed_count: int = 64, chunk: int = 2048) -> 
     import numpy as np
 
     points = np.asarray(vertices, dtype=float)
-    stride = max(1, int(math.ceil(len(points) / MAX_QUERY_POINTS)))
-    sampled = points[::stride]
+    if max_points is None:
+        sampled = points
+    else:
+        stride = max(1, int(math.ceil(len(points) / max_points)))
+        sampled = points[::stride]
+    if len(sampled) == 0:
+        return {"value": float("nan"), "query": (0.0, 0.0, 0.0), "hit": (0.0, 0.0, 0.0), "queries": 0}
     lower = _aabb_lower_bound(sampled, target)
     order = np.argsort(lower, kind="stable")
 
@@ -242,8 +249,8 @@ def _closest_between_meshes(mesh_a, mesh_b) -> dict:
     always belongs to A's surface, `pointB` to B's. Ties across the two scan
     directions resolve to the A side, exactly like the reference.
     """
-    side_a = _closest_side(mesh_a.vertices, mesh_b)
-    side_b = _closest_side(mesh_b.vertices, mesh_a)
+    side_a = _closest_side(mesh_a.vertices, mesh_b, max_points=MAX_QUERY_POINTS)
+    side_b = _closest_side(mesh_b.vertices, mesh_a, max_points=MAX_QUERY_POINTS)
     if side_a["value"] <= side_b["value"]:
         point_a, point_b, value = side_a["query"], side_a["hit"], side_a["value"]
     else:
@@ -381,6 +388,155 @@ def _is_watertight(faces) -> bool:
     return bad == 0
 
 
+def _parse_stl_raw(path: str):
+    """Raw binary-STL triangles, float64, no welding — the TS parser's input."""
+    import numpy as np
+
+    data = open(path, "rb").read()
+    if len(data) < 84:
+        raise ValueError(f"STL too short: {len(data)} bytes")
+    count = int.from_bytes(data[80:84], "little")
+    expected = 84 + count * 50
+    if len(data) < expected:
+        raise ValueError(f"STL truncated: {len(data)} < {expected}")
+    dtype = np.dtype([("normal", "<3f4"), ("vertices", "<9f4"), ("attr", "<u2")])
+    triangles = np.frombuffer(data, dtype=dtype, count=count, offset=84)
+    return triangles["vertices"].reshape(count, 3, 3).astype(np.float64)
+
+
+def _weld_raw(raw):
+    """Mirror of the TS `MeshBuilder`: coordinates are keyed at 1e-5 mm, the FIRST
+    occurrence's exact values survive, and triangles with a repeated vertex are
+    dropped as degenerate. Welding is what lets Manifold see shared edges."""
+    import numpy as np
+
+    vertices = raw.reshape(-1, 3)
+    keys = np.round(vertices * 1e5).astype(np.int64)
+    _, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    faces = inverse.reshape(-1, 3)
+    keep = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])
+    return vertices[first].astype(np.float32), faces[keep].astype(np.uint32)
+
+
+def _solid_from_stl(path: str, transform) -> dict:
+    """Bytes → placed solid, mirroring `solidify.ts` step for step.
+
+    matrix (rightmost, applied to the welded mesh) → Manifold merge → status and
+    volume checks (a non-solid or inside-out mesh is REFUSED, never patched) →
+    rotate → translate. The returned mesh is Manifold's output, so every consumer
+    (watertight test, distance sampling, bbox) shares one coordinate frame —
+    the same invariant the TS version documents.
+    """
+    import numpy as np
+    from manifold3d import Error, Manifold, Mesh
+
+    vertices, faces = _weld_raw(_parse_stl_raw(path))
+    if transform and transform.get("matrix"):
+        matrix = np.asarray(transform["matrix"], dtype=np.float64)
+        vertices = (vertices.astype(np.float64) @ matrix.T).astype(np.float32)
+    mesh = Mesh(vertices, faces)
+    mesh.merge()
+    solid = Manifold(mesh)
+    status = solid.status()
+    volume = float(solid.volume())
+    if status != Error.NoError:
+        raise ValueError(f"not a solid: Manifold status {status.name}")
+    if volume < 0:
+        raise ValueError(f"mesh faces are wound inside-out (signed volume {volume} mm³) — not a usable solid")
+    if transform and transform.get("rotate"):
+        solid = solid.rotate([float(x) for x in transform["rotate"]])
+    if transform and transform.get("translate"):
+        solid = solid.translate([float(x) for x in transform["translate"]])
+    out = solid.to_mesh()
+    box = [float(x) for x in solid.bounding_box()]
+    return {
+        "solid": solid,
+        "verts": np.asarray(out.vert_properties, dtype=np.float64)[:, :3],
+        "faces": np.asarray(out.tri_verts, dtype=np.int64),
+        "volume": float(solid.volume()),
+        "bbox": {"min": box[0:3], "max": box[3:6]},
+    }
+
+
+def _min_distance_via_sampling(verts, faces, target_verts, target_faces, max_samples: int = 1200) -> float:
+    """The TS `minDistanceViaBVH` sampling rule: walk triangles with a stride, take
+    ALL THREE vertices of each sampled triangle, and keep the smallest exact
+    distance to the other surface (0 short-circuits)."""
+    import numpy as np
+    import trimesh
+
+    triangle_count = len(faces)
+    if triangle_count == 0:
+        return float("nan")
+    step = max(1, triangle_count // max_samples)
+    sampled = faces[::step]
+    points = verts[np.unique(sampled.reshape(-1))]
+    target = trimesh.Trimesh(vertices=target_verts, faces=target_faces, process=False)
+    return _closest_side(points, target, max_points=None)["value"]
+
+
+def op_validate_assembly(params: dict) -> dict:
+    """The whole assembly report: per-part solid facts + pairwise interference and
+    clearance. Mirrors `validateAssembly` in src/host/assembly.ts.
+
+    Interference is decided by Manifold's intersection volume (sub-epsilon overlaps
+    are reported as 'ok' with the volume visible, exactly like the TS version —
+    microscope3's printed thread showed why), and only non-touching pairs pay for
+    the distance sampling.
+    """
+    parts = params["parts"]
+    threshold = float(params.get("thresholdMm", 0.75))
+    epsilon = float(params.get("interferenceEpsilonMm3", 1e-3))
+
+    built = []
+    part_reports = []
+    for part in parts:
+        info = _solid_from_stl(part["path"], part.get("transform"))
+        built.append({"name": part["name"], **info})
+        part_reports.append(
+            {
+                "name": part["name"],
+                # status is already NoError (otherwise _solid_from_stl refused it)
+                "watertight": _is_watertight(info["faces"]),
+                "volume": info["volume"],
+                "boundingBox": info["bbox"],
+                "triangles": int(len(info["faces"])),
+            }
+        )
+
+    pairs = []
+    failed = False
+    for i in range(len(built)):
+        for j in range(i + 1, len(built)):
+            a, b = built[i], built[j]
+            intersection = a["solid"] ^ b["solid"]
+            volume = 0.0 if intersection.is_empty() else max(0.0, float(intersection.volume()))
+            if volume > epsilon:
+                pairs.append({"partA": a["name"], "partB": b["name"], "intersectionVolume": volume, "minDistance": 0, "status": "interference"})
+                failed = True
+                continue
+            if volume > 1e-9:
+                # residual: touching by a whisper — visible, not failing
+                pairs.append({"partA": a["name"], "partB": b["name"], "intersectionVolume": volume, "minDistance": 0, "status": "ok"})
+                continue
+            distance = min(
+                _min_distance_via_sampling(a["verts"], a["faces"], b["verts"], b["faces"]),
+                _min_distance_via_sampling(b["verts"], b["faces"], a["verts"], a["faces"]),
+            )
+            status = "too_tight" if distance < threshold else "ok"
+            pairs.append({"partA": a["name"], "partB": b["name"], "intersectionVolume": 0, "minDistance": distance, "status": status})
+            if status != "ok":
+                failed = True
+
+    return {
+        "parts": part_reports,
+        "pairs": pairs,
+        "overallStatus": "fail" if failed else "pass",
+        "thresholdMm": threshold,
+        "interferenceEpsilonMm3": epsilon,
+    }
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
@@ -389,6 +545,7 @@ HANDLERS = {
     "closest_mesh_mesh": op_closest_mesh_mesh,
     "closest_mesh_sphere": op_closest_mesh_sphere,
     "connectivity": op_connectivity,
+    "validate_assembly": op_validate_assembly,
     "crash": op_crash,
 }
 

@@ -54,4 +54,10 @@ const p3 = r3.pairs[0];
 console.log('case3:', p3.status, 'minDistance:', p3.minDistance.toFixed(3));
 if (p3.status !== 'ok' || Math.abs(p3.minDistance - 5.0) > 0.01) { console.error('FAIL case3 (expect ≈5.0, ok)'); process.exit(1); }
 
+// The migrated validate_assembly talks to the resident Python worker; stop it so
+// this script can exit (an un-stopped worker keeps the event loop alive forever).
+const { resetPythonWorker } = await import('../src/host/python-worker.ts');
+resetPythonWorker();
+
 console.log('M2 ACCEPTANCE PASSED');
+process.exit(0);

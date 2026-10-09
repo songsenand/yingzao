@@ -391,6 +391,10 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   中位数（200 次）、**大载荷按文件往返并与 TS 结果 Δ=0**、失败带完整 traceback、
   kill 后重启、**并发请求严格串行（116 ms → 230 ms）**、打包检查。
   `run_python` 的一次性进程保持不变——两种形态共用一个接线点。
+  ⚠️ **worker 是子进程，生命周期必须归插件管**：`index.ts` 的 `ctx.effect` 注册
+  `resetPythonWorker()`，卸载即停；否则它的 stdio 句柄会吊住宿主的事件循环（实测：
+  迁移 `validate_assembly` 后 `accept-m2.mjs` 挂住不退出）。任何用到 worker 的脚本
+  收尾时也要显式 `resetPythonWorker()`。
 
 ### 12.4 pip 生态（实测 2026-09-28）
 

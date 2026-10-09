@@ -11,6 +11,7 @@ import { registerCadTools } from './tools.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
 import { configurePythonRuntime, ensurePythonRuntime, pythonRuntimeMode, recordRuntimeFailure } from './python-runtime.ts';
+import { resetPythonWorker } from './python-worker.ts';
 
 export const name = 'cad-harness';
 
@@ -65,6 +66,13 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
     void ensurePythonRuntime({ onProgress: (message) => ctx.logger?.info?.(`cad-harness: python runtime: ${message}`) })
       .catch((error) => recordRuntimeFailure(error, { onProgress: (message) => ctx.logger?.warn?.(`cad-harness: ${message}`) }));
   }
+
+  // The resident worker is a CHILD PROCESS, so it has to be stopped on unload:
+  // otherwise a disposed harness leaves a Python interpreter holding the event
+  // loop (measured — an un-stopped worker keeps even a plain script alive
+  // forever). Registered before the web-only block below so headless runs get it
+  // too.
+  ctx.effect(() => () => resetPythonWorker());
 
   // Keep the CAD catalog out of sessions that did not ask for it (see
   // tool-scope.ts for the measurement and for the adoption cost).

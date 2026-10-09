@@ -1,11 +1,24 @@
 // Assembly validation: per-part watertightness, pairwise interference volume
-// (exact, via Manifold booleans) and minimum clearance (BVH nearest-triangle
-// queries over sampled vertices).
+// (exact, via Manifold booleans) and minimum clearance (nearest-triangle queries
+// over sampled vertices).
+//
+// TWO IMPLEMENTATIONS, ONE CONTRACT (2026-10-08, batch 1): `validateAssembly` is
+// now a thin forwarder to the Python worker (`python/cad_worker/worker.py`), and
+// `validateAssemblyInTs` is the previous TS implementation kept as the PARITY
+// ORACLE — `scripts/accept-assembly-parity.mjs` runs both on the same inputs and
+// fails if the reports differ. The oracle is not a second production path: it
+// exists so "the numbers did not change" stays checkable instead of asserted.
+// `buildSolid` / `pairMinDistance` below are still live for `check_assembly` and
+// the union tool (batch 2).
 
+import { randomUUID } from 'node:crypto';
+import { rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { BufferGeometry, BufferAttribute, Vector3 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { parseBinaryStl, isWatertight, boundingBox, type ParsedMesh } from './mesh.ts';
 import { buildSolidFromStl } from './solidify.ts';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 
 export interface PartTransform {
   translate?: [number, number, number];
@@ -101,10 +114,41 @@ export async function pairMinDistance(
 }
 
 /**
- * Validate an assembly: watertight per part, then pairwise interference
- * volume (Manifold intersect) and minimum clearance (BVH).
+ * Validate an assembly. The SOLVE is Python's (batch 1, DECISION-LOG 2026-10-08):
+ * the STL bytes are written to the worker's scratch directory and travel as paths
+ * (never through the pipe), and the report comes back in the same shape as before.
+ * Kept async and byte-oriented so every existing caller — the tool, the import
+ * acceptance, the M2 acceptance — keeps working unchanged.
  */
 export async function validateAssembly(
+  parts: AssemblyPartInput[],
+  thresholdMm = 0.75,
+  interferenceEpsilonMm3 = 1e-3,
+): Promise<AssemblyReport> {
+  const scratch = await workerScratchDir();
+  const written: string[] = [];
+  const payload: { name: string; path: string; transform?: PartTransform }[] = [];
+  for (const part of parts) {
+    const path = join(scratch, `assembly-${randomUUID()}.stl`);
+    await writeFile(path, part.stl);
+    written.push(path);
+    payload.push({ name: part.name, path, transform: part.transform });
+  }
+  try {
+    const worker = await ensurePythonWorker();
+    return await worker.request<AssemblyReport>('validate_assembly', { parts: payload, thresholdMm, interferenceEpsilonMm3 });
+  } finally {
+    await Promise.all(written.map((path) => rm(path, { force: true }).catch(() => {})));
+  }
+}
+
+/**
+ * Validate an assembly: watertight per part, then pairwise interference
+ * volume (Manifold intersect) and minimum clearance (BVH).
+ *
+ * PARITY ORACLE — see the file header. Do not wire new callers to this.
+ */
+export async function validateAssemblyInTs(
   parts: AssemblyPartInput[],
   thresholdMm = 0.75,
   interferenceEpsilonMm3 = 1e-3,
