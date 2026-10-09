@@ -25,12 +25,16 @@
     },
     "client": {
       "platform": "web",
-      "external": ["@deepseek-ai/dsh-api-session-controller/client"]
+      "external": [
+        "@deepseek-ai/dsh-api-session-controller/client"
+      ]
     }
   },
   "files": [
     "lib/",
     "python/",
+    "skills/",
+    "presets/",
     "cordis.patch.yml"
   ],
   "scripts": {
