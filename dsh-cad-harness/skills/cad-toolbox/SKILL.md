@@ -5,8 +5,14 @@ description: Use when a task involves 3D geometry at all — designing or changi
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Fifteen tools, seven jobs. The tool descriptions say what each one *is*; this file
-says **which one the question belongs to**, and what has already gone wrong.
+Twenty tools, seven jobs. The tool descriptions say what each one *is*; this file
+says **which one the question belongs to**, what its boundary is, and what has
+already gone wrong.
+
+Four of the twenty are not geometry tools and are routed at the bottom of the
+table: `create_part` (name a subject before geometry exists), `delivery_audit`
+(the corpus-wide delivery check), and the runtime pair `run_python` /
+`python_runtime` (the open-ended escape hatch and its installer).
 
 ## The router (this table is the whole point)
 
@@ -28,6 +34,10 @@ says **which one the question belongs to**, and what has already gone wrong.
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |
 | "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
+| "the user is only *talking* about a part", no geometry yet | `create_part` | `generate_part` (it would invent a shape) |
+| "before I claim this is delivered" | `delivery_audit` | re-reading your own notes |
+| "a check no CAD tool covers" (FEM, optimisation, a custom metric) | `run_python` | shelling out to the system python |
+| "the runtime is missing / broken / I want it warm" | `python_runtime` | re-running a failing tool and hoping |
 
 **An imported part is not a special kind of part.** `import_part` lands the file
 as an ordinary version, so every other row of this table applies to it unchanged:
@@ -182,10 +192,66 @@ near-touching pairs were never declared).
   catches what nobody thought to declare.
 - **`merge_parts` is for "one rigid body", not for tidying a corpus.** Use it when
   a whole machine has to be a single body (`simulate_physics` topple, a
-  whole-assembly `measure_part`), because `simulate_physics` takes no joints
-  other than revolute and cannot hold a machine together by itself. It reports
+  whole-assembly `measure_part`), because `simulate_physics` takes only
+  revolute/prismatic joints and cannot hold a machine together by itself. It reports
   the number of **shells**: more than one means the parts you merged do not all
   touch, so the body is not a machine but a pile.
+- **`simulate_fluid` is a sampled estimate whose headline number is ONE
+  realization.** The scheme runs at a fixed `dt = 0.004 s`, and refining it moves
+  the arrival ratio a lot: measured on the Ø100 pipe, `dt` 0.004 → 0.002 → 0.001
+  gives arrival **0.674 → 0.758 → 0.797** (still climbing). So the arrival ratio
+  is a *range*, not a measurement: do not chase a 1–2 % difference between runs,
+  and do not read `overallStatus: pass` as a quality claim — it is a floor
+  (no divergence, penetration 0, conservation error < 1e-6, and arrival ≥ 0.5
+  when an outlet plane is defined).
+- **Read `simulate_fluid`'s `warnings` before believing its field.** A
+  `stacksPerSeed` above 1.5 means the requested `particleCount` exceeded the seed
+  lattice, so extra particles are **duplicates stacked on the same spot** — the
+  escaped *fraction* is unaffected, but the field is far coarser than
+  `particleCount0` suggests (raise `particlesPerCell`). And
+  `seedStats.solidFraction` is the share of the seed box that is metal: the box
+  comes from the bounding box, so a thick-walled part scores 0.6–0.8 and the
+  lattice is coarse exactly where the flow is.
+- **Read `simulate_physics`'s `metrics.notes`.** They are the tool telling you its
+  own number is unreliable: ≥ 4 shells in the input means the settled penetration
+  is a solver artefact with sparse ground contact (cross-check fit with
+  `check_assembly` instead), and the hold analysis is labelled quasi-static.
+  `settled` means "still moving at the end" (linvel > 5 mm/s), not "did not
+  drift"; `jointViolations` is anchor drift > 2 mm for a hinge and motion *across*
+  the axis > 2 mm for a slide.
+- **`check_printability` samples triangles, so it can miss a thin feature
+  entirely.** The stride is `floor(triangles / samples)` — at the default 600
+  samples a 28,830-triangle part is inspected every ~48th triangle. Raise
+  `samples` (max 4000) for a big or safety-critical part. Its wall numbers are
+  the distance to the **nearest** opposite wall (a traversal-order bug used to
+  report the far wall and under-report thin walls by ~2×); if you are comparing
+  against numbers from an older session, expect today's to be **thinner**.
+  `verdict: unprintable` means min wall < 0.4 × `wallMinMm`; `check` means a
+  finding exists (answer it); `ok` means none.
+- **`measure_part`'s `genus` is only meaningful for ONE connected solid.** For a
+  single body it is the number of through holes; a multi-body mesh reports a
+  **negative** number (two disjoint cubes → −1), which is another way of seeing
+  "this is not one part". Use `check_connectivity` for the body count.
+- **`check_connectivity` counts bodies by SHARED EDGE.** Two solids that touch at
+  a single vertex (or cross without sharing an edge) are two bodies; that is the
+  strict criterion, and it is why a corner-touching "one part" is still rejected.
+- **`// PARAMS` is how a part exposes tunables to the panel.** A top-level line of
+  the form `wall = 3; // PARAMS 壁厚` becomes a slider in the panel's Customizer
+  for that version (the description after `PARAMS` is the label). Keep them
+  top-level and numeric; a tagged assignment nested inside a module body is
+  still picked up, which is almost never what you meant.
+- **The geometric tools run on the plugin's bundled Python runtime** (pinned
+  CPython 3.13 + numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree;
+  `rapier3d` everywhere a wheel exists). The first call on a machine provisions it
+  once — hundreds of MB and minutes, with progress — and `python_runtime` reports,
+  provisions or repairs it; `run_python` is the escape hatch for anything the CAD
+  tools do not cover (pinned deps, full filesystem access, **no sandbox**).
+  If a tool comes back saying the runtime is not ready, that message already names
+  the fix: `python_runtime` with `action: "provision"`, then call the tool again.
+  With `DSH_CAD_PYTHON=off` every Python-backed tool is **unavailable by design**
+  and says so — the only exception is darwin-x64, where physics and motion keep
+  working because that platform has no `rapier3d` wheel and stays on the
+  TypeScript implementation.
 - **Runs have a lifecycle.** A run records a `subject` (the manifest it audited,
   the part set it posed); committing a newer run about the same subject marks the
   older one `supersededBy`. So "which run is the current answer" is readable, and
