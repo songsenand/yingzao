@@ -4,29 +4,52 @@ import { apply } from '../src/host/index.ts';
 
 const registered = {};
 
+// The plugin reaches the host connection through ctx.reflect.get('connection')
+// (that indirection landed after this smoke test was written), so the stub has to
+// provide it — otherwise apply() returns early and none of the routes register.
+const connection = {
+  fetch: {
+    register(route) {
+      registered.route = route;
+      console.log('fetch route registered:', route.path, route.methods, route.requestBody);
+      return async () => {};
+    },
+  },
+  rpc: {
+    intercept(channel, matches, handler) {
+      registered.channel = channel;
+      registered.matches = matches;
+      registered.handler = handler;
+      console.log('rpc interceptor registered on', channel);
+      return async () => {};
+    },
+  },
+};
+
 const ctx = {
+  connection,
+  reflect: { get: (key) => (key === 'connection' ? connection : undefined), set: () => {} },
+  // The plugin registers its tools through ctx.tools.register(...); this stub was
+  // written before that API existed, which is why this smoke test had been failing
+  // since tools landed. It records the names so the count can be asserted below.
+  tools: {
+    register(definition) {
+      registered.tools = registered.tools ?? [];
+      registered.tools.push(definition.name);
+      return () => {};
+    },
+  },
+  // Event subscription (usage telemetry observes llm/stream).
+  on(event) {
+    registered.events = registered.events ?? [];
+    registered.events.push(event);
+    return () => {};
+  },
+  logger: { debug() {}, info() {}, warn() {}, error() {} },
   effect(fn, label) {
     const result = fn();
-    registered[label] = result;
-    console.log('effect applied:', label, '->', typeof result === 'function' || result ? 'ok' : 'MISSING');
-  },
-  connection: {
-    fetch: {
-      register(route) {
-        registered.route = route;
-        console.log('fetch route registered:', route.path, route.methods, route.requestBody);
-        return async () => {};
-      },
-    },
-    rpc: {
-      intercept(channel, matches, handler) {
-        registered.channel = channel;
-        registered.matches = matches;
-        registered.handler = handler;
-        console.log('rpc interceptor registered on', channel);
-        return async () => {};
-      },
-    },
+    if (label) registered[label] = result;
+    console.log('effect applied:', label ?? '(unlabelled)');
   },
 };
 
@@ -62,4 +85,9 @@ if (res.status !== 200 || triCount !== 12 || actual !== expectedLen) {
 }
 // watertight quick check: Euler characteristic of a closed mesh V - E + F = 2 is
 // guaranteed by construction here (cube); edge/face ratio check instead:
+console.log(`tools registered: ${registered.tools?.length ?? 0} (${(registered.tools ?? []).slice(0, 3).join(', ')}…)`);
+if (!registered.tools || registered.tools.length < 10) {
+  console.error('FAIL: the plugin should register its tool set');
+  process.exit(1);
+}
 console.log('SMOKE TEST PASSED');
