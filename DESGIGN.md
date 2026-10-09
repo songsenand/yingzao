@@ -2585,6 +2585,15 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   `accept-sim-verdict` 在 Python 侧重跑全过，未改阈值。**
   顺带发现一个真缺陷（未修）：TS 的碰撞事件从未开启 `ActiveEvents.COLLISION_EVENTS`，
   所以 `接触:` 关键帧标签是死代码；Python 侧照现状镜像，开启它属于行为变更。
+- **批次 3 收尾：`simulate_motion`（2026-10-08）。** rapier 在机构仿真里只当**约束求解器**
+  （无碰撞体、无重力），判定来自**精确 Manifold 干涉时间线**——两部分都进了 worker，
+  TS 侧只剩 schema、parts 落盘与关键帧渲染。实测干涉计数逐位相同（0/0、25/25、49/49）、
+  行程差 0.0000 mm、周期差 0.00000 s。**`accept-m36` 17/17 在 Python 侧重跑通过**（含负例）。
+  **两个 API 陷阱记在这里以便后人**：Python 的 `RigidBodyBuilder.rotation()` 收的是
+  **scaled-axis 向量**（不是四元数，也不是欧拉角），要走
+  `Rotation3.from_quaternion(w,x,y,z).scaled_axis`（注意参数序 w,x,y,z）；
+  `additional_mass_properties()` 只收**一个 `MassProperties` 对象**，而它只能用关键字构造。
+  **批次 3 完成。**
 - `run_python`：`code`（内联）或 `script`（既有 .py 文件，相对项目目录），可选 `args` /
   `cwd` / `timeoutSec`（默认 120s，上限 600s）。返回 stdout/stderr 与**完整 traceback**，
   失败时把 `traceback` 单独给出——这正是 2026-09-28 试探 python-engine 时认定的核心收益。

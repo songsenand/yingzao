@@ -14,6 +14,10 @@
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import ManifoldModule from 'manifold-3d';
+import { randomUUID } from 'node:crypto';
+import { rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { parseBinaryStl } from './mesh.ts';
 import type { PhysicsReport, PoseSample, Trajectory } from './physics.ts';
 
@@ -203,7 +207,61 @@ function periodFromSamples(vals: number[], sampleDt: number): number | null {
   return (gaps.reduce((a, b) => a + b, 0) / gaps.length) * sampleDt;
 }
 
+/** Darwin-x64 has no `rapier3d` wheel, so mechanisms stay on the TS canonical there. */
+const PYTHON_MOTION_UNAVAILABLE = process.platform === 'darwin' && process.arch === 'x64';
+
+/**
+ * Drive a mechanism and report kinematics + the exact interference timeline
+ * (Q2=A: the Python worker is canonical).
+ *
+ * Everything the TS version did with rapier AND with Manifold now happens in the
+ * worker: rapier is only a constraint solver here (no colliders, no gravity), and
+ * the interference timeline is exact Manifold booleans per sampled pose — so the
+ * port keeps the same engine version for the part that decides PASS/CHECK, and the
+ * probe's constraint-agreement (≈0.05 mm) governs the rest.
+ */
 export async function runMotion(scenario: MotionScenario): Promise<MotionReport> {
+  if (PYTHON_MOTION_UNAVAILABLE) return runMotionInTs(scenario);
+
+  const scratch = await workerScratchDir();
+  const written: string[] = [];
+  const parts = [];
+  for (const part of scenario.parts) {
+    const path = join(scratch, `motion-${randomUUID()}.stl`);
+    await writeFile(path, part.stl);
+    written.push(path);
+    parts.push({
+      name: part.name,
+      path,
+      bodyType: part.bodyType,
+      position: part.position,
+      ...(part.rotation ? { rotation: part.rotation } : {}),
+    });
+  }
+  try {
+    const worker = await ensurePythonWorker();
+    return await worker.request<MotionReport>('simulate_motion', {
+      scenario: {
+        parts,
+        joints: scenario.joints,
+        ...(scenario.drive ? { drive: scenario.drive } : {}),
+        ...(scenario.oscillators ? { oscillators: scenario.oscillators } : {}),
+        ...(scenario.cycles !== undefined ? { cycles: scenario.cycles } : {}),
+        ...(scenario.samplePerCycle !== undefined ? { samplePerCycle: scenario.samplePerCycle } : {}),
+        ...(scenario.recordParts ? { recordParts: scenario.recordParts } : {}),
+      },
+    });
+  } finally {
+    await Promise.all(written.map((path) => rm(path, { force: true }).catch(() => {})));
+  }
+}
+
+/**
+ * The TS implementation — the CANONICAL only on darwin-x64, where the lock ships
+ * no `rapier3d` wheel (HARNESS §12.7). Everywhere else it is the parity oracle for
+ * the worker's `simulate_motion`.
+ */
+export async function runMotionInTs(scenario: MotionScenario): Promise<MotionReport> {
   const RAPIER_ = await R();
   const mod = await M();
 

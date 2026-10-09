@@ -42,6 +42,7 @@ drives:
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
     scad_parse_params   the `// PARAMS` convention
     simulate_physics    step a rigid-body scenario and report what happened
+    simulate_motion     drive a mechanism + exact interference timeline
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -81,6 +82,7 @@ OPS = [
     "scad_parse_output",
     "scad_parse_params",
     "simulate_physics",
+    "simulate_motion",
     "crash",
 ]
 
@@ -846,6 +848,21 @@ def _euler_to_quat(deg) -> tuple:
     )
 
 
+def _scaled_axis_of_euler(deg) -> tuple:
+    """A rapier body rotation, from Euler XYZ degrees.
+
+    TRAP, found the hard way: in this binding `RigidBodyBuilder.rotation(v)` takes a
+    SCALED-AXIS vector (axis × angle) in 3D — NOT a quaternion, and not three Euler
+    angles. Passing a quaternion raises "expected sequence of 3 floats, got length 4",
+    which is how this was discovered. `Rotation3.scaled_axis` bridges the two exactly
+    (verified by round-trip on identity, a 90° Y rotation and a compound rotation).
+    """
+    import rapier3d as R
+
+    qx, qy, qz, qw = _euler_to_quat(deg)
+    return tuple(R.Rotation3.from_quaternion(qw, qx, qy, qz).scaled_axis)
+
+
 def _is_convex(path: str) -> bool:
     """True when the mesh encloses the same volume as its convex hull (±1%) — the
     TS `isConvexStl`. A non-manifold input counts as NOT convex (trimesh path)."""
@@ -863,6 +880,459 @@ def _is_convex(path: str) -> bool:
         return abs(float(hull.volume()) - volume) / volume < 0.01
     except BaseException:  # noqa: BLE001 - mirror the TS catch-all
         return False
+
+
+# ---------------------------------------------------------------------------
+# Mechanism motion (M3.6): kinematics under a drive, verified by an exact
+# interference timeline.
+#
+# Mirrors `runMotion` in src/host/motion.ts. rapier is used purely as a CONSTRAINT
+# solver here — no colliders, no gravity — and spatial overlap is measured exactly
+# by Manifold booleans at each sampled pose. So the Python port has two engines to
+# satisfy: the joint solver (which the probe showed agrees to ~0.05 mm on
+# constraint quantities) and the same Manifold build the rest of this file uses.
+# ---------------------------------------------------------------------------
+
+
+def _norm3(vector) -> list:
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2])) or 1.0
+    return [float(vector[0]) / length, float(vector[1]) / length, float(vector[2]) / length]
+
+
+def _aabb_overlap(a, b) -> bool:
+    (a_min, a_max), (b_min, b_max) = a, b
+    return bool(
+        a_min[0] <= b_max[0] and a_max[0] >= b_min[0]
+        and a_min[1] <= b_max[1] and a_max[1] >= b_min[1]
+        and a_min[2] <= b_max[2] and a_max[2] >= b_min[2]
+    )
+
+
+def _period_from_samples(values, sample_dt):
+    """Period from successive maxima of a sampled signal — the TS `periodFromSamples`.
+    Returns None when the signal has fewer than two usable peaks."""
+    maxima = []
+    for i, value in enumerate(values):
+        left = values[i - 1] if i > 0 else float("-inf")
+        right = values[i + 1] if i < len(values) - 1 else float("-inf")
+        if value > left and value >= right:
+            if not maxima or i - maxima[-1] > 3:
+                maxima.append(i)
+    if len(maxima) < 2:
+        return None
+    gaps = [maxima[k] - maxima[k - 1] for k in range(1, len(maxima))]
+    return (sum(gaps) / len(gaps)) * sample_dt
+
+
+def _welded_mesh(path: str):
+    """`weldedOf`: parse → weld (1e-5 keys, first-encounter order) → Manifold merge."""
+    import numpy as np
+    from manifold3d import Mesh
+
+    vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(path))
+    mesh = Mesh(vertices, faces)
+    mesh.merge()
+    return np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3], np.asarray(mesh.tri_verts, dtype=np.int64)
+
+
+def _transform_points(vertices, matrix, translation):
+    import numpy as np
+
+    source = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    return source @ np.asarray(matrix, dtype=np.float64).T + np.asarray(translation, dtype=np.float64)
+
+
+def op_simulate_motion(params: dict) -> dict:
+    """Drive a mechanism and report kinematics + the exact interference timeline."""
+    import numpy as np
+    import rapier3d as R
+    from manifold3d import Manifold, Mesh
+
+    scenario = params["scenario"]
+    dt = 1 / 2000
+    cycles = int(scenario.get("cycles") or 2)
+    sample_per_cycle = int(scenario.get("samplePerCycle") or 24)
+    oscillator_inputs = scenario.get("oscillators") or []
+    drive = scenario.get("drive")
+    omega = float((drive or {}).get("omegaRadPerSec") or 0)
+    cycle_period = (2 * math.pi) / omega if omega > 0 else 1.0
+    total_sec = cycles * cycle_period
+    steps = max(1, int(round(total_sec / dt)))
+    sample_every = max(1, int(round((cycle_period / sample_per_cycle) / dt)))
+
+    world = R.PhysicsWorld((0.0, 0.0, 0.0))
+    world.integration_parameters.dt = dt
+
+    bodies: dict = {}
+    base_pose: dict = {}
+    welded: dict = {}
+    for part in scenario["parts"]:
+        name = part["name"]
+        quaternion = _euler_to_quat(part.get("rotation") or [0, 0, 0])
+        base_pose[name] = {"p": [float(v) for v in part["position"]], "q": quaternion}
+        is_drive = bool(drive) and drive.get("body") == name
+        if part["bodyType"] == "fixed":
+            builder = R.RigidBody.fixed()
+        elif is_drive:
+            # velocity-integrated kinematic: setAngvel persists and is exact
+            builder = R.RigidBody.kinematic_velocity_based()
+        elif part["bodyType"] == "kinematic" or any(o["body"] == name for o in oscillator_inputs):
+            builder = R.RigidBody.kinematic_position_based()
+        else:
+            # Collider-less dynamic body: translational mass alone breaks the joint
+            # solver (zero rotational inertia → constraint drift), so give it an
+            # AABB-estimated inertia tensor (m = 1 kg, box approximation).
+            vertices, faces = _welded_mesh(part["path"])
+            welded[name] = (vertices, faces)
+            low = vertices.min(axis=0)
+            high = vertices.max(axis=0)
+            ex = max(1e-3, float(high[0] - low[0]))
+            ey = max(1e-3, float(high[1] - low[1]))
+            ez = max(1e-3, float(high[2] - low[2]))
+            # `additional_mass_properties` takes a MassProperties OBJECT here (the
+            # positional mass/com/inertia form of the JS API does not exist), and
+            # MassProperties itself only constructs with keyword arguments.
+            mass_properties = R.MassProperties(
+                mass=1.0,
+                local_com=R.Vec3(0.0, 0.0, 0.0),
+                principal_inertia=((ey * ey + ez * ez) / 12, (ex * ex + ez * ez) / 12, (ex * ex + ey * ey) / 12),
+            )
+            builder = R.RigidBody.dynamic().additional_mass_properties(mass_properties).can_sleep(False)
+        builder = builder.translation(tuple(float(v) for v in part["position"]))
+        builder = builder.rotation(tuple(R.Rotation3.from_quaternion(quaternion[3], quaternion[0], quaternion[1], quaternion[2]).scaled_axis))
+        bodies[name] = world.add_body(builder)
+        if name not in welded:
+            welded[name] = _welded_mesh(part["path"])
+
+    if drive:
+        axis = _norm3(drive["axis"])
+        world.rigid_bodies[bodies[drive["body"]]].angvel = (axis[0] * omega, axis[1] * omega, axis[2] * omega)
+
+    for joint in scenario["joints"]:
+        a = bodies.get(joint["bodyA"])
+        b = bodies.get(joint["bodyB"])
+        if a is None or b is None:
+            raise ValueError(f"motion: joint references unknown body ({joint['bodyA']}, {joint['bodyB']})")
+        axis = _norm3(joint["axis"])
+        anchor_a = tuple(float(v) for v in joint["anchorA"])
+        anchor_b = tuple(float(v) for v in joint["anchorB"])
+        if joint["type"] == "prismatic":
+            builder = R.PrismaticJoint.builder(axis=tuple(axis)).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            if joint.get("limits"):
+                builder = builder.limits(float(joint["limits"][0]), float(joint["limits"][1]))
+        else:
+            builder = R.RevoluteJoint.builder(axis=tuple(axis)).local_anchor1(anchor_a).local_anchor2(anchor_b)
+        world.impulse_joints.insert(a, b, builder.build())
+
+    oscillators = []
+    for entry in oscillator_inputs:
+        coupled = isinstance(entry.get("pitchRadiusMm"), (int, float)) and math.isfinite(float(entry["pitchRadiusMm"])) and float(entry["pitchRadiusMm"]) != 0
+        if not coupled and not isinstance(entry.get("amplitudeMm"), (int, float)):
+            raise ValueError(f'oscillator for "{entry["body"]}" needs amplitudeMm (sinusoidal) or pitchRadiusMm (rack & pinion)')
+        if coupled and not drive:
+            raise ValueError(f'oscillator for "{entry["body"]}" is rack-coupled (pitchRadiusMm) but the scenario has no drive to follow')
+        if not coupled and not (entry.get("periodSec") and float(entry["periodSec"]) > 0):
+            raise ValueError(f'oscillator for "{entry["body"]}" needs a positive periodSec')
+        oscillators.append(
+            {
+                "body": bodies[entry["body"]],
+                "axis": _norm3(entry["axis"]),
+                "base": base_pose[entry["body"]]["p"],
+                "amplitude": float(entry.get("amplitudeMm") or 0),
+                "w": 0.0 if coupled else (2 * math.pi) / float(entry["periodSec"]),
+                "coupled": coupled,
+                "phi": float(entry.get("phaseRad") or 0),
+                "r": float(entry["pitchRadiusMm"]) if coupled else 0.0,
+            }
+        )
+
+    milestone_angles = [math.pi / 2, math.pi, (3 * math.pi) / 2]
+    milestone_steps = {}
+    for angle in milestone_angles:
+        step = int(round((angle / omega) / dt)) if omega > 0 else 0
+        if 0 < step < steps:
+            milestone_steps[step] = f"crank{int(round(angle * 180 / math.pi))}"
+
+    sample_times: list = []
+    sample_poses: list = []
+    milestone_poses: dict = {}
+    diverged = False
+
+    warm_up_steps = max(1, min(int(round(steps * 0.05)), int(math.ceil(0.1 / dt))))
+    warm = 0
+    travel_lo: dict = {}
+    travel_hi: dict = {}
+
+    def seed_travel() -> None:
+        for part in scenario["parts"]:
+            if part["bodyType"] == "fixed":
+                continue
+            translation = world.rigid_bodies[bodies[part["name"]]].translation
+            travel_lo[part["name"]] = [float(translation[i]) for i in range(3)]
+            travel_hi[part["name"]] = [float(translation[i]) for i in range(3)]
+
+    def track_travel() -> None:
+        if warm < warm_up_steps:
+            return
+        for part in scenario["parts"]:
+            if part["bodyType"] == "fixed":
+                continue
+            translation = world.rigid_bodies[bodies[part["name"]]].translation
+            low = travel_lo[part["name"]]
+            high = travel_hi[part["name"]]
+            for axis in range(3):
+                value = float(translation[axis])
+                if value < low[axis]:
+                    low[axis] = value
+                elif value > high[axis]:
+                    high[axis] = value
+
+    seed_travel()
+    for i in range(steps):
+        t = (i + 1) * dt
+        for oscillator in oscillators:
+            s = oscillator["r"] * (omega * t + oscillator["phi"]) if oscillator["coupled"] else oscillator["amplitude"] * math.sin(oscillator["w"] * t + oscillator["phi"])
+            world.rigid_bodies[oscillator["body"]].set_next_kinematic_translation(
+                (
+                    oscillator["base"][0] + oscillator["axis"][0] * s,
+                    oscillator["base"][1] + oscillator["axis"][1] * s,
+                    oscillator["base"][2] + oscillator["axis"][2] * s,
+                )
+            )
+        world.step()
+        warm += 1
+        if warm == warm_up_steps:
+            seed_travel()
+        track_travel()
+
+        if (i + 1) % sample_every == 0:
+            sample_times.append(t)
+            poses = {}
+            for part in scenario["parts"]:
+                body = world.rigid_bodies[bodies[part["name"]]]
+                translation = body.translation
+                rotation = body.rotation.quaternion
+                poses[part["name"]] = {
+                    "position": [float(translation[0]), float(translation[1]), float(translation[2])],
+                    "rotation": [float(rotation[0]), float(rotation[1]), float(rotation[2]), float(rotation[3])],
+                }
+                if not all(math.isfinite(translation[a]) for a in range(3)):
+                    diverged = True
+            sample_poses.append(poses)
+
+        if (i + 1) in milestone_steps:
+            poses = {}
+            for part in scenario["parts"]:
+                body = world.rigid_bodies[bodies[part["name"]]]
+                translation = body.translation
+                rotation = body.rotation.quaternion
+                poses[part["name"]] = {
+                    "position": [float(translation[0]), float(translation[1]), float(translation[2])],
+                    "rotation": [float(rotation[0]), float(rotation[1]), float(rotation[2]), float(rotation[3])],
+                }
+            milestone_poses[i + 1] = {"label": milestone_steps[i + 1], "poses": poses}
+
+    # ---- interference timeline (exact Manifold booleans per sampled pose) ----
+    is_fixed = {part["name"]: part["bodyType"] == "fixed" for part in scenario["parts"]}
+    fixed_world: dict = {}
+    for part in scenario["parts"]:
+        if part["bodyType"] != "fixed":
+            continue
+        vertices, _faces = welded[part["name"]]
+        pose = base_pose[part["name"]]
+        fixed_world[part["name"]] = _transform_points(vertices, _quat_to_matrix3(pose["q"]), pose["p"])
+
+    fixed_manifold: dict = {}
+    for part in scenario["parts"]:
+        if part["bodyType"] != "fixed":
+            continue
+        vertices, faces = welded[part["name"]]
+        fixed_manifold[part["name"]] = Manifold(Mesh(np.asarray(fixed_world[part["name"]], dtype=np.float32), np.asarray(faces, dtype=np.uint32)))
+
+    interference_events = []
+    interference_count = 0
+    first_interference_sample = -1
+
+    revolute_linked = {
+        "\u0000".join(sorted([joint["bodyA"], joint["bodyB"]]))
+        for joint in scenario["joints"]
+        if joint["type"] == "revolute"
+    }
+    pairs = []
+    for index, first in enumerate(scenario["parts"]):
+        for second in scenario["parts"][index + 1 :]:
+            if is_fixed[first["name"]] and is_fixed[second["name"]]:
+                continue
+            if "\u0000".join(sorted([first["name"], second["name"]])) in revolute_linked:
+                continue
+            pairs.append((first["name"], second["name"]))
+
+    for k, poses in enumerate(sample_poses):
+        verts: dict = {}
+        boxes: dict = {}
+        for part in scenario["parts"]:
+            name = part["name"]
+            vertices, _faces = welded[name]
+            if is_fixed[name]:
+                world_vertices = fixed_world[name]
+            else:
+                pose = poses[name]
+                world_vertices = _transform_points(vertices, _quat_to_matrix3(pose["rotation"]), pose["position"])
+            verts[name] = world_vertices
+            boxes[name] = (world_vertices.min(axis=0), world_vertices.max(axis=0))
+
+        for a_name, b_name in pairs:
+            if not _aabb_overlap(boxes[a_name], boxes[b_name]):
+                continue
+            manifold_a = fixed_manifold.get(a_name)
+            if manifold_a is None:
+                faces = welded[a_name][1]
+                manifold_a = Manifold(Mesh(np.asarray(verts[a_name], dtype=np.float32), np.asarray(faces, dtype=np.uint32)))
+            manifold_b = fixed_manifold.get(b_name)
+            if manifold_b is None:
+                faces = welded[b_name][1]
+                manifold_b = Manifold(Mesh(np.asarray(verts[b_name], dtype=np.float32), np.asarray(faces, dtype=np.uint32)))
+            intersection = manifold_a ^ manifold_b
+            volume = 0.0 if intersection.is_empty() else float(intersection.volume())
+            if volume > 1e-3:
+                interference_count += 1
+                time_sec = sample_times[k]
+                interference_events.append(
+                    {
+                        "step": (k + 1) * sample_every,
+                        "timeSec": time_sec,
+                        "partA": a_name,
+                        "partB": b_name,
+                        "volumeMm3": round(volume, 3),
+                    }
+                )
+                if first_interference_sample < 0:
+                    first_interference_sample = k
+    interference_events.sort(key=lambda event: (event["step"], -event["volumeMm3"]))
+
+    # ---- followers: every part that is not fixed and not the drive body ----
+    followers = {}
+    followers_detail = {}
+    sample_dt = sample_every * dt
+    record_set = set(scenario.get("recordParts") or [])
+    for part in scenario["parts"]:
+        name = part["name"]
+        if part["bodyType"] == "fixed":
+            continue
+        if drive and drive.get("body") == name:
+            continue
+        ranges = [travel_hi[name][axis] - travel_lo[name][axis] for axis in range(3)]
+        axis_index = 0 if ranges[0] >= ranges[1] and ranges[0] >= ranges[2] else (1 if ranges[1] >= ranges[2] else 2)
+        axis_name = ("x", "y", "z")[axis_index]
+        values = [round(poses[name]["position"][axis_index], 4) for poses in sample_poses]
+        followers[name] = {
+            "travelMm": round(ranges[axis_index], 3),
+            "axis": axis_name,
+            "periodSec": _period_from_samples(values, sample_dt),
+        }
+        if name in record_set:
+            followers_detail[name] = {"t": [round(t, 4) for t in sample_times], "vals": values, "axis": axis_name}
+
+    # ---- joint drift (final pose) ----
+    max_joint_drift = 0.0
+    joint_violations = []
+    for joint in scenario["joints"]:
+        a = bodies[joint["bodyA"]]
+        b = bodies[joint["bodyB"]]
+        wa = _world_anchor(world, a, joint["anchorA"])
+        wb = _world_anchor(world, b, joint["anchorB"])
+        drift = math.hypot(wa[0] - wb[0], wa[1] - wb[1], wa[2] - wb[2])
+        if joint["type"] == "prismatic":
+            axis = _norm3(joint["axis"])
+            delta = [wa[i] - wb[i] for i in range(3)]
+            along = sum(delta[i] * axis[i] for i in range(3))
+            drift = math.hypot(*[delta[i] - along * axis[i] for i in range(3)])
+        if drift > max_joint_drift:
+            max_joint_drift = drift
+        if drift > 2:
+            joint_violations.append(f"{joint['bodyA']}↔{joint['bodyB']}: anchor drift {drift:.2f}mm")
+
+    # ---- keyframes: initial + crank milestones + first interference + final ----
+    keyframes = []
+    initial = {
+        part["name"]: {"position": base_pose[part["name"]]["p"], "rotation": list(base_pose[part["name"]]["q"])}
+        for part in scenario["parts"]
+    }
+    keyframes.append({"step": 0, "timeSec": 0, "label": "crank0", "poses": initial})
+    for step, milestone in sorted(milestone_poses.items()):
+        keyframes.append({"step": step, "timeSec": round(step * dt, 4), "label": milestone["label"], "poses": milestone["poses"]})
+    if first_interference_sample >= 0:
+        k = first_interference_sample
+        keyframes.append(
+            {
+                "step": (k + 1) * sample_every,
+                "timeSec": round(sample_times[k], 4),
+                "label": "interference",
+                "poses": sample_poses[k],
+            }
+        )
+    if sample_poses:
+        k = len(sample_poses) - 1
+        keyframes.append({"step": steps, "timeSec": round(sample_times[k], 4), "label": "final", "poses": sample_poses[k]})
+
+    clean = interference_count == 0 and not diverged and max_joint_drift <= 2
+
+    trajectory_frames = [initial] + sample_poses
+    trajectory = {
+        "times": [round(t, 4) for t in [0.0] + sample_times],
+        "parts": [
+            {
+                "name": part["name"],
+                "bodyType": part["bodyType"],
+                "frames": [
+                    [
+                        frame[part["name"]]["position"][0],
+                        frame[part["name"]]["position"][1],
+                        frame[part["name"]]["position"][2],
+                        frame[part["name"]]["rotation"][0],
+                        frame[part["name"]]["rotation"][1],
+                        frame[part["name"]]["rotation"][2],
+                        frame[part["name"]]["rotation"][3],
+                    ]
+                    for frame in trajectory_frames
+                ],
+            }
+            for part in scenario["parts"]
+        ],
+        "events": [
+            {"timeSec": event["timeSec"], "label": f"干涉:{event['partA']}↔{event['partB']} {event['volumeMm3']:.1f}mm³"}
+            for event in interference_events[:20]
+        ],
+    }
+
+    return {
+        "overallStatus": "pass" if clean else "check",
+        "metrics": {
+            "driveOmegaRadPerSec": float(drive["omegaRadPerSec"]) if drive and drive.get("omegaRadPerSec") is not None else None,
+            "cyclePeriodSec": round(cycle_period, 4) if omega > 0 else None,
+            "followers": followers,
+            "interferenceCount": interference_count,
+            "interferenceEvents": interference_events[:20],
+            "maxJointDriftMm": round(max_joint_drift, 4),
+            "jointViolations": joint_violations,
+            "diverged": diverged,
+        },
+        "followersDetail": followers_detail,
+        "keyframes": keyframes[:8],
+        "trajectory": trajectory,
+        "stepsRun": steps,
+        "durationSec": round(total_sec, 3),
+    }
+
+
+def _world_anchor(world, handle, local) -> list:
+    body = world.rigid_bodies[handle]
+    matrix = _quat_to_matrix3(body.rotation.quaternion)
+    translation = body.translation
+    return [
+        float(translation[i]) + matrix[i][0] * float(local[0]) + matrix[i][1] * float(local[1]) + matrix[i][2] * float(local[2])
+        for i in range(3)
+    ]
 
 
 def op_simulate_physics(params: dict) -> dict:
@@ -899,7 +1369,7 @@ def op_simulate_physics(params: dict) -> dict:
             builder = R.RigidBody.dynamic().can_sleep(False).ccd_enabled(True)
         builder = builder.translation(tuple(float(v) for v in part["position"]))
         if part.get("rotation"):
-            builder = builder.rotation(R.Rotation3.from_quaternion(_euler_to_quat(part["rotation"])))
+            builder = builder.rotation(_scaled_axis_of_euler(part["rotation"]))
         body = world.add_body(builder)
         raw = _parse_stl_raw(part["path"])
         if part["bodyType"] == "dynamic":
@@ -1394,6 +1864,7 @@ HANDLERS = {
     "scad_parse_output": op_scad_parse_output,
     "scad_parse_params": op_scad_parse_params,
     "simulate_physics": op_simulate_physics,
+    "simulate_motion": op_simulate_motion,
     "crash": op_crash,
 }
 
