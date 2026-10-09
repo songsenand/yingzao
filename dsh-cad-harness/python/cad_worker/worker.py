@@ -46,6 +46,7 @@ drives:
     measure_part        whole-part ground truth (volume/area/centroid/genus)
     check_printability  wall thickness + overhang screen
     mpm_create/step/state/destroy   MLS-MPM fluid kernel (stateful, keyed by id)
+    fluid_run           drive the fluid scenario + SDF projection + audit
     crash           raises on purpose, to prove the traceback path
 
 This worker is deliberately SINGLE-THREADED. The acceptance measures that two
@@ -92,6 +93,7 @@ OPS = [
     "mpm_step",
     "mpm_state",
     "mpm_destroy",
+    "fluid_run",
     "crash",
 ]
 
@@ -1112,6 +1114,9 @@ def _mpm_taps(base, pos, cells):
     dx = [(base[:, 0] + i + 0.5) - pos[:, 0] for i in range(3)]
     dy = [(base[:, 1] + j + 0.5) - pos[:, 1] for j in range(3)]
     dz = [(base[:, 2] + k + 0.5) - pos[:, 2] for k in range(3)]
+    # Per-axis weights are computed ONCE (three per axis), not once per 27 taps:
+    # the naive version recomputed the same three arrays 9 times each.
+    weights = [axis_weights(pos[:, axis]) for axis in range(3)]
     taps = []
     for i in range(3):
         for j in range(3):
@@ -1120,11 +1125,23 @@ def _mpm_taps(base, pos, cells):
                 taps.append(
                     {
                         "cell": cell,
-                        "weight": weights_of(base, pos, i, j, k),
+                        "weight": weights[0][i] * weights[1][j] * weights[2][k],
                         "dist": np.stack([dx[i], dy[j], dz[k]], axis=1),
                     }
                 )
     return taps
+
+
+def axis_weights(coord):
+    """The three quadratic B-spline weights along one axis (0.5(0.5-f)², 0.75-f², 0.5(0.5+f)²)."""
+    import numpy as np
+
+    frac = coord - np.floor(coord) - 0.5
+    return (
+        0.5 * (0.5 - frac) ** 2,
+        0.75 - frac ** 2,
+        0.5 * (0.5 + frac) ** 2,
+    )
 
 
 def weights_of(base, pos, i, j, k):
@@ -1161,12 +1178,16 @@ def _mpm_step_once(world) -> None:
     # --- P2G pass 1: mass + APIC momentum ---
     grid_mass = np.zeros(total, dtype=np.float64)
     grid_mom = np.zeros((total, 3), dtype=np.float64)
+    # One bincount per tap for all three axes at once (index = cell*3 + axis):
+    # 27 calls per step instead of 81, and it was the dominant cost.
+    axis_offsets = np.arange(3, dtype=np.int64)
     for tap in taps:
         cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
         q = np.einsum("pab,pb->pa", C, dist)
         grid_mass += np.bincount(cell, weights=weight, minlength=total)
-        for axis in range(3):
-            grid_mom[:, axis] += np.bincount(cell, weights=weight * (vel[:, axis] + q[:, axis]), minlength=total)
+        contribution = weight[:, None] * (vel + q)
+        flat = np.bincount((cell[:, None] * 3 + axis_offsets).ravel(), weights=contribution.ravel(), minlength=total * 3)
+        grid_mom += flat.reshape(total, 3)
 
     # --- P2G pass 2: stress (weakly-compressible EOS + viscosity), vectorized ---
     density = np.zeros(active, dtype=np.float64)
@@ -1186,8 +1207,8 @@ def _mpm_step_once(world) -> None:
     for tap in taps:
         cell, weight, dist = tap["cell"], tap["weight"], tap["dist"]
         momentum = np.einsum("pab,pb->pa", stress, dist) * weight[:, None]
-        for axis in range(3):
-            grid_mom[:, axis] += np.bincount(cell, weights=momentum[:, axis], minlength=total)
+        flat = np.bincount((cell[:, None] * 3 + axis_offsets).ravel(), weights=momentum.ravel(), minlength=total * 3)
+        grid_mom += flat.reshape(total, 3)
 
     # --- grid update: v = momentum/mass + boundary conditions ---
     mass_safe = np.where(grid_mass > 0, grid_mass, 1.0)
@@ -1226,9 +1247,10 @@ def _mpm_step_once(world) -> None:
             # near-wall particles get dragged by the zeros (artificial boundary layer).
             solid = mask_flat[cells_of_tap]
             weight = np.where(solid, 0.0, weight)
-        gathered += weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax)
+        contribution = weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax)
+        gathered += contribution
         wsum += weight
-        B += (weight[:, None] * np.clip(flat_vel[cells_of_tap], -vmax, vmax))[:, :, None] * tap["dist"][:, None, :]
+        B += contribution[:, :, None] * tap["dist"][:, None, :]
 
     scale = np.where(wsum > 0.5, 1.0 / np.where(wsum == 0.0, 1.0, wsum), 1.0)
     gathered *= scale[:, None]
@@ -1362,6 +1384,304 @@ def op_mpm_destroy(params: dict) -> dict:
     existed = world is not None
     _mpm_drop(params["worldId"])
     return {"destroyed": existed, "worlds": len(_MpmWorlds)}
+
+
+# ---------------------------------------------------------------------------
+# The fluid run: scenario drive + SDF projection + the conservation audit.
+#
+# This is the `runFluid` of src/host/fluid.ts minus the two halves that need the
+# MESH rather than the field: building the SDF (buildSdfFromStl) and choosing seed
+# positions (seedPositions). Those stay in TypeScript for now and hand their result
+# over as FILES, because both are big: the SDF field is one float per cell and the
+# seeds are three doubles per particle (13.5 MB at the 564k-particle acceptance
+# case) — the "big payloads go by file" rule, and also Q1=B's "the file is the
+# contract".
+#
+# File layout (written by TS, read here) — one header, then flat arrays:
+#   sdf :  magic "CADFSDF1" | int32 nx,ny,nz | float64 dx | float64 ox,oy,oz
+#          | float32 sdf[n] | uint8 solidMask[n] | uint8 solidNormal[n]
+#   seed:  magic "CADFSEED" | int32 count | float64 xyz[3*count]
+#   snap:  magic "CADFSNAP" | int32 count | { int32 step, float64 timeSec,
+#          int32 n, float32 posMm[3n], float32 speed[n] } * count
+# ---------------------------------------------------------------------------
+
+
+def _read_fluid_sdf(path: str) -> dict:
+    import numpy as np
+
+    with open(path, "rb") as handle:
+        magic = handle.read(8)
+        if magic != b"CADFSDF1":
+            raise ValueError(f"bad sdf file magic: {magic!r}")
+        nx, ny, nz = np.fromfile(handle, dtype="<i4", count=3)
+        dx = float(np.fromfile(handle, dtype="<f8", count=1)[0])
+        origin = [float(v) for v in np.fromfile(handle, dtype="<f8", count=3)]
+        total = int(nx) * int(ny) * int(nz)
+        sdf = np.fromfile(handle, dtype="<f4", count=total)
+        mask = np.fromfile(handle, dtype="<u1", count=total)
+        normal = np.fromfile(handle, dtype="<u1", count=total)
+    return {
+        "cells": [int(nx), int(ny), int(nz)],
+        "dxMm": dx,
+        "originMm": origin,
+        "sdf": sdf.astype(np.float64),
+        "solidMask": mask,
+        "solidNormal": normal,
+    }
+
+
+def _read_fluid_seeds(path: str):
+    import numpy as np
+
+    with open(path, "rb") as handle:
+        magic = handle.read(8)
+        if magic != b"CADFSEED":
+            raise ValueError(f"bad seed file magic: {magic!r}")
+        count = int(np.fromfile(handle, dtype="<i4", count=1)[0])
+        values = np.fromfile(handle, dtype="<f8", count=3 * count)
+    return values.reshape(-1, 3)
+
+
+def _sdf_at(field: dict, x: float, y: float, z: float) -> float:
+    """Trilinear sample of the grid SDF — the TS `sdfAt`, clamp-and-lerp for clamp-and-lerp."""
+    nx, ny, nz = field["cells"]
+    ox, oy, oz = field["originMm"]
+    dx = field["dxMm"]
+    sdf = field["sdf"]
+
+    gx = min(nx - 1, max(0.0, (x - ox) / dx))
+    gy = min(ny - 1, max(0.0, (y - oy) / dx))
+    gz = min(nz - 1, max(0.0, (z - oz) / dx))
+    x0, y0, z0 = int(gx), int(gy), int(gz)
+    fx, fy, fz = gx - x0, gy - y0, gz - z0
+    x1, y1, z1 = min(x0 + 1, nx - 1), min(y0 + 1, ny - 1), min(z0 + 1, nz - 1)
+
+    def c(xx, yy, zz):
+        return float(sdf[(xx * ny + yy) * nz + zz])
+
+    def lerp(a, b, t):
+        return a + (b - a) * t
+
+    v00 = lerp(c(x0, y0, z0), c(x1, y0, z0), fx)
+    v10 = lerp(c(x0, y1, z0), c(x1, y1, z0), fx)
+    v01 = lerp(c(x0, y0, z1), c(x1, y0, z1), fx)
+    v11 = lerp(c(x0, y1, z1), c(x1, y1, z1), fx)
+    return lerp(lerp(v00, v10, fy), lerp(v01, v11, fy), fz)
+
+
+def _sdf_at_many(field: dict, points):
+    """Trilinear SDF samples for many points at once — the same clamp-and-lerp as
+    `_sdf_at`, vectorized. The scalar version is kept for single lookups; the run
+    loop needs this one (a per-particle Python loop over 1200 steps does not fit in
+    any timeout)."""
+    import numpy as np
+
+    nx, ny, nz = field["cells"]
+    dx = field["dxMm"]
+    origin = np.asarray(field["originMm"], dtype=np.float64)
+    sdf = field["sdf"]
+    maximum = np.array([nx - 1, ny - 1, nz - 1], dtype=np.float64)
+    grid = np.clip((np.asarray(points, dtype=np.float64) - origin) / dx, 0.0, maximum)
+    low = np.floor(grid).astype(np.int64)
+    frac = grid - low
+    high = np.minimum(low + 1, maximum.astype(np.int64))
+
+    def c(xx, yy, zz):
+        return sdf[(xx * ny + yy) * nz + zz]
+
+    x0, y0, z0 = low[:, 0], low[:, 1], low[:, 2]
+    x1, y1, z1 = high[:, 0], high[:, 1], high[:, 2]
+    fx, fy, fz = frac[:, 0], frac[:, 1], frac[:, 2]
+    c000, c100 = c(x0, y0, z0), c(x1, y0, z0)
+    c010, c110 = c(x0, y1, z0), c(x1, y1, z0)
+    c001, c101 = c(x0, y0, z1), c(x1, y0, z1)
+    c011, c111 = c(x0, y1, z1), c(x1, y1, z1)
+    v00 = c000 + (c100 - c000) * fx
+    v10 = c010 + (c110 - c010) * fx
+    v01 = c001 + (c101 - c001) * fx
+    v11 = c011 + (c111 - c011) * fx
+    return (v00 + (v10 - v00) * fy) + ((v01 + (v11 - v01) * fy) - (v00 + (v10 - v00) * fy)) * fz
+
+
+def op_fluid_run(params: dict) -> dict:
+    """Drive the MPM world through the scenario and audit the result.
+
+    Everything the TS `runFluid` did BETWEEN the SDF and the report happens here:
+    calibration + EOS/damping scaling, the near-surface projection, outlet timing,
+    section-averaged velocity, snapshots and the conservation metrics.
+    """
+    import numpy as np
+
+    sdf = _read_fluid_sdf(params["sdfPath"])
+    seeds = _read_fluid_seeds(params["seedsPath"])
+    config = params["config"]
+    steps = int(params.get("steps") or 1200)
+    snapshot_count = int(params.get("snapshotCount") or 4)
+    snapshot_every = int(params.get("snapshotEvery") or max(1, steps // (snapshot_count + 1)))
+    section_count = int(params.get("sectionCount") or 20)
+    flow_axis = int(params.get("flowAxis") or 0)
+    dx_mm = float(config["dxMm"])
+    origin = [float(v) for v in sdf["originMm"]]
+    penetration_tol = float(params.get("penetrationTolMm") or 0.3)
+    stiffness0 = float(params.get("stiffness0") or 50)
+    viscosity0 = float(params.get("viscosity0") or 0.1)
+    rest0 = float(params.get("restDensity0") or 1.5)
+
+    count = int(config["particleCount"])
+    created = op_mpm_create(
+        {
+            "config": config,
+            "seeds": [float(v) for v in seeds.reshape(-1)],
+        }
+    )
+    world = _MpmWorlds[created["worldId"]]
+    world["activeN"] = count
+    rest_density = _mpm_calibrate(world)
+    world["restDensity"] = rest_density
+    world["config"]["stiffness"] = stiffness0 * (rest_density / rest0)
+    world["config"]["viscosity"] = viscosity0 * (rest_density / rest0)
+
+    # near-surface mask: only particles in these cells need SDF projection
+    nx, ny, nz = sdf["cells"]
+    grid_cells = sdf["sdf"].reshape(nx, ny, nz)
+    band = 2.5 * dx_mm
+    near_surface = (grid_cells > -band) & (grid_cells < band)
+
+    def project_particles() -> None:
+        active = world["activeN"]
+        if active == 0:
+            return
+        pos = world["pos"][:active]
+        vel = world["vel"][:active]
+        cells = np.clip(np.floor(pos).astype(np.int64), 0, np.array([nx - 1, ny - 1, nz - 1]))
+        candidates = near_surface[cells[:, 0], cells[:, 1], cells[:, 2]]
+        if not candidates.any():
+            return
+        index = np.flatnonzero(candidates)
+        tol = 0.05
+        origin_array = np.asarray(origin, dtype=np.float64)
+        world_mm = pos[index] * dx_mm + origin_array[None, :]
+        distances = _sdf_at_many(sdf, world_mm)
+        inside = distances < -tol
+        if not inside.any():
+            return
+        index = index[inside]
+        world_mm = world_mm[inside]
+        distances = distances[inside]
+        # outward gradient via central differences on the grid SDF, sampled exactly
+        # where the TS version samples it (sdfAt at ±dx), vectorized
+        offset = np.zeros((1, 3), dtype=np.float64)
+        offset[0, 0] = dx_mm
+        gx = _sdf_at_many(sdf, world_mm + offset) - _sdf_at_many(sdf, world_mm - offset)
+        offset[0, 0] = 0.0
+        offset[0, 1] = dx_mm
+        gy = _sdf_at_many(sdf, world_mm + offset) - _sdf_at_many(sdf, world_mm - offset)
+        offset[0, 1] = 0.0
+        offset[0, 2] = dx_mm
+        gz = _sdf_at_many(sdf, world_mm + offset) - _sdf_at_many(sdf, world_mm - offset)
+        lengths = np.where((magnitude := np.sqrt(gx * gx + gy * gy + gz * gz)) > 0, magnitude, 1.0)
+        normals = np.stack([gx / lengths, gy / lengths, gz / lengths], axis=1)
+        push = (-distances + 0.15 * dx_mm) / dx_mm
+        pos[index] = pos[index] + normals * push[:, None]
+        # kill the into-wall velocity component (free slip)
+        vn = np.einsum("pa,pa->p", vel[index], normals)
+        drag = vn < 0
+        if drag.any():
+            target = index[drag]
+            vel[target] = vel[target] - normals[drag] * vn[drag][:, None]
+        world["pos"][:active] = pos
+        world["vel"][:active] = vel
+
+    time_to_outlet = None
+    escaped_before = 0
+    has_sections = bool(params.get("hasSections"))
+    lo = float(params.get("sectionLoMm") or 0.0)
+    hi = float(params.get("sectionHiMm") or 0.0)
+    section_vel_sum = np.zeros(section_count, dtype=np.float64)
+    section_vel_n = np.zeros(section_count, dtype=np.float64)
+    snapshots = []
+    snapshot_steps = []
+
+    for step in range(1, steps + 1):
+        _mpm_step_once(world)
+        project_particles()
+        if time_to_outlet is None and world["escaped"] > escaped_before:
+            time_to_outlet = step
+        escaped_before = world["escaped"]
+
+        active = world["activeN"]
+        if has_sections and active:
+            pos = world["pos"][:active]
+            vel = world["vel"][:active]
+            along = pos[:, flow_axis] * dx_mm + origin[flow_axis]
+            bins = np.floor((along - lo) / ((hi - lo) / section_count)).astype(np.int64)
+            valid = (bins >= 0) & (bins < section_count)
+            if valid.any():
+                np.add.at(section_vel_sum, bins[valid], vel[valid, flow_axis] * dx_mm)
+                np.add.at(section_vel_n, bins[valid], 1.0)
+
+        if step % snapshot_every == 0 and len(snapshots) < snapshot_count:
+            active = world["activeN"]
+            pos_mm = (world["pos"][:active] * dx_mm + np.asarray(origin)[None, :]).astype(np.float32)
+            speed = (np.linalg.norm(world["vel"][:active], axis=1) * dx_mm).astype(np.float32)
+            snapshots.append((step, round(step * float(config["dt"]), 3), pos_mm, speed))
+            snapshot_steps.append(step)
+
+    # ---- metrics: penetration + speed stats over the final state ----
+    active = world["activeN"]
+    penetration_count = 0
+    max_v = 0.0
+    sum_v = 0.0
+    if active:
+        pos_mm = world["pos"][:active] * dx_mm + np.asarray(origin)[None, :]
+        penetration_count = int((_sdf_at_many(sdf, pos_mm) < -penetration_tol).sum())
+        speeds = np.linalg.norm(world["vel"][:active], axis=1) * dx_mm
+        max_v = float(speeds.max())
+        sum_v = float(speeds.sum())
+
+    section_avg = []
+    if params.get("hasSections") or params.get("inlet"):
+        for i in range(section_count):
+            section_avg.append(
+                {
+                    "positionMm": round(lo + ((hi - lo) * (i + 0.5)) / section_count, 1),
+                    "velocityMmPerSec": round(float(section_vel_sum[i] / section_vel_n[i]) if section_vel_n[i] else 0.0, 1),
+                }
+            )
+
+    count0 = count
+    mass_error = abs(count0 - world["escaped"] - active) / count0 if count0 else 0.0
+    arrival = (world["escaped"] / count0) if count0 else 0.0
+
+    # snapshots go to a file (a 564k-particle snapshot is 6.8 MB)
+    with open(params["snapshotsPath"], "wb") as handle:
+        handle.write(b"CADFSNAP")
+        np.asarray([len(snapshots)], dtype="<i4").tofile(handle)
+        for step, time_sec, pos_mm, speed in snapshots:
+            np.asarray([step], dtype="<i4").tofile(handle)
+            np.asarray([time_sec], dtype="<f8").tofile(handle)
+            np.asarray([pos_mm.shape[0]], dtype="<i4").tofile(handle)
+            pos_mm.astype("<f4").tofile(handle)
+            speed.astype("<f4").tofile(handle)
+
+    result = {
+        "particleCount0": count0,
+        "restDensity": rest_density,
+        "escaped": world["escaped"],
+        "active": active,
+        "massConservationError": round(mass_error, 6),
+        "penetrationCount": penetration_count,
+        "outletArrivalRatio": round(arrival, 4),
+        "timeToOutletSteps": time_to_outlet,
+        "sectionAvgVelocity": section_avg,
+        "maxVelocityMmPerSec": round(max_v, 1),
+        "avgVelocityMmPerSec": round(sum_v / max(1, active), 1),
+        "diverged": bool(world["nonFinite"] > 0),
+        "stepsRun": steps,
+        "snapshotSteps": snapshot_steps,
+    }
+    op_mpm_destroy({"worldId": created["worldId"]})
+    return result
 
 
 def op_check_printability(params: dict) -> dict:
@@ -2487,6 +2807,7 @@ HANDLERS = {
     "mpm_step": op_mpm_step,
     "mpm_state": op_mpm_state,
     "mpm_destroy": op_mpm_destroy,
+    "fluid_run": op_fluid_run,
     "crash": op_crash,
 }
 

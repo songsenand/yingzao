@@ -4,6 +4,10 @@
 // Unit bridge: the solver runs in cell units (positions = cells, velocities =
 // cells/s); mm enter/exit only via dxMm: v_cells = v_mm / dxMm.
 
+import { randomUUID } from 'node:crypto';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { createMpmWorld, type MpmWorld, type MpmWorldConfig } from './mpm.ts';
 import { buildSdfFromStl, sdfAt, solidMaskAt, type SdfField } from './sdf.ts';
 import { parseBinaryStl, boundingBox } from './mesh.ts';
@@ -152,7 +156,246 @@ function seedPositions(
   return { seeds: out, rejectedWall, rejectedSolid };
 }
 
-export async function runFluid(scenario: FluidScenario): Promise<{
+/** Write the grid SDF + mask + normal as one binary file (see worker.py's header). */
+function writeSdfFile(path: string, sdf: SdfField): void {
+  const [nx, ny, nz] = sdf.cells;
+  const total = nx * ny * nz;
+  const header = Buffer.alloc(8 + 12 + 32);
+  header.write('CADFSDF1', 0, 'latin1');
+  header.writeInt32LE(nx, 8);
+  header.writeInt32LE(ny, 12);
+  header.writeInt32LE(nz, 16);
+  // header = magic(8) + int32 nx,ny,nz(12) + float64 dx + origin[3] (32) = 52 bytes
+  header.writeDoubleLE(sdf.dxMm, 20);
+  header.writeDoubleLE(sdf.originMm[0], 28);
+  header.writeDoubleLE(sdf.originMm[1], 36);
+  header.writeDoubleLE(sdf.originMm[2], 44);
+  const body = Buffer.alloc(total * 4 + total + total);
+  Buffer.from(sdf.sdf.buffer, sdf.sdf.byteOffset, total * 4).copy(body, 0);
+  Buffer.from(sdf.solidMask.buffer, sdf.solidMask.byteOffset, total).copy(body, total * 4);
+  Buffer.from(sdf.solidNormal.buffer, sdf.solidNormal.byteOffset, total).copy(body, total * 5);
+  writeFileSync(path, Buffer.concat([header, body]));
+}
+
+/** Write the seed lattice as one binary file: count + xyz doubles. */
+function writeSeedFile(path: string, seeds: [number, number, number][]): void {
+  const header = Buffer.alloc(8 + 4);
+  header.write('CADFSEED', 0, 'latin1');
+  header.writeInt32LE(seeds.length, 8);
+  const body = Buffer.alloc(seeds.length * 24);
+  seeds.forEach((seed, i) => {
+    body.writeDoubleLE(seed[0], i * 24);
+    body.writeDoubleLE(seed[1], i * 24 + 8);
+    body.writeDoubleLE(seed[2], i * 24 + 16);
+  });
+  writeFileSync(path, Buffer.concat([header, body]));
+}
+
+/** Read the snapshot file the worker wrote: step, time, positions (mm), speeds. */
+function readSnapshotFile(path: string): FluidSnapshot[] {
+  const data = readFileSync(path);
+  if (data.subarray(0, 8).toString('latin1') !== 'CADFSNAP') throw new Error('bad snapshot file magic');
+  let offset = 8;
+  const count = data.readInt32LE(offset); offset += 4;
+  const snapshots: FluidSnapshot[] = [];
+  for (let s = 0; s < count; s++) {
+    const step = data.readInt32LE(offset); offset += 4;
+    const timeSec = data.readDoubleLE(offset); offset += 8;
+    const n = data.readInt32LE(offset); offset += 4;
+    const posMm = new Float32Array(data.buffer.slice(data.byteOffset + offset, data.byteOffset + offset + n * 12));
+    offset += n * 12;
+    const speedMmPerSec = new Float32Array(data.buffer.slice(data.byteOffset + offset, data.byteOffset + n * 4));
+    offset += n * 4;
+    snapshots.push({ step, timeSec, posMm, speedMmPerSec });
+  }
+  return snapshots;
+}
+
+/**
+ * Run a fluid scenario (batch 4: the MPM kernel AND the run loop are the Python
+ * worker's; the matrix records that this is the one place where Python is
+ * deliberately slower — 2.5–4× measured — and that the kernel is marked for a
+ * later Rust/C implementation, whose native ceiling measured 3.7–4.6× FASTER than
+ * the TS kernel).
+ */
+export async function runFluid(scenario: FluidScenario): Promise<{ report: FluidReport; sdf: SdfField }> {
+  // ---------------------------------------------------------------------------
+  // OPEN DEFECT (2026-10-12): the Python run is NOT canonical yet.
+  //
+  // The KERNEL is verified exact against the TS kernel (accept-mpm-parity: 1e-6
+  // relative on aggregates, per-particle drift 4.9e-6 mm after 40 steps; a pure-kernel
+  // check at 2k/8k/20k particles for 200 steps matches to the last printed digit at
+  // every density). An earlier version of THIS loop matched case 1 (11.8k particles:
+  // arrival 0.705 vs TS 0.72) — but at the 50k-particle scale it transports far less:
+  // arrival 0.098 where the TS canonical gives 0.8643, and the 90° elbow turns 0.12
+  // where TS turns 0.63. The invariants hold (penetration 0, conservation 0, no
+  // divergence), so this is a systematic transport difference, not chaotic drift —
+  // and the only piece of the loop the kernel parity does NOT cover is the SDF
+  // projection. Until that is bisected and fixed, the TS implementation stays
+  // canonical and the Python path is opt-in:
+  //
+  //     DSH_CAD_FLUID_PYTHON=1
+  //
+  // The tool must not silently ship a wrong flow field.
+  // ---------------------------------------------------------------------------
+  if (process.env.DSH_CAD_FLUID_PYTHON !== '1') {
+    const legacy = await runFluidInTs(scenario);
+    return { report: legacy.report, sdf: legacy.sdf };
+  }
+  const t0 = performance.now();
+  const sdf = await buildSdfFromStl(scenario.pipeStl, {
+    cells: scenario.gridCells,
+    dxMm: scenario.dxMm,
+    originMm: scenario.gridOriginMm,
+  });
+
+  const flowAxis = scenario.inlet?.axis ?? scenario.outletAxis ?? 0;
+  const escapeAxis = scenario.outletAxis ?? scenario.inlet?.axis ?? flowAxis;
+  const ppc = scenario.particlesPerCell ?? 6;
+  const seeded = seedPositions(sdf, scenario.fluidRegionMm, ppc);
+  const seeds = seeded.seeds;
+  const count = scenario.particleCount ?? seeds.length;
+
+  const speedCells = (scenario.inlet?.velocityMmPerSec ?? 100) / scenario.dxMm;
+  const bandCells: [number, number] | undefined = scenario.inlet
+    ? [
+        (scenario.inlet.bandMm[0] - scenario.gridOriginMm[scenario.inlet.axis]) / scenario.dxMm,
+        (scenario.inlet.bandMm[1] - scenario.gridOriginMm[scenario.inlet.axis]) / scenario.dxMm,
+      ]
+    : undefined;
+  const escapeAt = scenario.outletPlaneMm !== undefined
+    ? (scenario.outletPlaneMm - scenario.gridOriginMm[escapeAxis]) / scenario.dxMm
+    : undefined;
+  const grav = scenario.gravityMmPerSec2 ?? [0, 0, -98.1];
+  const gravityCells: [number, number, number] = [grav[0] / scenario.dxMm, grav[1] / scenario.dxMm, grav[2] / scenario.dxMm];
+
+  const steps = scenario.steps ?? 1200;
+  const snapshotCount = scenario.snapshotCount ?? 4;
+  const snapshotEvery = Math.max(1, Math.floor(steps / (snapshotCount + 1)));
+
+  const scratch = await workerScratchDir();
+  const sdfPath = join(scratch, `fluid-sdf-${randomUUID()}.bin`);
+  const seedsPath = join(scratch, `fluid-seeds-${randomUUID()}.bin`);
+  const snapshotsPath = join(scratch, `fluid-snap-${randomUUID()}.bin`);
+  writeSdfFile(sdfPath, sdf);
+  writeSeedFile(seedsPath, seeds);
+
+  const hasSections = scenario.outletPlaneMm !== undefined;
+  const lo = scenario.fluidRegionMm.min[flowAxis]!;
+  const hi = scenario.outletPlaneMm ?? lo + 1;
+
+  let solved: {
+    particleCount0: number; escaped: number; active: number; massConservationError: number;
+    penetrationCount: number; outletArrivalRatio: number; timeToOutletSteps: number | null;
+    sectionAvgVelocity: { positionMm: number; velocityMmPerSec: number }[];
+    maxVelocityMmPerSec: number; avgVelocityMmPerSec: number; diverged: boolean; stepsRun: number;
+  };
+  try {
+    const worker = await ensurePythonWorker();
+    // The run is long by nature (thousands of steps x thousands of particles), so it
+    // gets a long worker budget; the TOOL's own timeoutMs is what bounds a real call.
+    solved = await worker.request('fluid_run', {
+      sdfPath,
+      seedsPath,
+      snapshotsPath,
+      config: {
+        cells: scenario.gridCells,
+        dxMm: scenario.dxMm,
+        particleCount: count,
+        gravity: gravityCells,
+        dt: DT,
+        vmax: 2.4 * speedCells,
+        ...(scenario.inlet ? { inlet: { axis: scenario.inlet.axis, band: bandCells, speed: speedCells } } : {}),
+        ...(escapeAt !== undefined ? { escape: { axis: escapeAxis, at: escapeAt } } : {}),
+      },
+      steps,
+      snapshotCount,
+      snapshotEvery,
+      flowAxis,
+      hasSections,
+      sectionLoMm: lo,
+      sectionHiMm: hi,
+      penetrationTolMm: PENETRATION_TOL_MM,
+      stiffness0: K0,
+      viscosity0: MU0,
+      restDensity0: RD0,
+      inlet: Boolean(scenario.inlet),
+    }, { timeoutMs: 1_800_000 });
+  } finally {
+    for (const path of [sdfPath, seedsPath]) rmSync(path, { force: true });
+  }
+  const snapshots = readSnapshotFile(snapshotsPath);
+  rmSync(snapshotsPath, { force: true });
+
+  // Seed-lattice accounting and its warnings are the CALLER's business: they are
+  // about the seeds this side chose, not about the run.
+  const count0 = count;
+  const stacksPerSeed = +(count / Math.max(1, seeds.length)).toFixed(2);
+  const warnings: string[] = [];
+  if (seeds.length === 0) {
+    warnings.push('no seed positions survived the wall/solid rejection — nothing to simulate');
+  }
+  if (stacksPerSeed > 1.5) {
+    warnings.push(
+      `particleCount ${count} exceeds the ${seeds.length} seed positions: particles STACK ` +
+      `${stacksPerSeed}-deep on the same spots instead of densifying the lattice. ` +
+      `The escaped fraction is unaffected (duplicates share a fate), but the field is far ` +
+      `coarser than particleCount0 suggests — raise particlesPerCell (or widen fluidRegionMm) ` +
+      `for a real denser lattice.`,
+    );
+  }
+  if (seeded.rejectedSolid > 0 && seeds.length + seeded.rejectedSolid > 0
+      && seeded.rejectedSolid / (seeds.length + seeded.rejectedSolid) > 0.5) {
+    warnings.push(
+      `${(100 * seeded.rejectedSolid / (seeds.length + seeded.rejectedSolid)).toFixed(0)}% of the seed region ` +
+      `is solid metal — the region is derived from the bounding box, so a thick-walled part gives a ` +
+      `region much larger than its cavity. Those points are rejected, but the lattice is coarse where it counts.`,
+    );
+  }
+  const hasEscape = scenario.outletPlaneMm !== undefined;
+  const clean = !solved.diverged && solved.penetrationCount === 0 && solved.massConservationError < 1e-6
+    && (!hasEscape || solved.outletArrivalRatio >= 0.5);
+
+  const report: FluidReport = {
+    overallStatus: clean ? 'pass' : 'check',
+    warnings,
+    metrics: {
+      particleCount0: count0,
+      seedStats: {
+        accepted: seeds.length,
+        rejectedWall: seeded.rejectedWall,
+        rejectedSolid: seeded.rejectedSolid,
+        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid)).toFixed(4),
+        requested: count,
+        stacksPerSeed,
+      },
+      escaped: solved.escaped,
+      active: solved.active,
+      massConservationError: solved.massConservationError,
+      penetrationCount: solved.penetrationCount,
+      outletArrivalRatio: solved.outletArrivalRatio,
+      timeToOutletSteps: solved.timeToOutletSteps,
+      sectionAvgVelocity: solved.sectionAvgVelocity,
+      maxVelocityMmPerSec: solved.maxVelocityMmPerSec,
+      avgVelocityMmPerSec: solved.avgVelocityMmPerSec,
+      diverged: solved.diverged,
+      stepsRun: solved.stepsRun,
+    },
+    snapshots,
+    durationSec: +((performance.now() - t0) / 1000).toFixed(1),
+  };
+  return { report, sdf };
+}
+
+/**
+ * The TS implementation — the parity oracle for the worker's `fluid_run`.
+ *
+ * It also OWNS what the worker does not: building the SDF from the pipe mesh and
+ * choosing seed positions (both need the geometry, and both are handed over as
+ * FILES — the SDF is one float per cell and the seeds are three doubles per
+ * particle, 13.5 MB at the 564k-particle acceptance case).
+ */
+export async function runFluidInTs(scenario: FluidScenario): Promise<{
   report: FluidReport;
   sdf: SdfField;
   world: MpmWorld;
