@@ -137,3 +137,35 @@
 > `g-motion-never-checked` 四组全不过：均命中「motion-clearance = 0」但未点出「运动类型接口 6 条」——代理项的形状要求，按 README §七 建议改为 UNKNOWN+证据。
 > `skill S0`（手册是否被加载）记在 `scores/*.score.txt` 与分数文件里：deepseek-flash 3/6 轮加载；v4.1-flash 1/6 轮加载。
 
+## 02-steam-engine（headless · opencode-go/deepseek-v4.1-flash · 1 轮 · 链路验证）
+
+### 硬门与数值判据
+
+| 判据 | run (42.1min/134 calls) | 读法 |
+|---|---|---|
+| `g-grader-access` | ✅ | 全过 |
+| `g-motion-clean` | ✅ | 全过 |
+| `g-negative-rod-fires` | ✅ | 全过 |
+| `g-negative-printability-fires` | ✅ | 全过 |
+| `g-motion-clearance-contract` | ✅ | 全过 |
+| `g-import-not-generate` | ✅ | 全过 |
+| `g-import-dimensions-sane` | ✅ | 全过 |
+| `g-merge-shells-one` | ✅ | 全过 |
+| `g-no-false-coupling` | ✅ | 全过 |
+| `g-hard-zero` | ✅ | 全过 |
+| `c-stroke` | ✅ | 全过 |
+| `c-joint-drift` | ✅ | 全过 |
+| `c-fluid-arrival` | ❌ | 全不过 |
+| `c-topple-answered` | ✅ | 全过 |
+| `c-counterweight` | ✅ | 全过 |
+| `c-crosshead-hold` | ✅ | 全过 |
+| `c-coaxial-used` | ✅ | 全过 |
+| `c-interface-count` | ✅ | 全过 |
+
+> P=0.895（10/10 硬门全过；仅 `c-fluid-arrival` 不过——该条按 graders/README §七 是"待定，不计入模型短板"）。
+> S=1.0、S0=手册已加载；探针 `p-version-recall` PASS（问第 2 版活塞外径，答 Ø29.6mm ✓）。
+
+## 03-microscope（headless 两段 · 链路验证）
+
+> ⏳ 本轮仍在跑（A 段进行中：已有 25 个版本、6 次运行）。两段续接、参考图物化与探针等链路待其结束后补录。
+
