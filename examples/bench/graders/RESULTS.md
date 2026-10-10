@@ -165,7 +165,38 @@
 > P=0.895（10/10 硬门全过；仅 `c-fluid-arrival` 不过——该条按 graders/README §七 是"待定，不计入模型短板"）。
 > S=1.0、S0=手册已加载；探针 `p-version-recall` PASS（问第 2 版活塞外径，答 Ø29.6mm ✓）。
 
-## 03-microscope（headless 两段 · 链路验证）
+## 03-microscope（headless 两段 · 链路验证 · 图像窗口修复后）
 
-> ⏳ 本轮仍在跑（A 段进行中：已有 25 个版本、6 次运行）。两段续接、参考图物化与探针等链路待其结束后补录。
+### 硬门与数值判据
+
+| 判据 | run (A 244 调用 + B 56 调用，97.6min) | 读法 |
+|---|---|---|
+| `g-grader-access` | ✅ | 全过 |
+| `g-negative-flange` | ❓ | 0 过 / 0 不过 |
+| `g-negative-gear-phase` | ❓ | 0 过 / 0 不过 |
+| `g-negative-chain` | ❓ | 0 过 / 0 不过 |
+| `g-motion-clearance-contract` | ✅ | 全过 |
+| `g-whole-machine-verified` | ✅ | 全过 |
+| `g-visual-evidence-current` | ❓ | 0 过 / 0 不过 |
+| `g-delivery-audit-clean` | ❓ | 0 过 / 0 不过 |
+| `g-printability-no-unprintable` | ❓ | 0 过 / 0 不过 |
+| `g-no-turret` | ❓ | 0 过 / 0 不过 |
+| `g-optics-self-consistent` | ❓ | 0 过 / 0 不过 |
+| `g-hard-zero` | ✅ | 全过 |
+| `c-stroke` | ❌ | 全不过 |
+| `c-motion-clean` | ❓ | 0 过 / 0 不过 |
+| `c-joint-drift` | ✅ | 全过 |
+| `c-fine-focus-dof` | ❓ | 0 过 / 0 不过 |
+| `c-coaxial` | ❓ | 0 过 / 0 不过 |
+| `c-interface-count` | ✅ | 全过 |
+| `c-undeclared-found` | ❓ | 0 过 / 0 不过 |
+| `c-stability-answers` | ❓ | 0 过 / 0 不过 |
+| `c-printability-json` | ❓ | 0 过 / 0 不过 |
+| `c-measured-vs-datum` | ❓ | 0 过 / 0 不过 |
+| `c-appearance-diff` | ❓ | 0 过 / 0 不过 |
+| `c-stdlib-used` | ❓ | 0 过 / 0 不过 |
+
+> 两段均 exit 0；同会话续接 ✓；参考图物化 ✓；两个探针都问了 ✓（S0=手册已加载）。
+> **判据层缺口**：26 条里只有 7 条能自动判定——8 条硬门与 9 条数值判据**没有求值器**（appearance / optics / negative controls / printability-json …），另有 `p-version-recall` 的 rubric `answerValues` 为空、`p-reference-recall` 无求值器；图片数仍读不到（"?"）。
+> 可判定项里 `c-stroke` **不过**（真实内容失败，非链路问题）。
 

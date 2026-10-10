@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T15:04:17.639Z",
+  "checkedAt": "2026-10-10T05:00:28.447Z",
   "manifestPath": "/home/songsenand/Project/ToyMarker/examples/microscope5/assembly/assembly.json",
   "manifestName": "显微镜 · 单目复式（M12 物镜，单物镜方案）",
   "results": [
@@ -14,14 +14,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.2,
-        "max": 0.2
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"column.法兰底面\": datum \"法兰底面\" not found in version v013"
     },
     {
       "interfaceId": "2",
@@ -34,14 +28,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.2,
-        "max": 0.2
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"arm.底面\": datum \"底面\" not found in version v071"
     },
     {
       "interfaceId": "3",
@@ -54,14 +42,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.05,
-        "max": 0.3
-      },
-      "measured": 0.15,
-      "detail": "diametral clearance Ø0.15 (hole Ø40.15 vs shaft Ø40)"
+      "verdict": "skipped",
+      "detail": "address \"base.法兰孔\": datum \"法兰孔\" not found in version v001"
     },
     {
       "interfaceId": "4",
@@ -74,14 +56,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.2,
-        "max": 0.2
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"arm.防转面\": datum \"防转面\" not found in version v071"
     },
     {
       "interfaceId": "5",
@@ -94,14 +70,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 25.2,
-        "max": 25.45
-      },
-      "measured": 25.3,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"stage.槽壁A\": datum \"槽壁A\" not found in version v079"
     },
     {
       "interfaceId": "5a",
@@ -114,14 +84,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.2,
-        "max": 0.6
-      },
-      "measured": 0.4,
-      "detail": "diametral clearance Ø0.4 (hole Ø22.4 vs shaft Ø22)"
+      "verdict": "skipped",
+      "detail": "address \"stage.抱箍内孔\": datum \"抱箍内孔\" not found in version v079"
     },
     {
       "interfaceId": "6",
@@ -134,14 +98,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.1,
-        "max": 0.35
-      },
-      "measured": 0.2,
-      "detail": "diametral clearance Ø0.2 (hole Ø8.2 vs shaft Ø8)"
+      "verdict": "skipped",
+      "detail": "address \"pinion-block.轴承孔A\": datum \"轴承孔A\" not found in version v082"
     },
     {
       "interfaceId": "7",
@@ -152,16 +110,10 @@
       "b": "focus-pinion-shaft.节圆点",
       "type": "转动副",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.5,
-        "max": 0.5
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"focus-carriage.齿条参考点\": datum \"齿条参考点\" not found in version v066"
     },
     {
       "interfaceId": "8",
@@ -172,16 +124,10 @@
       "b": "arm.导轨面",
       "type": "滑动副",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 0.1,
-        "max": 0.35
-      },
-      "measured": 0.2,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"focus-carriage.导轨面\": datum \"导轨面\" not found in version v066"
     },
     {
       "interfaceId": "8a",
@@ -194,14 +140,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.2,
-        "max": 0.2
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"pinion-block.安装面\": datum \"安装面\" not found in version v082"
     },
     {
       "interfaceId": "9",
@@ -212,16 +152,10 @@
       "b": "arm.弹簧座",
       "type": "弹簧",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "spring-preload",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "预紧力",
-        "min": 1,
-        "max": 3
-      },
-      "measured": 1.9992,
-      "detail": "installed 51.0099mm vs free 76mm → δ24.9901mm × 0.08N/mm = 1.9992N"
+      "verdict": "skipped",
+      "detail": "address \"focus-carriage.弹簧座\": datum \"弹簧座\" not found in version v066"
     },
     {
       "interfaceId": "6b",
@@ -234,14 +168,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"focus-knob-R.内孔\": datum \"内孔\" not found in version v059"
     },
     {
       "interfaceId": "6c",
@@ -254,14 +182,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"focus-knob-L.内孔\": datum \"内孔\" not found in version v059"
     },
     {
       "interfaceId": "8b",
@@ -274,14 +196,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 6,
-        "max": 12
-      },
-      "measured": 9,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"focus-carriage.板缘\": datum \"板缘\" not found in version v066"
     },
     {
       "interfaceId": "10",
@@ -294,14 +210,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.05,
-        "max": 0.3
-      },
-      "measured": 0.15,
-      "detail": "diametral clearance Ø0.15 (hole Ø26.1 vs shaft Ø25.95)"
+      "verdict": "skipped",
+      "detail": "address \"body-tube.下口\": datum \"下口\" not found in version v045"
     },
     {
       "interfaceId": "11",
@@ -314,14 +224,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.05,
-        "max": 0.3
-      },
-      "measured": 0.2,
-      "detail": "diametral clearance Ø0.2 (hole Ø26.1 vs shaft Ø25.9)"
+      "verdict": "skipped",
+      "detail": "address \"body-tube.上口\": datum \"上口\" not found in version v045"
     },
     {
       "interfaceId": "12",
@@ -334,14 +238,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 155.7,
-        "max": 156.3
-      },
-      "measured": 156,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"objective-mount.安装面\": datum \"安装面\" not found in version v046"
     },
     {
       "interfaceId": "13",
@@ -354,14 +252,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 12,
-        "max": 14
-      },
-      "measured": 13,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"objective-mount.安装面\": datum \"安装面\" not found in version v046"
     },
     {
       "interfaceId": "14",
@@ -372,16 +264,10 @@
       "b": "stage.通光孔轴",
       "type": "转动副",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "coaxial",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "同轴度",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+      "verdict": "skipped",
+      "detail": "address \"objective-mount.M12轴\": datum \"M12轴\" not found in version v046"
     },
     {
       "interfaceId": "15",
@@ -392,16 +278,10 @@
       "b": "stage.通光孔轴",
       "type": "转动副",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "coaxial",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "同轴度",
-        "min": -0.5,
-        "max": 0.5
-      },
-      "measured": 0,
-      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+      "verdict": "skipped",
+      "detail": "address \"illuminator.LED轴\": datum \"LED轴\" not found in version v080"
     },
     {
       "interfaceId": "12a",
@@ -414,14 +294,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"camera-plate.传感器定位面\": datum \"传感器定位面\" not found in version v043"
     },
     {
       "interfaceId": "15b",
@@ -434,14 +308,8 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": 0.1,
-        "max": 0.35
-      },
-      "measured": 0.15,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"illuminator.翼面\": datum \"翼面\" not found in version v080"
     },
     {
       "interfaceId": "16",
@@ -452,16 +320,10 @@
       "b": "body-tube.轴线",
       "type": "转动副",
       "severity": "hard",
-      "layer": "L0",
+      "layer": "L1",
       "check": "coaxial",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "同轴度",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+      "verdict": "skipped",
+      "detail": "address \"focus-carriage.抱环轴\": datum \"抱环轴\" not found in version v066"
     },
     {
       "interfaceId": "16a",
@@ -474,14 +336,8 @@
       "severity": "hard",
       "layer": "L0",
       "check": "diameter-match",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "直径",
-        "min": 0.1,
-        "max": 0.35
-      },
-      "measured": 0.25,
-      "detail": "diametral clearance Ø0.25 (hole Ø40.25 vs shaft Ø40)"
+      "verdict": "skipped",
+      "detail": "address \"fine-focus-ring.内孔\": datum \"内孔\" not found in version v052"
     },
     {
       "interfaceId": "16b",
@@ -492,16 +348,10 @@
       "b": "body-tube.轴线",
       "type": "转动副",
       "severity": "intent",
-      "layer": "L0",
+      "layer": "L1",
       "check": "coaxial",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "同轴度",
-        "min": -0.3,
-        "max": 0.3
-      },
-      "measured": 0,
-      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+      "verdict": "skipped",
+      "detail": "address \"camera-plate.轴线\": datum \"轴线\" not found in version v043"
     },
     {
       "interfaceId": "17",
@@ -514,25 +364,110 @@
       "severity": "intent",
       "layer": "L0",
       "check": "distance",
-      "verdict": "pass",
-      "expected": {
-        "quantity": "距离",
-        "min": -0.2,
-        "max": 0.2
-      },
-      "measured": 0,
-      "detail": "point-to-point distance between declared datums"
+      "verdict": "skipped",
+      "detail": "address \"slide-clip.脚底\": datum \"脚底\" not found in version v056"
     }
   ],
   "undeclared": [],
-  "partWarnings": [],
-  "adjacencyThresholdMm": 1,
+  "partWarnings": [
+    {
+      "partId": "column",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "arm",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "stage",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "focus-carriage",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "focus-pinion-shaft",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "focus-knob-L",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "focus-knob-R",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "fine-focus-ring",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "pinion-block",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "body-tube",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "objective-mount",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "eyepiece-tube",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "camera-plate",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "illuminator",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    },
+    {
+      "partId": "slide-clip",
+      "messages": [
+        "version has no model.stl and no model.scad"
+      ]
+    }
+  ],
+  "adjacencyThresholdMm": 1.2,
   "summary": {
     "interfaces": 26,
-    "pass": 26,
+    "pass": 0,
     "hardViolations": 0,
     "intentFlags": 0,
-    "skipped": 0,
+    "skipped": 26,
     "undeclared": 0
   },
   "overallStatus": "pass"
