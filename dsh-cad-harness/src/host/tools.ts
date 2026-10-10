@@ -283,6 +283,28 @@ interface MeasureExtentSolve {
   warnings: string[];
 }
 
+/** Payload of the worker's `measure_angle` op. */
+interface MeasureAngleSolve {
+  aDirMm: [number, number, number];
+  bDirMm: [number, number, number];
+  aOriginMm: [number, number, number];
+  bOriginMm: [number, number, number];
+  aSource: string;
+  bSource: string;
+  anchoredAtOrigin: boolean;
+  angleDeg: number;
+  acuteDeg: number;
+  supplementDeg: number;
+  parallel: boolean;
+  perpendicular: boolean;
+  coplanar: boolean;
+  lineDistanceMm: number;
+  commonNormalMm: [number, number, number];
+  crossingPointMm?: [number, number, number];
+  convention: string;
+  warnings: string[];
+}
+
 export function cadToolNames(): readonly string[] {
   return registeredCadTools;
 }
@@ -2925,6 +2947,160 @@ export function registerCadTools(
         axis: a.axisVector ?? a.axis ?? 'z',
       });
       return { versionId: a.versionId, ...out };
+    },
+  }));
+
+  // --- measure_angle: the angle between two things, with the convention stated ---
+  //
+  // "Angle" is the measurement most likely to produce a "your number does not match
+  // mine" round trip, because 30° and 150° describe the same pair of lines and a
+  // face-to-face angle is the supplement of the normal-to-normal one. So the reply
+  // carries `angleDeg` (as given), `acuteDeg` (0..90) and `supplementDeg` together,
+  // plus which of the three ways each side was named. The arithmetic is the worker's
+  // — the same `_axis_line_metrics` that `check_assembly`'s `coaxial` operator uses,
+  // so the two can never drift.
+  registerTool(defineTool({
+    name: 'measure_angle',
+    description:
+      'The angle between two directions, plus the distance between their lines. Name each side ONE of three ways: ' +
+      '`aProbe` [x,y,z] (a point — the direction becomes the normal of the face it lands on, so a rough guess is ' +
+      'enough), `aDatum` (an axis / cylinder / plane datum, resolved exactly), or `aPoints` [[x,y,z],[x,y,z]] ' +
+      '(the direction is the segment; give [apex, point] for a corner) / `aDir` (a vector you already know). ' +
+      'Returns angleDeg (between the vectors AS GIVEN, 0..180), acuteDeg (0..90 — the usual reading of "the angle ' +
+      'between two lines") and supplementDeg TOGETHER, with lineDistanceMm (perpendicular offset for parallel ' +
+      'lines, closest approach for skew), commonNormalMm and the crossing point when they meet. Angles are ' +
+      'degrees. mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Version whose surface side b snaps a probe to (and the default for side b\'s datum).' },
+      aVersionId: { type: 'string', description: 'Version for side a when the two sides live on different parts. Defaults to versionId.' },
+      bVersionId: { type: 'string', description: 'Version for side b. Defaults to versionId.' },
+      aProbe: { type: 'array', description: 'Side a as a POINT [x,y,z] mm: the direction becomes the normal of the nearest face. Approximate is fine.', items: { type: 'number' } },
+      bProbe: { type: 'array', description: 'Side b as a point (nearest face normal).', items: { type: 'number' } },
+      aDatum: { type: 'string', description: 'Side a as a datum name declared on aVersionId: axis / cylinder / plane give a direction, resolved EXACTLY.' },
+      bDatum: { type: 'string', description: 'Side b as a datum name declared on bVersionId.' },
+      aPoints: { type: 'array', description: 'Side a as two points [[x,y,z],[x,y,z]]; the direction is the segment between them.', items: { type: 'array', items: { type: 'number' } } },
+      bPoints: { type: 'array', description: 'Side b as two points.', items: { type: 'array', items: { type: 'number' } } },
+      aDir: { type: 'array', description: 'Side a as a direction vector [x,y,z] you already know (e.g. a face normal read out of list_features).', items: { type: 'number' } },
+      bDir: { type: 'array', description: 'Side b as a direction vector.', items: { type: 'number' } },
+      aOrigin: { type: 'array', description: 'A point ON side a\'s line. Needed for a meaningful lineDistanceMm / coplanar / crossing point when you gave aDir instead of a position.', items: { type: 'number' } },
+      bOrigin: { type: 'array', description: 'A point on side b\'s line.', items: { type: 'number' } },
+      parallelToleranceDeg: { type: 'number', description: 'Within this many degrees of 0 the lines count as parallel (and 90 as perpendicular). Default 0.5.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          aDirMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Unit direction of side a, as given (sign preserved).' },
+          bDirMm: { type: 'array', required: true, items: { type: 'number' } },
+          aOriginMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The point the side-a line was anchored at.' },
+          bOriginMm: { type: 'array', required: true, items: { type: 'number' } },
+          aSource: { type: 'string', required: true, description: 'How side a was named (probe / datum / points / dir).' },
+          bSource: { type: 'string', required: true },
+          anchoredAtOrigin: { type: 'boolean', required: true, description: 'A side gave a direction with no point on it, so the origin was assumed: lineDistanceMm and coplanar describe that anchor.' },
+          angleDeg: { type: 'number', required: true, description: 'Between the direction vectors AS GIVEN, 0..180. Flipping one input flips this to its supplement.' },
+          acuteDeg: { type: 'number', required: true, description: 'min(angleDeg, 180−angleDeg), 0..90 — the usual "angle between two lines".' },
+          supplementDeg: { type: 'number', required: true, description: '180 − angleDeg.' },
+          parallel: { type: 'boolean', required: true, description: 'acuteDeg within parallelToleranceDeg of 0.' },
+          perpendicular: { type: 'boolean', required: true, description: 'acuteDeg within parallelToleranceDeg of 90.' },
+          coplanar: { type: 'boolean', required: true, description: 'The lines meet or are parallel.' },
+          lineDistanceMm: { type: 'number', required: true, description: 'Parallel: perpendicular offset. Skew: closest approach.' },
+          commonNormalMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Direction of the shortest connecting segment (the cross product when the lines meet).' },
+          crossingPointMm: { type: 'array', items: { type: 'number' }, description: 'Present only when the lines actually meet.' },
+          convention: { type: 'string', required: true, description: 'Restates which number means what, so it travels with the result.' },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; aVersionId?: string; bVersionId?: string;
+        aProbe?: number[]; bProbe?: number[]; aDatum?: string; bDatum?: string;
+        aPoints?: number[][]; bPoints?: number[][];
+        aDir?: number[]; bDir?: number[]; aOrigin?: number[]; bOrigin?: number[];
+        parallelToleranceDeg?: number;
+      };
+      const { store } = await allStores(exec);
+      const versionOf = (side: 'a' | 'b') => (side === 'a' ? (a.aVersionId ?? a.versionId) : (a.bVersionId ?? a.versionId));
+      const versionStl = (v: string) => join(store.root, 'versions', v, 'model.stl');
+
+      /** Turn a datum name into a direction + a point on it; a point datum cannot. */
+      const datumSide = async (side: 'a' | 'b', name: string) => {
+        const version = versionOf(side);
+        const datums = await readVersionDatums(store, version);
+        const found = [
+          ...datums.axes.map((entry) => ({ kind: 'axis', name: entry.name, point: entry.point, dir: entry.dir })),
+          ...datums.cylinders.map((entry) => ({ kind: 'cylinder', name: entry.name, point: entry.point, dir: entry.dir })),
+          ...datums.planes.map((entry) => ({ kind: 'plane', name: entry.name, point: entry.point, dir: entry.normal })),
+          ...datums.points.map((entry) => ({ kind: 'point', name: entry.name, point: entry.point, dir: null })),
+        ].find((entry) => entry.name === name);
+        if (!found) {
+          const known = [...datums.axes, ...datums.cylinders, ...datums.planes, ...datums.points].map((e) => e.name);
+          throw new Error(`datum "${name}" not found on ${version} (declared: ${known.join(', ') || 'none'})`);
+        }
+        if (!found.dir) {
+          throw new Error(
+            `datum "${name}" on ${version} is a POINT — a point has no direction to measure an angle against. ` +
+            'Use aPoints [[x,y,z],[x,y,z]] (the corner and a point along one arm), aDir, or an axis/plane/cylinder datum.',
+          );
+        }
+        return { dir: found.dir, origin: found.point, source: `datum ${found.kind} "${name}" on ${version}` };
+      };
+
+      const payload: Record<string, unknown> = {
+        meshes: [versionStl(versionOf('a')), versionStl(versionOf('b'))],
+        parallelToleranceDeg: a.parallelToleranceDeg,
+      };
+      for (const side of ['a', 'b'] as const) {
+        const datum = side === 'a' ? a.aDatum : a.bDatum;
+        const probe = side === 'a' ? a.aProbe : a.bProbe;
+        const points = side === 'a' ? a.aPoints : a.bPoints;
+        const dir = side === 'a' ? a.aDir : a.bDir;
+        const origin = side === 'a' ? a.aOrigin : a.bOrigin;
+        const given = [datum, probe, points, dir].filter((value) => value !== undefined).length;
+        if (given === 0) {
+          throw new Error(
+            `side ${side} needs a direction: ${side}Probe [x,y,z], ${side}Datum "<name>", "${side}Points" [[x,y,z],[x,y,z]] or ${side}Dir [x,y,z]`,
+          );
+        }
+        if (given > 1) {
+          throw new Error(
+            `side ${side} got ${given} ways of naming a direction — give exactly one of ${side}Probe / ${side}Datum / ${side}Points / ${side}Dir`,
+          );
+        }
+        if (datum) {
+          const resolved = await datumSide(side, datum);
+          payload[`${side}Dir`] = resolved.dir;
+          payload[`${side}Origin`] = origin ?? resolved.origin;
+          payload[`${side}SourceHint`] = resolved.source;
+        } else if (probe) {
+          const stl = versionStl(versionOf(side));
+          if (!existsSync(stl)) {
+            throw new Error(
+              `side ${side} probes a face, but version ${versionOf(side)} has no model.stl — ` +
+              'pass aVersionId/bVersionId that exists, or name the direction with aDir/aPoints',
+            );
+          }
+          payload[`${side}Probe`] = probe;
+        } else if (points) {
+          payload[`${side}Points`] = points;
+        } else {
+          payload[`${side}Dir`] = dir;
+          if (origin) payload[`${side}Origin`] = origin;
+        }
+      }
+
+      const out = await (await ensurePythonWorker()).request<MeasureAngleSolve>('measure_angle', payload);
+      // A datum resolved here says so in the report: "datum axis 镜筒轴 on v010" is
+      // evidence about WHICH geometry was measured, and the worker cannot know it.
+      return {
+        versionId: a.versionId,
+        ...out,
+        aSource: (payload.aSourceHint as string | undefined) ?? out.aSource,
+        bSource: (payload.bSourceHint as string | undefined) ?? out.bSource,
+      };
     },
   }));
 

@@ -41,6 +41,7 @@ drives:
     list_features   planar faces, holes and cylinders with coordinates (list_features)
     measure_section    one cross-section as polygons, rings, holes and walls
     measure_extent     axial min/max/centre and the extremal vertices, any axis
+    measure_angle      angle + line distance between two named directions
     import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
     scad_prelude        the datum prelude injected into every part
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
@@ -89,6 +90,7 @@ OPS = [
     "list_features",
     "measure_section",
     "measure_extent",
+    "measure_angle",
     "import_mesh",
     "scad_prelude",
     "scad_parse_output",
@@ -644,14 +646,18 @@ def op_validate_assembly(params: dict) -> dict:
 def _snap_to_surface(mesh, point):
     """Closest surface point + inside/outside by the hit triangle's geometric normal
     — the TS `snapToSurface`. Returns the snapped point, how far the input was from
-    the surface, and whether it sat on the outward side of that face."""
+    the surface, whether it sat on the outward side of that face, and the hit face's
+    own normal and index (the last two exist for `measure_angle`, which needs the
+    normal of the face a probe landed on; taking the nearest triangle CENTRE instead
+    would pick a neighbouring facet whenever the probe lands near an edge)."""
     import numpy as np
     import trimesh
 
     closest, distance, face_ids = trimesh.proximity.ProximityQuery(mesh).on_surface(np.asarray(point, dtype=float).reshape(1, 3))
     snapped = np.asarray(closest[0], dtype=float)
     vertices = np.asarray(mesh.vertices, dtype=float)
-    face = np.asarray(mesh.faces[int(face_ids[0])], dtype=np.int64)
+    face_index = int(face_ids[0])
+    face = np.asarray(mesh.faces[face_index], dtype=np.int64)
     va, vb, vc = vertices[face[0]], vertices[face[1]], vertices[face[2]]
     normal = np.cross(vb - va, vc - va)
     length = float(np.linalg.norm(normal))
@@ -661,6 +667,8 @@ def _snap_to_surface(mesh, point):
         "snapped": snapped,
         "distance": float(distance[0]),
         "outside": bool(float(np.dot(np.asarray(point, dtype=float) - snapped, normal)) > 0),
+        "normal": normal,
+        "faceId": face_index,
     }
 
 
@@ -1770,6 +1778,214 @@ def op_measure_extent(params: dict) -> dict:
             "min": [_round3(float(x)) for x in np.asarray(mesh.bounds, dtype=float)[0]],
             "max": [_round3(float(x)) for x in np.asarray(mesh.bounds, dtype=float)[1]],
         },
+        "warnings": warnings,
+    }
+
+
+def _axis_line_metrics(p1, d1, p2, d2) -> dict:
+    """Angle and distance between two INFINITE lines, in ONE implementation.
+
+    This is the arithmetic that `check_assembly`'s `coaxial` operator has been doing
+    in TypeScript (`axisLineDistance` in src/host/assembly-check.ts): for parallel
+    axes the perpendicular offset, for skew axes the closest approach, plus the angle
+    between them so a tilted bore cannot hide behind a small offset. It lives here
+    now because the new `measure_angle` needs the same numbers, and two copies of an
+    angle would eventually disagree — the TS function stays as the parity ORACLE.
+
+    Reported so that no caller has to guess a convention:
+      `distanceMm`    line-to-line distance (parallel: perpendicular offset)
+      `angleDeg`      the angle between the direction vectors AS GIVEN, 0..180
+      `acuteDeg`      min(angle, 180−angle), 0..90 — what "the angle between two
+                      lines" usually means, and what the TS oracle reports
+      `supplementDeg` 180 − angleDeg
+    """
+    import numpy as np
+
+    u1 = np.asarray(d1, dtype=float)
+    u2 = np.asarray(d2, dtype=float)
+    n1 = float(np.linalg.norm(u1))
+    n2 = float(np.linalg.norm(u2))
+    if n1 <= 0 or n2 <= 0:
+        raise ValueError("a direction vector must be non-zero")
+    u1, u2 = u1 / n1, u2 / n2
+    a1 = np.asarray(p1, dtype=float)
+    a2 = np.asarray(p2, dtype=float)
+    w = a2 - a1
+
+    dot = float(u1 @ u2)
+    a = float(u1 @ u1)
+    b = dot
+    c = float(u2 @ u2)
+    d = float(u1 @ w)
+    e = float(u2 @ w)
+    denom = a * c - b * b
+
+    if abs(denom) < 1e-9:
+        # Parallel (or antiparallel): the perpendicular component of w. The closest
+        # PAIR is not unique for parallel lines, so this reports the pair found by
+        # dropping a perpendicular from a2: (a2 - perp) on line 1, a2 on line 2.
+        perp = w - u1 * d
+        distance = float(np.linalg.norm(perp))
+        close_a = a2 - perp
+        close_b = a2
+    else:
+        # SIGN CONVENTION, and it is easy to get wrong: the s,t that solve this system
+        # come out NEGATED relative to the parameters of the true closest pair, so the
+        # closest points are `a1 - sc*u1` / `a2 - tc*u2`, and the separating vector is
+        # `w + sc*u1 - tc*u2` — which is exactly the expression the TS oracle uses.
+        # Measured the hard way: writing `w + tc*u2 - sc*u1` (my first port) reported
+        # 58.085mm instead of 4.7245mm on a skew pair, i.e. it measured the FARTHEST
+        # pair. Symmetric test fixtures hide this; a parity run over skew lines does not.
+        sc = (b * e - c * d) / denom
+        tc = (a * e - b * d) / denom
+        close_a = a1 - u1 * sc
+        close_b = a2 - u2 * tc
+        distance = float(np.linalg.norm(close_b - close_a))
+
+    angle = float(np.degrees(np.arccos(max(-1.0, min(1.0, dot)))))
+    acute = min(angle, 180.0 - angle)
+    return {
+        "distanceMm": distance,
+        "angleDeg": angle,
+        "acuteDeg": acute,
+        "supplementDeg": 180.0 - angle,
+        "closeA": close_a,
+        "closeB": close_b,
+        "intersection": (close_a + close_b) / 2 if distance <= 1e-6 else None,
+    }
+
+
+def op_measure_angle(params: dict) -> dict:
+    """The angle between two things, with every convention written down.
+
+    Three ways to name a direction, because there are three ways a caller knows one:
+      * `aDir` / `bDir`  — an exact vector (a datum axis the caller read out, a
+        face normal from `list_features`, a direction it computed itself);
+      * `aProbe` / `bProbe` — a POINT; the direction becomes the normal of the face
+        nearest that point. This is the tolerant form: any point whose nearest face
+        is the one you meant works, which is what makes "the angle between this face
+        and that face" answerable without naming a feature;
+      * `aPoints` / `bPoints` — two points per side, so the direction is the segment
+        between them (three points total when one side is `[apex, other]`, which is
+        how a corner is usually described).
+
+    The output states `angleDeg` (as given), `acuteDeg` (0..90, the usual reading of
+    "the angle between two lines") and `supplementDeg`, plus the line-to-line
+    distance and the common normal. That redundancy is the point: "30°" and "150°"
+    describe the same pair of lines, and a tool that reports only one of them
+    produces the "your number does not match mine" round trip.
+    """
+    import numpy as np
+
+    meshes = params.get("meshes") or [None, None]
+    warnings: list[str] = []
+
+    def side(label: str, index: int) -> dict:
+        direction = params.get(f"{label}Dir")
+        probe = params.get(f"{label}Probe")
+        pair = params.get(f"{label}Points")
+        origin = params.get(f"{label}Origin")
+        if pair is not None:
+            points = np.asarray(pair, dtype=float)
+            if points.shape != (2, 3):
+                raise ValueError(f"{label}Points needs exactly two [x,y,z] points")
+            vector = points[1] - points[0]
+            base = points[0] if origin is None else np.asarray(origin, dtype=float)
+            return {"dir": vector, "origin": base, "source": f"{label}Points", "anchored": False}
+        if direction is not None:
+            vector = np.asarray(direction, dtype=float)
+            if vector.size != 3:
+                raise ValueError(f"{label}Dir needs three components")
+            # No origin given: the line is anchored at the origin. That is a real
+            # choice, and it is flagged — otherwise two direction-only sides always
+            # "intersect" at (0,0,0) and `coplanar`/`lineDistanceMm` describe the
+            # anchor rather than the part.
+            anchored = origin is None
+            base = np.asarray(origin, dtype=float) if origin is not None else np.zeros(3)
+            return {"dir": vector, "origin": base, "source": f"{label}Dir", "anchored": anchored}
+        if probe is not None:
+            path = meshes[index] if index < len(meshes) else None
+            if not path:
+                raise ValueError(f"{label}Probe needs a mesh for that side (meshes[{index}])")
+            mesh = _load(path)
+            point = np.asarray(probe, dtype=float)
+            snap = _snap_to_surface(mesh, point)
+            # The normal of the face the probe LANDED on, from the snap itself.
+            normal = np.asarray(snap["normal"], dtype=float)
+            if not _is_watertight(np.asarray(mesh.faces)):
+                warnings.append(
+                    f"{label}: the mesh is NOT watertight — a face normal taken from an open mesh "
+                    "may belong to a surface that is not a boundary of any solid"
+                )
+            return {
+                "dir": normal,
+                "origin": np.asarray(snap["snapped"], dtype=float),
+                "source": f"{label}Probe (nearest face normal, snap distance {_round3(float(snap['distance']))}mm)",
+                "anchored": False,
+            }
+        raise ValueError(
+            f"{label} needs a direction: {label}Dir [[x,y,z]], {label}Probe [x,y,z] (nearest face) "
+            f"or {label}Points [[x,y,z],[x,y,z]]"
+        )
+
+    first = side("a", 0)
+    second = side("b", 1)
+    metrics = _axis_line_metrics(first["origin"], first["dir"], second["origin"], second["dir"])
+
+    anchored_at_origin = bool(first["anchored"] and second["anchored"])
+    if first["anchored"] or second["anchored"]:
+        warnings.append(
+            "one side gave a direction with NO point on it, so that line is anchored at the ORIGIN. "
+            "lineDistanceMm / coplanar / crossingPointMm therefore describe that anchor: pass "
+            f"{'aOrigin' if first['anchored'] else ''}{' and ' if first['anchored'] and second['anchored'] else ''}"
+            f"{'bOrigin' if second['anchored'] else ''} (a point on the line) for a distance that means something."
+        )
+    parallel_tolerance = float(params.get("parallelToleranceDeg", 0.5))
+    parallel = metrics["acuteDeg"] <= parallel_tolerance
+    perpendicular = abs(metrics["acuteDeg"] - 90.0) <= parallel_tolerance
+    coplanar = metrics["distanceMm"] <= 1e-6 or parallel
+    if parallel and metrics["distanceMm"] <= 1e-6:
+        warnings.append(
+            "the two directions are parallel AND their lines coincide — the angle is 0° but the "
+            "lines are the same line, so a distance between them is not defined by this report"
+        )
+
+    return {
+        "aDirMm": [_round3(float(x)) for x in (np.asarray(first["dir"], dtype=float) / float(np.linalg.norm(first["dir"])))],
+        "bDirMm": [_round3(float(x)) for x in (np.asarray(second["dir"], dtype=float) / float(np.linalg.norm(second["dir"])))],
+        "aOriginMm": [_round3(float(x)) for x in first["origin"]],
+        "bOriginMm": [_round3(float(x)) for x in second["origin"]],
+        "aSource": first["source"],
+        "bSource": second["source"],
+        "anchoredAtOrigin": anchored_at_origin,
+        "angleDeg": _round3(metrics["angleDeg"]),
+        "acuteDeg": _round3(metrics["acuteDeg"]),
+        "supplementDeg": _round3(metrics["supplementDeg"]),
+        "parallel": bool(parallel),
+        "perpendicular": bool(perpendicular),
+        "coplanar": bool(coplanar),
+        "lineDistanceMm": _round3(metrics["distanceMm"]),
+        "commonNormalMm": [
+            _round3(float(x))
+            for x in (
+                (metrics["closeB"] - metrics["closeA"]) / float(np.linalg.norm(metrics["closeB"] - metrics["closeA"]))
+                if metrics["distanceMm"] > 1e-9
+                else np.cross(
+                    np.asarray(first["dir"], dtype=float) / float(np.linalg.norm(first["dir"])),
+                    np.asarray(second["dir"], dtype=float) / float(np.linalg.norm(second["dir"])),
+                )
+            )
+        ],
+        # Omitted rather than null when the lines are skew: there is no crossing, and a
+        # null in a numeric field reads as "measured and unknown".
+        **(
+            {"crossingPointMm": [_round3(float(x)) for x in metrics["intersection"]]}
+            if metrics["intersection"] is not None
+            else {}
+        ),
+        "convention": "angleDeg is between the direction vectors as given (0..180); acuteDeg = min(angle, 180-angle) "
+                      "is the usual 'angle between two lines'; supplementDeg = 180 - angleDeg. For two parallel axes "
+                      "lineDistanceMm is the perpendicular offset, for skew axes the closest approach.",
         "warnings": warnings,
     }
 
@@ -4122,6 +4338,7 @@ HANDLERS = {
     "list_features": op_list_features,
     "measure_section": op_measure_section,
     "measure_extent": op_measure_extent,
+    "measure_angle": op_measure_angle,
     "import_mesh": op_import_mesh,
     "scad_prelude": op_scad_prelude,
     "scad_parse_output": op_scad_parse_output,

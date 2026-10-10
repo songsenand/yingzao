@@ -443,6 +443,31 @@ check('measure_extent: axisVector reaches the worker as a vector',
   Math.abs(diagonalExtent.value.sizeMm - (40 + 40) / Math.SQRT2) < 0.1,
   `size=${diagonalExtent.value.sizeMm}`);
 
+const angleByProbe = await call('measure_angle', {
+  versionId: vMeasure, aProbe: [30, 0, 0], bProbe: [0, 0, 10],
+});
+check('measure_angle: two probes reach the worker and report the convention trio',
+  Math.abs(angleByProbe.value.acuteDeg - 90) < 0.01
+    && Math.abs(angleByProbe.value.angleDeg + angleByProbe.value.supplementDeg - 180) < 0.01
+    && angleByProbe.value.perpendicular === true,
+  `${angleByProbe.value.angleDeg}/${angleByProbe.value.acuteDeg}/${angleByProbe.value.supplementDeg}`);
+
+const vRail = (await call('generate_part', {
+  userIntent: 'P3 datum rail', part: 'P3 导轨', scadCode: 'datum_axis("rail", [0,0,0], [0,0,1]); cube(8, center=true);',
+  views: ['iso'],
+})).value.versionId;
+const angleByDatum = await call('measure_angle', { versionId: vRail, aDatum: 'rail', bDir: [1, 0, 0] });
+check('measure_angle: a datum axis resolves through the tool layer and says so',
+  Math.abs(angleByDatum.value.acuteDeg - 90) < 0.01
+    && /datum axis "rail"/.test(angleByDatum.value.aSource),
+  angleByDatum.value.aSource);
+check('measure_angle: naming one side two ways is refused, not silently resolved',
+  await call('measure_angle', { versionId: vRail, aDatum: 'rail', aDir: [1, 0, 0], bDir: [1, 0, 0] })
+    .then(() => false, () => true));
+check('measure_angle: a POINT datum is refused with a way forward (it has no direction)',
+  await call('measure_angle', { versionId: vMeasure, aDatum: 'nope', bDir: [1, 0, 0] })
+    .then(() => false, (error) => /not found|POINT/.test(String(error?.message ?? error))));
+
 const panelSrc = await readFile(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'client', 'panel.ts'), 'utf8');
 check('panel: 📸 opens a compose dialog (draft + send/park), text travels with the image',

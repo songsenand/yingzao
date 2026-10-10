@@ -5,11 +5,11 @@ description: Use when a task involves 3D geometry at all — designing or changi
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-four tools, seven jobs. The tool descriptions say what each one *is*; this file
+Twenty-five tools, seven jobs. The tool descriptions say what each one *is*; this file
 says **which one the question belongs to**, what its boundary is, and what has
 already gone wrong.
 
-Four of the twenty-four are not geometry tools and are routed at the bottom of the
+Four of the twenty-five are not geometry tools and are routed at the bottom of the
 table: `create_part` (name a subject before geometry exists), `delivery_audit`
 (the corpus-wide delivery check), and the runtime pair `run_python` /
 `python_runtime` (the open-ended escape hatch and its installer).
@@ -32,6 +32,7 @@ table: `create_part` (name a subject before geometry exists), `delivery_audit`
 | **"hole spacing in this plane", "the wall thickness in a cut", "the angle in a section"** | **`measure_section`** | picking 3D points off a render |
 | "hole spacing", "wall thickness here", "gap at this spot" | `measure_distance` | `measure_part` |
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_closest` | `measure_distance` |
+| **"what angle is this", "are these two faces parallel / square to each other", "how far off axis is this bore"** | `measure_angle` | eyeballing it off a render; guessing which of 30°/150° the reply meant |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
 | "can this actually be printed", "is this wall too thin", "will this need supports" | `check_printability` | looking at renders |
 | "is this one part or floating fragments", "shells > 1 warning" | `check_connectivity` | guessing from renders |
