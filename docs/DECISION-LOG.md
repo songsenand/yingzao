@@ -1289,3 +1289,77 @@ Python 领域能力都挂在它上面，换路要重下重装）；第 4 条（�
 - 评测报告的结论必须显式标注档位（headless vs GUI/造物模式，README §12.6）与 `S0`，避免把
   "手册没被加载"误读成"手册没效果"。
 - 下一步优先级：把 02/03（含 03 headless 两段）跑通 → 确认评分与归档闭环 → 再回头做手册措辞与成本优化。
+
+## 2026-10-12：测量可用性重构——LLM 侧四件套 + 剖面/夹角落到 worker
+
+**触发条件：** 第 1 条（用户逐条拍板，多轮讨论后选定）；第 4 条（新增 5 个工具、
+改 SUT 基准、牵动题库与手册）。
+
+**要解决的问题：** 用户反馈①"测距真的非常难用，三维空间中的点完全打不准，能否在
+剖切的平面上选两点测距，或者有其他方法"；②"夹角没有工具测量"。核到的事实：
+
+- `measure_distance` 只做「最近表面吸附」，**必须由调用方提供 3D 坐标**
+  （`src/host/measure.ts` 的 `snapToSurface`），而渲染图**明确不带坐标轴与尺寸**
+  （`generate_part` 工具描述自陈）。LLM 对外部几何（`import_part` 的 STL、既有语料）
+  **没有任何坐标来源**——这是"打不准"的根因，不是精度问题。
+- 后果已被量化：bench 归因记录 01 的 `c-protrusion` / `c-measured-vs-datum` 失败的直接
+  原因是**零 `measure_distance` 调用**（`experiments/20261010_bench_results_attribution.md`）。
+- 夹角**没有工具**；唯一能出角度的是 `check_assembly` 的 `coaxial`（其
+  `axisLineDistance` 已算出两轴夹角，只是没暴露）。
+- GUI 的「剖切」是 three.js 裁剪面 + 背面染色孪生，**剖口没有 cap 面**，且拾取只过滤
+  掉被裁掉那一半（`src/client/panel.ts` 的 `visibleHits`）——点进剖面开口实际打在
+  **深处内壁**上。所以"在剖切平面上选两点"目前物理上做不到。
+
+**决策内容（用户逐条拍板）：**
+
+1. **LLM 侧测距做四件**，按此顺序：
+   `measure_thickness`（射线容错测厚）→ `list_features`（平面面 + 孔识别）→
+   `measure_section`（结构化剖面）→ `measure_extent`（按轴起止/中心）。
+   **GUI 侧配套**：剖口 cap、锁剖切面、特征吸附。
+2. **夹角**：worker 新 op（`measure_angle`），**并顺带把 `check_assembly` 的领域半区
+   （接口契约规则 + `axisLineDistance`）一并迁走**，`coaxial` 消费同一个 op——
+   矩阵 §7 已排期，不做两遍。
+3. **依赖**：加 `shapely`（依赖集 8 → 9）。
+4. **优先级**：**插件能力先行**；题库分布式实施，顺序为
+   06 纯测量问答 → 04 补全零件 → 05 装配给定零件 → 07 改造已有零件 / 08 缺陷修复闭环。
+   04/05 的语料选材**暂缓**（候选：`ayaromenok/p3dNext` MIT / `jazwa/rackstack` MIT /
+   `revarbat/snappy-reprap` GPL-2.0；授权路径待定，见"未决"）。
+
+**理由：** 只有四件东西真正改变 LLM 的**信息位**——`list_features` 是唯一能给 LLM
+提供"非自己画的几何"的坐标的东西，它一落地，datum 声明 → 精确测距 → 夹角 → 同轴偏移
+→ 契约整条链被激活；`measure_thickness` 把"点必须精确落在面上"降级为"点只要落在该壁的
+投影范围内"（容差 = 特征自身宽度），且一次返回所有层；`measure_section` 让"在剖面上选
+两点"变成"根本不用选"（孔心坐标一返回，孔距就是两点距离）。其余办法只是把 LLM 已经
+知道的东西换个说法。
+
+**依据（实测，非推断）：**
+
+- 射线法在钉住的运行时里可靠：trimesh 5.1.1，`mesh.ray` 走
+  `ray_triangle.RayMeshIntersector`（rtree 已在锁内）。实测 5 个用例全部正确：
+  圆环 4 次穿越配对为 2 段各 3.0mm；轴对齐立方体 2 次；**射线正穿过三角形接缝与棱边
+  仍是 2 次（不重复计数）**；方壳 4 次 → 2 段各 2.0mm。
+  （对照：`sdf.ts` 当年正是被"射线出口落在共享棱上被两个三角形各记一次"坑过。）
+- `shapely 2.2.0` 的 cp313 wheel **覆盖全部 7 个目标**（manylinux x64/aarch64、
+  musllinux x64/aarch64、macosx arm64/x86_64、win_amd64），只依赖 `numpy>=1.26`
+  （锁内已是 2.5.3），无编译器。
+- 现状取证：`src/host/assembly-check.ts` 的 `axisLineDistance` 至今只在 TS；
+  `validate_assembly` 已在 worker，`check_assembly` 未迁（矩阵 §7）。
+
+**影响：**
+
+- **工具表 20 → 25**（新增 `measure_thickness` / `list_features` / `measure_section` /
+  `measure_extent` / `measure_angle`）。`SKILL.md` 的路由表要加行——**SUT 因此变更**，
+  按 bench 纪律（`graders/README.md` §二）**旧分数作废**，需重录 `SKILL.md` sha256 并重跑基线。
+- worker 新增 ops 与 `shapely`；`requirements.lock` 与 `requirementsSha` 随
+  `scripts/gen-python-lock.mjs` 重新生成（锁变化会触发 venv 重建）。
+- `docs/TOOL-RUNTIME-MATRIX.md` 增行（新工具 + `check_assembly` 领域半区迁移完成）；
+  `DESGIGN.md` §13.8 测量家族补记本轮；`HARNESS.md` 视接线变化同步。
+- 题库侧：06 纯测量问答成为本轮的直接验收台（它是唯一能"把工具可用性变成分数"的题）。
+
+**未决（不阻塞本次开工）：**
+
+- 04/05 的第三方语料**授权路径**（物化不入库 / 只选宽松授权入库 / 重画等价体）。
+  待定事实：本仓根目录**没有 LICENSE 文件**、`dsh-cad-harness/package.json` 无
+  `license` 字段。本仓若定 GPL-3.0，则 GPL-3.0 项目可入库；**GPL-2.0-only 与
+  GPL-3.0 不兼容**（`m90` 的文件头只写 "GNU GPL v2"，需核 only/or-later）。
+- 04/05 具体选哪个项目与子装配。

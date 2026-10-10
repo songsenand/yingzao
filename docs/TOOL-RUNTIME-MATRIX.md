@@ -168,6 +168,30 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | `measure_part` | `measure_part` | 5 件逐字段一致（含真实件 710012.998 mm³/亏格 -2） |
 | `check_printability` | `check_printability` | 悬垂面积逐位一致；**修掉两个真缺陷**（BVH 就地重排索引、raycast 遍历序当距离序） |
 
+**生于 Python（2026-10-12 测量能力批次，无迁移、无 TS oracle）：**
+
+> 这四件是**先写 Python、再让 `tools.ts` 只留 schema + 转发**的形态，正是 §1 的目标形态。
+> 它们没有 TS 参照实现，因此判据是**解析真值**而不是 parity；此外 `accept-p3.mjs` 把四件都从
+> **真实工具对象**（`execute`）驱动一遍，覆盖「版本号→路径、轴字符串/向量转发、输出 schema」，
+> 因为 worker 侧真值验收覆盖不到工具层的转发错误。
+
+| 工具 | worker op | 验收证据 |
+|---|---|---|
+| `measure_thickness` | `measure_thickness` | `accept-measure-thickness.mjs` **43 项**：3.000mm 壁 ×2、内起点、跨件 5.000mm 间隙、裁剪、落空、开口网格警告；**修掉一个真缺陷**——射线正好落在三角形接缝/顶点上会整个漏检（`$fn=64` 圆管实测 0 次穿越而实际 4 次），25 探针投票 + `nudgedMm`/`probeAgreement` |
+| `list_features` | `list_features` | `accept-list-features.mjs` **31 项**：Ø8/Ø12 孔心与直径、通孔/盲孔深度、bore-vs-boss、矩形槽判非圆；**修掉一个真缺陷**——矩形四角共圆，残差为 0 会把槽判成圆，加"环面积 ÷ 圆面积 ≥ 0.95" |
+| `measure_section` | `measure_section` | `accept-measure-section.mjs` **37 项**：2236.9mm² 材料多边形 + 两孔（壁 4.000/6.000）+ 孔距 40/30、圆管壁 2.996、槽非圆、空腔计数；**修掉两个真缺陷**——`polygonize` 需 1µm 共点（否则 256 线段得 0 多边形）、闭环哪侧是材料必须问实体（`representative_point`，不是 centroid） |
+| `measure_extent` | `measure_extent` | `accept-measure-extent.mjs` **16 项**：任意轴（`[1,1,0]` → 70.711mm）、两端极值顶点与其投影自洽、带符号轴翻转 |
+
+**本轮唯一的 GUI 侧改动属于 ① 类**（`src/client/section.ts` + `panel.ts` 三处接线）：剖切面
+把拾取点约束到切面、9px 内吸附到最近顶点、画出剖面轮廓与**封盖**（`capTriangles`）。浏览器里的
+three.js 数学 Python 够不着，所以按 §0 的 ① 类留在 TS；判据是纯模块验收
+`accept-section-pick.mjs` **34 项**（含方管封盖 = 400−100 = 300mm²，孔被减掉而不是填上），
+外加 `accept-p3` 里的面板接线守卫（三处接线任一被摘掉都会红）。
+
+**轴参数只有一份实现**：`measure_thickness` / `measure_section` / `measure_extent` 都收轴，
+规则统一在 worker 的 `_axis_vector`（`x`/`+x`/`-x`/`x+` 或向量）。此前 `+x/-x` 的解析被写在
+`tools.ts` 而另两件在 Python，两边已经漂移（只有 TS 那份接受 `y+`）——已收敛，`tools.ts` 只转发。
+
 **未完成（明确交接）：**
 
 | 项 | 现状 | 下一步 |
