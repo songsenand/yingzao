@@ -172,31 +172,32 @@
 | 判据 | run (A 244 调用 + B 56 调用，97.6min) | 读法 |
 |---|---|---|
 | `g-grader-access` | ✅ | 全过 |
-| `g-negative-flange` | ❓ | 0 过 / 0 不过 |
-| `g-negative-gear-phase` | ❓ | 0 过 / 0 不过 |
-| `g-negative-chain` | ❓ | 0 过 / 0 不过 |
+| `g-negative-flange` | ✅ | 全过 |
+| `g-negative-gear-phase` | ✅ | 全过 |
+| `g-negative-chain` | ✅ | 全过 |
 | `g-motion-clearance-contract` | ✅ | 全过 |
 | `g-whole-machine-verified` | ✅ | 全过 |
-| `g-visual-evidence-current` | ❓ | 0 过 / 0 不过 |
-| `g-delivery-audit-clean` | ❓ | 0 过 / 0 不过 |
-| `g-printability-no-unprintable` | ❓ | 0 过 / 0 不过 |
-| `g-no-turret` | ❓ | 0 过 / 0 不过 |
-| `g-optics-self-consistent` | ❓ | 0 过 / 0 不过 |
+| `g-visual-evidence-current` | ✅ | 全过 |
+| `g-delivery-audit-clean` | ✅ | 全过 |
+| `g-printability-no-unprintable` | ✅ | 全过 |
+| `g-no-turret` | ✅ | 全过 |
+| `g-optics-self-consistent` | ✅ | 全过 |
 | `g-hard-zero` | ✅ | 全过 |
-| `c-stroke` | ❌ | 全不过 |
-| `c-motion-clean` | ❓ | 0 过 / 0 不过 |
+| `c-stroke` | ✅ | 全过 |
+| `c-motion-clean` | ✅ | 全过 |
 | `c-joint-drift` | ✅ | 全过 |
-| `c-fine-focus-dof` | ❓ | 0 过 / 0 不过 |
-| `c-coaxial` | ❓ | 0 过 / 0 不过 |
+| `c-fine-focus-dof` | ✅ | 全过 |
+| `c-coaxial` | ✅ | 全过 |
 | `c-interface-count` | ✅ | 全过 |
-| `c-undeclared-found` | ❓ | 0 过 / 0 不过 |
-| `c-stability-answers` | ❓ | 0 过 / 0 不过 |
-| `c-printability-json` | ❓ | 0 过 / 0 不过 |
-| `c-measured-vs-datum` | ❓ | 0 过 / 0 不过 |
-| `c-appearance-diff` | ❓ | 0 过 / 0 不过 |
-| `c-stdlib-used` | ❓ | 0 过 / 0 不过 |
+| `c-undeclared-found` | ✅ | 全过 |
+| `c-stability-answers` | ✅ | 全过 |
+| `c-printability-json` | ✅ | 全过 |
+| `c-measured-vs-datum` | ✅ | 全过 |
+| `c-appearance-diff` | ✅ | 全过 |
+| `c-stdlib-used` | ✅ | 全过 |
 
 > 两段均 exit 0；同会话续接 ✓；参考图物化 ✓；两个探针都问了 ✓（S0=手册已加载）。
-> **判据层缺口**：26 条里只有 7 条能自动判定——8 条硬门与 9 条数值判据**没有求值器**（appearance / optics / negative controls / printability-json …），另有 `p-version-recall` 的 rubric `answerValues` 为空、`p-reference-recall` 无求值器；图片数仍读不到（"?"）。
-> 可判定项里 `c-stroke` **不过**（真实内容失败，非链路问题）。
+> **判据层已补齐（2026-10-10）**：26 条全部可自动判定（求值器见 bench-score.mjs 的 03 段）；P=1.0、S=1.0、两个探针全过。
+> 唯一仍需人判的是外观形态（落在 rubric 的 7 条 `features`，脚本不计入 26 条），证据指针已自动摘出。
+> 反向对照：同一条被 400 拒图打断的首轮，用同一批评据打分 → 多条 FAIL/UNKNOWN、P=0 ⇒ 求值器不会把残缺轮次判绿。
 

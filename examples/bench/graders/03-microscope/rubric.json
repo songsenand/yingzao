@@ -325,7 +325,9 @@
       "kind": "auto",
       "weight": 1,
       "inSkill": false,
-      "stage": "A"
+      "stage": "A",
+      "answerValues": [],
+      "answerNote": "期望值**从版本库推导**，不写死：取交付 children 里名为\"载物台\"的零件的第 3 版，用该版 SCAD 的 datum_plane(\"槽底\") 的 z 与 model.stl 的 bbox 顶面 z 相减得槽深，再与答案里的数字比（±0.05mm）。理由：槽深是模型自己的设计选择，跨轮次会变，写死数字会把一个正确的回忆判错。求值器见 bench-score.mjs 的 pVersionDerived()。"
     },
     {
       "id": "p-reference-recall",

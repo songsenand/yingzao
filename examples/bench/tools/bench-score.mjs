@@ -23,7 +23,7 @@ import { createHash } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
 import { homedir } from 'node:os';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +50,22 @@ const FORBIDDEN = [
 const readJson = async (p) => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return null; } };
 
 /** 自解析二进制 STL 的包围盒尺寸（打分器保持自包含，不引插件内部模块）。 */
+function stlBounds(buf) {
+  if (buf.length < 84) return null;
+  const n = buf.readUInt32LE(80);
+  if (buf.length < 84 + n * 50) return null;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < n; i++) {
+    const o = 84 + i * 50 + 12;
+    for (let v = 0; v < 3; v++) for (let a = 0; a < 3; a++) {
+      const x = buf.readFloatLE(o + v * 12 + a * 4);
+      if (x < lo[a]) lo[a] = x;
+      if (x > hi[a]) hi[a] = x;
+    }
+  }
+  return { min: lo, max: hi };
+}
+
 function stlSize(buf) {
   if (buf.length < 84) return null;
   const n = buf.readUInt32LE(80);
@@ -672,6 +688,378 @@ EV['p-version-recall'] = () => {
   return {
     ok: hit.length === want.length,
     detail: `期望 ${want.join('/')}（${def?.answerNote ?? ''}）；答案命中 ${hit.join('/') || '（无）'}。原答：${ans}…`,
+  };
+};
+
+
+// ═══════════════════ 03-microscope：判据求值器（2026-10-10 补）═══════════════════
+//
+// 立场（照 graders/README §七 的纪律）：只吃**结构化证据**——语料 JSON、工具调用与
+// 结果、考生产出的机读文件。**语义项不冒充判定**：客观部分成立才判 PASS，否则记
+// UNKNOWN 并把证据摘出来交人判。硬门一律不用关键词代理。
+const stageRows = () => events.flatMap((e, i) => (e.rows ?? []).map((r) => ({ ...r, stage: i })));
+const allStageCalls = () => stageRows().filter((e) => e.type === 'tool_call');
+const resultById = new Map(toolResults.filter((r) => r.callId).map((r) => [r.callId, String(r.result ?? '')]));
+const callsByTool = (name) => allStageCalls().filter((c) => c.tool === name);
+const resultJsonOf = (call) => { try { return JSON.parse(resultById.get(call.callId) ?? ''); } catch { return null; } };
+const asmResultsOf = (r) => (r?.report?.results ?? []);
+const asmAllResults = () => asmChecks().flatMap((r) => asmResultsOf(r).map((x) => ({ run: r.id, ...x })));
+const multiset = (a) => a.filter(Boolean).slice().sort().join(',');
+const deliveredVersions = () => corpus.children.map((c) => c.version).filter(Boolean);
+const motionRuns = () => corpus.runs.filter((r) => r.kind === 'motion' && r.report).slice()
+  .sort((a, b) => String(a.timestamp ?? a.id).localeCompare(String(b.timestamp ?? b.id)));
+const interferenceOf = (r) => r?.report?.metrics?.interferenceCount ?? null;
+const jointViolationsOf = (r) => (r?.report?.jointViolations ?? r?.report?.metrics?.jointViolations ?? []);
+const after = (id, list) => { const i = list.findIndex((r) => r.id === id); return i < 0 ? [] : list.slice(i + 1); };
+
+// —— 阴性对照三连：命中 + 改回 ——
+EV['g-negative-flange'] = () => {                       // M1：立柱止口 −0.5mm（直径匹配）
+  const checks = asmChecks();
+  // 只认**止口的直径匹配**出公差——"任何提到法兰的结果"会把真实的几何错误也算上。
+  const fire = checks.find((r) => (hardOf(r) ?? 0) >= 1
+    && asmResultsOf(r).some((x) => x.verdict === 'hard-violation'
+      && (x.check === 'diameter-match' || /直径/.test(x.expected?.quantity ?? ''))
+      && /止口|flange/i.test(`${x.a ?? ''} ${x.b ?? ''}`)));
+  if (!fire) return { ok: false, detail: `扫过 ${checks.length} 次装配检查，无一次因"止口直径"hard-violation` };
+  const hit = asmResultsOf(fire).find((x) => x.verdict === 'hard-violation' && /止口|flange/i.test(`${x.a ?? ''} ${x.b ?? ''}`));
+  const rev = after(fire.id, checks).find((r) => (hardOf(r) ?? 0) === 0 && r.report.overallStatus !== 'fail');
+  return { ok: !!rev, detail: rev
+    ? `${fire.id} 触发（${hit?.a} ↔ ${hit?.b} 实测 ${hit?.measured} vs 公差 [${hit?.expected?.min}, ${hit?.expected?.max}]）→ ${rev.id} 回到 0 hard（${rev.report.overallStatus}）`
+    : `${fire.id} 触发了，但之后没有回到零硬冲突` };
+};
+EV['g-negative-chain'] = () => {                        // M3：光阑定位面 +1mm
+  const checks = asmChecks();
+  const outOfTol = asmAllResults().filter((x) => x.measured != null && x.expected
+    && (x.measured < x.expected.min - 1e-9 || x.measured > x.expected.max + 1e-9));
+  // 只看 a/b 两端的名字——用整块 JSON 匹配会把"顺带提到光阑"的光学链接口算进来
+  const fire = outOfTol.find((x) => /光阑|field-stop|aperture/i.test(`${x.a ?? ''} ${x.b ?? ''}`));
+  if (!fire) return { ok: false, detail: `接口实测里没有"光阑/光阑定位面"出公差的一例` };
+  const rev = after(fire.run, checks).find((r) => (hardOf(r) ?? 0) === 0 && r.report.overallStatus !== 'fail');
+  return { ok: !!rev, detail: `${fire.run} 接口 ${fire.interfaceId} 实测 ${fire.measured} vs 公差 [${fire.expected.min}, ${fire.expected.max}]`
+    + (rev ? ` → ${rev.id} 回到 0 hard（${rev.report.overallStatus}）` : '，但之后没有回到零硬冲突') };
+};
+EV['g-negative-gear-phase'] = () => {                   // M2：齿条/齿轮错相位
+  const ms = motionRuns();
+  const fire = ms.find((r) => (interferenceOf(r) ?? 0) >= 1 && /pinion|rack|gear|齿条|齿轮|carriage|滑座/i.test(JSON.stringify(r.report)));
+  if (!fire) return { ok: false, detail: `扫过 ${ms.length} 次 motion，无一次在齿轮/齿条相关件上报干涉` };
+  const rev = after(fire.id, ms).find((r) => (interferenceOf(r) ?? 0) === 0 && r.status === 'pass');
+  return { ok: !!rev, detail: rev
+    ? `${fire.id} 报干涉 ${interferenceOf(fire)} 次（齿轮/齿条相关）→ ${rev.id} 回到 0 干涉 pass`
+    : `${fire.id} 报了干涉，但之后没有回到 0 干涉且 pass` };
+};
+
+// —— 交付纪律四条 ——
+EV['g-delivery-audit-clean'] = () => {
+  const calls = callsByTool('delivery_audit');
+  if (!calls.length) return { ok: false, detail: '没有调用 delivery_audit' };
+  const texts = calls.map((c) => resultById.get(c.callId) ?? '').filter(Boolean);
+  if (!texts.length) return { ok: 'unknown', detail: `调用 ${calls.length} 次，但读不到结果文本` };
+  const last = texts[texts.length - 1];
+  const head = last.split('\n')[0].slice(0, 130);
+  return { ok: !/BLOCKED/.test(last), detail: `最后一次 delivery_audit：${head}（异议是否逐条回应仍须人判）` };
+};
+EV['g-printability-no-unprintable'] = () => {
+  const perVersion = new Map();
+  for (const c of callsByTool('check_printability')) {
+    const j = resultJsonOf(c);
+    if (j?.versionId) perVersion.set(j.versionId, j);
+  }
+  if (!perVersion.size) return { ok: 'unknown', detail: '读不到 check_printability 的工具结果' };
+  const rows = Array.isArray(corpus.files['printability.json']) ? corpus.files['printability.json'] : [];
+  // 只算**交付版本**：设计过程中被否掉的中间版本报 unprintable 是正常的
+  const delivered = new Set(deliveredVersions());
+  const bad = [...perVersion.entries()].filter(([vid, j]) => j.verdict === 'unprintable' && delivered.has(vid));
+  if (!bad.length) return { ok: true, detail: `${perVersion.size} 次 check_printability 中，交付版本无 unprintable` };
+  const unexplained = bad.filter(([vid, j]) => {
+    const row = rows.find((r) => r.version === vid);
+    return !(row && typeof row.note === 'string' && row.note.length > 20
+      && (String(row.note).includes(String(j.minWallMm)) || /假读数|误判|射线|网格棱|artifact/i.test(row.note)));
+  }).map(([vid, j]) => `${vid}(minWall=${j.minWallMm})`);
+  return unexplained.length
+    ? { ok: false, detail: `工具报 unprintable 且未逐条回应：${unexplained.join(', ')}` }
+    : { ok: true, detail: `工具报 unprintable 的 ${bad.length} 件，考生在 printability.json 里逐条给了理由（${bad.map(([v]) => v).join(', ')}）` };
+};
+EV['g-no-turret'] = () => {
+  // 判"有没有这个**零件**"：只认交付 children 的零件名。零件**内部**顺带提到
+  // （例：照明座里放一片 Ø25 平凸聚光镜）不算——题面禁的是还原参考图里那几个可见部件。
+  const names = corpus.children.map((c) => c.name).filter(Boolean);
+  const bad = names.filter((n) => /转换器|聚光镜|反光镜|turret|revolving/i.test(String(n)));
+  const mentions = (corpus.manifest?.versions ?? []).map((v) => v.userIntent).filter(Boolean)
+    .filter((n) => /转换器|聚光镜|反光镜|turret|revolving/i.test(String(n)));
+  return { ok: bad.length === 0, detail: (bad.length ? `零件名命中 ${bad.length} 个：${bad.join(' / ')}` : `${names.length} 个零件名里无转换器·聚光镜·反光镜`)
+    + (mentions.length ? `；另有 ${mentions.length} 个版本意图**内部**提到（需人判是否算"还原了可见部件"）：${String(mentions[0]).slice(0, 60)}…` : '') };
+};
+EV['g-optics-self-consistent'] = () => {
+  const o = corpus.files['optics.json'];
+  if (!o) return { ok: false, detail: '没有 optics.json' };
+  const declared = [o.imageDistanceMm, o.objectDistanceMm].filter((x) => typeof x === 'number');
+  const measured = [];
+  for (const c of callsByTool('measure_distance')) {
+    const j = resultJsonOf(c);
+    if (typeof j?.distanceMm === 'number') measured.push(j.distanceMm);
+  }
+  if (declared.length < 2 || !measured.length) {
+    return { ok: 'unknown', detail: `optics.json 声明 ${declared.join('/')}mm，measure_distance 实测 ${measured.length} 条——不足以比对` };
+  }
+  const pairs = declared.map((d) => measured.find((m) => Math.abs(m - d) <= 0.3));
+  const f = o.focalLengthMm, v = o.imageDistanceMm, M = o.magnification;
+  const mCalc = (typeof f === 'number' && typeof v === 'number' && f > 0) ? v / f - 1 : null;
+  const mOk = (mCalc == null || typeof M !== 'number') ? null : Math.abs(mCalc - M) <= Math.max(0.5, 0.1 * M);
+  return {
+    ok: pairs.every(Boolean) && mOk !== false,
+    detail: `声明 ${declared.join('/')}mm vs 实测 ${pairs.map((p) => (p ?? '—')).join('/')}mm（±0.3mm）`
+      + (mCalc != null ? `；M 声明 ${M} vs v/f−1=${mCalc.toFixed(2)}${mOk === false ? ' ✗不一致' : ' ✓'}` : ''),
+  };
+};
+EV['g-visual-evidence-current'] = () => {
+  if (!corpus.children.length) return { ok: 'unknown', detail: '没有 assembly.json 的 children' };
+  const D = multiset(deliveredVersions());
+  const mergedSets = new Map();
+  for (const v of corpus.manifest?.versions ?? []) {
+    if (v.source?.kind !== 'merged') continue;
+    mergedSets.set(v.id, multiset((v.source.from ?? []).map((f) => f.versionId)));
+  }
+  const whole = [];
+  for (const c of allStageCalls()) {
+    const inp = c.input ?? {};
+    if (c.tool === 'render_part' && typeof inp.versionId === 'string' && mergedSets.has(inp.versionId)) {
+      whole.push({ stage: c.stage, target: `render_part ${inp.versionId}`, set: mergedSets.get(inp.versionId) });
+    } else if (c.tool === 'validate_assembly' && Array.isArray(inp.parts) && inp.parts.length === corpus.children.length) {
+      whole.push({ stage: c.stage, target: `validate_assembly(${inp.parts.length} 件)`, set: multiset(inp.parts.map((p) => p.versionId)) });
+    }
+  }
+  if (!whole.length) return { ok: 'unknown', detail: '没有整机级 render_part/validate_assembly 调用' };
+  const last = whole[whole.length - 1];
+  const ok = last.set === D;
+  return { ok, detail: `最后一次整机渲染/验证：${last.target}（阶段 ${last.stage + 1}）——其版本集${ok ? '与' : '**不**与'}交付集（${corpus.children.length} 件）一致` };
+};
+
+// —— 数值判据 ——
+EV['c-motion-clean'] = () => {
+  const ms = motionRuns();
+  if (!ms.length) return { ok: 'unknown', detail: '没有 motion run' };
+  const last = ms[ms.length - 1];
+  const iv = interferenceOf(last), jv = jointViolationsOf(last).length;
+  const src = new Set(last.sourceVersionIds ?? []);
+  // 陈旧性只跟**这次 run 用到的零件**比：motion 只跑运动的几件，拿全交付集去比会永远"陈旧"。
+  const runParts = (last.parts ?? []).map(String);
+  const relevant = corpus.children.filter((c) => runParts.some((n) => String(c.name).includes(n) || n.includes(String(c.name))));
+  const missing = relevant.map((c) => c.version).filter((v) => v && !src.has(v));
+  const stale = src.size > 0 && relevant.length > 0 && missing.length > 0;
+  const clean = iv === 0 && jv === 0;
+  if (clean && stale) {
+    return { ok: 'unknown', detail: `最后一次 motion ${last.id} 0 干涉/0 关节违规，但它跑的零件里 ${missing.length} 个的交付版本没被覆盖（${missing.slice(0, 4).join(',')}）——**陈旧证据**，不能据此判交付几何干净` };
+  }
+  return { ok: clean, detail: `最后一次 motion ${last.id}: interference=${iv} jointViolations=${jv}` };
+};
+EV['c-coaxial'] = () => needAssembly() ?? (() => {
+  const n = corpus.interfaces.filter((i) => i.check === 'coaxial').length;
+  return { ok: n >= 2, detail: `契约里 check=coaxial 的接口 ${n} 条（期望 ≥2）` };
+})();
+EV['c-undeclared-found'] = () => {
+  const found = asmChecks().map((r) => ({ id: r.id, n: (r.report.undeclared ?? []).length })).filter((x) => x.n >= 1);
+  return { ok: found.length >= 1, detail: found.length
+    ? `${found[0].id} 起邻接发现抓到 undeclared（最多 ${Math.max(...found.map((f) => f.n))} 条）`
+    : `全部 ${asmChecks().length} 次检查的 undeclared 都是空的` };
+};
+EV['c-printability-json'] = () => {
+  const rows = Array.isArray(corpus.files['printability.json']) ? corpus.files['printability.json'] : null;
+  if (!rows) return { ok: false, detail: '没有 printability.json' };
+  const deliveredNames = new Set(corpus.children.map((c) => c.name));
+  const covered = new Set(rows.map((r) => r.part));
+  const missing = [...deliveredNames].filter((n) => !covered.has(n));
+  const perVersion = new Map();
+  for (const c of callsByTool('check_printability')) {
+    const j = resultJsonOf(c);
+    if (j?.versionId) perVersion.set(j.versionId, j);
+  }
+  const mismatched = rows.filter((r) => {
+    const j = perVersion.get(r.version);
+    if (!j) return false;
+    if (j.verdict === 'unprintable' && r.verdict !== 'unprintable' && !(typeof r.note === 'string' && r.note.length > 20)) return true;
+    return j.verdict !== r.verdict && !(typeof r.note === 'string' && r.note.length > 20);
+  }).map((r) => `${r.part}(${r.version}: 文件 ${r.verdict} vs 工具 ${perVersion.get(r.version).verdict})`);
+  const ok = missing.length === 0 && mismatched.length === 0;
+  return { ok, detail: `printability.json ${rows.length} 行 / 交付 ${deliveredNames.size} 种零件`
+    + (missing.length ? `，缺 ${missing.slice(0, 4).join(',')}` : '')
+    + (mismatched.length ? `，与实测不一致且无说明：${mismatched.slice(0, 3).join('；')}` : '，与 check_printability 实测一致（或已给理由）') };
+};
+EV['c-measured-vs-datum'] = () => {
+  const measured = [];
+  for (const c of callsByTool('measure_distance')) {
+    const j = resultJsonOf(c);
+    if (typeof j?.distanceMm === 'number') measured.push(j.distanceMm);
+  }
+  if (!measured.length) return { ok: false, detail: '零 measure_distance 调用——只有契约一条路径，无从比对' };
+  const nominals = corpus.interfaces.map((i) => i.nominal?.value).filter((x) => typeof x === 'number');
+  const pairs = measured.map((m) => nominals.find((n) => Math.abs(n - m) < 0.05)).filter((x) => typeof x === 'number');
+  return pairs.length
+    ? { ok: true, detail: `${measured.length} 次实测里有 ${pairs.length} 次与契约名义值相差 <0.05mm（${pairs.slice(0, 3).join('/')}mm）` }
+    : { ok: 'unknown', detail: `${measured.length} 次实测（${measured.slice(0, 4).join('/')}mm）没有一个能按名义值与契约条目配上——需人判` };
+};
+EV['c-stdlib-used'] = () => {
+  let scads = [];
+  try {
+    for (const v of corpus.manifest?.versions ?? []) {
+      const f = pick(versionsDir ? join(versionsDir, v.id, 'model.scad') : null);
+      if (f) scads.push(f);
+    }
+  } catch { /* ignore */ }
+  if (!scads.length) return { ok: 'unknown', detail: '读不到任何版本的 model.scad' };
+  let includes = 0, modules = 0;
+  for (const f of scads) {
+    let src = '';
+    try { src = readFileSync(f, 'utf8'); } catch { continue; }
+    if (/include\s*<BOSL2\/(gears|threading|screws)\.scad>/.test(src)) includes++;
+    if (/\b(spur_gear|screw|threaded_rod|gear_profile|bevel_gear|worm|nut)\s*\(/.test(src)) modules++;
+  }
+  return { ok: includes > 0 && modules > 0, detail: `${scads.length} 个 SCAD 里 BOSL2 齿轮/螺纹 include ${includes} 个、对应模块调用 ${modules} 个` };
+};
+
+// —— 语义项：只在客观部分成立时判 PASS，否则 UNKNOWN（不做关键词代理式定罪）——
+const finalTextAll = () => finalText;
+EV['c-fine-focus-dof'] = () => {
+  const o = corpus.files['optics.json'];
+  const dof = typeof o?.depthOfFocusMm === 'number' ? o.depthOfFocusMm : null;
+  const umLevel = dof != null && dof > 0 && dof <= 0.1;                      // ≤100µm ⇒ µm 量级
+  const answerDof = /焦深[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*(µm|um|微米)/i.test(finalTextAll());
+  const backlash = /(回程间隙|消隙|预压|背隙|backlash|弹簧预压)/i.test(finalTextAll());
+  if ((umLevel || answerDof) && backlash) {
+    return { ok: true, detail: `焦深 ${dof != null ? dof + 'mm' : '(答案里给了 µm 量级数值)'}；答案含消隙/回程间隙的处置说明` };
+  }
+  return { ok: 'unknown', detail: `需人判：optics.json depthOfFocusMm=${dof ?? '—'}；答案里 µm 级焦深=${answerDof}；消隙说明=${backlash}` };
+};
+EV['c-stability-answers'] = () => {
+  const t = finalTextAll();
+  // 问 1：配重——要有**算出来的**量（CoM/倾倒角/质量）＋明确结论
+  const angle = /(倾倒角|倾覆角|临界角|临界倾角|tipping angle)[\s\S]{0,40}?\d+(?:\.\d+)?\s*°/.test(t)
+    || /CoM[\s\S]{0,60}?[−-]?\d+(\.\d+)?/.test(t);
+  const cwConclusion = /(不需要?配重|需要配重|配重块|无需配重)/.test(t);
+  // 问 2：压片簧/玻片——明确结论（滑/不滑、需要/不需要簧）
+  const spring = /(压片簧|压片夹|玻片)[\s\S]{0,120}?(不滑|滑出|不会滑|不需要?|需要|stayed|upright)/.test(t);
+  const citesRun = /(r\d{3}|simulate_physics|stability)/.test(t);
+  if (angle && cwConclusion && spring) {
+    return { ok: true, detail: `问 1：给算得的量（CoM/倾倒角）＋配重结论；问 2：给出玻片/压片簧结论${citesRun ? '，并引了 run/工具' : ''}（"与 run 一致"仍需人核）` };
+  }
+  return { ok: 'unknown', detail: `需人判：算得的量=${angle}；配重结论=${cwConclusion}；压片簧/玻片结论=${spring}；引用=${citesRun}` };
+};
+EV['c-appearance-diff'] = () => {
+  const t = finalTextAll();
+  const lines = t.split('\n').map((s) => s.trim()).filter((s) => /^([-*]|\d+[.、)]|\|)/.test(s));
+  const likeUnlike = lines.filter((s) => /(像|不像|一致|差异|还原)/.test(s)).length;
+  const keyed = /(马蹄|底座形态|弯臂|C ?形|弧形脚)/.test(t);
+  if (likeUnlike >= 5 && keyed) return { ok: true, detail: `逐项对照清单 ${likeUnlike} 行，且覆盖 key.md 判 ❌ 的形态项（底座/弯臂）` };
+  return { ok: 'unknown', detail: `需人判：清单行数=${likeUnlike}（≥5 要求）；是否落在 key.md 的 ❌ 项上=${keyed}；另需与参考图对照` };
+};
+// 外观 features：定性项，判据是"与参考图的形态是否一致"——机器读不出，给证据指针。
+const featureIds = ['f-silhouette-profile', 'f-base-form', 'f-arm-form', 'f-tube-and-eyepiece', 'f-single-objective', 'f-stage-and-clips', 'f-side-knob'];
+for (const fid of featureIds) {
+  EV[fid] = () => {
+    const renders = callsByTool('render_part').map((c) => (c.input ?? {}).versionId).filter(Boolean);
+    const lm = (() => { try { return JSON.parse(readFileSync(join(gradersDir, level, 'landmarks.json'), 'utf8')); } catch { return null; } })();
+    const bands = lm?.silhouetteProfile?.values ?? null;
+    return {
+      ok: 'unknown',
+      detail: `需人判（外观/形态）：render_part 目标 ${renders.slice(-4).join(',') || '—'}`
+        + (bands ? `；参考图九段剖面（排除 band${(lm.silhouetteProfile.excludedBands ?? []).join(',')}）= ${bands.filter((_, i) => !(lm.silhouetteProfile.excludedBands ?? []).includes(i)).map((x) => x.toFixed(3)).join(',')}` : '')
+        + `；key.md 有该特征的行（${fid}）——剖面 L1 阈值按 key.md §八 待基线回填`,
+    };
+  };
+}
+
+// —— 03 的行程/漂移口径与本卷 rubric 对齐（原求值器是按 40mm/0.5mm 写的）——
+{
+  const strokeGeneric = EV['c-stroke'];
+  const stroke03 = () => {
+    const travels = [];
+    for (const r of motionRuns()) {
+      const fol = r.report?.metrics?.followers ?? {};
+      for (const [name, f] of Object.entries(fol)) {
+        if (typeof f?.travelMm === 'number' && /carriage|滑座|stage|载物/i.test(name)) {
+          travels.push({ run: r.id, name, travel: f.travelMm, axis: f.axis });
+        }
+      }
+    }
+    if (!travels.length) return { ok: 'unknown', detail: 'motion 报告里没有 carriage/滑座 的 travelMm' };
+    const best = travels.reduce((a, b) => (b.travel > a.travel ? b : a));
+    return { ok: best.travel >= 25, detail: `调焦滑座最大行程 ${best.travel}mm（${best.run}，轴 ${best.axis}）；共 ${travels.length} 次观测（expect ≥25）` };
+  };
+  EV['c-stroke'] = () => (level === '03-microscope' ? stroke03() : strokeGeneric());
+
+  const driftGeneric = EV['c-joint-drift'];
+  const driftLimit = (() => {
+    const it = (rubric.checks ?? []).find((x) => x.id === 'c-joint-drift');
+    const m = /(\d+(?:\.\d+)?)/.exec(String(it?.expect ?? ''));
+    return m ? Number(m[1]) : 0.5;
+  })();
+  EV['c-joint-drift'] = () => {
+    const r = lastRunOf('motion');
+    const d = mOf(r).maxJointDriftMm;
+    if (typeof d !== 'number') return { ok: 'unknown', detail: '运动报告里没有 maxJointDriftMm' };
+    return { ok: d <= driftLimit, detail: `${r.id}: maxJointDriftMm=${d}（rubric expect ≤ ${driftLimit}）` };
+  };
+}
+
+// —— 探针：参考图取回（分档） + 版本回忆（期望值从语料推导，不写死）——
+EV['p-reference-recall'] = () => {
+  const variantName = (record.variant ?? 'default');
+  const gui = /gui/.test(variantName);
+  if (gui) {
+    const calls = callsByTool('recall_reference_image');
+    return { ok: calls.length > 0, detail: calls.length ? `GUI 档：recall_reference_image ${calls.length} 次` : 'GUI 档：没有 recall_reference_image 调用' };
+  }
+  const imgReads = allStageCalls().filter((c) => c.tool === 'read_image' && /参考图\.png/.test(JSON.stringify(c.input ?? {})));
+  const inStage2 = imgReads.filter((c) => c.stage >= 1);
+  return {
+    ok: inStage2.length > 0,
+    detail: `headless 档：对 参考图.png 的 read_image 共 ${imgReads.length} 次，其中第二阶段 ${inStage2.length} 次`
+      + (record.probes?.find((p) => p.id === 'p-reference-recall')?.answer ? '（探针答案已附在 record 里，被动观察项）' : ''),
+  };
+};
+// 覆盖原来的 p-version-recall：03 的期望值**从版本库推导**（"槽深"随模型自己的选择变，
+// 写死会误判）；其它 level 仍走原来的 answerValues 口径。
+const pVersionGeneric = EV['p-version-recall'];
+EV['p-version-recall'] = () => (level === '03-microscope' ? pVersionDerived() : pVersionGeneric());
+const pVersionDerived = () => {
+  const def = (rubric.probes ?? []).find((x) => x.id === 'p-version-recall');
+  const rec = probeRec('p-version-recall');
+  const when = def?.when ?? '';
+  const m = /renderRounds\s*>=\s*(\d+)/.exec(when);
+  if (m && renderRounds() < Number(m[1])) return { ok: 'unknown', detail: `不适用：${when}（实测 renderRounds=${renderRounds()}）` };
+  if (!rec) return { ok: 'unknown', detail: '本轮没问这条探针' };
+  const answer = rec.answer ?? '';
+  if (!answer) return { ok: 'unknown', detail: `问了但没拿到答案（exit=${rec.exitCode}）` };
+  // 载物台 = 名字或 userIntent 含"载物台"的零件；取它的**第 3 版**（按时间）
+  // 载物台 = **交付件**里那个名字；再由它的版本反查 partId 的版本链
+  const stageChild = corpus.children.find((c) => /载物台|stage/i.test(String(c.name ?? '')));
+  const stageVid = stageChild?.version;
+  const stagePartId = (corpus.manifest?.versions ?? []).find((v) => v.id === stageVid)?.partId;
+  const stagePartIds = new Set(stagePartId ? [stagePartId] : []);
+  const vids = (corpus.manifest?.versions ?? []).filter((v) => stagePartIds.has(v.partId))
+    .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp))).map((v) => v.id);
+  const third = vids[2];
+  if (!third) return { ok: 'unknown', detail: `版本库里找不到载物台的第 3 版（链：${vids.join('→') || '—'}）` };
+  // 槽深 = 该版本的 bbox 最高点 − SCAD 里名为"槽底"的 datum 平面 z
+  let want = null, how = '';
+  try {
+    const scadPath = pick(versionsDir ? join(versionsDir, third, 'model.scad') : null);
+    const stlPath = pick(versionsDir ? join(versionsDir, third, 'model.stl') : null);
+    if (scadPath && stlPath) {
+      const src = readFileSync(scadPath, 'utf8');
+      const g = /datum_plane\(\s*"槽底"\s*,\s*\[\s*[-\d.]+\s*,\s*[-\d.]+\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/.exec(src);
+      const bounds = stlBounds(Buffer.from(readFileSync(stlPath)));
+      if (g && bounds?.max) want = +(bounds.max[2] - Number(g[1])).toFixed(3);
+      how = g ? `${third} 槽底 z=${g[1]}、零件顶面 z=${bounds?.max?.[2]}` : `${third} 的 SCAD 里没有 datum_plane("槽底")`;
+    }
+  } catch { /* 推导失败 → 记 UNKNOWN */ }
+  const nums = (answer.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+  const staticWant = def?.answerValues ?? [];
+  const cands = want != null ? [want] : staticWant;
+  if (!cands.length) return { ok: 'unknown', detail: `期望值推导失败（${how || '读不到版本文件'}）；原答：${answer.replace(/\s+/g, ' ').slice(0, 120)}…` };
+  const hit = cands.filter((w) => nums.some((n) => Math.abs(n - w) < 0.05));
+  return {
+    ok: hit.length === cands.length,
+    detail: `期望槽深 ${cands.join('/')}mm（${how || def?.answerNote || ''}，第 3 版=${third}）；答案命中 ${hit.join('/') || '（无）'}。原答：${answer.replace(/\s+/g, ' ').slice(0, 110)}…`,
   };
 };
 
