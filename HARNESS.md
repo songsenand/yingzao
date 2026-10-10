@@ -474,6 +474,12 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 | `DSH_CAD_PYTHON_INDEX_URL` | pip 索引 | PyPI → 阿里云 依次尝试（同日实测 npmmirror 的 PyPI 路径 404、TUNA 403） |
 | `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试/多实例用） | `$DSH_HOME/cad/runtime` |
 
+**Opt-in 开关（默认关；标准/日常会话行为不变）：**
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_CAD_IMAGE_WINDOW=1` | 让**没有预设名的会话**也套用造物模式的 **24 张图像保留窗口**。为什么需要：headless（`dsh --profile headless`）不 compose 预设注册表（`preset-cad` 停在 pending），于是 `presetOfSession` 为 null、窗口不生效——2026-10-10 实测 03-microscope 的渲染会话把请求堆到 **70 张图**，被上游以 `Too many images in request: 70 > 64` 拒绝，A 段 exit 1、B 段直接不跑。带真预设的会话（`standard`/`cad`）**不受此开关影响**。 |
+
 **诊断开关（只用于定位，**绝不可在生产设置**；全部只影响日志/对照，不改变工具 schema）：**
 
 | 变量 | 作用 |

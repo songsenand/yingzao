@@ -41,7 +41,27 @@ const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED';
  * The live `agentPreset` Session projection is authoritative; the header is only
  * a fallback for profiles that do not compose dsh-agent-presets.
  */
-export function presetOfSession(session: any, projectionService?: any): string | null {
+/**
+ * OPT-IN override for environments that cannot name the cad preset.
+ *
+ * The window below is gated on the session's preset. A `dsh --profile headless`
+ * evaluation run composes no preset registry at all (`preset-cad` stays pending:
+ * "waiting for service: agentPresets"), so `presetOfSession` returns null, the
+ * cad window never applies, and a render-heavy session grows without bound until
+ * the PROVIDER rejects the request — measured on the bench's 03-microscope level:
+ * `INVALID_REQUEST 400: Too many images in request: 70 > 64`, which aborts the
+ * segment and voids the round. Setting `DSH_CAD_IMAGE_WINDOW=1` applies the same
+ * 24-image window to such a session.
+ *
+ * Default OFF: standard sessions keep dsh factory behaviour (the user's rule —
+ * this plugin patches no route budget).
+ */
+export function forcedCadImageWindow(): boolean {
+  const raw = process.env.DSH_CAD_IMAGE_WINDOW;
+  return raw === '1' || raw === 'true' || raw === 'always';
+}
+
+function resolvePresetOfSession(session: any, projectionService?: any): string | null {
   try {
     const read = projectionService?.stateOf;
     if (typeof read === 'function') {
@@ -52,6 +72,18 @@ export function presetOfSession(session: any, projectionService?: any): string |
   } catch { /* projection unavailable — fall through to the header */ }
   const header = session?.header?.agentPreset;
   return typeof header === 'string' && header ? header : null;
+}
+
+/**
+ * The preset an image decision should use. Differs from `resolvePresetOfSession`
+ * only when `DSH_CAD_IMAGE_WINDOW` is set AND the session names no preset at all
+ * — a real `standard` session stays `standard`, so the override cannot widen the
+ * window for sessions that deliberately run without 造物模式.
+ */
+export function presetOfSession(session: any, projectionService?: any): string | null {
+  const resolved = resolvePresetOfSession(session, projectionService);
+  if (!resolved && forcedCadImageWindow()) return 'cad';
+  return resolved;
 }
 
 import { DEEPSEEK_KEEP_IMAGES } from './image-budget.ts';
