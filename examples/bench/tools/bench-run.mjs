@@ -225,7 +225,7 @@ for (let r = 1; r <= args.repeat; r++) {
   if (args.dryRun) {
     rec.stages = taskFiles.map((t, i) => ({
       task: t.path,
-      cmd: `dsh --profile headless --patch ${skillOverlay} --patch ${join(runRoot, 'model-overlay.yml')}`
+      cmd: `dsh --profile headless --patch ${join(runRoot, 'skill-overlay.yml')} --patch ${skillOverlay} --patch ${join(runRoot, 'model-overlay.yml')}`
         + ` --json`
         + (i === 0 ? '' : ' --session-id <第一段事件流报出的 sessionId>')
         + ` < ${join(runRoot, t.path.replace(/^subjects\/[^/]+\//, ''))}`,
@@ -245,6 +245,23 @@ for (let r = 1; r <= args.repeat; r++) {
   await rm(runRoot, { recursive: true, force: true });
   await mkdir(runRoot, { recursive: true });
   await cp(join(subjectsDir, level), runRoot, { recursive: true });
+
+  // 1b) 手册副本放到 run root 里，并生成一份指向它的 overlay。
+  //
+  // 为什么：skill 内容自带 `<skill_resources> Base directory for this skill: <abs path>`，
+  // 而被检插件是 link 到仓库的 dev checkout —— 于是"仓库根"顺着手册路径进了考生上下文。
+  // 实测（01 r01）：考生从手册里的仓库路径出发 `cd examples/bench && find .`，
+  // 再 `cat graders/01-mortise-bench/{rubric.json,key.md,prompt.md}`，整轮作废。
+  // 把手册复制到 run root 外置后，考生看到的基础目录在仓库之外，面包屑消失。
+  const skillCopyDir = join(runRoot, '.skills');
+  const repoSkillDir = join(repoRoot, 'dsh-cad-harness', 'skills');
+  if (existsSync(repoSkillDir)) {
+    await cp(repoSkillDir, skillCopyDir, { recursive: true });
+  }
+  const runSkillOverlay = join(runRoot, 'skill-overlay.yml');
+  await writeFile(runSkillOverlay,
+    `- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n`
+    + `  config:\n    includeDefaultRoots: false\n    customSkillDirs:\n      - ${skillCopyDir}\n`, 'utf8');
 
   // 2) 按变体物化额外素材（03 headless：参考图进工作目录）
   for (const c of vcfg.copy ?? []) {
@@ -292,7 +309,7 @@ for (let r = 1; r <= args.repeat; r++) {
   let adoptedSessionId = null;
   for (const stage of rec.stages) {
     const eventsPath = join(runRoot, `${stage.local.replace(/\.md$/, '')}.events.jsonl`);
-    const argv = ['--profile', 'headless', '--patch', skillOverlay, '--patch', modelOverlay, '--json'];
+    const argv = ['--profile', 'headless', '--patch', runSkillOverlay, '--patch', skillOverlay, '--patch', modelOverlay, '--json'];
     if (adoptedSessionId) argv.push('--session-id', adoptedSessionId);
     const shown = `dsh ${argv.join(' ')} < ${stage.local}`;
     console.log(`  · ${shown}`);
@@ -323,7 +340,7 @@ for (let r = 1; r <= args.repeat; r++) {
   if (!aborted && adoptedSessionId && probes.length) {
     for (const pr of probes) {
       const evPath = join(runRoot, `probe-${pr.id}.events.jsonl`);
-      const pargv = ['--profile', 'headless', '--patch', skillOverlay, '--patch', modelOverlay,
+      const pargv = ['--profile', 'headless', '--patch', runSkillOverlay, '--patch', skillOverlay, '--patch', modelOverlay,
         '--json', '--session-id', adoptedSessionId];
       const shown = `dsh ${pargv.join(' ')} <<${pr.id} 的 ask>>`;
       console.log(`  · 探针 ${pr.id}: ${pr.ask.slice(0, 40)}…`);

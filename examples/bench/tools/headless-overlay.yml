@@ -30,12 +30,13 @@
 # 不要与 GUI/造物模式的分数混算。见 `graders/README.md` §二·五。
 
 # 1) 把 CAD 手册根接到顶层（照抄 preset-cad 里那一行的配置，保持只有 CAD 手册）
-- id: skill-filesystem
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    includeDefaultRoots: false
-    customSkillDirs:
-      - /home/songsenand/Project/ToyMarker/dsh-cad-harness/skills
+# 1) 手册根**不再写在这里**。
+#
+# 它现在由 `bench-run.mjs` 每轮写进 run root：
+#   <run-root>/skill-overlay.yml → customSkillDirs: [<run-root>/.skills]
+# 因为手册内容自带"Base directory for this skill: <绝对路径>"，而被检插件是 link 到
+# 仓库的 dev checkout —— 写仓库路径等于把"仓库根"递给考生。实测（01 r01）考生据此
+# 找到并 `cat graders/<题>/{rubric.json,key.md,prompt.md}`，整轮作废。
 
 # 2) 模型**不在这里**钉。
 #
@@ -48,3 +49,93 @@
 #
 # 分开写是为了让本文件只承担一个职责（接回手册），并且避免两份 overlay 都在写
 # 同一行时谁赢说不清。
+
+# 3) 把 **provider 注册表**也接回来（headless 的 llm-pi-ai 行没有 config）。
+#
+# 与手册那一行同理：headless 组出了 llm-pi-ai 这个插件，却没给它 providers 配置，
+# 于是 `--model <provider>/<model>` 只能指向 profile 里已注册的 provider（如
+# deepseek-official）。把 GUI 档用到的 provider 注册表原样抄过来，`bench-run.mjs`
+# 的 `--model opencode-go/deepseek-v4.1-flash` 之类的取值才有意义。
+# 密钥不在本文件里：`apiKeyEnv` 由 DSH 从 $DSH_HOME/.credentials.yaml 解析。
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      zai-coding-cn:
+        apiKeyEnv: ZAI_CODING_CN_API_KEY
+        models:
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+          - id: glm-4.7
+            name: GLM-4.7
+            contextWindow: 204800
+            maxTokens: 131072
+          - id: glm-5.2
+            name: GLM-5.2
+            contextWindow: 1000000
+            maxTokens: 131072
+      opencode-go:
+        models:
+          - id: minimax-m3
+            name: MiniMax-M3
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+              - image
+          - id: qwen3.8-flash
+            name: Qwen3.8 Flash
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+              - image
+          - id: deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash
+            contextWindow: 1000000
+            maxTokens: 384000
+            input:
+              - text
+              - image
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+              - image
+          - id: kimi-k2.7-code
+            name: Kimi K2.7 Code
+            contextWindow: 262144
+            maxTokens: 262144
+            input:
+              - text
+              - image
+          - id: kimi-k3
+            name: Kimi K3
+            contextWindow: 1048576
+            maxTokens: 131072
+            input:
+              - text
+              - image
+          - id: longcat-2.0
+            name: LongCat-2.0
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+          - id: gpt-5.6-luna
+            name: GPT-5.6 Luna
+            contextWindow: 1050000
+            maxTokens: 128000
+            input:
+              - text
+              - image
+          - id: muse-spark-1.3-contributor
+            name: Muse Spark 1.3 Contributor
+            contextWindow: 1048576
+            maxTokens: 131072
+            input:
+              - text
+              - image
+        apiKeyEnv: OPENCODE_GO_API_KEY

@@ -196,70 +196,40 @@ near-touching pairs were never declared).
   revolute/prismatic joints and cannot hold a machine together by itself. It reports
   the number of **shells**: more than one means the parts you merged do not all
   touch, so the body is not a machine but a pile.
-- **`simulate_fluid` is a sampled estimate whose headline number is ONE
-  realization.** The scheme runs at a fixed `dt = 0.004 s`, and refining it moves
-  the arrival ratio a lot: measured on the Ø100 pipe, `dt` 0.004 → 0.002 → 0.001
-  gives arrival **0.674 → 0.758 → 0.797** (still climbing). So the arrival ratio
-  is a *range*, not a measurement: do not chase a 1–2 % difference between runs,
-  and do not read `overallStatus: pass` as a quality claim — it is a floor
-  (no divergence, penetration 0, conservation error < 1e-6, and arrival ≥ 0.5
-  when an outlet plane is defined).
-- **Read `simulate_fluid`'s `warnings` before believing its field.** A
-  `stacksPerSeed` above 1.5 means the requested `particleCount` exceeded the seed
-  lattice, so extra particles are **duplicates stacked on the same spot** — the
-  escaped *fraction* is unaffected, but the field is far coarser than
-  `particleCount0` suggests (raise `particlesPerCell`). And
-  `seedStats.solidFraction` is the share of the seed box that is metal: the box
-  comes from the bounding box, so a thick-walled part scores 0.6–0.8 and the
-  lattice is coarse exactly where the flow is.
-- **Read `simulate_physics`'s `metrics.notes`.** They are the tool telling you its
-  own number is unreliable: ≥ 4 shells in the input means the settled penetration
-  is a solver artefact with sparse ground contact (cross-check fit with
-  `check_assembly` instead), and the hold analysis is labelled quasi-static.
-  `settled` means "still moving at the end" (linvel > 5 mm/s), not "did not
-  drift"; `jointViolations` is anchor drift > 2 mm for a hinge and motion *across*
-  the axis > 2 mm for a slide.
-- **`check_printability` samples triangles, so it can miss a thin feature
-  entirely.** The stride is `floor(triangles / samples)` — at the default 600
-  samples a 28,830-triangle part is inspected every ~48th triangle. Raise
-  `samples` (max 4000) for a big or safety-critical part. Its wall numbers are
-  the distance to the **nearest** opposite wall (a traversal-order bug used to
-  report the far wall and under-report thin walls by ~2×); if you are comparing
-  against numbers from an older session, expect today's to be **thinner**.
-  `verdict: unprintable` means min wall < 0.4 × `wallMinMm`; `check` means a
-  finding exists (answer it); `ok` means none.
-- **`measure_part`'s `genus` is only meaningful for ONE connected solid.** For a
-  single body it is the number of through holes; a multi-body mesh reports a
-  **negative** number (two disjoint cubes → −1), which is another way of seeing
-  "this is not one part". Use `check_connectivity` for the body count.
-- **`check_connectivity` counts bodies by SHARED EDGE.** Two solids that touch at
-  a single vertex (or cross without sharing an edge) are two bodies; that is the
-  strict criterion, and it is why a corner-touching "one part" is still rejected.
-- **`// PARAMS` is how a part exposes tunables to the panel.** A top-level line of
-  the form `wall = 3; // PARAMS 壁厚` becomes a slider in the panel's Customizer
-  for that version (the description after `PARAMS` is the label). Keep them
-  top-level and numeric; a tagged assignment nested inside a module body is
-  still picked up, which is almost never what you meant.
-- **The measuring, checking and simulating tools run on the plugin's bundled
-  Python runtime** — `generate_part` (its SCAD text protocol), `import_part`,
-  `merge_parts`, `validate_assembly`, `measure_part`, `measure_distance`,
-  `measure_closest`, `check_printability`, `check_connectivity`,
-  `simulate_physics`, `simulate_motion`, `simulate_fluid`. That runtime is pinned
-  (CPython 3.13 + numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree;
-  `rapier3d` everywhere a wheel exists), and the first call on a machine
-  provisions it once — hundreds of MB and minutes, with progress.
-  **`check_assembly`, `delivery_audit`, `create_part`, `set_datums`, `render_part`
-  and `recall_reference_image` do not need it** (they read the corpus, the store or
-  the panel), so they keep working with the runtime off. `python_runtime` reports,
-  provisions or repairs the runtime; `run_python` is the escape hatch for anything
-  the CAD tools do not cover (same pinned deps, full filesystem access, **no
-  sandbox**) and it installs the runtime on its own first call.
-  If a tool comes back saying the runtime is not ready, that message already names
-  the fix: `python_runtime` with `action: "provision"`, then call the tool again.
-  With `DSH_CAD_PYTHON=off` every Python-backed tool is **unavailable by design**
-  and says so — the only exception is darwin-x64, where physics and motion keep
-  working because that platform has no `rapier3d` wheel and stays on the
-  TypeScript implementation.
+- **Read the tool's own caveat fields before its headline number.** Each of these
+  is the tool telling you its result cannot be read the way you are about to read
+  it:
+  - `simulate_fluid`: `warnings` (a `stacksPerSeed` above 1.5 means the requested
+    count exceeded the seed lattice, so extra particles are duplicates on the same
+    spot) and `seedStats.solidFraction` (the share of the seed box that is metal —
+    high enough on a thick-walled part that the lattice is coarse where the flow
+    is). Its arrival ratio is a *sampled* number: state it as a range, and treat
+    `overallStatus: pass` as a floor, not a quality claim.
+  - `simulate_physics`: `metrics.notes` (they say when the run's own geometry
+    makes a figure an artefact — e.g. several disconnected shells — and when an
+    analysis is analytic rather than solved), `settled` (means "still moving at
+    the end", not "did not drift"), `jointViolations` (hinge anchor drift / slide
+    cross-axis motion beyond its threshold).
+  - `check_printability`: `samples` sets the triangle stride (`triangles / samples`),
+    so a thin feature between samples is missed — raise it for a big or
+    safety-critical part. Walls are measured to the nearest opposite wall;
+    `verdict` is one of `ok` / `check` (answer the finding) / `unprintable`.
+- **Check the operator, not just the interface count.** For every interface whose
+  `type` is a joint (转动副 / 滑动副), look at its `check` operator: an interface
+  whose operator cannot consume a motion run cannot fail because the mechanism
+  does not move, however green the report is. `motion-clearance` consuming a run
+  that predates the delivered versions is the same problem one step later.
+- **`genus` is only meaningful for ONE connected solid.** A multi-body mesh
+  reports a negative genus; use `check_connectivity` (shared-edge criterion — two
+  solids touching at a single vertex are two bodies) for the body count.
+- **`// PARAMS`** turns a top-level `name = number; // PARAMS <label>` line into a
+  panel tunable for that version.
+- **Runtime**: running the measuring / checking / simulating tools needs the
+  plugin's pinned Python runtime; `python_runtime` reports, provisions or repairs
+  it, and the runtime-not-ready error already names that fix. `run_python` shares
+  the same pinned environment and is the escape hatch for checks the CAD tools do
+  not cover. `check_assembly`, `delivery_audit`, `create_part`, `set_datums`,
+  `render_part`, `recall_reference_image` do not need it.
 - **Runs have a lifecycle.** A run records a `subject` (the manifest it audited,
   the part set it posed); committing a newer run about the same subject marks the
   older one `supersededBy`. So "which run is the current answer" is readable, and
@@ -363,13 +333,16 @@ near-touching pairs were never declared).
    the machine", check the run's part list — if it is not the full delivered
    set, the claim is about a fragment, and you say so or you re-run it over
    everything.
-6. **A mechanism must be an interface in the contract.** If parts move relative
-   to each other (gear/rack, slide, hinge, cam), the assembly manifest declares
-   `转动副` / `滑动副` interfaces with `check: "motion-clearance"` and cites the
-   motion run. microscope5 delivered 26 interfaces — **zero** of them
-   motion-clearance — so "26 interfaces, 0 hard violations" was a green light
-   that said nothing about the mechanism, which was in fact interfering.
-   A contract that cannot fail on the mechanism is not a contract.
+6. **A mechanism must be able to fail the contract.** If parts move relative to
+   each other (gear/rack, slide, hinge, cam), the manifest declares `转动副` /
+   `滑动副` interfaces with `check: "motion-clearance"` citing a motion run.
+   **Procedure before you call a contract green:** list every interface, take the
+   ones whose `type` is a joint, and for each ask (a) which operator its `check`
+   uses, (b) whether that operator consumes a run, and (c) whether the run it
+   cites covers the versions you are delivering. Any joint whose answers are not
+   (motion-clearance, yes, yes) is unverified no matter what the report says —
+   "N interfaces, 0 hard violations" cannot speak about a mechanism the contract
+   cannot fail on.
 7. **Run `delivery_audit` before any delivery claim, and answer its findings.**
    It reads the corpus (not your memory) and returns: failing runs that are
    still newest of their kind, stale evidence, versions nobody checked,
