@@ -5,7 +5,8 @@
 //
 // 用法：
 //   node examples/bench/tools/bench-run.mjs --level 01-mortise-bench \
-//        --model deepseek-official/deepseek-flash [--repeat 3] [--tag myrun]
+//        --model deepseek-official/deepseek-flash [--reasoning-effort low]
+//        [--repeat 3] [--tag myrun]
 //   node examples/bench/tools/bench-run.mjs --level 03-microscope --variant headless --model …
 //   node examples/bench/tools/bench-run.mjs --level 01-mortise-bench --dry-run
 //
@@ -94,6 +95,7 @@ function parseArgs(argv) {
     else if (a === '--repeat') out.repeat = Number(next());
     else if (a === '--tag') out.tag = next();
     else if (a === '--root-dir') out.rootDir = next();
+    else if (a === '--reasoning-effort') out.reasoningEffort = next();
     else if (a === '--no-probes') out.noProbes = true;
     else if (a === '--dry-run') out.dryRun = true;
     else die(`unknown flag ${a}`);
@@ -216,6 +218,7 @@ for (let r = 1; r <= args.repeat; r++) {
   const rec = {
     level, variant: variantName, run: r, runRoot, sessionId,
     model: args.model ?? null,
+    reasoningEffort: args.reasoningEffort ?? null,
     // tier 说的是"怎么跑的"（本 runner 一律走 headless），与变体是**两个维度**：
     // 变体决定参考图怎么送（附件 / 文件），tier 决定会话命名不命名预设。
     tier: 'headless（不命名预设）',
@@ -296,9 +299,13 @@ for (let r = 1; r <= args.repeat; r++) {
   const [provider, model] = (args.model ?? '').split('/');
   if (!provider || !model) die('--model 需为 <provider>/<model>');
   const modelOverlay = join(runRoot, 'model-overlay.yml');
+  // README §5.3：同一模型、同一 reasoning 档位，并记进分数文件。不指定时沿用 profile
+  // 默认——那样两臂虽可比，却与 GUI/造物模式档（web profile 里显式写着 reasoningEffort）
+  // 不是一个档位，A/B 结论不能跨档引用。
   await writeFile(modelOverlay,
     `- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n`
-    + `  config:\n    provider: ${provider}\n    model: ${model}\n`, 'utf8');
+    + `  config:\n    provider: ${provider}\n    model: ${model}\n`
+    + (args.reasoningEffort ? `    reasoningEffort: ${args.reasoningEffort}\n` : ''), 'utf8');
 
   // 6) 逐段跑
   //    `--session-id` 是"**认领一个已存在**的会话"——未知 id 直接报错（实测）。
