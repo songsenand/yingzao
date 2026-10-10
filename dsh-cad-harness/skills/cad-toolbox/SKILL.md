@@ -5,11 +5,11 @@ description: Use when a task involves 3D geometry at all — designing or changi
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty tools, seven jobs. The tool descriptions say what each one *is*; this file
+Twenty-four tools, seven jobs. The tool descriptions say what each one *is*; this file
 says **which one the question belongs to**, what its boundary is, and what has
 already gone wrong.
 
-Four of the twenty are not geometry tools and are routed at the bottom of the
+Four of the twenty-four are not geometry tools and are routed at the bottom of the
 table: `create_part` (name a subject before geometry exists), `delivery_audit`
 (the corpus-wide delivery check), and the runtime pair `run_python` /
 `python_runtime` (the open-ended escape hatch and its installer).
@@ -26,6 +26,10 @@ table: `create_part` (name a subject before geometry exists), `delivery_audit`
 | "does the mechanism move correctly", "what's the stroke", "does it jam mid-travel" | `simulate_motion` | `simulate_physics` |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
 | "how big / how many holes / is it watertight", whole-part numbers | `measure_part` | renders |
+| "how long is this along a diagonal", "which point is the top of this" | `measure_extent` | `measure_part` (bbox only, no coordinates) |
+| **"where are the holes", "what features does this part have", any geometry you did not draw** | **`list_features`** | guessing coordinates from a render |
+| "how thick is this wall", "what is behind this face", "the gap along this line" | `measure_thickness` | aiming `measure_distance` at a point you cannot name |
+| **"hole spacing in this plane", "the wall thickness in a cut", "the angle in a section"** | **`measure_section`** | picking 3D points off a render |
 | "hole spacing", "wall thickness here", "gap at this spot" | `measure_distance` | `measure_part` |
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_closest` | `measure_distance` |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
@@ -49,6 +53,15 @@ interface endpoint* — that needs datums, which an STL does not carry (see belo
 that gets confused most: whole-part scalars → `measure_part`; two points you can
 name → `measure_distance`; the closest approach you *cannot* name → let the
 solver find it with `measure_closest`.
+
+**You cannot name a point on geometry you did not draw, and renders carry no
+coordinates.** So before measuring an imported STL or an existing corpus part,
+get the coordinates from `list_features` (face normals, hole centres and
+diameters, cylinder axes) and then measure against those. When you cannot name a
+point even then, `measure_thickness` takes a LINE instead of a point: the ray only
+has to cross the wall, and every crossing comes back, so a rough guess is enough.
+`measure_distance` remains the tool for a point you can write down exactly — a
+datum, or a coordinate you read out of `list_features`.
 
 **`validate_assembly` vs `check_assembly`**: the first is ad-hoc (give it parts
 and poses, it answers interference and clearance); the second is contractual

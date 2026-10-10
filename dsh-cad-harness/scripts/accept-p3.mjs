@@ -389,6 +389,60 @@ check('generate_part with only unknown view names falls back to all four',
 const skillNow = await readFile(skillPath, 'utf8');
 check('SKILL.md teaches the image-budget economy (views on numeric iterations)',
   /Images are the biggest context spend/.test(skillNow) && /views: \["iso"\]/.test(skillNow));
+
+// ============ the measurement tools, driven through the REAL tool objects ============
+// Each new op is covered by its own truth acceptance (accept-measure-thickness /
+// -list-features / -measure-section / -measure-extent), but those drive the WORKER.
+// Nothing yet proved the tool layer wires version ids to worker paths for them, so a
+// schema or forwarding mistake could sit there unobserved. This closes that gap with
+// a part that has a bore and a boss, through `execute` exactly as the agent calls it.
+console.log('\n--- measurement tools end to end (tool layer) ---');
+const vMeasure = (await call('generate_part', {
+  userIntent: 'P3 measured part (plate with a bore and a boss)',
+  part: 'P3 测量件',
+  scadCode: 'difference(){ cube([40,40,8], center=true);'
+    + ' translate([-12,0,0]) cylinder(h=20, d=6, center=true, $fn=48); }'
+    + ' translate([12,0,7]) cylinder(h=8, d=10, center=true, $fn=48);',
+  views: ['iso'],
+})).value.versionId;
+
+const thickness = await call('measure_thickness', {
+  versionId: vMeasure, from: [-30, 0, 0], direction: '+x',
+});
+check('measure_thickness: the tool layer forwards an axis string and returns spans',
+  thickness.value.spans.length >= 2 && thickness.value.spans.every((span) => span.thicknessMm > 0)
+    && JSON.stringify(thickness.value.direction) === JSON.stringify([1, 0, 0]),
+  `spans=${thickness.value.spans.length} thinnest=${thickness.value.thinnestSpanMm} dir=${JSON.stringify(thickness.value.direction)}`);
+check('measure_thickness: the datum-free path still reports watertightness for the warning',
+  thickness.value.watertightA === true && !('watertightB' in thickness.value),
+  `watertightA=${thickness.value.watertightA} watertightB=${'watertightB' in thickness.value}`);
+
+const features = await call('list_features', { versionId: vMeasure });
+check('list_features: the tool layer returns faces, holes and the bore/boss classification',
+  features.value.watertight === true && features.value.faceCount > 0
+    && features.value.cylinders.some((cylinder) => cylinder.kind === 'bore')
+    && features.value.cylinders.some((cylinder) => cylinder.kind === 'boss'),
+  `faces=${features.value.faceCount} holes=${features.value.holeCount} cyls=${JSON.stringify(features.value.cylinders.map((c) => `${c.kind}:Ø${c.diameterMm}`))}`);
+check('list_features: thresholds are echoed so a filtered list is readable',
+  features.value.thresholds.minFaceAreaMm2 > 0 && typeof features.value.facesOmitted === 'number');
+
+const section = await call('measure_section', { versionId: vMeasure, axis: 'z' });
+check('measure_section: the tool layer sections a version and reports the plane frame',
+  section.value.empty === false && section.value.polygons.length > 0
+    && Array.isArray(section.value.uAxisMm) && typeof section.value.atMm === 'number',
+  `polys=${section.value.polygons.length} holes=${section.value.holeCount} at=${section.value.atMm}`);
+check('measure_section: a bad axis is refused by the worker, not silently defaulted',
+  await call('measure_section', { versionId: vMeasure, axis: 'diagonal' }).then(() => false, () => true));
+
+const extent = await call('measure_extent', { versionId: vMeasure, axis: 'x' });
+check('measure_extent: the tool layer projects on an axis and hands back extremal points',
+  extent.value.sizeMm > 39 && extent.value.minPointMm.length === 3 && extent.value.maxPointMm.length === 3,
+  `size=${extent.value.sizeMm} points=${JSON.stringify([extent.value.minPointMm, extent.value.maxPointMm])}`);
+const diagonalExtent = await call('measure_extent', { versionId: vMeasure, axisVector: [1, 1, 0] });
+check('measure_extent: axisVector reaches the worker as a vector',
+  Math.abs(diagonalExtent.value.sizeMm - (40 + 40) / Math.SQRT2) < 0.1,
+  `size=${diagonalExtent.value.sizeMm}`);
+
 const panelSrc = await readFile(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'client', 'panel.ts'), 'utf8');
 check('panel: 📸 opens a compose dialog (draft + send/park), text travels with the image',
@@ -396,6 +450,18 @@ check('panel: 📸 opens a compose dialog (draft + send/park), text travels with
     /userText: text/.test(panelSrc));
 check('panel: the auto caption is READ-ONLY and always sent; the user types a separate note',
   /只读展示，随图必发/.test(panelSrc) && /\[d\.auto, note\]/.test(panelSrc));
+// The section (剖切) has no geometry of its own — a clip plane is a shader effect —
+// so the three things that make it MEASURABLE have to stay wired: the click is
+// constrained to the plane, it snaps to a vertex, and the cut is drawn as a cap.
+// Losing any one of them silently returns the old behaviour (clicks landing on the
+// far interior wall, i.e. "two points in the section measure the part's diagonal").
+check('panel: a click in the section is constrained to the cut plane, capped, and snaps to vertices AND hole centres',
+  /projectToCutPlane\(/.test(panelSrc) && /nearestVertex\(/.test(panelSrc)
+    && /capTriangles\(/.test(panelSrc) && /sectionSegments\(/.test(panelSrc)
+    && /loopCentroids\(/.test(panelSrc) && /planeToWorld\(/.test(panelSrc)
+    && /SNAP_PX/.test(panelSrc));
+check('panel: measuring in a section says so in the caption the agent receives',
+  /测量点已约束在该剖切面内/.test(panelSrc));
 
 // ================= check_printability + delivery discipline =================
 
@@ -429,7 +495,15 @@ const openShot = await call('check_printability', { versionId: vOpen });
 check('an open mesh carries the watertight warning into its findings',
   openShot.value.watertight === false && openShot.value.findings.some((f) => /NOT watertight/.test(f)));
 check('SKILL.md carries the delivery-discipline section (green numbers ≠ done)',
-  /Delivery discipline/.test(skillNow) && /check_printability/.test(skillNow) && /Fifteen tools/.test(skillNow));
+  /Delivery discipline/.test(skillNow) && /check_printability/.test(skillNow));
+// Every tool the agent can call must be NAMED in the manual. This replaces a
+// literal "Fifteen tools" that had gone stale: it asserted a number from two
+// catalog generations ago, so it failed for a reason unrelated to what it was
+// guarding (the 2026-10-12 catalog is 20). Naming is the invariant that actually
+// matters — a tool the router table never mentions is a tool the model will not
+// reach for.
+const undocumented = [...tools.keys()].filter((name) => !new RegExp(`\\b${name}\\b`).test(skillNow));
+check(`SKILL.md names every registered CAD tool (${tools.size} of them)`, undocumented.length === 0, undocumented.join(', '));
 const hostSrc = await readFile(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'host', 'tools.ts'), 'utf8');
 check('validate_assembly finalize states the delivery gate (eyes + printability before done)',

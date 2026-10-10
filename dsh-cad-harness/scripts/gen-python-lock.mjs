@@ -66,6 +66,18 @@ const PACKAGES = [
   // price of moving measure_closest to Python (2026-10-08).
   // No dependencies; py3 wheels for all seven targets; no compiler.
   { name: 'rtree', version: '1.4.1' },
+  // Polygonisation for `measure_section` (2026-10-12): a cross-section has to be
+  // turned into polygons before its inner loops — the holes the section cuts
+  // through — can be trusted. Hand-chaining the section's line segments and then
+  // testing which loop contains which works until a section degenerates (tangent
+  // plane, coincident loops, a hole that touches an edge), which is exactly when a
+  // measurement is being relied on. shapely's `polygons_full` answers
+  // exterior/interiors directly and is already a trimesh dependency in spirit
+  // (`Path2D.polygons_full` is unusable without it).
+  // Measured 2026-10-12: cp313 wheels for all seven targets (manylinux x86_64 /
+  // aarch64, musllinux x86_64 / aarch64, macosx x86_64 / arm64, win_amd64), one
+  // dependency (`numpy>=1.26`, already pinned at 2.5.3), no compiler.
+  { name: 'shapely', version: '2.2.0' },
   {
     name: 'rapier3d',
     version: '0.36.1',

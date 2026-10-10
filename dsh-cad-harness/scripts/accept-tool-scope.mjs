@@ -39,7 +39,7 @@ const skip = (label, why) => console.log(`SKIP  ${label}  — ${why}`);
 
 const CAD_TOOLS = ['generate_part', 'create_part', 'import_part', 'validate_assembly', 'check_assembly',
   'simulate_physics', 'simulate_motion', 'simulate_fluid', 'render_part',
-  'measure_part', 'measure_distance', 'measure_closest'];
+  'measure_part', 'measure_distance', 'measure_thickness', 'measure_closest'];
 
 console.log('preset tool scope acceptance\n');
 

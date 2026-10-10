@@ -37,6 +37,10 @@ drives:
     validate_assembly  per-part solid facts + pairwise interference/clearance
     merge_solids    union of placed solids → merged STL on disk + facts
     measure_distance   two-point distance with surface snapping (measure_distance)
+    measure_thickness  every material span along one ray (measure_thickness)
+    list_features   planar faces, holes and cylinders with coordinates (list_features)
+    measure_section    one cross-section as polygons, rings, holes and walls
+    measure_extent     axial min/max/centre and the extremal vertices, any axis
     import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
     scad_prelude        the datum prelude injected into every part
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
@@ -81,6 +85,10 @@ OPS = [
     "validate_assembly",
     "merge_solids",
     "measure_distance",
+    "measure_thickness",
+    "list_features",
+    "measure_section",
+    "measure_extent",
     "import_mesh",
     "scad_prelude",
     "scad_parse_output",
@@ -121,7 +129,7 @@ def op_ping(_params: dict) -> dict:
 def op_versions(_params: dict) -> dict:
     import importlib
 
-    wanted = ["numpy", "scipy", "trimesh", "manifold3d", "networkx", "skfem", "rtree", "rapier3d"]
+    wanted = ["numpy", "scipy", "trimesh", "manifold3d", "networkx", "skfem", "rtree", "rapier3d", "shapely"]
     found = {}
     for name in wanted:
         try:
@@ -686,6 +694,1083 @@ def op_measure_distance(params: dict) -> dict:
         "bOutside": bool(snap_b["outside"]),
         "watertightA": _is_watertight(np.asarray(mesh_a.faces)),
         "watertightB": _is_watertight(np.asarray(mesh_b.faces)),
+    }
+
+
+def _ray_spans(mesh, origin, direction, tolerance_mm, max_span_mm, label) -> dict:
+    """Material spans along ONE ray through ONE solid (the `measure_thickness` core).
+
+    Why this exists next to `measure_distance`: a caller that cannot name an exact
+    surface point (an LLM measuring a part it did not write, an imported STL with no
+    datums) can still name a LINE, and a line only has to cross the wall it is
+    asking about. Every crossing is returned, so "how deep do I have to aim" stops
+    being a question.
+
+    TWO degeneracies are handled here, and both were measured, not guessed:
+
+    * **Coincident crossings.** A ray that clips a triangle seam reports the same
+      surface twice, and an un-deduped pair silently becomes a zero-thickness wall
+      — that is how `sdf.ts` once flipped inside/outside on axis-aligned meshes.
+      So crossings are clustered at `tolerance_mm` before pairing, and a cluster
+      whose entering and exiting crossings cancel is a tangency, not material.
+
+    * **A ray that lies exactly ON a seam or through a vertex reports NOTHING.**
+      Measured on an OpenSCAD tube: `+x` at y=0, z=0 (the vertex line of a `$fn`
+      cylinder) returned **0 crossings where 4 exist**. That is the one query a
+      caller is most likely to type — round numbers, an axis, a bore — and it fails
+      silently in the worst direction. So the requested line is probed together
+      with two rings of small perpendicular offsets (1e-3mm and 1e-2mm, eight
+      directions each), and the answer is the majority among the probes whose
+      inside/outside walk is self-consistent. A perpendicular offset changes a
+      crossing's distance by `d²/2R` (5e-6mm at d=0.01mm, R=10), i.e. below the
+      0.001mm the tool reports — so the winning answer is the requested line's
+      answer, and `nudgedMm` says how far the accepted line sits from it (0 when
+      the requested line itself won).
+    """
+    import numpy as np
+
+    in_origin = np.asarray(origin, dtype=float)
+    in_dir = np.asarray(direction, dtype=float)
+
+    # An orthonormal basis perpendicular to the ray. The offsets live in this
+    # plane, so they never change which side of a wall the start point is on.
+    seed = np.array([0.0, 0.0, 1.0]) if abs(in_dir[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    u = np.cross(in_dir, seed)
+    u = u / float(np.linalg.norm(u))
+    v = np.cross(in_dir, u)
+
+    watertight = _is_watertight(np.asarray(mesh.faces))
+    point_inside = bool(mesh.contains(in_origin.reshape(1, 3))[0]) if watertight else None
+
+    def probe(offset) -> dict:
+        """One ray cast + the resulting inside/outside walk."""
+        off = u * offset[0] + v * offset[1]
+        line_origin = in_origin + off
+        hit_points, _index_ray, index_tri = mesh.ray.intersects_location(
+            line_origin.reshape(1, 3), in_dir.reshape(1, 3), multiple_hits=True
+        )
+        events: list[dict] = []
+        dropped = 0
+        if len(hit_points):
+            ts = (hit_points - line_origin) @ in_dir
+            normals = np.asarray(mesh.face_normals, dtype=float)[index_tri]
+            signs = normals @ in_dir
+            order = np.argsort(ts, kind="stable")
+            ts, hit_points, normals, signs = ts[order], hit_points[order], normals[order], signs[order]
+
+            # Single-linkage clusters: crossings closer together than the tolerance
+            # are one surface. Grouping on the previous crossing (not the cluster
+            # start) cannot chain-drift — the tolerance is six orders below any wall.
+            groups: list[list[int]] = [[0]]
+            for i in range(1, len(ts)):
+                if float(ts[i]) - float(ts[groups[-1][-1]]) <= tolerance_mm:
+                    groups[-1].append(i)
+                else:
+                    groups.append([i])
+
+            for group in groups:
+                entering = [i for i in group if signs[i] < 0]
+                exiting = [i for i in group if signs[i] > 0]
+                net = len(entering) - len(exiting)
+                if net == 0:
+                    dropped += 1
+                    continue
+                side = entering if net > 0 else exiting
+                normal = np.sum(normals[side], axis=0)
+                length = float(np.linalg.norm(normal))
+                events.append(
+                    {
+                        "kind": "enter" if net > 0 else "exit",
+                        "t": float(np.mean(ts[side])),
+                        "point": [float(x) for x in np.mean(hit_points[side], axis=0)],
+                        "normal": [float(x) for x in (normal / length if length > 0 else normal)],
+                    }
+                )
+
+        # State on THIS line: the first crossing's sign, else the point-in-solid
+        # test (which is exact and does not care where the line sits).
+        starts_inside = (events[0]["kind"] == "exit") if events else bool(point_inside)
+
+        spans: list[dict] = []
+        violations: list[str] = []
+        inside = starts_inside
+        start_t = 0.0 if inside else None
+        start_point = [float(x) for x in line_origin] if inside else None
+        start_normal = None
+        for event in events:
+            if event["kind"] == "enter":
+                if inside:
+                    violations.append(f"two entering crossings in a row at t={_round3(event['t'])}mm")
+                inside, start_t, start_point, start_normal = True, event["t"], event["point"], event["normal"]
+            else:
+                if not inside:
+                    violations.append(f"exiting crossing while already outside at t={_round3(event['t'])}mm")
+                    continue
+                spans.append(
+                    {
+                        "part": label,
+                        "enterMm": start_t,
+                        "exitMm": event["t"],
+                        "thicknessMm": event["t"] - start_t,
+                        "atMm": (start_t + event["t"]) / 2,
+                        "entryPoint": start_point,
+                        "exitPoint": event["point"],
+                        "entryNormal": start_normal,
+                        "exitNormal": event["normal"],
+                    }
+                )
+                inside, start_t, start_point, start_normal = False, None, None, None
+
+        # A missing crossing cannot be a legitimate answer when the start point is
+        # inside the solid: a closed solid must be crossed on the way out.
+        if point_inside and not events:
+            violations.append("the start point is inside the solid but the ray found no crossings")
+        if inside and not violations:
+            violations.append("the ray is still inside material after its last crossing")
+        return {
+            "offset": offset,
+            "spans": spans,
+            "events": events,
+            "startsInside": bool(starts_inside),
+            "violations": violations,
+            "dropped": dropped,
+        }
+
+    RING_1 = 1e-3
+    RING_2 = 1e-2
+    # 12 directions, not 8: a ray lying in an axis-aligned seam stays degenerate
+    # for every offset whose perpendicular component along that seam's axis is
+    # zero, so the ring needs enough directions with a NON-zero component on each
+    # axis for the off-seam majority to be structural rather than lucky.
+    unit_ring = [
+        (math.cos(k * math.pi / 6), math.sin(k * math.pi / 6)) for k in range(12)
+    ]
+    candidates = [probe((0.0, 0.0))]
+    for radius in (RING_1, RING_2):
+        for dx, dy in unit_ring:
+            candidates.append(probe((dx * radius, dy * radius)))
+
+    clean = [candidate for candidate in candidates if not candidate["violations"]]
+    pool = clean or candidates
+
+    def same_answer(a: dict, b: dict) -> bool:
+        if len(a["spans"]) != len(b["spans"]):
+            return False
+        if a["startsInside"] != b["startsInside"]:
+            return False
+        return all(
+            abs(x["thicknessMm"] - y["thicknessMm"]) <= 1e-3 and abs(x["enterMm"] - y["enterMm"]) <= 1e-3
+            for x, y in zip(a["spans"], b["spans"])
+        )
+
+    votes = [sum(1 for other in pool if same_answer(candidate, other)) for candidate in candidates if candidate in pool]
+    best_index = max(range(len(pool)), key=lambda i: (votes[i], -abs(pool[i]["offset"][0]) - abs(pool[i]["offset"][1])))
+    winner = pool[best_index]
+    agreement = votes[best_index] / len(pool)
+
+    nudged = float(np.hypot(winner["offset"][0], winner["offset"][1]))
+    warnings: list[str] = []
+    if winner["dropped"]:
+        warnings.append(
+            f"part {label}: dropped {winner['dropped']} zero-thickness crossing cluster(s) "
+            "(a tangent ray, not a wall)"
+        )
+    if watertight and point_inside is not None and winner["startsInside"] != point_inside and nudged == 0:
+        warnings.append(
+            f"part {label}: the ray's first crossing says the start point is "
+            f"{'inside' if winner['startsInside'] else 'outside'} but the solid test says "
+            f"{'inside' if point_inside else 'outside'} — treat this part's spans as unreliable"
+        )
+    if winner["violations"]:
+        warnings.append(
+            f"part {label}: the inside/outside walk is inconsistent ({'; '.join(winner['violations'])}) — "
+            "no probe of this line was self-consistent, so every span here is suspect"
+        )
+    if agreement < 1.0 and not winner["violations"]:
+        warnings.append(
+            f"part {label}: only {votes[best_index]}/{len(pool)} probes of this line agree — the ray runs "
+            f"close to tangent to a surface, so the answer depends on a micron-scale offset. The reported "
+            f"spans come from the line displaced by {_round3(nudged)}mm."
+        )
+
+    spans = winner["spans"]
+    clipped = False
+    if max_span_mm is not None:
+        kept = []
+        for span in spans:
+            if span["enterMm"] > max_span_mm:
+                clipped = True
+                continue
+            if span["exitMm"] > max_span_mm:
+                span = dict(span, exitMm=max_span_mm, thicknessMm=max_span_mm - span["enterMm"], clipped=True)
+                clipped = True
+            kept.append(span)
+        spans = kept
+
+    return {
+        "spans": spans,
+        "crossings": winner["events"],
+        "startsInside": bool(point_inside) if point_inside is not None else winner["startsInside"],
+        "parityOdd": len(winner["events"]) % 2 == 1,
+        "clipped": clipped,
+        "nudgedMm": nudged,
+        "probeAgreement": agreement,
+        "warnings": warnings,
+    }
+
+def op_measure_thickness(params: dict) -> dict:
+    """Every material span along one ray, through one or two solids.
+
+    Deliberately coordinate-tolerant: the line has to cross the wall, the caller
+    does not have to hit a surface. `meshes` is [a] or [a, b] so a cross-part
+    clearance reads as the gap between a's last span and b's first span along the
+    same line. Numbers are rounded to 0.001mm via `_round3` (JS rounding, -0
+    normalised) because they are reported to the model verbatim.
+    """
+    import numpy as np
+
+    paths = [path for path in params.get("meshes", []) if path]
+    if not paths:
+        raise ValueError("measure_thickness needs at least one mesh path")
+    origin = np.asarray(params["from"], dtype=float)
+    # A principal-axis name (`+x` … `-z`) or a vector; parsed by `_axis_vector`, the
+    # one place axes are interpreted, so all three axis-taking ops agree.
+    direction = _axis_vector(params["direction"], field="direction")
+
+    warnings: list[str] = []
+    watertight: dict[str, bool] = {}
+    parts: dict[str, dict] = {}
+    for index, path in enumerate(paths[:2]):
+        label = "ab"[index]
+        mesh = _load(path)
+        watertight[label] = _is_watertight(np.asarray(mesh.faces))
+        if not watertight[label]:
+            warnings.append(
+                f"part {label} is NOT watertight — every span computed on an open mesh is unreliable; "
+                "fix the mesh before trusting this number"
+            )
+        parts[label] = _ray_spans(
+            mesh, origin, direction, float(params.get("toleranceMm", 1e-6)), params.get("maxSpanMm"), label
+        )
+        warnings.extend(parts[label]["warnings"])
+        if parts[label]["parityOdd"] and not parts[label]["startsInside"]:
+            warnings.append(
+                f"part {label}: an odd number of crossings ({len(parts[label]['crossings'])}) — "
+                "that cannot happen on a closed solid, so the ray is grazing an edge or the mesh is open"
+            )
+
+    spans = [span for label in parts for span in parts[label]["spans"]]
+    spans.sort(key=lambda span: span["enterMm"])
+
+    gaps = []
+    for first, second in zip(spans, spans[1:]):
+        gaps.append(
+            {
+                "afterMm": first["exitMm"],
+                "beforeMm": second["enterMm"],
+                "gapMm": second["enterMm"] - first["exitMm"],
+                "between": "same-part" if first["part"] == second["part"] else f"{first['part']}→{second['part']}",
+            }
+        )
+
+    def clean(span: dict) -> dict:
+        cleaned = {
+            "part": span["part"],
+            "enterMm": _round3(span["enterMm"]),
+            "exitMm": _round3(span["exitMm"]),
+            "thicknessMm": _round3(span["thicknessMm"]),
+            "atMm": _round3(span["atMm"]),
+            "entryPoint": [_round3(v) for v in span["entryPoint"]],
+            "exitPoint": [_round3(v) for v in span["exitPoint"]],
+            "exitNormal": [_round3(v) for v in span["exitNormal"]],
+            **({"clipped": True} if span.get("clipped") else {}),
+        }
+        # A span that starts AT the origin (the ray began inside material) has no
+        # entering crossing, so the key is omitted rather than filled with a
+        # placeholder vector — a fabricated normal would read as a measured one.
+        if span["entryNormal"] is not None:
+            cleaned["entryNormal"] = [_round3(v) for v in span["entryNormal"]]
+        return cleaned
+
+    if not spans:
+        warnings.append(
+            "the ray crosses no material — check `from` (was it meant to be inside the part?) "
+            "and `direction` (is the axis the one you meant?). A ray lying exactly in a face plane "
+            "or along an edge is undefined: nudge `from` by a fraction of a millimetre and try again"
+        )
+
+    return {
+        "direction": [_round3(v) for v in direction],
+        "from": [_round3(v) for v in origin],
+        "fromInsideSolid": any(parts[label]["startsInside"] for label in parts),
+        "spans": [clean(span) for span in spans],
+        "gaps": [
+            {
+                "afterMm": _round3(gap["afterMm"]),
+                "beforeMm": _round3(gap["beforeMm"]),
+                "gapMm": _round3(gap["gapMm"]),
+                "between": gap["between"],
+            }
+            for gap in gaps
+        ],
+        "thinnestSpanMm": _round3(min((span["thicknessMm"] for span in spans), default=0.0)),
+        "clipped": any(span.get("clipped") for span in spans),
+        # How far the accepted probe line sits from the requested one (0 = the
+        # requested line itself won the vote), and how many of the 17 probes agreed.
+        # A perpendicular displacement does not change a crossing's distance beyond
+        # d²/2R, so these report how much the answer leaned on that tie-break.
+        "nudgedMm": _round3(max(parts[label]["nudgedMm"] for label in parts)),
+        "probeAgreement": min(parts[label]["probeAgreement"] for label in parts),
+        "watertightA": watertight.get("a", False),
+        "watertightB": watertight.get("b"),
+        "warnings": warnings,
+    }
+
+
+def _chain_loops(edges):
+    """Chain boundary edge pairs (vertex indices) into closed loops of vertices.
+
+    `mesh.facets_boundary` hands back the boundary of a planar region as EDGES,
+    not as loops, so the loop structure — and with it "this region has an inner
+    boundary, therefore a hole" — has to be recovered here. The walk takes any
+    unused neighbour at a pinch point and stops when it returns to the start, so a
+    non-manifold boundary degrades into extra loops instead of hanging.
+    """
+    from collections import defaultdict
+
+    adjacency = defaultdict(list)
+    for a, b in edges:
+        adjacency[int(a)].append(int(b))
+        adjacency[int(b)].append(int(a))
+    remaining = {(min(int(a), int(b)), max(int(a), int(b))) for a, b in edges}
+
+    loops = []
+    while remaining:
+        first = remaining.pop()
+        loop = [first[0], first[1]]
+        while True:
+            tail = loop[-1]
+            candidates = [n for n in adjacency[tail] if (min(tail, n), max(tail, n)) in remaining]
+            if not candidates:
+                break
+            step = candidates[0]
+            remaining.discard((min(tail, step), max(tail, step)))
+            if step == loop[0]:
+                break
+            loop.append(step)
+        if len(loop) >= 3:
+            loops.append(loop)
+    return loops
+
+
+def _fit_circle(uv):
+    """Algebraic (Kåsa) circle fit in 2D → centre, radius, max radial residual."""
+    import numpy as np
+
+    x, y = uv[:, 0], uv[:, 1]
+    design = np.column_stack([2 * x, 2 * y, np.ones(len(x))])
+    target = x * x + y * y
+    solution, *_ = np.linalg.lstsq(design, target, rcond=None)
+    cx, cy, constant = (float(v) for v in solution)
+    radius = math.sqrt(max(constant + cx * cx + cy * cy, 0.0))
+    residual = float(np.max(np.abs(np.hypot(x - cx, y - cy) - radius))) if len(x) else 0.0
+    return cx, cy, radius, residual
+
+
+def _axis_vector(spec, field: str = "axis"):
+    """One axis argument, parsed in ONE place: `x`/`+x`/`-x`/`y`/`z`, or a vector.
+
+    Three ops take an axis (`measure_thickness` as a ray direction, `measure_section`
+    as a plane normal, `measure_extent` as a projection axis) and they must agree on
+    what the argument means. Keeping the parser here rather than in the tool layer is
+    also what keeps `tools.ts` to "schema + forward" — the alternative was a second
+    copy of these rules in TypeScript, which had already drifted (only one of the
+    three accepted a signed string).
+    """
+    import numpy as np
+
+    table = {"x": [1.0, 0.0, 0.0], "y": [0.0, 1.0, 0.0], "z": [0.0, 0.0, 1.0]}
+    if isinstance(spec, str):
+        key = spec.strip().lower()
+        sign = 1.0
+        # A sign may lead or trail (`-x`, `x-`): both are what a caller types, and
+        # rejecting one of them only costs a round trip to learn nothing.
+        if key[:1] in ("+", "-"):
+            sign = -1.0 if key[0] == "-" else 1.0
+            key = key[1:]
+        elif key[-1:] in ("+", "-"):
+            sign = -1.0 if key[-1] == "-" else 1.0
+            key = key[:-1]
+        if key not in table:
+            raise ValueError(
+                f'{field} must be "x", "y", "z" (optionally signed) or a [x,y,z] vector — got {spec!r}'
+            )
+        vector = np.asarray(table[key], dtype=float) * sign
+    else:
+        vector = np.asarray(spec, dtype=float)
+        if vector.size != 3:
+            raise ValueError(f"{field} as a vector needs exactly three components, got {vector.size}")
+    length = float(np.linalg.norm(vector))
+    if length <= 0:
+        raise ValueError(f"{field} must be a non-zero vector")
+    return vector / length
+
+
+def _plane_basis(normal):
+    """An orthonormal in-plane basis (u, v), chosen so principal sections read
+    naturally: a +z section gets u=x, v=y rather than an arbitrary pair."""
+    import numpy as np
+
+    seed = np.zeros(3)
+    seed[int(np.argmin(np.abs(normal)))] = 1.0
+    u = seed - normal * float(seed @ normal)
+    u = u / float(np.linalg.norm(u))
+    return u, np.cross(normal, u)
+
+
+def _simplify_closed(points, tolerance_mm):
+    """Indices of the vertices that carry shape.
+
+    A vertex is dropped only when it lies within `tolerance_mm` of the line through
+    its neighbours, so the extra vertices a triangulator scatters along a straight
+    edge disappear while a tessellated arc survives: at the 0.01mm default a $fn=64
+    circle of R=10 keeps every vertex (its sagitta is 0.012mm).
+    """
+    import numpy as np
+
+    count = len(points)
+    if count < 4:
+        return list(range(count))
+    kept = []
+    for index in range(count):
+        previous = points[(index - 1) % count]
+        current = points[index]
+        following = points[(index + 1) % count]
+        along = following - previous
+        length = float(np.linalg.norm(along))
+        if length <= 0:
+            continue
+        gap = current - previous
+        # 2D cross product written out: np.cross on 2-vectors is deprecated in numpy 2.
+        offset = abs(along[0] * gap[1] - along[1] * gap[0]) / length
+        if offset > tolerance_mm:
+            kept.append(index)
+    return kept or list(range(count))
+
+
+def _signed_area(uv) -> float:
+    import numpy as np
+
+    x, y = uv[:, 0], uv[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+
+
+def op_list_features(params: dict) -> dict:
+    """The coordinate inventory a caller needs to measure geometry it did not draw.
+
+    `measure_distance` asks for a point on a surface; a caller looking at an
+    imported STL or a corpus part has no way to name one. This op is where those
+    coordinates come FROM: planar faces with their normals and areas, the holes in
+    them (centre, diameter, depth), and the cylindrical surfaces (axis, diameter,
+    and whether the material is inside — a bore — or outside — a boss).
+
+    How the features are found, and the choice made at each step:
+
+    * **Planar faces** are trimesh's `facets` — connected sets of exactly coplanar
+      triangles. A tessellated cylinder contributes one facet per quad, so a facet
+      alone is not a feature; each face therefore also reports the SMOOTH REGION it
+      belongs to (facets reachable across a dihedral angle below `smoothDeg`), and a
+      quad of a Ø12 bore is recognisable as "5.9mm², one of 64 facets, 377mm²".
+      `minFaceAreaMm2` (default 4.0, echoed in `thresholds`) keeps the list
+      readable; `facesOmitted` says what it dropped, and every entry carries its own
+      area so nothing depends on the threshold being right.
+    * **Holes** need no threshold: a planar region whose boundary chains into more
+      than one loop HAS an inner boundary. The largest-|signed area| loop is the
+      outer one and the rest are holes, so a slot or a polygon pocket is reported as
+      such (`kind: "non-circular"`) instead of being forced through a circle fit.
+    * **Cylinders** come from a smooth region that is not planar: the axis is the
+      direction minimising `(n·a)²` over the region's face normals (every normal of
+      a cylinder is perpendicular to its axis), then a circle fit in the
+      perpendicular plane gives the radius. The fit is GATED on residual — a
+      torus-like or conical region fails the gate and is reported as a
+      `curvedSurface` instead of being described as a cylinder it is not.
+    * **Bore vs boss** is the sign of `n · (p − axis)` over the region: normals
+      pointing at the axis mean the material is outside (a bore).
+    """
+    import numpy as np
+
+    mesh = _load(params["path"])
+    triangles = np.asarray(mesh.faces)
+    watertight = _is_watertight(triangles)
+    smooth_deg = float(params.get("smoothDeg", 10.0))
+    min_face_area = float(params.get("minFaceAreaMm2", 4.0))
+    max_faces = int(params.get("maxFaces", 40))
+    max_cylinders = int(params.get("maxCylinders", 24))
+    with_hole_depth = bool(params.get("withHoleDepth", True))
+
+    warnings: list[str] = []
+    if not watertight:
+        warnings.append(
+            "the mesh is NOT watertight — face and hole inventories of an open mesh are incomplete "
+            "by construction; fix the mesh first"
+        )
+
+    facet_of_face = np.empty(len(triangles), dtype=np.int64)
+    for index, region in enumerate(mesh.facets):
+        facet_of_face[np.asarray(region, dtype=np.int64)] = index
+    facet_count = len(mesh.facets)
+    facet_area = np.asarray(mesh.facets_area, dtype=float)
+    facet_normal = np.asarray(mesh.facets_normal, dtype=float)
+    facet_origin = np.asarray(mesh.facets_origin, dtype=float)
+
+    # Smooth regions: group facets across edges whose dihedral angle is small. This
+    # is what separates "one face of the part" from "one segment of a cylinder".
+    region_of_facet = np.arange(facet_count)
+    smooth_angles = np.asarray(mesh.face_adjacency_angles, dtype=float)
+    pairs = np.asarray(mesh.face_adjacency, dtype=np.int64)
+    if len(pairs):
+        kept = pairs[smooth_angles <= math.radians(smooth_deg)]
+        if len(kept):
+            from scipy.sparse import coo_matrix
+            from scipy.sparse.csgraph import connected_components
+
+            i = facet_of_face[kept[:, 0]]
+            j = facet_of_face[kept[:, 1]]
+            keep = i != j
+            graph = coo_matrix(
+                (np.ones(int(keep.sum())), (i[keep], j[keep])), shape=(facet_count, facet_count)
+            )
+            _count, labels = connected_components(graph, directed=False)
+            region_of_facet = labels
+
+    region_facets: dict[int, list[int]] = {}
+    for facet in range(facet_count):
+        region_facets.setdefault(int(region_of_facet[facet]), []).append(facet)
+
+    region_stats = {}
+    for region, facets in region_facets.items():
+        indices = np.asarray(facets, dtype=np.int64)
+        normals = facet_normal[indices]
+        reference = normals[0]
+        # Sign-align before averaging: a facet's outward normal never legitimately
+        # points the other way inside one smooth region, and averaging raw normals
+        # around a bore would cancel to zero.
+        aligned = normals * np.where(normals @ reference < 0, -1.0, 1.0)[:, None]
+        mean_normal = aligned.mean(axis=0)
+        length = float(np.linalg.norm(mean_normal))
+        if length > 0:
+            cosines = np.clip((aligned @ (mean_normal / length)), -1, 1)
+            spread = float(np.degrees(np.arccos(cosines.min())))
+        else:
+            spread = 180.0
+        region_stats[region] = {
+            "facets": len(facets),
+            "areaMm2": float(facet_area[indices].sum()),
+            "planar": spread <= 1.0,
+            "spreadDeg": spread,
+        }
+
+    def boundary_loops(facet: int):
+        edges = mesh.facets_boundary[facet]
+        if edges is None or len(edges) == 0:
+            return []
+        return _chain_loops(np.asarray(edges, dtype=np.int64).reshape(-1, 2))
+
+    def hole_depth(center, normal, label):
+        """Depth of the void behind a face along its inward normal: the first
+        entering crossing is where the hole bottoms out. No crossing = through."""
+        probe = _ray_spans(
+            mesh,
+            np.asarray(center, dtype=float) - np.asarray(normal, dtype=float) * 1e-3,
+            -np.asarray(normal, dtype=float),
+            1e-6,
+            None,
+            label,
+        )
+        warnings.extend(probe["warnings"])
+        if not probe["spans"]:
+            return None
+        return float(probe["spans"][0]["enterMm"] + 1e-3)
+
+    # --- planar faces (and the holes in them) ---------------------------------
+    # ONLY facets whose smooth region is planar are faces. A facet of a non-planar
+    # region is a segment of a curved surface (one quad of a bore), and listing
+    # those is exactly the noise that would drown the real faces — they are
+    # described by `cylinders` / `curvedSurfaces` instead.
+    order = [int(i) for i in np.argsort(-facet_area)]
+    reported = []
+    holes_total = 0
+    hole_serial = 0
+    segments_not_listed = 0
+    for facet in order:
+        stats = region_stats[int(region_of_facet[facet])]
+        if not stats["planar"]:
+            if float(facet_area[facet]) >= min_face_area:
+                segments_not_listed += 1
+            continue
+        if len(reported) >= max_faces:
+            continue
+        if float(facet_area[facet]) < min_face_area:
+            continue
+        normal = facet_normal[facet]
+        origin = facet_origin[facet]
+        u, v = _plane_basis(normal)
+        loops = boundary_loops(facet)
+        uv_loops = []
+        for loop in loops:
+            points = np.asarray(mesh.vertices, dtype=float)[np.asarray(loop, dtype=np.int64)]
+            uv = np.column_stack([(points - origin) @ u, (points - origin) @ v])
+            uv_loops.append((loop, points, uv))
+        uv_loops.sort(key=lambda item: -abs(_signed_area(item[2])))
+        holes = []
+        for loop, points, uv in uv_loops[1:]:
+            hole_serial += 1
+            cx, cy, radius, residual = _fit_circle(uv)
+            loop_area = abs(_signed_area(uv))
+            circle_area = math.pi * radius * radius if radius > 0 else 0.0
+            area_ratio = loop_area / circle_area if circle_area > 0 else 0.0
+            # Residual alone does NOT decide circularity: the four corners of a
+            # RECTANGLE are concyclic, so an algebraic circle fit lands on a 10×6
+            # pocket exactly (residual 0) and would call it round. The area ratio is
+            # what separates a polygon from a circle — a regular 64-gon keeps 0.9988
+            # of its circle, a 10×6 rectangle keeps 0.56, a hex socket 0.83.
+            round_enough = residual <= max(0.05, 0.02 * radius) and area_ratio >= 0.95
+            center = origin + u * cx + v * cy
+            entry = {
+                "id": f"h{hole_serial}",
+                "centerMm": [_round3(float(x)) for x in center],
+                "axisMm": [_round3(float(x)) for x in normal],
+                "kind": "round" if round_enough else "non-circular",
+                "areaMm2": _round3(loop_area),
+                "vertices": len(points),
+                "circularityResidualMm": _round3(residual),
+                "areaRatioToCircle": _round3(area_ratio),
+            }
+            if round_enough:
+                entry["diameterMm"] = _round3(2 * radius)
+            if with_hole_depth:
+                depth = hole_depth(center, normal, "a")
+                entry["through"] = depth is None
+                if depth is not None:
+                    entry["depthMm"] = _round3(depth)
+            holes.append(entry)
+        holes_total += len(holes)
+        reported.append(
+            {
+                "id": f"f{facet}",
+                "normalMm": [_round3(float(x)) for x in normal],
+                "originMm": [_round3(float(x)) for x in origin],
+                "centroidMm": [_round3(float(x)) for x in np.asarray(mesh.triangles_center)[np.asarray(mesh.facets[facet], dtype=np.int64)].mean(axis=0)],
+                "areaMm2": _round3(float(facet_area[facet])),
+                "smoothRegion": {
+                    "facets": stats["facets"],
+                    "areaMm2": _round3(stats["areaMm2"]),
+                    "planar": stats["planar"],
+                },
+                "holes": holes,
+            }
+        )
+
+    # --- cylinders (and whatever else is curved) -------------------------------
+    cylinders = []
+    curved = []
+    for region, facets in sorted(region_facets.items(), key=lambda item: -region_stats[item[0]]["areaMm2"]):
+        stats = region_stats[region]
+        if stats["planar"] or stats["facets"] < 6:
+            continue
+        indices = np.asarray(facets, dtype=np.int64)
+        normals = facet_normal[indices]
+        areas = facet_area[indices]
+        # A flat facet can end up inside a curved region when a tangent fillet joins
+        # it to a bore (BOSL2 rounding does this). Those facets are not listed as
+        # faces, so the count is reported with the region: silence about a missing
+        # face would be worse than the extra number.
+        large_facets = int((areas >= min_face_area).sum())
+        weights = areas / areas.sum()
+        scatter = (normals * weights[:, None]).T @ normals
+        _values, vectors = np.linalg.eigh(scatter)
+        axis = vectors[:, 0]
+        pivot = int(np.argmax(np.abs(axis)))
+        if axis[pivot] < 0:
+            axis = -axis
+        # `mesh.facets` is a list of ragged arrays of TRIANGLE indices (one array per
+        # region) — not vertex indices, and not stackable — so the region's vertices
+        # come from its triangles. (`facets_boundary`, by contrast, hands back VERTEX
+        # index pairs; the two are easy to confuse and do not fail loudly.)
+        region_triangles = np.concatenate([np.asarray(mesh.facets[int(f)], dtype=np.int64) for f in indices])
+        vertices = np.unique(triangles[region_triangles].reshape(-1))
+        points = np.asarray(mesh.vertices, dtype=float)[vertices]
+        u, v = _plane_basis(axis)
+        mean = points.mean(axis=0)
+        relative = points - mean
+        cx, cy, radius, residual = _fit_circle(np.column_stack([relative @ u, relative @ v]))
+        axis_point = mean + u * cx + v * cy
+        along = float(np.max(points @ axis) - np.min(points @ axis))
+        tolerance = max(0.05, 0.02 * radius)
+        if residual > tolerance:
+            curved.append(
+                {
+                    "id": f"s{region}",
+                    "areaMm2": _round3(stats["areaMm2"]),
+                    "facets": stats["facets"],
+                    "largeFacets": large_facets,
+                    "reason": f"no cylinder fits: max radial residual {_round3(residual)}mm vs tolerance {_round3(tolerance)}mm",
+                }
+            )
+            continue
+        # Bore vs boss: for a bore every facet normal points AT the axis, for a boss
+        # every normal points AWAY from it. Area-weighted so a coarse tessellation
+        # does not outvote a fine one.
+        face_centroids = np.asarray(mesh.triangles_center)
+        radial_sum = 0.0
+        for facet in indices:
+            region_faces = np.asarray(mesh.facets[int(facet)], dtype=np.int64)
+            centre = face_centroids[region_faces].mean(axis=0)
+            direction = centre - axis_point
+            length = float(np.linalg.norm(direction))
+            if length > 0:
+                radial_sum += float(facet_normal[int(facet)] @ (direction / length)) * float(facet_area[int(facet)])
+        cylinders.append(
+            {
+                "id": f"c{region}",
+                "kind": "bore" if radial_sum < 0 else "boss",
+                "axisMm": [_round3(float(x)) for x in axis],
+                "centerMm": [_round3(float(x)) for x in axis_point],
+                "diameterMm": _round3(2 * radius),
+                "lengthMm": _round3(along),
+                "facets": stats["facets"],
+                "areaMm2": _round3(stats["areaMm2"]),
+                "largeFacets": large_facets,
+                "fitResidualMm": _round3(residual),
+            }
+        )
+
+    cylinders.sort(key=lambda entry: -entry["areaMm2"])
+    if len(cylinders) > max_cylinders:
+        curved.append(
+            {
+                "id": "omitted",
+                "areaMm2": 0.0,
+                "facets": 0,
+                "largeFacets": 0,
+                "reason": f"{len(cylinders) - max_cylinders} cylinder(s) omitted by maxCylinders={max_cylinders}",
+            }
+        )
+        cylinders = cylinders[:max_cylinders]
+
+    planar_facets = [
+        facet for facet in range(facet_count)
+        if region_stats[int(region_of_facet[facet])]["planar"] and float(facet_area[facet]) >= min_face_area
+    ]
+    return {
+        "watertight": watertight,
+        "triangles": int(len(triangles)),
+        "thresholds": {
+            "smoothDeg": smooth_deg,
+            "minFaceAreaMm2": min_face_area,
+            "maxFaces": max_faces,
+            "maxCylinders": max_cylinders,
+        },
+        "faces": reported,
+        # Planar faces that met the area threshold and were left out by maxFaces.
+        "facesOmitted": max(0, len(planar_facets) - len(reported)),
+        # Facets of curved regions — bore quads and the like. Not listed as faces on
+        # purpose; they are described by `cylinders` / `curvedSurfaces`.
+        "curvedSegmentFacets": segments_not_listed,
+        "cylinders": cylinders,
+        "curvedSurfaces": curved,
+        "faceCount": len(reported),
+        "holeCount": holes_total,
+        "cylinderCount": len(cylinders),
+        "warnings": warnings,
+    }
+
+
+def op_measure_section(params: dict) -> dict:
+    """A cross-section as DATA, not only as a picture.
+
+    Why this exists: "pick two points on the cut plane" is the natural way to ask a
+    question about a section, but on a mesh the cut plane has no surface to pick —
+    the plane is an interpretation of the geometry, not part of it. So the section
+    is returned as structure the caller can read directly: each polygon's outer ring
+    with its segment lengths and angles, each hole in it with a centre, a diameter
+    and the wall thickness to the outside, and the spacing between holes. After
+    that, measuring in a section needs no aim at all — the numbers are in the reply.
+
+    Method, and why each piece is where it is:
+
+    * the cut comes from `trimesh.intersections.mesh_plane` (exact, numpy only);
+    * the segments are polygonised with **shapely**, whose `polygonize` returns
+      rings WITH their interiors — the holes. Hand-chaining the segments works until
+      a section degenerates (a tangent plane, a hole touching an edge, coincident
+      loops), which is exactly when the number is being relied on;
+    * wall and web thicknesses are shapely ring-to-ring distances (exact segment to
+      segment), not centre-to-centre approximations;
+    * the inner loops are classified round vs non-circular by the SAME two tests as
+      `list_features` (fit residual AND area ratio) because a rectangle's corners are
+      concyclic and a residual alone calls a slot a circle.
+    """
+    import numpy as np
+    import shapely
+    import trimesh
+    from itertools import product
+    from shapely.geometry import LineString
+    from shapely.ops import polygonize, unary_union
+
+    mesh = _load(params["path"])
+    normal = _axis_vector(params.get("axis", "z"))
+    u, v = _plane_basis(normal)
+
+    bounds = np.asarray(mesh.bounds, dtype=float)
+    corners = np.array([[bounds[bit][axis] for axis, bit in enumerate(bits)] for bits in product((0, 1), repeat=3)])
+    projections = corners @ normal
+    low, high = float(projections.min()), float(projections.max())
+    if params.get("atMm") is not None:
+        at = float(params["atMm"])
+    else:
+        fraction = float(params.get("fraction", 0.5))
+        if not 0.0 <= fraction <= 1.0:
+            raise ValueError("fraction must be within 0..1")
+        at = low + (high - low) * fraction
+    origin = normal * at
+
+    tolerance = float(params.get("simplifyToleranceMm", 0.01))
+    max_polygons = int(params.get("maxPolygons", 12))
+    max_holes = int(params.get("maxHolesPerPolygon", 24))
+    max_ring_points = int(params.get("maxRingPoints", 128))
+    max_neighbours = int(params.get("maxHoleNeighbours", 3))
+
+    base = {
+        "axisMm": [_round3(float(x)) for x in normal],
+        "atMm": _round3(at),
+        "originMm": [_round3(float(x)) for x in origin],
+        "uAxisMm": [_round3(float(x)) for x in u],
+        "vAxisMm": [_round3(float(x)) for x in v],
+        "planeRangeMm": [_round3(low), _round3(high)],
+        "thresholds": {
+            "simplifyToleranceMm": tolerance,
+            "maxPolygons": max_polygons,
+            "maxHolesPerPolygon": max_holes,
+            "maxRingPoints": max_ring_points,
+        },
+    }
+
+    warnings: list[str] = []
+    segments = trimesh.intersections.mesh_plane(mesh, normal, origin)
+    if len(segments) == 0:
+        warnings.append(
+            f"the plane at {_round3(at)}mm along {base['axisMm']} does not cut this solid "
+            f"(its extent along that axis is {_round3(low)}..{_round3(high)}mm) — no section exists"
+        )
+        return {**base, "empty": True, "polygons": [], "holeSpacing": [], "areaMm2": 0.0,
+                "perimeterMm": 0.0, "bboxUvMm": [[0, 0], [0, 0]], "polygonsOmitted": 0,
+                "voidRegions": 0, "holeCount": 0, "warnings": warnings}
+
+    flat = np.asarray(segments, dtype=float).reshape(-1, 3) - origin
+    uv_segments = np.column_stack([flat @ u, flat @ v]).reshape(-1, 2, 2)
+    # Snap to a 1µm grid before polygonising. MEASURED, not prophylactic: one surface
+    # point reached from two triangles that share an edge is computed in two different
+    # orders, so the two endpoints differ in the last bits; GEOS then sees open
+    # linework and `polygonize` returns NOTHING for a section that plainly has rings
+    # (a $fn=64 tube cut at mid-height returned 0 polygons from 256 segments until
+    # this line existed). A micrometre is three orders below the 0.001mm this tool
+    # reports and far below the 0.01mm simplify tolerance.
+    uv_segments = np.round(uv_segments, 6)
+    merged = unary_union([LineString(segment) for segment in uv_segments])
+
+    # `polygonize` cannot know which side of a closed ring is material: the void
+    # inside a slot comes back as its own polygon next to the material around it. So
+    # every candidate is classified by asking the SOLID, at a point guaranteed to lie
+    # inside that polygon — `representative_point`, not `centroid`, because the
+    # centroid of an annulus sits in its bore and would reject the material.
+    def is_material(candidate) -> bool:
+        point = np.asarray(candidate.representative_point().coords, dtype=float)[0]
+        world = origin + u * point[0] + v * point[1]
+        return bool(mesh.contains(world.reshape(1, 3))[0])
+
+    candidates = sorted(polygonize(merged), key=lambda item: -item.area)
+    polygons = [candidate for candidate in candidates if is_material(candidate)]
+    void_regions = len(candidates) - len(polygons)
+
+    hole_records = []
+    reported = []
+    hole_serial = 0
+    for index, polygon in enumerate(polygons[:max_polygons]):
+        outer = np.asarray(polygon.exterior.coords, dtype=float)[:-1]
+        ring = outer[_simplify_closed(outer, tolerance)]
+        subsampled = False
+        if len(ring) > max_ring_points:
+            step = int(math.ceil(len(ring) / max_ring_points))
+            ring = ring[::step]
+            subsampled = True
+        lengths, angles = [], []
+        for position in range(len(ring)):
+            start, end = ring[position], ring[(position + 1) % len(ring)]
+            delta = end - start
+            lengths.append(_round3(float(np.linalg.norm(delta))))
+            angles.append(_round3(float(np.degrees(math.atan2(delta[1], delta[0]))) % 180.0))
+
+        holes = []
+        interiors = sorted(polygon.interiors, key=lambda item: -abs(item.length))[:max_holes]
+        for interior in interiors:
+            hole_serial += 1
+            ring_uv = np.asarray(interior.coords, dtype=float)[:-1]
+            cx, cy, radius, residual = _fit_circle(ring_uv)
+            area = abs(_signed_area(ring_uv))
+            circle_area = math.pi * radius * radius
+            ratio = area / circle_area if circle_area > 0 else 0.0
+            round_enough = residual <= max(0.05, 0.02 * radius) and ratio >= 0.95
+            centre_uv = np.array([cx, cy])
+            centre_world = origin + u * cx + v * cy
+            entry = {
+                "id": f"s{index + 1}.h{hole_serial}",
+                "centerUv": [_round3(float(cx)), _round3(float(cy))],
+                "centerWorldMm": [_round3(float(x)) for x in centre_world],
+                "areaMm2": _round3(area),
+                "kind": "round" if round_enough else "non-circular",
+                "circularityResidualMm": _round3(residual),
+                "areaRatioToCircle": _round3(ratio),
+                "vertices": len(ring_uv),
+                # Exact segment-to-segment distance to the polygon's outer ring: the
+                # thinnest material between this hole and the outside.
+                "wallToOuterMm": _round3(float(interior.distance(polygon.exterior))),
+            }
+            if round_enough:
+                entry["diameterMm"] = _round3(2 * radius)
+                # A section ring can carry the MIDPOINTS of a triangle diagonal:
+                # OpenSCAD splits every cylinder quad into two triangles and the cut
+                # crosses the diagonal, so half the ring sits at r·cos(θ/2) — 0.002mm
+                # inside the surface for $fn=64. A least-squares fit therefore reports
+                # a tessellated bore slightly SMALL, so the circumscribed diameter is
+                # reported beside it; for a tessellated bore that is the nominal one.
+                entry["enclosingDiameterMm"] = _round3(2 * float(shapely.minimum_bounding_radius(interior)))
+            else:
+                points = ring_uv[_simplify_closed(ring_uv, tolerance)]
+                entry["pointsUv"] = [[_round3(float(a)), _round3(float(b))] for a, b in points[:max_ring_points]]
+            holes.append(entry)
+            hole_records.append({"id": entry["id"], "center": centre_uv, "ring": interior})
+
+        reported.append(
+            {
+                "id": f"s{index + 1}",
+                "areaMm2": _round3(float(polygon.area)),
+                "perimeterMm": _round3(float(polygon.exterior.length)),
+                "holeCount": len(holes),
+                "outer": {
+                    "pointsUv": [[_round3(float(a)), _round3(float(b))] for a, b in ring],
+                    "pointsWorldMm": [
+                        [_round3(float(x)) for x in (origin + u * a + v * b)] for a, b in ring
+                    ],
+                    "segmentsMm": lengths,
+                    "anglesDeg": angles,
+                    "closed": True,
+                    "pointsSubsampled": subsampled,
+                },
+                "holes": holes,
+            }
+        )
+
+    spacing = []
+    seen = set()
+    for record in hole_records:
+        nearest = sorted(
+            (other for other in hole_records if other["id"] != record["id"]),
+            key=lambda other: float(np.linalg.norm(other["center"] - record["center"])),
+        )[:max_neighbours]
+        for other in nearest:
+            pair = tuple(sorted((record["id"], other["id"])))
+            if pair in seen:
+                continue
+            seen.add(pair)
+            spacing.append(
+                {
+                    "from": pair[0],
+                    "to": pair[1],
+                    "centerDistanceMm": _round3(float(np.linalg.norm(other["center"] - record["center"]))),
+                    # Ring-to-ring: the material left between the two holes (0 when
+                    # they break into each other).
+                    "clearanceMm": _round3(float(record["ring"].distance(other["ring"]))),
+                }
+            )
+
+    all_uv = uv_segments.reshape(-1, 2)
+    return {
+        **base,
+        "empty": False,
+        "polygons": reported,
+        "polygonsOmitted": max(0, len(polygons) - len(reported)),
+        # Enclosed rings that are NOT material — the void a through-hole or a slot
+        # punches through the section. Reported as a count so the arithmetic of the
+        # cut is legible (material polygons + voids = rings found).
+        "voidRegions": void_regions,
+        "holeSpacing": spacing,
+        "areaMm2": _round3(float(sum(polygon.area for polygon in polygons))),
+        "perimeterMm": _round3(float(sum(polygon.exterior.length for polygon in polygons))),
+        "bboxUvMm": [
+            [_round3(float(all_uv[:, 0].min())), _round3(float(all_uv[:, 1].min()))],
+            [_round3(float(all_uv[:, 0].max())), _round3(float(all_uv[:, 1].max()))],
+        ],
+        "holeCount": len(hole_records),
+        "warnings": warnings,
+    }
+
+
+def op_measure_extent(params: dict) -> dict:
+    """How far the solid reaches along ANY axis, and the two points that decide it.
+
+    `measure_part` answers this for x/y/z only, and hands back a size with no
+    coordinates — so a caller who needs "how long is this along its own diagonal" or
+    "which vertex is the top of this" has nothing to name. This reports the axial
+    min/max/centre plus the extremal VERTICES, which are exactly the coordinates a
+    later `measure_distance` needs.
+
+    Per-feature extents do NOT live here: `list_features` already reports a
+    cylinder's `lengthMm` and a hole's `depthMm`, from the feature itself rather than
+    from a second measurement that could disagree with it.
+    """
+    import numpy as np
+
+    mesh = _load(params["path"])
+    axis = _axis_vector(params.get("axis", "z"))
+
+    points = np.asarray(mesh.vertices, dtype=float)
+    if points.size == 0:
+        raise ValueError("the mesh has no vertices to measure")
+
+    projections = points @ axis
+    low_index = int(np.argmin(projections))
+    high_index = int(np.argmax(projections))
+    low, high = float(projections[low_index]), float(projections[high_index])
+
+    warnings: list[str] = []
+    if not _is_watertight(np.asarray(mesh.faces)):
+        warnings.append(
+            "the mesh is NOT watertight — its extent is still readable (it is the vertex envelope), "
+            "but no volume or fit conclusion should be drawn from this part"
+        )
+    tied_low = int(np.sum(np.isclose(projections, low, atol=1e-9)))
+    tied_high = int(np.sum(np.isclose(projections, high, atol=1e-9)))
+    if tied_low > 1 or tied_high > 1:
+        warnings.append(
+            f"the extreme along this axis is not unique ({tied_low} vertices at the low end, "
+            f"{tied_high} at the high end) — the reported point is one of them"
+        )
+
+    return {
+        "axisMm": [_round3(float(x)) for x in axis],
+        "source": "whole-part",
+        "vertexCount": int(len(points)),
+        "minMm": _round3(low),
+        "maxMm": _round3(high),
+        "sizeMm": _round3(high - low),
+        "centerMm": _round3((low + high) / 2),
+        "minPointMm": [_round3(float(x)) for x in points[low_index]],
+        "maxPointMm": [_round3(float(x)) for x in points[high_index]],
+        "asAxisAlignedMm": {
+            "min": [_round3(float(x)) for x in np.asarray(mesh.bounds, dtype=float)[0]],
+            "max": [_round3(float(x)) for x in np.asarray(mesh.bounds, dtype=float)[1]],
+        },
+        "warnings": warnings,
     }
 
 
@@ -3033,6 +4118,10 @@ HANDLERS = {
     "validate_assembly": op_validate_assembly,
     "merge_solids": op_merge_solids,
     "measure_distance": op_measure_distance,
+    "measure_thickness": op_measure_thickness,
+    "list_features": op_list_features,
+    "measure_section": op_measure_section,
+    "measure_extent": op_measure_extent,
     "import_mesh": op_import_mesh,
     "scad_prelude": op_scad_prelude,
     "scad_parse_output": op_scad_parse_output,

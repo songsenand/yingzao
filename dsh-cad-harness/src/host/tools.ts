@@ -142,6 +142,147 @@ interface MeasureDistanceSolve {
   watertightB: boolean;
 }
 
+/** Payload of the worker's `measure_thickness` op. */
+interface MeasureThicknessSolve {
+  direction: [number, number, number];
+  from: [number, number, number];
+  fromInsideSolid: boolean;
+  spans: {
+    part: string;
+    enterMm: number;
+    exitMm: number;
+    thicknessMm: number;
+    atMm: number;
+    entryPoint: [number, number, number];
+    exitPoint: [number, number, number];
+    entryNormal?: [number, number, number];
+    exitNormal: [number, number, number];
+    clipped?: boolean;
+  }[];
+  gaps: { afterMm: number; beforeMm: number; gapMm: number; between: string }[];
+  thinnestSpanMm: number;
+  clipped: boolean;
+  nudgedMm: number;
+  probeAgreement: number;
+  watertightA: boolean;
+  watertightB: boolean | null;
+  warnings: string[];
+}
+
+/** Payload of the worker's `list_features` op. */
+interface ListFeaturesSolve {
+  watertight: boolean;
+  triangles: number;
+  thresholds: { smoothDeg: number; minFaceAreaMm2: number; maxFaces: number; maxCylinders: number };
+  faces: {
+    id: string;
+    normalMm: [number, number, number];
+    originMm: [number, number, number];
+    centroidMm: [number, number, number];
+    areaMm2: number;
+    smoothRegion: { facets: number; areaMm2: number; planar: boolean };
+    holes: {
+      id: string;
+      centerMm: [number, number, number];
+      axisMm: [number, number, number];
+      kind: string;
+      areaMm2: number;
+      vertices: number;
+      circularityResidualMm: number;
+      areaRatioToCircle: number;
+      diameterMm?: number;
+      through?: boolean;
+      depthMm?: number;
+    }[];
+  }[];
+  facesOmitted: number;
+  curvedSegmentFacets: number;
+  cylinders: {
+    id: string;
+    kind: string;
+    axisMm: [number, number, number];
+    centerMm: [number, number, number];
+    diameterMm: number;
+    lengthMm: number;
+    facets: number;
+    areaMm2: number;
+    largeFacets: number;
+    fitResidualMm: number;
+  }[];
+  curvedSurfaces: { id: string; areaMm2: number; facets: number; largeFacets: number; reason: string }[];
+  faceCount: number;
+  holeCount: number;
+  cylinderCount: number;
+  warnings: string[];
+}
+
+/** Payload of the worker's `measure_section` op. */
+interface MeasureSectionSolve {
+  axisMm: [number, number, number];
+  atMm: number;
+  originMm: [number, number, number];
+  uAxisMm: [number, number, number];
+  vAxisMm: [number, number, number];
+  planeRangeMm: [number, number];
+  thresholds: {
+    simplifyToleranceMm: number;
+    maxPolygons: number;
+    maxHolesPerPolygon: number;
+    maxRingPoints: number;
+  };
+  empty: boolean;
+  polygons: {
+    id: string;
+    areaMm2: number;
+    perimeterMm: number;
+    holeCount: number;
+    outer: {
+      pointsUv: [number, number][];
+      pointsWorldMm: [number, number, number][];
+      segmentsMm: number[];
+      anglesDeg: number[];
+      closed: boolean;
+      pointsSubsampled: boolean;
+    };
+    holes: {
+      id: string;
+      centerUv: [number, number];
+      centerWorldMm: [number, number, number];
+      areaMm2: number;
+      kind: string;
+      circularityResidualMm: number;
+      areaRatioToCircle: number;
+      vertices: number;
+      wallToOuterMm: number;
+      diameterMm?: number;
+      enclosingDiameterMm?: number;
+      pointsUv?: [number, number][];
+    }[];
+  }[];
+  polygonsOmitted: number;
+  holeSpacing: { from: string; to: string; centerDistanceMm: number; clearanceMm: number }[];
+  areaMm2: number;
+  perimeterMm: number;
+  bboxUvMm: [number, number][];
+  holeCount: number;
+  warnings: string[];
+}
+
+/** Payload of the worker's `measure_extent` op. */
+interface MeasureExtentSolve {
+  axisMm: [number, number, number];
+  source: string;
+  vertexCount: number;
+  minMm: number;
+  maxMm: number;
+  sizeMm: number;
+  centerMm: number;
+  minPointMm: [number, number, number];
+  maxPointMm: [number, number, number];
+  asAxisAlignedMm: { min: number[]; max: number[] };
+  warnings: string[];
+}
+
 export function cadToolNames(): readonly string[] {
   return registeredCadTools;
 }
@@ -2294,6 +2435,496 @@ export function registerCadTools(
         bOutside,
         warnings,
       };
+    },
+  }));
+
+  // --- measure_thickness: every material span along one ray (the aiming-tolerant one) ---
+  //
+  // Why this exists beside measure_distance: measure_distance needs a point ON the
+  // surface you mean, and a caller that did not author the geometry (an imported
+  // STL, an existing corpus) has no way to name one — that is the whole reason the
+  // bench once measured ZERO measure_distance calls. A LINE only has to cross the
+  // wall it asks about, and every crossing comes back, so "how deep do I aim" stops
+  // being a question. The solve is Python's (`measure_thickness` op); what lives
+  // here is the schema, datum/axis resolution and the report.
+  registerTool(defineTool({
+    name: 'measure_thickness',
+    description:
+      'Every material span along one ray, in a single call: wall thicknesses, internal cavities and ' +
+      'cross-part clearances. Give a start point (APPROXIMATE IS FINE — the ray only has to cross the ' +
+      'wall, not hit a surface) and an axis. Returns, for each span, the enter/exit distance from the ' +
+      'start, the thickness, the point and surface normal at each end, plus the gap between consecutive ' +
+      'spans. Opposite entry/exit normals mean a wall; same-facing normals mean a slot, not a wall. ' +
+      'Pass bVersionId to read a clearance between two parts along the same line (tagged "a→b"). ' +
+      'Prefer this over measure_distance whenever you cannot name an exact surface point. mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to probe, e.g. "v003".' },
+      from: { type: 'array', description: 'Start point [x,y,z] mm — approximate is fine. Give this OR fromDatum.', items: { type: 'number' } },
+      fromDatum: { type: 'string', description: 'Datum anchor name, resolved EXACTLY (no guessing). Prefer over `from` when the part declares one.' },
+      direction: { type: 'string', description: 'Ray direction along a principal axis: +x | -x | +y | -y | +z | -z. Give this OR directionVector. Pick the axis that crosses the feature you care about.' },
+      directionVector: { type: 'array', description: 'Ray direction [x,y,z] for a non-axis-aligned probe; normalised internally.', items: { type: 'number' } },
+      bVersionId: { type: 'string', description: 'Second part included in the same ray, so a gap between the two comes back tagged "a→b".' },
+      maxSpanMm: { type: 'number', description: 'Stop reporting past this distance from `from`, mm. A span cut by the limit comes back with clipped:true.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          direction: { type: 'array', required: true, items: { type: 'number' } },
+          from: { type: 'array', required: true, items: { type: 'number' } },
+          fromInsideSolid: { type: 'boolean', required: true, description: 'The start point was inside material (then the first span begins at 0 and has no entryNormal).' },
+          spans: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                part: { type: 'string', required: true, description: '"a" = versionId, "b" = bVersionId.' },
+                enterMm: { type: 'number', required: true },
+                exitMm: { type: 'number', required: true },
+                thicknessMm: { type: 'number', required: true },
+                atMm: { type: 'number', required: true },
+                entryPoint: { type: 'array', required: true, items: { type: 'number' } },
+                exitPoint: { type: 'array', required: true, items: { type: 'number' } },
+                entryNormal: { type: 'array', items: { type: 'number' } },
+                exitNormal: { type: 'array', required: true, items: { type: 'number' } },
+                clipped: { type: 'boolean' },
+              },
+            },
+          },
+          gaps: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                afterMm: { type: 'number', required: true },
+                beforeMm: { type: 'number', required: true },
+                gapMm: { type: 'number', required: true },
+                between: { type: 'string', required: true, description: '"same-part" (a cavity) or "a→b" (a clearance).' },
+              },
+            },
+          },
+          thinnestSpanMm: { type: 'number', required: true },
+          clipped: { type: 'boolean', required: true },
+          nudgedMm: { type: 'number', required: true, description: 'How far the accepted probe line sits from the requested one, mm (0 = the requested line was used). Offsets are perpendicular, so they do not move a crossing by more than d²/2R.' },
+          probeAgreement: { type: 'number', required: true, description: 'Share of the 17 probe lines that agreed with the reported answer. Below 1 the ray runs near-tangent to a surface: read the warnings.' },
+          watertightA: { type: 'boolean', required: true },
+          watertightB: { type: 'boolean' },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; from?: number[]; fromDatum?: string;
+        direction?: string; directionVector?: number[];
+        bVersionId?: string; maxSpanMm?: number;
+      };
+      const { store } = await allStores(exec);
+      const versionStl = (v: string) => join(store.root, 'versions', v, 'model.stl');
+      if (!existsSync(versionStl(a.versionId))) throw new Error(`version ${a.versionId} has no model.stl`);
+      if (a.bVersionId && !existsSync(versionStl(a.bVersionId))) throw new Error(`version ${a.bVersionId} has no model.stl`);
+
+      let from: [number, number, number];
+      if (a.fromDatum) {
+        const datums = await readVersionDatumPoints(store, a.versionId);
+        const hit = datums[a.fromDatum];
+        if (!hit) {
+          const known = Object.keys(datums).join(', ') || 'none';
+          throw new Error(`datum "${a.fromDatum}" not found on ${a.versionId} (declared: ${known})`);
+        }
+        from = hit;
+      } else if (a.from) {
+        if (a.from.length !== 3) throw new Error('`from` needs three numbers [x,y,z] mm');
+        from = a.from as [number, number, number];
+      } else {
+        throw new Error('measure_thickness needs `from` [x,y,z] or `fromDatum`');
+      }
+
+      // The axis argument travels as given: a principal-axis name or a vector. The
+      // WORKER owns what an axis means (`_axis_vector`), because the same argument
+      // reaches three ops and a second parser here had already drifted from it.
+      const direction = a.directionVector ?? a.direction;
+      if (direction === undefined) {
+        throw new Error('measure_thickness needs `direction` ("+x" … "-z") or `directionVector`');
+      }
+
+      const out = await (await ensurePythonWorker()).request<MeasureThicknessSolve>('measure_thickness', {
+        meshes: [versionStl(a.versionId), a.bVersionId ? versionStl(a.bVersionId) : null],
+        from,
+        direction,
+        maxSpanMm: a.maxSpanMm,
+      });
+      return {
+        direction: out.direction,
+        from: out.from,
+        fromInsideSolid: out.fromInsideSolid,
+        spans: out.spans,
+        gaps: out.gaps,
+        thinnestSpanMm: out.thinnestSpanMm,
+        clipped: out.clipped,
+        nudgedMm: out.nudgedMm,
+        probeAgreement: out.probeAgreement,
+        watertightA: out.watertightA,
+        // Omitted (not false) when no second part was given: false would claim a
+        // verdict about a solid that was never opened.
+        ...(out.watertightB === null ? {} : { watertightB: out.watertightB }),
+        warnings: out.warnings,
+      };
+    },
+  }));
+
+  // --- list_features: WHERE things are, for geometry you did not draw ---
+  //
+  // This is the op that makes the rest of the measure family usable on geometry the
+  // caller did not author: measure_distance wants a point on a surface, and an
+  // imported STL or a corpus part offers no way to name one. Holes come back with
+  // centres and diameters, cylinders with their axes, planar faces with normals and
+  // areas — so every later measurement can be written against a feature instead of
+  // against a guessed coordinate.
+  //
+  // The limits are stated in the description on purpose: holes are found on PLANAR
+  // faces only (a hole drilled into a cylindrical wall needs the curved-surface
+  // path), and a flat facet that a tangent fillet joins to a bore lands in the
+  // curved region rather than the face list — which is why each curved region
+  // reports `largeFacets`.
+  registerTool(defineTool({
+    name: 'list_features',
+    description:
+      'The coordinate inventory of a saved version: planar faces (normal, a point on the plane, area, centroid), ' +
+      'the HOLES in them (centre, diameter, and whether each is through or how deep), and cylindrical surfaces ' +
+      '(axis, diameter, length, and bore-vs-boss). Use this FIRST whenever you must measure or assemble geometry ' +
+      'you did not generate — an imported STL, an existing corpus part — because measure_distance needs a point ' +
+      'on a surface and this is where those coordinates come from. Each face also reports the smooth region it ' +
+      'belongs to, so a 5.9mm² facet that is one of 64 in a 377mm² non-planar region is readable as a bore ' +
+      'segment rather than a face. Thresholds (`minFaceAreaMm2`, `smoothDeg`) are choices and are echoed in the ' +
+      'result, together with how many faces and curved segments were left out. Holes are detected on planar ' +
+      'faces only. mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to inspect, e.g. "v003".' },
+      minFaceAreaMm2: { type: 'number', description: 'A planar face smaller than this is not listed as a face. Default 4.0. Raise it to cut bore-segment noise on a finely tessellated part; lower it to catch small lands.' },
+      smoothDeg: { type: 'number', description: 'Dihedral angle below which two facets are treated as one smooth (curved) surface. Default 10 (a 64-segment bore steps 5.6°).' },
+      maxFaces: { type: 'integer', description: 'Cap on listed faces, largest first. Default 40; the result reports facesOmitted.' },
+      maxCylinders: { type: 'integer', description: 'Cap on listed cylinders. Default 24.' },
+      withHoleDepth: { type: 'boolean', description: 'Probe each hole along its axis to report depth / through-hole. Default true (one ray per hole).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          watertight: { type: 'boolean', required: true },
+          triangles: { type: 'integer', required: true },
+          thresholds: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              smoothDeg: { type: 'number', required: true },
+              minFaceAreaMm2: { type: 'number', required: true },
+              maxFaces: { type: 'number', required: true },
+              maxCylinders: { type: 'number', required: true },
+            },
+          },
+          faces: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                normalMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Outward unit normal.' },
+                originMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Any point on the plane.' },
+                centroidMm: { type: 'array', required: true, items: { type: 'number' } },
+                areaMm2: { type: 'number', required: true },
+                smoothRegion: {
+                  type: 'object', required: true, additionalProperties: false,
+                  properties: {
+                    facets: { type: 'number', required: true, description: 'Facets in this smooth region; 1 means a genuinely isolated flat face.' },
+                    areaMm2: { type: 'number', required: true },
+                    planar: { type: 'boolean', required: true, description: 'false means this facet is a segment of a curved surface (a bore quad).' },
+                  },
+                },
+                holes: {
+                  type: 'array', required: true,
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      id: { type: 'string', required: true },
+                      centerMm: { type: 'array', required: true, items: { type: 'number' } },
+                      axisMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Hole axis = the face normal (the hole goes INTO the material).' },
+                      kind: { type: 'string', required: true, description: '"round" | "non-circular" (a slot or a polygon pocket).' },
+                      areaMm2: { type: 'number', required: true },
+                      vertices: { type: 'number', required: true },
+                      circularityResidualMm: { type: 'number', required: true },
+                      areaRatioToCircle: { type: 'number', required: true, description: 'Loop area ÷ fitted-circle area. Below 0.95 the loop is a polygon, not a circle — a rectangle\'s four corners are concyclic, so residual alone cannot tell them apart.' },
+                      diameterMm: { type: 'number', description: 'Present only when kind is "round".' },
+                      through: { type: 'boolean', description: 'Present when withHoleDepth was on.' },
+                      depthMm: { type: 'number', description: 'Distance to the first surface behind the hole; absent when the hole is through.' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          facesOmitted: { type: 'number', required: true, description: 'Planar faces above the area threshold left out by maxFaces.' },
+          curvedSegmentFacets: { type: 'number', required: true, description: 'Facets belonging to curved surfaces — deliberately not listed as faces.' },
+          cylinders: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                kind: { type: 'string', required: true, description: '"bore" (a hole: material outside) | "boss" (a shaft: material inside).' },
+                axisMm: { type: 'array', required: true, items: { type: 'number' } },
+                centerMm: { type: 'array', required: true, items: { type: 'number' }, description: 'A point on the axis, at the region centroid height.' },
+                diameterMm: { type: 'number', required: true },
+                lengthMm: { type: 'number', required: true },
+                facets: { type: 'number', required: true },
+                areaMm2: { type: 'number', required: true },
+                largeFacets: { type: 'number', required: true, description: 'Facets here big enough to count as faces; nonzero means a flat facet is hidden inside this region (a tangent fillet).' },
+                fitResidualMm: { type: 'number', required: true },
+              },
+            },
+          },
+          curvedSurfaces: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                areaMm2: { type: 'number', required: true },
+                facets: { type: 'number', required: true },
+                largeFacets: { type: 'number', required: true },
+                reason: { type: 'string', required: true },
+              },
+            },
+          },
+          faceCount: { type: 'number', required: true },
+          holeCount: { type: 'number', required: true },
+          cylinderCount: { type: 'number', required: true },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; minFaceAreaMm2?: number; smoothDeg?: number;
+        maxFaces?: number; maxCylinders?: number; withHoleDepth?: boolean;
+      };
+      const { store } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
+      const out = await (await ensurePythonWorker()).request<ListFeaturesSolve>('list_features', {
+        path,
+        minFaceAreaMm2: a.minFaceAreaMm2,
+        smoothDeg: a.smoothDeg,
+        maxFaces: a.maxFaces,
+        maxCylinders: a.maxCylinders,
+        withHoleDepth: a.withHoleDepth,
+      });
+      return { versionId: a.versionId, ...out };
+    },
+  }));
+
+  // --- measure_section: the cross-section as data, so nothing has to be aimed at ---
+  //
+  // A cut plane has no surface on a mesh — it is an interpretation of the geometry —
+  // so there is nothing to click on. This returns the interpretation AS NUMBERS:
+  // each polygon's outer ring (points in the plane's own 2D frame AND in world
+  // coordinates, plus per-segment lengths and angles), each hole in it (centre,
+  // diameter, and the exact wall thickness to the outside) and the spacing between
+  // holes. Hole spacing, wall thickness and in-plane angles are then read off the
+  // reply instead of being aimed at.
+  registerTool(defineTool({
+    name: 'measure_section',
+    description:
+      'Cut a saved version with a plane and return the SECTION AS DATA: every polygon, its outer ring ' +
+      '(points in the plane\'s 2D frame AND in world mm, with per-segment lengths and angles), every hole ' +
+      'in it (centre, diameter, kind, and the exact segment-to-segment wall thickness to the outside), and ' +
+      'the centre distance and clearance between neighbouring holes. Use it for hole spacing, wall thickness ' +
+      'or an in-plane angle WITHOUT naming any 3D point — `axis` plus `fraction` is the whole input. The ' +
+      'plane\'s own u/v axes are reported, so a follow-up `measure_distance` can be written against the ' +
+      'world coordinates it returns. Holes are found by polygonising the cut, so a slot is reported as ' +
+      'non-circular rather than forced through a circle. mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to section, e.g. "v003".' },
+      axis: { type: 'string', description: 'Plane normal along a principal axis: x | y | z (a leading "-" flips it). Default z, i.e. a horizontal cut.' },
+      fraction: { type: 'number', description: 'Where to cut, as 0..1 across the bounding box along the axis. Default 0.5 (mid-height).' },
+      atMm: { type: 'number', description: 'Explicit cut position in mm along the axis — wins over `fraction`. The version\'s extent along that axis is reported as planeRangeMm.' },
+      simplifyToleranceMm: { type: 'number', description: 'Ring vertices within this distance of the line through their neighbours are dropped. Default 0.01 (a $fn=64 R=10 circle keeps every vertex).' },
+      maxPolygons: { type: 'integer', description: 'Cap on reported polygons, largest first. Default 12.' },
+      maxHolesPerPolygon: { type: 'integer', description: 'Cap on holes reported per polygon. Default 24.' },
+      maxHoleNeighbours: { type: 'integer', description: 'How many nearest holes to relate to each hole. Default 3.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          axisMm: { type: 'array', required: true, items: { type: 'number' } },
+          atMm: { type: 'number', required: true },
+          originMm: { type: 'array', required: true, items: { type: 'number' }, description: 'A point on the cut plane (axisMm × atMm).' },
+          uAxisMm: { type: 'array', required: true, items: { type: 'number' }, description: 'In-plane +u direction in world coordinates.' },
+          vAxisMm: { type: 'array', required: true, items: { type: 'number' }, description: 'In-plane +v direction; (u, v, axis) is right-handed.' },
+          planeRangeMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The version\'s extent along the axis ([low, high]); gives the valid atMm range.' },
+          thresholds: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              simplifyToleranceMm: { type: 'number', required: true },
+              maxPolygons: { type: 'number', required: true },
+              maxHolesPerPolygon: { type: 'number', required: true },
+              maxRingPoints: { type: 'number', required: true },
+            },
+          },
+          empty: { type: 'boolean', required: true, description: 'true when the plane misses the solid; warning says why.' },
+          polygons: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                areaMm2: { type: 'number', required: true },
+                perimeterMm: { type: 'number', required: true },
+                holeCount: { type: 'number', required: true },
+                outer: {
+                  type: 'object', required: true, additionalProperties: false,
+                  properties: {
+                    pointsUv: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                    pointsWorldMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                    segmentsMm: { type: 'array', required: true, items: { type: 'number' }, description: 'Segment i runs from point i to point i+1 (wrapping at the end).' },
+                    anglesDeg: { type: 'array', required: true, items: { type: 'number' }, description: 'Direction of segment i from +u, in [0,180) — a line has no preferred sign.' },
+                    closed: { type: 'boolean', required: true },
+                    pointsSubsampled: { type: 'boolean', required: true },
+                  },
+                },
+                holes: {
+                  type: 'array', required: true,
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      id: { type: 'string', required: true },
+                      centerUv: { type: 'array', required: true, items: { type: 'number' } },
+                      centerWorldMm: { type: 'array', required: true, items: { type: 'number' } },
+                      areaMm2: { type: 'number', required: true },
+                      kind: { type: 'string', required: true, description: '"round" | "non-circular".' },
+                      circularityResidualMm: { type: 'number', required: true },
+                      areaRatioToCircle: { type: 'number', required: true },
+                      vertices: { type: 'number', required: true },
+                      wallToOuterMm: { type: 'number', required: true, description: 'Exact segment-to-segment distance to this polygon\'s outer ring — the thinnest material between the hole and the outside.' },
+                      diameterMm: { type: 'number', description: 'Present only when kind is "round": the least-squares fit, which on a tessellated bore reads slightly SMALL.' },
+                      enclosingDiameterMm: { type: 'number', description: 'The circumscribed (minimum enclosing circle) diameter. For a tessellated bore this is the nominal diameter; compare it with diameterMm to see the triangulation gap.' },
+                      pointsUv: { type: 'array', items: { type: 'array', items: { type: 'number' } }, description: 'Present only for non-circular holes, where a diameter cannot describe the shape.' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          polygonsOmitted: { type: 'number', required: true },
+          holeSpacing: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                from: { type: 'string', required: true },
+                to: { type: 'string', required: true },
+                centerDistanceMm: { type: 'number', required: true },
+                clearanceMm: { type: 'number', required: true, description: 'Ring-to-ring gap between the two holes (0 when they break into each other).' },
+              },
+            },
+          },
+          areaMm2: { type: 'number', required: true },
+          perimeterMm: { type: 'number', required: true },
+          bboxUvMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+          holeCount: { type: 'number', required: true },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 60_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; axis?: string; fraction?: number; atMm?: number;
+        simplifyToleranceMm?: number; maxPolygons?: number; maxHolesPerPolygon?: number; maxHoleNeighbours?: number;
+      };
+      const { store } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
+      const out = await (await ensurePythonWorker()).request<MeasureSectionSolve>('measure_section', {
+        path,
+        axis: a.axis ?? 'z',
+        atMm: a.atMm,
+        fraction: a.fraction,
+        simplifyToleranceMm: a.simplifyToleranceMm,
+        maxPolygons: a.maxPolygons,
+        maxHolesPerPolygon: a.maxHolesPerPolygon,
+        maxHoleNeighbours: a.maxHoleNeighbours,
+      });
+      return { versionId: a.versionId, ...out };
+    },
+  }));
+
+  // --- measure_extent: how far it reaches along ANY axis, plus the two points ---
+  //
+  // measure_part's bbox is x/y/z only and carries no coordinates. This answers the
+  // same question for an arbitrary axis and hands back the extremal VERTICES, which
+  // are precisely the coordinates a follow-up measure_distance needs. Per-feature
+  // extents are deliberately NOT here — list_features reports a cylinder's lengthMm
+  // and a hole's depthMm from the feature itself.
+  registerTool(defineTool({
+    name: 'measure_extent',
+    description:
+      'How far a saved version reaches along ANY axis: the minimum and maximum projection, the size, the ' +
+      'centre, and the two extremal VERTICES (the coordinates you would otherwise have to find by hand). ' +
+      'Use it for a non-axis-aligned extent (a diagonal, a slanted boss), for "which point is the top of ' +
+      'this", or when you need a point ON the part to hand to measure_distance. Collinear as a first look: ' +
+      'it is the vertex envelope, so it says nothing about volume or fit. For a per-feature extent use ' +
+      '`list_features` instead — a cylinder\'s lengthMm and a hole\'s depthMm come from the feature itself. ' +
+      'mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to measure, e.g. "v003".' },
+      axis: { type: 'string', description: 'Axis to project on: x | y | z (a leading "-" flips it). Default z. Give axisVector for anything else.' },
+      axisVector: { type: 'array', description: 'Projection axis [x,y,z] for a non-principal direction; normalised internally.', items: { type: 'number' } },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          axisMm: { type: 'array', required: true, items: { type: 'number' } },
+          source: { type: 'string', required: true, description: 'Always "whole-part" today; reserved for scoped extents.' },
+          vertexCount: { type: 'number', required: true },
+          minMm: { type: 'number', required: true, description: 'Smallest projection onto the axis.' },
+          maxMm: { type: 'number', required: true },
+          sizeMm: { type: 'number', required: true },
+          centerMm: { type: 'number', required: true },
+          minPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at minMm.' },
+          maxPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at maxMm.' },
+          asAxisAlignedMm: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              min: { type: 'array', required: true, items: { type: 'number' } },
+              max: { type: 'array', required: true, items: { type: 'number' } },
+            },
+          },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 30_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string; axis?: string; axisVector?: number[] };
+      const { store } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
+      const out = await (await ensurePythonWorker()).request<MeasureExtentSolve>('measure_extent', {
+        path,
+        axis: a.axisVector ?? a.axis ?? 'z',
+      });
+      return { versionId: a.versionId, ...out };
     },
   }));
 

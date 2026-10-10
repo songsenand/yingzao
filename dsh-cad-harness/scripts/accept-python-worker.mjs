@@ -3,7 +3,7 @@
 //
 //   1. handshake: `protocolVersion`, python version, declared ops
 //   2. latency: ping round trip over the pipe (measured 0.02 ms, budget 1 ms)
-//   3. versions: the eight pinned packages actually import in this venv
+//   3. versions: the nine pinned packages actually import in this venv
 //   4. BY-FILE PAYLOADS: 200 query points in, distances out — both by file, and
 //      the distances must agree with the TS three-mesh-bvh result (Δ=0 measured;
 //      this is the assertion that makes "the migration kept the numbers" real)
@@ -90,9 +90,9 @@ check(pingMedian < 1, 'ping round trip stays under 1 ms', `${pingMedian.toFixed(
 console.log('--- versions ---');
 const versions = await worker.request('versions');
 const packages = versions.packages ?? {};
-const expected = ['numpy', 'scipy', 'trimesh', 'manifold3d', 'networkx', 'skfem', 'rtree', 'rapier3d'];
+const expected = ['numpy', 'scipy', 'trimesh', 'manifold3d', 'networkx', 'skfem', 'rtree', 'rapier3d', 'shapely'];
 const missing = expected.filter((name) => !(name in packages));
-check(missing.length === 0, 'all eight pinned packages are reported', Object.entries(packages).map(([k, v]) => `${k}=${v}`).join(' '));
+check(missing.length === 0, 'all nine pinned packages are reported', Object.entries(packages).map(([k, v]) => `${k}=${v}`).join(' '));
 const unavailable = Object.entries(packages).filter(([, value]) => String(value).startsWith('unavailable'));
 check(
   unavailable.length === 0 || unavailable.every(([name]) => name === 'rapier3d'),

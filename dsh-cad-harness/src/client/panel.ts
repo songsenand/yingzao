@@ -13,6 +13,10 @@ import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playba
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { fitDistance } from './fit';
 import {
+  axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
+  planeToWorld, projectToCutPlane, sectionLoops, sectionSegments,
+} from './section';
+import {
   attachStudioLights, configureStudioRenderer, backgroundById, loadBackgroundId, saveBackgroundId,
   overlayInk, VIEWPORT_BACKGROUNDS,
 } from './lighting';
@@ -93,6 +97,15 @@ const VIEWPORT_RATIO_MIN = 9 / 16;      // 16:9
 const DOT_PX = 7;
 const MEASURE_COLOR = 0xff3040;
 const THICK_COLOR = 0x00838f;
+/** How close a click must be to a mesh vertex before it snaps onto it. */
+const SNAP_PX = 9;
+/** The cut plane's own outline, so the section reads as a plane and not a hole. */
+const SECTION_COLOR = 0xf0a020;
+/**
+ * The cut FACE. Between the body (#7aa7d9) and the interior tint (#41608a) so the
+ * cut reads as cut material rather than as a hole into the part.
+ */
+const CAP_COLOR = 0x6d90b8;
 /** Unit sphere, scaled per frame; shared, so never disposed per marker. */
 const DOT_GEO = new THREE.SphereGeometry(1, 12, 8);
 
@@ -111,18 +124,10 @@ function scaleScreenDots(dots: THREE.Object3D[], camera: THREE.PerspectiveCamera
  * default (above/front) camera and the view looks INTO the part. The old plane
  * sat at `box.max.z` with normal (0,0,-1), which keeps everything — the ◐剖切
  * toggle was a no-op.
+ *
+ * `axisIndex` / `clipCut` live in ./section.ts (with the picking maths) so the
+ * arithmetic is testable without a browser.
  */
-function axisIndex(axis: 'x' | 'y' | 'z'): number {
-  return axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
-}
-
-/** Cut coordinate along the section axis, in world units. */
-function clipCut(box: THREE.Box3, clip: { pos: number; axis: 'x' | 'y' | 'z' }): number {
-  const i = axisIndex(clip.axis);
-  const lo = box.min.getComponent(i);
-  const hi = box.max.getComponent(i);
-  return lo + (hi - lo) * clip.pos;
-}
 
 function applyClip(
   mesh: THREE.Mesh,
@@ -583,6 +588,12 @@ export function CadPanel(): React.ReactElement {
     dist?: number;
   } | null>(null);
   const measureGroupRef = useRef<any>(null);
+  /**
+   * The cut plane's outline lives in its OWN group: the annotation effect above
+   * clears its children every time a measurement changes, so sharing a parent would
+   * make the outline disappear the moment the user measured something.
+   */
+  const sectionGroupRef = useRef<any>(null);
   const meshRef = useRef<any>(null);
   /** Double-sided twin of the mesh, used only for raycasting (see the builder). */
   const pickMeshRef = useRef<THREE.Mesh | null>(null);
@@ -885,6 +896,9 @@ export function CadPanel(): React.ReactElement {
         const mGroup = new THREE.Group();
         scene.add(mGroup);
         measureGroupRef.current = mGroup;
+        const sGroup = new THREE.Group();
+        scene.add(sGroup);
+        sectionGroupRef.current = sGroup;
         // Clipping is enabled on the renderer once and for all: toggling the
         // section or sliding its plane must NOT rebuild the scene, because every
         // rebuild costs a WebGL context (see forceContextLoss below).
@@ -1094,6 +1108,65 @@ export function CadPanel(): React.ReactElement {
     ];
   };
 
+  /**
+   * Snap a raw pick to something the user can actually mean.
+   *
+   * Two corrections, both of them about the section:
+   *
+   * 1. **A cut plane has no geometry**, so a click that looks like it lands on the
+   *    cut passes through the opening and hits the far interior wall — two points
+   *    that look adjacent in a section then measure the part's diagonal. When the
+   *    section is on, the pick is constrained to the cut plane.
+   * 2. **A click is never exact**, and on a triangulated part a vertex is the one
+   *    unambiguously "there" point. Within a few pixels of a vertex the pick snaps
+   *    to it, which is what makes reading a corner or a boss centre reliable.
+   *
+   * The snap radius is stated in PIXELS and converted with the camera, so it keeps
+   * its meaning when the part is small or the view is zoomed out.
+   */
+  const refinePick = (raw: [number, number, number]): [number, number, number] => {
+    const geometry = (pickTarget()?.geometry ?? meshRef.current?.geometry) as THREE.BufferGeometry | undefined;
+    const camera = cameraRef.current;
+    const mount = mountRef.current;
+    const clip = clipRef.current;
+    const box = geometry?.boundingBox;
+    let point = raw;
+    if (clip.on && box) {
+      point = projectToCutPlane(point, clip.axis, clipCut(box, clip));
+    }
+    const positions = geometry?.getAttribute('position');
+    if (!geometry || !camera || !mount || !positions) return point;
+    const distanceMm = camera.position.distanceTo(new THREE.Vector3(point[0], point[1], point[2]));
+    const perPixel = millimetresPerPixel({
+      fovDeg: (camera as THREE.PerspectiveCamera).fov ?? 45,
+      viewportHeightPx: mount.clientHeight,
+      distanceMm,
+    });
+    const radius = Math.max(perPixel * SNAP_PX, 1e-4);
+    const snapped = nearestVertex(positions.array as ArrayLike<number>, point, radius);
+    // In a section the centre of a HOLE is the target a user actually wants, and a
+    // hole centre is not a mesh vertex — so the cut's own loops contribute snap
+    // candidates too (see loopCentroids).
+    let centre: [number, number, number] | null = null;
+    if (clip.on && box) {
+      const cut = clipCut(box, clip);
+      for (const candidate of loopCentroids(sectionLoops(geometry, clip.axis, cut))) {
+        const world = planeToWorld(candidate, clip.axis, cut);
+        const away = Math.hypot(world[0] - point[0], world[1] - point[1], world[2] - point[2]);
+        if (away > radius) continue;
+        if (!centre || away < Math.hypot(centre[0] - point[0], centre[1] - point[1], centre[2] - point[2])) {
+          centre = world;
+        }
+      }
+    }
+    if (centre && snapped) {
+      const toCentre = Math.hypot(centre[0] - point[0], centre[1] - point[1], centre[2] - point[2]);
+      const toVertex = Math.hypot(snapped[0] - point[0], snapped[1] - point[1], snapped[2] - point[2]);
+      return toCentre <= toVertex ? centre : snapped;
+    }
+    return centre ?? snapped ?? point;
+  };
+
   // CAD-style two-point pick on the mesh surface (measure mode)
   const pickMeasurePoint = (e: React.MouseEvent) => {
     const target = pickTarget();
@@ -1101,7 +1174,7 @@ export function CadPanel(): React.ReactElement {
     if (!target || !raycaster) return;
     const hits = visibleHits(raycaster, target);
     if (hits.length === 0) { setHint('未点到零件表面 — 再试一次'); return; }
-    const p = xyz(hits[0]!.point);
+    const p = xyz(new THREE.Vector3(...refinePick(xyz(hits[0]!.point))));
     // Completing the pair ends the mode: the measurement (dots, line, value)
     // stays, but the viewport goes back to orbit/zoom without a second click.
     const finishing = !!measureRef.current && !measureRef.current.b;
@@ -1192,6 +1265,56 @@ export function CadPanel(): React.ReactElement {
     group.visible = true;
   }, [measure, thick, versionId]);
 
+  /**
+   * Outline of the cut plane, so the section reads as a PLANE and not as a hole.
+   *
+   * A clip plane is a shader effect: it removes material and leaves nothing behind,
+   * which is why a cut model used to look like a shell with a bite taken out of it
+   * and why clicking "on the cut" was guesswork. The outline is the plane ∩ mesh, and
+   * it is what tells the user where the plane actually is — and, with the pick
+   * constrained to the same plane (see `refinePick`), where a click will land.
+   *
+   * Rebuilt only when the plane moves, in the annotation group: sliding the plane
+   * must not rebuild the SCENE (every rebuild costs a WebGL context).
+   */
+  useEffect(() => {
+    const group: any = sectionGroupRef.current;
+    const geometry = meshRef.current?.geometry as THREE.BufferGeometry | undefined;
+    if (!group) return;
+    // `spec` is set at the END of the async scene build, so it is the signal that the
+    // geometry belongs to the version now on screen — depending on `versionId` alone
+    // would draw the outline of the PREVIOUS part for one frame after a switch.
+    while (group.children.length) {
+      const stale: any = group.children.pop();
+      stale.geometry?.dispose?.();
+      stale.material?.dispose?.();
+    }
+    if (!section || !geometry?.boundingBox) return;
+    const cut = clipCut(geometry.boundingBox, { pos: sectionPos, axis: sectionAxis });
+    // The cap: a clip plane removes material and leaves an open shell, so the cut is
+    // filled with the actual cross-section — holes subtracted, not filled in. It is
+    // NOT clipped itself (no clippingPlanes): it IS the boundary, and putting it on
+    // the same plane as the clip would erase it.
+    const cap = capTriangles(geometry, sectionAxis, cut);
+    if (cap.length > 0) {
+      const capGeometry = new THREE.BufferGeometry();
+      capGeometry.setAttribute('position', new THREE.Float32BufferAttribute(cap, 3));
+      const capMesh = new THREE.Mesh(capGeometry, new THREE.MeshBasicMaterial({
+        color: CAP_COLOR,
+        side: THREE.DoubleSide,
+      }));
+      capMesh.renderOrder = 996;
+      group.add(capMesh);
+    }
+    const flat = sectionSegments(geometry, sectionAxis, cut);
+    if (flat.length === 0) return;
+    const outline = new THREE.BufferGeometry();
+    outline.setAttribute('position', new THREE.Float32BufferAttribute(flat, 3));
+    const line = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({ color: SECTION_COLOR }));
+    line.renderOrder = 997;
+    group.add(line);
+  }, [section, sectionPos, sectionAxis, versionId, spec]);
+
   // Section toggle / slider: update the live material, never rebuild the scene.
   useEffect(() => {
     const mesh = meshRef.current as THREE.Mesh | null;
@@ -1269,7 +1392,7 @@ export function CadPanel(): React.ReactElement {
     if (spec) facts.push(`包围盒 ${spec.size.map((n) => round3(n)).join(' × ')} mm`);
     // 剖视状态改变画面含义（模型看起来缺一半），模型必须知道截的是什么：
     // 轴向 + 位置。没开剖视就不提，避免每张图都背一句废话。
-    if (section) facts.push(`剖视：沿 ${sectionAxis} 轴、保留 ${Math.round(sectionPos * 100)}% 侧`);
+    if (section) facts.push(`剖视：沿 ${sectionAxis} 轴、保留 ${Math.round(sectionPos * 100)}% 侧（测量点已约束在该剖切面内）`);
     if (measure?.b) {
       facts.push(`两点测量 ${(measure.dist ?? 0).toFixed(2)} mm（自 [${measure.a.map((n) => n.toFixed(1)).join(', ')}] 至 [${measure.b.map((n) => n.toFixed(1)).join(', ')}]）`);
     }
