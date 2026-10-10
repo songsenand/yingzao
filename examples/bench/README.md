@@ -36,7 +36,7 @@
 | 项 | 基准值（2026-10-05 冻结） |
 |---|---|
 | git commit | **首次包含 `examples/bench/` 的那次提交**——`git log --diff-filter=A --format=%H -- examples/bench` 即可取到。（它的前一次是 `76b6661f`，只有插件侧、没有题库。）之所以不硬编码 hash：提交的 hash 无法写进它自己。 |
-| `SKILL.md` sha256 | `a560a40deefcdc3b0c7ac02a2b60c5a7bd83b37f9f7fdd3286b6a2e1a7f78aa6`（**374 行**，2026-10-12 测量能力批次之后；上一版是 `8e2717f9…`，313 行） |
+| `SKILL.md` sha256 | `d6f49801f2dacb2ef718bf6447fb8b8de4a8ba54feaff77f0db87dbef0e65875`（**375 行**，2026-10-12 加 `measure_angle` 之后；前一版是 `a560a40d…`，374 行） |
 | `01-mortise-bench/TASK.md` | `3c2a285a61c27b4f9131c3d47cd120e56811b1408be56619a424dff90f94ad89` |
 | `01b-diagnosis/TASK.md` | `b4ed3957032b9a2e4d3ca8ce05b53bf6beff055dd89cd2efeeced348ad4e3509` |
 | `02-steam-engine/TASK.md` | `e3768a0dff1aa916e7122fb6af8e4b1a40fb2b80ccfc6a9f7bc662bf3f2bcd48` |
@@ -47,8 +47,8 @@
 **为什么记这些**：只有 SUT 与考卷逐字一致，两轮分数才可比。改了考卷就必须重录
 指纹并重跑基线——**旧分数作废**。
 
-> **2026-10-12 测量能力批次**：SUT 的工具表从 **20 件变为 24 件**（新增
-> `measure_thickness` / `list_features` / `measure_section` / `measure_extent`，
+> **2026-10-12 测量能力批次**：SUT 的工具表从 **20 件变为 25 件**（新增
+> `measure_thickness` / `list_features` / `measure_section` / `measure_extent` / `measure_angle`，
 > worker 侧同步新增四个 op 并接入 `shapely`），`SKILL.md` 的路由表与流程段随之改写。
 > 因此**这一批之前的所有分数都不可比**，重跑基线前请先确认 §7 的 `00-smoke` 全绿。
 > 背景与取舍见 [`docs/DECISION-LOG.md`](../../docs/DECISION-LOG.md) 2026-10-12 条。

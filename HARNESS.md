@@ -387,9 +387,9 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   宿主侧 `src/host/python-worker.ts` 的 `PythonWorker` / `ensurePythonWorker()`（单例 + 崩溃重启）
   + `resolveWorkerScript()`（源码与打包两种深度）；`package.json.files` 加了 `python/`。
   v1 ops：`ping` / `versions` / `stl_stats` / `closest_points` / `crash`。
-  **2026-10-12 现状**：`OPS` 已扩到 **28 个**（与 `HANDLERS` 一一对应，`hello` 帧会报全表），
+  **2026-10-12 现状**：`OPS` 已扩到 **29 个**（与 `HANDLERS` 一一对应，`hello` 帧会报全表），
   覆盖测量家族（`measure_part` / `measure_distance` / `measure_closest` / **`measure_thickness`** /
-  **`list_features`** / **`measure_section`** / **`measure_extent`**）、装配契约、运动/刚体/流体、
+  **`list_features`** / **`measure_section`** / **`measure_extent`** / **`measure_angle`**）、装配契约、运动/刚体/流体、
   SCAD 文本协议与导入合并；依赖集 **9 件**（新增 `shapely 2.2.0`，给剖面多边形化用；
   锁由 `scripts/gen-python-lock.mjs` 生成，改锁会经 venv marker 触发重建）。
   验收 `scripts/accept-python-worker.mjs`（8 组断言全绿）：握手 **14.8 ms**、ping **0.026 ms**

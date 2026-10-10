@@ -181,6 +181,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | `list_features` | `list_features` | `accept-list-features.mjs` **31 项**：Ø8/Ø12 孔心与直径、通孔/盲孔深度、bore-vs-boss、矩形槽判非圆；**修掉一个真缺陷**——矩形四角共圆，残差为 0 会把槽判成圆，加"环面积 ÷ 圆面积 ≥ 0.95" |
 | `measure_section` | `measure_section` | `accept-measure-section.mjs` **37 项**：2236.9mm² 材料多边形 + 两孔（壁 4.000/6.000）+ 孔距 40/30、圆管壁 2.996、槽非圆、空腔计数；**修掉两个真缺陷**——`polygonize` 需 1µm 共点（否则 256 线段得 0 多边形）、闭环哪侧是材料必须问实体（`representative_point`，不是 centroid） |
 | `measure_extent` | `measure_extent` | `accept-measure-extent.mjs` **16 项**：任意轴（`[1,1,0]` → 70.711mm）、两端极值顶点与其投影自洽、带符号轴翻转 |
+| `measure_angle` | `measure_angle`（共用 `_axis_line_metrics`） | `accept-measure-angle.mjs` **27 项**：30°/150° 约定三数自洽、平行偏距、非对称斜交闭式（3/√2、7mm）、相交点、三种命名方式、探针容差、`anchoredAtOrigin` 标志、六条错误路径；**parity** `accept-measure-angle-parity.mjs`（39 用例对 TS `axisLineDistance`，worst Δ 4.9e-4，落在 0.001 上报精度内）。**真缺陷**：最近点符号约定写错，报的是**最远**的一对（实测 58.085mm vs 闭式 4.7245mm）——对称用例掩盖了它，非对称闭式用例与 parity 抓到 |
 
 **本轮唯一的 GUI 侧改动属于 ① 类**（`src/client/section.ts` + `panel.ts` 三处接线）：剖切面
 把拾取点约束到切面、9px 内吸附到最近顶点、画出剖面轮廓与**封盖**（`capTriangles`）。浏览器里的
