@@ -15,10 +15,12 @@
 // mm / z-up. Datums are part-local; transforms are applied here (rotate about
 // X then Y then Z in degrees, matching Manifold rotate, then translate).
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { compileStlOnly, type DatumSet } from './compile.ts';
-import { buildSolid, pairMinDistance } from './assembly.ts';
+import { buildSolid, pairMinDistance, type PartTransform } from './assembly.ts';
+import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import {
   loadAssemblyManifest, flattenParts, allInterfaces, findNode,
   type AssemblyManifest, type ManifestNode, type ManifestInterface, type OwnedInterface,
@@ -115,6 +117,14 @@ interface PartWorld {
   built: Awaited<ReturnType<typeof buildSolid>> | null;
   datums: DatumSet;      // transformed to world
   warnings: string[];
+  /**
+   * How the WORKER can build this same placed solid: an STL path plus the exact
+   * transform `buildSolid` was given (`matrix` already encodes rotate∘pose). Null
+   * when the part never became a solid, which is also when the adjacency half must
+   * skip it. `scratch` names a temporary file to delete once the request is done —
+   * a version whose STL had to be rebuilt from model.scad has no bytes on disk.
+   */
+  workerMesh: { path: string; transform: PartTransform; scratch?: string } | null;
 }
 
 async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<PartWorld> {
@@ -135,21 +145,35 @@ async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<P
   }
 
   let built: PartWorld['built'] = null;
+  let workerMesh: PartWorld['workerMesh'] = null;
   if (stl) {
     try {
       // world = translate ∘ rotate ∘ pose; the pose (rotate about a datum axis)
       // reaches the mesh as a leading 3×3, never folded through Euler angles.
       const geo = await partWorldAffine(store, node);
       if (geo.poseError) warnings.push(geo.poseError);
-      built = await buildSolid(stl, {
-        // matrix already encodes rotate∘pose — never pass both.
+      // matrix already encodes rotate∘pose — never pass both.
+      const transform: PartTransform = {
         ...(geo.matrix
           ? { matrix: geo.matrix }
           : { ...(node.transform?.rotate ? { rotate: node.transform.rotate } : {}) }),
         ...(node.transform?.translate ? { translate: node.transform.translate } : {}),
-      });
+      };
+      built = await buildSolid(stl, transform);
+      const onDisk = join(dir, 'model.stl');
+      const fromDisk = stl === await readFile(onDisk).catch(() => null);
+      if (fromDisk) {
+        workerMesh = { path: onDisk, transform };
+      } else {
+        // Rebuilt from model.scad: the bytes exist only in memory, so they get a file
+        // the worker can read (the same path-not-pipe rule validate_assembly follows).
+        const scratch = join(await workerScratchDir(), `check-${randomUUID()}.stl`);
+        await writeFile(scratch, stl);
+        workerMesh = { path: scratch, transform, scratch };
+      }
     } catch (e) {
       warnings.push(`solid build failed: ${(e as Error).message}`);
+      workerMesh = null;
     }
   }
 
@@ -164,7 +188,7 @@ async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<P
     planes: raw.planes.map((d) => ({ name: d.name, point: transformPoint(d.point), normal: transformDir(d.normal) })),
     cylinders: raw.cylinders.map((d) => ({ name: d.name, point: transformPoint(d.point), dir: transformDir(d.dir), radius: d.radius })),
   };
-  return { id: node.id, node, built, datums, warnings };
+  return { id: node.id, node, built, datums, warnings, workerMesh };
 }
 
 /**
@@ -362,7 +386,14 @@ function numParam(iface: ManifestInterface, keys: string[]): number | null {
   return null;
 }
 
-export async function runAssemblyCheck(
+/**
+ * PARITY ORACLE — the pre-migration TypeScript implementation. Do not wire new
+ * callers to this: `runAssemblyCheck` below is what the tool and the HTTP path use,
+ * and it evaluates the contracts in the worker. This stays because it is the only
+ * independent statement of what those numbers and those detail strings were, and
+ * `scripts/accept-check-assembly-parity.mjs` compares the two on real manifests.
+ */
+export async function runAssemblyCheckInTs(
   store: VersionStore,
   manifestPath: string,
   opts: { adjacencyThresholdMm?: number; runs?: RunEntry[] } = {},
@@ -590,6 +621,137 @@ export async function runAssemblyCheck(
     overallStatus: hard > 0 ? 'fail' : intents + undeclared.length > 0 ? 'check' : 'pass',
   };
   return report;
+}
+
+/**
+ * Evaluate the manifest's declared interfaces and its undeclared neighbours.
+ *
+ * THE SOLVE IS PYTHON'S (DECISION-LOG 2026-10-12): the layer/check derivation, the
+ * five operators, the verdict-vs-tolerance rule, the adjacency discovery and the
+ * summary all happen in the worker's `assembly_contracts` op. What stays here is
+ * everything that needs the STORE rather than the geometry — loading the manifest,
+ * building each part's placed solid, resolving interface endpoints to world datum
+ * features, and computing which cited runs have gone stale.
+ *
+ * The split is deliberate: `coaxial` consumes the worker's `_axis_line_metrics`, the
+ * same arithmetic `measure_angle` reports, and the adjacency half uses the same
+ * Manifold intersection `validate_assembly` uses — so a declared interface's verdict
+ * and an undeclared pair's interference volume can no longer disagree about which
+ * engine measured them.
+ */
+export async function runAssemblyCheck(
+  store: VersionStore,
+  manifestPath: string,
+  opts: { adjacencyThresholdMm?: number; runs?: RunEntry[] } = {},
+): Promise<AssemblyCheckReport> {
+  const manifest = await loadAssemblyManifest(manifestPath);
+  const parts = new Map<string, PartWorld>();
+  const partWarnings: AssemblyCheckReport['partWarnings'] = [];
+  for (const flat of flattenParts(manifest.root)) {
+    if (flat.node.source === 'stock') {
+      partWarnings.push({ partId: flat.id, messages: ['stock part — skipped from geometric checks (v1)'] });
+      continue;
+    }
+    const world = await loadPartWorld(store, flat.node);
+    parts.set(flat.id, world);
+    if (world.warnings.length > 0) partWarnings.push({ partId: flat.id, messages: world.warnings });
+  }
+
+  // Endpoint resolution stays here: it needs the manifest tree (which child owns the
+  // address) and each version's datum set. The worker receives resolved features.
+  const owned: OwnedInterface[] = allInterfaces(manifest.root);
+  const interfaces = owned.map(({ ownerPath, iface }) => {
+    const owner = findNode(manifest.root, ownerPath[ownerPath.length - 1]!)!;
+    const record = (address: string) => {
+      const resolved = resolveEndpoint(parts, owner, address);
+      if ('error' in resolved) return { address, error: resolved.error };
+      return { address, kind: resolved.kind, ...(resolved.feature as Record<string, unknown>) };
+    };
+    return {
+      id: iface.id,
+      ownerPath,
+      // The report echoes these ADDRESS strings (that is what the pre-migration
+      // implementation produced and what the stored reports contain); the resolved
+      // world features go in aFeature/bFeature for the operators to use.
+      a: iface.a,
+      b: iface.b,
+      aFeature: record(iface.a),
+      bFeature: record(iface.b),
+      type: iface.type,
+      severity: iface.severity,
+      layer: iface.layer,
+      check: iface.check,
+      nominal: iface.nominal,
+      tolerance: iface.tolerance,
+      params: iface.params,
+    };
+  });
+
+  // Evidence expires with the version it cites (DESGIGN §22): a cited run whose
+  // geometry predates the CURRENT version of any of its parts is not evidence. That
+  // is a store question, so the worker is told the answer per run rather than the
+  // whole version history.
+  const versionList = await listVersions(store);
+  const versionById = new Map(versionList.map((v) => [v.id, v]));
+  const newestOfPart = new Map<string, string>();
+  for (const v of versionList) {
+    if (!v.partId) continue;
+    const current = newestOfPart.get(v.partId);
+    if (!current || (versionById.get(current)?.timestamp ?? '') < v.timestamp) newestOfPart.set(v.partId, v.id);
+  }
+  const runPayload: Record<string, unknown> = {};
+  for (const run of opts.runs ?? []) {
+    const staleVersionIds = run.sourceVersionIds.filter((id) => {
+      const version = versionById.get(id);
+      if (!version?.partId) return false;
+      return newestOfPart.get(version.partId) !== id;
+    });
+    runPayload[run.id] = {
+      kind: run.kind,
+      status: run.status,
+      summary: run.summary,
+      supersededBy: run.supersededBy ?? null,
+      staleVersionIds,
+    };
+  }
+
+  const adjacencyThresholdMm = opts.adjacencyThresholdMm ?? 0.75;
+  const scratch: string[] = [];
+  const payloadParts = [...parts.values()]
+    .filter((part) => part.workerMesh !== null)
+    .map((part) => {
+      if (part.workerMesh!.scratch) scratch.push(part.workerMesh!.scratch);
+      return { id: part.id, path: part.workerMesh!.path, transform: part.workerMesh!.transform };
+    });
+
+  try {
+    const worker = await ensurePythonWorker();
+    const solved = await worker.request<{
+      results: AssemblyCheckReport['results'];
+      undeclared: AssemblyCheckReport['undeclared'];
+      summary: AssemblyCheckReport['summary'];
+      overallStatus: AssemblyCheckReport['overallStatus'];
+    }>('assembly_contracts', {
+      parts: payloadParts,
+      interfaces,
+      runs: runPayload,
+      thresholds: { adjacencyThresholdMm },
+    });
+
+    return {
+      checkedAt: new Date().toISOString(),
+      manifestPath,
+      manifestName: manifest.name,
+      results: solved.results,
+      undeclared: solved.undeclared,
+      partWarnings,
+      adjacencyThresholdMm,
+      summary: solved.summary,
+      overallStatus: solved.overallStatus,
+    };
+  } finally {
+    await Promise.all(scratch.map((path) => rm(path, { force: true }).catch(() => {})));
+  }
 }
 
 /**

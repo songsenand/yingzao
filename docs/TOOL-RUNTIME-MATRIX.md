@@ -44,7 +44,7 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 4 | `import_part` | STL 解析、单位/水密/焊接、datum 归一化、版本落盘 | schema、渲染附件 | ✅ **已迁移（2026-10-08，批次 2）** | worker 的 `import_mesh` op：二进制/ASCII 解析、壳数、单位缩放、焊接、Manifold 实体判定与诊断都在 Python，**焊接后的网格由 Python 写出**（那就是存进版本的东西）；TS 侧只剩路径/扩展名检查、sha256、unit 校验、datum 与存版。**真值验收**（不是 oracle）：20 mm 立方体 = 8000 mm³、1 inch = 25.4 且体积 ×25.4³、ASCII 与二进制同结果、两个不相接体 = 2 壳 + 警告、开口网格被拒并给边诊断、绕向反转被单独识别、整机 710012.998 mm³ / 28830 面 / 26 壳逐项对上。**顺带修掉一个真实缺陷**：TS 的 `parseStl` 数了退化面却把计数丢掉（恒返回 0），所以"退化三角形被丢弃"这句从未出现过；Python 报真数 |
 | 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | worker 的 `merge_solids` op：各件以**路径**进，**合并后的 STL 由 Python 写出**（谁算谁交付），TS 侧只剩解析、provenance、渲染与存版。**parity**：三角数/体积/尺寸/壳数与 TS 完全一致；**两件并集与真实零件（1.44 MB）的 STL 逐字节相同**；三件带共面接触时仅**三角形顺序**不同（几何指纹与顶点集完全相同，已实测非我方代码所致——Python 侧 `(a+b)+c`、`a+(b+c)`、`batch_boolean` 三种写法字节都一样）。耗时 0.56×–1.2× |
 | 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | ✅ **已迁移（2026-10-08）** | 求解在 worker 的 `validate_assembly` op（parts 以**路径**进，报告原样回）；TS 侧只剩 schema、part 解析/位姿拼装、run 持久化与渲染。`validateAssemblyInTs` 保留为 parity oracle。**8 个用例全字段一致**（含真实零件、rotate、matrix/pose 路径、干涉、too_tight、非实体拒绝）；耗时 0.54×–1.78×，真实零件对 274→177 ms（0.65×）与 274→407 ms（1.48×） |
-| 7 | `check_assembly` | 接口契约判定、距离查询 | schema | **P** | 纯领域规则 |
+| 7 | `check_assembly` | 接口契约判定、距离查询 | schema + manifest/store 读取 + 端点解析 + 跑数时效 | **P**（2026-10-12 已迁，op `assembly_contracts`） | 纯领域规则 |
 | 8 | `check_connectivity` | 连通分量/壳数 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `connectivity` op：**按共享边**判连通（只共顶点算两块）、体序为 XY 包围盒面积降序（平局按首个三角形）。耗时 **0.68×/0.74×/0.76×**（Python 更快：92→62、72→53、6→5 ms）。**关键保真点**：水密用 TS 的严格判据（每条有向边恰好一次且反向边存在），**没有**换成 trimesh 更宽松的 `is_watertight`——反证用例：把一个立方体某个三角面绕向翻转，严格判据说"不水密"，trimesh 自己会说"水密" |
 | 9 | `check_printability` | 壁厚（沿内法线的光线投射）、悬垂面积 | schema | ✅ **已迁移（2026-10-08）+ 修掉两个被暴露的真缺陷** | 实现从 `tools.ts` 提到 `inspect.ts`，worker 出 `check_printability` op；悬垂面积纯算术（**逐位相同**），壁厚光线投射（实测 0.121 s/601 根，无②类负收益）。**缺陷 A**：`buildMeshBvh` 会**就地重排**索引，先建 BVH 再采样导致采样集随库的内部策略变化（真实件 647.6 vs 244.1 mm²）→ BVH 改用索引拷贝、采样固定解析序。**缺陷 B（安全相关）**：`MeshBVH.raycast` 返回的是**遍历序**不是距离序，原写法"第一个 >0.075 的命中"取到**远壁** → 真实件最小壁厚报 0.2mm（真值 0.026mm）、薄壁 15 个（真值 34 个，暴力法确认）→ 两侧改为取最近命中。修完壁厚 Δ 0.0000 mm、薄壁 34 vs 34；`accept-p3`/`accept-tool-scope`/新 parity 全过 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `measure_part` op：焊接（同 TS 的 1e-5 key 与首现顺序）→ Manifold（体积/亏格，构造即有效性闸门）→ 三角面叉积面积 → 有符号四面体和质心 → 包围盒/水密/三角数；TS 侧只剩读文件（**按路径**，不复制字节）与版本号拼装。**`-0` 归一化照搬**（否则对称件曾全军覆没）。**parity 逐位相同**：立方体 8000 mm³、通孔板亏格 1、双壳件亏格 -1、球（`-0` 陷阱）、真实件 整机.stl 710012.998 mm³/28830 面/亏格 -2；坏网格两侧都失败 |
@@ -167,6 +167,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | `simulate_motion` | `simulate_motion` | parity（干涉计数逐位相同）+ **`accept-m36` 17/17 在 Python 侧通过** |
 | `measure_part` | `measure_part` | 5 件逐字段一致（含真实件 710012.998 mm³/亏格 -2） |
 | `check_printability` | `check_printability` | 悬垂面积逐位一致；**修掉两个真缺陷**（BVH 就地重排索引、raycast 遍历序当距离序） |
+| `check_assembly` | `assembly_contracts` | **parity**：2 个夹具 + 2 个语料（microscope2 cad-data / microscope5）+ 1 个 17 接口合成 manifest（覆盖五算子、五条 motion 证据结局、未实现 L1、未知 L0、未解析端点、未声明邻接、stock 跳过）逐字段一致；`accept-assembly.mjs` 既有断言在 worker 路径上全过。`axisLineDistance` 保留为 oracle，`coaxial` 与 `measure_angle` 现在消费同一份 `_axis_line_metrics`。**迁移中抓到一处契约变化**：报告里的 `a`/`b` 是**地址字符串**（预迁移行为），把解析后的特征对象塞进去会被 parity 抓到 |
 
 **生于 Python（2026-10-12 测量能力批次，无迁移、无 TS oracle）：**
 
@@ -198,7 +199,6 @@ three.js 数学 Python 够不着，所以按 §0 的 ① 类留在 TS；判据�
 | 项 | 现状 | 下一步 |
 |---|---|---|
 | 体素 FEM | **未开始** | 用户已裁决迁 Python（接受慢）；若照搬 scikit-fem 路线组装慢 3–17×，**matrix-free 路线未测**，应先量 |
-| `check_assembly` | 未迁移（P）——**已排期（用户 2026-10-12：前两项完成后即排）** | 领域半区=接口契约规则 + `axisLineDistance`；store/manifest 读写与证据时效留在 TS。先切载荷边界：parts 路径+世界位姿+interfaces+阈值进，判定+未声明+相邻出 |
 | `delivery_audit` | 未迁移（P）——**已排期**（紧随 `check_assembly`） | 先做"规则 vs store I/O"切分，再迁规则 |
 | `render_part` | 判定为 ① 平台系留（理由见 row 13） | 无需动作 |
 | `recall_reference_image` | ① 平台（DSH attachments） | 无需动作 |

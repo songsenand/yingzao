@@ -42,6 +42,7 @@ drives:
     measure_section    one cross-section as polygons, rings, holes and walls
     measure_extent     axial min/max/centre and the extremal vertices, any axis
     measure_angle      angle + line distance between two named directions
+    assembly_contracts the contract half of check_assembly: five operators, undeclared neighbours
     import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
     scad_prelude        the datum prelude injected into every part
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
@@ -91,6 +92,7 @@ OPS = [
     "measure_section",
     "measure_extent",
     "measure_angle",
+    "assembly_contracts",
     "import_mesh",
     "scad_prelude",
     "scad_parse_output",
@@ -579,6 +581,295 @@ def _min_distance_via_sampling(verts, faces, target_verts, target_faces, max_sam
     points = verts[np.unique(sampled.reshape(-1))]
     target = trimesh.Trimesh(vertices=target_verts, faces=target_faces, process=False)
     return _closest_side(points, target, max_points=None)["value"]
+
+
+# ---------------------------------------------------------------------------
+# The CONTRACT half of `check_assembly` (moved here 2026-10-12, DECISION-LOG #2).
+#
+# What moved: the layer/check derivation, the five operators
+# (distance / motion-clearance / spring-preload / coaxial / diameter-match), the
+# verdict-vs-tolerance rule, the undeclared-adjacency discovery, and the summary.
+# What stayed in TS: manifest and store I/O, part world loading (STL path + datums +
+# pose), endpoint resolution, the motion-run records and their evidence staleness —
+# all of it needs the store, not the geometry.
+#
+# `coaxial` consumes `_axis_line_metrics`, the same arithmetic `measure_angle` uses,
+# which is the whole reason the migration was scheduled with that tool.
+
+DEFAULT_DERIVED = {
+    "贴合": ("L0", "distance"),
+    "间隙": ("L0", "distance"),
+    "紧固": ("L0", "diameter-match"),
+    "转动副": ("L1", "motion-clearance"),
+    "滑动副": ("L1", "motion-clearance"),
+    "弹簧": ("L1", "spring-behaviour"),
+    "流道": ("L2", "flow"),
+}
+
+# Operators this engine can actually evaluate. Everything else is reported as
+# `skipped` — deliberately, because a green verdict on a check nobody ran is the most
+# expensive lie a validator can tell.
+IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload"}
+
+
+def _js_num(value) -> str:
+    """A number as a JS template literal renders it: `6`, not `6.0`.
+
+    The detail strings are part of the report a human reads, so they are compared
+    character for character in the parity acceptance — which means Python's `str(6.0)`
+    ('6.0') is a parity break against JS's `${6}` ('6')."""
+    number = float(value)
+    if number.is_integer() and abs(number) < 1e15:
+        return str(int(number))
+    return repr(number)
+
+
+def _num_param(iface: dict, keys: list) -> float | None:
+    for key in keys:
+        value = (iface.get("params") or {}).get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if math.isfinite(float(value)):
+            return float(value)
+    return None
+
+
+def _assembly_base(iface: dict) -> dict:
+    layer, check = DEFAULT_DERIVED.get(iface.get("type"), ("L1", "unknown"))
+    return {
+        "interfaceId": iface["id"],
+        "ownerPath": iface.get("ownerPath") or [],
+        "a": iface["a"],
+        "b": iface["b"],
+        "type": iface["type"],
+        "severity": iface["severity"],
+        "layer": iface.get("layer") or layer,
+        "check": iface.get("check") or check,
+        "verdict": "skipped",
+        "detail": "",
+    }
+
+
+def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
+    """`verdictFor` in assembly-check.ts — including its layer/check defaults, which
+    differ from `_assembly_base`'s (L0/distance here vs the type-derived pair there).
+    That difference is reproduced deliberately: the parity acceptance is what proves
+    the migration changed no number and no word."""
+    tolerance = iface.get("tolerance")
+    in_range = True if not tolerance else (measured >= tolerance["min"] and measured <= tolerance["max"])
+    severity = iface["severity"]
+    out = {
+        "interfaceId": iface["id"],
+        "ownerPath": iface.get("ownerPath") or [],
+        "a": iface["a"],
+        "b": iface["b"],
+        "type": iface["type"],
+        "severity": severity,
+        "layer": iface.get("layer") or "L0",
+        "check": iface.get("check") or "distance",
+        "verdict": "pass" if in_range else ("hard-violation" if severity == "hard" else "intent-flag"),
+        "measured": measured,
+        "detail": detail,
+    }
+    nominal = iface.get("nominal")
+    if nominal:
+        expected = {"quantity": nominal["quantity"]}
+        if tolerance:
+            if "min" in tolerance:
+                expected["min"] = tolerance["min"]
+            if "max" in tolerance:
+                expected["max"] = tolerance["max"]
+        out["expected"] = expected
+    return out
+
+
+def op_assembly_contracts(params: dict) -> dict:
+    """Evaluate the declared interfaces and discover undeclared neighbours.
+
+    The reply is the report MINUS the store-derived fields (checkedAt, manifestPath,
+    manifestName, partWarnings): those are the caller's, because only the caller has
+    the manifest and the version store.
+    """
+    import numpy as np
+
+    runs = params.get("runs") or {}
+    thresholds = params.get("thresholds") or {}
+    results: list = []
+
+    for iface in params["interfaces"]:
+        base = _assembly_base(iface)
+        layer, check = base["layer"], base["check"]
+        if layer != "L0" and check not in IMPLEMENTED_CHECKS:
+            results.append({**base, "detail": f'{layer} check "{check}" not implemented in v1 — pending'})
+            continue
+        # `a`/`b` are the manifest ADDRESS strings and the report echoes them; the
+        # resolved world features arrive under `aFeature`/`bFeature`. Folding the
+        # features into `a`/`b` was my first attempt and the parity acceptance caught
+        # it: the pre-migration report carried strings, so an object there is a
+        # contract change for every consumer that reads the address.
+        ra, rb = iface.get("aFeature") or {}, iface.get("bFeature") or {}
+        if "error" in ra:
+            results.append({**base, "detail": ra["error"]})
+            continue
+        if "error" in rb:
+            results.append({**base, "detail": rb["error"]})
+            continue
+
+        pa = [float(x) for x in ra["point"]]
+        pb = [float(x) for x in rb["point"]]
+
+        if check in ("distance", "motion-clearance"):
+            measured = _round_js(float(math.dist(pa, pb)), 4)
+            verdict = _assembly_verdict(iface, measured, "point-to-point distance between declared datums")
+            if check == "motion-clearance":
+                # A motion claim has two halves and this engine can decide one: the
+                # relationship at the modelled pose (a distance, evaluated above) and
+                # whether the pair survives the travel (decided by simulate_motion).
+                # An interface naming the run that proved it gets the halves tied
+                # together here instead of being reported as unimplemented forever.
+                raw = (iface.get("params") or {}).get("runId")
+                cited = str(raw) if isinstance(raw, str) else None
+                if not cited:
+                    verdict["detail"] += " — motion half NOT evidenced: run simulate_motion over the travel and cite it with params.runId"
+                else:
+                    run = runs.get(cited)
+                    if not run:
+                        verdict["verdict"] = "hard-violation"
+                        verdict["detail"] += f' — params.runId "{cited}" names no run in this project'
+                    elif run.get("kind") != "motion":
+                        verdict["verdict"] = "hard-violation"
+                        verdict["detail"] += f' — run {cited} is a {run.get("kind")} run, not a motion run'
+                    elif run.get("status") != "pass":
+                        verdict["verdict"] = "hard-violation"
+                        verdict["detail"] += f' — cited motion run {cited} did not pass ({run.get("summary")})'
+                    elif run.get("staleVersionIds"):
+                        stale = run["staleVersionIds"]
+                        verdict["verdict"] = "hard-violation"
+                        verdict["detail"] += (
+                            f" — cited motion run {cited} is STALE: it verified {', '.join(stale)}, "
+                            "which a part has since replaced. Re-run the motion over the current versions and cite that run "
+                            "(evidence expires with the version it cites)."
+                        )
+                    else:
+                        superseded = f", SUPERSEDED by {run['supersededBy']}" if run.get("supersededBy") else ""
+                        verdict["detail"] += f' — motion evidenced by {cited} ({run.get("summary")}{superseded})'
+            results.append(verdict)
+        elif check == "spring-preload":
+            stiffness = _num_param(iface, ["stiffnessNPerMm", "springRateNPerMm", "k"])
+            free = _num_param(iface, ["freeLengthMm", "freeLength"])
+            if stiffness is None or free is None:
+                results.append({
+                    **base,
+                    "detail": "spring-preload needs params.freeLengthMm and params.stiffnessNPerMm, with a and b being the "
+                              "spring's own two ends — without them there is nothing to measure a deflection against",
+                })
+                continue
+            installed = _round_js(float(math.dist(pa, pb)), 4)
+            deflection = _round_js(free - installed, 4)
+            force = _round_js(stiffness * deflection, 4)
+            detail = (
+                f"installed {_js_num(installed)}mm vs free {_js_num(free)}mm → δ{_js_num(deflection)}mm × "
+                f"{_js_num(stiffness)}N/mm = {_js_num(force)}N"
+                + (" (STRETCHED past free length — negative deflection)" if deflection < 0 else "")
+            )
+            results.append(_assembly_verdict(iface, force, detail))
+        elif check == "coaxial":
+            dir_a = ra.get("dir")
+            dir_b = rb.get("dir")
+            if not dir_a or not dir_b:
+                results.append({
+                    **base,
+                    "detail": "coaxial requires axis or cylinder datums (datum_axis / datum_cyl) on both endpoints — "
+                              "a point datum has no direction to be coaxial WITH",
+                })
+                continue
+            metrics = _axis_line_metrics(pa, dir_a, pb, dir_b)
+            measured = _round_js(metrics["distanceMm"], 4)
+            verdict = _assembly_verdict(
+                iface, measured,
+                f'axis offset {_js_num(measured)}mm, axes {metrics["acuteDeg"]:.3f}° apart (line-to-line, infinite extents)',
+            )
+            tolerance = iface.get("tolerance") or {}
+            ceiling = tolerance.get("max", float("inf"))
+            if metrics["acuteDeg"] > 1.0 and measured <= ceiling:
+                # A tilted bore can pass the offset test while the parts will not
+                # assemble; the tolerance speaks about the offset, so tilt gets its own
+                # hard note rather than silently riding inside a pass.
+                verdict["detail"] += " — axes NOT parallel: offset pass does not mean the bores line up"
+                if iface["severity"] == "hard":
+                    verdict["verdict"] = "hard-violation"
+            results.append(verdict)
+        elif check == "diameter-match":
+            radius_a, radius_b = ra.get("radius"), rb.get("radius")
+            if not isinstance(radius_a, (int, float)) or not isinstance(radius_b, (int, float)):
+                results.append({**base, "detail": "diameter-match requires cylinder datums (datum_cyl) on both endpoints"})
+                continue
+            # a = hole (larger), b = shaft: diametral clearance
+            measured = _round_js(2 * (float(radius_a) - float(radius_b)), 4)
+            verdict = _assembly_verdict(
+                iface, measured,
+                f"diametral clearance Ø{_js_num(measured)} (hole Ø{_js_num(2 * float(radius_a))} "
+                f"vs shaft Ø{_js_num(2 * float(radius_b))})",
+            )
+            if measured < 0 and iface["severity"] != "hard":
+                verdict["verdict"] = "hard-violation"
+                verdict["detail"] += " — negative clearance means interference, escalated to hard"
+            results.append(verdict)
+        else:
+            results.append({**base, "detail": f'L0 check "{check}" is unknown — skipped'})
+
+    # ---- adjacency discovery: near/interfering pairs with no declared interface ----
+    undeclared: list = []
+    geometric = [part for part in (params.get("parts") or []) if part.get("path")]
+    if len(geometric) >= 2:
+        threshold = float(thresholds.get("adjacencyThresholdMm", 0.75))
+        built = [(part, _solid_from_stl(part["path"], part.get("transform"))) for part in geometric]
+        declared_pairs = set()
+        for iface in params["interfaces"]:
+            head_a = str(iface.get("a", "")).split(".")[0]
+            head_b = str(iface.get("b", "")).split(".")[0]
+            if head_a and head_b:
+                declared_pairs.add(tuple(sorted((head_a, head_b))))
+        for i in range(len(built)):
+            for j in range(i + 1, len(built)):
+                part_a, solid_a = built[i]
+                part_b, solid_b = built[j]
+                intersection = solid_a["solid"] ^ solid_b["solid"]
+                volume = 0.0 if intersection.is_empty() else max(0.0, float(intersection.volume()))
+                min_distance = 0.0
+                if volume <= 1e-6:
+                    min_distance = min(
+                        _min_distance_via_sampling(solid_a["verts"], solid_a["faces"], solid_b["verts"], solid_b["faces"]),
+                        _min_distance_via_sampling(solid_b["verts"], solid_b["faces"], solid_a["verts"], solid_a["faces"]),
+                    )
+                if not (volume > 1e-6 or min_distance < threshold):
+                    continue
+                if tuple(sorted((part_a["id"], part_b["id"]))) in declared_pairs:
+                    continue
+                undeclared.append({
+                    "partA": part_a["id"],
+                    "partB": part_b["id"],
+                    "minDistance": _round_js(min_distance, 4),
+                    "intersectionVolume": _round_js(volume, 4),
+                })
+
+    passed = sum(1 for r in results if r["verdict"] == "pass")
+    hard = sum(1 for r in results if r["verdict"] == "hard-violation")
+    intents = sum(1 for r in results if r["verdict"] == "intent-flag")
+    skipped = sum(1 for r in results if r["verdict"] == "skipped")
+    return {
+        "results": results,
+        "undeclared": undeclared,
+        "summary": {
+            "interfaces": len(results),
+            "pass": passed,
+            "hardViolations": hard,
+            "intentFlags": intents,
+            "skipped": skipped,
+            "undeclared": len(undeclared),
+        },
+        "overallStatus": "fail" if hard > 0 else ("check" if intents + len(undeclared) > 0 else "pass"),
+    }
 
 
 def op_validate_assembly(params: dict) -> dict:
@@ -4339,6 +4630,7 @@ HANDLERS = {
     "measure_section": op_measure_section,
     "measure_extent": op_measure_extent,
     "measure_angle": op_measure_angle,
+    "assembly_contracts": op_assembly_contracts,
     "import_mesh": op_import_mesh,
     "scad_prelude": op_scad_prelude,
     "scad_parse_output": op_scad_parse_output,
