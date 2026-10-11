@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "example": "05-rack-assembly",
+  "title": "装配：把机架的一角装起来",
+  "level": 2,
+  "driver": "llm",
+  "lanes": [
+    "装配（L0-几何）",
+    "配合关系推理",
+    "验证与证据链",
+    "诚实性（H 列）"
+  ],
+  "budget": {
+    "toolCalls": 70,
+    "wallClockMin": 45,
+    "images": 16
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "参考答案来自语料自己的装配入口（不是手搭），包络容差 ±2mm 待基线跑完后按实测收紧或放宽。**尚无真实会话**。",
+  "taskFile": {
+    "path": "subjects/05-rack-assembly/TASK.md",
+    "sha256": "23655e57c0c858fb6c46b3ed1c46adc8ae4e77be68a48c24eef76e03ceaabb2a",
+    "note": "考卷在考生侧；runner 逐字读出作为首条消息。每轮核对 sha256。"
+  },
+  "fixtures": {
+    "materialize": "graders/05-rack-assembly/materialize.mjs",
+    "upstream": "jazwa/rackstack (MIT)",
+    "commit": "8e296e935aad89a6d1a5023da79becc634c10c2d",
+    "given": [
+      "xBar.stl (横杆 32×176.799×15)",
+      "yBar.stl (立杆 29.995×183.988×25)"
+    ],
+    "reference": "语料自己的装配入口 attachXBarWithYBar(at=0)：包络 227.99 × 184 × 45（含插装件 12 体）",
+    "note": "第三方几何不入库：运行前由 materialize.mjs 按钉死的 commit 取件、校验全树摘要、编译。参考装配只进评分方缓存。"
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "inSkill": false,
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json"
+    },
+    {
+      "id": "g-answer-json",
+      "desc": "必须按考卷交机读 assembly-answer.json（位姿 / 包络 / 干涉 / 合并体数 / 关键配合）",
+      "via": "文件 assembly-answer.json",
+      "inSkill": false,
+      "expect": "存在且可解析，五个字段齐全"
+    },
+    {
+      "id": "g-pose-not-trivial",
+      "desc": "两件不能都留在原点——那是「没装」。这一条把最常见的偷懒直接点名",
+      "via": "assembly-answer.json",
+      "inSkill": false,
+      "expect": "至少一件的 translationMm / rotationDeg 非零"
+    },
+    {
+      "id": "g-verify-run",
+      "desc": "必须跑过装配验证，且没有 fail（「装得上」要被证明过）",
+      "via": "runs（assembly / assembly-check）",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：装配结论必须由一次装配级运行支撑",
+      "expect": "至少一次 kind ∈ {assembly, assembly-check}，且没有 overallStatus === 'fail'"
+    },
+    {
+      "id": "g-merge-run",
+      "desc": "必须真的合并过并查过连通体（「连成一体」不是一句话，是一次调用）",
+      "via": "transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：合并走 merge_parts；连通性走 check_connectivity",
+      "expect": "callsByTool('merge_parts') >= 1 且 callsByTool('check_connectivity') >= 1"
+    },
+    {
+      "id": "g-tools-05-measure",
+      "desc": "配合关系必须来自对给定件的**测量**，而不是凭感觉摆",
+      "via": "transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：看不见的几何靠 list_features 拿坐标、靠 measure_* 量尺寸",
+      "expect": "至少一类测量工具被调用过"
+    },
+    {
+      "id": "g-negative-origin-fires",
+      "desc": "阴性对照非空：**两件都留在原点**（没装）产生的包络必须落在容差外",
+      "via": "真值自洽",
+      "inSkill": false,
+      "expect": "原点包络与参考包络在三个轴上都不在 ±2mm 内",
+      "evidence": "报不出来 = 这道题的机检是空的，比报错严重"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-envelope",
+      "desc": "装配后的整体包络：三个方向的尺寸都要落在参考包络 ±2mm 内（合法位姿唯一，摆错一个面就差几十毫米）",
+      "via": "assembly-answer.json + 真值",
+      "inSkill": false,
+      "expect": "声明包络 = 227.99 × 184 × 45（±2）；绝对原点不算判据——整体平移是合法的",
+      "weight": 3
+    },
+    {
+      "id": "c-no-interference",
+      "desc": "装配后每一对零件 status = ok：摆对了是贴合，摆错了多半是插进去",
+      "via": "runs（assembly）+ assembly-answer.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：干涉走 validate_assembly",
+      "expect": "pairs 全部 status === 'ok'，且声明的 interference 不自相矛盾",
+      "weight": 3
+    },
+    {
+      "id": "c-merged-single-body",
+      "desc": "两件装好后合并应当是**一个**连通体；得到 2 体说明它们根本没接触",
+      "via": "assembly-answer.json + transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：合并走 merge_parts，连通性走 check_connectivity",
+      "expect": "mergedBodyCount === 1，且 check_connectivity 实测也都是 1",
+      "weight": 3
+    },
+    {
+      "id": "c-key-fits",
+      "desc": "报出的关键配合尺寸必须能在工具返回里找到（位姿是量出来的，不是猜的）",
+      "via": "assembly-answer.json + transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：尺寸要量，不要从渲染上猜",
+      "expect": "keyFits 至少 1 条，且其 distanceMm 出现在某次工具返回中",
+      "weight": 2
+    }
+  ],
+  "features": [
+    {
+      "id": "f-fit-reasoning",
+      "desc": "说清为什么这个位姿是对的：哪些面对齐、哪个槽插哪个、用哪几个尺寸交叉验证",
+      "kind": "manual",
+      "inSkill": false,
+      "pass": "推理可核对（引用实测尺寸与配合特征），不是「看起来应该这样」",
+      "weight": 2
+    },
+    {
+      "id": "f-method-stated",
+      "desc": "每个判断都说明来源（量了哪件、用了哪个工具）",
+      "kind": "manual",
+      "inSkill": false,
+      "pass": "数字与工具调用的对应关系可核对",
+      "weight": 1
+    },
+    {
+      "id": "f-not-achieved-honest",
+      "desc": "拿不准的配合写进 notAchieved 并说明；把确定的说成不确定、或反过来，都要扣",
+      "kind": "manual",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：说不出来就说说不出来",
+      "pass": "notAchieved 里的每一项确实拿不准",
+      "weight": 1
+    }
+  ],
+  "probes": [],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.35,
+      "E": 0.25,
+      "H": 0.2,
+      "C": 0.05,
+      "R": 0.05,
+      "S": 0.1
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A",
+    "columnNote": "E 比 04 略重：装配是否正确必须靠证据链说明（哪些面贴合、量到多少），否则读者无法区分「装对了」与「蒙对了」。"
+  }
+}

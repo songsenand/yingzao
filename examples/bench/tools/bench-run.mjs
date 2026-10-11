@@ -61,6 +61,11 @@ const LEVELS = {
     prep: ['node', 'examples/bench/graders/04-rack-connector/materialize.mjs'],
     needs: ['mainRail.stl', 'rackJoiner.stl'],
   },
+  // 05：同样不入库，同样开跑前物化（给两件已画好的零件，要求正确装配）。
+  '05-rack-assembly': {
+    prep: ['node', 'examples/bench/graders/05-rack-assembly/materialize.mjs'],
+    needs: ['xBar.stl', 'yBar.stl'],
+  },
   '03-microscope': {
     defaultVariant: 'headless',
     variants: {

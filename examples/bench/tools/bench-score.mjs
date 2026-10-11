@@ -218,7 +218,7 @@ for (const v of corpus.manifest?.versions ?? []) {
 }
 
 // 考生产出的机读文件（rubric 的 via 直接点名，如 joinery.json）
-for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json', 'measure.json', 'connector.json']) {
+for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json', 'measure.json', 'connector.json', 'assembly-answer.json']) {
   const v = await readJson(join(runRoot, f));
   if (v) corpus.files[f] = v;
 }
@@ -228,6 +228,12 @@ const at = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]
 
 // ---------- 求值器 ----------
 // 每个返回 { ok: boolean|'unknown', detail: string }
+//
+// ⚠️ **EV 是按判据 id 全局注册的**：两卷用同名判据会互相覆盖，后注册的赢，
+// 而症状是"某一卷的自检在跑另一卷的实现"——静默，且看起来一切正常。
+// 实测踩到：06/04/05 都叫过 g-negative-control-fires，三个语义各不相同。
+// 规则：**只有语义完全相同的判据才可同名**（如 g-grader-access），否则起卷内独有的名字。
+// `tools/check-rubric-ids.mjs` 扫描全部 rubric 报跨卷重名。
 const EV = {};
 
 // —— transcript ——
@@ -1211,7 +1217,7 @@ EV['c-diagonal-extent'] = () => {
 gtCheck('c-section-hole-distance', (g) => ({ value: g.section?.holeCentreDistanceMm, tolerance: g.tolerances?.lengthMm ?? 0.02, path: 'part.section.holeCentreDistanceMm' }));
 gtCheck('c-section-area', (g) => ({ value: g.section?.materialAreaMm2, tolerance: g.tolerances?.areaMm2 ?? 1, path: 'part.section.materialAreaMm2' }));
 
-EV['g-negative-control-fires'] = () => {
+EV['g-negative-delta-fires'] = () => {
   // 机检不能是空的：把真值按"改动量"平移后，本题的容差必须把它判掉。
   if (!gt06?.delta) return { ok: 'unknown', detail: 'ground-truth.json 里没有 delta' };
   const before = gt06.delta.beforeMm;
@@ -1271,7 +1277,7 @@ EV['g-assembly-run'] = () => {
       + (failed.length ? ` — ${failed.length} 次 fail` : ''),
   };
 };
-EV['g-tools-used'] = () => {
+EV['g-measure-and-model'] = () => {
   // 因果门：尺寸必须来自对**给定件**的测量，形状必须来自建模工具
   const measured = ['list_features', 'measure_extent', 'measure_section', 'measure_thickness', 'measure_part', 'measure_distance']
     .filter((t) => callsByTool(t).length > 0);
@@ -1283,7 +1289,7 @@ EV['g-tools-used'] = () => {
       + (modelled.includes('generate_part') ? '' : ' — 新零件不是建模出来的'),
   };
 };
-EV['g-negative-control-fires'] = () => {
+EV['g-negative-copy-fires'] = () => {
   // 机检不能是空的：**照抄任何一个给定件都必须被判掉**。这是这道题最容易被蒙混的方式
   // （两件 STL 都在手上，直接 import 一件改名就交），所以把它变成可机检的事实。
   if (!gt04?.acceptance) return { ok: 'unknown', detail: 'ground-truth.json 缺 acceptance' };
@@ -1373,6 +1379,134 @@ EV['c-not-a-copy'] = () => {
     .filter(([, box]) => Array.isArray(box) && sorted3(box).every((v, i) => Math.abs(v - mine[i]) <= 1));
   return { ok: same.length === 0,
     detail: same.length ? `交付件尺寸与导入件 ${same.map(([id]) => id).join(', ')} 相同（复制品）` : `尺寸 ${mine.join(' / ')} 与给定件都不同` };
+};
+
+// ---------- 05-rack-assembly ----------
+// 测的是**装配关系**：位姿对不对（包络）、贴不贴（干涉）、连没连上（连通体）。
+// 参考答案来自语料自己的装配入口，所以"正确答案"不是我手搭的。
+const gt05 = await readJson(join(gradersDir, '05-rack-assembly', 'ground-truth.json'));
+const ans05 = () => corpus.files['assembly-answer.json'] ?? null;
+const at05 = (path) => at(ans05(), path);
+const num05 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+const near05 = (a, b, tol) => num05(a) !== null && Math.abs(a - b) <= tol;
+/** 考生声明的包络 → 三个尺寸（绝对原点不算判据：整体平移是合法的） */
+const declaredEnvelope = () => {
+  const box = at05('envelopeMm');
+  if (!box) return null;
+  const size = (axis) => {
+    const lo = num05(box[axis]?.min), hi = num05(box[axis]?.max);
+    return lo === null || hi === null ? null : +(hi - lo).toFixed(3);
+  };
+  const sizes = [size('x'), size('y'), size('z')];
+  return sizes.some((v) => v === null) ? null : sizes;
+};
+
+EV['g-answer-json'] = () => {
+  const a = ans05();
+  if (!a) return { ok: false, detail: '工作目录下没有 assembly-answer.json（考卷要求机读交卷）' };
+  const missing = ['parts', 'envelopeMm', 'interference', 'mergedBodyCount', 'keyFits'].filter((k) => a[k] == null);
+  return { ok: missing.length === 0, detail: missing.length ? `assembly-answer.json 缺字段：${missing.join(', ')}` : '字段齐全' };
+};
+EV['g-pose-not-trivial'] = () => {
+  // 两件都留在原点 = 根本没装配。包络判据也会抓，但这条把"没动过"直接点名。
+  const parts = at05('parts') ?? [];
+  if (parts.length < 2) return { ok: false, detail: `只报 ${parts.length} 件——这一卷给的就是两件` };
+  const moved = parts.filter((p) => (p?.translationMm ?? [0, 0, 0]).some((v) => Math.abs(num05(v) ?? 0) > 1e-6)
+    || (p?.rotationDeg ?? [0, 0, 0]).some((v) => Math.abs(num05(v) ?? 0) > 1e-6));
+  return { ok: moved.length >= 1, detail: `${parts.length} 件里 ${moved.length} 件被移动/旋转过`
+    + (moved.length ? '' : ' — 两件都还在原点，等于没装') };
+};
+EV['g-verify-run'] = () => {
+  const runs = corpus.runs.filter((r) => r.kind === 'assembly' || r.kind === 'assembly-check');
+  if (!runs.length) return { ok: false, detail: '没跑过装配验证——"装得上"没有被证明过' };
+  const failed = runs.filter((r) => r.report?.overallStatus === 'fail');
+  return { ok: failed.length === 0,
+    detail: `${runs.length} 次装配运行（${runs.map((r) => `${r.id}:${r.report?.overallStatus}`).join(', ')}）` };
+};
+EV['g-merge-run'] = () => {
+  const merged = callsByTool('merge_parts').length;
+  const conn = callsByTool('check_connectivity').length;
+  return { ok: merged >= 1 && conn >= 1,
+    detail: `merge_parts ${merged} 次、check_connectivity ${conn} 次`
+      + (merged ? '' : ' — 没合并过，"连成一体"无从谈起')
+      + (conn ? '' : ' — 没查过连通体数') };
+};
+EV['g-tools-05-measure'] = () => {
+  // 因果：配合关系必须是从**实测**几何读出来的
+  const measured = ['list_features', 'measure_extent', 'measure_section', 'measure_thickness', 'measure_part', 'measure_distance', 'measure_angle']
+    .filter((t) => callsByTool(t).length > 0);
+  return { ok: measured.length > 0, detail: `测量工具：${measured.join(', ') || '（无）'}`
+    + (measured.length ? '' : ' — 位姿不可能是量出来的') };
+};
+EV['g-negative-origin-fires'] = () => {
+  // 机检不能是空的：**两件都留在原点**（最常见的偷懒）必须被判掉。
+  // 由真值算：原点状态的包络 = 两件各自 bbox 的并集上界，与参考包络比。
+  if (!gt05?.given || !gt05?.acceptance?.envelopeMm) return { ok: 'unknown', detail: 'ground-truth.json 缺 given/acceptance' };
+  const target = gt05.acceptance.envelopeMm.target;
+  const tol = gt05.acceptance.envelopeMm.tolerance ?? 2;
+  const axes = ['x', 'y', 'z'];
+  const atOrigin = axes.map((axis) => {
+    const boxes = [gt05.given.xBar.extentMm[axis], gt05.given.yBar.extentMm[axis]];
+    const lo = Math.min(...boxes.map((b) => b.min));
+    const hi = Math.max(...boxes.map((b) => b.max));
+    return +(hi - lo).toFixed(3);
+  });
+  const same = axes.filter((axis, i) => Math.abs(atOrigin[i] - target[axis]) <= tol);
+  // 判据是"偷懒状态会被**拒**"，所以只要**至少一个轴**落在容差外就成立——
+  // 不是"三个轴都不同"。实测：滑动横杆不改变 y 方向的包络（参考 184 vs 原点 183.988），
+  // 所以要求三轴全不同会把有效的对照误判成空的。
+  return { ok: same.length < axes.length,
+    detail: same.length < axes.length
+      ? `两件留在原点的包络 ${atOrigin.join(' × ')} vs 参考 ${axes.map((a) => target[a]).join(' × ')}：`
+        + `${axes.filter((a, i) => !same.includes(a)).join('/')} 轴在容差外 ⇒ 偷懒状态会被拒，对照有效`
+        + (same.length ? `（${same.join('/')} 轴相同是正常的：沿该方向滑动不改变包络）` : '')
+      : `**阴性对照是空的**：原点包络三个轴都落在容差内` };
+};
+EV['c-envelope'] = () => {
+  if (!gt05?.acceptance?.envelopeMm) return { ok: 'unknown', detail: 'ground-truth.json 缺 acceptance' };
+  const target = gt05.acceptance.envelopeMm.target;
+  const tol = gt05.acceptance.envelopeMm.tolerance ?? 2;
+  const sizes = declaredEnvelope();
+  if (!sizes) return { ok: false, detail: 'assembly-answer.json 的 envelopeMm 不完整（每个轴要有 min/max）' };
+  const axes = ['x', 'y', 'z'];
+  const off = axes.filter((axis, i) => !near05(sizes[i], target[axis], tol));
+  return { ok: off.length === 0,
+    detail: `声明包络 ${sizes.join(' × ')} vs 参考 ${axes.map((a) => target[a]).join(' × ')}（±${tol}）`
+      + (off.length ? ` — ${off.join('/')} 轴差超容差：摆错一个面就会这样` : '') };
+};
+EV['c-no-interference'] = () => {
+  const pairs = corpus.runs.filter((r) => r.kind === 'assembly' && r.report).flatMap((r) => r.report.pairs ?? []);
+  if (!pairs.length) return { ok: 'unknown', detail: '装配报告里没有零件对（没验过干涉）' };
+  const bad = pairs.filter((p) => p.status && p.status !== 'ok');
+  const declared = at05('interference');
+  const declaredOk = declared == null ? null : (declared.status === 'ok' || num05(declared.pairCount) === 0);
+  return { ok: bad.length === 0 && declaredOk !== false,
+    detail: `${pairs.length} 对：${pairs.map((p) => `${p.partA}↔${p.partB}:${p.status}`).join(', ')}`
+      + (declared ? `；声明 ${declared.status ?? '?'}` : '') };
+};
+EV['c-merged-single-body'] = () => {
+  const declared = num05(at05('mergedBodyCount'));
+  const conn = callsByTool('check_connectivity').map((c) => resultJsonOf(c)).filter(Boolean);
+  const measured = conn.map((r) => r.count ?? r.bodies?.length).filter((v) => typeof v === 'number');
+  const single = measured.length ? measured.every((v) => v === 1) : null;
+  return { ok: declared === 1 && single !== false,
+    detail: `声明合并后 ${declared ?? '(未报)'} 体；check_connectivity 实测 ${measured.length ? measured.join('/') : '未调用'}`
+      + (measured.length && single === false ? ' — 实测不止一体，说明两件没接触' : '') };
+};
+EV['c-key-fits'] = () => {
+  const fits = at05('keyFits') ?? [];
+  if (!fits.length) return { ok: false, detail: '没报任何关键配合尺寸——位姿是怎么判出来的？' };
+  const pool = [];
+  for (const c of allStageCalls()) {
+    const j = resultJsonOf(c); if (j == null) continue;
+    const walk = (o) => { if (typeof o === 'number') pool.push(o); else if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
+    walk(j);
+  }
+  const grounded = fits.filter((f) => num05(f?.distanceMm) !== null
+    && pool.some((x) => Math.abs(x - f.distanceMm) <= 1e-6));
+  return { ok: grounded.length >= 1,
+    detail: `${fits.length} 条配合，其中 ${grounded.length} 条的距离能在工具返回里找到`
+      + (grounded.length ? '' : ' — 报出来的配合距离没有工具出处') };
 };
 
 // ---------- 汇总 ----------

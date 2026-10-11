@@ -125,7 +125,7 @@ const SCENARIOS = [
   // 没有新零件时，除了 g-new-part-version，"尺寸类"判据记 unknown（没法判≠判错），
   // 而 g-tools-used 也应当红：没有 generate_part，说明形状不是建模出来的。
   { name: 'D 只导入、没建新版本', opts: { withNewPart: false, connector: { ...CONNECTOR, partVersionId: 'v001' } },
-    mustFail: ['g-new-part-version', 'g-tools-used'] },
+    mustFail: ['g-new-part-version', 'g-measure-and-model'] },
 ];
 
 const tmp = join(REPO, '.tmp-04-selfcheck');

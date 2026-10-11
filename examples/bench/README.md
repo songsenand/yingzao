@@ -47,6 +47,7 @@
 | `06-measure/part.stl` | `30cbcc128339da4ad430e2ffce1aa664b07f687686897ddd0c28f586aba4e120` |
 | `06-measure/part-b.stl` | `bf0d259ecf035fd7b0725160767b31f279d06639093cc8711714c5931f51c42b` |
 | `04-rack-connector/TASK.md`（2026-10-12 新增） | `06d8072939f7918d68d201409e0407ed0e8b8f863c1cbb7197b346376d2bedf6` |
+| `05-rack-assembly/TASK.md`（2026-10-12 新增） | `23655e57c0c858fb6c46b3ed1c46adc8ae4e77be68a48c24eef76e03ceaabb2a` |
 
 **为什么记这些**：只有 SUT 与考卷逐字一致，两轮分数才可比。改了考卷就必须重录
 指纹并重跑基线——**旧分数作废**。

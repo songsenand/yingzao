@@ -27,7 +27,10 @@
     "upstream": "jazwa/rackstack (MIT)",
     "commit": "8e296e935aad89a6d1a5023da79becc634c10c2d",
     "treeDigest": "731039bc9b2480fd2cca8b6b3084826f9a2e86d856297c295acae148030e2381",
-    "given": ["mainRail.stl (导轨 136×27×12)", "rackJoiner.stl (同族接头 9.8×9.8×20.502)"],
+    "given": [
+      "mainRail.stl (导轨 136×27×12)",
+      "rackJoiner.stl (同族接头 9.8×9.8×20.502)"
+    ],
     "note": "第三方几何**不入库**：运行前由 materialize.mjs 按钉死的 commit 取件、校验全树摘要、编译。参考解只进评分方缓存，不进考生工作目录。"
   },
   "gates": [
@@ -62,7 +65,7 @@
       "expect": "至少一次 kind ∈ {assembly, assembly-check} 的运行，且没有 overallStatus === 'fail'"
     },
     {
-      "id": "g-tools-used",
+      "id": "g-measure-and-model",
       "desc": "尺寸必须来自对给定件的**测量**，形状必须来自**建模**（两条因果缺一不可）",
       "via": "transcript",
       "inSkill": true,
@@ -70,7 +73,7 @@
       "expect": "callsByTool(list_features|measure_*) >= 1 且 callsByTool(generate_part) >= 1"
     },
     {
-      "id": "g-negative-control-fires",
+      "id": "g-negative-copy-fires",
       "desc": "阴性对照非空：**照抄任何一个给定件都必须落在接受带外**（两件 STL 都在手上，改名就交是最省事的蒙混）",
       "via": "真值自洽",
       "inSkill": false,

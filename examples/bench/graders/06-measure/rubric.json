@@ -70,7 +70,7 @@
       "evidence": "报告不出来 = 这道题的机检是空的，比报错严重（见 README §八）"
     },
     {
-      "id": "g-negative-control-fires",
+      "id": "g-negative-delta-fires",
       "desc": "机检非空的自证：两件之间的改动量（1.000mm）必须大于壁厚容差（0.05mm），否则照抄 part 的数不会被判掉",
       "via": "真值自洽",
       "inSkill": false,
