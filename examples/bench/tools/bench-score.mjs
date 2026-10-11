@@ -206,8 +206,19 @@ for (const v of corpus.manifest?.versions ?? []) {
   if (f) { const b = await readFile(f); corpus.importedBbox[v.id] = stlSize(Buffer.from(b)); }
 }
 
+// 每个版本自己那份 STL 的包围盒尺寸。**必须在这里预载**：求值器是同步调用的
+// （`itemsOf` 里直接 `ev()`），在里面 await 读文件会静默拿到 Promise。
+corpus.versionBbox = {};
+for (const v of corpus.manifest?.versions ?? []) {
+  const f = pick(
+    versionsDir ? join(versionsDir, v.id, 'model.stl') : null,
+    join(runRoot, 'cad-data', 'versions', v.id, 'model.stl'),
+  );
+  if (f) { const b = await readFile(f); corpus.versionBbox[v.id] = stlSize(Buffer.from(b)); }
+}
+
 // 考生产出的机读文件（rubric 的 via 直接点名，如 joinery.json）
-for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json', 'measure.json']) {
+for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json', 'measure.json', 'connector.json']) {
   const v = await readJson(join(runRoot, f));
   if (v) corpus.files[f] = v;
 }
@@ -1211,6 +1222,157 @@ EV['g-negative-control-fires'] = () => {
     detail: `改动量 ${Math.abs(after - before).toFixed(3)}mm > 容差 ${tol}mm ⇒ 照抄 part 的数会判掉`
       + (Math.abs(after - before) > tol ? '' : '；**改动量小于容差，阴性对照是空的**'),
   };
+};
+
+// ---------- 04-rack-connector ----------
+// 判据是**功能性**的：装得上、锁得住、印得出——不是"像不像原件"。数字全部取自
+// `ground-truth.json`（工具实测），交付件的尺寸由打分器**自己解析 STL**，不引插件内部模块。
+const gt04 = await readJson(join(gradersDir, '04-rack-connector', 'ground-truth.json'));
+const ans04 = () => corpus.files['connector.json'] ?? null;
+const at04 = (path) => at(ans04(), path);
+/** 考生自己建模的那一件 = 非 imported 的版本（给定件都是 imported） */
+const newPartVersions = () => (corpus.manifest?.versions ?? []).filter((v) => v.source?.kind !== 'imported');
+const newPart = () => {
+  const list = newPartVersions();
+  const named = at04('partVersionId');
+  return (named && list.find((v) => v.id === named)) || (list.length === 1 ? list[0] : null);
+};
+const bboxOf = (v) => (v ? corpus.versionBbox?.[v.id] ?? null : null);
+/** 三个尺寸排序：判据与朝向无关（考生横着画还是竖着画都该判得一样） */
+const sorted3 = (box) => (Array.isArray(box) ? [...box].sort((a, b) => a - b) : null);
+const within = (x, band) => typeof x === 'number' && x >= band.min && x <= band.max;
+const sizesOfExtent = (extent) => [extent.x.sizeMm, extent.y.sizeMm, extent.z.sizeMm];
+
+EV['g-connector-json'] = () => {
+  const a = ans04();
+  if (!a) return { ok: false, detail: '工作目录下没有 connector.json（考卷要求机读交卷）' };
+  const missing = ['partVersionId', 'crossSectionMm', 'lengthMm', 'throughHoles', 'assemblyStatus', 'printability']
+    .filter((k) => a[k] == null);
+  return { ok: missing.length === 0, detail: missing.length ? `connector.json 缺字段：${missing.join(', ')}` : 'connector.json 存在且字段齐全' };
+};
+EV['g-new-part-version'] = () => {
+  const list = newPartVersions();
+  if (!list.length) return { ok: false, detail: '没有"考生自己建模"的版本（只有导入件）——形状没有被真正做出来' };
+  const named = at04('partVersionId');
+  if (named && !list.some((v) => v.id === named)) {
+    return { ok: false, detail: `connector.json 指的 ${named} 不是新建版本（新建的有 ${list.map((v) => v.id).join(', ')}）` };
+  }
+  const bbox = bboxOf(newPart());
+  if (!bbox) return { ok: false, detail: `新版本 ${newPart()?.id} 读不到 model.stl，无法自解析尺寸` };
+  return { ok: true, detail: `新零件 ${newPart().id}，自解析尺寸 ${bbox.join(' × ')}mm` };
+};
+EV['g-assembly-run'] = () => {
+  const runs = corpus.runs.filter((r) => r.kind === 'assembly' || r.kind === 'assembly-check');
+  if (!runs.length) return { ok: false, detail: '没有任何装配验证/检查运行——"装得上"没有被证明过' };
+  const failed = runs.filter((r) => r.report?.overallStatus === 'fail');
+  return {
+    ok: failed.length === 0,
+    detail: `${runs.length} 次装配运行（${runs.map((r) => `${r.id}:${r.report?.overallStatus}`).join(', ')}）`
+      + (failed.length ? ` — ${failed.length} 次 fail` : ''),
+  };
+};
+EV['g-tools-used'] = () => {
+  // 因果门：尺寸必须来自对**给定件**的测量，形状必须来自建模工具
+  const measured = ['list_features', 'measure_extent', 'measure_section', 'measure_thickness', 'measure_part', 'measure_distance']
+    .filter((t) => callsByTool(t).length > 0);
+  const modelled = ['generate_part', 'import_part', 'merge_parts'].filter((t) => callsByTool(t).length > 0);
+  return {
+    ok: measured.length > 0 && modelled.includes('generate_part'),
+    detail: `测量工具：${measured.join(', ') || '（无）'}；出形状：${modelled.join(', ') || '（无）'}`
+      + (measured.length ? '' : ' — 尺寸不可能是量出来的')
+      + (modelled.includes('generate_part') ? '' : ' — 新零件不是建模出来的'),
+  };
+};
+EV['g-negative-control-fires'] = () => {
+  // 机检不能是空的：**照抄任何一个给定件都必须被判掉**。这是这道题最容易被蒙混的方式
+  // （两件 STL 都在手上，直接 import 一件改名就交），所以把它变成可机检的事实。
+  if (!gt04?.acceptance) return { ok: 'unknown', detail: 'ground-truth.json 缺 acceptance' };
+  const cross = gt04.acceptance.crossSectionMm;
+  const length = gt04.acceptance.lengthMm;
+  const problems = [];
+  for (const [name, given] of Object.entries(gt04.given)) {
+    const sizes = sorted3(sizesOfExtent(given.extentMm));
+    const middleTwoInBand = within(sizes[0], cross) && within(sizes[1], cross);
+    const longestInBand = within(sizes[2], length);
+    if (middleTwoInBand && longestInBand) problems.push(`${name} 照抄也能过`);
+  }
+  return {
+    ok: problems.length === 0,
+    detail: problems.length
+      ? `阴性对照是空的：${problems.join('；')}`
+      : `照抄导轨（${sizesOfExtent(gt04.given.mainRail.extentMm).join('×')}）或同族接头（${sizesOfExtent(gt04.given.rackJoiner.extentMm).join('×')}）都会落在接受带外 ⇒ 对照有效`,
+  };
+};
+const band04 = (id, pick, label) => {
+  EV[id] = () => {
+    if (!gt04) return { ok: 'unknown', detail: 'ground-truth.json 缺失（先跑 materialize.mjs 与 measure-04.mjs）' };
+    const band = pick(gt04.acceptance);
+    const sizes = sorted3(bboxOf(newPart()));
+    if (!sizes) {
+      // 没有交付件可量时记 unknown：判它"截面不对"是假话——根本没有截面。
+      // 该扣的分由 g-new-part-version 那条硬门去扣。
+      return { ok: 'unknown', detail: '没有可量的交付件（g-new-part-version 已失败）' };
+    }
+    return { ok: within(sizes[0], band) && within(sizes[1], band),
+      detail: `${label}：交付件三个尺寸（排序）${sizes.join(' / ')}mm，接受带 ${band.min}–${band.max}（取中间两个）` };
+  };
+};
+band04('c-cross-section', (a) => a.crossSectionMm, '配合截面');
+EV['c-length'] = () => {
+  if (!gt04) return { ok: 'unknown', detail: 'ground-truth.json 缺失' };
+  const band = gt04.acceptance.lengthMm;
+  const sizes = sorted3(bboxOf(newPart()));
+  if (!sizes) return { ok: 'unknown', detail: '没有可量的交付件（g-new-part-version 已失败）' };
+  return { ok: within(sizes[2], band),
+    detail: `长度（最长边）${sizes[2]}mm，接受带 ${band.min}–${band.max}` };
+};
+EV['c-through-holes'] = () => {
+  if (!gt04) return { ok: 'unknown', detail: 'ground-truth.json 缺失' };
+  const band = gt04.acceptance.throughHoleDiameterMm;
+  const want = gt04.acceptance.throughHoleCount.min;
+  const holes = at04('throughHoles') ?? [];
+  const ok = holes.filter((h) => within(h?.diameterMm, band));
+  if (!ok.length) return { ok: false, detail: `报了 ${holes.length} 个通孔，没有一个落在 Ø${band.min}–${band.max}` };
+  // 因果：报出来的孔径必须能在某次工具返回里找到（不然是编的）
+  const pool = [];
+  for (const c of allStageCalls()) {
+    const j = resultJsonOf(c);
+    if (j == null) continue;
+    const walk = (o) => { if (typeof o === 'number') pool.push(o); else if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
+    walk(j);
+  }
+  const invented = ok.filter((h) => !pool.some((x) => Math.abs(x - h.diameterMm) <= 1e-6));
+  return { ok: ok.length >= want && invented.length === 0,
+    detail: `${ok.length} 个合格通孔（要求 ≥${want}，Ø${band.min}–${band.max}）`
+      + (invented.length ? `；其中 ${invented.length} 个孔径在任何工具返回里都找不到` : '；孔径都能在工具返回里找到') };
+};
+EV['c-printable-single-body'] = () => {
+  const verdict = at04('printability');
+  const conn = callsByTool('check_connectivity').map((c) => resultJsonOf(c)).filter(Boolean);
+  const single = conn.length ? conn.every((r) => (r.count ?? r.bodies?.length) === 1) : null;
+  const printable = typeof verdict === 'string' && ['ok', 'check'].includes(verdict);
+  return {
+    ok: printable && single !== false,
+    detail: `可打印性 ${verdict ?? '(未报)'}；check_connectivity ${single === null ? '未调用' : single ? '单体' : '不止一体'}`,
+  };
+};
+EV['c-assembly-no-interference'] = () => {
+  const runs = corpus.runs.filter((r) => r.kind === 'assembly' && r.report);
+  if (!runs.length) return { ok: 'unknown', detail: '没有 validate_assembly 运行——干涉未验' };
+  const pairs = runs.flatMap((r) => r.report.pairs ?? []);
+  if (!pairs.length) return { ok: 'unknown', detail: '装配报告里没有任何零件对' };
+  const bad = pairs.filter((p) => p.status && p.status !== 'ok');
+  return { ok: bad.length === 0,
+    detail: `${pairs.length} 对：${pairs.map((p) => `${p.partA}↔${p.partB}:${p.status}`).join(', ')}` };
+};
+EV['c-not-a-copy'] = () => {
+  // 与"阴性对照"配套：交付件不能就是某个给定件的复制品
+  const mine = sorted3(bboxOf(newPart()));
+  if (!mine) return { ok: 'unknown', detail: '没有可量的交付件（g-new-part-version 已失败）' };
+  const same = Object.entries(corpus.importedBbox ?? {})
+    .filter(([, box]) => Array.isArray(box) && sorted3(box).every((v, i) => Math.abs(v - mine[i]) <= 1));
+  return { ok: same.length === 0,
+    detail: same.length ? `交付件尺寸与导入件 ${same.map(([id]) => id).join(', ')} 相同（复制品）` : `尺寸 ${mine.join(' / ')} 与给定件都不同` };
 };
 
 // ---------- 汇总 ----------

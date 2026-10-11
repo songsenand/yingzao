@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "example": "04-rack-connector",
+  "title": "补一件：机架缺的底部堆叠接头",
+  "level": 1.5,
+  "driver": "llm",
+  "lanes": [
+    "逆向：从给定件读出配合尺寸",
+    "补全零件（L0-几何）",
+    "装配与验证",
+    "诚实性（H 列）"
+  ],
+  "budget": {
+    "toolCalls": 60,
+    "wallClockMin": 40,
+    "images": 12
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "接受带来自评分方实测真值（ground-truth.json），不是推断；但**尚无一轮真实会话**，预算与权重待基线跑完再定。",
+  "taskFile": {
+    "path": "subjects/04-rack-connector/TASK.md",
+    "sha256": "06d8072939f7918d68d201409e0407ed0e8b8f863c1cbb7197b346376d2bedf6",
+    "note": "考卷在考生侧；runner 逐字读出作为首条消息。每轮核对 sha256。"
+  },
+  "fixtures": {
+    "materialize": "graders/04-rack-connector/materialize.mjs",
+    "upstream": "jazwa/rackstack (MIT)",
+    "commit": "8e296e935aad89a6d1a5023da79becc634c10c2d",
+    "treeDigest": "731039bc9b2480fd2cca8b6b3084826f9a2e86d856297c295acae148030e2381",
+    "given": ["mainRail.stl (导轨 136×27×12)", "rackJoiner.stl (同族接头 9.8×9.8×20.502)"],
+    "note": "第三方几何**不入库**：运行前由 materialize.mjs 按钉死的 commit 取件、校验全树摘要、编译。参考解只进评分方缓存，不进考生工作目录。"
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "inSkill": false,
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json"
+    },
+    {
+      "id": "g-connector-json",
+      "desc": "必须按考卷交机读 connector.json（含 partVersionId / 截面 / 长度 / 通孔 / 装配状态 / 可打印性）",
+      "via": "文件 connector.json",
+      "inSkill": false,
+      "expect": "存在且可解析，六个字段齐全"
+    },
+    {
+      "id": "g-new-part-version",
+      "desc": "必须真的做出一个**新版本**（不是只导入给定件），且 connector.json 指的是它",
+      "via": "cad-data/manifest.json + 版本的 model.stl",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 的路由表：造物走 generate_part，外部件走 import_part——两者混淆就会只剩下导入件",
+      "expect": "存在 source.kind !== 'imported' 的版本，且能自解析其 model.stl 的尺寸"
+    },
+    {
+      "id": "g-assembly-run",
+      "desc": "必须跑过一次装配验证/检查，且没有 fail（「装得上」要被证明过）",
+      "via": "runs（assembly / assembly-check）",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：整机/装配结论必须由一次装配级运行支撑",
+      "expect": "至少一次 kind ∈ {assembly, assembly-check} 的运行，且没有 overallStatus === 'fail'"
+    },
+    {
+      "id": "g-tools-used",
+      "desc": "尺寸必须来自对给定件的**测量**，形状必须来自**建模**（两条因果缺一不可）",
+      "via": "transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：看不见的几何靠 list_features 拿坐标、靠 measure_* 量尺寸",
+      "expect": "callsByTool(list_features|measure_*) >= 1 且 callsByTool(generate_part) >= 1"
+    },
+    {
+      "id": "g-negative-control-fires",
+      "desc": "阴性对照非空：**照抄任何一个给定件都必须落在接受带外**（两件 STL 都在手上，改名就交是最省事的蒙混）",
+      "via": "真值自洽",
+      "inSkill": false,
+      "expect": "导轨与同族接头的尺寸都不满足「中间两个 ∈ 截面带 且 最长边 ∈ 长度带」",
+      "evidence": "报不出来 = 这道题的机检是空的，比报错严重"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-cross-section",
+      "desc": "配合截面：交付件三个尺寸里**中间两个** ∈ 9.4–9.9mm（要插进/套上导轨的 9.8 方口）",
+      "via": "自解析交付件 STL + 真值",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：配合尺寸要量出来（同族接头就是现成参照）",
+      "expect": "sorted(bbox)[0] 与 [1] 都 ∈ [9.4, 9.9]；参考件实测 9.8 × 9.8",
+      "weight": 3
+    },
+    {
+      "id": "c-length",
+      "desc": "长度：最长边 ∈ 10–18mm（跨得过对接缝、又不顶到同族的 rackJoiner）",
+      "via": "自解析交付件 STL + 真值",
+      "inSkill": false,
+      "expect": "sorted(bbox)[2] ∈ [10, 18]；参考件 12.001、同族件 20.502",
+      "weight": 2
+    },
+    {
+      "id": "c-through-holes",
+      "desc": "锁得住：至少 1 个通孔，直径 ∈ Ø3.0–3.6（M3 过孔），且报出的孔径能在工具返回里找到",
+      "via": "connector.json + transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：孔心与孔径用 list_features 读，不要从渲染上猜",
+      "expect": "connector.json.throughHoles 里 ≥1 个落在 Ø3.0–3.6；参考件与同族件都是 Ø3.25",
+      "weight": 3
+    },
+    {
+      "id": "c-printable-single-body",
+      "desc": "是一体、可打印：可打印性 verdict ∈ {ok, check}（若调过 check_connectivity，必须是单体）",
+      "via": "connector.json + transcript",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：可打印性要跑工具，不靠眼看",
+      "expect": "printability ∈ {ok, check}；check_connectivity.count === 1（若调用过）",
+      "weight": 2
+    },
+    {
+      "id": "c-assembly-no-interference",
+      "desc": "装起来不干涉：装配报告里每一对零件 status === 'ok'",
+      "via": "runs（assembly）",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md：装配干涉走 validate_assembly",
+      "expect": "pairs 全部 status === 'ok'（无 interference / too_tight）",
+      "weight": 3
+    },
+    {
+      "id": "c-not-a-copy",
+      "desc": "交付件不能是给定件的复制品（截面/长度/整体尺寸都与两个导入件不同）",
+      "via": "自解析交付件 STL + 导入件 STL",
+      "inSkill": false,
+      "expect": "sorted(bbox) 与任一导入件的 sorted(bbox) 逐项差 > 1mm",
+      "weight": 2
+    }
+  ],
+  "features": [
+    {
+      "id": "f-family-idiom",
+      "desc": "像这个家族的接头：方截面、端头有导入倒角、锁孔开在配合面上（与同族件对照看）",
+      "kind": "manual",
+      "inSkill": false,
+      "pass": "外观与同族件属同一设计语言，不是一根光溜溜的方棒",
+      "weight": 2
+    },
+    {
+      "id": "f-method-stated",
+      "desc": "说清每个尺寸是怎么来的（量了哪件、用了哪个工具），而不是「我按 10mm 画的」",
+      "kind": "manual",
+      "inSkill": false,
+      "pass": "尺寸与工具调用的对应关系可核对",
+      "weight": 2
+    },
+    {
+      "id": "f-not-achieved-honest",
+      "desc": "做不到或不确定的要求写进 notAchieved 并说明；把做到的事塞进去充数要扣",
+      "kind": "manual",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：说不出来就说说不出来",
+      "pass": "notAchieved 里的每一项确实没做到",
+      "weight": 1
+    }
+  ],
+  "probes": [],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.4,
+      "E": 0.2,
+      "H": 0.2,
+      "C": 0.05,
+      "R": 0.05,
+      "S": 0.1
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A",
+    "columnNote": "本题 S 比 01/02/03 略重：给定件的尺寸只能靠测量工具读出来，手册有没有把模型引到 list_features/measure_* 上是可测的。"
+  }
+}

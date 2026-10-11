@@ -19,7 +19,7 @@
 | `01b-diagnosis` | 诊断上一轮交付 | 1.5 | LLM | — | 读证据 / 诚实性 / **skill 生效度** | 无几何对照；H 列重罚假声明 |
 | `02-steam-engine` | 往复式蒸汽机 | 2 | LLM | 3 | L1 运动 + L1 刚体 + L2 流体 + `import_part` | 连杆短 3mm 必报干涉；0.8mm 壁必报薄壁 |
 | `03-microscope` | 单目复式显微镜（**两档**：GUI 附件 / headless 文件） | 3 | LLM | 6 | L0 + 运动 + 刚体 + 可打印性 + **外观还原** + 长程记忆 | 三连：止口 −0.5 / 错齿相位 / 光阑面 +1 |
-| `06-measure` | 量一个你没画过的零件（**纯测量问答**） | 1 | LLM | 1 | **测量工具链**：从特征到坐标（`list_features` → 测厚 / 剖面 / 夹角 / 按轴起止 / 间距）；证据链与诚实性 | 同一个件两版**只差圆筒内径 Ø16→Ø14**（壁厚 3.000→4.000）：照抄或猜数会在差值上暴露 |
+| `04-rack-connector` | 补一件：机架缺的底部堆叠接头（**第三方语料**） | 1.5 | LLM | 2 | **逆向**：从只有 STL 的给定件量出配合尺寸 → 补出缺失件 → 装配验证 | 两件 STL 都在手上，「导入一件改名就交」必须被判掉（照抄导轨/同族接头的尺寸都在接受带外） |
 
 ### 表 2 · 考场（在哪儿考、怎么考）
 
@@ -31,7 +31,7 @@
 | `02-steam-engine` | 造物模式 | `subjects/02-steam-engine/` | `subjects/02-steam-engine/TASK.md` | `assets/608.stl`（运行前生成） | `rubric.json` | `key.md` |
 | `03-microscope` **GUI 档** | 造物模式 | `subjects/03-microscope/` | **两段**：`TASK.md` → `TASK-2.md` | `参考图.png`（随 A 段走**对话附件**） | `rubric.json`（`variants.gui`）+ `landmarks.json` | `key.md` |
 | `03-microscope` **headless 档** | headless（不命名预设） | run root | **两段**：`TASK.headless.md` → `TASK-2.md` | `参考图.png`（`bench-run` **复制进 run root**） | `rubric.json`（`variants.headless`）+ `landmarks.json` | `key.md` |
-| `06-measure` | 造物模式 | `subjects/06-measure/` | `subjects/06-measure/TASK.md` | `part.stl` + `part-b.stl`（**生成物，入库**；源码在评分方一侧） | `rubric.json` | `key.md` |
+| `04-rack-connector` | 造物模式 | `subjects/04-rack-connector/`（run root） | `subjects/04-rack-connector/TASK.md` | `mainRail.stl` + `rackJoiner.stl`（**prep 现场物化**：钉 commit、不入库） | `rubric.json` | `key.md` |
 
 **手册（`SKILL.md`）不入表**：它是被测系统的一部分，由 SUT 自己决定加不加载——
 我们不人为塞进消息、也不人为抠掉。它有没有被加载，记在 `S0`。
@@ -46,6 +46,7 @@
 | `02-steam-engine` | 10 | 8 | 4 | 1 | 23 | 11 | 120 / 120min / 70 | uncertain |
 | `03-microscope` | 12 | 12 | 7 | 2 | 33 | 11 | 150 / 150min / 80 | uncertain |
 | `06-measure` | 6 | 7 | 3 | 0 | 16 | 8 | 40 / 25min / 10 | uncertain |
+| `04-rack-connector` | 6 | 6 | 3 | 0 | 15 | 8 | 60 / 40min / 12 | uncertain |
 
 ### 表 4 · 六列权重
 
@@ -57,6 +58,7 @@
 | `02-steam-engine` | 0.30 | 0.20 | **0.30** | 0.05 | 0.05 | 0.10 |
 | `03-microscope` | 0.30 | 0.20 | 0.25 | 0.05 | 0.10 | 0.10 |
 | `06-measure` | **0.45** | 0.20 | 0.20 | 0.05 | 0.05 | 0.05 |
+| `04-rack-connector` | 0.40 | 0.20 | 0.20 | 0.05 | 0.05 | 0.10 |
 
 > 权重就是设计意图：`02` 的 H 最重（专测"能不能如实说表达不了"）；
 > `01b` 的 E/H/S 三足鼎立（专测读证据、诚实、手册生效）；
@@ -129,7 +131,7 @@ microscope 语料是**历史语料**，保留查证，不再当评测基线—�
 **两档分数不混算。** 保留 GUI 档的理由正是它覆盖 `recall_reference_image`——
 headless 没有附图通道，那条能力在自动化下永远不会被触发。
 
-## 三、六道题，按"同时压测的能力车道数"排序
+## 三、七道题，按"同时压测的能力车道数"排序
 
 | 编号 | 题目 | 车道数 | 主要压测 | 预设 |
 |---|---|---|---|---|
@@ -139,6 +141,7 @@ headless 没有附图通道，那条能力在自动化下永远不会被触发�
 | `02-steam-engine` | 往复式蒸汽机 | 3 | L1 运动 + L1 刚体 + L2 流体（+ `import_part`） | 造物模式 |
 | `03-microscope` | 单目复式显微镜 | 6 | L0 + L1 运动 + L1 刚体 + 可打印性 + 外观还原 + 长程记忆 | 造物模式 |
 | `06-measure` | 量一个你没画过的零件 | 1 | **测量问答**：特征识别 → 测厚 / 剖面 / 夹角 / 按轴起止；证据链（E/H） | 造物模式 |
+| `04-rack-connector` | 补一件机架接头 | 2 | **逆向 + 补全 + 装配验证**（第三方 OpenSCAD 语料，钉 commit 物化） | 造物模式 |
 
 **所有 LLM 题统一在造物模式跑**——因为 SUT 就是造物模式下的那套东西，换预设
 等于换了一个我们并不发布的产品。手册出不出现在上下文里，由 SUT 自己的加载
@@ -397,6 +400,7 @@ examples/bench/
 |---|---|
 | 题库骨架（`00`/`01`/`01b`/`02`/`03` 五题的 `prompt.md` / `rubric.json` / `key.md`） | ✅ 已落地 |
 | `06-measure`（纯测量问答：题面 / 操作说明 / rubric / key / 件与实测真值 / 机检自检） | ✅ 已落地（2026-10-12）——**尚无真实会话**，见下 |
+| `04-rack-connector`（补全零件：物化脚本 / 题面 / rubric / key / 实测真值 / 机检自检 / runner prep 钩子） | ✅ 已落地（2026-10-12）——**尚无真实会话** |
 | 考生侧 / 评分方分离（`subjects/` vs `graders/`） | ✅ 已落地 |
 | SUT 基准冻结（commit + `SKILL.md` sha256） | ✅ 已记录 |
 | 参考图净化 + `landmarks.json` | ✅ 已落地（530×887，水印已去，band4 标为排除） |
@@ -412,6 +416,7 @@ examples/bench/
 | `06-measure` 的求值器覆盖（16 条判据：13 机检 + 3 人判，**0 条落 UNKNOWN**） | ✅ 已落地并有自检脚本 |
 | `06-measure` 的机检自检（合成 run root 证明判据会响：编数 / 绕工具 / 漏对比） | ✅ 四场景全部按预期响应（`graders/06-measure/self-check.mjs`） |
 | `06-measure` 的**沙箱日志检查**与**视觉检查** | ⏳ **未做**——需要真跑一轮（`tools/bench-run.mjs --level 06-measure`） |
+| `04-rack-connector` 的沙箱日志检查与视觉检查 | ⏳ **未做**——`bench-run --level 04-rack-connector`（prep 会自动物化语料） |
 | 首轮基线（定阈值、填 `key.md` 的实测列） | ⏳ 待跑 |
 
 ### `bench-smoke.mjs` 落地时定下的三件事（2026-10-07 结项）

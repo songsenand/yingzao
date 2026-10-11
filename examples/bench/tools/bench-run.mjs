@@ -54,6 +54,13 @@ const LEVELS = {
   // 06：两个 STL 就是全部素材，考生 cwd 里必须有它们（`needs` 会在开跑前核对，
   // 缺件直接退出，而不是让模型在空目录里找零件）。件由评分方脚本生成、入库。
   '06-measure': { needs: ['part.stl', 'part-b.stl'] },
+  // 04：第三方几何**不入库**（2026-10-12 决策），所以开跑前先物化——钉 commit 取件、
+  // 校验全树摘要、编译成 STL 放进 run root。prep 失败即中止：宁可不开跑，
+  // 也不要让模型在一个空目录里"找不到零件"。
+  '04-rack-connector': {
+    prep: ['node', 'examples/bench/graders/04-rack-connector/materialize.mjs'],
+    needs: ['mainRail.stl', 'rackJoiner.stl'],
+  },
   '03-microscope': {
     defaultVariant: 'headless',
     variants: {
@@ -277,9 +284,22 @@ for (let r = 1; r <= args.repeat; r++) {
   }
 
   // 3) 素材检查
+  // 3.5) 物化素材（如 04：第三方几何不入库，开跑前按钉死的 commit 取件）
+  const prep = cfg.prep ?? vcfg.prep ?? null;
+  if (prep) {
+    const [cmd, ...args] = prep;
+    console.log(`[r${r}] prep: ${prep.join(' ')} --out ${runRoot}`);
+    const code = await run(cmd, [...args, '--out', runRoot], { cwd: join(benchDir, '..', '..'), stdio: 'inherit' })
+      .then(() => 0, (err) => err?.code ?? 1);
+    if (code !== 0) {
+      console.error(`\n[r${r}] prep 失败（exit ${code}）——素材没到位，中止这一轮`);
+      process.exit(1);
+    }
+  }
+
   for (const need of needs) {
     if (!existsSync(join(runRoot, need))) {
-      console.error(`\n[r${r}] 缺素材 ${need} —— 02 的导入件见 README §3.1`);
+      console.error(`\n[r${r}] 缺素材 ${need} —— 02 的导入件见 README §3.1；04 的由 prep 物化`);
       process.exit(1);
     }
   }
