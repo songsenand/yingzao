@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "example": "05-rack-assembly",
+  "note": "判据是\"位姿对不对\"：参考包络来自语料自己的装配入口（attachXBarWithYBar）。全部数字工具实测，来源见 sources；不要手改。",
+  "upstream": {
+    "repo": "jazwa/rackstack",
+    "commit": "8e296e935aad89a6d1a5023da79becc634c10c2d",
+    "license": "MIT"
+  },
+  "given": {
+    "xBar": {
+      "extentMm": {
+        "x": {
+          "min": 0,
+          "max": 32,
+          "sizeMm": 32
+        },
+        "y": {
+          "min": -0.399,
+          "max": 176.399,
+          "sizeMm": 176.799
+        },
+        "z": {
+          "min": 0,
+          "max": 15,
+          "sizeMm": 15
+        }
+      },
+      "solid": {
+        "bodies": 1,
+        "watertight": true,
+        "volumeMm3": 25938.468,
+        "triangles": 13020
+      }
+    },
+    "yBar": {
+      "extentMm": {
+        "x": {
+          "min": 0.006,
+          "max": 30.001,
+          "sizeMm": 29.995
+        },
+        "y": {
+          "min": 0.006,
+          "max": 183.994,
+          "sizeMm": 183.988
+        },
+        "z": {
+          "min": 0,
+          "max": 25,
+          "sizeMm": 25
+        }
+      },
+      "solid": {
+        "bodies": 1,
+        "watertight": true,
+        "volumeMm3": 37216.058,
+        "triangles": 17578
+      }
+    }
+  },
+  "reference": {
+    "extentMm": {
+      "x": {
+        "min": 0.006,
+        "max": 227.996,
+        "sizeMm": 227.99
+      },
+      "y": {
+        "min": 0,
+        "max": 184,
+        "sizeMm": 184
+      },
+      "z": {
+        "min": 0,
+        "max": 45,
+        "sizeMm": 45
+      }
+    },
+    "solid": {
+      "bodies": 12,
+      "watertight": true,
+      "volumeMm3": 126726.924,
+      "triangles": 63948
+    },
+    "note": "语料的装配入口，含插装的螺母/磁铁模块，实测 13 体——只用来定包络与量级"
+  },
+  "acceptance": {
+    "envelopeMm": {
+      "tolerance": 2,
+      "target": {
+        "x": 227.99,
+        "y": 184,
+        "z": 45,
+        "originMm": [
+          0.006,
+          0,
+          0
+        ]
+      },
+      "why": "两件都摆对时合起来的包络是唯一的。参考件自带插装件但都在两件内部，不改变包络；容差 ±2mm 用来吸收合并/坐标取整，摆错一个面会差出几十毫米，判据仍然敏感。"
+    },
+    "noInterference": {
+      "why": "摆对了是\"贴合\"，摆错了十有八九是\"插进去\"——所以干涉数必须为 0。"
+    },
+    "bodiesAfterMerge": {
+      "target": 1,
+      "why": "两件装好后 `merge_parts` 应当得到**一个**连通体（它们本来就是靠配合特征连起来的）；若得到 2 体，说明两件根本没接触——位姿差得远。"
+    }
+  },
+  "sources": {
+    "xBar.extent": {
+      "op": "measure_extent",
+      "params": {
+        "path": "xBar.stl",
+        "axis": "x|y|z"
+      },
+      "value": {
+        "x": {
+          "min": 0,
+          "max": 32,
+          "sizeMm": 32
+        },
+        "y": {
+          "min": -0.399,
+          "max": 176.399,
+          "sizeMm": 176.799
+        },
+        "z": {
+          "min": 0,
+          "max": 15,
+          "sizeMm": 15
+        }
+      }
+    },
+    "xBar.solid": {
+      "op": "connectivity+measure_part",
+      "params": {
+        "path": "xBar.stl"
+      },
+      "value": {
+        "bodies": 1,
+        "watertight": true,
+        "volumeMm3": 25938.468,
+        "triangles": 13020
+      }
+    },
+    "yBar.extent": {
+      "op": "measure_extent",
+      "params": {
+        "path": "yBar.stl",
+        "axis": "x|y|z"
+      },
+      "value": {
+        "x": {
+          "min": 0.006,
+          "max": 30.001,
+          "sizeMm": 29.995
+        },
+        "y": {
+          "min": 0.006,
+          "max": 183.994,
+          "sizeMm": 183.988
+        },
+        "z": {
+          "min": 0,
+          "max": 25,
+          "sizeMm": 25
+        }
+      }
+    },
+    "yBar.solid": {
+      "op": "connectivity+measure_part",
+      "params": {
+        "path": "yBar.stl"
+      },
+      "value": {
+        "bodies": 1,
+        "watertight": true,
+        "volumeMm3": 37216.058,
+        "triangles": 17578
+      }
+    },
+    "reference.extent": {
+      "op": "measure_extent",
+      "params": {
+        "path": "reference.stl",
+        "axis": "x|y|z"
+      },
+      "value": {
+        "x": {
+          "min": 0.006,
+          "max": 227.996,
+          "sizeMm": 227.99
+        },
+        "y": {
+          "min": 0,
+          "max": 184,
+          "sizeMm": 184
+        },
+        "z": {
+          "min": 0,
+          "max": 45,
+          "sizeMm": 45
+        }
+      }
+    },
+    "reference.solid": {
+      "op": "connectivity+measure_part",
+      "params": {
+        "path": "reference.stl"
+      },
+      "value": {
+        "bodies": 12,
+        "watertight": true,
+        "volumeMm3": 126726.924,
+        "triangles": 63948
+      }
+    }
+  }
+}
