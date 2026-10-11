@@ -1514,13 +1514,38 @@ def op_list_features(params: dict) -> dict:
             "by construction; fix the mesh first"
         )
 
-    facet_of_face = np.empty(len(triangles), dtype=np.int64)
+    # SAFE fill, and the reason is a real crash: `mesh.facets` groups COPLANAR
+    # adjacent triangles, and trimesh's pass EXCLUDES degenerate/sliver faces. With
+    # `np.empty` those faces kept uninitialised memory, which then entered the
+    # connectivity graph as a facet index — measured on a rackstack connector
+    # (64 of 444 faces uncovered), it crashed with
+    # `ValueError: axis 0 index 281479271743489 exceeds matrix dimension 84`.
+    # They are not reported as faces either (there is no facet boundary loop for
+    # them), so they are marked -1 and simply do not join a smooth region.
+    facet_of_face = np.full(len(triangles), -1, dtype=np.int64)
     for index, region in enumerate(mesh.facets):
         facet_of_face[np.asarray(region, dtype=np.int64)] = index
     facet_count = len(mesh.facets)
     facet_area = np.asarray(mesh.facets_area, dtype=float)
     facet_normal = np.asarray(mesh.facets_normal, dtype=float)
     facet_origin = np.asarray(mesh.facets_origin, dtype=float)
+    loose_faces = np.where(facet_of_face < 0)[0]
+    if loose_faces.size:
+        loose_area = float(np.asarray(mesh.area_faces, dtype=float)[loose_faces].sum())
+        warnings.append(
+            f"{int(loose_faces.size)} face(s) ({_round3(loose_area)}mm² total) belong to no coplanar facet "
+            "region — trimesh's facet pass leaves bevel/chamfer strips out. They are NOT reported as faces "
+            "or cylinders here (single-face regions get misread as tiny cylinders), so treat the inventories "
+            "below as covering everything except those strips"
+        )
+    # Faces trimesh's coplanar-facet pass leaves out are NOT invented into regions.
+    # Tried it, and it is worse: measured on this project's own 06 fixture, the two
+    # loose faces are 115mm² each, and promoting them to single-face regions made the
+    # circle fitter report them as Ø0.393 "cylinders" — four bogus features replacing
+    # the real boss and bores. So they are excluded from the inventory and COUNTED in
+    # a warning instead: the caller learns that this mesh has faces the facet pass
+    # could not group (measured on a real rackstack connector: 64 of 444, all
+    # chamfer/bevel strips) rather than being handed made-up features.
 
     # Smooth regions: group facets across edges whose dihedral angle is small. This
     # is what separates "one face of the part" from "one segment of a cylinder".
@@ -1535,7 +1560,8 @@ def op_list_features(params: dict) -> dict:
 
             i = facet_of_face[kept[:, 0]]
             j = facet_of_face[kept[:, 1]]
-            keep = i != j
+            # Both sides must be REAL facets: a sliver face (-1) has no region to join.
+            keep = (i >= 0) & (j >= 0) & (i != j)
             graph = coo_matrix(
                 (np.ones(int(keep.sum())), (i[keep], j[keep])), shape=(facet_count, facet_count)
             )
@@ -1545,6 +1571,20 @@ def op_list_features(params: dict) -> dict:
     region_facets: dict[int, list[int]] = {}
     for facet in range(facet_count):
         region_facets.setdefault(int(region_of_facet[facet]), []).append(facet)
+
+    def faces_of_region(region: int):
+        """The TRIANGLE indices of one smooth region.
+
+        `facet_of_face` maps facet → faces; the inverse needs `region_of_facet` (which
+        facet belongs to which region). Comparing `facet_of_face` against a REGION
+        label looks like the same thing and is not: for a merged region only the facet
+        whose id happens to equal the label matches, so a 64-facet bore wall collapses
+        to a couple of triangles and the circle fit reports Ø0.393 — measured on this
+        project's own 06 fixture, four bogus cylinders replacing the real boss and
+        bores. The union over the region's facets is the correct set.
+        """
+        out = np.concatenate([np.asarray(mesh.facets[int(f)], dtype=np.int64) for f in region_facets[region]])
+        return out
 
     region_stats = {}
     for region, facets in region_facets.items():
@@ -1696,7 +1736,7 @@ def op_list_features(params: dict) -> dict:
         # region) — not vertex indices, and not stackable — so the region's vertices
         # come from its triangles. (`facets_boundary`, by contrast, hands back VERTEX
         # index pairs; the two are easy to confuse and do not fail loudly.)
-        region_triangles = np.concatenate([np.asarray(mesh.facets[int(f)], dtype=np.int64) for f in indices])
+        region_triangles = faces_of_region(int(region))
         vertices = np.unique(triangles[region_triangles].reshape(-1))
         points = np.asarray(mesh.vertices, dtype=float)[vertices]
         u, v = _plane_basis(axis)
@@ -3514,16 +3554,39 @@ def op_fluid_run(params: dict) -> dict:
     return result
 
 
+# A wall measurement only counts when the ray actually reaches the OTHER side of the
+# material. `dot(n_in, n_exit) < OPPOSITE_WALL_DOT` is what "the other side" means:
+# a hit on a coplanar sliver — a Manifold artefact at a crease or at an exposed
+# start-cap — has nearly the SAME normal and is not a wall at all. Measured on the
+# real corpus: a 0.012 mm² sliver face reported a 0.17 mm "wall" that does not exist
+# (dot = −0.08), while a genuine 0.50 mm tube wall reports dot = −1.000.
+OPPOSITE_WALL_DOT = -0.5
+
+# `unprintable` is a delivery blocker, so a SINGLE sampled face must not be able to
+# decide it. `check` already reports the minimum honestly; escalating to
+# `unprintable` additionally requires the thin region to be a SUSTAINED area rather
+# than one knife edge or one degenerate triangle.
+UNPRINTABLE_MIN_THIN_AREA_MM2 = 50.0
+UNPRINTABLE_MIN_THIN_AREA_FRACTION = 0.01
+
+
 def op_check_printability(params: dict) -> dict:
     """Manufacturability screen (FDM bias): sampled wall thickness by a ray along the
     inward normal, plus down-facing overhang area — the `checkPrintabilityInTs` of
     src/host/inspect.ts.
 
-    The overhang half is pure arithmetic on a deterministic triangle sample, so it is
-    expected to match the TS version exactly. The wall half is a spatial-index ray
-    cast; the matrix's negative-return table flagged the index as a risk, so it was
-    measured before porting (601 rays on the 28,830-triangle real part: 0.121 s
-    against a 120 s budget).
+    Only the WALL half is sampled, because only it is expensive (a spatial-index ray
+    cast; measured before porting at 601 rays / 0.121 s on a 28,830-triangle part,
+    against a 120 s budget). The overhang half is arithmetic and is computed over
+    EVERY triangle: summing the areas of every Nth face misses the other N−1, which
+    is a biased estimate, not noise (real 5.7" propeller: 200 mm² sampled against
+    2022 mm² true — a 10x under-report rendered as "mm²").
+
+    When the ray half cannot measure anything on a watertight mesh — the engine is
+    unavailable rather than the geometry being degenerate — the report says so and
+    never returns `ok`. Three silent failures are guarded here, each of which was
+    observed for real: an engine that is missing, a sliver that fakes a thin wall,
+    and a single face deciding a red verdict.
     """
     import numpy as np
     import trimesh
@@ -3538,26 +3601,31 @@ def op_check_printability(params: dict) -> dict:
     watertight = _is_watertight(triangles)
 
     tri_count = len(triangles)
-    step = max(1, tri_count // target_samples)
-    sampled_index = np.arange(0, tri_count, step)
-    corners = points[triangles[sampled_index]]
-    centroids = corners.mean(axis=1)
-    edge_u = corners[:, 1] - corners[:, 0]
-    edge_v = corners[:, 2] - corners[:, 0]
-    cross = np.cross(edge_u, edge_v)
-    lengths = np.linalg.norm(cross, axis=1)
-    safe = np.where(lengths[:, None] == 0, 1.0, lengths[:, None])
-    normals = cross / safe
-    areas = lengths / 2
-    sampled = int(len(sampled_index))
+
+    # ---- overhang: every triangle, no sampling -----------------------------
+    all_corners = points[triangles]
+    all_centroids = all_corners.mean(axis=1)
+    all_cross = np.cross(all_corners[:, 1] - all_corners[:, 0], all_corners[:, 2] - all_corners[:, 0])
+    all_lengths = np.linalg.norm(all_cross, axis=1)
+    all_normals = all_cross / np.where(all_lengths[:, None] == 0, 1.0, all_lengths[:, None])
+    all_areas = all_lengths / 2
+    surface_area = float(np.sum(all_areas))
     z_floor = float(points[:, 2].min())
 
     # down-facing overhang: normal points below horizontal by overhangDeg
     overhang_sin = math.sin(overhang_deg * math.pi / 180)
-    overhang_mask = (normals[:, 2] < -overhang_sin) & (centroids[:, 2] - z_floor > 0.8)
-    overhang_area = float(np.sum(areas[overhang_mask]))
-    overhang_z_min = float(np.min(centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("inf")
-    overhang_z_max = float(np.max(centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("-inf")
+    overhang_mask = (all_normals[:, 2] < -overhang_sin) & (all_centroids[:, 2] - z_floor > 0.8)
+    overhang_area = float(np.sum(all_areas[overhang_mask]))
+    overhang_z_min = float(np.min(all_centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("inf")
+    overhang_z_max = float(np.max(all_centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("-inf")
+
+    # ---- wall thickness: sampled ray cast (the expensive half) --------------
+    step = max(1, tri_count // target_samples)
+    sampled_index = np.arange(0, tri_count, step)
+    centroids = all_centroids[sampled_index]
+    normals = all_normals[sampled_index]
+    areas = all_areas[sampled_index]
+    sampled = int(len(sampled_index))
 
     # wall thickness: from 0.05 outside the surface, march along -n; the FIRST hit is
     # the sample triangle's own plane (at ≈0.05, skipped), the SECOND is the opposite
@@ -3565,49 +3633,90 @@ def op_check_printability(params: dict) -> dict:
     min_wall = float("inf")
     min_wall_at = None
     thin_samples = 0
+    thin_area = 0.0
+    measured = 0
     mesh = trimesh.Trimesh(vertices=points, faces=triangles, process=False)
     origins = centroids + normals * 0.05
     directions = -normals
     try:
-        locations, index_ray, _index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=True)
+        locations, index_ray, index_tri = mesh.ray.intersects_location(origins, directions, multiple_hits=True)
         distances = np.linalg.norm(locations - origins[index_ray], axis=1) if len(locations) else np.zeros(0)
     except BaseException:  # noqa: BLE001 - degenerate region: fall back to per-ray
-        locations, index_ray, distances = [], [], []
+        locations, index_ray, distances, index_tri = [], [], [], []
         for ray_index in range(sampled):
             try:
-                hit, hit_ray, _hit_tri = mesh.ray.intersects_location(origins[ray_index : ray_index + 1], directions[ray_index : ray_index + 1], multiple_hits=True)
-                for point in hit:
+                hit, hit_ray, hit_tri = mesh.ray.intersects_location(origins[ray_index : ray_index + 1], directions[ray_index : ray_index + 1], multiple_hits=True)
+                for point, tri in zip(hit, hit_tri):
                     locations.append(point)
                     index_ray.append(ray_index)
+                    index_tri.append(int(tri))
                     distances.append(float(np.linalg.norm(point - origins[ray_index])))
             except BaseException:  # noqa: BLE001
                 continue
         index_ray = np.asarray(index_ray, dtype=np.int64)
+        index_tri = np.asarray(index_tri, dtype=np.int64)
         distances = np.asarray(distances, dtype=np.float64)
 
-    order = np.argsort(distances, kind="stable") if len(distances) else np.zeros(0, dtype=np.int64)
+    # Group the hits per ray ONCE. The previous form re-filtered the whole hit array
+    # per ray (`distances[index_ray == ray_index]`) and dropped the hit's triangle —
+    # which is exactly the datum that says whether the hit IS a wall.
+    index_tri = np.asarray(index_tri, dtype=np.int64).reshape(-1)
+    if len(index_ray):
+        order = np.argsort(index_ray, kind="stable")
+        ray_sorted, tri_sorted, dist_sorted = index_ray[order], index_tri[order], distances[order]
+    else:
+        ray_sorted = tri_sorted = np.zeros(0, dtype=np.int64)
+        dist_sorted = np.zeros(0, dtype=np.float64)
+    ray_ids = np.arange(sampled)
+    starts = np.searchsorted(ray_sorted, ray_ids, side="left")
+    ends = np.searchsorted(ray_sorted, ray_ids, side="right")
+
     for ray_index in range(sampled):
-        hits = distances[index_ray == ray_index]
-        hits = hits[hits > 0.075]
-        if hits.size == 0:
+        lo, hi = int(starts[ray_index]), int(ends[ray_index])
+        if hi <= lo:
             continue
-        wall = float(hits.min()) - 0.05
+        t = dist_sorted[lo:hi]
+        keep = t > 0.075                      # the sample triangle's own plane
+        if not bool(keep.any()):
+            continue
+        t, tris = t[keep], tri_sorted[lo:hi][keep]
+        # …and only hits that face BACK at us (the far side of the material)
+        facing = (all_normals[tris] @ normals[ray_index]) < OPPOSITE_WALL_DOT
+        if not bool(facing.any()):
+            continue
+        wall = float(t[facing].min()) - 0.05
+        measured += 1
         if wall < min_wall:
             min_wall = wall
             min_wall_at = [float(v) for v in centroids[ray_index]]
         if wall < wall_min_mm:
             thin_samples += 1
+            thin_area += float(areas[ray_index])
+
+    # the thin half is measured on a 1/step sample → scale it back to the surface
+    thin_area *= tri_count / max(1, sampled)
+    thin_area_pct = (thin_area / surface_area * 100.0) if surface_area > 0 else 0.0
+    wall_measured = measured > 0
 
     findings = []
     if not watertight:
         findings.append(
             "mesh is NOT watertight — printability numbers below are computed on an open surface and are unreliable; fix the mesh first"
         )
-    if min_wall_at is not None and min_wall < wall_min_mm:
+    if not wall_measured:
+        findings.append(
+            f"壁厚**未测到**：{sampled} 个采样面沿内法线都没有打到对面壁。闭合实体不该出现这个结果，"
+            "最可能是射线引擎不可用（trimesh 的 ray 需要 rtree）——**本次一个壁厚都没量过，"
+            "下面的结论不能当通过读**；先修运行时（python_runtime action=repair）再重跑"
+        )
+    elif min_wall_at is not None and min_wall < wall_min_mm:
         where = ",".join(_js_to_fixed(v, 1) for v in min_wall_at)
         findings.append(
             f"最薄壁 {_js_to_fixed(min_wall, 2)}mm @ [{where}]（阈值 {wall_min_mm}mm；"
-            f"{sampled} 个采样面中 {thin_samples} 个低于阈值）— 薄壁打印要么断要么翘，加厚、加筋或改朝向"
+            f"{sampled} 个采样面中 {thin_samples} 个低于阈值，薄区≈{_js_to_fixed(thin_area, 1)}mm²"
+            f"（占表面 {_js_to_fixed(thin_area_pct, 1)}%））"
+            " — 薄**壳**（两自由面近似平行、成片）会断或翘；实心件收敛到棱线的**薄边**"
+            "（翼型前后缘那种）不属此列，用薄区面积占比区分"
         )
     if overhang_area > 20:
         findings.append(
@@ -3616,13 +3725,24 @@ def op_check_printability(params: dict) -> dict:
             " — 需要支撑、改打印朝向、或改成 45° 以内/桥接"
         )
 
-    severe = math.isfinite(min_wall) and min_wall < wall_min_mm * 0.4
-    verdict = "unprintable" if severe else ("check" if findings else "ok")
+    severe = (
+        wall_measured
+        and math.isfinite(min_wall)
+        and min_wall < wall_min_mm * 0.4
+        and thin_area >= max(UNPRINTABLE_MIN_THIN_AREA_MM2,
+                             UNPRINTABLE_MIN_THIN_AREA_FRACTION * surface_area)
+    )
+    # `ok` means "this part passed the screen". A screen that could not measure the
+    # wall has not passed anything, so it can never return `ok`.
+    verdict = "unprintable" if severe else ("ok" if (wall_measured and not findings) else "check")
     return {
         "verdict": verdict,
         **({"minWallMm": float(_js_to_fixed(min_wall, 3))} if math.isfinite(min_wall) else {}),
+        "wallMeasured": wall_measured,
         "thinSamples": thin_samples,
         "sampled": sampled,
+        "thinAreaMm2": float(_js_to_fixed(thin_area, 1)),
+        "thinAreaPct": float(_js_to_fixed(thin_area_pct, 2)),
         "overhangAreaMm2": float(_js_to_fixed(overhang_area, 1)),
         "overhangZRange": (
             [float(_js_to_fixed(overhang_z_min, 1)), float(_js_to_fixed(overhang_z_max, 1))]

@@ -173,6 +173,38 @@ if (existsSync(real)) {
   console.log(`SKIP  real corpus part  — ${real} not found`);
 }
 
+// --- 7b. faces that trimesh's coplanar-facet pass leaves out ------------------
+// REGRESSION for a real crash. The op built its face-to-facet map with `np.empty`, so
+// a face that trimesh's facet pass leaves out carried UNINITIALISED memory into the
+// connectivity graph and the run died with
+//   `ValueError: axis 0 index 281479271743489 exceeds matrix dimension 84`
+// (measured on a rackstack connector: 64 of 444 faces, all chamfer strips).
+//
+// The condition needs faces that BOTH fall outside the facet groups AND still appear
+// in face_adjacency. Hand-built fixtures did not reproduce it: a coplanar micro-patch
+// groups with its neighbours, a narrow strip is coplanar and groups too, and a
+// degenerate triangle is dropped from the adjacency graph entirely (the old code
+// survived that one). So the fixture is the REAL part, materialised on demand — and
+// when it is absent this check SKIPS loudly rather than passing silently. To create it:
+//
+//   cd /home/songsenand/Project/ToyMarker/.tmp-04-corpus
+//   git init rs && cd rs && git remote add origin https://github.com/jazwa/rackstack \
+//     && git config core.sparseCheckout true && printf '*.scad\n' > .git/info/sparse-checkout \
+//     && git fetch --depth 1 --filter=blob:none origin 8e296e935aad89a6d1a5023da79becc634c10c2d \
+//     && git checkout FETCH_HEAD
+//   openscad --export-format binstl -o ../out/stackConnectorBottom_P.bin.stl \
+//     rack/print/stackConnectorBottom_P.scad
+const corpusPart = join(REPO, '.tmp-04-corpus', 'out', 'stackConnectorBottom_P.bin.stl');
+if (existsSync(corpusPart)) {
+  const third = await features(corpusPart);
+  check(third.warnings.some((w) => /no coplanar facet region/.test(w)),
+    'a real third-party part with chamfer strips outside the facet groups: no crash, and it says so',
+    third.warnings.find((w) => /coplanar facet/.test(w))?.slice(0, 84) ?? 'no such warning');
+} else {
+  console.log('SKIP  real third-party part (chamfer strips outside facet groups)'
+    + ` — ${corpusPart} not materialised; the command is in this file`);
+}
+
 // --- 8. error path -----------------------------------------------------------
 let raised = false;
 try {
