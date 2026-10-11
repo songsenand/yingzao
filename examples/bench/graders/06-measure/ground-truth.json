@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "example": "06-measure",
+  "note": "全部数字来自工具实测；每一项的来源见 sources。不要手改：改了就不再是\"实测真值\"，判据会变成空的。",
+  "measuredWith": {
+    "workerOps": [
+      "list_features",
+      "measure_thickness",
+      "measure_angle",
+      "measure_extent",
+      "measure_section"
+    ]
+  },
+  "part": "part.stl",
+  "negativePart": "part-b.stl",
+  "cylinders": {
+    "count": 4,
+    "bores": 3,
+    "bosses": 1,
+    "list": [
+      {
+        "kind": "boss",
+        "diameterMm": 22,
+        "centerMm": [
+          0,
+          -12,
+          14
+        ],
+        "lengthMm": 12
+      },
+      {
+        "kind": "bore",
+        "diameterMm": 16,
+        "centerMm": [
+          0,
+          -12,
+          14
+        ],
+        "lengthMm": 12
+      },
+      {
+        "kind": "bore",
+        "diameterMm": 14,
+        "centerMm": [
+          25,
+          0,
+          4
+        ],
+        "lengthMm": 8
+      },
+      {
+        "kind": "bore",
+        "diameterMm": 8,
+        "centerMm": [
+          -25,
+          0,
+          4
+        ],
+        "lengthMm": 8
+      }
+    ]
+  },
+  "holeCentreDistanceMm": 50,
+  "tubeWallThicknessMm": 3,
+  "slopeAngleAcuteDeg": 30,
+  "slopeAngleAsGivenDeg": 150,
+  "slopeAngleConventionNote": "acuteDeg 是\"斜面与底面\"的夹角；angleDeg 取决于探针落在哪个面上（法线朝向），所以 rubric 按 acuteDeg 判定，并要求考生自己声明口径。",
+  "extentX": {
+    "min": -40,
+    "max": 40,
+    "sizeMm": 80
+  },
+  "extentY": {
+    "min": -25,
+    "max": 25,
+    "sizeMm": 50
+  },
+  "extentZ": {
+    "min": 0,
+    "max": 20,
+    "sizeMm": 20
+  },
+  "diagonalExtent": {
+    "axis": [
+      1,
+      1,
+      0
+    ],
+    "min": -45.962,
+    "max": 45.962,
+    "lengthMm": 91.924
+  },
+  "section": {
+    "atZMm": 4,
+    "holeCount": 2,
+    "holeCentreDistanceMm": 50,
+    "materialAreaMm2": 3796.124
+  },
+  "delta": {
+    "what": "圆筒壁厚（boss 内径 Ø16 → Ø14）",
+    "beforeMm": 3,
+    "afterMm": 4,
+    "toleranceMm": 0.05,
+    "bossBoreDiametersMm": [
+      14,
+      14,
+      8
+    ]
+  },
+  "tolerances": {
+    "lengthMm": 0.02,
+    "wallMm": 0.05,
+    "angleDeg": 0.5,
+    "areaMm2": 1,
+    "countExact": true
+  },
+  "sources": {
+    "cylinders": {
+      "op": "list_features",
+      "params": {
+        "path": "part.stl"
+      },
+      "value": [
+        {
+          "id": "c9",
+          "kind": "boss",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            0,
+            -12,
+            14
+          ],
+          "diameterMm": 22,
+          "lengthMm": 12,
+          "facets": 64,
+          "areaMm2": 829.047,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c11",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            0,
+            -12,
+            14
+          ],
+          "diameterMm": 16,
+          "lengthMm": 12,
+          "facets": 64,
+          "areaMm2": 602.944,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c8",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            25,
+            0,
+            4
+          ],
+          "diameterMm": 14,
+          "lengthMm": 8,
+          "facets": 64,
+          "areaMm2": 351.717,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c7",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            -25,
+            0,
+            4
+          ],
+          "diameterMm": 8,
+          "lengthMm": 8,
+          "facets": 64,
+          "areaMm2": 200.981,
+          "largeFacets": 0,
+          "fitResidualMm": 0
+        }
+      ]
+    },
+    "holeCentreDistanceMm": {
+      "op": "list_features",
+      "params": {
+        "path": "part.stl"
+      },
+      "value": 50
+    },
+    "tubeWallThicknessMm": {
+      "op": "measure_thickness",
+      "params": {
+        "meshes": [
+          "part.stl"
+        ],
+        "from": [
+          0,
+          -12,
+          14
+        ],
+        "direction": "+x"
+      },
+      "value": [
+        {
+          "part": "a",
+          "enterMm": 8,
+          "exitMm": 11,
+          "thicknessMm": 3,
+          "atMm": 9.5,
+          "entryPoint": [
+            8,
+            -12.001,
+            14
+          ],
+          "exitPoint": [
+            11,
+            -12.001,
+            14
+          ],
+          "exitNormal": [
+            0.999,
+            -0.049,
+            0
+          ],
+          "entryNormal": [
+            -0.999,
+            0.049,
+            0
+          ]
+        }
+      ]
+    },
+    "slopeAngle": {
+      "op": "measure_angle",
+      "params": {
+        "aProbe": [
+          0,
+          0,
+          -4
+        ],
+        "bProbe": [
+          -1.5,
+          15,
+          16.371
+        ]
+      },
+      "value": {
+        "angleDeg": 150,
+        "acuteDeg": 30,
+        "supplementDeg": 30,
+        "aSource": "aProbe (nearest face normal, snap distance 4.0mm)",
+        "bSource": "bProbe (nearest face normal, snap distance 3.0mm)"
+      }
+    },
+    "extentX": {
+      "op": "measure_extent",
+      "params": {
+        "path": "part.stl",
+        "axis": "x"
+      },
+      "value": {
+        "minMm": -40,
+        "maxMm": 40,
+        "sizeMm": 80,
+        "minPointMm": [
+          -40,
+          25,
+          8
+        ],
+        "maxPointMm": [
+          40,
+          -25,
+          8
+        ]
+      }
+    },
+    "extentY": {
+      "op": "measure_extent",
+      "params": {
+        "path": "part.stl",
+        "axis": "y"
+      },
+      "value": {
+        "minMm": -25,
+        "maxMm": 25,
+        "sizeMm": 50,
+        "minPointMm": [
+          40,
+          -25,
+          8
+        ],
+        "maxPointMm": [
+          40,
+          25,
+          0
+        ]
+      }
+    },
+    "extentZ": {
+      "op": "measure_extent",
+      "params": {
+        "path": "part.stl",
+        "axis": "z"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 20,
+        "sizeMm": 20,
+        "minPointMm": [
+          40,
+          25,
+          0
+        ],
+        "maxPointMm": [
+          10.947,
+          -10.922,
+          20
+        ]
+      }
+    },
+    "diagonalExtent": {
+      "op": "measure_extent",
+      "params": {
+        "path": "part.stl",
+        "axis": [
+          1,
+          1,
+          0
+        ]
+      },
+      "value": {
+        "minMm": -45.962,
+        "maxMm": 45.962,
+        "sizeMm": 91.924
+      }
+    },
+    "section": {
+      "op": "measure_section",
+      "params": {
+        "path": "part.stl",
+        "axis": "z",
+        "atMm": 4
+      },
+      "value": {
+        "atMm": 4,
+        "holeCount": 2,
+        "areaMm2": 3796.124,
+        "holeSpacing": [
+          {
+            "from": "s1.h1",
+            "to": "s1.h2",
+            "centerDistanceMm": 50,
+            "clearanceMm": 39
+          }
+        ],
+        "polygons": 1,
+        "empty": false
+      }
+    },
+    "negativeWall": {
+      "op": "measure_thickness",
+      "params": {
+        "meshes": [
+          "part-b.stl"
+        ],
+        "from": [
+          0,
+          -12,
+          14
+        ],
+        "direction": "+x"
+      },
+      "value": [
+        {
+          "part": "a",
+          "enterMm": 7,
+          "exitMm": 11,
+          "thicknessMm": 4,
+          "atMm": 9,
+          "entryPoint": [
+            7,
+            -12.001,
+            14
+          ],
+          "exitPoint": [
+            11,
+            -12.001,
+            14
+          ],
+          "exitNormal": [
+            0.999,
+            -0.049,
+            0
+          ],
+          "entryNormal": [
+            -0.999,
+            0.049,
+            0
+          ]
+        }
+      ]
+    },
+    "negativeCylinders": {
+      "op": "list_features",
+      "params": {
+        "path": "part-b.stl"
+      },
+      "value": [
+        {
+          "id": "c9",
+          "kind": "boss",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            0,
+            -12,
+            14
+          ],
+          "diameterMm": 22,
+          "lengthMm": 12,
+          "facets": 64,
+          "areaMm2": 829.047,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c11",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            0,
+            -12,
+            14
+          ],
+          "diameterMm": 14,
+          "lengthMm": 12,
+          "facets": 64,
+          "areaMm2": 527.576,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c8",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            25,
+            0,
+            4
+          ],
+          "diameterMm": 14,
+          "lengthMm": 8,
+          "facets": 64,
+          "areaMm2": 351.717,
+          "largeFacets": 64,
+          "fitResidualMm": 0
+        },
+        {
+          "id": "c7",
+          "kind": "bore",
+          "axisMm": [
+            0,
+            0,
+            1
+          ],
+          "centerMm": [
+            -25,
+            0,
+            4
+          ],
+          "diameterMm": 8,
+          "lengthMm": 8,
+          "facets": 64,
+          "areaMm2": 200.981,
+          "largeFacets": 0,
+          "fitResidualMm": 0
+        }
+      ]
+    }
+  }
+}

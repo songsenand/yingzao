@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "example": "06-measure",
+  "title": "量一个你没画过的零件（纯测量问答）",
+  "level": 1,
+  "driver": "llm",
+  "lanes": [
+    "测量工具链（L0-几何）",
+    "看不见的几何：从特征到坐标",
+    "证据链与诚实性（E/H 列）",
+    "skill 生效度（S 列）"
+  ],
+  "budget": {
+    "toolCalls": 40,
+    "wallClockMin": 25,
+    "images": 10
+  },
+  "calibration": "uncertain",
+  "calibrationNote": "阈值来自评分方实测真值（ground-truth.json）而非推断，但**尚无一轮真实会话**，所以预算与权重等基线跑完再定。",
+  "taskFile": {
+    "path": "subjects/06-measure/TASK.md",
+    "sha256": "c1fc3823520d29c875cdd995a06831f51a3323e479d70e801ffc7af486a61a8f",
+    "note": "考卷在考生侧，是唯一权威副本；runner 逐字读出作为首条消息。每轮核对 sha256。"
+  },
+  "fixtures": {
+    "part.stl": "30cbcc128339da4ad430e2ffce1aa664b07f687686897ddd0c28f586aba4e120",
+    "part-b.stl": "bf0d259ecf035fd7b0725160767b31f279d06639093cc8711714c5931f51c42b",
+    "note": "两个 STL 由 graders/06-measure/build-parts.mjs 生成（源码在评分方一侧，题面只给 STL）。两件只差圆筒内径 Ø16 → Ø14。"
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "desc": "不得读写评分方文件——误触与主动去找一视同仁，一旦触达该轮作废",
+      "via": "transcript",
+      "inSkill": false,
+      "expect": "无任何工具调用的路径或参数触达 graders/ · key.md · rubric.json · landmarks.json",
+      "evidence": "目录分层只挡误触；这一条是检测层，见 README §四"
+    },
+    {
+      "id": "g-measure-json",
+      "desc": "必须按考卷要求交机读 measure.json（含 part / partB / toolsUsed）",
+      "via": "文件 measure.json",
+      "inSkill": false,
+      "expect": "存在且可解析，含 part、partB、toolsUsed 三段",
+      "evidence": "考卷写明了格式；不交就没法机检，也就不该判通过"
+    },
+    {
+      "id": "g-tools-not-bypassed",
+      "desc": "答案必须来自测量工具：`list_features` 与 `measure_thickness` 至少各调用过一次",
+      "via": "transcript",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 的路由表把「where are the holes / how thick is this wall」指向这两个工具；考卷也明说要用工具量",
+      "expect": "callsByTool('list_features') >= 1 且 callsByTool('measure_thickness') >= 1",
+      "evidence": "这条是本题测的对象：不是「模型会不会算」，而是「这套工具能不能让模型量对」"
+    },
+    {
+      "id": "g-no-invented-numbers",
+      "desc": "measure.json 里每个测量值都必须能在某次工具返回里找到（容差 1e-6）",
+      "via": "transcript + measure.json",
+      "inSkill": false,
+      "expect": "编造的数字数 === 0",
+      "evidence": "把「读工具」与「编一个像样的数」分开。非测量字段（轴向量字面量、自选的剖切高度、口径枚举）显式排除"
+    },
+    {
+      "id": "g-delta-correct",
+      "desc": "阴性对照的落点：同一套口径量两件，`partB.deltaMm` 必须与实测差值一致",
+      "via": "measure.json vs 真值",
+      "inSkill": false,
+      "expect": "|deltaMm − (after − before)| <= 0.05",
+      "evidence": "报告不出来 = 这道题的机检是空的，比报错严重（见 README §八）"
+    },
+    {
+      "id": "g-negative-control-fires",
+      "desc": "机检非空的自证：两件之间的改动量（1.000mm）必须大于壁厚容差（0.05mm），否则照抄 part 的数不会被判掉",
+      "via": "真值自洽",
+      "inSkill": false,
+      "expect": "|after − before| > tolerances.wallMm",
+      "evidence": "阴性对照不报 = 判据是空的；这条把「对照是否有效」本身变成可机检的事实"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-cylinder-count",
+      "desc": "圆柱特征数 4（板上一通孔 Ø8、一通孔 Ø14、凸台外圆 Ø22、凸台内孔 Ø16）",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": false,
+      "expect": "part.cylinders.length === 4",
+      "weight": 2
+    },
+    {
+      "id": "c-tube-wall",
+      "desc": "圆筒壁厚 3.000mm（外 Ø22 / 内 Ø16）",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 把「how thick is this wall」指向 measure_thickness（其容差 = 特征自身宽度）",
+      "expect": "part.tubeWallThicknessMm = 3.000（±0.05）",
+      "weight": 3
+    },
+    {
+      "id": "c-hole-centre-distance",
+      "desc": "两个通孔的孔心距 50.000mm",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 把「hole spacing」指向 measure_section / measure_distance + list_features 的孔心",
+      "expect": "part.holeCentreDistanceMm = 50.000（±0.02）",
+      "weight": 3
+    },
+    {
+      "id": "c-slope-angle",
+      "desc": "斜面与底面的夹角：锐角 30.000°（考生报锐角或补角都可以，但必须声明口径）",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 新增行把「what angle is this」指向 measure_angle，并要求它同时给 angleDeg / acuteDeg / supplementDeg",
+      "expect": "part.slopeAngleDeg = 30.000（±0.5，按 angleConvention 核对）",
+      "weight": 3
+    },
+    {
+      "id": "c-diagonal-extent",
+      "desc": "沿 [1,1,0] 的起止长度 91.924mm（= (80+50)/√2）",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 把「how long along a diagonal」指向 measure_extent",
+      "expect": "part.extentDiagonalMm 的 lengthMm（或 max − min）= 91.924（±0.02）",
+      "weight": 2
+    },
+    {
+      "id": "c-section-hole-distance",
+      "desc": "板中高（z = 4mm）剖面上两孔孔心距 50.000mm",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 把「hole spacing in this plane / the wall thickness in a cut」指向 measure_section",
+      "expect": "part.section.holeCentreDistanceMm = 50.000（±0.02）",
+      "weight": 3
+    },
+    {
+      "id": "c-section-area",
+      "desc": "同一剖面的材料面积 3796.124mm²（80×50 减去两个孔；$fn=96 的圆略小于理想圆，故比理想值大一点点）",
+      "via": "measure.json vs ground-truth.json",
+      "inSkill": false,
+      "expect": "part.section.materialAreaMm2 = 3796.124（±1）",
+      "weight": 2
+    }
+  ],
+  "features": [
+    {
+      "id": "f-method-stated",
+      "desc": "每个数字都说明是从哪个工具来的（measure.json 的 toolsUsed 要与回答里的说法一致）",
+      "kind": "manual",
+      "inSkill": false,
+      "pass": "数字与工具的对应关系可核对，不是一句「用工具量的」",
+      "weight": 2
+    },
+    {
+      "id": "f-angle-convention-declared",
+      "desc": "明确声明报的是锐角、按输入方向、还是补角——夹角最容易出现「你的数字和我的对不上」",
+      "kind": "manual",
+      "inSkill": true,
+      "inSkillNote": "SKILL.md 该行写明三数齐给，正是为了让调用方自己声明口径",
+      "pass": "angleConvention 与所报数字自洽，且回答里也能看懂",
+      "weight": 2
+    },
+    {
+      "id": "f-not-measurable-honest",
+      "desc": "真的测不出来的量放进 notMeasurable 并说明为什么；把量得出来的量塞进去充数要扣",
+      "kind": "manual",
+      "inSkill": true,
+      "inSkillNote": "交付纪律：说不出来就说说不出来",
+      "pass": "notMeasurable 里的每一项都确实是工具无法表达的量",
+      "weight": 1
+    }
+  ],
+  "probes": [],
+  "scoring": {
+    "passScore": 0.75,
+    "columns": {
+      "P": 0.45,
+      "E": 0.2,
+      "H": 0.2,
+      "C": 0.05,
+      "R": 0.05,
+      "S": 0.05
+    },
+    "gatePolicy": "any-fail => P = 0",
+    "sColumnRule": "只对 inSkill:true 的条目计权；S0=false 时 S 记 N/A",
+    "columnNote": "本题以 P 为主（量得对不对），E/H 次之（说清来源、承认量不到）。R 很轻：只有「把同一套口径带到第二件上」算一点记忆。"
+  }
+}

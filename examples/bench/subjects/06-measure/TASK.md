@@ -42,7 +42,7 @@
 {
   "part": {
     "cylinders": [
-      { "kind": "bore|boss", "diameterMm": 0.0, "axisPointMm": [0,0,0], "axisDirMm": [0,0,1] }
+      { "kind": "bore|boss", "diameterMm": 0.0, "centerMm": [0,0,0], "lengthMm": 0.0 }
     ],
     "holeCentreDistanceMm": 0.0,
     "tubeWallThicknessMm": 0.0,
@@ -52,7 +52,8 @@
     "extentYMm": { "min": 0.0, "max": 0.0 },
     "extentZMm": { "min": 0.0, "max": 0.0 },
     "extentDiagonalMm": { "axis": [1,1,0], "min": 0.0, "max": 0.0 },
-    "section": { "atZMm": 0.0, "holeCentreDistanceMm": 0.0, "materialAreaMm2": 0.0 }
+    "section": { "atZMm": 0.0, "holeCentreDistanceMm": 0.0, "materialAreaMm2": 0.0 },
+    "note": "孔距与材料面积在板厚范围内的任意高度都一样——你切在哪一层都行，写清 atZMm 即可"
   },
   "partB": {
     "changed": "一句话说改了哪一处",

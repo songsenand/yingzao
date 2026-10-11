@@ -43,6 +43,9 @@
 | `03-microscope/TASK.md`（A 段 · **GUI 档**） | `93f602114329f2be53e0244f366e1f4f04e784f2ecea2e4f0888846d7792ccdb` |
 | `03-microscope/TASK.headless.md`（A 段 · **headless 档**） | `c93d8db2054fb35310a9655ab1db8faa89c5789bdc35507a3d38a3f79e7a8d66` |
 | `03-microscope/TASK-2.md`（B 段 · 两档共用） | `0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20` |
+| `06-measure/TASK.md`（2026-10-12 新增） | `c1fc3823520d29c875cdd995a06831f51a3323e479d70e801ffc7af486a61a8f` |
+| `06-measure/part.stl` | `30cbcc128339da4ad430e2ffce1aa664b07f687686897ddd0c28f586aba4e120` |
+| `06-measure/part-b.stl` | `bf0d259ecf035fd7b0725160767b31f279d06639093cc8711714c5931f51c42b` |
 
 **为什么记这些**：只有 SUT 与考卷逐字一致，两轮分数才可比。改了考卷就必须重录
 指纹并重跑基线——**旧分数作废**。

@@ -1140,7 +1140,9 @@ EV['g-no-invented-numbers'] = () => {
   //   .deltaMm        允许由两次测量算出（下面单独判）
   // 上一版这里写了 `|| true`，过滤成了空操作，等于把每道题都判成"编数字"。
   collect(a, '$');
-  const measured = flat.filter(([path]) => !/\.(axis|atZMm|changed|kind)$/.test(path)
+  // `axis` 是数组，路径会带 `[0]`/`[1]` 后缀——只写 `\.axis$` 挡不住它的分量，
+  // 于是字面量 1 会被当成"编造的数字"（自检时实测踩到）。
+  const measured = flat.filter(([path]) => !/\.(axis|atZMm|changed|kind)(\[\d+\])?$/.test(path)
     && !/Convention$/i.test(path) && !/deltaMm$/i.test(path));
   const invented = measured.filter(([, v]) => {
     if (v === 0) return false;   // 0 是占位/退化值，不作为"编造"证据
