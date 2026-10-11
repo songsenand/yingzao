@@ -1,0 +1,898 @@
+{
+  "schemaVersion": 1,
+  "example": "04-rack-connector",
+  "note": "判据是功能性的：装得上、锁得住、印得出。参考件只用来证明\"这个量级合理\"。全部数字来自工具实测，来源见 sources；不要手改。",
+  "upstream": {
+    "repo": "jazwa/rackstack",
+    "commit": "8e296e935aad89a6d1a5023da79becc634c10c2d",
+    "license": "MIT"
+  },
+  "given": {
+    "mainRail": {
+      "extentMm": {
+        "x": {
+          "min": 0,
+          "max": 136,
+          "sizeMm": 136
+        },
+        "y": {
+          "min": 0,
+          "max": 27,
+          "sizeMm": 27
+        },
+        "z": {
+          "min": 0,
+          "max": 12,
+          "sizeMm": 12
+        }
+      },
+      "features": {
+        "faceCount": 40,
+        "holeCount": 40,
+        "cylinderCount": 6,
+        "warnings": [
+          "part a: only 14/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 15/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.0mm."
+        ],
+        "throughHoles": [
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              13,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              93,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              113,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              123,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              103,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              83,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              73,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              23,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              33,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              43,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              53,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              63,
+              23,
+              0
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              13,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              73,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              83,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              113,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              123,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              93,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              103,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              23,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              33,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              43,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              53,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              63,
+              23,
+              2.5
+            ]
+          },
+          {
+            "diameterMm": 6.111,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              4.818,
+              19.818,
+              7.5
+            ]
+          },
+          {
+            "diameterMm": 6.111,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              131.182,
+              19.818,
+              7.5
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              43,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              53,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              33,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              23,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              63,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              13,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              73,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              83,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              103,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              123,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              93,
+              5.66,
+              7
+            ]
+          },
+          {
+            "diameterMm": 4.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              113,
+              5.66,
+              7
+            ]
+          }
+        ],
+        "throughDiametersMm": [
+          4.25,
+          6.111
+        ],
+        "pairSpacingMm": 126.364
+      }
+    },
+    "rackJoiner": {
+      "extentMm": {
+        "x": {
+          "min": 0,
+          "max": 9.8,
+          "sizeMm": 9.8
+        },
+        "y": {
+          "min": 0,
+          "max": 9.8,
+          "sizeMm": 9.8
+        },
+        "z": {
+          "min": -10.251,
+          "max": 10.251,
+          "sizeMm": 20.502
+        }
+      },
+      "features": {
+        "faceCount": 24,
+        "holeCount": 8,
+        "cylinderCount": 0,
+        "warnings": [
+          "128 face(s) (208.302mm² total) belong to no coplanar facet region — trimesh's facet pass leaves bevel/chamfer strips out. They are NOT reported as faces or cylinders here (single-face regions get misread as tiny cylinders), so treat the inventories below as covering everything except those strips",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm."
+        ],
+        "throughHoles": [
+          {
+            "diameterMm": 3.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              3.775,
+              5,
+              6.25
+            ]
+          },
+          {
+            "diameterMm": 3.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              3.775,
+              5,
+              -6.25
+            ]
+          },
+          {
+            "diameterMm": 3.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              6.225,
+              5,
+              -6.25
+            ]
+          },
+          {
+            "diameterMm": 3.25,
+            "through": true,
+            "depthMm": null,
+            "centerMm": [
+              6.225,
+              5,
+              6.25
+            ]
+          }
+        ],
+        "throughDiametersMm": [
+          3.25
+        ],
+        "pairSpacingMm": 2.45
+      }
+    }
+  },
+  "reference": {
+    "extentMm": {
+      "x": {
+        "min": 0,
+        "max": 9.8,
+        "sizeMm": 9.8
+      },
+      "y": {
+        "min": 0,
+        "max": 9.8,
+        "sizeMm": 9.8
+      },
+      "z": {
+        "min": -2,
+        "max": 10.001,
+        "sizeMm": 12.001
+      }
+    },
+    "features": {
+      "faceCount": 15,
+      "holeCount": 4,
+      "cylinderCount": 0,
+      "warnings": [
+        "64 face(s) (104.151mm² total) belong to no coplanar facet region — trimesh's facet pass leaves bevel/chamfer strips out. They are NOT reported as faces or cylinders here (single-face regions get misread as tiny cylinders), so treat the inventories below as covering everything except those strips",
+        "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+        "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm."
+      ],
+      "throughHoles": [
+        {
+          "diameterMm": 3.25,
+          "through": true,
+          "depthMm": null,
+          "centerMm": [
+            3.775,
+            5,
+            6
+          ]
+        },
+        {
+          "diameterMm": 3.25,
+          "through": true,
+          "depthMm": null,
+          "centerMm": [
+            6.225,
+            5,
+            6
+          ]
+        }
+      ],
+      "throughDiametersMm": [
+        3.25
+      ],
+      "pairSpacingMm": 2.45
+    },
+    "bodies": 1,
+    "watertight": true
+  },
+  "acceptance": {
+    "crossSectionMm": {
+      "min": 9.4,
+      "max": 9.9,
+      "why": "接头要插进/套上导轨的 9.8mm 方口：比 9.4 还小会晃、锁不住；比 9.9 大就插不进去。参考件实测 9.8 × 9.8。"
+    },
+    "lengthMm": {
+      "min": 10,
+      "max": 18,
+      "why": "要跨过两段导轨的对接缝（太短锁不住、太长会撞到同族的 rackJoiner）；参考件 12.001、同族 rackJoiner 20.502。"
+    },
+    "throughHoleDiameterMm": {
+      "min": 3,
+      "max": 3.6,
+      "why": "M3 螺钉过孔：导轨上的锁孔实测 Ø4.25/6.111，参考件与同族件都是 Ø3.25。"
+    },
+    "throughHoleCount": {
+      "min": 1,
+      "why": "至少一个通孔把接头锁在导轨上；参考件 2 个、同族件 4 个。"
+    },
+    "pairSpacingMm": {
+      "nominal": 2.45,
+      "tolerance": 0.4,
+      "why": "接头家族成对锁孔的水平间距（参考件 2.45、同族件 2.45）。"
+    }
+  },
+  "sources": {
+    "rail.extent.x": {
+      "op": "measure_extent",
+      "params": {
+        "path": "rail.stl",
+        "axis": "x"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 136,
+        "sizeMm": 136
+      }
+    },
+    "rail.extent.y": {
+      "op": "measure_extent",
+      "params": {
+        "path": "rail.stl",
+        "axis": "y"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 27,
+        "sizeMm": 27
+      }
+    },
+    "rail.extent.z": {
+      "op": "measure_extent",
+      "params": {
+        "path": "rail.stl",
+        "axis": "z"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 12,
+        "sizeMm": 12
+      }
+    },
+    "rail.list_features": {
+      "op": "list_features",
+      "params": {
+        "path": "rail.stl"
+      },
+      "value": {
+        "faceCount": 40,
+        "holeCount": 40,
+        "cylinderCount": 6,
+        "warnings": [
+          "part a: only 14/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 15/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.0mm."
+        ],
+        "cylinders": [
+          {
+            "id": "c5",
+            "kind": "boss",
+            "axisMm": [
+              1,
+              0,
+              0
+            ],
+            "centerMm": [
+              68,
+              177,
+              7.694
+            ],
+            "diameterMm": 354.031,
+            "lengthMm": 136,
+            "facets": 14,
+            "areaMm2": 1088.091,
+            "largeFacets": 1,
+            "fitResidualMm": 0.111
+          },
+          {
+            "id": "c0",
+            "kind": "boss",
+            "axisMm": [
+              1,
+              0,
+              0
+            ],
+            "centerMm": [
+              68,
+              12.681,
+              -843.317
+            ],
+            "diameterMm": 1710.752,
+            "lengthMm": 136,
+            "facets": 15,
+            "areaMm2": 725.116,
+            "largeFacets": 2,
+            "fitResidualMm": 0.061
+          },
+          {
+            "id": "c1047",
+            "kind": "bore",
+            "axisMm": [
+              0.707,
+              0.707,
+              0
+            ],
+            "centerMm": [
+              1.399,
+              16.399,
+              7.5
+            ],
+            "diameterMm": 3.25,
+            "lengthMm": 5.582,
+            "facets": 64,
+            "areaMm2": 40.384,
+            "largeFacets": 0,
+            "fitResidualMm": 0
+          },
+          {
+            "id": "c1050",
+            "kind": "bore",
+            "axisMm": [
+              -0.707,
+              0.707,
+              0
+            ],
+            "centerMm": [
+              134.601,
+              16.399,
+              7.5
+            ],
+            "diameterMm": 3.25,
+            "lengthMm": 5.582,
+            "facets": 64,
+            "areaMm2": 40.384,
+            "largeFacets": 0,
+            "fitResidualMm": 0
+          },
+          {
+            "id": "c1048",
+            "kind": "bore",
+            "axisMm": [
+              0.707,
+              0.707,
+              0
+            ],
+            "centerMm": [
+              4.409,
+              19.409,
+              7.5
+            ],
+            "diameterMm": 6,
+            "lengthMm": 1.975,
+            "facets": 64,
+            "areaMm2": 21.802,
+            "largeFacets": 0,
+            "fitResidualMm": 0
+          },
+          {
+            "id": "c1051",
+            "kind": "bore",
+            "axisMm": [
+              0.707,
+              -0.707,
+              0
+            ],
+            "centerMm": [
+              131.591,
+              19.409,
+              7.5
+            ],
+            "diameterMm": 6,
+            "lengthMm": 1.975,
+            "facets": 64,
+            "areaMm2": 21.802,
+            "largeFacets": 0,
+            "fitResidualMm": 0
+          }
+        ],
+        "facesOmitted": 52
+      }
+    },
+    "joiner.extent.x": {
+      "op": "measure_extent",
+      "params": {
+        "path": "joiner.stl",
+        "axis": "x"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 9.8,
+        "sizeMm": 9.8
+      }
+    },
+    "joiner.extent.y": {
+      "op": "measure_extent",
+      "params": {
+        "path": "joiner.stl",
+        "axis": "y"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 9.8,
+        "sizeMm": 9.8
+      }
+    },
+    "joiner.extent.z": {
+      "op": "measure_extent",
+      "params": {
+        "path": "joiner.stl",
+        "axis": "z"
+      },
+      "value": {
+        "minMm": -10.251,
+        "maxMm": 10.251,
+        "sizeMm": 20.502
+      }
+    },
+    "joiner.list_features": {
+      "op": "list_features",
+      "params": {
+        "path": "joiner.stl"
+      },
+      "value": {
+        "faceCount": 24,
+        "holeCount": 8,
+        "cylinderCount": 0,
+        "warnings": [
+          "128 face(s) (208.302mm² total) belong to no coplanar facet region — trimesh's facet pass leaves bevel/chamfer strips out. They are NOT reported as faces or cylinders here (single-face regions get misread as tiny cylinders), so treat the inventories below as covering everything except those strips",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm."
+        ],
+        "cylinders": [],
+        "facesOmitted": 0
+      }
+    },
+    "reference.extent.x": {
+      "op": "measure_extent",
+      "params": {
+        "path": "reference.stl",
+        "axis": "x"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 9.8,
+        "sizeMm": 9.8
+      }
+    },
+    "reference.extent.y": {
+      "op": "measure_extent",
+      "params": {
+        "path": "reference.stl",
+        "axis": "y"
+      },
+      "value": {
+        "minMm": 0,
+        "maxMm": 9.8,
+        "sizeMm": 9.8
+      }
+    },
+    "reference.extent.z": {
+      "op": "measure_extent",
+      "params": {
+        "path": "reference.stl",
+        "axis": "z"
+      },
+      "value": {
+        "minMm": -2,
+        "maxMm": 10.001,
+        "sizeMm": 12.001
+      }
+    },
+    "reference.list_features": {
+      "op": "list_features",
+      "params": {
+        "path": "reference.stl"
+      },
+      "value": {
+        "faceCount": 15,
+        "holeCount": 4,
+        "cylinderCount": 0,
+        "warnings": [
+          "64 face(s) (104.151mm² total) belong to no coplanar facet region — trimesh's facet pass leaves bevel/chamfer strips out. They are NOT reported as faces or cylinders here (single-face regions get misread as tiny cylinders), so treat the inventories below as covering everything except those strips",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm.",
+          "part a: only 5/25 probes of this line agree — the ray runs close to tangent to a surface, so the answer depends on a micron-scale offset. The reported spans come from the line displaced by 0.001mm."
+        ],
+        "cylinders": [],
+        "facesOmitted": 0
+      }
+    },
+    "reference.connectivity": {
+      "op": "connectivity",
+      "params": {
+        "path": "reference.stl"
+      },
+      "value": {
+        "bodies": [
+          {
+            "min": [
+              0,
+              0,
+              -2
+            ],
+            "max": [
+              9.8,
+              9.8,
+              10.001
+            ]
+          }
+        ],
+        "count": 1,
+        "watertight": true,
+        "triangles": 444
+      }
+    }
+  }
+}
