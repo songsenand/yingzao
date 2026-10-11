@@ -207,7 +207,7 @@ for (const v of corpus.manifest?.versions ?? []) {
 }
 
 // 考生产出的机读文件（rubric 的 via 直接点名，如 joinery.json）
-for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json']) {
+for (const f of ['joinery.json', 'motion.json', 'stability.json', 'optics.json', 'printability.json', 'measure.json']) {
   const v = await readJson(join(runRoot, f));
   if (v) corpus.files[f] = v;
 }
@@ -1081,6 +1081,135 @@ function cost() {
     stages: (record.stages ?? []).map((s) => ({ task: s.task, exitCode: s.exitCode, turns: s.turns, tools: s.toolCallCount })),
   };
 }
+
+// ---------- 06-measure ----------
+// 基准真值由评分方用**同一批工具**实测（graders/06-measure/ground-truth.json）。
+// 判据、求值器、key.md 都从那一份取数——同一个数字抄三处，总有一天会对不上。
+const gt06 = await readJson(join(gradersDir, '06-measure', 'ground-truth.json'));
+const ans06 = () => corpus.files['measure.json'] ?? null;
+const at06 = (path) => at(ans06(), path);
+const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+const nearMm = (a, b, tol) => num(a) !== null && num(b) !== null && Math.abs(a - b) <= tol;
+/** 本题的测量工具：题面要求用它们量，判据据此建立因果 */
+const MEASURE_TOOLS_06 = ['list_features', 'measure_thickness', 'measure_section', 'measure_extent', 'measure_angle', 'measure_distance', 'measure_part', 'import_part', 'render_part', 'run_python'];
+
+EV['g-measure-json'] = () => {
+  const a = ans06();
+  if (!a) return { ok: false, detail: '工作目录下没有 measure.json（考卷要求机读交卷）' };
+  const missing = ['part', 'partB', 'toolsUsed'].filter((k) => a[k] == null);
+  return { ok: missing.length === 0, detail: missing.length ? `measure.json 缺字段：${missing.join(', ')}` : 'measure.json 存在且含 part / partB / toolsUsed' };
+};
+EV['g-tools-not-bypassed'] = () => {
+  // 因果门：答案必须来自这几个工具，而不是先验或自己解析 STL 字节
+  const used = MEASURE_TOOLS_06.filter((t) => callsByTool(t).length > 0);
+  const need = ['list_features', 'measure_thickness'];
+  const missing = need.filter((t) => !used.includes(t));
+  const anyMeasure = used.some((t) => /^measure_|^list_features$/.test(t));
+  return {
+    ok: missing.length === 0 && anyMeasure,
+    detail: `用过：${used.join(', ') || '（无）'}` + (missing.length ? `；缺 ${missing.join(', ')}——答案不可能来自工具` : ''),
+  };
+};
+EV['g-no-invented-numbers'] = () => {
+  // measure.json 里的每个数字都必须能在某次工具返回里找到（容差 1e-6）。
+  // 这条把"读工具"与"编数字"分开：编出来的数字几乎不可能撞上工具返回。
+  const a = ans06();
+  if (!a) return { ok: 'unknown', detail: '没有 measure.json' };
+  const pool = [];
+  for (const c of allStageCalls()) {
+    const j = resultJsonOf(c);
+    if (j == null) continue;
+    const walk = (o) => {
+      if (typeof o === 'number' && Number.isFinite(o)) pool.push(o);
+      else if (Array.isArray(o)) o.forEach(walk);
+      else if (o && typeof o === 'object') Object.values(o).forEach(walk);
+    };
+    walk(j);
+  }
+  if (!pool.length) return { ok: 'unknown', detail: '没有任何工具返回可供比对（零结果）' };
+  const flat = [];
+  const collect = (o, path) => {
+    if (typeof o === 'number' && Number.isFinite(o)) flat.push([path, o]);
+    else if (Array.isArray(o)) o.forEach((v, i) => collect(v, `${path}[${i}]`));
+    else if (o && typeof o === 'object') Object.entries(o).forEach(([k, v]) => collect(v, `${path}.${k}`));
+  };
+  // 只查"测量值"字段。非测量字段必须显式排除，否则它们会被误判成编造：
+  //   .axis*          题面里的方向字面量（[1,1,0]）
+  //   .atZMm          考生自己选的剖切高度，是个选择而不是测量
+  //   .angleConvention/.changed/.kind  非数值或枚举
+  //   .deltaMm        允许由两次测量算出（下面单独判）
+  // 上一版这里写了 `|| true`，过滤成了空操作，等于把每道题都判成"编数字"。
+  collect(a, '$');
+  const measured = flat.filter(([path]) => !/\.(axis|atZMm|changed|kind)$/.test(path)
+    && !/Convention$/i.test(path) && !/deltaMm$/i.test(path));
+  const invented = measured.filter(([, v]) => {
+    if (v === 0) return false;   // 0 是占位/退化值，不作为"编造"证据
+    return !pool.some((x) => Math.abs(x - v) <= 1e-6);
+  });
+  return {
+    ok: invented.length === 0,
+    detail: invented.length
+      ? `${invented.length} 个数字在任何工具返回里都找不到：${invented.slice(0, 4).map(([p, v]) => `${p}=${v}`).join(', ')}`
+      : `${measured.length} 个数字都能在工具返回里找到`,
+  };
+};
+EV['g-delta-correct'] = () => {
+  // 阴性对照的落点：同一套口径量两个版本，差值必须与真值一致
+  if (!gt06?.delta) return { ok: 'unknown', detail: 'ground-truth.json 里没有 delta' };
+  const got = num(at06('partB.deltaMm'));
+  if (got === null) return { ok: false, detail: 'measure.json 没报 partB.deltaMm' };
+  return {
+    ok: nearMm(got, gt06.delta.afterMm - gt06.delta.beforeMm, gt06.delta.toleranceMm ?? 0.05),
+    detail: `报 ${got} vs 真值 ${(gt06.delta.afterMm - gt06.delta.beforeMm).toFixed(3)}（${gt06.delta.what}）`,
+  };
+};
+// 数值判据：先从真值取，缺真值就 unknown —— 绝不把没实现的条目算成通过
+const gtCheck = (id, pickFn) => {
+  EV[id] = () => {
+    if (!gt06) return { ok: 'unknown', detail: 'ground-truth.json 缺失（先跑 graders/06-measure/ground-truth.mjs）' };
+    const want = pickFn(gt06);
+    if (want === undefined || want === null) return { ok: 'unknown', detail: `${id}: ground-truth.json 未提供该真值` };
+    const { value, tolerance, path } = typeof want === 'object' && 'value' in want ? want : { value: want, path: null };
+    if (!path) return { ok: 'unknown', detail: `${id}: 真值 ${JSON.stringify(value)} 未绑定 measure.json 的字段` };
+    const got = at06(path);
+    if (got === undefined) return { ok: false, detail: `measure.json 缺 ${path}` };
+    if (typeof value === 'number') {
+      return { ok: nearMm(got, value, tolerance ?? 0.02), detail: `${path}=${JSON.stringify(got)} vs 真值 ${value}（±${tolerance ?? 0.02}）` };
+    }
+    return { ok: JSON.stringify(got) === JSON.stringify(value), detail: `${path}=${JSON.stringify(got)} vs 真值 ${JSON.stringify(value)}` };
+  };
+};
+gtCheck('c-cylinder-count', (g) => ({ value: g.cylinders.count, tolerance: 0, path: 'part.cylinders.length' }));
+gtCheck('c-tube-wall', (g) => ({ value: g.tubeWallThicknessMm, tolerance: g.tolerances?.wallMm ?? 0.05, path: 'part.tubeWallThicknessMm' }));
+gtCheck('c-hole-centre-distance', (g) => ({ value: g.holeCentreDistanceMm, tolerance: g.tolerances?.lengthMm ?? 0.02, path: 'part.holeCentreDistanceMm' }));
+gtCheck('c-slope-angle', (g) => ({ value: g.slopeAngleAcuteDeg, tolerance: g.tolerances?.angleDeg ?? 0.5, path: 'part.slopeAngleDeg' }));
+// 题面要的是 min/max（考生自己算长度容易算错，也不该由题面代为决定口径），
+// 所以这里两条路都认：给了 lengthMm 就用，否则用 max − min。
+EV['c-diagonal-extent'] = () => {
+  if (!gt06) return { ok: 'unknown', detail: 'ground-truth.json 缺失' };
+  const want = gt06.diagonalExtent?.lengthMm;
+  if (want == null) return { ok: 'unknown', detail: 'ground-truth.json 未提供 diagonalExtent.lengthMm' };
+  const tol = gt06.tolerances?.lengthMm ?? 0.02;
+  const box = at06('part.extentDiagonalMm') ?? {};
+  const got = num(box.lengthMm) ?? (num(box.max) !== null && num(box.min) !== null ? box.max - box.min : null);
+  if (got === null) return { ok: false, detail: 'measure.json 的 part.extentDiagonalMm 既没有 lengthMm，也没有可用的 min/max' };
+  return { ok: nearMm(got, want, tol), detail: `沿 ${JSON.stringify(box.axis ?? [1,1,0])} 长度 ${got.toFixed(3)} vs 真值 ${want}（±${tol}）` };
+};
+gtCheck('c-section-hole-distance', (g) => ({ value: g.section?.holeCentreDistanceMm, tolerance: g.tolerances?.lengthMm ?? 0.02, path: 'part.section.holeCentreDistanceMm' }));
+gtCheck('c-section-area', (g) => ({ value: g.section?.materialAreaMm2, tolerance: g.tolerances?.areaMm2 ?? 1, path: 'part.section.materialAreaMm2' }));
+
+EV['g-negative-control-fires'] = () => {
+  // 机检不能是空的：把真值按"改动量"平移后，本题的容差必须把它判掉。
+  if (!gt06?.delta) return { ok: 'unknown', detail: 'ground-truth.json 里没有 delta' };
+  const before = gt06.delta.beforeMm;
+  const after = gt06.delta.afterMm;
+  const tol = gt06.tolerances?.wallMm ?? gt06.delta.toleranceMm ?? 0.05;
+  return {
+    ok: Math.abs(after - before) > tol,
+    detail: `改动量 ${Math.abs(after - before).toFixed(3)}mm > 容差 ${tol}mm ⇒ 照抄 part 的数会判掉`
+      + (Math.abs(after - before) > tol ? '' : '；**改动量小于容差，阴性对照是空的**'),
+  };
+};
 
 // ---------- 汇总 ----------
 function itemsOf(kind) {
