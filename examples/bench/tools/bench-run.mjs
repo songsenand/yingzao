@@ -51,6 +51,9 @@ const LEVELS = {
   '01-mortise-bench': { needs: [] },
   '01b-diagnosis': { needs: ['dossier/assembly.json'] },
   '02-steam-engine': { needs: ['assets/608.stl'] },
+  // 06：两个 STL 就是全部素材，考生 cwd 里必须有它们（`needs` 会在开跑前核对，
+  // 缺件直接退出，而不是让模型在空目录里找零件）。件由评分方脚本生成、入库。
+  '06-measure': { needs: ['part.stl', 'part-b.stl'] },
   '03-microscope': {
     defaultVariant: 'headless',
     variants: {
