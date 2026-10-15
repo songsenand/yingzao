@@ -29,7 +29,7 @@ export interface PythonBuildLock {
 export const PYTHON_BUILD: PythonBuildLock = {
   pythonVersion: "3.13.16",
   buildTag: "20261003",
-  baseUrl: "https://github.com/astral-sh/python-build-standalone/releases/download",
+  baseUrl: "https://registry.npmmirror.com/-/binary/python-build-standalone",
   mirrors: ["https://registry.npmmirror.com/-/binary/python-build-standalone"],
   archiveRoot: 'python',
   targets: {
@@ -72,19 +72,16 @@ export const PYTHON_BUILD: PythonBuildLock = {
 };
 
 /**
- * pip indexes, tried in order. The first is canonical; the second exists because
- * a direct PyPI install of this dependency set measured 11m44s from CN
- * (2026-10-08) while the mirror answers instantly.
- *
- * Measured the same day, same network: registry.npmmirror.com/pypi/... returns
- * 404 for the simple index and pypi.tuna.tsinghua.edu.cn/simple returns 403,
- * so neither is listed; mirrors.aliyun.com/pypi/simple serves the full index
- * (verified to contain the pinned versions). Deployments with their own mirror
- * set DSH_CAD_PYTHON_INDEX_URL.
+ * pip indexes, tried in order. 用户拍板（2026-10-15）：国内部署**阿里云优先**。
+ * 依据（同日，xlb 栈 ~340MB 实装）：pypi.org 的 files.pythonhosted.org 通道会把
+ * 大闭包安装拖到 16 分钟以上，甚至无限停滞（0 字节/40s，socket 不报错所以轮内
+ * 失败转移不触发）；mirrors.aliyun.com 同一闭包数分钟完成。pypi.org 保留为
+ * 第二源（上游权威），仅在前者失败时兜底。部署若另有镜像，用
+ * DSH_CAD_PYTHON_INDEX_URL 直接指定单源。
  */
 export const PIP_INDEXES: readonly string[] = [
-  'https://pypi.org/simple',
   'https://mirrors.aliyun.com/pypi/simple',
+  'https://pypi.org/simple',
 ];
 
 /** Written next to the venv and fed to pip verbatim. */

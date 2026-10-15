@@ -2997,7 +2997,12 @@ Skill 两层同步：cad-toolbox 路由表 + Discipline 注意事项；cad-simul
 Poiseuille 发展带（基线 0.753，阈值 [0.60,0.95]）、镜像对称 0.00%、入口生效、
 修复探测器 false、`off` 门控响亮。性能 **2.06 ms/步 @ 48×24×24（CPU）**。
 
-**边界与后续**：阶段 A 只做盒子通道（无嵌固件/热/多相）；阶段 B 按需上 FluidX3D
-（自由液面/多相）；SU2 留作高 Re RANS/可压缩将来分支（probe 产物存
-`experiments/artifacts/20261015_cfd_probe/`）。上游追踪：xlb 发版（携 ZouHe 修复
-与 PR #168 warp 升级）→ 升级撤双 shim（验收探测器自动提醒）。
+**边界与后续**：阶段 A 只做盒子通道（无嵌固件/热/多相）；**阶段 B（FluidX3D，自由液面/
+多相）冻结——仅在必要场景出现时解冻**（2026-10-15 用户拍板）；SU2 留作高 Re RANS/
+可压缩将来分支（probe 产物存 `experiments/artifacts/20261015_cfd_probe/`）。上游追踪：
+xlb 发版（携 ZouHe 修复与 PR #168 warp 升级）→ 升级撤双 shim（验收探测器自动提醒）。
+
+**镜像策略（用户拍板 2026-10-15）**：pip 索引**阿里云优先**（`PIP_INDEXES` 翻转，
+pypi.org 降为兜底）——实测 pypi.org 的 files 通道对大闭包会拖 16 分钟以上甚至无限
+停滞且不触发轮内失败转移，aliyun 同闭包数分钟完成；`DSH_CAD_PYTHON_INDEX_URL`
+单源覆盖机制保留。解释器工件仍走 github + npmmirror（aliyun 无此镜像）。

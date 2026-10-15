@@ -33,14 +33,6 @@ const argOf = (flag, fallback) => {
 };
 process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', join(REPO, '.tmp-measure-runtime')));
 
-// The xlb stack (~340 MB incl. vtk/jaxlib) stalls indefinitely on the canonical
-// pypi.org channel from CN (measured 2026-10-15: 0 bytes over 40 s, no failover
-// because the socket never errors). The plugin's own PIP_INDEXES lists aliyun as
-// the measured-fast mirror, so pin the index rather than roulette the first one.
-if (!process.env.DSH_CAD_PYTHON_INDEX_URL) {
-  process.env.DSH_CAD_PYTHON_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple';
-}
-
 const venvPython = process.platform === 'win32'
   ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')
   : join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'bin', 'python');

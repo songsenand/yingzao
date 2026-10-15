@@ -2632,3 +2632,24 @@ wheel 无缓存之间的不对称。
 
 **影响：** runtime root 磁盘占用上限 +~600MB（可随运行时整体删除）；换 index 源
 后命中率下降（预期内，不影响正确性）；DESIGN §26.3 已同步。
+
+## 2026-10-15（补记二）：pip 索引阿里云优先；阶段 B（FluidX3D）冻结
+
+**触发条件：** 第 1 条（用户拍板，两条均为明确指示）。
+
+**决策内容：**
+1. `PIP_INDEXES` 翻转为**阿里云优先**（`mirrors.aliyun.com/pypi/simple` 第一、
+   `pypi.org/simple` 降为兜底）；`DSH_CAD_PYTHON_INDEX_URL` 单源覆盖机制保留。
+2. **阶段 B（FluidX3D）冻结**：短期内不做，仅在必要场景（倾倒/注液/排空类
+   自由液面需求实际出现）时解冻。
+
+**理由/依据：** 同日 xlb 栈（~340MB 闭包）实装两次实测——pypi.org 的
+files.pythonhosted.org 通道首次 16 分钟后报错、二次无限停滞（0 字节/40s，socket
+不报错致轮内失败转移不触发）；aliyun 同闭包数分钟完成。此前"canonical 优先"
+的排序在该实测面前不成立。阶段 B 冻结与同日决策的"按需采纳"一致，本次收紧为
+"无必要场景不动"。
+
+**影响：** 新锁（sha `5362bedc…`）部署/重装默认走 aliyun；既有 venv 因 marker
+sha 变化会在下次使用时触发一次例行重装（requirements 文本未变，纯 identity
+翻转）。FluidX3D 的评估证据保留在 experiments/20261015_xlb_lbm_probe.md，
+解冻时直接引用。
