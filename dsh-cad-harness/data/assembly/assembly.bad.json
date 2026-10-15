@@ -68,7 +68,7 @@
         "id": "bracket",
         "name": "镜架",
         "kind": "part",
-        "version": "v061",
+        "version": "v086",
         "source": "generated",
         "material": "PLA",
         "datums": [
@@ -90,7 +90,7 @@
         "id": "slide",
         "name": "调焦滑座",
         "kind": "part",
-        "version": "v062",
+        "version": "v087",
         "source": "generated",
         "material": "PLA",
         "transform": {
@@ -115,7 +115,7 @@
         "id": "shaft",
         "name": "调焦轴",
         "kind": "part",
-        "version": "v064",
+        "version": "v089",
         "source": "generated",
         "material": "PLA",
         "transform": {
@@ -141,7 +141,7 @@
         "id": "washer",
         "name": "垫圈",
         "kind": "part",
-        "version": "v065",
+        "version": "v090",
         "source": "generated",
         "material": "PLA",
         "transform": {
