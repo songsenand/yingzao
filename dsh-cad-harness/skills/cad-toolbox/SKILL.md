@@ -35,6 +35,7 @@ against it, and read a reference only when the skill tells you to.
 | "will it topple", "does it rest stably", "does the hinge hold", "does it sink" | `simulate_physics` | `validate_assembly` |
 | "does the mechanism move correctly", "what's the stroke", "does it jam mid-travel" | `simulate_motion` | `simulate_physics` |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
+| "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `simulate_lbm` | embedded solids (box walls only for now) |
 | "how big / how many holes / is it watertight", whole-part numbers | `measure_part` | renders |
 | "how long is this along a diagonal", "which point is the top of this" | `measure_part` with `axis` / `axisVector` | a bare `measure_part` (bbox only, no coordinates) |
 | **"where are the holes", "what features does this part have", any geometry you did not draw** | **`list_features`** | guessing coordinates from a render |
@@ -137,6 +138,13 @@ near-touching pairs were never declared).
     high enough on a thick-walled part that the lattice is coarse where the flow
     is). Its arrival ratio is a *sampled* number: state it as a range, and treat
     `overallStatus: pass` as a floor, not a quality claim.
+  - `simulate_lbm`: `metrics.peakUx` against the Poiseuille peak (`1.5×latticeVelocity`)
+    — `overallStatus: developing/underdeveloped` means the profile is still entering
+    the duct, so quote the shape, not drag numbers; `metrics.stable: false` reports
+    as `diverged` and means the lattice velocity or Re overran the scheme, not a
+    partial answer. Mirror symmetry (`metrics.mirrorError`) is the cheap honesty
+    check — a symmetric profile with a wrong peak means "not developed yet", never
+    "the theory is off".
   - `simulate_physics`: `metrics.notes` (they say when the run's own geometry
     makes a figure an artefact — e.g. several disconnected shells — and when an
     analysis is analytic rather than solved), `settled` (means "still moving at

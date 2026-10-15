@@ -33,6 +33,14 @@ const argOf = (flag, fallback) => {
 };
 process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', join(REPO, '.tmp-measure-runtime')));
 
+// The xlb stack (~340 MB incl. vtk/jaxlib) stalls indefinitely on the canonical
+// pypi.org channel from CN (measured 2026-10-15: 0 bytes over 40 s, no failover
+// because the socket never errors). The plugin's own PIP_INDEXES lists aliyun as
+// the measured-fast mirror, so pin the index rather than roulette the first one.
+if (!process.env.DSH_CAD_PYTHON_INDEX_URL) {
+  process.env.DSH_CAD_PYTHON_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple';
+}
+
 const venvPython = process.platform === 'win32'
   ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')
   : join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'bin', 'python');
@@ -123,6 +131,27 @@ let analytical = null;
     child.on('exit', () => rejectPromise(new Error('off-guard subprocess exited before reply')));
   });
   check(result.ok === false && /CAD_LBM_ENGINE=off/.test(result.error ?? ''), 'CAD_LBM_ENGINE=off refuses loudly', result.error?.slice(0, 80));
+}
+
+// 6. tool-surface: drive the REAL simulate_lbm tool object (registration + forwarding)
+{
+  const { registerCadTools } = await import('../src/host/tools.ts');
+  const tools = new Map();
+  registerCadTools({
+    tools: { register: (def) => { tools.set(def.name, def); } },
+    attachments: { saveImages: async (items) => items.map((it) => ({ kind: 'stub', name: it.name })) },
+    reflect: { get: () => undefined },
+    on: () => {},
+  });
+  const def = tools.get('simulate_lbm');
+  check(Boolean(def), 'simulate_lbm registered in tools.ts');
+  if (def) {
+    const value = await def.execute({ cells: [32, 16, 16], steps: 4000 });
+    check(['developed', 'developing', 'underdeveloped'].includes(value.overallStatus),
+      'simulate_lbm execute returns a tool-level overallStatus', value.overallStatus);
+    check(value.metrics?.stable === true && Array.isArray(value.metrics?.centerline),
+      'simulate_lbm forwards worker metrics', `peak=${value.metrics?.peakUx}`);
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

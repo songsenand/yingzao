@@ -72,3 +72,22 @@ probe（experiments/20261015_xlb_lbm_probe.md）证实 pip 车道成立并暴露
   （上游修复发版之日该断言变红，提示撤 shim）。
 - **待办（下一批次）**：tools.ts 工具面（`simulate_lbm` 窄 schema）+ DESIGN.md
   同步（引擎车道定稿后一并）+ 上游发版追踪（xlb release / PR #168）。
+
+## 补记（工具面 + 文档同步，同日第二批）
+- **tools.ts**：新增 `simulate_lbm`（对齐 simulate_fluid 输出形态 `overallStatus +
+  metrics`）：四参 `cells / reynolds / latticeVelocity / steps`；`overallStatus` 按发展比
+  分档（developed ≥0.9 / developing ≥0.6 / underdeveloped / diverged）；finalizeContent
+  报峰值 vs 理论 1.5U、镜像对称、入口生效，并给出"发展长度随 Re 增长"的读取提醒。
+- **skill 两层同步**：cad-toolbox 路由表新增通道流行 + Discipline 节新增
+  `simulate_lbm` 注意事项（peakUx vs 1.5U、stable:false=越界非部分答案、镜像对称是
+  诚实性检查）；cad-simulation 深度节新增四条"不显然事实"（lattice units 换算归
+  LLM 声明、发展长度、阶段 A 无嵌固件、无耦合），front-matter 补 trigger。
+- **DESIGN.md**：§2.1 做表新增 LBM 行；§2.2 不做的"工业级 CFD"条目修订（真实 NS
+  通道模板 ≠ 工业级保证）；新增 **§29（v2.33）** 完整记录决策链（SU2→改道→双轨）、
+  引擎车道、三处规避、工具面、验收与边界。
+- **验收扩展**：accept-lbm-channel 新增第 6 节——通过 `registerCadTools` 最小 ctx
+  驱动**真实 simulate_lbm 工具对象**（注册 + 转发 + overallStatus 分档），
+  补齐"工具层转发断言"。
+- **运维教训**：`job_kill` 落在运行时 repair 中途会把 venv 打成半残
+  （"present on disk, not importable"）——repair 期间不可中断；冷供给（重抽解释器
+  + 全量装包）约 6–11 分钟。

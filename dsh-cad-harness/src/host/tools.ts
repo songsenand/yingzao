@@ -2371,6 +2371,81 @@ export function registerCadTools(
     },
   }));
 
+  // --- simulate_lbm: XLB lattice-Boltzmann channel template (CFD lane stage A, 2026-10-15) ---
+  registerTool(defineTool({
+    name: 'simulate_lbm',
+    description:
+      'Lattice-Boltzmann channel flow (XLB, CPU): developed velocity profile vs the Poiseuille parabola, mirror symmetry and stability at a chosen Reynolds number. Stage-A template — the domain is a rectangular channel with box walls; no embedded solids, no heat, single phase.',
+    parameters: {
+      cells: {
+        type: 'array',
+        description: 'Lattice resolution [nx,ny,nz]; nx is the flow direction. Default [48,24,24]. Keep the product ≤ ~200k on CPU; runtime is linear in steps×cells.',
+        items: { type: 'number' },
+      },
+      reynolds: {
+        type: 'number',
+        description: 'Channel Reynolds number based on (ny-1) cells. Default 100. Development length grows ~with Re — raise steps together with Re.',
+      },
+      latticeVelocity: {
+        type: 'number',
+        description: 'Inlet speed in lattice units. Default 0.05; keep ≤0.1 (weakly compressible LBM).',
+      },
+      steps: {
+        type: 'number',
+        description: 'Time steps. Default 20000 (≈75% developed on the default grid); quote numbers only near the developed end.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          overallStatus: { type: 'string', required: true },
+          metrics: { type: 'object', required: true, additionalProperties: true },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 300_000,
+    async execute(args: unknown) {
+      const a = args as { cells?: number[]; reynolds?: number; latticeVelocity?: number; steps?: number };
+      const result = await (await ensurePythonWorker()).request<Record<string, unknown>>('lbm_channel', {
+        gridShape: a.cells ?? [48, 24, 24],
+        reynolds: a.reynolds ?? 100,
+        latticeVelocity: a.latticeVelocity ?? 0.05,
+        steps: a.steps ?? 20000,
+      });
+      const latticeVelocity = Number(result.latticeVelocity) || 0.05;
+      const peakRatio = (Number(result.peakUx) || 0) / (1.5 * latticeVelocity);
+      const overallStatus = result.stable !== true
+        ? 'diverged'
+        : peakRatio >= 0.9
+          ? 'developed'
+          : peakRatio >= 0.6
+            ? 'developing'
+            : 'underdeveloped';
+      return { overallStatus, metrics: result };
+    },
+    finalizeContent(_exec, result) {
+      const value = (result as { value?: { overallStatus: string; metrics: Record<string, unknown> } }).value;
+      if (!value) return undefined;
+      const m = value.metrics as Record<string, unknown>;
+      const n = (k: string): string => {
+        const v = m[k];
+        return typeof v === 'number' ? v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : '—';
+      };
+      const latticeVelocity = Number(m.latticeVelocity ?? 0.05);
+      const theory = 1.5 * latticeVelocity;
+      const ratio = (Number(m.peakUx) || 0) / theory;
+      const lines = [
+        `LBM channel ${value.overallStatus}. ${n('steps')} steps on ${JSON.stringify(m.grid)} lattice (${n('msPerStep')} ms/step, Re ${n('reynolds')}).`,
+        `Centerline peak ${n('peakUx')} of ${theory.toFixed(4)} theoretical (ratio ${ratio.toFixed(2)}) · mirror symmetry ${(Number(m.mirrorError) * 100 || 0).toFixed(2)}% of peak · inlet ${n('inletUx')}.`,
+        'Check: is the profile symmetric and developed enough for the question asked? Development length grows with Re — raise steps or the duct length before quoting numbers near the inlet.',
+      ];
+      return [{ type: 'text', text: lines.join('\n') }] as never;
+    },
+  }));
+
   // --- render_part: on-demand view with camera params (model-initiated) ---
   registerTool(defineTool({
     name: 'render_part',

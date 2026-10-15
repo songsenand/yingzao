@@ -1,17 +1,28 @@
 ---
 name: cad-simulation
-description: "Depth for simulate_motion / simulate_physics / simulate_fluid: what each engine actually models, which joints and drives it accepts, the traps that have cost iterations (rack pitch vs a sinusoid, pivot vs world axis, tiltDeg vs a hand-built gravity vector), and the questions NONE of them can answer — no fluid-structure coupling, no aerodynamics, no flexible bodies, no force or torque output."
-whenToUse: "Before running any simulate_* tool, or when asked whether a mechanism moves, topples, holds under friction, or fills with fluid."
+description: "Depth for simulate_motion / simulate_physics / simulate_fluid / simulate_lbm: what each engine actually models, which joints and drives it accepts, the traps that have cost iterations (rack pitch vs a sinusoid, pivot vs world axis, tiltDeg vs a hand-built gravity vector, lattice units vs millimetres), and the questions NONE of them can answer — no fluid-structure coupling, no aerodynamics, no flexible bodies, no force or torque output."
+whenToUse: "Before running any simulate_* tool, or when asked whether a mechanism moves, topples, holds under friction, fills with fluid, or what the velocity profile in a duct looks like."
 ---
 
 # Simulation: what the engines model, and what they cannot
 
 Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 
-Motion is kinematics with an exact interference timeline; physics is rigid bodies under gravity; fluid is a fixed-boundary MPM. None of the three reports a force.
+Motion is kinematics with an exact interference timeline; physics is rigid bodies under gravity; fluid is a fixed-boundary MPM; `simulate_lbm` is a lattice-Boltzmann channel template (box walls, no embedded solids yet). None of the four reports a force.
 
 ## Facts that are not obvious from the tool descriptions
 
+- **`simulate_lbm` works in lattice units, not millimetres.** `latticeVelocity`
+  and the profile it returns are in cell-per-step units; converting to physical
+  m/s means picking a length scale and a viscosity, and the conversion is YOURS
+  to state. Keep `latticeVelocity ≤ 0.1` (weakly compressible scheme) and read
+  `metrics.peakUx` against `1.5×latticeVelocity`, the analytical channel peak.
+- **Development length grows with Re.** `overallStatus: developing` means the
+  parabola is still forming — quote the symmetry and the shape trend, not drag
+  or shear numbers, until `developed`. Scale `steps` up together with `reynolds`.
+- **Stage A has no embedded solids.** The only walls are the box: no part in the
+  flow, no heat, no free surface, no multiphase. A "flow around my part" question
+  is out of scope for this tool today — say so instead of running it.
 - **Fluid–structure coupling does not exist.** Neither simulator pushes parts
   around. If the question needs both, split it into a rigid check and a fluid
   check, or say the limitation out loud instead of implying a coupled result.

@@ -46,6 +46,7 @@
 | 装配间隙数值验证 | 完整实现 |
 | 轻量刚体物理仿真（rapier） | 完整实现 |
 | MPM 流体仿真 | CPU 离线内核已交付（M4）；M4R：库化开放给 LLM（自有 shell + 真实模块，无专用场景 API） |
+| LBM 通用 CFD（阶段 A：通道模板） | 引擎落地（2026-10-15）：XLB 进 hash 锁 + worker `lbm_channel` + `simulate_lbm` 工具面；三处上游规避带验收探测器（§29） |
 | MPM 结果可视化 | M4R 主线：面板粒子回放 + 渲染参数化进库 + 帧数据落盘（可视化一等公民） |
 | MPM 结果 → 修改建议 | ~~规则引擎~~ 取消（v2.4）：插件供数据与渲染，解读归 LLM |
 | 版本管理 | 完整实现 |
@@ -54,7 +55,7 @@
 
 - MPM 结果驱动自动代码修改闭环
 - 精确 FEA / 应力分析
-- 工业级 CFD / 精确流场数值保证（MPM 产出是趋势判断；v2.4 起场景表达开放给 LLM 脚本，不再限于预定义场景）
+- 工业级 CFD / 精确流场数值保证（MPM 产出是趋势判断；v2.4 起场景表达开放给 LLM 脚本。2026-10-15 起 `simulate_lbm` 提供真实 NS 方程的通道级模板（§29），仍非工业级保证——无湍流模型、无嵌固件、网格即盒子）
 - 工业级公差、工程图、BOM
 - 多用户、权限、云部署
 - 移动端适配
@@ -2956,3 +2957,47 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
   `ezdxf==1.4.4`（传递依赖全部已在锁内）。
 - 验收样本：`scripts/fixtures/cad-import/`（来源与基线见其 README）。
 
+
+## 29. 通用 CFD 车道：XLB LBM 引擎 + `simulate_lbm`（v2.33，2026-10-15）
+
+**决策链**：SU2 预编译捆绑（同日晨）→ 实跑 probe 暴露"配置面考古成本 + v7 文档 vs v8
+二进制漂移"，与"LLM 能力"维度冲突 → 用户审阅后改道**双轨 LBM**（DECISION-LOG
+2026-10-15 两条：改道条目 + shim 定稿补记）。Lethe（无预编译发行，deal.II 源码 4-6h）
+出局；Code_Saturne（无任何预编译渠道）与 OpenFOAM（GPL-3 + Arch 无包）降为
+"系统自装 + 子进程"将来分支；FluidX3D（MIT，自由液面/多相）留作阶段 B。
+
+**引擎车道**（对齐 numba 采纳模式）：
+- 依赖：`xlb==0.3.1`（Apache-2.0，纯 py）+ `warp-lang==1.12.1`（**钉版**——1.18 移除
+  `warp.utils.ScopedTimer` 炸 import）+ `jax/jaxlib==0.11.2` + 完整传递闭包共 43 包进
+  hash 锁；musl×2 与 darwin-x64 按 wheel 实际覆盖 cad-exclude（jaxlib/warp 无
+  musl/darwin-x64 wheel）。闭包解析用锁约束下 `pip install --dry-run --report`，
+  首装曾暴露 `opt_einsum`/`attrs` 漏钉——闭包比对必须跑（`closure.txt` ↔ lock）。
+- worker：`python/cad_worker/lbm_xlb.py`（引擎模块，显式路径加载对齐 `_load_mpm_numba`）
+  + `worker.lbm_channel` op；门控 `CAD_LBM_ENGINE`（`off` 响亮拒绝；无回退引擎，
+  不可用即响亮 ok:false）。
+- **三处上游规避（全部有验收断言看护）**：
+  1. warp 钉版（锁内，无需运行时代码）；
+  2. `check_bc_overlaps` 的 `list += ndarray` 写法被 numpy 2.5 语义变化炸穿 →
+     extend 版替换，打在 `xlb.helper` 与 stepper 模块两个绑定名；
+  3. ZouHeBC `prescribed_values` 从未赋值（上游 main 已修：`prescribed_values =
+     profile()`）→ wrapper 同语句镜像；**修复探测器**：引擎上报
+     `upstreamZouheFixed`，验收断言其 `false`——上游修复发版之日断言变红，
+     提示升级撤 shim。
+- numpy 2.5 的 `list += ndarray` 语义变化是**插件级环境发现**：worker 89 处 `+=`
+  全量排查无罪（experiments/20261015_xlb_lbm_probe.md），编码规范进评审关注项。
+
+**工具面**：`simulate_lbm`（tools.ts，窄 schema 对齐 simulate_fluid 输出形态
+`overallStatus + metrics`）：`cells / reynolds / latticeVelocity / steps` 四参，
+`overallStatus` 按 Poiseuille 峰值发展比（developed ≥0.9 / developing ≥0.6 /
+underdeveloped / diverged）；finalizeContent 报峰值 vs 理论 1.5U、镜像对称、入口。
+Skill 两层同步：cad-toolbox 路由表 + Discipline 注意事项；cad-simulation 深度节
+（lattice units 换算归 LLM 声明、发展长度随 Re、阶段 A 无嵌固件）。
+
+**验收**：`scripts/accept-lbm-channel.mjs` 11/11——xlb 报告、冒烟稳定、确定性逐位一致、
+Poiseuille 发展带（基线 0.753，阈值 [0.60,0.95]）、镜像对称 0.00%、入口生效、
+修复探测器 false、`off` 门控响亮。性能 **2.06 ms/步 @ 48×24×24（CPU）**。
+
+**边界与后续**：阶段 A 只做盒子通道（无嵌固件/热/多相）；阶段 B 按需上 FluidX3D
+（自由液面/多相）；SU2 留作高 Re RANS/可压缩将来分支（probe 产物存
+`experiments/artifacts/20261015_cfd_probe/`）。上游追踪：xlb 发版（携 ZouHe 修复
+与 PR #168 warp 升级）→ 升级撤双 shim（验收探测器自动提醒）。
