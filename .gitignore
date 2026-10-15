@@ -71,3 +71,8 @@ examples/dsh-home/
 # ---- Python 字节码（worker 的构建产物，禁止入库）----
 __pycache__/
 *.pyc
+
+# ---- 调研与运行残留（一次性，可再生成）----
+/.research/
+/pypi_report.json
+/assembly/
