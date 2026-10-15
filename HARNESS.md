@@ -106,9 +106,9 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 
 **界面打扰原则（2026-09-28，来自实机反馈）**：面板**不因界面加载而自动弹出**——自动唤起只由**明确相关的事件**触发（本插件 = 会话出现 CAD 工具活动，即新版本产生），其余时候靠右栏 Tab 单击激活。依据：插件可能被装在通用工作区（代码仓库、文档项目），启动即弹模型预览是噪声；而"LLM 跑完 CAD 工具后预览自动出现"是有用的。**区分"加载即弹"（禁）与"相关事件即弹"（可）**——适用于所有面板。
 
-**面板布局原则（2026-09-28，来自实机反馈；同日第四轮修正）**：既然**视觉是一等公民**，那么**模型预览必须占据首屏与最大面积**——视口置于面板最上方，**吃掉所有余量**（`aspect-ratio:1` 只作下限：正方形是地板不是天花板）；**版本历史、参数、验证报告、导出全部折进一行式折叠区**（默认收起），版本选择用下拉放在模型**之后**；**底部允许一条状态带**（结论 + 版本序号 + 出处），但必须 11px、单行、可省略——**视图之下，不许喧宾夺主**。空间不够时的让路顺序是**先滚折叠区、再缩视口**（`details` 收缩因子 100 : 视口 1）：实测 380×560 视口仍 355×352、详情区压到 41px 并滚动；380×400 极端情况下视口 355×233、详情区归零而面板不溢出。反面教材：把版本 chips 网格铺在首位，预览反被挤成 335×300 并溢出面板——**控件可以等，模型不能等**。附带一条几何纪律：**视口变高不等于模型变大**（取景由视口短边决定），所以"比正方形矮"是必须避免的，而"比正方形高"是白得的。实测与理由见 DESGIGN.md §6.9 / §6.10（v2.14b），沙箱出图工具见 `dsh-cad-harness/sandbox/preview/`。
+**面板布局原则（2026-09-28，来自实机反馈；同日第四轮修正）**：既然**视觉是一等公民**，那么**模型预览必须占据首屏与最大面积**——视口置于面板最上方，**吃掉所有余量**（`aspect-ratio:1` 只作下限：正方形是地板不是天花板）；**版本历史、参数、验证报告、导出全部折进一行式折叠区**（默认收起），版本选择用下拉放在模型**之后**；**底部允许一条状态带**（结论 + 版本序号 + 出处），但必须 11px、单行、可省略——**视图之下，不许喧宾夺主**。空间不够时的让路顺序是**先滚折叠区、再缩视口**（`details` 收缩因子 100 : 视口 1）：实测 380×560 视口仍 355×352、详情区压到 41px 并滚动；380×400 极端情况下视口 355×233、详情区归零而面板不溢出。反面教材：把版本 chips 网格铺在首位，预览反被挤成 335×300 并溢出面板——**控件可以等，模型不能等**。附带一条几何纪律：**视口变高不等于模型变大**（取景由视口短边决定），所以"比正方形矮"是必须避免的，而"比正方形高"是白得的。实测与理由见 DESIGN.md §6.9 / §6.10（v2.14b），沙箱出图工具见 `dsh-cad-harness/sandbox/preview/`。
 
-**零件从命名起就是版本控制对象（2026-09-28 四轮追问）**：不是"先做出零件、事后套版本"，而是**零件 = 版本库**：零件是仓库（可空存在）、版本是不可变提交（父子限同零件并校验）、运行是 CI 结果（挂版本上、可跨零件）。**缺 HEAD/回滚/审批**（详见 DESGIGN §6.10 待办）——所以面板上的「跟随最新/已钉住」只是视图偏好，别把它当模型状态。**身份靠显式声明而不是推断**：实测 33 个版本里 32 个无 parent、同一零件被造成 5 个互不相干的根，任何文本/链式推断都会把「同零件换参数」和「不同零件」混为一谈。
+**零件从命名起就是版本控制对象（2026-09-28 四轮追问）**：不是"先做出零件、事后套版本"，而是**零件 = 版本库**：零件是仓库（可空存在）、版本是不可变提交（父子限同零件并校验）、运行是 CI 结果（挂版本上、可跨零件）。**缺 HEAD/回滚/审批**（详见 DESIGN §6.10 待办）——所以面板上的「跟随最新/已钉住」只是视图偏好，别把它当模型状态。**身份靠显式声明而不是推断**：实测 33 个版本里 32 个无 parent、同一零件被造成 5 个互不相干的根，任何文本/链式推断都会把「同零件换参数」和「不同零件」混为一谈。
 
 **光照是"看"的一部分，不是装饰（2026-10-01）**：视口的职责是**让人看清形状**，而形状靠的是**明暗变化**。两条硬判据：①**主光必须跟着相机**（三点光挂在相机上）——世界固定的主光意味着"你想看的那一面正好没被打光"，转到背面就白转；②**环境光不能吃掉明暗**——环境占比从 33% 降到 8%（key 2.4 / fill 0.5 / rim 0.85 / 半球 0.24），正对光与背对光的对比 3× → 11×，另加胶片式高光收束，避免正打的面被削平成白（削平 = 一点信息都不剩）。**沙箱实测**（同机位同零件、按颜色只取模型像素）：色调方差 18.5→42.2、动态范围 95→125，两端无压死无削平，证据图 `sandbox/shots/lighting-{before,after}-*.png`。判据可以**在没有 GPU 的地方**验证为场景图性质（`scripts/accept-lighting.mjs`：rig 是否在相机上、转相机时主光是否跟转、环境占比与对比度），像素面靠 `sandbox/preview/shot-gl.mjs`（Xvfb + llvmpipe；本机 `firefox --headless` **建不出 WebGL 上下文**，这条以前没人发现，等于"看图"这一步断着）。
 
@@ -118,7 +118,7 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 
 **同一角落的控件必须同款（2026-10-01）**：背景选择器第一版用底色填充整个胶囊——结果在浅底上胶囊"消失"进视口、在暗底上又和白色「复原」打架，而且没写字号字体（继承默认，和「复原」不是一套字）。定死的规矩：**同角落的控件必须共用同一套底盘**（白板 + `1px #d5d9dd` + `11px/16px`，与「复原」逐字段一致），**图标家族也要一致**（这一角是 `⤾ 复原` / `🎨 背景`；色块本身当图标在浅底上读作"没勾的复选框"，弃用）。
 
-**视口必须自带度量与方位（2026-09-28 三轮反馈）**：任何 3D 视口都要能回答两个问题——**"这有多大"**（标尺/比例尺）与**"这是哪个方向"**（坐标系三轴），并配一个**复原视图**（转飞/缩放过头后一键回初始取景）。角标位置固定：**坐标系左下、标尺右下**。实现走 DOM 角标（每帧读活相机），不画进 WebGL：不被模型裁切、四处视图复用同一套、且**无头浏览器能直接截到**（WebGL canvas 不进 `--screenshot`，这决定了它可验收）。依据与实测见 DESGIGN.md §6.9c。
+**视口必须自带度量与方位（2026-09-28 三轮反馈）**：任何 3D 视口都要能回答两个问题——**"这有多大"**（标尺/比例尺）与**"这是哪个方向"**（坐标系三轴），并配一个**复原视图**（转飞/缩放过头后一键回初始取景）。角标位置固定：**坐标系左下、标尺右下**。实现走 DOM 角标（每帧读活相机），不画进 WebGL：不被模型裁切、四处视图复用同一套、且**无头浏览器能直接截到**（WebGL canvas 不进 `--screenshot`，这决定了它可验收）。依据与实测见 DESIGN.md §6.9c。
 
 **图像只有一条正路进上下文（2026-10-01 定）**：图像**不许**以 base64 或 data URI 写进文本，也**不许**把"复制到剪贴板、请用户自己粘"当作唯一路径（那是把插件的活推给人）。正规接口只有两个方向，且**上下文里永远只有引用、字节走附件通道**：
 
@@ -127,7 +127,7 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 | 宿主工具（渲染图、求解标注图） | 工具结果的 `content` 里带 `ImageBlock` | `ctx.attachments.saveImages([{ data, mediaType, name }])` → `output.render(args, value)` 或 `finalizeContent(exec, result)` 返回 `[{type:'text',…},{type:'image', attachment: ref}]` |
 | 浏览器面板（视口截图） | 直接发进会话 | `sessions.scope(id)` → `sessions.sessionOf(actx)` → `conversation.createDrafts(id, [file])` → `conversation.sendSession(face, text, ids, 'queue')` |
 
-**三个易被"某处看到的示例"带偏的幻觉**（对着 0.1.5-rc.3 的类型声明与打包产物核过）：`ctx.attachments.create({data, mimeType})` **不存在**（真名 `saveImage`/`saveImages`，字段是 `mediaType`）；工具结果**没有** `attachments:` 字段（`ToolExecutionSuccess = {isError, value, content, meta?, additionalContexts?, concludesTurn?}`，多写的键会被 output schema 判违规）；图像**不会**"被框架自动加入"。**交付任何图像功能前先问一句：模型下一回合真的能看到它吗？** 答不上来就是没做完。详见 DESGIGN.md §6.9o。
+**三个易被"某处看到的示例"带偏的幻觉**（对着 0.1.5-rc.3 的类型声明与打包产物核过）：`ctx.attachments.create({data, mimeType})` **不存在**（真名 `saveImage`/`saveImages`，字段是 `mediaType`）；工具结果**没有** `attachments:` 字段（`ToolExecutionSuccess = {isError, value, content, meta?, additionalContexts?, concludesTurn?}`，多写的键会被 output schema 判违规）；图像**不会**"被框架自动加入"。**交付任何图像功能前先问一句：模型下一回合真的能看到它吗？** 答不上来就是没做完。详见 DESIGN.md §6.9o。
 
 **图片会累积，所以必须修枝（2026-10-01 定）**：会话每步重发全史，而每轮 `generate_part` 带 4 张渲染图 → 图片数**单调累积**（本仓实测峰值 88 张/请求 ≈ 88k 图片 token，语料合计 36M）。规则：
 
@@ -137,16 +137,16 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 4. **计费必须与实收一致**。适配器的定价对已 offload 的图按 0 视觉 token 计——否则"剪了却还按没剪算"，压缩会在错误的位置触发。
 5. **遥测要报实收数**。`usage.jsonl` 的 `images` = 提供商实收张数，`imagesBeforePrune` = 历史张数；报虚高数会让人对预算产生错误判断。
 
-实现与验收见 DESGIGN.md §13.10（`cordis.patch.yml` + `src/host/image-budget.ts` + `scripts/accept-image-budget.mjs`）。
+实现与验收见 DESIGN.md §13.10（`cordis.patch.yml` + `src/host/image-budget.ts` + `scripts/accept-image-budget.mjs`）。
 
 **模型可见的东西属于 agent plane（2026-10-01 定）**：DSH 是两层 composition——**profile（host plane）**装注册表/沙箱/持久化/模型路由，**preset（agent plane）**装**工具、prompt section、projection**，且只有选了该 preset 的会话看得见。所以：
 
 1. **凡是"模型看得见"的开销，一律问它挂在哪一层。** 工具表不是免费的：它随每次请求发出，且被 harness 算作请求信封的**唯一计价字段**。本仓实测：不挂 CAD 的会话 27 工具 ≈ 6.8k token，挂了 37~38 工具 ≈ 11.1~11.4k —— **+4.5k/请求**。插件挂在 profile 层 = 每个会话（含纯编程）都在替它付费。
 2. **系统提示词 ≠ 请求载荷。** 系统提示词是会话表面上的节点（由 persona 拥有）；插件"没改提示词"不等于"没有代价"。
 3. **不要为了摘工具而把插件行挪进 preset**——浏览器半边的发现依赖 profile 的 composed rows（带 `dsh.client` 的包要出现在行里），挪走 UI 就没了。正确做法是**拆职责**：路由/遥测/UI 留全局，**工具可见性按 preset 收窄**（`ctx.tools.restrict`，必须在 agent 自己的 ctx 上调）。
-4. **"要求重开会话才生效"的改动，只能装在项目开始前**：按 preset 收窄工具表曾在项目中途上线 → 被否决并全量回退（preset 是**会话的创建事实**，只在会话还空白时可改，规则一上线就让所有已存在会话失去工具）→ 同日在新项目开始前重新装上（DESGIGN §13.11）。教训不是"方案错"，而是**采纳时机是方案的一部分**；判断标准是先问"对正在进行的会话有没有影响"，不是"省多少"。
+4. **"要求重开会话才生效"的改动，只能装在项目开始前**：按 preset 收窄工具表曾在项目中途上线 → 被否决并全量回退（preset 是**会话的创建事实**，只在会话还空白时可改，规则一上线就让所有已存在会话失去工具）→ 同日在新项目开始前重新装上（DESIGN §13.11）。教训不是"方案错"，而是**采纳时机是方案的一部分**；判断标准是先问"对正在进行的会话有没有影响"，不是"省多少"。
 5. **验收要看"模型实际收到什么"**：会话日志的 `request/header` 是 durable 的工具表快照——打印每个会话真实发出的工具数与目录 token，才算证明了改动（`scripts/inspect-tool-catalog.mjs`；不启动 dsh 的prospective 版本是 `scripts/measure-tool-cost.mjs`，它把源码里的描述换进最近一次真实请求再重新计价）。
-5b. **削成本优先于分层**：CAD 工具表 4,621 tok 里，工具级描述只占 1,764（38%），脚手架占 1,698（37%），参数级描述 1,152。把"选型判据/全局约定/反直觉事实"从工具描述搬进 **skill**（按需加载、且发现根挂在 CAD preset 上所以编程会话连目录项都看不到），**每次请求省 1,227 tok、−27%，且对任何会话零打扰**。剩下可削的是脚手架与参数描述，风险更高，要单独权衡（DESGIGN §13.12）。
+5b. **削成本优先于分层**：CAD 工具表 4,621 tok 里，工具级描述只占 1,764（38%），脚手架占 1,698（37%），参数级描述 1,152。把"选型判据/全局约定/反直觉事实"从工具描述搬进 **skill**（按需加载、且发现根挂在 CAD preset 上所以编程会话连目录项都看不到），**每次请求省 1,227 tok、−27%，且对任何会话零打扰**。剩下可削的是脚手架与参数描述，风险更高，要单独权衡（DESIGN §13.12）。
 6. **"零打扰"是硬门槛**：判断一个成本方案能不能上，第一条不是"省多少"，而是**"对正在进行的会话有没有影响"**。省 token 的方案如果要求人重开会话，就不合格（本轮实测教训）。
 
 **一个项目一份语料：插件不许有"全局设计"（2026-10-01 定）**：实机反馈——新项目打开 CAD 面板，零件下拉里还是旧项目画的零件。根因不是 UI：所有 store 在插件 `apply` 时按**插件安装目录**开了一次，于是整个 profile 只有一个语料；又因为 `ensurePart()` **按名字全局匹配**，新项目里一个叫"底座"的零件会**认领**旧项目那个"底座"，两个项目的修订史被静默缝合（比显示问题严重得多）。
@@ -158,7 +158,7 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 5. **迁移必须可重跑**。旧 dsh 进程重启前仍会往老路径写东西，所以迁移脚本按条目合并、冲突 id 拒绝覆盖并报出、遥测按行去重追加——**不猜、不覆盖、可重复执行**。
 6. **判据**：任何 `join(pluginRoot, …)` 形式的持久化路径，当场回答**"第二个项目来了会怎样"**。"插件级单例"是隐形的功能缺失，不是省事。
 
-实现与验收见 DESGIGN.md §13.13（`src/host/project.ts` + `scripts/accept-project-scope.mjs` 真路由隔离取证 + `scripts/migrate-to-projects.mjs`）。
+实现与验收见 DESIGN.md §13.13（`src/host/project.ts` + `scripts/accept-project-scope.mjs` 真路由隔离取证 + `scripts/migrate-to-projects.mjs`）。
 
 **两半的作用域不一致时，面板必须说出来（2026-10-01 定，实机踩坑）**：本插件的**人的半边是全局的**（路由、面板、遥测），**模型的半边是按预设的**（工具表、skill 目录）。于是会出现一种静默失败——**标准模式**的会话里，面板一切正常、零件列表空空如也，而 Agent **一个 CAD 工具都没有**。实测代价：Agent 拿不到工具就自己读插件源码、用 bash 调 OpenSCAD 硬画，最后报 `Error: skill "cad-toolbox" is unknown or no longer available`（skill 根挂在同一个预设上，所以连技能也一起没了）；人看到的只是一句莫名其妙的报错。
 
@@ -176,7 +176,7 @@ v2.3 原则 1「模型输出意图/引用，几何引擎解析真值」是一条
 
 **量具**：`dsh-cad-harness/scripts/inspect-tool-catalog.mjs`（只读，读会话日志的 `request/header`）打印每个会话**真实发出**的工具表大小与 CAD 占比。任何关于"这次改动省了多少"的说法都必须由它出数。
 
-按 preset 收窄的实现与回退记录见 DESGIGN.md §13.11。
+按 preset 收窄的实现与回退记录见 DESIGN.md §13.11。
 
 **面板交互原则：产物即主体，不给模式开关（2026-09-28 二轮反馈）**：人**只选产物**（零件版本 / 验证运行），**呈现方式由产物自己是什么决定**——版本给几何视口，物理/机构运行给时间轴回放，流体运行给粒子回放，清单检查给报告卡片。**禁止让人先选"看什么类型的东西"再选产物**：那是把引擎内部的呈现差异泄漏成用户决策，而且必然会撒谎——旧版的「动作/流体」Tab 取的其实是"最近一次运行"，与选中的版本无关，停在那个 Tab 上版本下拉是个死控件。推论：**产物必须自带身份与出处**（运行有 id/时间戳/kind/`sourceVersionIds`），没有出处就如实说"内联 SCAD 场景"，不许硬塞给某个版本；**"相关验证"由 provenance 生成**，不靠人记。默认跟随最新产物，可一键钉住。
 
@@ -230,8 +230,8 @@ skill 只能做三件事：描述现有能力、传递决策经验（哪类问�
 |---|---|---|---|
 | 判据 | 看着对 | 数值对 + 工艺可行 + 可复现 | 缺口（工艺可行性无验证） |
 | 失败 | 报错重来 | 可预测失败 + 边界明确 | 缺口（边界未文档化） |
-| 交付 | STL 能打印 | 可交付、可交接 | 导出已建（stl/3mf/obj/off/wrl，导入件同样可用）；**STEP 导入**仍是边界（§7.3） |
-| 互操作 | 无 | 在既有件上设计 | **已建（STL，2026-10-01）**：外部 STL 作为一等版本进入项目，直接参与装配检查与三层验证；STEP/IGES 见 §7.3 |
+| 交付 | STL 能打印 | 可交付、可交接 | 导出已建（stl/3mf/obj/off/wrl，导入件同样可用）；**STEP/DXF 导入已建（2026-10-15，§7.3）**；IGES 仍是边界 |
+| 互操作 | 无 | 在既有件上设计 | **已建（STL 2026-10-01；STEP/DXF 2026-10-15）**：外部几何作为一等版本进入项目，直接参与装配检查与三层验证；IGES 见 §7.3 |
 | 规模 | 单件 | 装配体 | 缺口（见 §8，立场已修订） |
 | 人 | 提需求、看结果 | 精确编辑 + 签核 + 可追溯 | 缺口（权威编辑，§4） |
 | 精度 | 趋势判断 | 需要时交给认证工具 | **边界**（做交接契约，不填） |
@@ -279,7 +279,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 
 **单位是声明不是推断**：STL 无单位，`unit`（mm/cm/m/inch）与 `scale` 由调用方声明，在**任何测量之前**作用一次并原样记入 `import.json`。25.4 倍错误是这一类导入的经典失败模式。
 
-**边界（STEP，未变）**：仍无 B-rep 内核，`import_part` 对 `.step/.stp/.iges/.igs` 返回**可行动的内核边界说明**（事实 + 计划路线 + 当下可做的转换），而不是"解析失败"。手头已核实的最短路线是 `replicad` + `replicad-opencascadejs` 1.1.0（提供 `importSTEP(Blob)` / `exportSTEP` / `setOC`，纯 wasm、无传递依赖、unpacked ~55MB，Node 侧可跑）——B-rep→网格是**标准细分**（不是逆向工程），代价是精度受 deflection 限制，届时应把 deflection 记进版本；顺带可拿到 STEP 导出与从 B-rep 抽取**精确**孔/轴 datum。是否引入这 55MB 是内核可插拔这条线上的决定，未在本轮做出。
+**边界（2026-10-15 起：STEP/DXF 已建，IGES 仍是边界）**：`import_part` 现在直接读 `.step/.stp`——cascadio（MIT，OpenCASCADE 打包成 STEP→GLB 转换器）进锁、worker 的 `import_mesh` op 内嵌转换；GLB 中间格式声明**米**（探针实测，bbox 0.01 = 10mm），worker ×1000 落 mm，`appliedScale` 如实含此步。`.dxf` 走 ezdxf：`$INSUNITS` 优先于调用方单位；2D 闭环轮廓**必须给 `depthMm`** 才挤出成实体（manifold3d `CrossSection` EvenOdd——轮廓不是实体）；3D 网格实体走 STL 同款焊接尾流。探针数据 `experiments/20261015_cad_import_probe.md`；验收 `accept-import-cad.mjs`；决策 DECISION-LOG 2026-10-15。**IGES 不变**：cascadio 0.1.1 对 IGES **静默失败**（stderr 打 OCCT 错误、不写输出文件——实测），且无其他读取器，`.iges/.igs` 仍返回可行动边界（转 STEP/STL）。`replicad` + `opencascadejs`（~55MB wasm）那条线的剩余价值收窄为两件还没做的事：**STEP 导出**与从 B-rep 抽取**精确**孔/轴 datum（网格细分只给网格级的）；是否引入仍是内核可插拔线上的决定，未做出。
 
 ---
 
@@ -401,7 +401,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
   迁移 `validate_assembly` 后 `accept-m2.mjs` 挂住不退出）。任何用到 worker 的脚本
   收尾时也要显式 `resetPythonWorker()`。
 
-### 12.4 pip 生态（实测 2026-09-28）
+### 12.4 pip 生态（实测 2026-09-28；2026-10-14 增 numba/llvmlite）
 
 | 包 | 版本 | wheel | 用途 |
 |---|---|---|---|
@@ -411,6 +411,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 | `cadquery-ocp`（OCP） | 8.0.1.0.0 | 20（cp311-cp314） | B-rep/STEP（**后置**，见 §12.6） |
 | `build123d` / `cadquery` | 0.13.0 / 2.8.0 | 1 / 1 | OCP 之上的 CAD API |
 | **`rapier3d`** | **0.36.0** | 6 | rapier 官方 Python 绑定（f32） |
+| **`numba` / `llvmlite`** | **0.68.0 / 0.50.0** | 5 / 5（cp313） | **MPM 内核 JIT 引擎**（2026-10-14 采纳：对 numpy 内核 5.1–8.7×、对 TS 1.3–2.0×，`experiments/20261014_numba_mpm_probe.md`）。cp313 wheel 仅 manylinux x64/arm64、macOS arm64、Windows x64/arm64——**musl 与 darwin-x64 由 `cad-exclude` 裁剪**（原因随包走），这些目标经 `worker._mpm_engine` 自动回落 numpy 内核；`CAD_MPM_ENGINE=numba` 强制时缺失会**响亮失败**，绝不静默回落 |
 
 **conda-only（不用）**：`pythonocc-core`、`PyChrono`。注：PyPI 上的 `pychrono` 是**抢名的无关包**，不是 Project Chrono。
 
@@ -429,6 +430,7 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 - 裁决：B-rep/STEP **继续后置**（本就排在装配与视觉表达之后）；将来真要 STEP 时按此顺序评估：**FreeCAD headless（Python，成熟 STEP 双向）→ cadquery-ocp → Replicad(JS/WASM)**
 - 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy；OCCT 只在 B-rep 任务里出现，可 lazy import 或独立 worker
 - **2026-10-01 补充**：**STL 导入已交付，且不需要 OCCT**（§7.3）——"导入既有件"这条缺口的一半被证明与 B-rep 无关。STEP 导入的评估顺序不变，但已手头核实 `replicad` + `replicad-opencascadejs` 1.1.0 的 API（`importSTEP` / `exportSTEP` / `setOC`）与体量（~55MB wasm，无传递依赖），它是"留在 Node 栈"的那条路，且能顺带提供 B-rep→精确 datum。**引入与否是内核可插拔线上的决定，未做出。**
+- **2026-10-15 补充**：**STEP 导入已交付，走的是 Python worker 而不是 Replicad**——`cascadio`（MIT，OpenCASCADE→GLB 转换器）+ `ezdxf`（MIT，DXF）进锁，`import_mesh` 内嵌转换，产物仍是焊接后的 `model.stl`，下游零改动（§7.3、DECISION-LOG 同日）。§7.1/本节的评估顺序（FreeCAD headless → cadquery-ocp → Replicad）**保留给还没做的部分**：STEP 导出与 B-rep 级精确 datum。IGES 维持边界（cascadio 静默失败已实测）。
 
 ---
 
@@ -448,12 +450,27 @@ LLM 适配度判据：训练语料密度 > headless 可执行 > 错误反馈质�
 - **落点**：`$DSH_HOME/cad/runtime/`（`python/<版本>`、`venv/`、`cache/`、`state.json`），
   跨项目共享；运行时**不进项目目录、不进 git**。
 - **依赖**：numpy / scipy / trimesh / manifold3d / networkx / **scikit-fem** / **rtree** /
-  rapier3d 0.36，全部
+  **shapely** / rapier3d 0.36 / **numba 0.68 + llvmlite 0.50**（共 11 个），全部
   `--require-hashes --only-binary=:all:` 锁定，因此**任何平台都不需要编译器**。
   **rapier3d 没有 darwin-x64 wheel**：用户 2026-10-08 拍板——该平台**物理继续用 TS 引擎**，
-  Python 侧不装它。锁里的 `# cad-exclude: darwin-x64 | <原因>` 指令负责裁剪，**原因随包走**：
+  Python 侧不装它。**numba（2026-10-14 采纳）同样缺 musl 与 darwin-x64 wheel**，同一
+  `cad-exclude` 机制裁剪；MPM 引擎的选择在 worker 内部解决（`worker._mpm_engine`，
+  env `CAD_MPM_ENGINE`）：能 import numba 就用 numba，否则回落 numpy 内核——回落是
+  平台事实不是故障，但**强制 `CAD_MPM_ENGINE=numba` 而不可用时必须响亮失败**。
   安装期写进 `state.json.skipped`，`python_runtime` 明说"这台机器上没有 rapier3d，因为没有
   wheel、物理留在 TS canonical"——**安装时就要确认下来**，不能让缺包看起来像坏包。
+  **反向情形（2026-10-11 修）**：锁里**有**、venv 里却 import 不动的包，以前会被
+  "标记文件匹配"判成已就绪（本机实测：标记 `requirementsSha=08b72cc0…` 而当前锁是
+  `a21baffa…`，`rtree`/`shapely` 都 import 不了，`status` 仍报 `ready`）。
+  现在 `venvIsCurrent` 之外**必须真的 import 一遍锁定包**才算 current：装完先验证再写标记
+  （验证不过就抛错、不写标记，下次自动重试），`python_runtime` 新增 `missingPackages`，
+  非空即 `state: failed`。**"就绪"必须是可证伪的**。
+- **工具面与手册分层（2026-10-11）**：CAD 工具 **22 个**（由 25 个按功能合并：`measure_extent` +
+  `check_connectivity` → `measure_part`；`measure_closest` + `measure_distance` → `measure_gap`；
+  worker op 未变）。手册拆为三层：`skills/cad-toolbox/SKILL.md` 是**唯一点名全部工具的路由器**
+  （约定 + 纪律 + 交付纪律），四个按工作的 skill（`cad-simulation` / `cad-assembly` /
+  `cad-modeling-measure` / `cad-manufacturing`）按需加载，长案例史进各自 `references/`。
+  doc test 的作用域据此分开："是否点名全部工具"钉在路由器上，"是否讲了某条陷阱/纪律"扫全树。
 - **工具面**：`run_python`（内联 `code` 或既有 `.py` 脚本、超时、stdout/stderr、完整 traceback）
   与 `python_runtime`（status / provision / repair）。两者随 CAD 预设做可见性过滤，与其余
   CAD 工具同一条纪律。§12.3 的**常驻 worker 已于 2026-10-08 落地**（batch 0）：

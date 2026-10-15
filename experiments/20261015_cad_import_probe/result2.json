@@ -1,0 +1,146 @@
+{
+ "colored.step": {
+  "bodies": 1,
+  "per_body": {
+   "half_round_screw001": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 0,
+    "tris": 3074
+   }
+  },
+  "x1000_mm": {
+   "status": "Error.NoError",
+   "ok": true,
+   "volume": 242.2,
+   "genus": 0
+  },
+  "bad_edges": null
+ },
+ "material.stp": {
+  "bodies": 1,
+  "per_body": {
+   "Part 1": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 0,
+    "tris": 12
+   }
+  },
+  "x1000_mm": {
+   "status": "Error.NoError",
+   "ok": true,
+   "volume": 107231.1,
+   "genus": 0
+  },
+  "bad_edges": null
+ },
+ "multibody.step": {
+  "bodies": 10,
+  "per_body": {
+   "box_base": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 0,
+    "tris": 188
+   },
+   "side_long": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 2,
+    "tris": 244
+   },
+   "side_long_1": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 2,
+    "tris": 244
+   },
+   "side_short": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 6,
+    "tris": 1164
+   },
+   "side_short_B": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 3,
+    "tris": 520
+   },
+   "gusset": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 1,
+    "tris": 180
+   },
+   "gusset_1": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 1,
+    "tris": 180
+   },
+   "gusset_2": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 1,
+    "tris": 180
+   },
+   "gusset_3": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 1,
+    "tris": 180
+   },
+   "box_top": {
+    "status": "Error.NoError",
+    "ok": true,
+    "volume": 0.0,
+    "genus": 4,
+    "tris": 860
+   }
+  },
+  "x1000_mm": {
+   "status": "Error.NoError",
+   "ok": true,
+   "volume": 263544.1,
+   "genus": 12
+  },
+  "bad_edges": null
+ },
+ "igs_glb_bytes": null,
+ "igs_glb": "raised ValueError: string is not a file: `/home/songsenand/Project/ToyMarker/experiments/20261015_cad_import_probe/igs.glb`",
+ "tol_sweep_mm_part": {
+  "None": {
+   "tris": 3074,
+   "volume_mm3": 242.2
+  },
+  "0.01": {
+   "tris": 3074,
+   "volume_mm3": 242.2
+  },
+  "0.002": {
+   "tris": 12254,
+   "volume_mm3": 242.8
+  },
+  "0.0005": {
+   "tris": 49420,
+   "volume_mm3": 242.9
+  }
+ },
+ "dxf_binary": {
+  "bytes": 13526,
+  "entities": 2
+ }
+}

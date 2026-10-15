@@ -1,0 +1,128 @@
+{
+ "cascadio_version": "0.1.1",
+ "colored.step": {
+  "convert_s": 0.043,
+  "bodies_in_glb": 1,
+  "triangles": 3074,
+  "vertices_merged": 1959,
+  "volume_mm3_reported_by_trimesh": 0.0,
+  "watertight": false,
+  "bbox": [
+   0.01,
+   0.01,
+   0.02
+  ],
+  "units_attr": "meters",
+  "direct_step_load_same_triangles": true
+ },
+ "material.stp": {
+  "convert_s": 0.003,
+  "bodies_in_glb": 1,
+  "triangles": 12,
+  "vertices_merged": 24,
+  "volume_mm3_reported_by_trimesh": 0.0,
+  "watertight": false,
+  "bbox": [
+   0.07,
+   0.03,
+   0.06
+  ],
+  "units_attr": "meters",
+  "direct_step_load_same_triangles": true
+ },
+ "featuretype.STEP": {
+  "convert_s": 0.051,
+  "bodies_in_glb": 1,
+  "triangles": 8326,
+  "vertices_merged": 7247,
+  "volume_mm3_reported_by_trimesh": 0.0,
+  "watertight": false,
+  "bbox": [
+   0.13,
+   0.06,
+   0.03
+  ],
+  "units_attr": "meters",
+  "direct_step_load_same_triangles": true
+ },
+ "multibody.step": {
+  "convert_s": 0.116,
+  "bodies_in_glb": 10,
+  "triangles": 3940,
+  "vertices_merged": 4690,
+  "volume_mm3_reported_by_trimesh": 0.0,
+  "watertight": false,
+  "bbox": [
+   0.18,
+   0.11,
+   0.1
+  ],
+  "units_attr": null,
+  "direct_step_load_same_triangles": true
+ },
+ "tolerance_sweep": {
+  "None": {
+   "convert_s": 0.111,
+   "triangles": 3940,
+   "volume": 0.0,
+   "bbox": [
+    0.18,
+    0.11,
+    0.1
+   ]
+  },
+  "0.5": {
+   "convert_s": 0.106,
+   "triangles": 2768,
+   "volume": 0.0,
+   "bbox": [
+    0.18,
+    0.11,
+    0.1
+   ]
+  },
+  "0.1": {
+   "convert_s": 0.106,
+   "triangles": 2776,
+   "volume": 0.0,
+   "bbox": [
+    0.18,
+    0.11,
+    0.1
+   ]
+  }
+ },
+ "iges": "UNEXPECTEDLY SUCCEEDED",
+ "ezdxf_version": "1.4.4",
+ "dxf_profiles": {
+  "profile-mm.dxf": {
+   "doc_units": 4,
+   "loops": 2,
+   "extrude_s": 0.006,
+   "volume": 14870.5,
+   "genus": 1,
+   "triangles": 272,
+   "status_ok": false
+  },
+  "profile-inch.dxf": {
+   "doc_units": 1,
+   "loops": 2,
+   "extrude_s": 0.001,
+   "volume": 14870.5,
+   "genus": 1,
+   "triangles": 272,
+   "status_ok": false
+  },
+  "_expected_mm3": 14869.0,
+  "_inch_ratio_expected": 16387.06
+ },
+ "dxf_polyface": {
+  "soup_triangles": 36,
+  "welded_vertices": 8,
+  "status_ok": false,
+  "volume": 8000.0,
+  "genus": 0,
+  "expected_volume": 8000.0
+ },
+ "dxf_binary": "raised AttributeError: 'str' object has no attribute 'write'"
+}

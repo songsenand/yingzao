@@ -1,0 +1,141 @@
+{
+  "date": "2026-10-14",
+  "machine": {
+    "cpus": 16,
+    "python": "3.13.16"
+  },
+  "numba": {
+    "version": "0.68.0",
+    "threads": 1
+  },
+  "numpy": "2.5.4",
+  "scene": {
+    "cells": [
+      100,
+      24,
+      24
+    ],
+    "dt": 0.004,
+    "vmax": 60,
+    "inlet": {
+      "axis": 0,
+      "band": [
+        2,
+        5
+      ],
+      "speed": 25
+    },
+    "recycle": {
+      "axis": 0,
+      "at": 98,
+      "respawn": 3
+    },
+    "note": "pipe along +x, no solids; identical scene for all engines"
+  },
+  "ladder": [
+    {
+      "latticeSpacingCells": 1.0,
+      "particles": 8820,
+      "timedStepsPerBlock": 50,
+      "restDensity": 0.995071965993029,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          19.145,
+          17.767,
+          18.961
+        ],
+        "msPerStepBest": 17.767,
+        "msPerStepMedian": 18.961
+      },
+      "numbaKernel": {
+        "msPerStepBlocks": [
+          3.578,
+          3.613,
+          3.635
+        ],
+        "msPerStepBest": 3.578,
+        "msPerStepMedian": 3.613
+      },
+      "numbaCompileFirstStepS": 0.083,
+      "speedupBest": 4.97
+    },
+    {
+      "latticeSpacingCells": 0.5,
+      "particles": 65559,
+      "timedStepsPerBlock": 50,
+      "restDensity": 7.96499247463072,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          98.635,
+          103.603,
+          100.872
+        ],
+        "msPerStepBest": 98.635,
+        "msPerStepMedian": 100.872
+      },
+      "numbaKernel": {
+        "msPerStepBlocks": [
+          21.928,
+          22.025,
+          22.238
+        ],
+        "msPerStepBest": 21.928,
+        "msPerStepMedian": 22.025
+      },
+      "numbaCompileFirstStepS": 0.024,
+      "speedupBest": 4.5
+    },
+    {
+      "latticeSpacingCells": 0.28,
+      "particles": 383320,
+      "timedStepsPerBlock": 25,
+      "restDensity": 45.347716523239576,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          726.217,
+          750.979,
+          829.073
+        ],
+        "msPerStepBest": 726.217,
+        "msPerStepMedian": 750.979
+      },
+      "numbaKernel": {
+        "msPerStepBlocks": [
+          137.435,
+          137.521,
+          136.762
+        ],
+        "msPerStepBest": 136.762,
+        "msPerStepMedian": 137.435
+      },
+      "numbaCompileFirstStepS": 0.144,
+      "speedupBest": 5.31
+    },
+    {
+      "latticeSpacingCells": 0.25,
+      "particles": 524472,
+      "timedStepsPerBlock": 25,
+      "restDensity": 63.780703226533554,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          1044.82,
+          1036.777,
+          999.066
+        ],
+        "msPerStepBest": 999.066,
+        "msPerStepMedian": 1036.777
+      },
+      "numbaKernel": {
+        "msPerStepBlocks": [
+          168.081,
+          167.487,
+          167.193
+        ],
+        "msPerStepBest": 167.193,
+        "msPerStepMedian": 167.487
+      },
+      "numbaCompileFirstStepS": 0.171,
+      "speedupBest": 5.98
+    }
+  ]
+}

@@ -120,7 +120,8 @@ execution_summaries/
 - 修改私有函数、内部工具类
 - 调整测试代码或构建脚本
 
-**DESIGN.md：** 当决策影响了架构设计时，同步更新 `docs/DESIGN.md`。
+**DESIGN.md：** 当决策影响了架构设计时，同步更新项目根目录的 `DESIGN.md`
+（2026-10-13 由 `DESGIGN.md` 更名）。
 DESIGN.md 记录的是**当前有效的设计**，不是决策历史；决策历史留在
 DECISION-LOG.md 中。两者保持单向关系：DECISION-LOG → DESIGN。
 

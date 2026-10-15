@@ -45,6 +45,10 @@ batch 0 不是优化项，是让"能迁就迁"成立的前提。
 | 5 | `merge_parts` | Manifold 布尔 | schema、渲染附件 | ✅ **已迁移（2026-10-08）** | worker 的 `merge_solids` op：各件以**路径**进，**合并后的 STL 由 Python 写出**（谁算谁交付），TS 侧只剩解析、provenance、渲染与存版。**parity**：三角数/体积/尺寸/壳数与 TS 完全一致；**两件并集与真实零件（1.44 MB）的 STL 逐字节相同**；三件带共面接触时仅**三角形顺序**不同（几何指纹与顶点集完全相同，已实测非我方代码所致——Python 侧 `(a+b)+c`、`a+(b+c)`、`batch_boolean` 三种写法字节都一样）。耗时 0.56×–1.2× |
 | 6 | `validate_assembly` | 干涉/间隙/包围盒/渲染编排 | schema、图片附件 | ✅ **已迁移（2026-10-08）** | 求解在 worker 的 `validate_assembly` op（parts 以**路径**进，报告原样回）；TS 侧只剩 schema、part 解析/位姿拼装、run 持久化与渲染。`validateAssemblyInTs` 保留为 parity oracle。**8 个用例全字段一致**（含真实零件、rotate、matrix/pose 路径、干涉、too_tight、非实体拒绝）；耗时 0.54×–1.78×，真实零件对 274→177 ms（0.65×）与 274→407 ms（1.48×） |
 | 7 | `check_assembly` | 接口契约判定、距离查询 | schema + manifest/store 读取 + 端点解析 + 跑数时效 | **P**（2026-10-12 已迁，op `assembly_contracts`） | 纯领域规则 |
+> **2026-10-11 工具表面按功能合并（25→22）**：`measure_extent` + `check_connectivity` → `measure_part`；
+> `measure_closest` + `measure_distance` → `measure_gap`。**下表的 worker op 一个都没变**——
+> 迁移行的结论仍然成立，只是承载它的工具名并了。读表时把旧名映射到新工具即可。
+
 | 8 | `check_connectivity` | 连通分量/壳数 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `connectivity` op：**按共享边**判连通（只共顶点算两块）、体序为 XY 包围盒面积降序（平局按首个三角形）。耗时 **0.68×/0.74×/0.76×**（Python 更快：92→62、72→53、6→5 ms）。**关键保真点**：水密用 TS 的严格判据（每条有向边恰好一次且反向边存在），**没有**换成 trimesh 更宽松的 `is_watertight`——反证用例：把一个立方体某个三角面绕向翻转，严格判据说"不水密"，trimesh 自己会说"水密" |
 | 9 | `check_printability` | 壁厚（沿内法线的光线投射）、悬垂面积 | schema | ✅ **已迁移（2026-10-08）+ 修掉两个被暴露的真缺陷** | 实现从 `tools.ts` 提到 `inspect.ts`，worker 出 `check_printability` op；悬垂面积纯算术（**逐位相同**），壁厚光线投射（实测 0.121 s/601 根，无②类负收益）。**缺陷 A**：`buildMeshBvh` 会**就地重排**索引，先建 BVH 再采样导致采样集随库的内部策略变化（真实件 647.6 vs 244.1 mm²）→ BVH 改用索引拷贝、采样固定解析序。**缺陷 B（安全相关）**：`MeshBVH.raycast` 返回的是**遍历序**不是距离序，原写法"第一个 >0.075 的命中"取到**远壁** → 真实件最小壁厚报 0.2mm（真值 0.026mm）、薄壁 15 个（真值 34 个，暴力法确认）→ 两侧改为取最近命中。修完壁厚 Δ 0.0000 mm、薄壁 34 vs 34；`accept-p3`/`accept-tool-scope`/新 parity 全过 |
 | 10 | `measure_part` | 体积/质心/惯性/包围盒 | schema | ✅ **已迁移（2026-10-08）** | worker 的 `measure_part` op：焊接（同 TS 的 1e-5 key 与首现顺序）→ Manifold（体积/亏格，构造即有效性闸门）→ 三角面叉积面积 → 有符号四面体和质心 → 包围盒/水密/三角数；TS 侧只剩读文件（**按路径**，不复制字节）与版本号拼装。**`-0` 归一化照搬**（否则对称件曾全军覆没）。**parity 逐位相同**：立方体 8000 mm³、通孔板亏格 1、双壳件亏格 -1、球（`-0` 陷阱）、真实件 整机.stl 710012.998 mm³/28830 面/亏格 -2；坏网格两侧都失败 |
@@ -166,7 +170,7 @@ Python 侧 0.36），**换边必须重跑物理基线**（TS 侧现有 17/17 + 2
 | `simulate_physics` | `simulate_physics` | parity + **`accept-p2`/`accept-p3`/`accept-sim-verdict` 在 Python 侧全过、未改阈值** |
 | `simulate_motion` | `simulate_motion` | parity（干涉计数逐位相同）+ **`accept-m36` 17/17 在 Python 侧通过** |
 | `measure_part` | `measure_part` | 5 件逐字段一致（含真实件 710012.998 mm³/亏格 -2） |
-| `check_printability` | `check_printability` | 悬垂面积逐位一致；**修掉两个真缺陷**（BVH 就地重排索引、raycast 遍历序当距离序） |
+| `check_printability` | `check_printability` | 悬垂面积逐位一致；**修掉五个真缺陷**（BVH 就地重排索引、raycast 遍历序当距离序、悬垂面积按 1/step 采样求和却未补步长（真件 200 vs 2022mm²）、任意命中当"对面壁"（0.012mm² 的共面退化面报出假 0.17mm）、射线引擎缺失被逐条 `except` 吞掉而对任何零件都报"干净" → 新增 `wallMeasured`，未测到壁厚**永不返回 `ok`**）。**第五个的修法又踩回第一个**：`MeshBVH` 重排索引后 `faceIndex` 不再对应 `mesh.triVerts`，"只认对面壁"于是把每面真壁判成共面片（TS 薄壁计数 33→0，parity 11 项失败）→ 改为对着 `bvh.geometry` 解、并把命中循环移出 `try{}catch{}`（异常被那个 `catch` 吞掉，又是一次"静默没测到"）。修后 `accept-printability-parity` **45/45**、`accept-p3` 退出 0 |
 | `check_assembly` | `assembly_contracts` | **parity**：2 个夹具 + 2 个语料（microscope2 cad-data / microscope5）+ 1 个 17 接口合成 manifest（覆盖五算子、五条 motion 证据结局、未实现 L1、未知 L0、未解析端点、未声明邻接、stock 跳过）逐字段一致；`accept-assembly.mjs` 既有断言在 worker 路径上全过。`axisLineDistance` 保留为 oracle，`coaxial` 与 `measure_angle` 现在消费同一份 `_axis_line_metrics`。**迁移中抓到一处契约变化**：报告里的 `a`/`b` 是**地址字符串**（预迁移行为），把解析后的特征对象塞进去会被 parity 抓到 |
 
 **生于 Python（2026-10-12 测量能力批次，无迁移、无 TS oracle）：**
@@ -207,3 +211,15 @@ three.js 数学 Python 够不着，所以按 §0 的 ① 类留在 TS；判据�
 **性能仍需关注的一项**：`simulate_fluid` 实测 **5–7×** 慢于 TS（超出用户批准的 2.5–4×），
 瓶颈是内核内存流量；原生 Rust/C 内核实测比 TS **快 3.7–4.6×** ⇒ 已是该工具的**实际必需项**，
 不再是"中后期再说"。
+
+> **2026-10-14 修正（numba 内核采纳，DECISION-LOG 同日）**：上一段的"必需项"结论已被
+> **numba 移植**以更小的改动面满足——同内核算法 JIT 化（`python/cad_worker/mpm_numba.py`，
+> 经 `worker._mpm_engine` 选择，`CAD_MPM_ENGINE` 可强制）。同机同管道场景实测
+> （`experiments/20261014_numba_mpm_probe.md`）：对 numpy 内核 **5.1–8.7×**、
+> **对 TS 内核 1.3–2.0×**（8.8k–524k 粒子四档全部快于 TS，含 worker IPC 的端到端计时
+> 在 `accept-mpm-parity` 里为 Python 30ms vs TS 36–50ms）；`accept-m4` 24 断言、
+> `accept-mpm-parity`（numba 与 numpy 两路径）、`accept-fluid-sign` 16/16 全过
+> （其到达率跨度阈值 0.15→0.20，依据见该脚本注释与 DECISION-LOG）。
+> **原生 Rust/C 内核由"实际必需项"降回"可选优化"**（剩余瓶颈是串行 P2G，
+> 网格着色并行是下一步空间；锁平台缺口 musl/darwin-x64 由 numpy 内核回落）。
+> darwin-x64 物理走 TS 的裁决不变；MPM 的 darwin-x64 走 numpy 内核（同前）。

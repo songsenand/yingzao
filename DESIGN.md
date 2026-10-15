@@ -1,5 +1,11 @@
 # 零件设计 Harness 设计文档
 
+> **文件名**：本文件原名 `DESGIGN.md`（拼写错误），2026-10-13 更正为 `DESIGN.md`。
+> 历史记录——`execution_summaries/`、`experiments/`、`verification/`、
+> `examples/*/execution_summaries/`、以及 `docs/DECISION-LOG.md` 的**既有条目**——
+> 是按发生时的事实留档的，其中出现的 `DESGIGN.md` 一律指本文件，**不回改**。
+> 活文档与代码里的引用已全部更新。
+
 **版本**：v2.0
 **目标读者**：编码 Agent
 **场景**：开放的 CAD harness（2026-09-27 起，原为小团队内部工具）；定位与哲学见 HARNESS.md
@@ -390,9 +396,16 @@ interface PhysicsResult {
 
 **实作模块**：
 
+> **2026-10-14 内核引擎更新**：生产内核在 Python worker（2026-10-12 起 Python canonical），
+> 现为**双引擎**——`python/cad_worker/mpm_numba.py`（numba JIT：对 numpy 内核 5.1–8.7×、
+> 对 TS 1.3–2.0×，`experiments/20261014_numba_mpm_probe.md`）经 `worker._mpm_engine`
+> 自动选择（`CAD_MPM_ENGINE` 可强制；musl/darwin-x64 无 wheel 自动回落 numpy 内核），
+> 下表的 `mpm.ts` 保留为 TS oracle + darwin-x64 fallback 角色。两引擎共用同一套网格边界
+> 与驱动/审计规则实现（尾部逐行同构），算法不变。
+
 | 文件 | 职责 |
 |---|---|
-| `mpm.ts` | MLS-MPM 内核（P2G×2 + grid + G2P APIC，弱可压 EOS，cell 单位运行，restDensity 自动标定，NaN 三重加固） |
+| `mpm.ts` | MLS-MPM 内核（P2G×2 + grid + G2P APIC，弱可压 EOS，cell 单位运行，restDensity 自动标定，NaN 三重加固）——TS oracle；生产引擎见上注 |
 | `sdf.ts` | STL → 水密 → BVH 距离 + 三射线奇偶符号 → 逐格 SDF（solidMask/solidNormal/trilinear） |
 | `fluid.ts` | 场景组装：粒子初始化、入口驱动、出口 escape 守恒审计、分段平均速度、发散检测、`deriveFluidPreset` 自动推导 |
 | `fluid-render.ts` | 零依赖 PNG 点云渲染（`node:zlib` 手写 PNG，双视角 + 速度着色 + 壁面参照 + z-buffer） |
@@ -1362,7 +1375,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 特征识别 list_features | 网格面分割（平面/圆柱/孔）→ 特征级测量，模型零坐标引用 | 长期 |
 | 视觉指向 pixel-unproject | 渲染图像素 → 反投影射线 → 网格求交 → 3D 点；依赖渲染管线暴露相机参数 | 长期 |
 | 弹性本构扩展 | mpm.ts 加变形梯度 F + fixed-corotated/neo-Hookean（`material: 'fluid'\|'elastic'`），回答单体**定性**应力/变形；趋势非 FEA；**已降级（v2.13）**：软体默认归 rapier（Python 绑定有 `add_soft_body`），MPM 弹性仅"显式要求才做" | 长期（降级） |
-| 内核可插拔 / STEP | Replicad（TS+WASM+OCCT，留在 Node 栈）/ Build123d / FreeCAD headless；STEP 缺失是内核类别缺口（HARNESS.md §7.1）；**当前优先级低于装配与视觉表达**；v2.13 补充：`pythonocc-core` 实测不佳，将来按 FreeCAD headless → cadquery-ocp → Replicad 顺序评估 | 中期（后置） |
+| 内核可插拔 / STEP | Replicad（TS+WASM+OCCT，留在 Node 栈）/ Build123d / FreeCAD headless；**STEP 导入已建（v2.32，2026-10-15）**：cascadio（OpenCASCADE→GLB）+ ezdxf 进锁、worker `import_mesh` 内嵌转换（HARNESS.md §7.3）；本行**剩余范围** = STEP 导出与 B-rep 级精确 datum，评估顺序仍是 FreeCAD headless → cadquery-ocp → Replicad（v2.13：`pythonocc-core` 实测不佳） | 中期（范围收窄） |
 | 文档回填纪律 | v2.11 §10.11：改实现同轮回填设计章节或以 §13 记差异 | 已立规矩 |
 
 ## 13. 实施实录（决策档案）
@@ -1607,6 +1620,51 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 只给方向不给点时，两条线都锚在原点，`coplanar` / `lineDistanceMm` 描述的是这个锚点而
 不是零件——故输出带 `anchoredAtOrigin` 标志与相应警告，而不是给一个看着很确定的数。
 
+### 13.8d 通道瓶颈（`passage_bottleneck`，2026-10-13）：一条**指名**通路的瓶颈
+
+**回答什么**：一条通道（排粉/排液/刀具要走的那条路）最窄处有多宽。判据 = **横切截面的最大
+内切圆，沿通路取最小**（不是取平均——平均会把最窄处抹掉）。
+
+**为什么必须"指名"，三条依据（同一日三条决策，见 `docs/DECISION-LOG.md`）**：
+
+1. **先拓扑**：壳的**亏格**就是独立隧道条数（`欧拉数 = 2 − 2g`，整数运算，无 pitch、无分辨率
+   取舍）；壳数 = 有几个封闭内腔。**亏格 0 ⇒ 没有通路 ⇒ 不出数**；有封闭内腔转 S2-a 的
+   负体积判据（通道尺寸 0）。
+2. **必须锚定到一个开口**：同一张平面上可能有好几条通路，而一张平面只能给一个**可证**的数
+   （取各分量的**最大**，否则"没有半径 r 的球能停在这张平面上"不成立），于是宽通路必然**盖住**
+   窄的——实测 Ø6 与 Ø1 两条平行贯通孔，全零件盲扫读 **2.996**，而最窄那条是 **0.500**。
+   所以输入是**一个开口**（`fromMm` + `fromAxis`），锚点直接取 `list_features` 报出的孔
+   （`centerMm` + `axisMm`）。这与 2026-10-11 的"孔即开口即通道"是同一条线。
+3. **只在横切上出数**：空隙截面必须是材料里的**内孔**。切出零件之外的尖角薄片、或顺着通路走
+   的刀，读数不支撑任何结论（实测：不加这一条，30° 斜孔的近两端切片被读成 0.178mm，真值 4.000）。
+
+**输入 / 输出**：`{path, fromMm, fromAxis, budget}` →
+`{topology, reachable, throughAlongAxis, bottleneckRadiusMm, tightestAtMm, endConditions,
+sectionsAccepted, cuts, sampledSpanMm, micToleranceMm, disclosure}`。
+**拒绝时给 `refused` + 原因，绝不给数字**，并说清是哪一种：亏格 0（没有通路）／锚点归不上任何
+通路（不是开口）／走查在**材料内部**断掉（死胡同 = 盲特征，或通路拐过了跳跃上限）。
+
+**未接工具（有意）**：本 op 进 worker 的 op 表（**第 31 个**），但**不注册工具**——规则层
+（`escapePassageMinMm`、`toolRadiusMm` 的非圆槽那一半）怎么消费它尚未定案，先让它在验收里活着。
+
+**锚点的要求（验收里踩出来的）**：开口必须是**平面面内部的闭环**。一条通到面边缘的槽
+（例如 1.5×40 的槽在 20mm 的块上）不是"开口"：`list_features` 报 0 个孔。另外锚点可以落在
+**内部台阶面**上——此时只有一侧有通路，另一侧是实心；**那不是死胡同**（判据只统计真正有截面的
+方向，见 `op_passage_bottleneck` 的 `endConditions`）。
+
+**已接线（2026-10-13）**：`escapePassageMinMm` 对**非圆 + 贯通**的开口调用本 op（锚点 =
+该开口的 `centerMm` + `axisMm`，`fromSizeMm = sqrt(areaMm2)`），只有
+`reachable && throughAlongAxis` 才出 witness，且与圆孔同一条余量规则（噪声带 =
+`max(micToleranceMm, 0.01)`）。此前非圆通道是**静默缺席**：孔表按"有没有直径"过滤，
+而非圆孔按设计没有直径（实测 microscope4 v031：53 个孔里 32 个非圆，一个都没进规则）。
+
+**已知边界（必须随结果披露，不许静默）**：① 走查步长可能跨过一段很短的颈——采样问题，
+故输出必带 `sectionsAccepted`/`coveredMm`，"没找到更窄处"必须说清查得够不够全；
+② **宽开口给粗步长**：步长按开口尺度取，7000mm² 的腔口得 13.9mm，一步跨过 4mm 深的腔
+（实测 h6 因此拒绝出数）；要覆盖它得由调用方传更小的 `fromSizeMm`，或让 op 按第一刀截面自标定；
+③ 锚点只认**平面面上的闭环开口**：曲面上的开口（`list_features` 报不出）、一个开口通向两条路、
+多条隧道无法配对，一律**未判定**而不是猜；④ "未排除"≠"能排出"——工具只能证明"太窄"。
+
 ### 13.9 教训
 
 1. **性能判断先基准后结论**：「express 预览档」方案没测就提，实际瓶颈是 xvfb-run 启动税，方案完全跑偏
@@ -1617,7 +1675,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 ### 13.10 图片上下文修枝（实施实录，v2.13p）
 
-> **来源**：「还有一个问题，是我们之前在 DESGIGN.md 中讨论过的，对图片类的上下文要进行修枝，太挤占上下文了，现在我们需要实现他了」——指的是 §12.3「图片修剪扩展」：*方案：旧轮图片换文本占位；触发线：单任务轮次 ≥4*。
+> **来源**：「还有一个问题，是我们之前在 DESIGN.md 中讨论过的，对图片类的上下文要进行修枝，太挤占上下文了，现在我们需要实现他了」——指的是 §12.3「图片修剪扩展」：*方案：旧轮图片换文本占位；触发线：单任务轮次 ≥4*。
 
 **先把问题量化**（用本仓自己的遥测 `data/usage/usage.jsonl`，1094 次会话请求）：
 
@@ -2772,3 +2830,122 @@ wheel（`cp313-*-manylinux_2_27_x86_64`、`py3-none-any`、`cp39-abi3`），**�
 node dsh-cad-harness/scripts/accept-python.mjs          # 全量：锁 / 解包器 / 真实供给 / 执行 / 开关
 node dsh-cad-harness/scripts/accept-python.mjs --quick  # 跳过网络段
 ```
+
+## 27. 工艺档案与判定层：阈值是带出处的声明，判定只做否决（v2.31，2026-10-11）
+
+**一句话**：制造可行性不再由工具里写死的阈值判定，而由**声明出来的工艺档案**判定；工具对每个档案
+只能给 `excluded`（带反例）或 `not-excluded`，**永不排序、永不推荐**，并且**未排除不等于能做出**。
+决策与依据见 `docs/DECISION-LOG.md` 2026-10-11 各条；实验数据见
+`experiments/20261011_void_reachability_and_draft_cone.md`。
+
+### 27.1 问题：一个没有作者的阈值会塑造设计
+
+起因是 `examples/multirotor-propeller/`：叶片后缘被**加厚**，只为了满足工具里写死的
+`wallMinMm = 1.2`。那条阈值来自 FDM/PLA 的一个具体机器与喷嘴，**却对一个手板件、一件 SLS 件、
+一件注塑件施加了同样的约束**，而且没有人能指出它是谁定的、依据什么。一个查不到作者的阈值
+**无法被质疑**，于是它静静地决定了零件形状。
+
+### 27.2 档案是契约
+
+`dsh-cad-harness/schemas/process-profile.schema.json`：一份档案声明工艺（`FDM | SLA | SLS | MJF |
+injection | CNC-3axis/4axis/5axis | casting`）、材料，以及**每条规则**的四件事——
+`applies`（这条规则管不管这个工艺，不管要写原因）、`decidable`（工具能不能从网格判定）、
+`value`、`source`（出处：`measured > vendor-spec > standard > literature > rule-of-thumb > assumed`）。
+工具用 `profileIds: ["fdm-pla-0.4"]` 或 `profilesJson` 接收；**非法档案当场拒绝并点名出错规则**
+（不修补、不部分应用）。
+
+**没声明档案时不静默套默认**：使用内建兜底档（其每个数都是 `assumed`），在 `profileSource` 与
+findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —— `ok` 会声称"通过了调用者
+从未指名的工艺"。**声明档案才是拿到通过的方式**；档案 id + 内容 hash 随判定返回。
+
+### 27.3 四条不可协商（都在代码里执行，不是承诺）
+
+1. **两值判定**：`excluded`（带反例：规则 + 位置 + 测量值 vs 要求值）或 `not-excluded`。
+   **`not-excluded` 的含义是"没有找到几何反例"，不是"能做出来"。**
+2. **永不推荐**：无排序、无打分、无 `recommended` 字段；schema 层面就拒绝这类字段。
+   成本、良率、交期、可达公差不是几何事实。
+3. **不适用要说出来**：粉末床与机加工没有悬垂约束、只有注塑有拔模。把 SLS 件的悬垂报成
+   "需要支撑"不是保守，是**错的**。每条规则带 `applies` + 原因，报告列出。
+4. **缺项不是"无约束"**：未声明的规则进 `unevaluable`；工具判不了的能力项（公差、表面粗糙度）
+   同样进 `unevaluable`。
+
+### 27.4 余量纪律
+
+阈值类判定**必须报告余量**，不给裸标志。三条带，带宽来自**测量自身的分辨率**（不引入自编工艺常数）：
+
+| 带 | 条件 | 判定 |
+| --- | --- | --- |
+| 1 | `测量值 < 要求 − 分辨率` | **排除**（反例） |
+| 2 | `\|测量值 − 要求\| ≤ 分辨率` | **未排除 + 记为困难**（含两个数字） |
+| 3 | `测量值 > 要求 + 分辨率` | 不报 |
+
+分辨率按规则取：壁厚取抽样步长、圆孔取**圆度拟合残差**、拔模取**法线分桶宽度**。理由：在
+±1 分辨率内**测量本身没有资格**断言"放得下"或"放不下"，记困难是唯一诚实的说法；排除只在
+缺口超出噪声时才下（与"证明用于否决、估计用于放行"一致）。
+
+### 27.5 已实现的规则，以及每条**能证明什么**
+
+| 规则 | 可判部分 | 不可判部分（明说） |
+| --- | --- | --- |
+| `wallMinMm` / `overhangDeg` | 壁厚（抽样射线，`wallMeasured` 门禁：未测到永不返回 ok）；悬垂面积（全三角形精确） | 抽样漏掉的细特征 |
+| `escapePassageMinMm` | **封闭内腔**（壳的带符号体积为负 ⇒ 通道尺寸 0，精确）；**圆孔且贯通**的通道（直径精确） | 盲特征（是否积住不是几何事实）、非圆截面通道 |
+| `draftMinDeg` | **可行抽芯方向锥为空**（盖交的完备判定：2k 盖心 + O(k²) 边界圆交点） | 锥非空时的采样锥宽是估计（判定用枚举，报告用采样） |
+| `toolRadiusMm` / `holeAspectMax` | 圆孔的直径与深径比（精确） | 非圆槽/窄凹腔（需体素可达性，未接线） |
+
+**"先问哪一侧可证"**：壁厚/窄槽类**否决**可证；通道类若按路径判定则**放行**可证、否决不可证；
+拔模的空锥可证。判断哪一侧便宜，就决定了工具能诚实主张什么（DECISION-LOG 同日条目）。
+
+### 27.6 代码落点与验收
+
+- 契约与判定推导：`src/host/process-profile.ts`（验证 / 内容 hash / `notApplicable`+`unevaluable`
+  推导 / 内建兜底档）；schema 与示例：`schemas/process-profile.schema.json`、`schemas/examples/`。
+- 工具接线：`src/host/tools.ts` 的 `check_printability`（`profileIds`/`profilesJson`、
+  `profileSource`、`profiles[]` 两值判定、反例与披露）。
+- 几何引擎：`python/cad_worker/worker.py` 的 `op_check_printability`（含 `draft` 块）、
+  `op_connectivity`（`voids`）、`op_void_reach`（**已实现未接线**）。
+- 验收：`accept-process-profiles` 27/27、`accept-p3` 89/89、`accept-printability-parity` 45/45、
+  `accept-connectivity` 12/12 与 `accept-connectivity-parity` 21/21。
+- 文档：`skills/cad-manufacturing/SKILL.md` 写清档案契约、四种规则与**如何撰写档案**
+  （出处的信任阶梯、草稿是有名字的假设、用即验证、阶梯试件标定、每个反例都要解释）。
+
+## 28. CAD 导入扩到 STEP/DXF：trimesh + cascadio + ezdxf（v2.32，2026-10-15）
+
+> 用户拍板（对比 cadaclysm / ezdxf / trimesh 组合后指示"实现到我们的插件中去"）。
+> 决策与依赖论证：`docs/DECISION-LOG.md` 2026-10-15；探针：
+> `experiments/20261015_cad_import_probe.md`。本节只记**当前有效的设计**。
+
+### 28.1 格式矩阵（当前有效）
+
+| 格式 | 读取链路 | 单位政策 | 验收 |
+|---|---|---|---|
+| `.stl`（二进制/ASCII） | 原路不变：worker `_parse_stl_raw` → weld | 调用方声明（mm/cm/m/inch ×scale） | `accept-import.mjs` |
+| `.step/.stp` | `cascadio.step_to_glb`（OpenCASCADE）→ trimesh 载 GLB → 三角形汤 | **文件自带**；GLB 中间格式声明米 → worker ×1000 落 mm；`unit` 参数仅接受 mm/缺省（违反拒收），`scale` 照常叠加 | `accept-import-cad.mjs` 1–3 |
+| `.dxf` | ezdxf（recover 模式）：3D 网格实体原样；否则 2D 闭环轮廓 → manifold3d `CrossSection`(EvenOdd) `extrude(depthMm)` | `$INSUNITS` 优先（{1,2,3,4,5,6,7} 有映射）；无/未知 → 按调用方单位并告警；`depthMm` 以 mm 计 | `accept-import-cad.mjs` 4–7 |
+| `.iges/.igs/.brep` | **无读取器**：cascadio 0.1.1 对 IGES 静默失败（不写输出，探针实测） | — | 边界消息 `accept-import.mjs` 9a |
+
+三条新链路全部汇入既有尾流：**weld（1e-5 量化）→ scale 一次 → Manifold 判定 → 写
+`model.stl`**。版本库与下游 11 个工具零改动——这是"导入=一个版本"原则（§7.3）的延续。
+
+### 28.2 关键事实（都有数字）
+
+- colored.step（FreeCAD 导出）→ 242.2 mm³、genus 0、43ms；multibody.step →
+  **10 体 / 263544.1 mm³ / genus 12**；全部 Manifold NoError。
+- `tol_linear` 公差扫描：默认 ≈0.01 → 3074 三角形；0.002 → 12254；体积收敛差
+  <0.3%。`tolLinear/tolAngular` 经 `import_mesh` 参数透传。
+- DXF 40×40 方 + r6 孔 + `depthMm=10` → 14870.5 mm³（理论 14869.3）、genus 1、6ms；
+  `$INSUNITS=1`（英寸）文件读出 ×25.4 换算系数。
+- **cascadio 对读不了的文件不抛异常**（IGES：stderr 一行 OCCT 错误、无输出文件）→
+  worker 以"输出不存在"判失败，TS 层保留 IGES 边界消息。
+
+### 28.3 代码落点
+
+- `python/cad_worker/worker.py`：`_load_step_soup` / `_load_dxf_soup` /
+  `_DXF_INSUNITS_TO_MM`；`op_import_mesh` 按扩展名分派；`op_versions` 增
+  cascadio/ezdxf。`EZDXF_CONFIG_DIR` 指向 scratch（容器无 `~/.cache` 消音）。
+- `src/host/import.ts`：`SUPPORTED_EXTENSIONS = [.stl, .step, .stp, .dxf]`；
+  STEP 的 unit 拒收逻辑；`depthMm` 通道；worker warnings 并入。
+- `src/host/tools.ts`：`import_part` 增 `depthMm` 参数；描述与 output.format 枚举。
+- 锁：`cascadio==0.1.1`（**钉版**——上游会删 PyPI 旧版；exclude musl）+
+  `ezdxf==1.4.4`（传递依赖全部已在锁内）。
+- 验收样本：`scripts/fixtures/cad-import/`（来源与基线见其 README）。
+

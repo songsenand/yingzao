@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-14",
+  "node": "v26.11.1",
+  "ladder": [
+    {
+      "latticeSpacingCells": 1,
+      "particles": 8820,
+      "timedStepsPerBlock": 50,
+      "restDensity": 0,
+      "tsKernel": {
+        "msPerStepBlocks": [
+          4.548,
+          4.157,
+          4.168
+        ],
+        "msPerStepBest": 4.157,
+        "msPerStepMedian": 4.168
+      }
+    },
+    {
+      "latticeSpacingCells": 0.5,
+      "particles": 65559,
+      "timedStepsPerBlock": 50,
+      "restDensity": 0,
+      "tsKernel": {
+        "msPerStepBlocks": [
+          29.857,
+          29.184,
+          29.551
+        ],
+        "msPerStepBest": 29.184,
+        "msPerStepMedian": 29.551
+      }
+    },
+    {
+      "latticeSpacingCells": 0.28,
+      "particles": 383320,
+      "timedStepsPerBlock": 25,
+      "restDensity": 0,
+      "tsKernel": {
+        "msPerStepBlocks": [
+          166.712,
+          165.629,
+          164.715
+        ],
+        "msPerStepBest": 164.715,
+        "msPerStepMedian": 165.629
+      }
+    },
+    {
+      "latticeSpacingCells": 0.25,
+      "particles": 524472,
+      "timedStepsPerBlock": 25,
+      "restDensity": 0,
+      "tsKernel": {
+        "msPerStepBlocks": [
+          225.729,
+          227.746,
+          224.091
+        ],
+        "msPerStepBest": 224.091,
+        "msPerStepMedian": 225.729
+      }
+    }
+  ]
+}

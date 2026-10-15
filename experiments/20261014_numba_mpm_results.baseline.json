@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-14",
+  "machine": {
+    "cpus": 16,
+    "python": "3.13.16"
+  },
+  "numba": null,
+  "numpy": "2.5.3",
+  "scene": {
+    "cells": [
+      100,
+      24,
+      24
+    ],
+    "dt": 0.004,
+    "vmax": 60,
+    "inlet": {
+      "axis": 0,
+      "band": [
+        2,
+        5
+      ],
+      "speed": 25
+    },
+    "recycle": {
+      "axis": 0,
+      "at": 98,
+      "respawn": 3
+    },
+    "note": "pipe along +x, no solids; identical scene for all engines"
+  },
+  "ladder": [
+    {
+      "latticeSpacingCells": 1.0,
+      "particles": 8820,
+      "timedStepsPerBlock": 50,
+      "restDensity": 0.995071965993029,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          18.876,
+          18.429,
+          21.184
+        ],
+        "msPerStepBest": 18.429,
+        "msPerStepMedian": 18.876
+      }
+    },
+    {
+      "latticeSpacingCells": 0.5,
+      "particles": 65559,
+      "timedStepsPerBlock": 50,
+      "restDensity": 7.96499247463072,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          108.323,
+          106.044,
+          102.575
+        ],
+        "msPerStepBest": 102.575,
+        "msPerStepMedian": 106.044
+      }
+    },
+    {
+      "latticeSpacingCells": 0.28,
+      "particles": 383320,
+      "timedStepsPerBlock": 25,
+      "restDensity": 45.347716523239576,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          779.587,
+          730.027,
+          766.671
+        ],
+        "msPerStepBest": 730.027,
+        "msPerStepMedian": 766.671
+      }
+    },
+    {
+      "latticeSpacingCells": 0.25,
+      "particles": 524472,
+      "timedStepsPerBlock": 25,
+      "restDensity": 63.780703226533554,
+      "numpyKernel": {
+        "msPerStepBlocks": [
+          1032.332,
+          1121.991,
+          1082.408
+        ],
+        "msPerStepBest": 1032.332,
+        "msPerStepMedian": 1082.408
+      }
+    }
+  ]
+}
