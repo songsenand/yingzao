@@ -1,0 +1,499 @@
+{
+  "checkedAt": "2026-10-11T00:14:36.795Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/assembly/audit-manifest.json",
+  "manifestName": "Ø144 三叶多旋翼螺旋桨 · 双工位电机接口验证台",
+  "results": [
+    {
+      "interfaceId": "A-1",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.桨毂底面",
+      "b": "motor-A.钟壳顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.1,
+        "max": 0.1
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "A-2",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.中心轴孔",
+      "b": "motor-A.电机轴",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø5.2 vs shaft Ø5)"
+    },
+    {
+      "interfaceId": "A-3",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.中心轴孔轴",
+      "b": "motor-A.电机轴轴",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.15,
+        "max": 0.15
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "A-4",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.叶根最低点",
+      "b": "motor-A.钟壳顶面-叶根A",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.4,
+        "max": 2
+      },
+      "measured": 0.955,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r001 (干涉 0 次)"
+    },
+    {
+      "interfaceId": "A-5",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.螺母座孔",
+      "b": "nut-A.垫圈外缘",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.5,
+        "max": 3
+      },
+      "measured": 1.5,
+      "detail": "diametral clearance Ø1.5 (hole Ø11.5 vs shaft Ø10)"
+    },
+    {
+      "interfaceId": "A-6",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.螺母座面",
+      "b": "nut-A.垫圈底面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.1,
+        "max": 0.1
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "A-7",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.螺母座面",
+      "b": "motor-A.轴端",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 5,
+        "max": 9
+      },
+      "measured": 6,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "A-8",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.叶根前缘点",
+      "b": "nut-A.垫圈外缘A",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 3,
+        "max": 12
+      },
+      "measured": 7.7595,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r001 (干涉 0 次)"
+    },
+    {
+      "interfaceId": "A-9",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.M2孔1",
+      "b": "motor-A.M2孔1",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "A-10",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.M2孔2",
+      "b": "motor-A.M2孔2",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "A-11",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-ccw.M2孔3",
+      "b": "motor-A.M2孔3",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "A-12",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "nut-A.螺母内孔",
+      "b": "motor-A.电机轴",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø5.2 vs shaft Ø5)"
+    },
+    {
+      "interfaceId": "B-1",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.桨毂底面",
+      "b": "motor-B.钟壳顶面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.1,
+        "max": 0.1
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "B-2",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.中心轴孔",
+      "b": "motor-B.电机轴",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø5.2 vs shaft Ø5)"
+    },
+    {
+      "interfaceId": "B-3",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.中心轴孔轴",
+      "b": "motor-B.电机轴轴",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.15,
+        "max": 0.15
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "B-4",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.叶根最低点",
+      "b": "motor-B.钟壳顶面-叶根B",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 0.4,
+        "max": 2
+      },
+      "measured": 0.955,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r003 (干涉 0 次)"
+    },
+    {
+      "interfaceId": "B-5",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.螺母座孔",
+      "b": "nut-B.垫圈外缘",
+      "type": "紧固",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.5,
+        "max": 3
+      },
+      "measured": 1.5,
+      "detail": "diametral clearance Ø1.5 (hole Ø11.5 vs shaft Ø10)"
+    },
+    {
+      "interfaceId": "B-6",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.螺母座面",
+      "b": "nut-B.垫圈底面",
+      "type": "贴合",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.1,
+        "max": 0.1
+      },
+      "measured": 0,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "B-7",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.螺母座面",
+      "b": "motor-B.轴端",
+      "type": "间隙",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "distance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 5,
+        "max": 9
+      },
+      "measured": 6,
+      "detail": "point-to-point distance between declared datums"
+    },
+    {
+      "interfaceId": "B-8",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.叶根前缘点",
+      "b": "nut-B.垫圈外缘B",
+      "type": "转动副",
+      "severity": "hard",
+      "layer": "L0",
+      "check": "motion-clearance",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": 3,
+        "max": 12
+      },
+      "measured": 7.7595,
+      "detail": "point-to-point distance between declared datums — motion evidenced by r003 (干涉 0 次)"
+    },
+    {
+      "interfaceId": "B-9",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.M2孔1",
+      "b": "motor-B.M2孔1",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "B-10",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.M2孔2",
+      "b": "motor-B.M2孔2",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "B-11",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "prop-cw.M2孔3",
+      "b": "motor-B.M2孔3",
+      "type": "紧固",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "coaxial",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "距离",
+        "min": -0.3,
+        "max": 0.3
+      },
+      "measured": 0,
+      "detail": "axis offset 0mm, axes 0.000° apart (line-to-line, infinite extents)"
+    },
+    {
+      "interfaceId": "B-12",
+      "ownerPath": [
+        "rig"
+      ],
+      "a": "nut-B.螺母内孔",
+      "b": "motor-B.电机轴",
+      "type": "间隙",
+      "severity": "intent",
+      "layer": "L0",
+      "check": "diameter-match",
+      "verdict": "pass",
+      "expected": {
+        "quantity": "直径",
+        "min": 0.05,
+        "max": 0.35
+      },
+      "measured": 0.2,
+      "detail": "diametral clearance Ø0.2 (hole Ø5.2 vs shaft Ø5)"
+    }
+  ],
+  "undeclared": [],
+  "partWarnings": [],
+  "adjacencyThresholdMm": 0.75,
+  "summary": {
+    "interfaces": 24,
+    "pass": 24,
+    "hardViolations": 0,
+    "intentFlags": 0,
+    "skipped": 0,
+    "undeclared": 0
+  },
+  "overallStatus": "pass"
+}

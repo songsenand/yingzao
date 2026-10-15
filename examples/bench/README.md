@@ -181,6 +181,17 @@ cd dsh-cad-harness && node esbuild.mjs && cd ..
 node examples/bench/graders/00-smoke/bench-smoke.mjs
 ```
 
+> **在隔离 `DSH_HOME` 下跑（沙箱、CI、或本手册 §12 的 headless 通道）**：校准脚本
+> 会把 `DSH_HOME` 指到空临时目录，此时捆绑 Python 运行时被视为未备（state: absent），
+> 且 `prepareVenv` 即使在热路径上也要写 `<runtime>/state.json`——只读挂载会直接 EROFS。
+> 处置：把一份已 provision 的运行时（如 `~/.dsh/cad/runtime`，约 420MB）`cp -a` 到
+> **可写**位置，再以环境变量指过去（覆盖优先级最高，见 `python-runtime.ts` 的
+> `pythonRuntimeRoot()`）：
+>
+> ```bash
+> DSH_CAD_PYTHON_ROOT=/path/to/runtime-copy node examples/bench/graders/00-smoke/bench-smoke.mjs
+> ```
+
 **它全绿之前，跑出来的任何评测分数都不作数。** 理由：一次失败的评测无法区分
 "插件退化了"与"模型变笨了"，两者都表现为"分数掉了"，处置却相反。
 

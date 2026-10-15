@@ -7,8 +7,8 @@
   "lanes": [
     "generate_part 编译与渲染",
     "datum 声明与 set_datums",
-    "measure_part / measure_distance / measure_closest",
-    "check_connectivity / check_printability",
+    "measure_part / measure_gap（点对与实体对）",
+    "measure_part bodies 半区 / check_printability",
     "validate_assembly / check_assembly 五算子",
     "simulate_motion / simulate_physics / simulate_fluid",
     "merge_parts / delivery_audit",
@@ -147,16 +147,16 @@
     },
     {
       "id": "c-measure-close",
-      "desc": "measure_closest 不解坐标也能找出最近点对",
-      "via": "measure_closest",
+      "desc": "measure_gap 实体对模式不解坐标也能找出最近点对（2026-10-11 吸收 measure_closest）",
+      "via": "measure_gap",
       "expect": "返回点对与间距，间距与两板实际间隙一致",
       "weight": 1,
       "inSkill": false
     },
     {
       "id": "c-connectivity",
-      "desc": "单实体件报 single-body；故意做多实体件必须报 multi-body",
-      "via": "check_connectivity",
+      "desc": "单实体件报 single-body；故意做多实体件必须报 multi-body（2026-10-11 起 via measure_part 的 bodies 半区）",
+      "via": "measure_part",
       "expect": "正例 single-body；反例 multi-body 且列出各体位置",
       "weight": 1,
       "inSkill": false

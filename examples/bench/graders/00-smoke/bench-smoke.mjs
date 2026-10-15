@@ -234,35 +234,35 @@ rubricRow('check', 'c-measure-part',
   vecNear(mp.sizeMm, [100, 60, 8], 0.01) && volumeErr < 0.01,
   `size=${fmt(mp.sizeMm)} volume 偏差 ${(volumeErr * 100).toFixed(3)}%`);
 
-// ---- 5. measure_distance 孔壁 → 板边 ----
-const md = (await call('measure_distance', {
+// ---- 5. measure_gap 点对（孔壁 → 板边；2026-10-11 起 measure_distance 并入 measure_gap）----
+const md = (await call('measure_gap', {
   versionId: vPlate.versionId, aPoint: [41, 30, 4], bPoint: [100, 30, 4],
 })).value;
-step(5, 'measure_distance 孔壁 → 板边',
+step(5, 'measure_gap 点对（孔壁 → 板边）',
   `distance=${md.distanceMm}mm（解析 59） aSnap=${md.aSnapDistanceMm?.toFixed?.(3)} bSnap=${md.bSnapDistanceMm?.toFixed?.(3)}`);
 step('5b', '步骤 5 附带断言（非判据）', `|${md.distanceMm} − 59| = ${Math.abs(md.distanceMm - 59).toFixed(4)}mm`);
 
-// ---- 6. measure_closest 两块板 ----
+// ---- 6. measure_gap 两块板（实心/实心求解模式，旧 measure_closest 并入）----
 const vFar = (await call('generate_part', {
   part: '冒烟板远端', userIntent: '离首板 5mm 的第二块板',
   scadCode: 'translate([105,0,0]) cube([100,60,8]);\ndatum("近端面", [105,30,4]);', views: ['iso'],
 })).value;
-const mc = (await call('measure_closest', { aVersionId: vPlate.versionId, bVersionId: vFar.versionId })).value;
-step(6, 'measure_closest 两块板', `distance=${mc.distanceMm}mm method=${mc.method} A=${fmt(mc.pointA)} B=${fmt(mc.pointB)}`);
+const mc = (await call('measure_gap', { aVersionId: vPlate.versionId, bVersionId: vFar.versionId })).value;
+step(6, 'measure_gap 两块板', `distance=${mc.distanceMm}mm method=${mc.method} A=${fmt(mc.pointA)} B=${fmt(mc.pointB)}`);
 rubricRow('check', 'c-measure-close', near(mc.distanceMm, 5, 0.01) && Array.isArray(mc.pointA) && Array.isArray(mc.pointB),
   `两板间隙实测 ${mc.distanceMm}mm（解析 5）`);
 
-// ---- 7. check_connectivity 正例 + 反例 ----
-const cc = (await call('check_connectivity', { versionId: vPlate.versionId })).value;
+// ---- 7. 连通性正例 + 反例（2026-10-11 起 check_connectivity 并入 measure_part 的 bodies 半区）----
+const cc = (await call('measure_part', { versionId: vPlate.versionId })).value;
 const vMulti = (await call('generate_part', {
   part: '冒烟多体', userIntent: '两个分离立方体（反例）',
   scadCode: 'cube([10,10,10]);\ntranslate([30,0,0]) cube([10,10,10]);', views: ['iso'],
 })).value;
-const ccBad = (await call('check_connectivity', { versionId: vMulti.versionId })).value;
-step(7, 'check_connectivity 正例/反例', `板=${cc.verdict}(${cc.bodies}) 多体件=${ccBad.verdict}(${ccBad.bodies})`);
+const ccBad = (await call('measure_part', { versionId: vMulti.versionId })).value;
+step(7, '连通性 正例/反例（measure_part·bodies）', `板=${cc.bodyVerdict}(${cc.bodies}) 多体件=${ccBad.bodyVerdict}(${ccBad.bodies})`);
 rubricRow('check', 'c-connectivity',
-  cc.verdict === 'single-body' && ccBad.verdict === 'multi-body' && ccBad.bodies === 2 && ccBad.bodyCenters?.length === 2,
-  `正例 ${cc.verdict}；反例 ${ccBad.verdict} bodies=${ccBad.bodies} centers=${JSON.stringify(ccBad.bodyCenters)}`);
+  cc.bodyVerdict === 'single-body' && ccBad.bodyVerdict === 'multi-body' && ccBad.bodies === 2 && ccBad.bodyCenters?.length === 2,
+  `正例 ${cc.bodyVerdict}；反例 ${ccBad.bodyVerdict} bodies=${ccBad.bodies} centers=${JSON.stringify(ccBad.bodyCenters)}`);
 
 // ---- 8. check_printability 8mm 厚板 ----
 const pr = (await call('check_printability', { versionId: vPlate.versionId })).value;

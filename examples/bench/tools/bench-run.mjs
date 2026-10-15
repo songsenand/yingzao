@@ -404,6 +404,6 @@ if (!args.dryRun) {
   const index = join(baseRoot, 'runs-index.json');
   await writeFile(index, JSON.stringify({ level, variant: variantName, model: args.model, repeat: args.repeat, records }, null, 2) + '\n', 'utf8');
   console.log(`\n索引 → ${index}`);
-  console.log('下一步：按 graders/<level>/rubric.json 打六列（bench-score.mjs 待实现）。');
+  console.log('下一步：node examples/bench/tools/bench-score.mjs --run <run-root>（机检六列，能自动判的会判，其余列 UNKNOWN）。');
   console.log(`档位：${records[0]?.tier}${names.length > 1 ? ` · 变体 ${variantName}` : ''}——分数不要与 GUI/造物模式档混算。`);
 }

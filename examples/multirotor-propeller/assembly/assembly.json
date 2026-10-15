@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "name": "Ø144 三叶多旋翼螺旋桨 · 双工位电机接口验证台",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "rig",
+    "name": "双工位验证台（A 工位装正桨、B 工位装反桨，共用同一电机接口）",
+    "kind": "assembly",
+    "children": [
+      {
+        "id": "motor-A",
+        "name": "电机接口检具（A 工位）",
+        "kind": "part",
+        "version": "v003",
+        "source": "generated",
+        "material": "—（示意检具，不打印）",
+        "stockRef": "典型 2205/2207 级无刷电机：Ø28 钟壳 + Ø5 轴（露出 11mm）+ 3×M2 螺纹孔 @ Ø16 分布圆"
+      },
+      {
+        "id": "prop-ccw",
+        "name": "多旋翼螺旋桨 正桨 Ø144×3叶",
+        "kind": "part",
+        "version": "v001",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 2
+      },
+      {
+        "id": "nut-A",
+        "name": "M5 锁紧螺母 + 垫圈（A）",
+        "kind": "part",
+        "version": "v004",
+        "source": "generated",
+        "material": "钢（外购）",
+        "transform": {
+          "translate": [
+            0,
+            0,
+            5
+          ]
+        }
+      },
+      {
+        "id": "motor-B",
+        "name": "电机接口检具（B 工位）",
+        "kind": "part",
+        "version": "v003",
+        "source": "generated",
+        "material": "—（示意检具，不打印）",
+        "transform": {
+          "translate": [
+            200,
+            0,
+            0
+          ]
+        },
+        "stockRef": "与 A 工位同一型号，仅位置不同"
+      },
+      {
+        "id": "prop-cw",
+        "name": "多旋翼螺旋桨 反桨 Ø144×3叶",
+        "kind": "part",
+        "version": "v002",
+        "source": "generated",
+        "material": "PLA",
+        "qty": 2,
+        "transform": {
+          "translate": [
+            200,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "nut-B",
+        "name": "M5 锁紧螺母 + 垫圈（B）",
+        "kind": "part",
+        "version": "v004",
+        "source": "generated",
+        "material": "钢（外购）",
+        "transform": {
+          "translate": [
+            200,
+            0,
+            5
+          ]
+        }
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "A-1",
+        "a": "prop-ccw.桨毂底面",
+        "b": "motor-A.钟壳顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "check": "distance",
+        "note": "桨毂底面整面坐在钟壳顶面上——这是摩擦传扭的承载面，也是桨盘高度的唯一基准"
+      },
+      {
+        "id": "A-2",
+        "a": "prop-ccw.中心轴孔",
+        "b": "motor-A.电机轴",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "隙 = 孔Ø5.2 − 轴Ø5.0；这是 FDM 的滑配件，单边 0.1mm，靠 M5 螺母压紧后靠端面摩擦传扭"
+      },
+      {
+        "id": "A-3",
+        "a": "prop-ccw.中心轴孔轴",
+        "b": "motor-A.电机轴轴",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.15,
+          "max": 0.15
+        },
+        "check": "coaxial",
+        "note": "孔轴与电机轴必须共线：两点距离查不出「孔歪了」，所以这里用 coaxial 量轴线间距并检查两轴平行。这一条管的是**对中**（装配要求），不声明旋转自由度——桨能不能转由 A-4 / A-8 两条 motion-clearance 接口引用 r001 证明"
+      },
+      {
+        "id": "A-4",
+        "a": "prop-ccw.叶根最低点",
+        "b": "motor-A.钟壳顶面-叶根A",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.955
+        },
+        "tolerance": {
+          "min": 0.4,
+          "max": 2.0
+        },
+        "check": "motion-clearance",
+        "params": {
+          "runId": "r001"
+        },
+        "note": "桨整转时叶根下缘从钟壳顶面上方扫过。两点都是**特征 datum**（不是零件间最小距离）：叶根后缘下棱 vs 其正下方的钟壳顶面。真值用 measure_part/顶点扫描复核为 1.00mm，此处取更保守的 0.955。运动一半由 r001 证明（2 转，干涉 0 次，关节漂移 0）"
+      },
+      {
+        "id": "A-5",
+        "a": "prop-ccw.螺母座孔",
+        "b": "nut-A.垫圈外缘",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 1.5
+        },
+        "tolerance": {
+          "min": 0.5,
+          "max": 3.0
+        },
+        "check": "diameter-match",
+        "note": "毂上 Ø11.5 沉台套 Ø10 垫圈：单边 0.75mm，整圈不变，所以桨转、垫圈不转也不会蹭"
+      },
+      {
+        "id": "A-6",
+        "a": "prop-ccw.螺母座面",
+        "b": "nut-A.垫圈底面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "check": "distance",
+        "note": "垫圈坐在沉台面上（世界 z=5）。螺母压的是垫圈，不是桨毂顶面——所以桨毂顶面可以低，夹持厚度才是 HUB_T−SEAT_T=5.0"
+      },
+      {
+        "id": "A-7",
+        "a": "prop-ccw.螺母座面",
+        "b": "motor-A.轴端",
+        "type": "间隙",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 6.0
+        },
+        "tolerance": {
+          "min": 5.0,
+          "max": 9.0
+        },
+        "check": "distance",
+        "note": "轴端必须高出沉台面 ≥5mm，才够 M5 尼龙螺母（高 5）完整咬合。这是买电机时要核的唯一尺寸：轴露出钟壳顶面 ≥10mm"
+      },
+      {
+        "id": "A-8",
+        "a": "prop-ccw.叶根前缘点",
+        "b": "nut-A.垫圈外缘A",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 7.76
+        },
+        "tolerance": {
+          "min": 3.0,
+          "max": 12.0
+        },
+        "check": "motion-clearance",
+        "params": {
+          "runId": "r001"
+        },
+        "note": "旋转的叶根前缘 vs 静止的垫圈外缘（同一方位角、同一高度上取的最近点对）。它证明'叶子不会扫到螺母'；桨与螺母之间真正最近的间隙是毂孔/垫圈那 0.75mm（见 A-5）"
+      },
+      {
+        "id": "A-9",
+        "a": "prop-ccw.M2孔1",
+        "b": "motor-A.M2孔1",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "Ø16 分布圆上的第 1 个 M2 防转孔（方位 60°）。电机的钟壳若没有对应螺纹孔，这条接口与 A-10/A-11 就不成立——桨仍然能用，只是只剩 M5 摩擦这一条传扭路径"
+      },
+      {
+        "id": "A-10",
+        "a": "prop-ccw.M2孔2",
+        "b": "motor-A.M2孔2",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "第 2 个 M2 孔（方位 180°）"
+      },
+      {
+        "id": "A-11",
+        "a": "prop-ccw.M2孔3",
+        "b": "motor-A.M2孔3",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "第 3 个 M2 孔（方位 300°）。三个孔位都落在两条叶片之间，M2 沉头不会碰到 M5 垫圈"
+      },
+      {
+        "id": "A-12",
+        "a": "nut-A.螺母内孔",
+        "b": "motor-A.电机轴",
+        "type": "间隙",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "螺母是示意件：内孔按 Ø5.2 建模（真实 M5 螺母内孔约 Ø4.5，靠螺纹咬合，本模型不表达螺纹）。取 ≥ 轴径是为了不制造人为干涉"
+      },
+      {
+        "id": "B-1",
+        "a": "prop-cw.桨毂底面",
+        "b": "motor-B.钟壳顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "check": "distance",
+        "note": "B 工位反桨：与 A-1 同义。反桨是正桨关于 XZ 平面的镜像，所以毂底、轴孔、M2 孔位全部与 A 工位逐点重合"
+      },
+      {
+        "id": "B-2",
+        "a": "prop-cw.中心轴孔",
+        "b": "motor-B.电机轴",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "与 A-2 同义"
+      },
+      {
+        "id": "B-3",
+        "a": "prop-cw.中心轴孔轴",
+        "b": "motor-B.电机轴轴",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.15,
+          "max": 0.15
+        },
+        "check": "coaxial",
+        "note": "与 A-3 同义：管对中，不管转动；B 工位的转动由 B-4 / B-8 引用 r003 证明"
+      },
+      {
+        "id": "B-4",
+        "a": "prop-cw.叶根最低点",
+        "b": "motor-B.钟壳顶面-叶根B",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.955
+        },
+        "tolerance": {
+          "min": 0.4,
+          "max": 2.0
+        },
+        "check": "motion-clearance",
+        "params": {
+          "runId": "r003"
+        },
+        "note": "反桨叶根下缘离钟壳顶面。镜像后叶根最低点跑到 +y 一侧，所以用 B 侧的顶面基准点。运动由 r003 证明（干涉 0 次，漂移 0）"
+      },
+      {
+        "id": "B-5",
+        "a": "prop-cw.螺母座孔",
+        "b": "nut-B.垫圈外缘",
+        "type": "紧固",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 1.5
+        },
+        "tolerance": {
+          "min": 0.5,
+          "max": 3.0
+        },
+        "check": "diameter-match",
+        "note": "与 A-5 同义"
+      },
+      {
+        "id": "B-6",
+        "a": "prop-cw.螺母座面",
+        "b": "nut-B.垫圈底面",
+        "type": "贴合",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "check": "distance",
+        "note": "与 A-6 同义"
+      },
+      {
+        "id": "B-7",
+        "a": "prop-cw.螺母座面",
+        "b": "motor-B.轴端",
+        "type": "间隙",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 6.0
+        },
+        "tolerance": {
+          "min": 5.0,
+          "max": 9.0
+        },
+        "check": "distance",
+        "note": "与 A-7 同义"
+      },
+      {
+        "id": "B-8",
+        "a": "prop-cw.叶根前缘点",
+        "b": "nut-B.垫圈外缘B",
+        "type": "转动副",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 7.76
+        },
+        "tolerance": {
+          "min": 3.0,
+          "max": 12.0
+        },
+        "check": "motion-clearance",
+        "params": {
+          "runId": "r003"
+        },
+        "note": "与 A-8 同义（镜像后取 B 侧垫圈外缘点）"
+      },
+      {
+        "id": "B-9",
+        "a": "prop-cw.M2孔1",
+        "b": "motor-B.M2孔1",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "反桨的 M2 孔位与正桨逐点相同（关于 XZ 平面镜像时方位角集合不变），所以正反桨能装同一个钟壳"
+      },
+      {
+        "id": "B-10",
+        "a": "prop-cw.M2孔2",
+        "b": "motor-B.M2孔2",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "与 B-9 同组"
+      },
+      {
+        "id": "B-11",
+        "a": "prop-cw.M2孔3",
+        "b": "motor-B.M2孔3",
+        "type": "紧固",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        },
+        "check": "coaxial",
+        "note": "与 B-9 同组"
+      },
+      {
+        "id": "B-12",
+        "a": "nut-B.螺母内孔",
+        "b": "motor-B.电机轴",
+        "type": "间隙",
+        "severity": "intent",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.2
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "check": "diameter-match",
+        "note": "与 A-12 同义"
+      }
+    ]
+  }
+}
