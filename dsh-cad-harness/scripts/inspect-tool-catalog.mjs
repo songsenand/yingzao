@@ -22,7 +22,7 @@ import zlib from 'node:zlib';
 /** Tools this plugin registers. Kept as a plain list: this script is a probe, not a consumer. */
 const CAD_TOOLS = new Set(['generate_part', 'create_part', 'validate_assembly', 'check_assembly',
   'simulate_physics', 'simulate_motion', 'simulate_fluid', 'render_part',
-  'measure_part', 'measure_distance', 'measure_closest']);
+  'measure_part', 'measure_gap']);
 
 const CHARS_PER_TOKEN = 4;      // dsh-token-meter:estimate.js
 const BLOCK_OVERHEAD = 4;       // ditto

@@ -78,7 +78,7 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // tool-scope.ts for the measurement and for the adoption cost).
   if (config?.toolScope === 'preset') applyPresetToolScope(ctx, cadTools, config);
 
-  // Image policy (DESGIGN §16–17): NO route-level budget is applied —
+  // Image policy (DESIGN §16–17): NO route-level budget is applied —
   // standard-mode sessions run on dsh factory defaults. The 造物 preset's
   // 24-image window is enforced per session by the preset-aware offload
   // executor, which also replaces the stock executor (cordis.patch.yml).

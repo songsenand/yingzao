@@ -1,4 +1,4 @@
-// Acceptance for delivery_audit (DESGIGN §23).
+// Acceptance for delivery_audit (DESIGN §23).
 //
 // The primary case is the REAL microscope5 corpus: every finding below was
 // measured independently (runs/versions analysis) before the tool existed, so

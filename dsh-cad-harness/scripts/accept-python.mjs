@@ -74,7 +74,18 @@ check(
 );
 const requirementLines = REQUIREMENTS_LOCK.split('\n').filter((line) => line && !line.startsWith('#') && !line.startsWith(' '));
 const pinned = requirementLines.filter((line) => /^[a-z0-9_.-]+==[0-9]/.test(line));
-check(pinned.length === 8, 'eight dependencies are pinned with ==', `${pinned.length} found`);
+// The pinned set is asserted BY NAME, not by count. A count cannot tell a forgotten pin
+// from a new dependency, and it goes stale the moment one is added — which it did:
+// `shapely` arrived with the polygonisation work and this line still said "eight".
+const EXPECTED_PINNED = [
+  'numpy', 'scipy', 'trimesh', 'manifold3d', 'networkx', 'scikit-fem', 'rtree', 'rapier3d', 'shapely',
+];
+const pinnedNames = pinned.map((line) => line.split('==')[0]);
+check(
+  pinnedNames.length === EXPECTED_PINNED.length && EXPECTED_PINNED.every((name) => pinnedNames.includes(name)),
+  `every expected dependency is pinned with == (${EXPECTED_PINNED.length})`,
+  `pinned: ${pinnedNames.join(', ')}`,
+);
 check(
   REQUIREMENTS_LOCK.includes('# cad-exclude: darwin-x64 |') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
   'rapier3d carries the darwin-x64 exclude directive',
@@ -245,7 +256,7 @@ try {
       },
       (message) => console.log(`      … ${message}`),
     );
-    check(imports.ok, 'all eight dependencies import in the venv', imports.stderr.trim().split('\n').slice(-2).join(' | '));
+    check(imports.ok, `all ${EXPECTED_PINNED.length} dependencies import in the venv`, imports.stderr.trim().split('\n').slice(-2).join(' | '));
     check(/^python 3\.13/.test(imports.stdout.trim()), 'the interpreter is the pinned 3.13', imports.stdout.trim().split('\n')[0]);
 
     const crash = await runPython({

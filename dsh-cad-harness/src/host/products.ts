@@ -56,7 +56,7 @@ export function buildProducts(
     const newest = newestFirst(list)[0];
     if (newest) newestOfPart.set(pid, newest.id);
   }
-  /** Versions a run cites that a part has since replaced (DESGIGN §22). */
+  /** Versions a run cites that a part has since replaced (DESIGN §22). */
   const staleSourceVersions = (r: RunEntry): string[] =>
     r.sourceVersionIds.filter((id) => {
       const version = versionById.get(id);

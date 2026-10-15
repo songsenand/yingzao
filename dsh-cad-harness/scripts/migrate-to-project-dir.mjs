@@ -1,6 +1,6 @@
 // One-shot migration: `<DSH_HOME>/cad/<basename>-<hash8>/` → `<cwd>/cad-data/`.
 //
-// The 2026-10-03 user decision (DESGIGN §19): per-project artifacts live
+// The 2026-10-03 user decision (DESIGN §19): per-project artifacts live
 // INSIDE the project folder, so deleting the folder deletes the corpus and
 // recreating a same-named project in place starts fresh. The legacy hashed
 // directories record their cwd in `project.json`; this script moves each

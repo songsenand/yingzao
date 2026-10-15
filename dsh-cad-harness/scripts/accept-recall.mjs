@@ -1,4 +1,4 @@
-// Acceptance for recall_reference_image (DESGIGN §15/§16 — the plugin-side
+// Acceptance for recall_reference_image (DESIGN §15/§16 — the plugin-side
 // answer to "oldest-first offload prunes the user's reference image").
 //
 // Verified against the REAL tool code (registerCadTools from src/host/tools.ts)

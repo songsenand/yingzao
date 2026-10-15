@@ -1,4 +1,4 @@
-// Acceptance for the preset tool scope (DESGIGN §13.11).
+// Acceptance for the preset tool scope (DESIGN §13.11).
 //
 //   1. The rule: a CAD-preset session keeps the whole catalog, any other NAMED
 //      preset loses it, a session with no preset and a delegated child keep it
@@ -39,8 +39,8 @@ const skip = (label, why) => console.log(`SKIP  ${label}  — ${why}`);
 
 const CAD_TOOLS = ['generate_part', 'create_part', 'import_part', 'validate_assembly', 'check_assembly',
   'simulate_physics', 'simulate_motion', 'simulate_fluid', 'render_part',
-  'measure_part', 'measure_distance', 'measure_thickness', 'measure_closest',
-  'measure_angle', 'list_features', 'measure_section', 'measure_extent'];
+  'measure_part', 'measure_gap', 'measure_thickness',
+  'measure_angle', 'list_features', 'measure_section'];
 
 console.log('preset tool scope acceptance\n');
 

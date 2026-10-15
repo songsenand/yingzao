@@ -94,20 +94,21 @@ check('  …and the structured warnings array carries it too',
 console.log('\n--- P0-3  measure_* warnings on open meshes ---');
 const vClosed = closed.value.versionId;
 const vOpen = open.value.versionId;
-const closest = await call('measure_closest', { aVersionId: vOpen, bVersionId: vClosed });
-check('measure_closest warns when an input is not watertight',
+const closest = await call('measure_gap', { aVersionId: vOpen, bVersionId: vClosed });
+check('measure_gap: a solid/solid pair needs no base part', closest.ok !== false, JSON.stringify(closest.value).slice(0, 80));
+check('measure_gap (solid/solid) warns when an input is not watertight',
   (closest.value.warnings ?? []).some((w) => /NOT watertight/.test(w)),
   JSON.stringify(closest.value.warnings ?? []));
-const closestClosed = await call('measure_closest', { aVersionId: vClosed, bVersionId: vClosed });
+const closestClosed = await call('measure_gap', { aVersionId: vClosed, bVersionId: vClosed });
 check('  …and stays silent on closed solids',
   (closestClosed.value.warnings ?? []).length === 0);
-const dist = await call('measure_distance', {
-  versionId: vOpen, aPoint: [5, 5, 0], bVersionId: vClosed, bPoint: [10, 10, 20],
+const dist = await call('measure_gap', {
+  versionId: vOpen, aPoint: [5, 5, 0], bOn: vClosed, bPoint: [10, 10, 20],
 });
-check('measure_distance warns on open-meth surface snapping too',
+check('measure_gap (point/point) warns on open-mesh surface snapping too',
   (dist.value.warnings ?? []).some((w) => /NOT watertight/.test(w)),
   JSON.stringify(dist.value.warnings ?? []));
-const distDatum = await call('measure_distance', {
+const distDatum = await call('measure_gap', {
   versionId: vClosed, aPoint: [0, 0, 20], bPoint: [0, 0, 0],
 });
 check('  …with clean inputs there are no warnings',
@@ -119,10 +120,23 @@ check('  …with clean inputs there are no warnings',
 console.log('\n--- P0-2  SKILL.md degrees/radians trap ---');
 const skillPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'cad-toolbox', 'SKILL.md');
 const skill = await readFile(skillPath, 'utf8');
-check('SKILL.md names the OpenSCAD degrees in / radians out trap',
-  /DEGREES in/i.test(skill) && /inv\(α\)/.test(skill) && /d2r/.test(skill));
-check('SKILL.md orders watertight over pretty',
-  /Watertight beats pretty/.test(skill) && /NOT WATERTIGHT/.test(skill));
+// CONTENT assertions read the WHOLE skills tree; only the "names every registered
+// tool" assertion stays pinned to the router, because naming every tool IS the
+// router's contract. The skill is layered now (tier-1 router + per-job skills +
+// reference files), so prose moves between files — a doc test pinned to one path
+// either breaks loudly for no reason or, worse, silently stops testing anything.
+const { readdirSync: rdSkills, statSync: stSkills } = await import('node:fs');
+const { join: joinSkills } = await import('node:path');
+const skillsRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
+const walkSkills = (dir) => rdSkills(dir).flatMap((e) => {
+  const full = joinSkills(dir, e);
+  return stSkills(full).isDirectory() ? walkSkills(full) : full.endsWith('.md') ? [full] : [];
+});
+const skillTree = (await Promise.all(walkSkills(skillsRoot).map((f) => readFile(f, 'utf8')))).join('\n');
+check('the skill set names the OpenSCAD degrees in / radians out trap',
+  /DEGREES in/i.test(skillTree) && /inv\(α\)/.test(skillTree) && /d2r/.test(skillTree));
+check('the skill set orders watertight over pretty',
+  /Watertight beats pretty/.test(skillTree) && /NOT WATERTIGHT/.test(skillTree));
 
 // ================= P1-1: coaxial operator ====================================
 
@@ -387,8 +401,8 @@ const bogusViews = await call('generate_part', {
 check('generate_part with only unknown view names falls back to all four',
   bogusViews.value.views.length === 4, JSON.stringify(bogusViews.value.views));
 const skillNow = await readFile(skillPath, 'utf8');
-check('SKILL.md teaches the image-budget economy (views on numeric iterations)',
-  /Images are the biggest context spend/.test(skillNow) && /views: \["iso"\]/.test(skillNow));
+check('the skill set teaches the image-budget economy (views on numeric iterations)',
+  /Images are the biggest context spend/.test(skillTree) && /views: \["iso"\]/.test(skillTree));
 
 // ============ the measurement tools, driven through the REAL tool objects ============
 // Each new op is covered by its own truth acceptance (accept-measure-thickness /
@@ -434,14 +448,14 @@ check('measure_section: the tool layer sections a version and reports the plane 
 check('measure_section: a bad axis is refused by the worker, not silently defaulted',
   await call('measure_section', { versionId: vMeasure, axis: 'diagonal' }).then(() => false, () => true));
 
-const extent = await call('measure_extent', { versionId: vMeasure, axis: 'x' });
-check('measure_extent: the tool layer projects on an axis and hands back extremal points',
-  extent.value.sizeMm > 39 && extent.value.minPointMm.length === 3 && extent.value.maxPointMm.length === 3,
-  `size=${extent.value.sizeMm} points=${JSON.stringify([extent.value.minPointMm, extent.value.maxPointMm])}`);
-const diagonalExtent = await call('measure_extent', { versionId: vMeasure, axisVector: [1, 1, 0] });
-check('measure_extent: axisVector reaches the worker as a vector',
-  Math.abs(diagonalExtent.value.sizeMm - (40 + 40) / Math.SQRT2) < 0.1,
-  `size=${diagonalExtent.value.sizeMm}`);
+const extent = await call('measure_part', { versionId: vMeasure, axis: 'x' });
+check('measure_part(axis): the tool layer projects on an axis and hands back extremal points',
+  extent.value.extent.sizeMm > 39 && extent.value.extent.minPointMm.length === 3 && extent.value.extent.maxPointMm.length === 3,
+  `size=${extent.value.extent.sizeMm} points=${JSON.stringify([extent.value.extent.minPointMm, extent.value.extent.maxPointMm])}`);
+const diagonalExtent = await call('measure_part', { versionId: vMeasure, axisVector: [1, 1, 0] });
+check('measure_part(axisVector): reaches the worker as a vector',
+  Math.abs(diagonalExtent.value.extent.sizeMm - (40 + 40) / Math.SQRT2) < 0.1,
+  `size=${diagonalExtent.value.extent.sizeMm}`);
 
 const angleByProbe = await call('measure_angle', {
   versionId: vMeasure, aProbe: [30, 0, 0], bProbe: [0, 0, 10],
@@ -497,12 +511,57 @@ const vGood = (await call('generate_part', {
 const vThin = (await call('generate_part', {
   userIntent: 'P3 unprintably thin plate', part: 'P3 薄片', scadCode: 'cube([30,30,0.4]);',
 })).value.versionId;
+// S2-b fixtures: a BLIND narrow dimple (the negative control — it must never exclude a
+// part), and a bore that exactly matches the requirement (the marginal band).
+const vDimple = (await call('generate_part', {
+  userIntent: 'P3 blind dimple (Ø0.5 x 0.3, cosmetic)', part: 'P3 盲凹陷',
+  scadCode: 'difference() { cube([20,20,10], center=true); translate([0,0,4.85]) cylinder(r=0.25, h=0.3, center=true, $fn=32); }',
+})).value.versionId;
+const vExactBore = (await call('generate_part', {
+  userIntent: 'P3 bore exactly at the requirement (Ø2.0)', part: 'P3 等宽孔',
+  scadCode: 'difference() { cube([20,20,10], center=true); cylinder(r=1, h=30, center=true, $fn=48); }',
+})).value.versionId;
+// CNC tool-reach fixtures: a bore narrower than the declared cutter, one wide enough,
+// and one so deep for its diameter that a drill would wander.
+const vNarrowBore = (await call('generate_part', {
+  userIntent: 'P3 narrow bore (Ø1.5)', part: 'P3 细孔',
+  scadCode: 'difference() { cube([20,20,10], center=true); cylinder(r=0.75, h=30, center=true, $fn=48); }',
+})).value.versionId;
+const vWideBore = (await call('generate_part', {
+  userIntent: 'P3 wide bore (Ø4)', part: 'P3 宽孔',
+  scadCode: 'difference() { cube([20,20,10], center=true); cylinder(r=2, h=30, center=true, $fn=48); }',
+})).value.versionId;
+// S2-b non-circular passages: a rectangular through slot. Before 2026-10-13 these never
+// reached the rule at all (the hole list filtered out anything without a diameter), so a
+// narrow non-circular drain was silently absent rather than measured. Now each opening of the
+// slot names a passage and the worker measures its bottleneck.
+const vNarrowSlot = (await call('generate_part', {
+  userIntent: 'P3 narrow through slot (1.5mm wide)', part: 'P3 窄槽',
+  // The slot must NOT reach the face edge: an opening that runs out to the boundary is not a
+  // closed loop, so list_features finds no hole to anchor at (measured: a 1.5×40 slot in a 20mm
+  // block reports holeCount 0). 1.5 × 8 keeps the opening inside the z faces.
+  scadCode: 'difference() { cube([20,20,10], center=true); cube([1.5,8,40], center=true); }',
+})).value.versionId;
+const vWideSlot = (await call('generate_part', {
+  userIntent: 'P3 wide through slot (6mm wide)', part: 'P3 宽槽',
+  scadCode: 'difference() { cube([20,20,10], center=true); cube([6,8,40], center=true); }',
+})).value.versionId;
+const vDeepBore = (await call('generate_part', {
+  userIntent: 'P3 deep bore (Ø3 x 20)', part: 'P3 深孔',
+  scadCode: 'difference() { cube([20,20,20], center=true); cylinder(r=1.5, h=40, center=true, $fn=48); }',
+})).value.versionId;
+// A SEALED cavity: a hollow with no drain/escape hole. This is the one escape-passage
+// failure a mesh can prove — see the escapePassageMinMm checks below.
+const vVoid = (await call('generate_part', {
+  userIntent: 'P3 sealed cavity (no escape passage)', part: 'P3 封闭内腔',
+  scadCode: 'difference() { sphere(r=10, $fn=64); sphere(r=9, $fn=64); }',
+})).value.versionId;
 const vCeil = (await call('generate_part', {
   userIntent: 'P3 slab on a post (huge unsupported ceiling)', part: 'P3 天花板',
   scadCode: 'cube([4,4,10]);\ntranslate([0,0,10]) cube([30,30,4]);',
 })).value.versionId;
 
-const good = await call('check_printability', { versionId: vGood });
+const good = await call('check_printability', { versionId: vGood, profileIds: ['fdm-pla-0.4'] });
 check('a chunky cube screens ok (min wall 12mm, no overhang)',
   good.value.verdict === 'ok' && Math.abs(good.value.minWallMm - 12) < 0.5 && good.value.findings.length === 0,
   JSON.stringify(good.value));
@@ -519,8 +578,212 @@ check('a 30×30 slab on a 4×4 post is flagged for its unsupported ceiling',
 const openShot = await call('check_printability', { versionId: vOpen });
 check('an open mesh carries the watertight warning into its findings',
   openShot.value.watertight === false && openShot.value.findings.some((f) => /NOT watertight/.test(f)));
-check('SKILL.md carries the delivery-discipline section (green numbers ≠ done)',
-  /Delivery discipline/.test(skillNow) && /check_printability/.test(skillNow));
+
+// ---- process profiles: the two-valued judgment, and no silent default ---------
+// A manufacturing screen may EXCLUDE a process (with a witness) or find no
+// counter-example. It may never rank, score or recommend one — see DECISION-LOG
+// 2026-10-11. These checks pin that vocabulary and the no-silent-default rule.
+{
+  // A clean part with NO declared profile must not read as a pass: the geometry is
+  // fine, the DECLARATION is missing. Declaring a profile is what earns "ok".
+  const cleanNoProfile = await call('check_printability', { versionId: vGood });
+  check('no profile declared → a clean part reports check, not ok',
+    cleanNoProfile.value.verdict === 'check', String(cleanNoProfile.value.verdict));
+  const cleanDeclared = await call('check_printability', { versionId: vGood, profileIds: ['fdm-pla-0.4'] });
+  check('…and declaring a profile is what earns ok',
+    cleanDeclared.value.verdict === 'ok', String(cleanDeclared.value.verdict));
+
+  const noProfile = await call('check_printability', { versionId: vThin });
+  check('no profile declared → profileSource says so (no silent default)',
+    noProfile.value.profileSource === 'builtin-default',
+    String(noProfile.value.profileSource));
+  check('…and the built-in fallback is NAMED, with a hash, in the findings',
+    /builtin-default/.test(JSON.stringify(noProfile.value.profiles)) &&
+    /内建默认档/.test(noProfile.value.findings.join(' ')),
+    (noProfile.value.profiles[0] ?? {}).profileId);
+  check('…and the fallback admits it is uncalibrated, not a recommendation',
+    /不是推荐/.test(noProfile.value.findings.join(' ')));
+
+  const declared = await call('check_printability', { versionId: vThin, profileIds: ['fdm-pla-0.4'] });
+  const ev = declared.value.profiles[0] ?? {};
+  check('a declared profile is judged two-valued: excluded for a 0.4mm wall vs 1.2mm',
+    ev.verdict === 'excluded' && declared.value.profileSource === 'declared', String(ev.verdict));
+  check('…and the exclusion carries a WITNESS (rule + location + measured vs required)',
+    ev.witnesses?.[0]?.rule === 'wallMinMm' && typeof ev.witnesses[0].measured === 'number' &&
+    typeof ev.witnesses[0].required === 'number' && Array.isArray(ev.witnesses[0].locationMm),
+    JSON.stringify(ev.witnesses?.[0]));
+  check('…and it echoes the profile hash (a verdict without its premise is not evidence)',
+    typeof ev.profileHash === 'string' && ev.profileHash.length >= 8, String(ev.profileHash));
+  check('…and it discloses what does NOT apply, and what a tool cannot decide',
+    (ev.notApplicable ?? []).some((x) => /draftMinDeg/.test(x)) &&
+    (ev.unevaluable ?? []).some((x) => /tolMm/.test(x)),
+    `na=${(ev.notApplicable ?? []).length} un=${(ev.unevaluable ?? []).length}`);
+
+  const permissive = JSON.stringify([{
+    schemaVersion: 1, id: 'test-permissive-cnc', process: 'CNC-3axis',
+    rules: {
+      wallMinMm: { applies: true, decidable: 'geometry', value: 0.2, direction: 'min', source: { kind: 'assumed', ref: 'test fixture' } },
+      overhangDeg: { applies: false, decidable: 'geometry', reason: 'machining has no overhang constraint' },
+    },
+  }]);
+  const notExcluded = await call('check_printability', { versionId: vThin, profilesJson: permissive });
+  const ev2 = notExcluded.value.profiles[0] ?? {};
+  check('no counter-example → "not-excluded", never "ok"',
+    ev2.verdict === 'not-excluded', String(ev2.verdict));
+  check('…and the overhang rule is disclosed as not applicable, with its reason',
+    (ev2.notApplicable ?? []).some((x) => /overhangDeg.*overhang constraint/.test(x)),
+    JSON.stringify(ev2.notApplicable));
+
+  const badProfile = JSON.stringify([{
+    schemaVersion: 1, id: 'bad-no-source', process: 'FDM',
+    rules: { wallMinMm: { applies: true, decidable: 'geometry', value: 1, direction: 'min' } },
+  }]);
+  const refused = await call('check_printability', { versionId: vThin, profilesJson: badProfile })
+    .then(() => false, (e) => /wallMinMm.*source/.test(String(e.message ?? e)));
+  check('an invalid profile is REFUSED, naming the offending rule', refused);
+
+  // ---- S2: sealed cavities / escape passages ----------------------------------
+  const slaProfile = JSON.stringify([{
+    schemaVersion: 1, id: 'test-sla-drain', process: 'SLA', material: 'standard resin',
+    rules: {
+      wallMinMm: { applies: true, decidable: 'geometry', value: 0.4, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+      escapePassageMinMm: { applies: true, decidable: 'geometry', value: 2, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+    },
+  }]);
+  const sealed = await call('check_printability', { versionId: vVoid, profilesJson: slaProfile });
+  const evSealed = sealed.value.profiles[0] ?? {};
+  check('a sealed cavity EXCLUDES an SLA profile that requires an escape passage',
+    evSealed.verdict === 'excluded', String(evSealed.verdict));
+  check('…and the witness names the rule and the VOID location, not just a number',
+    evSealed.witnesses?.[0]?.rule === 'escapePassageMinMm' &&
+    evSealed.witnesses[0].measured === 0 && evSealed.witnesses[0].required === 2 &&
+    Array.isArray(evSealed.witnesses[0].locationMm),
+    JSON.stringify(evSealed.witnesses?.[0]));
+
+  const solidSla = await call('check_printability', { versionId: vGood, profilesJson: slaProfile });
+  const evSolid = solidSla.value.profiles[0] ?? {};
+  check('a solid part does NOT get excluded by the escape rule', evSolid.verdict === 'not-excluded', String(evSolid.verdict));
+  check('…and the report says the passage INTERIOR was not measured (never a pass)',
+    (solidSla.value.findings ?? []).some((f) => /通道内部的截面没有被测量/.test(f)),
+    (solidSla.value.findings ?? []).find((f) => /通道/.test(f)) ?? '(no such finding)');
+
+  // ---- S4: CNC tool reach (exact for circular bores) --------------------------
+  const cncProfile = JSON.stringify([{
+    schemaVersion: 1, id: 'test-cnc-3axis', process: 'CNC-3axis',
+    rules: {
+      wallMinMm: { applies: true, decidable: 'geometry', value: 0.5, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+      toolRadiusMm: { applies: true, decidable: 'geometry', value: 1.5, direction: 'min', source: { kind: 'vendor-spec', ref: 'test fixture: smallest cutter on hand' } },
+      holeAspectMax: { applies: true, decidable: 'geometry', value: 5, direction: 'max', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+    },
+  }]);
+  const narrow = await call('check_printability', { versionId: vNarrowBore, profilesJson: cncProfile });
+  const evNarrow = narrow.value.profiles[0] ?? {};
+  check('a bore narrower than the declared cutter EXCLUDES the CNC profile',
+    evNarrow.verdict === 'excluded', String(evNarrow.verdict));
+  check('…with a witness in cutter-radius terms (measured 0.75 vs required 1.5), located at the bore',
+    evNarrow.witnesses?.some((w) => w.rule === 'toolRadiusMm' && w.measured === 0.75 && w.required === 1.5 &&
+      Array.isArray(w.locationMm)) === true,
+    JSON.stringify(evNarrow.witnesses?.[0]));
+
+  const wide = await call('check_printability', { versionId: vWideBore, profilesJson: cncProfile });
+  check('a bore wide enough for the cutter does NOT exclude',
+    (wide.value.profiles[0] ?? {}).verdict === 'not-excluded',
+    String((wide.value.profiles[0] ?? {}).verdict));
+  check('…and the report says only CIRCULAR bores were checked (slots are not covered)',
+    (wide.value.findings ?? []).some((f) => /非圆形的槽/.test(f)));
+
+  const deep = await call('check_printability', { versionId: vDeepBore, profilesJson: cncProfile });
+  const evDeep = deep.value.profiles[0] ?? {};
+  check('a bore too deep for its diameter (Ø3 × 20 = 6.67 > 5) EXCLUDES',
+    evDeep.verdict === 'excluded' &&
+    evDeep.witnesses?.some((w) => w.rule === 'holeAspectMax' && w.measured > 6.6 && w.required === 5) === true,
+    JSON.stringify(evDeep.witnesses ?? []));
+
+  // ---- S3: the feasible draw-direction cone (draft) ----------------------------
+  const draftProfile = (d) => JSON.stringify([{
+    schemaVersion: 1, id: `test-draft-${d}`, process: 'injection',
+    rules: {
+      wallMinMm: { applies: true, decidable: 'geometry', value: 0.5, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+      draftMinDeg: { applies: true, decidable: 'geometry', value: d, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+    },
+  }]);
+  const d45 = await call('check_printability', { versionId: vGood, profilesJson: draftProfile(45) });
+  const ev45 = d45.value.profiles[0] ?? {};
+  check('45° draft on a cube EXCLUDES — the empty cone a PAIRWISE test cannot prove',
+    ev45.verdict === 'excluded', String(ev45.verdict));
+  check('…and the witness is in degrees, carries the best achievable draft, and a face location',
+    ev45.witnesses?.some((w) => w.rule === 'draftMinDeg' && w.unit === 'deg' && w.required === 45 &&
+      typeof w.measured === 'number' && w.measured < 45 && Array.isArray(w.locationMm)) === true,
+    JSON.stringify(ev45.witnesses ?? []));
+
+  const d1 = await call('check_printability', { versionId: vGood, profilesJson: draftProfile(1) });
+  check('1° draft on the same cube does NOT exclude (the cone is non-empty)',
+    (d1.value.profiles[0] ?? {}).verdict === 'not-excluded',
+    String((d1.value.profiles[0] ?? {}).verdict));
+
+  const dMarg = await call('check_printability', { versionId: vGood, profilesJson: draftProfile(34.5) });
+  check('a near-zero draft margin is recorded as DIFFICULT, not passed',
+    (dMarg.value.profiles[0] ?? {}).verdict === 'not-excluded' &&
+    (dMarg.value.findings ?? []).some((f) => /拔模余量过小/.test(f)),
+    (dMarg.value.findings ?? []).find((f) => /拔模/.test(f)) ?? '(no draft finding)');
+
+  // ---- S2-b: escape passages (exact for round through holes; UNDETERMINED otherwise)
+  const escapeProfile = JSON.stringify([{
+    schemaVersion: 1, id: 'test-sla-escape', process: 'SLA', material: 'standard resin',
+    rules: {
+      wallMinMm: { applies: true, decidable: 'geometry', value: 0.4, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+      escapePassageMinMm: { applies: true, decidable: 'geometry', value: 2, direction: 'min', source: { kind: 'rule-of-thumb', ref: 'test fixture' } },
+    },
+  }]);
+  const narrowEsc = await call('check_printability', { versionId: vNarrowBore, profilesJson: escapeProfile });
+  const evEsc = narrowEsc.value.profiles[0] ?? {};
+  check('a round THROUGH passage narrower than the requirement EXCLUDES (exact)',
+    evEsc.verdict === 'excluded' &&
+    evEsc.witnesses?.some((w) => w.rule === 'escapePassageMinMm' && w.measured === 1.5 && w.required === 2 &&
+      Array.isArray(w.locationMm)) === true,
+    JSON.stringify(evEsc.witnesses ?? []));
+
+  const wideEsc = await call('check_printability', { versionId: vWideBore, profilesJson: escapeProfile });
+  check('a wide enough through passage does NOT exclude',
+    (wideEsc.value.profiles[0] ?? {}).verdict === 'not-excluded',
+    String((wideEsc.value.profiles[0] ?? {}).verdict));
+
+  // S2-b non-circular: the bottleneck of a rectangular through slot is MEASURED (worker op
+  // passage_bottleneck anchored at the opening), so a narrow slot is a witness, not a silence.
+  const narrowSlot = await call('check_printability', { versionId: vNarrowSlot, profilesJson: escapeProfile });
+  const evSlot = narrowSlot.value.profiles[0] ?? {};
+  check('a NON-CIRCULAR through slot narrower than the requirement EXCLUDES (measured, not silent)',
+    evSlot.verdict === 'excluded'
+    && evSlot.witnesses?.some((w) => w.rule === 'escapePassageMinMm' && w.measured === 1.5
+      && w.required === 2 && Array.isArray(w.locationMm)) === true,
+    JSON.stringify(evSlot.witnesses ?? []));
+  const wideSlot = await call('check_printability', { versionId: vWideSlot, profilesJson: escapeProfile });
+  check('a wide enough NON-CIRCULAR slot does NOT exclude (no false exclusion)',
+    (wideSlot.value.profiles[0] ?? {}).verdict === 'not-excluded',
+    String((wideSlot.value.profiles[0] ?? {}).verdict));
+
+  // THE NEGATIVE CONTROL: a narrow BLIND dimple must never condemn the part.
+  const dimple = await call('check_printability', { versionId: vDimple, profilesJson: escapeProfile });
+  check('a narrow BLIND dimple must NOT exclude (no false exclusion from a cosmetic feature)',
+    (dimple.value.profiles[0] ?? {}).verdict === 'not-excluded' &&
+    (dimple.value.profiles[0] ?? {}).witnesses?.length === 0,
+    JSON.stringify((dimple.value.profiles[0] ?? {}).witnesses ?? []));
+  check('…and it is reported as UNDETERMINED, not silently passed',
+    (dimple.value.findings ?? []).some((f) => /盲特征/.test(f) && /未判定/.test(f)),
+    (dimple.value.findings ?? []).find((f) => /盲/.test(f)) ?? '(no blind-feature note)');
+
+  const exactEsc = await call('check_printability', { versionId: vExactBore, profilesJson: escapeProfile });
+  check('a passage exactly at the requirement is recorded as DIFFICULT, not passed',
+    (exactEsc.value.profiles[0] ?? {}).verdict === 'not-excluded' &&
+    (exactEsc.value.findings ?? []).some((f) => /通道余量过小/.test(f)),
+    (exactEsc.value.findings ?? []).find((f) => /通道/.test(f)) ?? '(no margin note)');
+
+  const surface = JSON.stringify(noProfile.value);
+  check('the report has no rank / score / recommend field (structurally, not by promise)',
+    !/"(rank|score|recommend|recommended|best)"\s*:/.test(surface));
+}
+check('the skill set carries the delivery-discipline section (green numbers ≠ done)',
+  /Delivery discipline/.test(skillTree) && /check_printability/.test(skillTree));
 // Every tool the agent can call must be NAMED in the manual. This replaces a
 // literal "Fifteen tools" that had gone stale: it asserted a number from two
 // catalog generations ago, so it failed for a reason unrelated to what it was

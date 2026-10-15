@@ -18,7 +18,8 @@
 //   7  re-importing a revised export is a REVISION of the same part, and
 //      crossing parts is refused rather than silently stitched
 //   8  the browse tree says where the version came from
-//   9  STEP gets an actionable kernel-boundary answer, not a parse error
+//   9  IGES gets an actionable format-boundary answer, not a parse error
+//      (STEP imports through OpenCASCADE since 2026-10-15: accept-import-cad.mjs)
 //
 //   node scripts/accept-import.mjs
 
@@ -54,6 +55,22 @@ const WORK = await mkdtemp(join(tmpdir(), 'cad-import-work-'));
 // The "project directory" — where a colleague's file lands.
 const PROJ = join(WORK, 'partner-handoff');
 await mkdir(PROJ, { recursive: true });
+
+// A fresh HOME is a cold runtime; ensurePythonWorker refuses to provision inside
+// a tool call on purpose (a 180 s timeout must not absorb a minutes-long pip
+// install), so provision up front — same pattern as accept-import-cad.mjs.
+{
+  const { pythonRuntimeStatus, repairPythonRuntime } = await import('../src/host/python-runtime.ts');
+  const status = await pythonRuntimeStatus();
+  if (status.state !== 'ready') {
+    console.log(`runtime not ready (state: ${status.state}) — provisioning from the lock (minutes on first run)...`);
+    await repairPythonRuntime({
+      pipTimeoutMs: 45 * 60 * 1000,
+      onProgress: (message) => console.error(`  [provision] ${message}`),
+    });
+    console.log('runtime ready.');
+  }
+}
 
 // ---------- the host a tool call sees ----------
 // Enough of the cordis surface for registerCadTools: a tool registry and the
@@ -344,12 +361,12 @@ const stlOf = async (id) => new Uint8Array(await readFile(join(corpus.root, 'ver
   check('8b generated version stays generated', ref?.source === 'generated' && ref?.origin === undefined, `${ref?.source}`);
 }
 
-// ---------- 9. the kernel boundary is stated, not stumbled into ----------
+// ---------- 9. the format boundary is stated, not stumbled into ----------
 {
   let msg = null;
-  try { await importTool.execute({ file: 'bearing.step', part: '轴承' }, exec); } catch (e) { msg = String(e?.message ?? e); }
-  check('9a STEP gets the B-rep boundary and a way forward',
-    !!msg && /B-rep/.test(msg) && /STL/.test(msg) && /FreeCAD|export STL/.test(msg), (msg ?? '(no error)').slice(0, 90));
+  try { await importTool.execute({ file: 'bearing.igs', part: '轴承' }, exec); } catch (e) { msg = String(e?.message ?? e); }
+  check('9a IGES gets its boundary and a way forward (STEP imports since 2026-10-15)',
+    !!msg && /IGES/.test(msg) && /STEP|STL/.test(msg), (msg ?? '(no error)').slice(0, 90));
 
   let msg3mf = null;
   try { await importTool.execute({ file: 'widget.3mf', part: '零件' }, exec); } catch (e) { msg3mf = String(e?.message ?? e); }

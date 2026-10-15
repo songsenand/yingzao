@@ -149,7 +149,7 @@ The boxes differ *between* docks (a genuine resize may re-wrap and re-fit) but
 never *within* one. At 380×900 the automatic split is body 260px / viewport
 355×393 — the viewport is held at "square + 40" because past square the extra
 height is only empty margin (the fit is bound by the shorter side), and below
-square the model really shrinks. The price is stated in DESGIGN §6.9e: the details are a fixed
+square the model really shrinks. The price is stated in DESIGN §6.9e: the details are a fixed
 190px scroll box (≈25px of slack when collapsed) and the feedback block is a
 permanent 38px carrying the standing instructions when idle.
 
@@ -157,7 +157,7 @@ permanent 38px carrying the standing instructions when idle.
 
 Three complaints — "放大后探针点特别大 / 薄壁没办法 / 截图点了没反应" — and what
 each turned out to be. All of it was verified numerically against the real
-`v034` STL (three.js in node) plus DOM-layer captures; see DESGIGN §6.9d.
+`v034` STL (three.js in node) plus DOM-layer captures; see DESIGN §6.9d.
 
 | shot | shows |
 |---|---|

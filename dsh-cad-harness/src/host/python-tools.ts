@@ -4,7 +4,7 @@
 // runtime"): it provisions on demand, executes a program or an existing .py
 // file, and hands back stdout/stderr plus the full Python traceback. It is the
 // deliberate opposite of a curated API — the same "open the real capability"
-// stance the harness takes for bash and Node (DESGIGN M4R pillar A), because a
+// stance the harness takes for bash and Node (DESIGN M4R pillar A), because a
 // narrow invented API is what forces every future analysis back into our code.
 //
 // `python_runtime` is the honest status/repair surface: what is installed, where
@@ -72,28 +72,44 @@ function statusFields(status: PythonRuntimeStatus) {
   return {
     state: status.state,
     root: status.root,
-    target: status.target ?? undefined,
+    // Absent facts must be ABSENT keys, not undefined-valued ones: the framework's
+    // lossless-JSON check (`snapshotToolValue` → `walkJsonValue`) rejects any
+    // property whose value is `undefined` — that check runs BEFORE schema
+    // validation, so `?? undefined` here made every python_runtime call fail with
+    // "value is not lossless JSON". Conditional spreads keep the comment above
+    // ("omitted, not null") literally true.
+    ...(status.target ? { target: status.target } : {}),
     pythonVersion: status.pythonVersion,
     mode: status.mode,
-    source: status.source ?? undefined,
-    interpreter: status.interpreter ?? undefined,
-    venvPython: status.venvPython ?? undefined,
-    installedAt: status.installedAt ?? undefined,
-    phase: status.phase ?? undefined,
-    error: status.error ?? undefined,
+    ...(status.source ? { source: status.source } : {}),
+    ...(status.interpreter ? { interpreter: status.interpreter } : {}),
+    ...(status.venvPython ? { venvPython: status.venvPython } : {}),
+    ...(status.installedAt ? { installedAt: status.installedAt } : {}),
+    ...(status.phase ? { phase: status.phase } : {}),
+    ...(status.error ? { error: status.error } : {}),
     occupiedBytes: status.occupiedBytes,
     occupied: humanBytes(status.occupiedBytes),
     skipped: status.skipped.map((entry) => `${entry.name}==${entry.version} (${entry.reason})`),
+    missingPackages: status.missingPackages,
   };
 }
 
 /**
- * The one line that keeps a platform-specific omission from reading as a bug.
- * On darwin-x64 rapier3d is absent by design and physics stays on the TS engine.
+ * The one line that keeps "absent by design" and "broken" from reading the same.
+ *
+ * `skipped` is the lock's deliberate omission for this platform; `missingPackages`
+ * is a venv that cannot import what its own lock says it installed — the state a
+ * matching marker used to hide.
  */
 function skipSummary(status: PythonRuntimeStatus): string | null {
-  if (!status.skipped.length) return null;
-  return `not installed on this platform: ${status.skipped.map((entry) => `${entry.name} — ${entry.reason}`).join('; ')}`;
+  const lines: string[] = [];
+  if (status.missingPackages.length) {
+    lines.push(`BROKEN: the venv cannot import ${status.missingPackages.join(', ')} — run action=repair`);
+  }
+  if (status.skipped.length) {
+    lines.push(`not installed on this platform: ${status.skipped.map((entry) => `${entry.name} — ${entry.reason}`).join('; ')}`);
+  }
+  return lines.length ? lines.join('\n') : null;
 }
 
 function renderRunResult(value: RunPythonValue): unknown[] {
@@ -236,11 +252,20 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
           },
           onProgress,
         );
+        // Null-valued results must be ABSENT keys, not `?? undefined` — and not
+        // carried through by `...result` either. The framework's lossless-JSON
+        // check rejects undefined-valued properties BEFORE schema validation (so
+        // every run_python call failed with "value is not lossless JSON", even
+        // `print("hello")`: a successful run still has signal=null and
+        // traceback=null); a null that survived into the object would then fail
+        // the schema's `type: integer` / `type: string` rows instead. Destructure
+        // the three nullable fields out, then re-add only when they have values.
+        const { exitCode: _ec, signal: _sig, traceback: _tb, ...rest } = result;
         return {
-          ...result,
-          exitCode: result.exitCode ?? undefined,
-          signal: result.signal ?? undefined,
-          traceback: result.traceback ?? undefined,
+          ...rest,
+          ...(result.exitCode !== null ? { exitCode: result.exitCode } : {}),
+          ...(result.signal ? { signal: result.signal } : {}),
+          ...(result.traceback ? { traceback: result.traceback } : {}),
           ...(progress.length ? { provisionLog: progress.slice(-8) } : {}),
         };
       } catch (error) {
@@ -297,6 +322,11 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
             type: 'array',
             items: { type: 'string' },
             description: 'Packages this platform\'s lock deliberately omits, with the reason (e.g. rapier3d on darwin-x64: no wheel, physics stays on the TS engine).',
+          },
+          missingPackages: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Locked packages the venv cannot actually import. NON-EMPTY MEANS THE RUNTIME IS BROKEN even though its marker matches — tools needing those packages degrade; action=repair rebuilds.',
           },
           provisionLog: { type: 'array', items: { type: 'string' } },
           summary: { type: 'string', required: true, description: 'Human-readable rendering of the same facts.' },

@@ -402,7 +402,7 @@ export async function runAssemblyCheckInTs(
   const parts = new Map<string, PartWorld>();
   const partWarnings: AssemblyCheckReport['partWarnings'] = [];
 
-  // Evidence expires with the version it cites (DESGIGN §22): a cited run whose
+  // Evidence expires with the version it cites (DESIGN §22): a cited run whose
   // geometry predates the CURRENT version of any of its parts is not evidence.
   const versionList = await listVersions(store);
   const versionById = new Map(versionList.map((v) => [v.id, v]));
@@ -687,7 +687,7 @@ export async function runAssemblyCheck(
     };
   });
 
-  // Evidence expires with the version it cites (DESGIGN §22): a cited run whose
+  // Evidence expires with the version it cites (DESIGN §22): a cited run whose
   // geometry predates the CURRENT version of any of its parts is not evidence. That
   // is a store question, so the worker is told the answer per run rather than the
   // whole version history.

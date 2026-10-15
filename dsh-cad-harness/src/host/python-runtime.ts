@@ -68,6 +68,13 @@ export interface PythonRuntimeStatus {
   occupiedBytes: number;
   /** Packages this platform's lock deliberately leaves out, with reasons. */
   skipped: LockSkip[];
+  /**
+   * Locked packages the venv cannot import. Non-empty means the runtime is NOT
+   * usable even though its marker matches — `state` is then `failed`, because a
+   * "ready" badge over a venv that cannot import its own lock is the lie this
+   * field exists to prevent.
+   */
+  missingPackages: string[];
 }
 
 export interface ProvisionOptions {
@@ -348,9 +355,20 @@ export async function pythonRuntimeStatus(): Promise<PythonRuntimeStatus> {
     // A warm venv still has to explain what it does not contain, so this comes
     // from the lock plan rather than only from the recorded install.
     skipped: state?.skipped ?? lockPlanForTarget(target).skipped,
+    missingPackages: [],
   };
   if (mode === 'off' || !target) return base;
   if (state?.interpreter && state?.venvPython && existsSync(state.interpreter) && existsSync(state.venvPython)) {
+    // Existence is not readiness: check that the locked set actually imports.
+    const missing = await missingLockedImports(state.venvPython, target);
+    if (missing.length > 0) {
+      return {
+        ...base,
+        state: 'failed',
+        missingPackages: missing,
+        error: `the venv cannot import ${missing.join(', ')} (present on disk, not importable) — run python_runtime action=repair`,
+      };
+    }
     return { ...base, state: 'ready', error: null };
   }
   if (state?.error) return { ...base, state: 'failed' };
@@ -545,6 +563,71 @@ async function venvIsCurrent(root: string, target: string, source: string): Prom
   } catch {
     return false;
   }
+}
+
+/**
+ * The locked packages, by import name.
+ *
+ * Kept here so "installed" can be CHECKED rather than assumed. The marker only
+ * proves that a pip run finished; it does not prove the packages are importable.
+ * On 2026-10-11 this machine held a venv whose marker matched perfectly and which
+ * was missing `rtree` and `shapely` — so `python_runtime status` said `ready`
+ * while `check_printability`'s ray half silently measured nothing (every ray
+ * raised, every exception was swallowed, and the tool called the part clean).
+ * A readiness claim that cannot be falsified is how that stays invisible.
+ */
+const LOCKED_IMPORTS: { pkg: string; module: string }[] = [
+  { pkg: 'numpy', module: 'numpy' },
+  { pkg: 'scipy', module: 'scipy' },
+  { pkg: 'trimesh', module: 'trimesh' },
+  { pkg: 'manifold3d', module: 'manifold3d' },
+  // MPM kernel JIT engine (2026-10-14). Excluded targets (musl, darwin-x64) are
+  // skipped by the lock plan below, so "absent by design" stays distinct from
+  // "broken" — the worker's `_mpm_engine` falls back to the numpy kernel there.
+  { pkg: 'numba', module: 'numba' },
+  { pkg: 'networkx', module: 'networkx' },
+  { pkg: 'scikit-fem', module: 'skfem' },
+  { pkg: 'rtree', module: 'rtree' },
+  { pkg: 'rapier3d', module: 'rapier3d' },
+  { pkg: 'shapely', module: 'shapely' },
+];
+
+/**
+ * Which locked packages this venv cannot actually import.
+ *
+ * Empty array = the venv is what the marker claims. Packages the lock
+ * deliberately omits for this target are NOT reported: "absent by design" and
+ * "broken" must not look the same (that distinction is the lock's own
+ * `cad-exclude` contract).
+ */
+export async function missingLockedImports(venvPython: string, target: string): Promise<string[]> {
+  const skipped = new Set(lockPlanForTarget(target).skipped.map((s) => s.name));
+  const wanted = LOCKED_IMPORTS.filter((entry) => !skipped.has(entry.pkg));
+  if (wanted.length === 0) return [];
+  const modules = JSON.stringify(wanted.map((entry) => entry.module));
+  const program = [
+    'import importlib, json, sys',
+    `failed = []`,
+    `for name in ${modules}:`,
+    '    try:',
+    '        importlib.import_module(name)',
+    '    except BaseException:',
+    '        failed.append(name)',
+    'sys.stdout.write("__MISSING__" + json.dumps(failed))',
+  ].join('\n');
+  const probe = await runProcess(venvPython, ['-I', '-c', program], { timeoutMs: 120_000 });
+  const marker = probe.stdout.lastIndexOf('__MISSING__');
+  if (probe.code !== 0 || marker < 0) {
+    // The interpreter itself did not run: that is every package missing, not none.
+    return wanted.map((entry) => entry.pkg);
+  }
+  let failedModules: string[] = [];
+  try {
+    failedModules = JSON.parse(probe.stdout.slice(marker + '__MISSING__'.length).trim()) as string[];
+  } catch {
+    return wanted.map((entry) => entry.pkg);
+  }
+  return wanted.filter((entry) => failedModules.includes(entry.module)).map((entry) => entry.pkg);
 }
 
 export interface LockSkip {
@@ -747,10 +830,21 @@ async function prepareVenv(
   options: ProvisionOptions,
 ): Promise<PythonRuntimePaths> {
   const venvPython = venvPythonPath(root);
-  const current = !options.force && (await venvIsCurrent(root, target, source)) && existsSync(venvPython);
   // The lock plan is what "installed on this platform" means; on a warm venv it
   // still has to be reported, so the skip list survives a no-op provisioning.
   let skipped: LockSkip[] = lockPlanForTarget(target).skipped;
+  let current = !options.force && (await venvIsCurrent(root, target, source)) && existsSync(venvPython);
+  if (current) {
+    // A matching marker proves a pip run FINISHED, not that the packages are
+    // importable. Verify, and treat a venv that cannot import the locked set as
+    // not current — otherwise a half-installed venv keeps its "ready" badge and
+    // every tool that needs the missing package degrades instead of failing.
+    const missing = await missingLockedImports(venvPython, target);
+    if (missing.length > 0) {
+      progress(`runtime is missing ${missing.join(', ')} — reinstalling the locked set`);
+      current = false;
+    }
+  }
 
   if (!current) {
     await writeState(root, { phase: 'venv', error: null, target, source, interpreter });
@@ -770,6 +864,17 @@ async function prepareVenv(
       progress,
       options.pipTimeoutMs ?? DEFAULT_PIP_TIMEOUT_MS,
     );
+    // BEFORE the marker: a pip run that exits 0 has not thereby installed
+    // anything. The marker is what makes this venv "current" forever after, so
+    // writing it over a venv that cannot import the locked set is exactly how a
+    // `ready` runtime ends up with a silently dead ray engine.
+    const stillMissing = await missingLockedImports(venvPython, target);
+    if (stillMissing.length > 0) {
+      throw new Error(
+        `the dependency install finished but ${stillMissing.join(', ')} cannot be imported — ` +
+        'the runtime is NOT ready (marker not written, so the next call retries)',
+      );
+    }
     const marker: VenvMarker = {
       protocol: PYTHON_LOCK_PROTOCOL,
       pythonVersion: PYTHON_BUILD.pythonVersion,

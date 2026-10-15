@@ -2,7 +2,7 @@
 #
 # 1) Activate the host half.
 #
-# IMAGE POLICY (DESGIGN §16–17): NO route-level budget is patched at all —
+# IMAGE POLICY (DESIGN §16–17): NO route-level budget is patched at all —
 # the user's rule is that standard-mode sessions run on DSH FACTORY DEFAULTS
 # (deepseek 600/20, pi-ai unbounded) with zero plugin interference. The 造物
 # (cad) preset's 24-image retention window is enforced per SESSION by the
@@ -35,7 +35,7 @@
 # Replace the stock image-offload executor with the plugin's preset-aware one.
 # The stock `@deepseek-ai/dsh-compaction-image-offload` offloads the OLDEST
 # retained occurrences with no exemption, so the user's reference image —
-# always the oldest — is pruned first (measured on microscope3, DESGIGN §15.1).
+# always the oldest — is pruned first (measured on microscope3, DESIGN §15.1).
 # The plugin's executor (src/host/image-offload.ts) ports the stock behavior
 # and dispatches by the session's preset:
 #   * cad (造物模式): 24-image retention window + user-message top-level images

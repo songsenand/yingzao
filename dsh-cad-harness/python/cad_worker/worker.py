@@ -43,7 +43,9 @@ drives:
     measure_extent     axial min/max/centre and the extremal vertices, any axis
     measure_angle      angle + line distance between two named directions
     assembly_contracts the contract half of check_assembly: five operators, undeclared neighbours
-    import_mesh     parse/scale/weld one STL into a storable mesh (import_part)
+    import_mesh     parse/scale/weld one STL/STEP/DXF into a storable mesh (import_part)
+                    STEP via cascadio(OpenCASCADE)→GLB, DXF via ezdxf (2D profiles
+                    extruded with depthMm through manifold3d, or 3D mesh entities)
     scad_prelude        the datum prelude injected into every part
     scad_parse_output   errors/warnings/datums from one OpenSCAD run
     scad_parse_params   the `// PARAMS` convention
@@ -52,6 +54,12 @@ drives:
     measure_part        whole-part ground truth (volume/area/centroid/genus)
     check_printability  wall thickness + overhang screen
     mpm_create/step/state/destroy   MLS-MPM fluid kernel (stateful, keyed by id)
+                                    Two engines behind one entry (`_mpm_step_once`):
+                                    numba JIT (adopted 2026-10-14, 5.1-8.7x over
+                                    numpy / 1.3-2.0x over TS, DECISION-LOG same day,
+                                    module `mpm_numba.py`) and the numpy kernel as
+                                    oracle + platform fallback. `CAD_MPM_ENGINE`
+                                    forces (forced numba + unavailable = raise).
     fluid_run           drive the fluid scenario + SDF projection + audit
     crash           raises on purpose, to prove the traceback path
 
@@ -90,6 +98,7 @@ OPS = [
     "measure_thickness",
     "list_features",
     "measure_section",
+    "passage_bottleneck",
     "measure_extent",
     "measure_angle",
     "assembly_contracts",
@@ -133,7 +142,7 @@ def op_ping(_params: dict) -> dict:
 def op_versions(_params: dict) -> dict:
     import importlib
 
-    wanted = ["numpy", "scipy", "trimesh", "manifold3d", "networkx", "skfem", "rtree", "rapier3d", "shapely"]
+    wanted = ["numpy", "scipy", "trimesh", "manifold3d", "numba", "networkx", "skfem", "rtree", "rapier3d", "shapely", "cascadio", "ezdxf"]
     found = {}
     for name in wanted:
         try:
@@ -141,6 +150,11 @@ def op_versions(_params: dict) -> dict:
             found[name] = getattr(module, "__version__", "unknown")
         except BaseException as exc:  # noqa: BLE001 - report, do not die
             found[name] = f"unavailable: {type(exc).__name__}"
+    # xlb is reported by spec, not by import: importing pulls warp+jax (~seconds)
+    # and versions must stay cheap. The engine itself reports on first lbm_channel.
+    import importlib.util
+
+    found["xlb"] = "available (spec)" if importlib.util.find_spec("xlb") else "unavailable: not installed"
     return {"python": sys.version.split()[0], "packages": found}
 
 
@@ -352,6 +366,543 @@ def op_closest_mesh_sphere(params: dict) -> dict:
     }
 
 
+def op_void_reach(params: dict) -> dict:
+    """Voxel reachability: where can a ball of radius r NOT go?
+
+    ONE engine for two rules, because they ask the same question with a different r:
+      * CNC `toolRadiusMm` — r = the smallest cutter radius. A void region the cutter
+        cannot enter is a slot/pocket it cannot machine.
+      * `escapePassageMinMm` — r = required passage width / 2. A cavity (or the deep end
+        of a pocket) the ball cannot reach is where powder or uncured resin stays.
+
+    How it works, and the two mistakes the probe caught (both kept as comments because
+    each one produced plausible-looking numbers):
+
+      * "void with dt < r" is NOT "unreachable". The whole boundary layer of the outside
+        air has dt < r. Unreachable means: connected to the far field at t=0 but NOT
+        reachable by a ball of radius r. The first version reported ~2700 mm3 of phantom
+        cavity on a plain box.
+      * the ball sweep must use a SPHERICAL structuring element. `binary_dilation`'s
+        default is a diamond (L1), which under-covers the diagonals: a 4mm slot with a
+        3mm tool still reported 66 mm3 unreachable.
+      * a one-voxel-thick residual shell at the solid interface is voxelisation error,
+        not a pocket. Eroding the residual by one voxel removes the shell and keeps a
+        real pocket, so the criterion is "a region at least ~2 voxels thick".
+
+    THE 2-VOXEL FLOOR DOES NOT SCALE WITH THE RADIUS, and that bounds where the EXCLUSION
+    half may be trusted (measured 2026-10-13). A ball sweeping a cornered — or merely
+    voxelised, i.e. staircase — surface always leaves a residue whose depth grows with the
+    radius, so past a radius the floor is cleared by an artifact rather than by a pocket.
+    On the 20x6mm through-slot family at pitch 0.2 the boundary sits near r ≈ 1.7mm:
+    slots of 3.0/4.0/6.0mm at r = half the slot width (tool exactly fits ⇒ must NOT be
+    excluded) report 0mm3, 3.1mm3 (4 regions) and 31.0mm3 (4 regions) respectively, and a
+    round tunnel at exactly its own radius reports ~79mm3. Those small, corner-shaped
+    regions are the tool's unreachable corner, not a blocked passage — real for CNC
+    (`toolRadiusMm`), noise for powder/resin evacuation (`escapePassageMinMm`). Which of
+    the two a caller is asking about is a rule-layer decision this op cannot make.
+    Every threshold verdict reports a MARGIN, not a flag (DECISION-LOG 2026-10-11):
+    the caller gets each region's bottleneck radius, so zero/near-zero clearance can be
+    recorded as difficult instead of silently passing.
+    """
+    import numpy as np
+    import trimesh
+    from scipy import ndimage
+
+    pitch = float(params["pitchMm"])
+    required = float(params["requiredRadiusMm"])
+    max_voxels = int(params.get("maxVoxels") or 4_000_000)
+
+    mesh = trimesh.load(params["path"], process=True)
+    if not bool(mesh.is_watertight):
+        return {"refused": "the mesh is not watertight — voxelisation needs a closed solid"}
+
+    # The padding must leave a far-field air layer: `reachable()` identifies the region
+    # connected to the GRID BOUNDARY, so with no air layer that set is empty and every
+    # void voxel reads as unreachable. `ceiling` keeps that layer at least as thick as the
+    # largest radius the op asks about.
+    # NOTE (2026-10-13): this padding was once credited with the 1.600mm plateau that the
+    # margin half used to report. That attribution was WRONG — the value did not move when
+    # the padding was fixed, and the plateau is a corner artifact of the ball sweep (see
+    # the refusal in the return value and `experiments/20261013_void_reach_tightest_plateau.md`).
+    ceiling = max(2.0 * required, 4.0 * pitch)
+    grid = mesh.voxelized(pitch=pitch).fill()
+    solid = np.asarray(grid.matrix)
+    # Voxel (i, j, k) sits at `origin + i*pitch` in mesh coordinates, and the padding is
+    # counted in array indices — so every coordinate handed back must add `origin` again
+    # (`centerMm` below). Omitting it put every reported pocket centre off by the mesh AABB
+    # minimum: 2026-10-13 probe on a part whose bounds start at (-10, -10, -5) had the
+    # reported centres 10-12mm away from the pockets they named.
+    origin = np.asarray(grid.transform[:3, 3], dtype=float)
+    pad = int(np.ceil((ceiling + 4.0 * pitch) / pitch))
+    solid = np.pad(solid, pad, constant_values=False)
+    dims = [int(x) for x in solid.shape]
+    if dims[0] * dims[1] * dims[2] > max_voxels:
+        return {
+            "refused": (
+                f"a {pitch}mm grid over this part needs {dims[0]}x{dims[1]}x{dims[2]} = "
+                f"{dims[0]*dims[1]*dims[2]} voxels (limit {max_voxels}). Refusing rather than "
+                "coarsening silently: a coarser grid would over-report widths and could pass "
+                "exactly the feature this rule exists to catch."
+            )
+        }
+
+    void = ~solid
+    dt = ndimage.distance_transform_edt(void) * pitch
+
+    def ball(rv: int):
+        g = np.ogrid[-rv:rv + 1, -rv:rv + 1, -rv:rv + 1]
+        return (g[0] ** 2 + g[1] ** 2 + g[2] ** 2) <= rv * rv
+
+    def reachable(radius: float):
+        """Void voxels a ball of `radius` can sweep, coming from the far field."""
+        mask = (dt > 0.0) if radius <= 0.0 else (dt >= radius)
+        lab, _ = ndimage.label(mask)
+        edge = set()
+        for face in (lab[0, :, :], lab[-1, :, :], lab[:, 0, :], lab[:, -1, :], lab[:, :, 0], lab[:, :, -1]):
+            edge |= set(np.unique(face).tolist())
+        edge.discard(0)
+        return np.isin(lab, list(edge))
+
+    outside = reachable(0.0)
+    swept = ndimage.binary_dilation(reachable(required), structure=ball(int(np.ceil(required / pitch))))
+    residual = outside & ~swept
+    genuine = ndimage.binary_erosion(residual, structure=ball(1))
+
+    labels, count = ndimage.label(genuine)
+    regions = []
+    if count > 0:
+        sizes = ndimage.sum(genuine, labels, index=np.arange(1, count + 1))
+        order = np.argsort(-np.asarray(sizes))
+        for rank, idx in enumerate(order):
+            cluster = labels == (idx + 1)
+            voxels = int(sizes[idx])
+            coords = np.argwhere(cluster)
+            centre = coords.mean(axis=0)
+            entry = {
+                "centerMm": [round(float(origin[i] + (centre[i] - pad) * pitch), 3) for i in range(3)],
+                "voxelCount": voxels,
+                "volumeMm3": round(voxels * pitch ** 3, 3),
+            }
+            # The MEASURED value: the largest radius that still reaches this region.
+            # Binary search, only for the biggest few regions (each step is a labelling).
+            if rank < 3:
+                probe = tuple(int(x) for x in coords[len(coords) // 2])
+                lo, hi = 0.0, required
+                for _ in range(12):
+                    mid = (lo + hi) / 2
+                    if reachable(mid)[probe]:
+                        lo = mid
+                    else:
+                        hi = mid
+                entry["bottleneckRadiusMm"] = round(lo, 3)
+            regions.append(entry)
+
+    # THE TIGHTEST PASSAGE IS **NOT REPORTED**, and that is deliberate (2026-10-13).
+    #
+    # A `tightest(lo, hi)` bisection used to live here: it returned the largest radius at
+    # which the ball sweep stopped leaving a residue thicker than the 2-voxel noise floor.
+    # It was meant to be the clearance of a passage that the ball still fits through (the
+    # zero-clearance case the margin band is about), but it does not measure passage WIDTH:
+    # for any passage whose cross-section has a CORNER — every polygon, and every staircase
+    # step of a voxelised curved surface — the ball sweep ALWAYS leaves a corner residue,
+    # whose depth grows with the radius. So the first radius at which that residue clears
+    # the noise floor is a property of the corner, not of the passage.
+    #
+    # Measured 2026-10-13 on the 20x6mm through-slot family (pitch 0.2, probe:
+    # experiments/scripts/probe_void_reach_tightest.py, report:
+    # experiments/20261013_void_reach_tightest_plateau.md):
+    #   * square slots 3.0 / 4.0 / 6.0mm ALL returned 1.600 — width-independent, and
+    #     1.600 = 8 x pitch, i.e. the flip sits on the pitch grid;
+    #   * the flip is driven by the removal of the dt == 1.600 voxel shell (forcing the
+    #     structuring element radius does not move it);
+    #   * the surviving residue is 100% inside the slot's four CORNERS;
+    #   * a ROUND tunnel of the same widths tracks the true radius (1.397 / 1.887 / 2.883);
+    #   * an L-inf structuring element (which cannot leave a corner residue) returns
+    #     2.0 / 3.0 for the 4.0 / 6.0mm slots.
+    # No choice of structuring element repairs this (a cube over-reports a round passage),
+    # so a corner-free definition of the margin half is a DESIGN decision, not a fix. Until
+    # it is made, `tightestPassageRadiusMm` is null and the per-region
+    # `bottleneckRadiusMm` (which asks "does a ball of radius r reach THIS point" and is
+    # corner-free by construction) is the number to use.
+    #
+    # Reporting null instead of a plausible-looking wrong number is the rule this op
+    # already follows for `maxVoxels` and non-watertight meshes.
+
+    return {
+        "pitchMm": pitch,
+        "requiredRadiusMm": required,
+        "dims": dims,
+        "resolvableMm": round(3.0 * pitch, 3),
+        "tightestPassageRadiusMm": None,
+        "tightestUnavailable": (
+            "not reported: the residual-based bisection measured corner sharpness, not passage "
+            "width (2026-10-13 — 3.0/4.0/6.0mm square slots all returned the same 1.600mm). "
+            "Use each region's bottleneckRadiusMm. See "
+            "experiments/20261013_void_reach_tightest_plateau.md for the evidence and the "
+            "corner-free definitions still to be chosen."
+        ),
+        "unreachable": regions,
+        "unreachableVolumeMm3": round(float(genuine.sum()) * pitch ** 3, 3),
+    }
+
+
+def _extent_along_axis(mesh, axis):
+    """[low, high] of the vertex envelope along `axis` — same convention as `measure_extent`."""
+    import numpy as np
+
+    projections = np.asarray(mesh.vertices, dtype=float) @ np.asarray(axis, dtype=float)
+    return float(np.min(projections)), float(np.max(projections))
+
+
+def _surface_topology(mesh) -> dict:
+    """壳数 + 每个壳的亏格 —— "有没有路"是拓扑问题，不是几何测量问题。
+
+    闭合可定向的单壳曲面满足 `欧拉数 = 2 − 2g`，所以 `g = (2 − euler)/2` 就是这条壳上的
+    **独立隧道条数**；壳数则是"含几个封闭内腔"。整数运算，**没有 pitch、没有分辨率取舍**——
+    这正是体素路线栽跟头的地方。实测 9 个已知件全部分类正确
+    （见 `experiments/20261013_section_mic_strategy.md`）。
+    """
+    shells = mesh.split(only_watertight=False)
+    genus = [int(round((2.0 - float(shell.euler_number)) / 2.0)) for shell in shells]
+    return {"shells": len(shells), "genusPerShell": genus, "tunnels": int(sum(genus))}
+
+
+def _cut_section(mesh, normal, at_mm):
+    """一张切片里的**空隙区域**（材料截面凸包 − 材料），外加"必须是内孔"的过滤。
+
+    返回 `(void, frame, cutThePart)`：
+      * `void` 是 shapely 几何（可能是 MultiPolygon）；`None` 表示这一刀没有可用截面；
+      * `cutThePart` 说明这一刀到底有没有切到零件 —— 走查靠它区分"通路到了表面"（切不到）
+        与"通路在零件内部断掉"（切到但空隙没了，即盲特征）。
+    构造与示例台架 `examples/passage-bottleneck/tools/bottleneck_report.py` 的 `void_region`
+    一致：精确切割 → `polygonize` → 面内一点判材料 → 凸包减材料。
+    """
+    import numpy as np
+    import trimesh
+    from shapely.geometry import LineString
+    from shapely.ops import polygonize, unary_union
+
+    n = np.asarray(normal, dtype=float)
+    n = n / np.linalg.norm(n)
+    origin = n * at_mm
+    u, v = _plane_basis(n)
+    segments = trimesh.intersections.mesh_plane(mesh, n, origin)
+    if len(segments) == 0:
+        return None, (u, v, origin), False
+    flat = np.asarray(segments, dtype=float).reshape(-1, 3) - origin
+    uv = np.round(np.column_stack([flat @ u, flat @ v]).reshape(-1, 2, 2), 6)
+    material = []
+    for candidate in polygonize(unary_union([LineString(s) for s in uv])):
+        point = np.asarray(candidate.representative_point().coords, dtype=float)[0]
+        world = origin + u * point[0] + v * point[1]
+        if bool(mesh.contains(world.reshape(1, 3))[0]):
+            material.append(candidate)
+    if not material:
+        return None, (u, v, origin), True
+    solid_section = unary_union(material)
+    hull = solid_section.convex_hull
+    void = hull.difference(solid_section)
+    # 「必须是内孔」：空隙截面不能碰到截面外轮廓。碰到只有两种情形——刀口切出零件之外
+    # （那里的"空隙"是尖角薄片，内切圆可以任意小 ⇒ 假报窄），或刀口顺着通路走
+    # （不把两端分开，它的数不支撑任何结论）。实测：不加这一条，30° 斜孔的近两端切片
+    # 被读成 0.178mm（真值 4.000）。
+    if void.is_empty or void.boundary.distance(hull.boundary) <= 1e-3:
+        return None, (u, v, origin), True
+    return void, (u, v, origin), True
+
+
+def _pick_anchored(void, anchor_uv, previous_uv, jump_limit_mm):
+    """从一张切片的空隙区域里挑出**锚点所在的那一条**（其余通路不参与）。
+
+    这是"必须锚定到开口"的执行形式（DECISION-LOG 2026-10-13）：同一张平面上可能有好几条
+    通路，而一张平面只能给一个可证的数（取各分量的**最大**），于是宽通路会把窄的盖住 ——
+    实测 Ø6 与 Ø1 两条平行孔盲扫读 2.996，真相 0.500。
+
+    首刀取离锚点投影最近的分量；之后取**与上一刀所选分量最近**的那个，于是沿通路"跟着走"。
+    但"最近的那个"永远存在 —— 锚的那条一旦断掉，纯取最近会**安静地跳到另一条通路上**。
+    实测 2026-10-13：零件上有一条 Ø3 贯通排液孔和一个 Ø1 盲孔，锚在盲孔上时，走查在盲孔底
+    之后跳到了排液孔上，把死胡同报成"贯通、瓶颈 0.499"。所以这里加**跳跃上限**：
+    候选必须落在上一刀截面附近（同一段通路相邻两刀的相对位移量级 = 步长×tanθ），
+    超出上限就返回 `None` ⇒ 走查认定"这一端在零件内部断掉" ⇒ 不出数。
+    """
+    import shapely
+
+    parts = [void] if void.geom_type == "Polygon" else list(void.geoms)
+    parts = [part for part in parts if part.geom_type == "Polygon" and part.area > 0]
+    if not parts:
+        return None
+    if previous_uv is not None:
+        best = min(parts, key=lambda part: part.distance(previous_uv))
+        return best if best.distance(previous_uv) <= jump_limit_mm else None
+    point = shapely.Point(anchor_uv)
+    best = min(parts, key=lambda part: part.distance(point))
+    return best if best.distance(point) <= jump_limit_mm else None
+
+
+def _mic_radius(geometry, tolerance_mm: float):
+    """该截面的最大内切圆半径；切成多块时取**各块的最大值**（不是面积最大的那块）。
+
+    最大内切圆只能落在其中一块里；按面积挑块会把"大而扁"的一块当成答案，从而**低报**
+    （实测：斜孔上低报到 0.178mm）。取最大分量同时也是可证性要求的：一张平面上的结论只能是
+    "没有半径 r 的球能停在**这张平面**上"。
+    """
+    import shapely
+
+    parts = [geometry] if geometry.geom_type == "Polygon" else list(geometry.geoms)
+    best = None
+    for part in parts:
+        if part.geom_type != "Polygon" or part.area <= 0:
+            continue
+        radius = float(shapely.length(shapely.maximum_inscribed_circle(part, tolerance_mm)))
+        if best is None or radius > best:
+            best = radius
+    return best
+
+
+def _ray_leaves_the_part(mesh, origin, direction, u, v) -> bool:
+    """从空隙里的一个点沿轴射出去，是不是**直接离开零件**（一次都不碰料）。
+
+    单条射线会栽在三角形接缝/顶点上：盲孔底的圆心正是一圈扇形三角面的**顶点**，实测从孔内
+    沿轴射出得到 0 次相交（看起来像"从开口出去了"），于是一个死胡同被判成贯通。这与
+    DESIGN.md §13.8b 记的三条引擎约束第 1 条是同一个坑（`$fn=64` 圆管上沿顶点线射 4 次
+    却报 0 次）。所以按同样的处置：**一簇微小偏移探针取中位数**，落单的退化值被票数压掉。
+    """
+    import numpy as np
+
+    counts = []
+    for magnitude in (0.0, 0.01, 0.05):
+        for step in range(0 if magnitude == 0.0 else 8):
+            angle = (2.0 * math.pi * step) / 8.0
+            offset = u * (magnitude * math.cos(angle)) + v * (magnitude * math.sin(angle))
+            probe = origin + offset
+            hits = mesh.ray.intersects_location(
+                ray_origins=np.asarray(probe, dtype=float).reshape(1, 3),
+                ray_directions=np.asarray(direction, dtype=float).reshape(1, 3))[0]
+            counts.append(len(hits))
+    counts.sort()
+    return counts[len(counts) // 2] == 0
+
+
+def op_passage_bottleneck(params: dict) -> dict:
+    """一条**指名通路**的瓶颈半径 —— 截面最大内切圆沿通路取最小。
+
+    为什么是这个形状（三条都已定案，见 DECISION-LOG 2026-10-13）：
+
+    1. **先拓扑**：`tunnels = 0` 就没有通路，不出数；有封闭内腔转 S2-a 的负体积判据（尺寸 0）。
+    2. **锚定到一个开口**：输入是**一个开口**（点 + 轴），不是"一个零件"。全零件盲扫会把
+       窄通路盖住 —— 实测 Ø6 + Ø1 两条平行贯通孔，盲扫读 2.996，而最窄那条是 0.500。
+       锚点就用 `list_features` 报出的孔（`centerMm` + `axisMm`）。
+    3. **只在横切上出数**：`MIC(空隙 ∩ 平面) ≥ 平面上最大的 dt`，而穿过通路的球心必须穿过
+       把两端分开的平面 ⇒ `MIC < r` 证明半径 r 的球过不去。切到零件但空隙截面不是"内孔"
+       的刀一律不要（`_cut_section`）。
+
+    **走查**：从锚点站位沿 ±轴各走一趟，步长 = 轴向量程 / max(8, budget/6)，记下每刀接受的
+    半径；某一方向连续两刀没有可用截面就停。停下的那一刀**还切到材料** ⇒ 通路在零件内部
+    断掉（盲特征）⇒ 报 `未判定`，不出数；**切不到材料** ⇒ 这一端到了表面。两侧都到表面才
+    算 `throughAlongAxis`。然后在最小站位附近二分细化（预算的一半）。
+
+    已知边界：走查步长可能跨过一段很短的颈（采样问题），所以输出必须带 `sectionsAccepted`
+    与最窄处位置，让人能判断"查得够不够全"；锚点只认**平面面上的开口**，曲面上的开口
+    （`list_features` 报不出）在本 op 里无法锚定，那属于后续工作。
+    """
+    import numpy as np
+
+    mesh = _load(params["path"])
+    if not bool(mesh.is_watertight):
+        return {"refused": "the mesh is not watertight — a section needs a closed solid"}
+    axis = np.asarray(_axis_vector(params.get("fromAxis") or params.get("axisMm") or "z"),
+                      dtype=float)
+    axis = axis / float(np.linalg.norm(axis))
+    anchor = np.asarray(params.get("fromMm"), dtype=float).reshape(3)
+    budget = max(16, int(params.get("budget") or 120))
+
+    topology = _surface_topology(mesh)
+    if topology["tunnels"] == 0:
+        return {
+            "topology": topology,
+            "reachable": False,
+            "refused": ("no passage exists on this solid (every shell has genus 0): the surface has "
+                        "only blind dents/cavities. A fully sealed cavity is S2-a's negative-volume "
+                        "verdict (passage size 0), and a blind dent is UNDETERMINED — neither is a "
+                        "width this op may report."),
+        }
+
+    low, high = _extent_along_axis(mesh, axis)
+    span = float(high - low)
+    tolerance = max(1e-4, span * 1e-5)
+    # 步长必须按**开口自身**的尺度取，不能按整个零件的量程取。实测 microscope4 v031：
+    # 开口面积 11.56mm² 的非圆贯通孔，按 span/20（那件 ~10mm）走一步就**跨过了 3mm 厚的壁**，
+    # 于是每个站位都落空、被误判成"死胡同"。开尺度大约束"多小的收窄还分辨得出"，
+    # 所以它决定步长；span 只用来兜底（上下限）。调用方从 list_features 拿到面积就能给 fromSizeMm。
+    try:
+        feature_size = float(params.get("fromSizeMm") or 0.0)
+    except (TypeError, ValueError):
+        feature_size = 0.0
+    if not (feature_size > 0):
+        feature_size = span / 50.0
+    # 均匀步长，尺度取**开口自身**而不是整个零件：开口尺度大约束"多细的收窄还分辨得出"，
+    # 所以它决定步长，span 只用来兜底上下限。曾经试过"近处细、远处按 ×1.5 渐粗"，在真实件上
+    # 失败：300mm 的件步长会涨到 15mm，而跳跃上限（2×步长）随之涨到 30mm，走查开始在相距
+    # 几十毫米的特征之间乱跳。**代价是长通路可能走不完**——那就如实报"没走完"
+    # （`endConditions` / `coveredMm`），由调用方决定要不要加预算，而不是靠悄悄跨步掩盖。
+    step = min(max(feature_size / 6.0, span / 400.0), max(span / 20.0, 1e-6))
+
+    # 锚点在"切片 uv"里的位置与站位无关：平面的两个基向量都垂直于轴。
+    _u, _v = _plane_basis(axis)
+    anchor_uv = (float(anchor @ _u), float(anchor @ _v))
+    start = float(anchor @ axis)
+
+    # 跳跃上限：同一段通路相邻两刀的相对位移量级是 步长×tanθ（θ 为斜穿角）；两条不同通路的
+    # 分开距离通常是"中间隔着的材料"。取 2 倍步长，既容得下斜穿的漂移，又拦得住跳过去。
+    jump_limit = max(2.0 * step, 3.0 * tolerance)
+
+    sections = []          # [(站位, 半径, 截面几何(uv), 世界圆心)]
+    cuts = 0
+    ends = {}
+    accepted_per_direction = {"+": 0, "-": 0}
+    for direction, tag in ((1.0, "+"), (-1.0, "-")):
+        # 参照点：先是锚点自身（它就在开口平面上），之后是上一刀截面的中心。用它判断
+        # "这一端出去了没有"——**不能**用"这一刀还切不切到零件"：同一个高度上零件别处的料
+        # 照样会让平面切到东西。实测 microscope4 v031 的 h48：锚点在 z=301.87，往 +z 走
+        # 8 刀都"切到零件"（那是零件别处的料），于是这个**开口自己的面**被误判成死胡同，
+        # 一条真贯通的 3.4mm 孔被报成不出数。同理，斜孔出零件后平面还会切零件的角
+        # （03-tilted-bore 实测约 2mm）。所以判据是"延续点在不在实体里"，而且要往外多推几档。
+        ref_world = anchor.copy()
+        ref_station = start
+        previous = None
+        ends[tag] = "ran out of range"
+        station = start + direction * step
+        while cuts < budget and low - step <= station <= high + step:
+            void, _frame, _cut_the_part = _cut_section(mesh, axis, station)
+            cuts += 1
+            picked = None
+            if void is not None:
+                picked = _pick_anchored(void, anchor_uv, previous, jump_limit)
+            if picked is None:
+                # 到头了。是"到了表面"还是"在材料内部断掉"？**从最后一个已知在空隙里的点，
+                # 沿轴射一条线**：这条射线要么穿过开口出去（0 次相交），要么撞上前面的料
+                # （≥1 次相交 ⇒ 死胡同）。
+                #   之前用过两种更朴素的判据，都在真实件上翻过车：
+                #   ① "这一刀还切不切到零件" —— 同一高度上零件别处的料会骗过它（h48）；
+                #   ② "把中心往外推几档再问实体" —— 推近了会停在孔内（孔内不是实体，于是被当成
+                #      空气 ⇒ 假"表面"，A′ 的盲孔就是这样变成贯通的），推远了又会越过薄壁。
+                # 射线只有一个前提：起点必须在空隙里（用截面的 representative_point，而不是质心）。
+                origin = ref_world + axis * (1e-3 * direction)
+                # 射线方向必须跟着**这一趟走的方向**：用 +axis 会让 - 方向那一趟朝开口上方射，
+                # 于是 0 次相交、死胡同被判成贯通（实测 A′ 的 Ø1 盲孔）。
+                ends[tag] = ("surface"
+                             if _ray_leaves_the_part(mesh, origin, axis * direction, _u, _v)
+                             else "dead end inside the material")
+                break
+            radius = _mic_radius(picked, tolerance)
+            if radius is not None:
+                # representative_point 而不是质心：质心可能落在非凸截面的料里，那样后面的射线
+                # 判据、以及"最窄处在哪"都会被污染。
+                inside_uv = np.asarray(picked.representative_point().coords, dtype=float)[0]
+                ref_world = axis * float(station) + _u * inside_uv[0] + _v * inside_uv[1]
+                ref_station = float(station)
+                sections.append((float(station), float(radius), picked, ref_world.copy()))
+                previous = picked
+                accepted_per_direction[tag] += 1
+            station += direction * step
+        if tag == "-" and ends["-"].startswith("dead end"):
+            break
+
+    # 只统计**这一段通路真正存在的方向**：锚点落在零件的内部台阶面上时，朝外的那一侧
+    # 根本就是料（0 个截面），那不是"通路在这里断掉"。实测 microscope4 v031 的 h48：
+    # 锚点在 z=301.87 的内部台阶面上，通路朝上走 5 刀后出到表面（r=1.7），朝下那侧是实心；
+    # 早先把"朝下那侧没有截面"也当成死胡同，于是一条真贯通的孔被拒绝出数。
+    active = [tag for tag, count in accepted_per_direction.items() if count > 0]
+    dead_end = [tag for tag in active if ends[tag].startswith("dead end")]
+    at_surface = [tag for tag in active if ends[tag] == "surface"]
+    common = {
+        "topology": topology,
+        "anchorMm": [_round3(float(x)) for x in anchor],
+        "axisMm": [_round3(float(x)) for x in axis],
+        "endConditions": ends,
+        "stepMm": _round3(step),
+        "featureSizeMm": _round3(feature_size),
+        "cuts": cuts,
+        "sectionsAccepted": len(sections),
+    }
+    if not sections:
+        return dict(common, reachable=False, refused=(
+            "the anchor does not name a passage: no section of the void could be attributed to it. "
+            "Check that `fromMm` lies on an opening of a through passage (list_features reports the "
+            "openings it can name)."))
+    if dead_end:
+        # 走查在零件内部断掉 ⇒ 这个开口是**死胡同**（盲特征），或者通路拐出了跳跃上限。
+        # 无论哪一种，都把数字扣下：不出数才是诚实的结果。
+        return dict(common, reachable=False, throughAlongAxis=False, bottleneckRadiusMm=None,
+                    sampledSpanMm=[_round3(min(item[0] for item in sections)),
+                                   _round3(max(item[0] for item in sections))],
+                    refused=(
+                        "the anchored walk stopped inside the material on the "
+                        f"{'/'.join(dead_end)} side: this opening is a dead end (a blind feature) or "
+                        "the passage turns further than one step allows. A dead end is NOT a "
+                        "bottleneck of width 0, so no width is reported. A sealed cavity is S2-a's "
+                        "verdict; a blind dent stays UNDETERMINED unless a profile declares a depth "
+                        "threshold."))
+
+    # 自适应细化：在最小站位与它相邻的较小一侧之间二分（台架里 C 策略实测 0.1%）。
+    while cuts < budget and len(sections) >= 2:
+        sections.sort(key=lambda item: item[0])
+        best = min(range(len(sections)), key=lambda index: sections[index][1])
+        neighbours = [sections[index] for index in (best - 1, best + 1) if 0 <= index < len(sections)]
+        if not neighbours:
+            break
+        neighbour = min(neighbours, key=lambda item: item[1])
+        if abs(neighbour[0] - sections[best][0]) < 1e-4:
+            break
+        station = (sections[best][0] + neighbour[0]) / 2.0
+        void, _frame, _cut = _cut_section(mesh, axis, station)
+        picked = None if void is None else _pick_anchored(
+            void, anchor_uv, sections[best][2], jump_limit)
+        if picked is None:
+            break
+        radius = _mic_radius(picked, tolerance)
+        cuts += 1
+        if radius is None:
+            break
+        centre_uv = np.asarray(picked.centroid.coords, dtype=float)[0]
+        sections.append((float(station), float(radius), picked,
+                         axis * float(station) + _u * centre_uv[0] + _v * centre_uv[1]))
+
+    tightest = min(sections, key=lambda item: item[1])
+    intervals = sorted(item[0] for item in sections)
+    return {
+        "topology": topology,
+        "anchorMm": [_round3(float(x)) for x in anchor],
+        "axisMm": [_round3(float(x)) for x in axis],
+        "reachable": True,
+        # 两端都走到表面才算"这条通路被完整走完"。没走全时**仍然出数**——单个可用截面就是
+        # "这里过不去"的证据（下界性质），覆盖不全只会漏报，不会假排除——但必须披露。
+        # "这条通路被完整走完" = 它存在的每个方向都走到了表面。只走通一侧（另一侧没有通路）
+        # 也算走完；一侧在材料内部断掉则是死胡同，上面已经拒绝。
+        "throughAlongAxis": bool(active) and len(at_surface) == len(active),
+        "bottleneckRadiusMm": _round3(float(tightest[1])),
+        "tightestAtMm": [_round3(float(x)) for x in tightest[3]],
+        "endConditions": ends,
+        "coveredMm": [_round3(min(item[0] for item in sections)),
+                       _round3(max(item[0] for item in sections))],
+        "extentAlongAxisMm": [_round3(low), _round3(high)],
+        "sectionsAccepted": len(sections),
+        "cuts": cuts,
+        "sampledSpanMm": [_round3(intervals[0]), _round3(intervals[-1])],
+        "micToleranceMm": tolerance,
+        "disclosure": (
+            "this is the bottleneck of the ONE passage named by the anchor, measured as the "
+            "smallest maximum-inscribed-circle over transverse sections. It is proof of "
+            "'too narrow' when below a requirement, and never proof of 'wide enough to vent' — a "
+            "wide spot can still be a dead end. Sampling can step over a very short neck, so "
+            "`sectionsAccepted`/`sampledSpanMm` are part of the answer. Other openings of this "
+            "part were NOT measured unless they are asked for in their own call, and a passage "
+            "whose openings cannot be named (holes on curved surfaces, or two tunnels that cannot "
+            "be paired up) stays UNDETERMINED."
+        ),
+    }
+
+
 def op_connectivity(params: dict) -> dict:
     """Connected bodies + strict watertight test for one saved version.
 
@@ -395,9 +946,41 @@ def op_connectivity(params: dict) -> dict:
     for body in bodies:
         body.pop("firstFace", None)
 
+    # ENCLOSED VOIDS (2026-10-11). A sealed cavity — a hollow modelled as a boolean
+    # difference with no drain/escape hole — is invisible to the body count: it is a
+    # SECOND shell, and shells>1 is also what two floating fragments look like. The
+    # divider is the SIGN of each shell's volume. For a consistently wound solid the
+    # divergence theorem gives the outer surface a positive volume and a cavity's
+    # surface a NEGATIVE one, because a cavity's outward normal (outward from the
+    # MATERIAL) points into the void. Sum them and you get the material volume back:
+    # hollow sphere R10/r9 → +4188.8 − 3053.6 = +1135.2 mm³. So: negative = a void,
+    # positive = a separate body. That distinction is what makes "trapped powder /
+    # uncured resin can never leave" a geometric WITNESS rather than a guess.
+    voids = []
+    for component in components:
+        tris = faces[np.asarray(component, dtype=np.int64)]
+        a = vertices[tris[:, 0]]
+        b = vertices[tris[:, 1]]
+        c = vertices[tris[:, 2]]
+        signed = float(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
+        if signed >= -1e-6:
+            continue
+        used = np.unique(tris.reshape(-1))
+        points = vertices[used]
+        voids.append(
+            {
+                "volumeMm3": round(abs(signed), 3),
+                "center": [round(float(x), 3) for x in points.mean(axis=0)],
+                "min": [round(float(x), 3) for x in points.min(axis=0)],
+                "max": [round(float(x), 3) for x in points.max(axis=0)],
+            }
+        )
+    voids.sort(key=lambda void: -void["volumeMm3"])
+
     return {
         "bodies": bodies,
         "count": len(bodies),
+        "voids": voids,
         "watertight": _is_watertight(faces),
         "triangles": int(len(faces)),
     }
@@ -408,6 +991,13 @@ def _watertight_bad_edges(faces) -> int:
     `isWatertight`'s `undirectedBad`: a directed edge must appear exactly once AND
     its reverse must exist. trimesh's own `is_watertight` only counts undirected
     edge sharing, which is laxer and would silence real warnings.
+
+    WHY SORTS AND `searchsorted` INSTEAD OF `np.unique` / `np.isin` (measured
+    2026-10-13, numpy 2.5.3, 1.29M directed-edge keys = a 430k-triangle part):
+    `np.unique` WITHOUT `return_counts` and `np.isin` take numpy's hash path, which
+    on this array cost 765ms and 750–1539ms per call against 55ms for a plain sort
+    and 27ms for a binary search. Same rule, evaluated on sorted keys, ~10× faster —
+    and this function is what made `list_features` slow (see `_mesh_watertight`).
     """
     import numpy as np
 
@@ -415,14 +1005,33 @@ def _watertight_bad_edges(faces) -> int:
     if faces.size == 0:
         return 1
     edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0).astype(np.int64)
-    directed = edges[:, 0] * 4294967296 + edges[:, 1]
-    unique, counts = np.unique(directed, return_counts=True)
-    if len(unique) == 0:
+    # Vertex indices are packed into one sortable key; 2**32 is above anything a
+    # 32-bit vertex buffer can hold, so the packing stays injective.
+    forward = np.sort(edges[:, 0] * 4294967296 + edges[:, 1])
+    if len(forward) == 0:
         return 1
-    bad = int(np.count_nonzero(counts != 1))
-    reverse = edges[:, 1] * 4294967296 + edges[:, 0]
-    has_reverse = np.isin(unique, np.unique(reverse))
-    return bad + int(np.count_nonzero(~has_reverse))
+    reverse = np.sort(edges[:, 1] * 4294967296 + edges[:, 0])
+
+    # Group starts of a sorted key array: a new distinct key begins wherever the
+    # neighbour differs. Group SIZE is the old `counts`.
+    starts = np.empty(len(forward), dtype=bool)
+    starts[0] = True
+    np.not_equal(forward[1:], forward[:-1], out=starts[1:])
+    group_start = np.flatnonzero(starts)
+    sizes = np.diff(np.append(group_start, len(forward)))
+    bad = int(np.count_nonzero(sizes != 1))
+
+    # `reverse` is already sorted, so its distinct keys are its group starts — no
+    # second dedupe pass — and membership is a C-level binary search, not a hash set.
+    reverse_starts = np.empty(len(reverse), dtype=bool)
+    reverse_starts[0] = True
+    np.not_equal(reverse[1:], reverse[:-1], out=reverse_starts[1:])
+    reverse_unique = reverse[np.flatnonzero(reverse_starts)]
+    present = forward[group_start]
+    position = np.searchsorted(reverse_unique, present)
+    np.clip(position, 0, len(reverse_unique) - 1, out=position)
+    missing = int(np.count_nonzero(reverse_unique[position] != present))
+    return bad + missing
 
 
 def _is_watertight(faces) -> bool:
@@ -435,6 +1044,32 @@ def _is_watertight(faces) -> bool:
 
     faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     return bool(faces.size > 0 and _watertight_bad_edges(faces) == 0)
+
+
+def _mesh_watertight(mesh) -> bool:
+    """`_is_watertight` for a trimesh mesh, asked at most ONCE per mesh object.
+
+    Not a micro-optimisation — this was the whole cost of `list_features` on a big
+    part (measured 2026-10-13): `_ray_spans` needs the flag to decide whether a
+    point-in-solid test means anything, and `op_list_features` calls `_ray_spans`
+    once per hole. On a 21.5MB / 430k-triangle part that recomputed the same
+    1.29M-directed-edge pass 40 times: 50.9s of the op's 56.4s wall time.
+
+    The flag is a function of `mesh.faces` alone and nothing in this worker mutates
+    a mesh in place, so caching it on the object is the same answer for free. It is
+    per-object rather than module-level on purpose: the worker is long-lived, and an
+    id()-keyed global could serve a stale answer to a recycled address.
+    """
+    import numpy as np
+
+    cached = getattr(mesh, "_cad_watertight", None)
+    if cached is None:
+        cached = _is_watertight(np.asarray(mesh.faces))
+        try:
+            mesh._cad_watertight = cached
+        except AttributeError:  # a slotted or immutable mesh still gets the right answer
+            pass
+    return cached
 
 
 def _parse_stl_raw(path: str):
@@ -1038,7 +1673,7 @@ def _ray_spans(mesh, origin, direction, tolerance_mm, max_span_mm, label) -> dic
     u = u / float(np.linalg.norm(u))
     v = np.cross(in_dir, u)
 
-    watertight = _is_watertight(np.asarray(mesh.faces))
+    watertight = _mesh_watertight(mesh)
     point_inside = bool(mesh.contains(in_origin.reshape(1, 3))[0]) if watertight else None
 
     def probe(offset) -> dict:
@@ -1242,7 +1877,7 @@ def op_measure_thickness(params: dict) -> dict:
     for index, path in enumerate(paths[:2]):
         label = "ab"[index]
         mesh = _load(path)
-        watertight[label] = _is_watertight(np.asarray(mesh.faces))
+        watertight[label] = _mesh_watertight(mesh)
         if not watertight[label]:
             warnings.append(
                 f"part {label} is NOT watertight — every span computed on an open mesh is unreliable; "
@@ -1464,6 +2099,31 @@ def _signed_area(uv) -> float:
     return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
 
 
+def _interior_point_uv(ring):
+    """A point guaranteed to lie INSIDE a closed ring (2D uv), or None if it degenerates.
+
+    Why this exists next to `_fit_circle`: the fitted-circle centre is only guaranteed to be
+    inside the loop when the loop is roughly round or convex. On an L-shaped opening the
+    centre lands in the material that fills the missing corner, and every probe cast from
+    there starts inside the solid — measured 2026-10-13 on a 40x40x6 plate with a through L
+    slot: 25/25 samples along the wall thickness hit material from the fitted centre and
+    0/25 from this point. `measure_section` already reaches for `representative_point()`
+    for exactly this reason (an annulus' centroid sits in its bore).
+    """
+    import numpy as np
+    import shapely
+
+    points = np.asarray(ring, dtype=float)
+    if len(points) < 3:
+        return None
+    polygon = shapely.Polygon(points)
+    if not polygon.is_valid:                      # a self-touching ring is still a region
+        polygon = polygon.buffer(0)
+    if polygon.is_empty or polygon.area <= 0:
+        return None
+    return np.asarray(polygon.representative_point().coords, dtype=float)[0]
+
+
 def op_list_features(params: dict) -> dict:
     """The coordinate inventory a caller needs to measure geometry it did not draw.
 
@@ -1500,7 +2160,7 @@ def op_list_features(params: dict) -> dict:
 
     mesh = _load(params["path"])
     triangles = np.asarray(mesh.faces)
-    watertight = _is_watertight(triangles)
+    watertight = _mesh_watertight(mesh)
     smooth_deg = float(params.get("smoothDeg", 10.0))
     min_face_area = float(params.get("minFaceAreaMm2", 4.0))
     max_faces = int(params.get("maxFaces", 40))
@@ -1688,7 +2348,24 @@ def op_list_features(params: dict) -> dict:
             if round_enough:
                 entry["diameterMm"] = _round3(2 * radius)
             if with_hole_depth:
-                depth = hole_depth(center, normal, "a")
+                # The depth probe must start from a point that is INSIDE the opening loop.
+                # The fitted-circle centre is only guaranteed to be inside when the loop is
+                # roughly round/convex: on an L-shaped through slot it lands in the material
+                # that fills the missing corner, the ray hits that material 25/25 times along
+                # the wall thickness and the hole is reported as a BLIND one (`depthMm` ~
+                # 0.001). Measured 2026-10-13 on a 40x40x6 plate with an L slot: fitted-circle
+                # centre -> through false; `representative_point()` -> through true.
+                # So the probe point is the loop's own interior point, and the reported
+                # `centerMm` stays what it is (the fitted-circle centre, which is the right
+                # answer for a hole that IS round).
+                probe = center
+                try:
+                    point_uv = _interior_point_uv(uv)
+                    if point_uv is not None:
+                        probe = origin + u * point_uv[0] + v * point_uv[1]
+                except Exception:  # noqa: BLE001 - a degenerate ring must not lose the probe
+                    probe = center
+                depth = hole_depth(probe, normal, "a")
                 entry["through"] = depth is None
                 if depth is not None:
                     entry["depthMm"] = _round3(depth)
@@ -2082,7 +2759,7 @@ def op_measure_extent(params: dict) -> dict:
     low, high = float(projections[low_index]), float(projections[high_index])
 
     warnings: list[str] = []
-    if not _is_watertight(np.asarray(mesh.faces)):
+    if not _mesh_watertight(mesh):
         warnings.append(
             "the mesh is NOT watertight — its extent is still readable (it is the vertex envelope), "
             "but no volume or fit conclusion should be drawn from this part"
@@ -2243,7 +2920,7 @@ def op_measure_angle(params: dict) -> dict:
             snap = _snap_to_surface(mesh, point)
             # The normal of the face the probe LANDED on, from the snap itself.
             normal = np.asarray(snap["normal"], dtype=float)
-            if not _is_watertight(np.asarray(mesh.faces)):
+            if not _mesh_watertight(mesh):
                 warnings.append(
                     f"{label}: the mesh is NOT watertight — a face normal taken from an open mesh "
                     "may belong to a surface that is not a boundary of any solid"
@@ -2856,7 +3533,108 @@ def _weights32(coord, tap):
     return (0.5 * (0.5 + frac) * (0.5 + frac)).astype(np.float32)
 
 
+_MPM_ENGINE: str | None = None
+_MPM_NUMBA_MODULE = None
+
+_LBM_XLB_MODULE = None
+
+
+def _load_lbm_xlb():
+    """Load the XLB LBM engine sibling module, by explicit path.
+
+    Same pattern as _load_mpm_numba: the worker runs with `python -I`, so the
+    script directory is not on sys.path. The module owns the three xlb==0.3.1
+    compat shims (warp pin is in the lock; overlap checker; ZouHe
+    prescribed_values — see lbm_xlb.py docstring and DECISION-LOG 2026-10-15).
+    """
+    global _LBM_XLB_MODULE
+    if _LBM_XLB_MODULE is not None:
+        return _LBM_XLB_MODULE
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lbm_xlb.py")
+    spec = importlib.util.spec_from_file_location("lbm_xlb", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load lbm_xlb from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["lbm_xlb"] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop("lbm_xlb", None)
+        raise
+    _LBM_XLB_MODULE = module
+    return module
+
+
+def _load_mpm_numba():
+    """Load the sibling numba engine module, by explicit path.
+
+    The worker runs with `python -I` (isolated mode: the script directory is NOT
+    put on sys.path — python-worker.ts spawn), so a plain `import mpm_numba`
+    fails even though the file sits next to this one. Loading by path keeps the
+    engine a sibling file instead of inlining it into worker.py.
+    """
+    global _MPM_NUMBA_MODULE
+    if _MPM_NUMBA_MODULE is not None:
+        return _MPM_NUMBA_MODULE
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mpm_numba.py")
+    spec = importlib.util.spec_from_file_location("mpm_numba", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load mpm_numba from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["mpm_numba"] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop("mpm_numba", None)
+        raise
+    _MPM_NUMBA_MODULE = module
+    return module
+
+
+def _mpm_engine() -> str:
+    """Which MPM kernel runs: "numba" when importable, else "numpy".
+
+    Resolved once per process. `CAD_MPM_ENGINE` forces: `numba` RAISES when
+    unavailable — a forced engine that silently fell back would turn every
+    acceptance run into a silent false pass (the defect class HARNESS exists to
+    prevent); `numpy` pins the oracle path. Auto fallback is a PLATFORM fact,
+    not an error: the lock excludes numba on linux-musl and darwin-x64 (no cp313
+    wheels, DECISION-LOG 2026-10-14), and those targets legitimately run numpy.
+    Evidence of which engine ran goes to stderr once, and `op_versions` reports
+    numba's presence.
+    """
+    global _MPM_ENGINE
+    if _MPM_ENGINE is None:
+        forced = os.environ.get("CAD_MPM_ENGINE", "").strip().lower()
+        available = False
+        reason = ""
+        if forced != "numpy":
+            try:
+                _load_mpm_numba()
+                available = True
+            except BaseException as exc:  # noqa: BLE001 - report, do not die
+                reason = f"{type(exc).__name__}: {exc}"
+        if forced == "numba":
+            if not available:
+                raise RuntimeError(f"CAD_MPM_ENGINE=numba forced but numba is unavailable ({reason})")
+            _MPM_ENGINE = "numba"
+        elif forced == "numpy":
+            _MPM_ENGINE = "numpy"
+        else:
+            _MPM_ENGINE = "numba" if available else "numpy"
+        suffix = f" (numba unavailable: {reason})" if reason else ""
+        _log(f"mpm engine: {_MPM_ENGINE}{suffix}")
+    return _MPM_ENGINE
+
+
 def _mpm_step_once(world) -> None:
+    if _mpm_engine() == "numba":
+        _load_mpm_numba().step_once(world)
+        return
     import numpy as np
 
     config = world["config"]
@@ -3698,6 +4476,147 @@ def op_check_printability(params: dict) -> dict:
     thin_area_pct = (thin_area / surface_area * 100.0) if surface_area > 0 else 0.0
     wall_measured = measured > 0
 
+    # ---- draft (molding): the FEASIBLE DRAW-DIRECTION CONE --------------------
+    #
+    # A face with unit normal n needs draft delta: the angle between the face and the
+    # draw direction must be >= delta. With phi = the acute angle between n and the
+    # direction's LINE, draft = 90 - phi, so the face is satisfied iff
+    #     |n . d| >= sin(delta)
+    # i.e. TWO SPHERICAL CAPS of angular radius (90 - delta) around +n and -n. The
+    # part's feasible draw directions are the INTERSECTION of those caps over all faces.
+    #
+    # This replaces a withdrawn design that searched a fixed set of 26 directions and
+    # reported the least-bad one. That design was a TAUTOLOGY: some candidate direction
+    # is always parallel to a given face normal, so a zero-draft cube reported 0 mm2 of
+    # violation (draw along a body diagonal and all six faces have 35 deg of draft).
+    # It was withdrawn rather than shipped (DECISION-LOG 2026-10-11).
+    #
+    # EXACT where it matters: faces i,j are incompatible iff even the best of the four
+    # sign choices fails, which reduces to
+    #     acute_angle(line_i, line_j) > (90 - delta_i) + (90 - delta_j)
+    # That is a PROOF of infeasibility with a witness pair — no sampling involved. The
+    # non-empty side is a sampled estimate of the cone's size, and says so: proof for
+    # exclusion, estimate for the positive side, as everywhere else here.
+    #
+    # Faces are merged by orientation first: a mesh has thousands of triangles but few
+    # distinct normals, and the cone depends only on orientation.
+    draft = None
+    if params.get("draftMinDeg") is not None:
+        delta_deg = float(params["draftMinDeg"])
+        delta = math.radians(delta_deg)
+        keep = all_areas > 1e-4                      # drop true degenerate slivers
+        nrm, ar, ctr = all_normals[keep], all_areas[keep], all_centroids[keep]
+        if len(nrm) > 0:
+            key = np.round(nrm * 200.0).astype(np.int32)     # ~0.3 deg buckets
+            _uniq, inv = np.unique(key, axis=0, return_inverse=True)
+            nf = int(inv.max()) + 1
+            area_f = np.zeros(nf)
+            acc = np.zeros((nf, 3))
+            rep = np.zeros((nf, 3))
+            np.add.at(area_f, inv, ar)
+            np.add.at(acc, inv, nrm * ar[:, None])
+            biggest = np.zeros(nf)
+            for f in range(len(ar)):                 # representative = the biggest face
+                if ar[f] > biggest[inv[f]]:
+                    biggest[inv[f]] = ar[f]
+                    rep[inv[f]] = ctr[f]
+            norm = np.linalg.norm(acc, axis=1, keepdims=True)
+            dirs_f = acc / np.where(norm == 0, 1.0, norm)
+
+            # COMPLETE decision. An earlier version tested PAIRS of faces only, which is
+            # sufficient but NOT complete: a cube at delta=45 has an EMPTY cone that no
+            # pair reveals (every pair is satisfiable at zero margin — +x and +y both get
+            # exactly 45 deg along (0.707, 0.707, 0) — while the three mutually
+            # perpendicular ones together need |d.x|^2+|d.y|^2+|d.z|^2 >= 1.5 > 1).
+            #
+            # A non-empty intersection of caps either CONTAINS a cap centre or has an
+            # extreme point on two cap boundaries, i.e. a pairwise circle-circle
+            # intersection. So 2k centres + O(k^2) intersections decide emptiness EXACTLY.
+            #
+            # (All faces share one delta, so the caps share one radius; if per-face draft
+            #  ever arrives, the |rho_a - rho_b| term must return to the overlap test.)
+            cap_radius = 90.0 - delta_deg
+            rho = math.radians(cap_radius)
+            cos_rho, sin_rho = math.cos(rho), math.sin(rho)
+            centres = np.vstack([dirs_f, -dirs_f])
+            candidates = [c for c in centres]
+            k2 = len(centres)
+            for a in range(k2):
+                for b in range(a + 1, k2):
+                    u, v = centres[a], centres[b]
+                    gamma = math.acos(max(-1.0, min(1.0, float(u @ v))))
+                    if gamma > 2.0 * rho + 1e-12:
+                        continue
+                    e = v - float(v @ u) * u
+                    ne = float(np.linalg.norm(e))
+                    if ne < 1e-12 or abs(sin_rho) < 1e-12:
+                        continue
+                    e = e / ne
+                    w = np.cross(u, e)
+                    cos_t = (cos_rho - cos_rho * float(u @ v)) / (sin_rho * float(e @ v))
+                    if abs(cos_t) > 1.0 + 1e-9:
+                        continue
+                    t = math.acos(max(-1.0, min(1.0, cos_t)))
+                    for sgn in (1.0, -1.0):
+                        candidates.append(cos_rho * u + sin_rho * (math.cos(t * sgn) * e + math.sin(t * sgn) * w))
+
+            cone_empty = True
+            best_cand = None
+            for cand in candidates:
+                nlen = float(np.linalg.norm(cand))
+                if nlen < 1e-12:
+                    continue
+                unit = cand / nlen
+                margin_c = float((np.degrees(np.arcsin(np.clip(np.abs(dirs_f @ unit), 0.0, 1.0))) - delta_deg).min())
+                if best_cand is None or margin_c > best_cand[0]:
+                    best_cand = (margin_c, unit)
+                if margin_c >= -1e-9:
+                    cone_empty = False
+                    break
+
+            N = 20000                                    # Fibonacci sphere
+            kk = np.arange(N) + 0.5
+            zz = 1.0 - 2.0 * kk / N
+            rr = np.sqrt(np.maximum(0.0, 1.0 - zz * zz))
+            gg = math.pi * (1.0 + 5.0 ** 0.5) * kk
+            sphere = np.stack([rr * np.cos(gg), rr * np.sin(gg), zz], axis=1)
+            proj = np.abs(dirs_f @ sphere.T)                     # (nf, N)
+            satisfied = proj >= math.sin(delta) - 1e-12
+            feasible = satisfied.all(axis=0)
+            margins = np.degrees(np.arcsin(np.clip(proj, 0.0, 1.0))) - delta_deg
+            worst = margins.min(axis=0)
+            best_k = int(np.argmax(worst))
+            deficits = margins[:, best_k]
+            constraining = []
+            for f in np.argsort(deficits)[:3]:
+                relaxed = np.delete(satisfied, int(f), axis=0).all(axis=0) if nf > 1 else np.ones(N, bool)
+                constraining.append({
+                    "atMm": [round(float(x), 2) for x in rep[f]],
+                    "draftAtBestDeg": round(float(deficits[f] + delta_deg), 2),
+                    "deficitDeg": round(float(-deficits[f]), 2),
+                    "areaMm2": round(float(area_f[f]), 3),
+                    "feasiblePctIfRelaxed": round(float(relaxed.mean() * 100.0), 2),
+                })
+            draft = {
+                "requiredDraftDeg": delta_deg,
+                "distinctOrientations": nf,
+                "coneEmpty": cone_empty,
+                "candidatesChecked": len(candidates),
+                "bestCandidateMarginDeg": round(float(best_cand[0]), 3) if best_cand else None,
+                "bestCandidateDirectionMm": [round(float(x), 4) for x in best_cand[1]] if best_cand else None,
+                "feasiblePct": round(float(feasible.mean() * 100.0), 3),
+                "bestDirectionMm": [round(float(x), 4) for x in sphere[best_k]],
+                # margin = draft - delta, so draft = margin + delta. (An earlier version
+                # wrote 90 - (margin + delta), subtracting 90 twice and reporting 55.11 deg
+                # for a cube's body diagonal whose true worst-face draft is 34.9 deg.)
+                "bestWorstDraftDeg": round(float(worst[best_k] + delta_deg), 2),
+                "bestMarginDeg": round(float(worst[best_k]), 3),
+                "constrainingFaces": constraining,
+                "directionsSampled": N,
+                "note": ("feasiblePct is a SAMPLED estimate of the cone; infeasibility is "
+                         "proved separately by the pairwise contradiction test"),
+            }
+
     findings = []
     if not watertight:
         findings.append(
@@ -3738,6 +4657,9 @@ def op_check_printability(params: dict) -> dict:
     return {
         "verdict": verdict,
         **({"minWallMm": float(_js_to_fixed(min_wall, 3))} if math.isfinite(min_wall) else {}),
+        # The LOCATION of the thinnest wall. A number is not a witness: "0.60mm" is
+        # an argument, "[2.7,5.1,5.7]" is something a human can go and look at.
+        **({"minWallAtMm": [float(_js_to_fixed(v, 2)) for v in min_wall_at]} if min_wall_at else {}),
         "wallMeasured": wall_measured,
         "thinSamples": thin_samples,
         "sampled": sampled,
@@ -3749,6 +4671,7 @@ def op_check_printability(params: dict) -> dict:
             if math.isfinite(overhang_z_min)
             else []
         ),
+        **({"draft": draft} if draft else {}),
         "findings": findings,
         "watertight": watertight,
     }
@@ -4570,13 +5493,43 @@ def op_simulate_physics(params: dict) -> dict:
     }
 
 
+def op_lbm_channel(params: dict) -> dict:
+    """Run the XLB LBM channel template and report developed-flow metrics.
+
+    Stage A of the CFD lane (DECISION-LOG 2026-10-15): one narrow scenario
+    (rectangular channel, ZouHe velocity inlet, DoNothing outlet, halfway
+    bounce-back walls) so the acceptance can check analytical truth
+    (Poiseuille development, mirror symmetry), determinism and the compat
+    shims. CAD_LBM_ENGINE=off refuses loudly; there is no fallback engine, so
+    an unavailable xlb surfaces as a loud ok:false — never as an empty result.
+    """
+    forced = os.environ.get("CAD_LBM_ENGINE", "").strip().lower()
+    if forced == "off":
+        raise RuntimeError("CAD_LBM_ENGINE=off — LBM engine disabled by request")
+
+    mod = _load_lbm_xlb()
+    grid_shape = params.get("gridShape") or [48, 24, 24]
+    result = mod.run_channel(
+        grid_shape=[int(v) for v in grid_shape],
+        lattice_velocity=float(params.get("latticeVelocity") or 0.05),
+        reynolds=float(params.get("reynolds") or 100),
+        steps=int(params.get("steps") or 5000),
+    )
+    return result
+
+
 def op_import_mesh(params: dict) -> dict:
     """Parse → shells → scale → weld → solid verdict for `import_part`.
 
-    Mirrors the domain half of `importGeometry` in src/host/import.ts. What stays in
-    TS: path resolution, extension checks, hashing, unit/scale validation, datums
-    and version storage. The welded, scaled mesh is WRITTEN to `out` — that file is
-    what the version store holds — and its facts come back with it.
+    Mirrors the domain half of `importGeometry` in src/host/import.ts. Formats:
+    .stl (binary/ASCII, unit declared by the caller), .step/.stp (cascadio → GLB;
+    the GLB declares METERS — probed 2026-10-15 — so the soup is scaled ×1000 and
+    `appliedScale` reports the total), .dxf (ezdxf; $INSUNITS honoured, closed 2D
+    profiles extruded by depthMm through manifold3d, 3D mesh entities welded like
+    STL). What stays in TS: path resolution, extension checks, hashing, unit/scale
+    validation, datums and version storage. The welded, scaled mesh is WRITTEN to
+    `out` — that file is what the version store holds — and its facts come back
+    with it.
     """
     import numpy as np
     from manifold3d import Error, Manifold, Mesh
@@ -4584,28 +5537,47 @@ def op_import_mesh(params: dict) -> dict:
     path = params["path"]
     scale = float(params.get("scale", 1.0))
     out = params["out"]
+    ext = os.path.splitext(path)[1].lower()
 
-    data = open(path, "rb").read()
-    fmt = _detect_stl_format(data)
-    if fmt == "unknown":
-        raise ValueError(
-            f'not an STL I can read ({len(data)} bytes; neither binary — 84+n*50 — nor an ASCII "solid/facet" file). '
-            "If this is STEP/3MF/OBJ, see the import notes."
-        )
-    vertices = _parse_stl_raw(path).reshape(-1, 3) if fmt == "binary" else _parse_ascii_vertices(data)
+    if ext in (".step", ".stp"):
+        vertices, fmt, native_to_mm, warnings = _load_step_soup(path, params)
+    elif ext == ".dxf":
+        vertices, fmt, native_to_mm, warnings = _load_dxf_soup(path, params)
+    else:
+        data = open(path, "rb").read()
+        fmt = _detect_stl_format(data)
+        if fmt == "unknown":
+            raise ValueError(
+                f'not an STL I can read ({len(data)} bytes; neither binary — 84+n*50 — nor an ASCII "solid/facet" file). '
+                "If this is STEP/3MF/OBJ, see the import notes."
+            )
+        vertices = _parse_stl_raw(path).reshape(-1, 3) if fmt == "binary" else _parse_ascii_vertices(data)
+        native_to_mm = 1.0
+        warnings = []
     if len(vertices) == 0:
         raise ValueError("no triangles")
 
+    # The declared unit/scale is applied ONCE, before anything is measured, so
+    # every number this op returns is already in mm — native_to_mm folds the
+    # format's own unit statement (STEP meters → ×1000) into the same multiply.
+    applied_scale = scale * native_to_mm
+    # When the format's native unit is NOT mm, scale BEFORE welding: the weld
+    # grid is keyed at 1e-5 in the numbers it sees, and welding metre-scale
+    # values would quantize 1000× coarser than the same part in mm. STL (native
+    # mm) keeps the shipped order — weld first, then the declared scale.
+    # applied_scale stays the TOTAL (what the result reports); pre_weld_scale is
+    # only the part of it applied before the weld.
+    pre_weld_scale = applied_scale if native_to_mm != 1.0 else 1.0
+    if pre_weld_scale != 1.0:
+        vertices = np.asarray(vertices, dtype=np.float64) * pre_weld_scale
     welded, faces, degenerate = _weld(vertices, np.arange(len(vertices), dtype=np.int64).reshape(-1, 3))
     raw_triangles = int(len(faces))
     raw_vertices = int(len(welded))
     # Shells are counted on the file AS DELIVERED (welded, pre-scale): welding can
     # only merge what touches, and a multi-body file is something the caller must know.
     shells = _shell_count(faces)
-    # The declared unit/scale is applied ONCE, before anything is measured, so every
-    # number this op returns is already in mm.
-    if scale != 1.0:
-        welded = (welded.astype(np.float64) * scale).astype(np.float32)
+    if applied_scale != pre_weld_scale:
+        welded = (welded.astype(np.float64) * (applied_scale / pre_weld_scale)).astype(np.float32)
 
     mesh = Mesh(welded, faces)
     mesh.merge()
@@ -4632,7 +5604,7 @@ def op_import_mesh(params: dict) -> dict:
             else f"{bad_edges} edge(s) are not shared by exactly two triangles — the surface has holes or T-junctions"
         )
     return {
-        "format": "stl-binary" if fmt == "binary" else "stl-ascii",
+        "format": fmt if fmt.startswith(("step", "dxf")) else ("stl-binary" if fmt == "binary" else "stl-ascii"),
         "solid": bool(ok and not inverted),
         "inverted": inverted,
         "signedVolumeMm3": _round_js(volume),
@@ -4651,9 +5623,175 @@ def op_import_mesh(params: dict) -> dict:
             "max": [_round_js(v) for v in box[3:6]],
             "size": [_round_js(box[3] - box[0]), _round_js(box[4] - box[1]), _round_js(box[5] - box[2])],
         },
-        "appliedScale": scale,
+        "appliedScale": applied_scale,
+        "warnings": warnings,
         "outBytes": os.path.getsize(out),
     }
+
+
+# --- CAD import formats (import_mesh) — adopted 2026-10-15, DECISION-LOG same day.
+# Probe: experiments/20261015_cad_import_probe.md. Facts the code below relies on,
+# all measured:
+#   * cascadio's GLB declares METERS for STEP input (colored.step bbox 0.01 =
+#     10 mm), so the soup is scaled ×1000 here and `appliedScale` reports the total;
+#   * cascadio fails SILENTLY on formats OpenCASCADE cannot read (IGES): no
+#     exception, NO output file — the output's existence is part of the verdict;
+#   * manifold3d `CrossSection` (FillRule.EvenOdd) turns closed 2D DXF loops —
+#     outer loops and holes together — into one solid via `extrude`, so no
+#     triangulation add-on is needed; the result feeds the same STL tail flow.
+
+_DXF_INSUNITS_TO_MM = {
+    1: 25.4,       # inches
+    2: 304.8,      # feet
+    3: 1609344.0,  # miles
+    4: 1.0,        # millimetres (CAD convention)
+    5: 10.0,       # centimetres
+    6: 1000.0,     # metres
+    7: 1000000.0,  # kilometres
+}
+
+
+def _load_step_soup(path: str, params: dict) -> tuple:
+    """STEP/STP → cascadio (OpenCASCADE) → GLB → trimesh → triangle soup in mm."""
+    import numpy as np
+    import trimesh
+    import cascadio
+
+    scratch = os.path.dirname(os.path.abspath(params["out"]))
+    glb = os.path.join(scratch, f"step-{os.getpid()}-{time.time_ns()}.glb")
+    kwargs = {}
+    if params.get("tolLinear") is not None:
+        kwargs["tol_linear"] = float(params["tolLinear"])
+    if params.get("tolAngular") is not None:
+        kwargs["tol_angular"] = float(params["tolAngular"])
+    cascadio.step_to_glb(path, glb, **kwargs)
+    try:
+        # cascadio does NOT raise when OpenCASCADE cannot read a file — IGES does
+        # exactly this: an ERR line on stderr and no output. Existence is the verdict.
+        if not os.path.exists(glb) or os.path.getsize(glb) == 0:
+            raise ValueError(
+                "OpenCASCADE produced no geometry for this file (cascadio fails silently on formats it cannot "
+                "read — IGES is the known case). Re-export as STEP or STL and import that."
+            )
+        scene = trimesh.load(glb, process=False)
+        mesh = scene.to_mesh() if hasattr(scene, "to_mesh") else scene
+        verts = np.asarray(mesh.vertices, dtype=np.float64)
+        faces = np.asarray(mesh.faces, dtype=np.int64)
+        if len(faces) == 0:
+            raise ValueError("the STEP contains no tessellatable solids (empty geometry)")
+        # Soup stays in the FILE'S units (metres here); the op applies
+        # native_to_mm exactly once, before welding (the weld grid is 1e-5 mm).
+        soup = verts[faces].reshape(-1, 3)
+        return soup, "step-cascadio", 1000.0, [
+            "STEP units come from the file itself; appliedScale includes the ×1000 metres→mm step of the GLB "
+            "intermediate (probed 2026-10-15). Use scale for size corrections — the unit argument does not apply."
+        ]
+    finally:
+        try:
+            os.remove(glb)
+        except OSError:
+            pass
+
+
+def _load_dxf_soup(path: str, params: dict) -> tuple:
+    """DXF → ezdxf → triangle soup in mm: 3D mesh entities as-is, or closed 2D
+    profiles extruded by depthMm through manifold3d."""
+    scratch = os.path.dirname(os.path.abspath(params["out"]))
+    # ezdxf writes a font cache under ~/.cache by default; containers may not have
+    # one and the warning would pollute stderr on every call.
+    os.environ.setdefault("EZDXF_CONFIG_DIR", os.path.join(scratch, "ezdxf-config"))
+    import numpy as np
+    import ezdxf
+    from ezdxf import recover
+    from ezdxf.disassemble import recursive_decompose, to_primitives
+
+    try:
+        # `recover` is the malformed-ASCII path; it cannot read BINARY DXF (its
+        # text loader chokes on the "AutoCAD Binary DXF" sentinel), so binary
+        # files are detected by magic and read with the strict loader, which
+        # auto-detects the format.
+        with open(path, "rb") as handle:
+            head = handle.read(22)
+        if head.startswith(b"AutoCAD Binary DXF"):
+            doc, auditor = ezdxf.readfile(path), None
+        else:
+            doc, auditor = recover.readfile(path)
+    except Exception as exc:
+        raise ValueError(f"ezdxf could not read this file: {exc}")
+    warnings = []
+    if auditor is not None and auditor.has_errors:
+        warnings.append(f"ezdxf recovered this file with {len(auditor.errors)} error(s); invalid entities may be missing.")
+
+    code = int(doc.header.get("$INSUNITS", 0) or 0)
+    factor = _DXF_INSUNITS_TO_MM.get(code)
+    if factor is None:
+        factor = 1.0
+        warnings.append(
+            f"DXF $INSUNITS={code} (absent or not a length unit): coordinates treated as the declared unit (default mm)."
+        )
+    elif code != 4:
+        warnings.append(f"DXF $INSUNITS={code}: coordinates scaled ×{factor} to mm; the unit argument was ignored.")
+
+    depth = params.get("depthMm")
+    if depth is not None and (not isinstance(depth, (int, float)) or float(depth) <= 0):
+        raise ValueError(f"depthMm must be a positive number of millimetres, got {depth!r}")
+
+    msp = doc.modelspace()
+    # 3D mesh entities first: a file that carries its own solids means them.
+    soup = []
+    for primitive in to_primitives(recursive_decompose(msp)):
+        mb = primitive.mesh
+        if mb is None or len(mb.faces) == 0:
+            continue
+        for face in mb.faces:
+            idx = [int(i) for i in face]
+            for k in range(1, len(idx) - 1):  # fan-triangulate the n-gon
+                soup.append((mb.vertices[idx[0]].xyz, mb.vertices[idx[k]].xyz, mb.vertices[idx[k + 1]].xyz))
+    if soup:
+        if depth is not None:
+            warnings.append("depthMm was ignored: the DXF carries 3D mesh entities, which are imported as-is.")
+        # Soup stays in the file's own units; the op applies `factor` exactly once.
+        return np.asarray(soup, dtype=np.float64).reshape(-1, 3), "dxf-ezdxf-mesh", factor, warnings
+
+    # 2D profiles → manifold3d extrusion. depthMm is in mm (the stored frame), so
+    # the loops go to mm BEFORE the EvenOdd resolution and the extrude depth is
+    # the mm value verbatim.
+    from manifold3d import CrossSection, FillRule
+
+    if depth is None:
+        raise ValueError(
+            "this DXF has 2D drawing geometry only, and a profile is not a body: pass depthMm (millimetres) to "
+            "extrude the closed profiles into a solid, e.g. depthMm=10 for a 10 mm plate. Open curves and text are "
+            "not profiles and are ignored. Nothing was imported."
+        )
+    loops = []
+    open_curves = 0
+    for primitive in to_primitives(recursive_decompose(msp)):
+        p = primitive.path
+        if p is None:
+            continue
+        pts = np.asarray([(v.x, v.y) for v in p.flattening(0.01)], dtype=np.float64)
+        if len(pts) < 3 or not np.allclose(pts[0], pts[-1], atol=1e-6):
+            open_curves += 1
+            continue
+        loops.append((pts * factor).astype(np.float32))
+    if open_curves:
+        warnings.append(f"{open_curves} open curve(s) ignored (not closed profiles).")
+    if not loops:
+        raise ValueError("no closed 2D profiles and no mesh entities found in this DXF — nothing to import.")
+    section = CrossSection(loops, fillrule=FillRule.EvenOdd)
+    if section.is_empty():
+        raise ValueError("the closed profiles collapsed to an empty region (self-intersecting or degenerate loops).")
+    solid = section.extrude(float(depth))
+    if factor != 1.0:
+        warnings.append(
+            "depthMm is millimetres in the stored frame and is NOT scaled by $INSUNITS — the profile is at its "
+            f"real size (×{factor}), the plate is exactly depthMm thick."
+        )
+    mesh = solid.to_mesh()
+    verts = np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3]
+    faces = np.asarray(mesh.tri_verts, dtype=np.int64)
+    return verts[faces].reshape(-1, 3), "dxf-ezdxf-extrude", 1.0, warnings
 
 
 def _shell_count(faces) -> int:
@@ -4748,6 +5886,7 @@ HANDLERS = {
     "measure_thickness": op_measure_thickness,
     "list_features": op_list_features,
     "measure_section": op_measure_section,
+    "passage_bottleneck": op_passage_bottleneck,
     "measure_extent": op_measure_extent,
     "measure_angle": op_measure_angle,
     "assembly_contracts": op_assembly_contracts,
@@ -4756,6 +5895,7 @@ HANDLERS = {
     "scad_parse_output": op_scad_parse_output,
     "scad_parse_params": op_scad_parse_params,
     "simulate_physics": op_simulate_physics,
+    "lbm_channel": op_lbm_channel,
     "simulate_motion": op_simulate_motion,
     "measure_part": op_measure_part,
     "check_printability": op_check_printability,

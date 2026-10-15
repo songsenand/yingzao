@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toymarker.local/schemas/process-profile.schema.json",
+  "title": "Process profile",
+  "description": "A declared manufacturing process capability: the rules a part must satisfy to be makeable by ONE process + material + machine combination. Profiles are DATA, authored by the user, never inferred from geometry and never invented by a tool. Every rule carries provenance because an unprovenanced number is an unverifiable claim. See docs/DECISION-LOG.md 2026-10-11: the tool may only EXCLUDE (produce a witness) - it never ranks, scores or recommends.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "process", "rules"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Stable identifier, e.g. \"fdm-pla-0.4\". Recorded in every run so a verdict is interpretable later."
+    },
+    "process": {
+      "enum": ["FDM", "SLA", "SLS", "MJF", "injection", "CNC-3axis", "CNC-4axis", "CNC-5axis", "casting"],
+      "description": "The process family. Determines which rules are applicable at all - e.g. overhang is meaningless for powder-bed and for machining, draft is mandatory only for molding."
+    },
+    "material": { "type": "string", "description": "e.g. \"PLA\", \"PA12\", \"ABS\", \"6061-T6\"." },
+    "machine": { "type": "string", "description": "Free text; the machine is what a calibrated number is calibrated TO." },
+    "description": { "type": "string" },
+    "rules": { "$ref": "#/$defs/rules" },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "description": "Where this number comes from. `assumed` is allowed and must stay legible: an assumption is a finding, not a licence.",
+      "properties": {
+        "kind": { "enum": ["vendor-spec", "standard", "measured", "literature", "rule-of-thumb", "assumed"] },
+        "ref": { "type": "string", "description": "Vendor doc, standard clause, literature citation, or the coupon/run id for `measured`." },
+        "date": { "type": "string", "description": "ISO date; required in spirit for `measured` (numbers decay)." },
+        "by": { "type": "string" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applies", "decidable"],
+      "description": "One named rule. Rules are NAMED, not expressions: a named rule is enumerable, testable and answers \"which rule judged this?\". Anything needing arbitrary logic belongs in run_python, not here.",
+      "properties": {
+        "applies": {
+          "type": "boolean",
+          "description": "false = this rule does not govern this process. It must still be REPORTED (with `reason`), never silently dropped: telling an SLS part its overhang needs support is wrong, not conservative."
+        },
+        "decidable": {
+          "enum": ["geometry", "declared-requirement", "not-decidable"],
+          "description": "Whether a tool can decide it from the mesh alone. `geometry` = evaluable now. `declared-requirement` = needs a requirement declared elsewhere (e.g. a tolerance requirement to compare against tolerance capability). `not-decidable` = cost, lead time, yield - not geometric facts at all. The rule report's unevaluable list is DERIVED from this field, so it cannot drift out of sync."
+        },
+        "value": {
+          "type": ["number", "null"],
+          "description": "Threshold. Lengths in mm, angles in degrees (repo-wide convention: mm, z-up)."
+        },
+        "direction": {
+          "enum": ["min", "max"],
+          "description": "`min` = the measured quantity must be >= value (wall, feature, gap, draft, passage). `max` = must be <= value (overhang angle, bridge span, hole aspect)."
+        },
+        "reason": { "type": "string", "description": "Required when applies=false: why this rule does not govern this process." },
+        "source": { "$ref": "#/$defs/provenance" },
+        "detail": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "applies": { "const": true } }, "required": ["applies"] },
+          "then": { "required": ["value", "direction", "source"] }
+        },
+        {
+          "if": { "properties": { "applies": { "const": false } }, "required": ["applies"] },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The named rule set. Omitted rules are treated as `decidable: geometry, applies: true` with NO value = unevaluable, and are reported as such - a missing number is never read as \"no constraint\".",
+      "properties": {
+        "wallMinMm": { "$ref": "#/$defs/rule", "description": "Thinnest wall the process can produce reliably (two free surfaces, roughly parallel)." },
+        "featureMinMm": { "$ref": "#/$defs/rule", "description": "Smallest POSITIVE feature (pin, rib, boss). Distinct from a wall: it is bounded by one free surface, not two." },
+        "gapMinMm": { "$ref": "#/$defs/rule", "description": "Smallest NEGATIVE clearance that stays open instead of fusing, sagging shut or trapping powder." },
+        "overhangDeg": { "$ref": "#/$defs/rule", "description": "Down-facing faces steeper than this need support. applies=false for powder-bed, molding and machining." },
+        "bridgeMaxMm": { "$ref": "#/$defs/rule", "description": "Longest unsupported span that closes without support." },
+        "holeAspectMax": { "$ref": "#/$defs/rule", "description": "Depth / diameter limit for a drilled or printed hole." },
+        "draftMinDeg": { "$ref": "#/$defs/rule", "description": "Minimum draft for release from a mold. applies=false for additive and subtractive." },
+        "escapePassageMinMm": { "$ref": "#/$defs/rule", "description": "Smallest passage that lets trapped powder (SLS/MJF) or uncured resin (SLA/DLP) leave an enclosed or hollow region. applies=false elsewhere." },
+        "toolRadiusMm": { "$ref": "#/$defs/rule", "description": "Smallest cutter radius; internal corners below it cannot be cut and pockets narrower than it are unreachable." },
+        "tolMm": { "$ref": "#/$defs/rule", "description": "Achievable dimensional tolerance. A CAPABILITY, so `decidable` is declared-requirement: excluding on it needs a tolerance requirement to compare against." },
+        "surfaceRaUm": { "$ref": "#/$defs/rule", "description": "Achievable surface roughness. Not a geometric exclusion at all; declared-requirement at best." }
+      }
+    }
+  }
+}

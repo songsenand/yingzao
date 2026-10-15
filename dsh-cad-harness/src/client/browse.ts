@@ -1,4 +1,4 @@
-// The browse categories: 零件 / 组件 / 整体及仿真 / 装配契约 (DESGIGN §20).
+// The browse categories: 零件 / 组件 / 整体及仿真 / 装配契约 (DESIGN §20).
 //
 // Pure, and therefore testable: the panel's three-column browser is driven by
 // these lists, and getting them wrong is invisible until someone notices an

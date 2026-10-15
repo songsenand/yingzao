@@ -38,7 +38,7 @@ export interface RunProduct {
   sourceVersionIds: string[];
   /**
    * Source versions that are NO LONGER the newest version of their part
-   * (DESGIGN §22): the run still says "pass", but it verified geometry that has
+   * (DESIGN §22): the run still says "pass", but it verified geometry that has
    * since been replaced. Evidence expires with the version it cites.
    */
   staleVersionIds?: string[];

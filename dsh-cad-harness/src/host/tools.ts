@@ -17,6 +17,10 @@ import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
+import {
+  builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile,
+  type ProcessProfile,
+} from './process-profile.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { runMotion } from './motion.ts';
@@ -115,6 +119,14 @@ interface MeshSphereSolve {
 interface ConnectivitySolve {
   count: number;
   bodies: { min: number[]; max: number[] }[];
+  /**
+   * Sealed cavities: shells whose signed volume is NEGATIVE. A cavity's outward
+   * normal (outward from the material) points into the void, so the divergence
+   * theorem returns a negative volume for it and a positive one for a separate
+   * body. That sign is the only thing that tells "trapped powder" from "two
+   * floating fragments".
+   */
+  voids?: { volumeMm3: number; center: number[]; min: number[]; max: number[] }[];
   watertight: boolean;
   triangles: number;
 }
@@ -260,6 +272,7 @@ interface MeasureSectionSolve {
     }[];
   }[];
   polygonsOmitted: number;
+  voidRegions: number;
   holeSpacing: { from: string; to: string; centerDistanceMm: number; clearanceMm: number }[];
   areaMm2: number;
   perimeterMm: number;
@@ -307,6 +320,81 @@ interface MeasureAngleSolve {
 
 export function cadToolNames(): readonly string[] {
   return registeredCadTools;
+}
+
+/**
+ * Where the shipped example profiles live, from BOTH build layouts: `src/host/` when a
+ * script imports the source, `lib/` when the bundled plugin runs.
+ */
+const PROFILE_DIR_CANDIDATES = [
+  new URL('../../schemas/examples/', import.meta.url),
+  new URL('../schemas/examples/', import.meta.url),
+];
+
+/**
+ * Resolve the profiles a call declared. NO SILENT DEFAULT: with nothing declared the
+ * answer is the built-in fallback, and the caller is TOLD so (its id and hash go into
+ * the report). An invalid profile is refused with the offending rule named — never
+ * repaired, never partially applied.
+ */
+async function resolveProcessProfiles(
+  a: { profileIds?: string[]; profilesJson?: string },
+): Promise<{ profiles: ProcessProfile[]; source: 'declared' | 'builtin-default'; errors: string[] }> {
+  const errors: string[] = [];
+  const profiles: ProcessProfile[] = [];
+  if (a.profilesJson !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(a.profilesJson);
+    } catch (e) {
+      errors.push(`profilesJson is not valid JSON: ${(e as Error).message}`);
+      parsed = undefined;
+    }
+    if (parsed !== undefined) {
+      for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+        const v = validateProfile(item);
+        if (v.ok) profiles.push(v.profile);
+        else errors.push(...v.errors);
+      }
+    }
+  }
+  for (const id of a.profileIds ?? []) {
+    const dir = PROFILE_DIR_CANDIDATES.find((u) => existsSync(u));
+    const file = dir ? new URL(`${id}.json`, dir) : null;
+    if (!file || !existsSync(file)) {
+      errors.push(`no shipped profile "${id}" — looked for ${id}.json in schemas/examples/`);
+      continue;
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await readFile(file, 'utf8'));
+    } catch (e) {
+      errors.push(`${id}.json is not readable JSON: ${(e as Error).message}`);
+      continue;
+    }
+    const v = validateProfile(raw);
+    if (v.ok) profiles.push(v.profile);
+    else errors.push(...v.errors.map((m) => `${id}: ${m}`));
+  }
+  if (profiles.length === 0 && errors.length === 0) {
+    return { profiles: [builtinDefaultProfile()], source: 'builtin-default', errors };
+  }
+  return { profiles, source: 'declared', errors };
+}
+
+/**
+ * Per-version caches for the two expensive worker ops that profile-driven printability
+ * calls need. A saved version's model.stl NEVER changes — that is the corpus's core
+ * invariant (a corrected part is a NEW version) — so these results stay valid for the
+ * process lifetime. Without the cache, every call re-runs `list_features` (face
+ * clustering plus a depth ray per hole) and `connectivity`, which dominates the call.
+ */
+const featureCache = new Map<string, unknown>();
+const connectivityCache = new Map<string, ConnectivitySolve>();
+
+/** Cache key: the store root matters too — two projects can both have a "v001". */
+function versionCacheKey(storeRoot: string, versionId: string): string {
+  return `${storeRoot}::${versionId}`;
 }
 
 export function registerCadTools(
@@ -543,8 +631,13 @@ export function registerCadTools(
     });
     await run.json('report.json', report);
     await run.json('trajectory.json', { kind: 'motion', durationSec: report.durationSec, trajectory: report.trajectory });
-    const pngs = await renderKeyframes(report as unknown as PhysicsReport, stlFiles, join(run.dir, 'frames'));
-    const keep = pngs.slice(0, 4);
+    const { frames, warnings: renderWarnings } = await renderKeyframes(report as unknown as PhysicsReport, stlFiles, join(run.dir, 'frames'));
+    // A render that emits WARNING/ERROR is not a render you may trust (see
+    // renderKeyframes' header): surface it instead of attaching silent pictures.
+    if (renderWarnings.length > 0) {
+      report.metrics.jointViolations.push(...renderWarnings.slice(0, 3).map((w) => `render: ${w}`));
+    }
+    const keep = frames.slice(0, 4);
     const refs: { view: string; ref: unknown }[] = [];
     try {
       for (const f of keep) {
@@ -556,7 +649,7 @@ export function registerCadTools(
     }
     motionRefsForFinalize = { refs };
     const followerList = Object.values(report.metrics.followers ?? {});
-    // DESGIGN §21: 干涉不是"黄牌提醒"，是交付阻塞。机构里两个零件在运动中
+    // DESIGN §21: 干涉不是"黄牌提醒"，是交付阻塞。机构里两个零件在运动中
     // 相互重叠 = 几何上不可制造（要么留间隙要么有过盈声明），直接 fail（红）。
     const interferenceBlocking = report.metrics.interferenceCount > 0;
     const motionStatus: 'pass' | 'check' | 'fail' =
@@ -739,9 +832,9 @@ export function registerCadTools(
       }
       if ((parsed ? shellCount(parsed) : 0) > 1) {
         result.warnings.push(
-          `DISCIPLINE (DESGIGN §18): ${shellCount(parsed!)} disconnected bodies in one version — a part must be a ` +
+          `DISCIPLINE (DESIGN §18): ${shellCount(parsed!)} disconnected bodies in one version — a part must be a ` +
           'single connected solid. Either union the fragments in OpenSCAD, or model them as SEPARATE parts. ' +
-          'Run check_connectivity to see where each body sits.',
+          'Run measure_part to see where each body sits (it reports bodies, bodySizes, bodyCenters).',
         );
       }
 
@@ -854,6 +947,8 @@ export function registerCadTools(
     userIntent?: string;
     unit?: Unit;
     scale?: number;
+    /** Extrusion depth (mm) for DXF 2D closed profiles. */
+    depthMm?: number;
     datums?: DatumInput[];
     allowNonSolid?: boolean;
     render?: boolean;
@@ -898,6 +993,7 @@ export function registerCadTools(
       cwd: project.cwd,
       unit: a.unit,
       scale: a.scale,
+      depthMm: a.depthMm,
       allowNonSolid: a.allowNonSolid,
     });
     const datumSet = normalizeDatums(a.datums);
@@ -988,8 +1084,11 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'import_part',
     description:
-      'Import an external STL (binary or ASCII, mm z-up) as a new version of a part, so it can be measured, assembled and simulated like any generated part. ' +
-      'Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. STEP/IGES unsupported (no B-rep kernel) — convert to STL first.',
+      'Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation; file units are honored ' +
+      'and the result lands in mm) or DXF (closed 2D profiles extruded by depthMm, or 3D mesh entities) as a new ' +
+      'version of a part, so it can be measured, assembled and simulated like any generated part. ' +
+      'Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. ' +
+      'IGES is not readable — re-export STEP or STL instead.',
     parameters: {
       file: {
         type: 'string',
@@ -1010,11 +1109,15 @@ export function registerCadTools(
       },
       unit: {
         type: 'string',
-        description: 'The source file\'s unit as DECLARED by you: mm (default), cm, m or inch. STL carries no unit, so this is never inferred.',
+        description: 'The source file\'s unit as DECLARED by you: mm (default), cm, m or inch. STL carries no unit, so this is never inferred. STEP self-declares (mm only accepted); DXF $INSUNITS wins when set.',
       },
       scale: {
         type: 'number',
         description: 'Extra multiplier applied on top of unit, e.g. 0.5 for a half-scale model.',
+      },
+      depthMm: {
+        type: 'number',
+        description: 'Extrusion depth in mm for DXF 2D closed profiles, e.g. 10 for a 10mm plate. Required when a DXF has no 3D mesh entities; ignored otherwise.',
       },
       datums: {
         type: 'array',
@@ -1048,7 +1151,7 @@ export function registerCadTools(
         properties: {
           versionId: { type: 'string', required: true },
           part: { type: 'string', required: true },
-          format: { type: 'string', required: true, description: 'stl-binary or stl-ascii.' },
+          format: { type: 'string', required: true, description: 'stl-binary, stl-ascii, step-cascadio, dxf-ezdxf-extrude or dxf-ezdxf-mesh.' },
           solid: { type: 'boolean', required: true },
           watertight: { type: 'boolean', required: true },
           repaired: { type: 'array', required: true, items: { type: 'string' }, description: 'What welding changed, in words.' },
@@ -1736,8 +1839,11 @@ export function registerCadTools(
         keyframeCount: 6,
       });
       // Render keyframes and persist the newest 4 as model-visible attachments.
-      const pngs = await renderKeyframes(report, stlFiles, join(run.dir, 'frames'));
-      const keep = pngs.slice(0, 4);
+      const { frames, warnings: renderWarnings } = await renderKeyframes(report, stlFiles, join(run.dir, 'frames'));
+      if (renderWarnings.length > 0) {
+        report.metrics.jointViolations.push(...renderWarnings.slice(0, 3).map((w) => `render: ${w}`));
+      }
+      const keep = frames.slice(0, 4);
       const refs: { view: string; ref: unknown }[] = [];
       try {
         for (const f of keep) {
@@ -2323,9 +2429,18 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'measure_part',
     description:
-      'Whole-part ground truth: bounding box, volume, surface area, centre of mass, triangle count, watertightness, genus.',
+      'Whole-part ground truth in one call: bounding box (size AND min/max), volume, surface area, centre of ' +
+      'mass, triangle count, watertightness, genus, and the mutually disconnected BODIES with each one\'s ' +
+      'bbox (a part must be a single body). Pass `axis` (x|y|z, a leading "-" flips it) or `axisVector` for ' +
+      'a non-principal direction and you also get the projection along it: min/max, size, centre and the two ' +
+      'extremal VERTICES — the coordinates you would otherwise hunt for by hand, and a point ON the part to ' +
+      'hand to another measurement. mm, z-up. For a per-feature extent (a cylinder\'s length, a hole\'s ' +
+      'depth) use `list_features` instead. On an open / non-manifold mesh the mass properties are OMITTED ' +
+      '(with a warning) rather than guessed, but the body count still comes back.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version, e.g. "v003".' },
+      axis: { type: 'string', description: 'Optional. Project on x | y | z (a leading "-" flips it). For anything else use axisVector. Without either, only the axis-aligned bbox is reported.' },
+      axisVector: { type: 'array', description: 'Optional projection axis [x,y,z] for a non-principal direction (a diagonal, a slanted boss); normalised internally.', items: { type: 'number' } },
     },
     output: {
       schema: {
@@ -2334,127 +2449,393 @@ export function registerCadTools(
           versionId: { type: 'string', required: true },
           watertight: { type: 'boolean', required: true },
           triangles: { type: 'integer', required: true },
-          sizeMm: { type: 'array', required: true, items: { type: 'number' } },
-          volumeMm3: { type: 'number', required: true },
-          surfaceAreaMm2: { type: 'number', required: true },
-          centerOfMassMm: { type: 'array', required: true, items: { type: 'number' } },
-          genus: { type: 'integer', required: true },
-        },
-      },
-      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
-    },
-    timeoutMs: 30_000,
-    async execute(args: unknown, exec: unknown) {
-      const { versionId } = args as { versionId: string };
-      const { store } = await allStores(exec);
-      const m = await measureVersion(store, versionId);
-      return {
-        versionId: m.versionId,
-        watertight: m.watertight,
-        triangles: m.triangles,
-        sizeMm: m.boundingBoxMm.size,
-        volumeMm3: m.volumeMm3,
-        surfaceAreaMm2: m.surfaceAreaMm2,
-        centerOfMassMm: m.centerOfMassMm,
-        genus: m.genus,
-      };
-    },
-  }));
-
-  // --- measure_distance: two-point surface measurement (M2/M3 gap fill) ---
-  registerTool(defineTool({
-    name: 'measure_distance',
-    description:
-      'Exact distance between two points, each snapped to its part\'s surface; reports the snapped coordinates, how far your input was from the surface, and whether it was inside the solid. Datums resolve exactly, without snapping.',
-    parameters: {
-      versionId: { type: 'string', required: true, description: 'Saved version of the base part, e.g. "v003".' },
-      aPoint: { type: 'array', description: 'First point [x,y,z] mm — approximate is fine (snapped to surface). Give this OR aDatum.', items: { type: 'number' } },
-      bPoint: { type: 'array', description: 'Second point [x,y,z] mm. Give this OR bDatum.', items: { type: 'number' } },
-      bVersionId: { type: 'string', description: 'Second part to snap b onto (cross-part measurement). Defaults to versionId.' },
-      aDatum: { type: 'string', description: 'Name of a datum anchor declared via datum("name",[x,y,z]) in the part code. Resolved EXACT (no snapping) — prefer over aPoint.' },
-      bDatum: { type: 'string', description: 'Datum anchor name for b. Prefer over bPoint.' },
-      snap: { type: 'boolean', description: 'Snap raw coordinate inputs to the nearest surface point. Default true. Datum-resolved points are never snapped.' },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          distanceMm: { type: 'number', required: true },
-          dxMm: { type: 'number', required: true },
-          dyMm: { type: 'number', required: true },
-          dzMm: { type: 'number', required: true },
-          aSnapped: { type: 'array', required: true, items: { type: 'number' } },
-          bSnapped: { type: 'array', required: true, items: { type: 'number' } },
-          aSnapDistanceMm: { type: 'number', required: true },
-          bSnapDistanceMm: { type: 'number', required: true },
-          aOutside: { type: 'boolean', required: true },
-          bOutside: { type: 'boolean', required: true },
+          // NOT required: on an open / non-manifold mesh these are refused rather
+          // than guessed (a plausible volume for an open surface is a lie). The
+          // body fields below stay required — they are meaningful either way.
+          sizeMm: { type: 'array', items: { type: 'number' }, description: 'Bounding-box size [dx,dy,dz]. Absent when the mesh is not a valid manifold solid.' },
+          bboxMinMm: { type: 'array', items: { type: 'number' } },
+          bboxMaxMm: { type: 'array', items: { type: 'number' } },
+          volumeMm3: { type: 'number' },
+          surfaceAreaMm2: { type: 'number' },
+          centerOfMassMm: { type: 'array', items: { type: 'number' } },
+          genus: { type: 'integer' },
+          bodies: { type: 'number', required: true, description: 'Mutually disconnected solids, by SHARED EDGE. >1 means this is not one solid: union the fragments, or model them as SEPARATE parts.' },
+          bodySizes: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body [dx,dy,dz] mm, largest first.' },
+          bodyCenters: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body bbox centre [x,y,z] mm.' },
+          bodyVerdict: { type: 'string', required: true, description: '"single-body" | "multi-body".' },
+          extent: {
+            type: 'object', additionalProperties: false,
+            description: 'Present only when axis/axisVector was given.',
+            properties: {
+              axisMm: { type: 'array', required: true, items: { type: 'number' } },
+              source: { type: 'string', required: true },
+              vertexCount: { type: 'number', required: true },
+              minMm: { type: 'number', required: true, description: 'Smallest projection onto the axis.' },
+              maxMm: { type: 'number', required: true },
+              sizeMm: { type: 'number', required: true },
+              centerMm: { type: 'number', required: true },
+              minPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at minMm.' },
+              maxPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at maxMm.' },
+            },
+          },
           warnings: { type: 'array', items: { type: 'string' } },
         },
       },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     timeoutMs: 60_000,
+    // 2026-10-11: measure_extent and check_connectivity were merged INTO here.
+    // All three answered "what IS this part" about the whole body: extent's
+    // `asAxisAlignedMm` was already the bounding box this tool reports as `sizeMm`,
+    // and connectivity's body count belongs to the same watertight/genus family.
+    // Three entry points for one question is where "which of these do I call?"
+    // comes from. The fields are a pure UNION — nothing changed meaning, extent's
+    // axis simply became optional (absent = no projection block).
     async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string; aPoint?: number[]; bPoint?: number[]; aDatum?: string; bDatum?: string; bVersionId?: string; snap?: boolean };
+      const a = args as { versionId: string; axis?: string; axisVector?: number[] };
       const { store } = await allStores(exec);
-      const loadDatums = (v: string): Promise<Record<string, [number, number, number]>> =>
-        readVersionDatumPoints(store, v);
-      const resolve = async (side: 'a' | 'b', datumName?: string, point?: number[]): Promise<[number, number, number]> => {
-        if (datumName) {
-          const datums = await loadDatums(side === 'a' ? a.versionId : (a.bVersionId ?? a.versionId));
-          const hit = datums[datumName];
-          if (!hit) {
-            const known = Object.keys(datums).join(', ') || 'none';
-            throw new Error(`datum "${datumName}" not found on ${side === 'a' ? a.versionId : (a.bVersionId ?? a.versionId)} (declared: ${known})`);
-          }
-          return hit;
-        }
-        if (!point) throw new Error(`point ${side} needs aPoint/bPoint or ${side}Datum`);
-        return point as [number, number, number];
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) throw new Error(`version ${a.versionId} has no model.stl`);
+      const worker = await ensurePythonWorker();
+      // BODY COUNT FIRST, and never let a broken mesh hide it. This is the one
+      // field that must survive an open/non-manifold model — it is precisely when
+      // the mesh is broken that you need to know how many pieces there are. The
+      // mass properties, by contrast, are REFUSED on such a mesh rather than
+      // guessed (the measure op raises "not a valid manifold solid"; a plausible
+      // volume for an open surface is worse than no volume). Hence the optional
+      // fields in the schema: absent means "not obtainable", not "zero".
+      const conn = await worker.request<ConnectivitySolve>('connectivity', { path: modelPath });
+      let m: Awaited<ReturnType<typeof measureVersion>> | null = null;
+      let massError: string | null = null;
+      try {
+        m = await measureVersion(store, a.versionId);
+      } catch (e) {
+        massError = (e as Error).message;
+      }
+      const size = (b: { min: number[]; max: number[] }) => b.max.map((n, i) => +(n - b.min[i]!).toFixed(2));
+      const center = (b: { min: number[]; max: number[] }) => b.min.map((n, i) => +((n + b.max[i]!) / 2).toFixed(2));
+      let extent: Omit<MeasureExtentSolve, 'asAxisAlignedMm' | 'warnings'> | undefined;
+      if (m !== null && (a.axisVector !== undefined || a.axis !== undefined)) {
+        const e = await worker.request<MeasureExtentSolve>('measure_extent', {
+          path: modelPath,
+          axis: a.axisVector ?? a.axis ?? 'z',
+        });
+        extent = {
+          axisMm: e.axisMm, source: e.source, vertexCount: e.vertexCount,
+          minMm: e.minMm, maxMm: e.maxMm, sizeMm: e.sizeMm, centerMm: e.centerMm,
+          minPointMm: e.minPointMm, maxPointMm: e.maxPointMm,
+        };
+      }
+      const warnings: string[] = [];
+      if (massError !== null) {
+        warnings.push(
+          `volume / surface area / centre of mass / genus are OMITTED: the mesh is not a valid manifold ` +
+          `solid (${massError}). Fix the mesh first — on an open surface those numbers would be fiction. ` +
+          `The body count below is still meaningful.`,
+        );
+      }
+      // Two strict manifold tests agree by construction on healthy meshes. If they
+      // ever disagree, that disagreement IS the finding — report the conservative
+      // value and say so, rather than picking one silently.
+      if (m !== null && conn.watertight !== m.watertight) {
+        warnings.push(
+          `watertight disagrees between the strict manifold test (${conn.watertight}) and the measure op ` +
+          `(${m.watertight}) — treat the part as NOT watertight and investigate the mesh`,
+        );
+      }
+      return {
+        versionId: a.versionId,
+        watertight: m === null ? conn.watertight : conn.watertight && m.watertight,
+        triangles: conn.triangles,
+        bodies: conn.count,
+        bodySizes: conn.bodies.map(size),
+        bodyCenters: conn.bodies.map(center),
+        bodyVerdict: conn.count === 1 ? 'single-body' : 'multi-body',
+        ...(m !== null
+          ? {
+              sizeMm: m.boundingBoxMm.size,
+              bboxMinMm: m.boundingBoxMm.min,
+              bboxMaxMm: m.boundingBoxMm.max,
+              volumeMm3: m.volumeMm3,
+              surfaceAreaMm2: m.surfaceAreaMm2,
+              centerOfMassMm: m.centerOfMassMm,
+              genus: m.genus,
+            }
+          : {}),
+        ...(extent ? { extent } : {}),
+        ...(warnings.length ? { warnings } : {}),
       };
-      const aPt = await resolve('a', a.aDatum, a.aPoint);
-      const bPt = await resolve('b', a.bDatum, a.bPoint);
-      const versionStl = (v: string) => join(store.root, 'versions', v, 'model.stl');
-      if (!existsSync(versionStl(a.versionId))) throw new Error(`version ${a.versionId} has no model.stl`);
-      // The solve is Python's (batch 1); the parts travel as paths. datum-resolved
-      // points are exact declarations — never snap them; raw coordinate inputs snap
-      // to the nearest surface by default.
+    },
+  }));
+
+  // --- measure_gap: how far apart two things are, however you name them ------
+  //
+  // 2026-10-11: measure_closest and measure_distance were merged into this. Both
+  // answered ONE question — "how far apart are these two things?" — but each
+  // accepted only its own spelling of an endpoint, so a caller had to work out
+  // which tool took which form before it could ask. Now each endpoint is named ONE
+  // of four ways and the tool routes itself:
+  //
+  //   aVersionId / bVersionId   a whole saved solid   → solved closest-point pair
+  //   aSphere    / bSphere      an analytic sphere    → solved exactly
+  //   aPoint     / bPoint       a coordinate          → snapped to the surface
+  //   aDatum     / bDatum       a declared datum      → EXACT, never snapped
+  //
+  // Both endpoints must be the same KIND of thing: solid/sphere with solid/sphere
+  // (solved, no coordinates needed from you) or point/datum with point/datum (your
+  // inputs, snapped, with per-endpoint diagnostics). Mixing a solid with a point is
+  // REFUSED with an explicit message rather than silently picking one engine —
+  // that is a deliberate v1 scope, not a physical impossibility.
+  //
+  // Porting notes for callers of the two retired tools:
+  //   measure_closest  → unchanged (`pointA`/`pointB`, `method`, `frame`, render).
+  //   measure_distance → `aSnapped`/`bSnapped` are now `pointA`/`pointB`, and
+  //     `dxMm`/`dyMm`/`dzMm` are reported for solved pairs too (arithmetic on the
+  //     points, not a new measurement). Its `bVersionId`-as-"the part to snap B
+  //     onto" is now `bOn`, because `bVersionId` means "endpoint B IS that solid",
+  //     which is what it always meant in closest. The snap/inside diagnostics are
+  //     now OMITTED for a datum endpoint instead of being forced to 0/false:
+  //     a datum is never snapped, so those numbers would be invented.
+  registerTool(defineTool({
+    name: 'measure_gap',
+    description:
+      'How far apart two things are, however you name them. Each endpoint is ONE of: a saved solid ' +
+      '(`aVersionId`/`bVersionId`), an analytic sphere (`aSphere`/`bSphere`, solved exactly), a coordinate ' +
+      '(`aPoint`/`bPoint`, snapped to the surface by default) or a declared datum (`aDatum`/`bDatum`, ' +
+      'resolved EXACTLY and never snapped). Solid/sphere pairs are solved as a closest-point problem and ' +
+      'come back with an annotated render; point/datum pairs come back with per-endpoint snap distances and ' +
+      'whether your input point was inside the solid. Both endpoints must be the same kind — a solid cannot ' +
+      'be paired with a point in one call. mm, z-up.',
+    parameters: {
+      versionId: { type: 'string', description: 'The base part: it owns endpoint A and, unless bOn says otherwise, endpoint B. Required for point/datum endpoints; a solid/sphere pair does not need it.' },
+      aVersionId: { type: 'string', description: 'Endpoint A as a whole solid: saved version id.' },
+      aSphere: {
+        type: 'object',
+        description: 'Endpoint A as an analytic sphere probe {center:[x,y,z], radius} — solved exactly.',
+        additionalProperties: false,
+        properties: {
+          center: { type: 'array', required: true, items: { type: 'number' } },
+          radius: { type: 'number', required: true },
+        },
+      },
+      aPoint: { type: 'array', description: 'Endpoint A as a coordinate [x,y,z] mm — approximate is fine (snapped to versionId\'s surface). Give this OR aDatum.', items: { type: 'number' } },
+      aDatum: { type: 'string', description: 'Endpoint A as a datum anchor declared via datum("name",[x,y,z]). Resolved EXACT (no snapping) — prefer over aPoint.' },
+      bVersionId: { type: 'string', description: 'Endpoint B as a whole solid: saved version id.' },
+      bSphere: {
+        type: 'object',
+        description: 'Endpoint B as an analytic sphere probe.',
+        additionalProperties: false,
+        properties: {
+          center: { type: 'array', required: true, items: { type: 'number' } },
+          radius: { type: 'number', required: true },
+        },
+      },
+      bPoint: { type: 'array', description: 'Endpoint B as a coordinate [x,y,z] mm — snapped to bOn\'s surface (bOn defaults to versionId). Give this OR bDatum.', items: { type: 'number' } },
+      bDatum: { type: 'string', description: 'Endpoint B as a datum anchor on bOn (defaults to versionId). Resolved EXACT — prefer over bPoint.' },
+      bOn: { type: 'string', description: 'Which part a bPoint/bDatum endpoint belongs to. Defaults to versionId. (This is what the retired measure_distance meant by bVersionId.)' },
+      snap: { type: 'boolean', description: 'Snap raw coordinate inputs to the nearest surface point. Default true. Datum-resolved points are never snapped.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          distanceMm: { type: 'number', required: true },
+          dxMm: { type: 'number', required: true, description: 'pointB − pointA, componentwise.' },
+          dyMm: { type: 'number', required: true },
+          dzMm: { type: 'number', required: true },
+          pointA: { type: 'array', required: true, items: { type: 'number' } },
+          pointB: { type: 'array', required: true, items: { type: 'number' } },
+          method: { type: 'string', description: 'How the pair was solved. Present for solid/sphere endpoints.' },
+          frame: { type: 'string', description: 'Path of the annotated render, when one was produced.' },
+          aSnapDistanceMm: { type: 'number', description: 'How far endpoint A\'s raw coordinate was from the surface. Present for aPoint endpoints only (a datum is never snapped).' },
+          bSnapDistanceMm: { type: 'number' },
+          aOutside: { type: 'boolean', description: 'Whether endpoint A\'s input point was inside the part. Present for aPoint endpoints only.' },
+          bOutside: { type: 'boolean' },
+          warnings: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 180_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string;
+        aVersionId?: string; bVersionId?: string;
+        aSphere?: { center: number[]; radius: number };
+        bSphere?: { center: number[]; radius: number };
+        aPoint?: number[]; bPoint?: number[];
+        aDatum?: string; bDatum?: string;
+        bOn?: string; snap?: boolean;
+      };
+      const { store } = await allStores(exec);
+      const versionStl = (id: string) => join(store.root, 'versions', id, 'model.stl');
+      if (a.versionId !== undefined && !existsSync(versionStl(a.versionId))) {
+        throw new Error(`version ${a.versionId} has no model.stl`);
+      }
+
+      // Name the endpoints first: exactly one spelling each, and the same KIND on
+      // both sides. Every error names the spellings that were accepted, because a
+      // rejected call is where a caller learns the vocabulary.
+      const classify = (side: 'a' | 'b'): 'solid' | 'sphere' | 'point' | 'datum' => {
+        const spellings: [string, unknown][] = side === 'a'
+          ? [['aVersionId', a.aVersionId], ['aSphere', a.aSphere], ['aPoint', a.aPoint], ['aDatum', a.aDatum]]
+          : [['bVersionId', a.bVersionId], ['bSphere', a.bSphere], ['bPoint', a.bPoint], ['bDatum', a.bDatum]];
+        const named = spellings.filter(([, v]) => v !== undefined).map(([k]) => k);
+        if (named.length !== 1) {
+          throw new Error(
+            `endpoint ${side} needs exactly ONE of ${spellings.map(([k]) => k).join(' / ')} — ` +
+            `got ${named.length === 0 ? 'none' : named.join(' + ')}`,
+          );
+        }
+        const key = named[0]!;
+        return key.endsWith('VersionId') ? 'solid'
+          : key.endsWith('Sphere') ? 'sphere'
+          : key.endsWith('Datum') ? 'datum'
+          : 'point';
+      };
+      const kindA = classify('a');
+      const kindB = classify('b');
+      const solvedA = kindA === 'solid' || kindA === 'sphere';
+      const solvedB = kindB === 'solid' || kindB === 'sphere';
+      if (solvedA !== solvedB) {
+        throw new Error(
+          `cannot pair a ${kindA} endpoint with a ${kindB} endpoint in one call: solid/sphere pairs are ` +
+          'solved as a closest-point problem, point/datum pairs are snapped. Name both endpoints the same ' +
+          'way, or measure the two steps separately.',
+        );
+      }
+
+      const warnings: string[] = [];
+      const axis = (p: [number, number, number], q: [number, number, number]) =>
+        [0, 1, 2].map((i) => +(q[i]! - p[i]!).toFixed(3)) as [number, number, number];
+
+      if (!solvedA && a.versionId === undefined) {
+        throw new Error(
+          'a point/datum endpoint needs `versionId` — the part it belongs to (a bPoint/bDatum may name ' +
+          'another part with `bOn`). Only a solid/sphere pair can be measured without a base part.',
+        );
+      }
+      if (solvedA) {
+        // ---- solved pair: solid / sphere, no coordinates from the caller ------
+        if (a.aSphere && a.bSphere) {
+          throw new Error('sphere-vs-sphere: subtract the centres yourself — the distance is analytic');
+        }
+        const warnIfOpen = (v: string, label: string, watertight: boolean) => {
+          if (!watertight) {
+            warnings.push(`part ${label} (${v}) is NOT watertight — a closest-point pair on an open surface is not a clearance between solids (microscope3: this exact tool reported a fake 0.05mm margin on a broken mesh)`);
+          }
+        };
+        const worker = await ensurePythonWorker();
+        let distanceMm: number;
+        let pointA: [number, number, number];
+        let pointB: [number, number, number];
+        let method: string;
+        if (a.aSphere && a.bVersionId) {
+          const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
+            mesh: versionStl(a.bVersionId), center: a.aSphere.center, radius: a.aSphere.radius,
+          });
+          distanceMm = solved.distanceMm;
+          pointA = solved.spherePoint;
+          pointB = solved.meshPoint;
+          method = solved.method;
+          warnIfOpen(a.bVersionId, 'b', solved.watertight);
+        } else if (a.bSphere && a.aVersionId) {
+          const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
+            mesh: versionStl(a.aVersionId), center: a.bSphere.center, radius: a.bSphere.radius,
+          });
+          distanceMm = solved.distanceMm;
+          pointA = solved.meshPoint;
+          pointB = solved.spherePoint;
+          method = solved.method;
+          warnIfOpen(a.aVersionId, 'a', solved.watertight);
+        } else {
+          const solved = await worker.request<MeshMeshSolve>('closest_mesh_mesh', {
+            meshA: versionStl(a.aVersionId!), meshB: versionStl(a.bVersionId!),
+          });
+          distanceMm = solved.distanceMm;
+          pointA = solved.pointA;
+          pointB = solved.pointB;
+          method = solved.method;
+          warnIfOpen(a.aVersionId!, 'a', solved.watertightA);
+          warnIfOpen(a.bVersionId!, 'b', solved.watertightB);
+        }
+
+        // annotated render: parts + marker spheres + connector
+        const measureDir = join(store.root, 'measure');
+        await mkdir(measureDir, { recursive: true });
+        const partScad = async (versionId: string | undefined, color: string, name: string): Promise<string> => {
+          if (!versionId) return '';
+          const bytes = await readFile(join(store.root, 'versions', versionId, 'model.stl'));
+          const path = join(measureDir, `${name}.stl`);
+          await writeFile(path, bytes);
+          return `color("${color}", 0.7) import("${path}");\n`;
+        };
+        let scad = '';
+        scad += await partScad(a.aVersionId, '#4a7dbd', 'a');
+        scad += await partScad(a.bVersionId, '#c0392b', 'b');
+        if (a.aSphere) scad += `color("#4a7dbd", 0.5) translate([${a.aSphere.center.join(',')}]) sphere(r=${a.aSphere.radius}, $fn=64);\n`;
+        if (a.bSphere) scad += `color("#c0392b", 0.5) translate([${a.bSphere.center.join(',')}]) sphere(r=${a.bSphere.radius}, $fn=64);\n`;
+        const f = (v: [number, number, number]) => v.map((x) => x.toFixed(4)).join(',');
+        scad += `color("red") translate([${f(pointA)}]) sphere(r=2.2, $fn=32);\n`;
+        scad += `color("royalblue") translate([${f(pointB)}]) sphere(r=2.2, $fn=32);\n`;
+        scad += `color("black") hull() { translate([${f(pointA)}]) sphere(r=0.5, $fn=16); translate([${f(pointB)}]) sphere(r=0.5, $fn=16); }\n`;
+
+        const scadPath = join(measureDir, `gap_${Date.now()}.scad`);
+        const pngPath = scadPath.replace(/\.scad$/, '.png');
+        await writeFile(scadPath, scad, 'utf8');
+        const ok = await renderScadPng(scadPath, pngPath, { rotate: [65, 0, 25] });
+        const frame = ok ? pngPath : '';
+        try {
+          await ctx.attachments.saveImages([{ data: await readFile(pngPath), mediaType: 'image/png', name: 'gap-closest-points' }]);
+        } catch { /* headless: frame on disk is enough */ }
+        const [dxMm, dyMm, dzMm] = axis(pointA, pointB);
+        return { distanceMm, dxMm, dyMm, dzMm, pointA, pointB, method, frame, warnings };
+      }
+
+      // ---- snapped pair: point / datum --------------------------------------
+      const bPart = a.bOn ?? a.versionId;
+      if (!existsSync(versionStl(bPart))) throw new Error(`version ${bPart} has no model.stl (bOn)`);
+      const resolve = async (part: string, datumName?: string, point?: number[]): Promise<[number, number, number]> => {
+        if (!datumName) return point as [number, number, number];
+        const datums = await readVersionDatumPoints(store, part);
+        const hit = datums[datumName];
+        if (!hit) {
+          const known = Object.keys(datums).join(', ') || 'none';
+          throw new Error(`datum "${datumName}" not found on ${part} (declared: ${known})`);
+        }
+        return hit;
+      };
+      const aPt = await resolve(a.versionId!, a.aDatum, a.aPoint);
+      const bPt = await resolve(bPart, a.bDatum, a.bPoint);
+      // The solve is Python's (batch 1); the parts travel as paths. Datum-resolved
+      // points are exact declarations — never snap them.
       const snapRaw = a.snap ?? true;
       const out = await (await ensurePythonWorker()).request<MeasureDistanceSolve>('measure_distance', {
-        meshA: versionStl(a.versionId),
-        meshB: a.bVersionId ? versionStl(a.bVersionId) : null,
+        meshA: versionStl(a.versionId!),
+        meshB: bPart === a.versionId ? null : versionStl(bPart),
         a: aPt,
         b: bPt,
-        snapA: snapRaw && !a.aDatum,
-        snapB: snapRaw && !a.bDatum,
+        snapA: snapRaw && kindA === 'point',
+        snapB: snapRaw && kindB === 'point',
       });
       // A snapped distance on an open surface is a number about a mesh that does
       // not describe a solid (microscope3: measure_closest reported 0.05mm
       // "clearance" on exactly such a mesh). Never refuse — datums still resolve
       // exactly — but roar. The flag is the STRICT manifold verdict, not trimesh's.
-      const warnings: string[] = [];
-      for (const [label, watertight, v] of [['a', out.watertightA, a.versionId], ['b', out.watertightB, a.bVersionId ?? a.versionId]] as const) {
+      for (const [label, watertight, v] of [['a', out.watertightA, a.versionId!], ['b', out.watertightB, bPart]] as const) {
         if (!watertight) {
           warnings.push(`part ${label} (${v}) is NOT watertight — surface snapping on an open mesh is unreliable, fix the mesh before trusting this number`);
         }
       }
-      const aSnapDistanceMm = a.aDatum ? 0 : out.aSnapDistanceMm;
-      const bSnapDistanceMm = a.bDatum ? 0 : out.bSnapDistanceMm;
-      const aOutside = a.aDatum ? false : out.aOutside;
-      const bOutside = a.bDatum ? false : out.bOutside;
       return {
         distanceMm: out.distanceMm,
         dxMm: out.dxMm,
         dyMm: out.dyMm,
         dzMm: out.dzMm,
-        aSnapped: out.aSnapped,
-        bSnapped: out.bSnapped,
-        aSnapDistanceMm,
-        bSnapDistanceMm,
-        aOutside,
-        bOutside,
+        pointA: out.aSnapped,
+        pointB: out.bSnapped,
+        ...(kindA === 'point' ? { aSnapDistanceMm: out.aSnapDistanceMm, aOutside: out.aOutside } : {}),
+        ...(kindB === 'point' ? { bSnapDistanceMm: out.bSnapDistanceMm, bOutside: out.bOutside } : {}),
         warnings,
       };
     },
@@ -2844,6 +3225,10 @@ export function registerCadTools(
             },
           },
           polygonsOmitted: { type: 'number', required: true },
+          voidRegions: {
+            type: 'number', required: true,
+            description: 'Enclosed rings that are NOT material — the void a through-hole or slot punches in the section; material polygons + voidRegions = rings the cut found.',
+          },
           holeSpacing: {
             type: 'array', required: true,
             items: {
@@ -2888,67 +3273,6 @@ export function registerCadTools(
     },
   }));
 
-  // --- measure_extent: how far it reaches along ANY axis, plus the two points ---
-  //
-  // measure_part's bbox is x/y/z only and carries no coordinates. This answers the
-  // same question for an arbitrary axis and hands back the extremal VERTICES, which
-  // are precisely the coordinates a follow-up measure_distance needs. Per-feature
-  // extents are deliberately NOT here — list_features reports a cylinder's lengthMm
-  // and a hole's depthMm from the feature itself.
-  registerTool(defineTool({
-    name: 'measure_extent',
-    description:
-      'How far a saved version reaches along ANY axis: the minimum and maximum projection, the size, the ' +
-      'centre, and the two extremal VERTICES (the coordinates you would otherwise have to find by hand). ' +
-      'Use it for a non-axis-aligned extent (a diagonal, a slanted boss), for "which point is the top of ' +
-      'this", or when you need a point ON the part to hand to measure_distance. Collinear as a first look: ' +
-      'it is the vertex envelope, so it says nothing about volume or fit. For a per-feature extent use ' +
-      '`list_features` instead — a cylinder\'s lengthMm and a hole\'s depthMm come from the feature itself. ' +
-      'mm, z-up.',
-    parameters: {
-      versionId: { type: 'string', required: true, description: 'Saved version to measure, e.g. "v003".' },
-      axis: { type: 'string', description: 'Axis to project on: x | y | z (a leading "-" flips it). Default z. Give axisVector for anything else.' },
-      axisVector: { type: 'array', description: 'Projection axis [x,y,z] for a non-principal direction; normalised internally.', items: { type: 'number' } },
-    },
-    output: {
-      schema: {
-        type: 'object', additionalProperties: false,
-        properties: {
-          versionId: { type: 'string', required: true },
-          axisMm: { type: 'array', required: true, items: { type: 'number' } },
-          source: { type: 'string', required: true, description: 'Always "whole-part" today; reserved for scoped extents.' },
-          vertexCount: { type: 'number', required: true },
-          minMm: { type: 'number', required: true, description: 'Smallest projection onto the axis.' },
-          maxMm: { type: 'number', required: true },
-          sizeMm: { type: 'number', required: true },
-          centerMm: { type: 'number', required: true },
-          minPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at minMm.' },
-          maxPointMm: { type: 'array', required: true, items: { type: 'number' }, description: 'The vertex at maxMm.' },
-          asAxisAlignedMm: {
-            type: 'object', required: true, additionalProperties: false,
-            properties: {
-              min: { type: 'array', required: true, items: { type: 'number' } },
-              max: { type: 'array', required: true, items: { type: 'number' } },
-            },
-          },
-          warnings: { type: 'array', items: { type: 'string' } },
-        },
-      },
-      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
-    },
-    timeoutMs: 30_000,
-    async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string; axis?: string; axisVector?: number[] };
-      const { store } = await allStores(exec);
-      const path = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
-      const out = await (await ensurePythonWorker()).request<MeasureExtentSolve>('measure_extent', {
-        path,
-        axis: a.axisVector ?? a.axis ?? 'z',
-      });
-      return { versionId: a.versionId, ...out };
-    },
-  }));
 
   // --- measure_angle: the angle between two things, with the convention stated ---
   //
@@ -3104,158 +3428,30 @@ export function registerCadTools(
     },
   }));
 
-  // --- measure_closest: solved closest-point pair between two solids (no coordinates from the model) ---
-  //
-  // The SOLVE is Python's (DECISION-LOG 2026-10-08: 能迁就迁 + rtree in the lock).
-  // The worker op reproduces the TS reference method exactly — every stride-th
-  // vertex of A projected onto B and vice versa, minimum wins — so the numbers are
-  // unchanged (parity asserted in scripts/accept-measure-closest.mjs against the
-  // TS implementation, which stays in measure.ts as the oracle). What stays here
-  // is wiring: schema, version→path resolution, the warning text, and the
-  // annotated render (OpenSCAD + ctx.attachments are ① platform services).
-  registerTool(defineTool({
-    name: 'measure_closest',
-    description:
-      'Solved closest point pair between two solids: give two version ids, or a version plus an analytic sphere probe. Returns the distance, both 3D points, and an annotated render. No coordinates needed from you.',
-    parameters: {
-      aVersionId: { type: 'string', description: 'First solid: saved version id.' },
-      bVersionId: { type: 'string', description: 'Second solid: saved version id.' },
-      aSphere: {
-        type: 'object',
-        description: 'First solid as an analytic sphere probe {center:[x,y,z], radius} — solved exactly.',
-        additionalProperties: false,
-        properties: {
-          center: { type: 'array', required: true, items: { type: 'number' } },
-          radius: { type: 'number', required: true },
-        },
-      },
-      bSphere: {
-        type: 'object',
-        description: 'Second solid as an analytic sphere probe.',
-        additionalProperties: false,
-        properties: {
-          center: { type: 'array', required: true, items: { type: 'number' } },
-          radius: { type: 'number', required: true },
-        },
-      },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          distanceMm: { type: 'number', required: true },
-          pointA: { type: 'array', required: true, items: { type: 'number' } },
-          pointB: { type: 'array', required: true, items: { type: 'number' } },
-          method: { type: 'string', required: true },
-          frame: { type: 'string', required: true },
-          warnings: { type: 'array', items: { type: 'string' } },
-        },
-      },
-      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
-    },
-    timeoutMs: 180_000,
-    async execute(args: unknown, exec: unknown) {
-      const a = args as {
-        aVersionId?: string; bVersionId?: string;
-        aSphere?: { center: number[]; radius: number };
-        bSphere?: { center: number[]; radius: number };
-      };
-      const { store } = await allStores(exec);
-      const exactlyOne = (x?: unknown, y?: unknown) => (x ? 1 : 0) + (y ? 1 : 0) === 1;
-      if (!exactlyOne(a.aVersionId, a.aSphere)) throw new Error('specify exactly one of aVersionId / aSphere');
-      if (!exactlyOne(a.bVersionId, a.bSphere)) throw new Error('specify exactly one of bVersionId / bSphere');
-      if (a.aSphere && a.bSphere) throw new Error('sphere-vs-sphere: subtract the centres yourself — distance is analytic');
-
-      const versionStl = (id: string) => join(store.root, 'versions', id, 'model.stl');
-
-      // solve (Python worker; the meshes travel as PATHS — no copying at all)
-      let distanceMm: number;
-      let pointA: [number, number, number];
-      let pointB: [number, number, number];
-      let method: string;
-      const wtWarnings: string[] = [];
-      const warnIfOpen = (v: string, label: string, watertight: boolean) => {
-        if (!watertight) {
-          wtWarnings.push(`part ${label} (${v}) is NOT watertight — a closest-point pair on an open surface is not a clearance between solids (microscope3: this exact tool reported a fake 0.05mm margin on a broken mesh)`);
-        }
-      };
-      const worker = await ensurePythonWorker();
-      if (a.aSphere && a.bVersionId) {
-        const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
-          mesh: versionStl(a.bVersionId), center: a.aSphere.center, radius: a.aSphere.radius,
-        });
-        distanceMm = solved.distanceMm;
-        pointA = solved.spherePoint;
-        pointB = solved.meshPoint;
-        method = solved.method;
-        warnIfOpen(a.bVersionId, 'b', solved.watertight);
-      } else if (a.bSphere && a.aVersionId) {
-        const solved = await worker.request<MeshSphereSolve>('closest_mesh_sphere', {
-          mesh: versionStl(a.aVersionId), center: a.bSphere.center, radius: a.bSphere.radius,
-        });
-        distanceMm = solved.distanceMm;
-        pointA = solved.meshPoint;
-        pointB = solved.spherePoint;
-        method = solved.method;
-        warnIfOpen(a.aVersionId, 'a', solved.watertight);
-      } else {
-        const solved = await worker.request<MeshMeshSolve>('closest_mesh_mesh', {
-          meshA: versionStl(a.aVersionId!), meshB: versionStl(a.bVersionId!),
-        });
-        distanceMm = solved.distanceMm;
-        pointA = solved.pointA;
-        pointB = solved.pointB;
-        method = solved.method;
-        warnIfOpen(a.aVersionId!, 'a', solved.watertightA);
-        warnIfOpen(a.bVersionId!, 'b', solved.watertightB);
-      }
-
-      // annotated render: parts + marker spheres + connector
-      const measureDir = join(store.root, 'measure');
-      await mkdir(measureDir, { recursive: true });
-      const partScad = async (versionId: string | undefined, color: string, name: string): Promise<string> => {
-        if (!versionId) return '';
-        const bytes = await readFile(join(store.root, 'versions', versionId, 'model.stl'));
-        const path = join(measureDir, `${name}.stl`);
-        await writeFile(path, bytes);
-        return `color("${color}", 0.7) import("${path}");\n`;
-      };
-      let scad = '';
-      scad += await partScad(a.aVersionId, '#4a7dbd', 'a');
-      scad += await partScad(a.bVersionId, '#c0392b', 'b');
-      if (a.aSphere) scad += `color("#4a7dbd", 0.5) translate([${a.aSphere.center.join(',')}]) sphere(r=${a.aSphere.radius}, $fn=64);\n`;
-      if (a.bSphere) scad += `color("#c0392b", 0.5) translate([${a.bSphere.center.join(',')}]) sphere(r=${a.bSphere.radius}, $fn=64);\n`;
-      const f = (v: [number, number, number]) => v.map((x) => x.toFixed(4)).join(',');
-      scad += `color("red") translate([${f(pointA)}]) sphere(r=2.2, $fn=32);\n`;
-      scad += `color("royalblue") translate([${f(pointB)}]) sphere(r=2.2, $fn=32);\n`;
-      scad += `color("black") hull() { translate([${f(pointA)}]) sphere(r=0.5, $fn=16); translate([${f(pointB)}]) sphere(r=0.5, $fn=16); }\n`;
-
-      const scadPath = join(measureDir, `closest_${Date.now()}.scad`);
-      const pngPath = scadPath.replace(/\.scad$/, '.png');
-      await writeFile(scadPath, scad, 'utf8');
-      const ok = await renderScadPng(scadPath, pngPath, { rotate: [65, 0, 25] });
-      const frame = ok ? pngPath : '';
-
-      const result = { distanceMm, pointA, pointB, method, frame, warnings: wtWarnings };
-      try {
-        await ctx.attachments.saveImages([{ data: await readFile(pngPath), mediaType: 'image/png', name: 'closest-points' }]);
-      } catch { /* headless: frame on disk is enough */ }
-      return result;
-    },
-  }));
-
   // --- check_printability: "符合逻辑"与"打得出来"是两回事 ---------------------
   //
   // microscope 系列两次交付了薄到打不出来的零件（渲染好看、装配全绿、壁却只有
   // 0.x mm），因为几何真值工具回答"是什么"，从不回答"造不造得出"。本工具用
-  // 采样射线回答最便宜的两个制造问题：壁厚（沿内法线打到对面的距离）和
-  // 悬垂（朝下的、比临界角更平的面的面积）。这是**采样估计**，不是完整可
-  // 制造性分析——findings 给出位置，改不改由设计判断。
+  // 射线回答最便宜的两个制造问题：壁厚（沿内法线打到**对面壁**的距离）和
+  // 悬垂（朝下的、比临界角更平的面的面积）。findings 给出位置，改不改由设计判断。
+  //
+  // 2026-10-11 修掉三个"静默"缺陷，都在这条链上真实发生过：
+  //  1. 悬垂面积曾经只在 1/step 采样面上求和，是把面积当 mm² 报出来的**有偏低
+  //     估计**（真件 200 vs 2022 mm²，差 10 倍）。现在全量三角面精确求和。
+  //  2. 壁厚曾经接受任意命中当"对面壁"，一处 0.012mm² 的共面退化面因此报出
+  //     0.17mm 的假壁。现在要求出射面法线与入射面反向（dot < −0.5）。
+  //  3. 射线引擎整个不可用时（venv 缺 rtree），每根射线的异常都被吞掉，工具对
+  //     任何零件都给"干净"结论。现在 wallMeasured=false 会显式报出来，且
+  //     **未测到壁厚时永不返回 ok**。
   registerTool(defineTool({
     name: 'check_printability',
     description:
-      'Manufacturability screen for a saved version (FDM bias): sampled wall thickness (ray to the opposite wall along the inward normal), plus down-facing area steeper than the overhang angle. Returns min wall, thin-spot count, unsupported area, findings with locations, and a verdict. A SAMPLED estimate, not a full DFM analysis — run it before delivering a part; run it again after any wall/angle-changing edit.',
+      // The field list lives in the output schema below, and the profile contract lives in
+      // the cad-manufacturing skill (loaded on demand). What stays HERE is what a caller
+      // must know at call time — every token in a tool description is paid on EVERY
+      // request, while the skill is not (HARNESS 12.5 / DESIGN 13.12).
+      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
+      'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id to screen, e.g. "v012".' },
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width).' },
@@ -3264,6 +3460,8 @@ export function registerCadTools(
         description: 'A down-facing face tilted more than this many degrees from vertical counts as needing support. Default 45.',
       },
       samples: { type: 'number', description: 'Approximate surface samples. Default 600; raise for big meshes, lower for quick passes.' },
+      profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles to judge against, e.g. ["fdm-pla-0.4"]. Each yields its own two-valued verdict. Omit (with profilesJson) to use the built-in fallback, which the report then names.' },
+      profilesJson: { type: 'string', description: 'An inline JSON array of process profiles (schema: schemas/process-profile.schema.json). Use for a profile you authored; an invalid one is REFUSED with the offending rule named.' },
     },
     output: {
       schema: {
@@ -3271,27 +3469,429 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
-          verdict: { type: 'string', required: true, description: '"ok" | "check" | "unprintable".' },
+          verdict: { type: 'string', required: true, description: '"ok" | "check" | "unprintable". "ok" is impossible when wallMeasured is false.' },
           minWallMm: { type: 'number' },
+          wallMeasured: { type: 'boolean', required: true, description: 'False = the ray half measured nothing (typically a broken ray engine). Never trust the rest of the report then, and never read it as a pass.' },
           thinSamples: { type: 'number', required: true },
           sampled: { type: 'number', required: true },
-          overhangAreaMm2: { type: 'number', required: true },
+          thinAreaMm2: { type: 'number', required: true, description: 'Area of the sub-threshold region, scaled from the sample to the whole surface.' },
+          thinAreaPct: { type: 'number', required: true, description: 'That area as a % of the whole surface — a thin SHELL spans a lot of it, a blunt edge only a strip.' },
+          overhangAreaMm2: { type: 'number', required: true, description: 'Exact: summed over every triangle, not sampled.' },
           overhangZRange: { type: 'array', items: { type: 'number' } },
           findings: { type: 'array', required: true, items: { type: 'string' } },
+          minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found — the witness a human can go and look at.' },
           watertight: { type: 'boolean', required: true },
+          profileSource: { type: 'string', required: true, description: '"declared" | "builtin-default". The latter means NO process was declared: the numbers come from an uncalibrated fallback that the findings name.' },
+          profiles: {
+            type: 'array', required: true,
+            description: 'One entry per declared profile (or the single built-in fallback). Two-valued on purpose: "excluded" carries a witness, "not-excluded" means no geometric counter-example was found.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                profileId: { type: 'string', required: true },
+                profileHash: { type: 'string', required: true, description: 'Content hash — a verdict without its premise is not evidence.' },
+                verdict: { type: 'string', required: true, description: '"excluded" | "not-excluded" (never "ok", never a ranking).' },
+                witnesses: {
+                  type: 'array', required: true,
+                  description: 'Why it is excluded. A rule plus a location is a witness; a bare number is an argument.',
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      rule: { type: 'string', required: true },
+                      measured: { type: 'number', required: true },
+                      required: { type: 'number', required: true },
+                      unit: { type: 'string', required: true },
+                      locationMm: { type: 'array', items: { type: 'number' } },
+                    },
+                  },
+                },
+                notApplicable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules this process does not govern, with the reason. Never silently dropped: calling an SLS part overhang "needs support" is wrong, not conservative.' },
+                unevaluable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules a tool cannot decide from the mesh (cost, tolerance capability) or that were never declared. A missing number is not "no constraint".' },
+              },
+            },
+          },
         },
       },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number };
+      const a = args as {
+        versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
+        profileIds?: string[]; profilesJson?: string;
+      };
       const { store } = await allStores(exec);
-      return checkPrintability(store, a);
+      const resolved = await resolveProcessProfiles(a);
+      if (resolved.errors.length > 0) {
+        throw new Error(`invalid process profile:\n  - ${resolved.errors.join('\n  - ')}`);
+      }
+      // The shape the output schema declares. `excluded` carries witnesses; the other
+      // value is `not-excluded` — never "ok", because "no counter-example found" is not
+      // a statement that the part can be made.
+      type ProfileEvaluation = {
+        profileId: string;
+        profileHash: string;
+        verdict: 'excluded' | 'not-excluded';
+        witnesses: { rule: string; measured: number; required: number; unit: string; locationMm?: number[] }[];
+        notApplicable: string[];
+        unevaluable: string[];
+      };
+      // Sealed cavities are needed only if some profile governs escape passages.
+      // Fetched once, not per profile: the mesh does not change between profiles.
+      const needsEscape = resolved.profiles.some((profile) =>
+        profile.rules.escapePassageMinMm?.applies === true &&
+        profile.rules.escapePassageMinMm.decidable === 'geometry');
+      let voids: { volumeMm3: number; center: number[] }[] = [];
+      if (needsEscape) {
+        const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+        if (existsSync(modelPath)) {
+          const cKey = versionCacheKey(store.root, a.versionId);
+          let conn = connectivityCache.get(cKey);
+          if (!conn) {
+            conn = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
+            connectivityCache.set(cKey, conn);
+          }
+          voids = conn.voids ?? [];
+        }
+      }
+      // CNC TOOL REACH. Circular bores are EXACT witnesses: a cutter of radius r cannot
+      // enter a bore narrower than 2r, and a bore deeper than N diameters cannot be
+      // drilled without the drill wandering. Non-circular slots and pockets need a voxel
+      // reachability sweep, so they are DISCLOSED as not covered (see the finding below)
+      // rather than quietly passed.
+      const needsToolReach = resolved.profiles.some((profile) =>
+        (profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry') ||
+        (profile.rules.holeAspectMax?.applies === true && profile.rules.holeAspectMax.decidable === 'geometry'));
+      // Draft is per-profile (each profile declares its own draftMinDeg), so unlike the
+      // voids and bores above it is fetched INSIDE the loop.
+      type DraftSolve = {
+        coneEmpty: boolean;
+        candidatesChecked: number;
+        bestMarginDeg: number;
+        bestWorstDraftDeg: number;
+        feasiblePct: number;
+        bestDirectionMm: number[];
+        constrainingFaces: { atMm: number[]; draftAtBestDeg: number; deficitDeg: number; areaMm2: number; feasiblePctIfRelaxed: number }[];
+      };
+      // S2-b escape passages come from the same inventory: a HOLE in a face is an
+      // opening, i.e. a passage. Round + through is EXACT (a detected circle's
+      // diameter); anything else is reported as UNDETERMINED rather than passed —
+      // see the loop. (A decorative blind depression must never exclude a part that
+      // has a perfectly good drain hole elsewhere.)
+      const escapeDeclared = resolved.profiles.some((profile) =>
+        profile.rules.escapePassageMinMm?.applies === true && profile.rules.escapePassageMinMm.decidable === 'geometry');
+      type HoleInfo = {
+        // `diameterMm` is absent for a NON-CIRCULAR opening on purpose (list_features refuses to
+        // invent a diameter for a shape a circle cannot describe). The escape rule used to filter
+        // such holes out, which meant they were silently absent from the report rather than
+        // reported as undetermined — measured 2026-10-13 on microscope4 v031: 32 of 53 openings
+        // are non-circular, and none of them reached the rule. Now they stay, with `axisMm` and
+        // `areaMm2` as what the passage bottleneck needs to be anchored.
+        diameterMm?: number; through: boolean; depthMm?: number; kind?: string;
+        centerMm: number[]; axisMm: number[]; areaMm2?: number; residualMm?: number;
+      };
+      let holes: HoleInfo[] = [];
+      let bores: { diameterMm: number; lengthMm: number; centerMm: number[] }[] = [];
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (needsToolReach || escapeDeclared) {
+        if (existsSync(modelPath)) {
+          const lfKey = versionCacheKey(store.root, a.versionId);
+          const feats = (featureCache.get(lfKey) ?? await (await ensurePythonWorker()).request<{
+            cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
+            faces?: { normalMm?: number[]; holes?: {
+              kind?: string; diameterMm?: number; through?: boolean; depthMm?: number;
+              centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number;
+            }[] }[];
+          }>('list_features', { path: modelPath }).then((r) => {
+            featureCache.set(lfKey, r);
+            return r;
+          })) as {
+            cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
+            faces?: { normalMm?: number[]; holes?: { kind?: string; diameterMm?: number; through?: boolean; depthMm?: number; centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number }[] }[];
+          };
+          bores = (feats.cylinders ?? [])
+            .filter((c) => c.kind === 'bore' && typeof c.diameterMm === 'number' && typeof c.lengthMm === 'number')
+            .map((c) => ({ diameterMm: c.diameterMm!, lengthMm: c.lengthMm!, centerMm: c.centerMm ?? [] }));
+          holes = (feats.faces ?? []).flatMap((f) => {
+            const axis = Array.isArray(f.normalMm) ? f.normalMm : null;
+            if (!axis) return [];
+            // A hole with neither a centre nor a face normal cannot be anchored later, so that is
+            // the only kind dropped here. Circularity is NOT a filter any more (see HoleInfo).
+            return (f.holes ?? [])
+              .filter((h) => Array.isArray(h.centerMm))
+              .map((h) => ({
+                diameterMm: h.diameterMm, through: h.through === true, depthMm: h.depthMm,
+                kind: h.kind, centerMm: h.centerMm ?? [], axisMm: axis,
+                areaMm2: h.areaMm2, residualMm: h.circularityResidualMm,
+              }));
+          });
+        }
+      }
+      const marginalNotes: string[] = [];
+      const undeterminedNotes: string[] = [];
+      const evaluations: ProfileEvaluation[] = [];
+      let base: Awaited<ReturnType<typeof checkPrintability>> | null = null;
+      for (const profile of resolved.profiles) {
+        // The profile's OWN numbers drive the same measurement — that is the point:
+        // the threshold stops being a literal and becomes a declared claim.
+        const rules = evaluableRules(profile);
+        const wall = rules.find((r) => r.rule === 'wallMinMm');
+        const overhang = rules.find((r) => r.rule === 'overhangDeg');
+        const screen = await checkPrintability(store, {
+          versionId: a.versionId,
+          wallMinMm: wall?.value ?? a.wallMinMm,
+          overhangDeg: overhang?.value ?? a.overhangDeg,
+          samples: a.samples,
+        });
+        base = base ?? screen;
+        const { notApplicable, unevaluable } = disclosureLists(profile);
+        const witnesses: ProfileEvaluation['witnesses'] = [];
+        // Only a HARD constraint excludes. A too-steep overhang needs supports; it does
+        // not make the part impossible, so it stays a finding, not a witness.
+        if (wall && screen.wallMeasured && screen.minWallMm !== undefined && screen.minWallMm < wall.value) {
+          witnesses.push({
+            rule: 'wallMinMm',
+            measured: screen.minWallMm,
+            required: wall.value,
+            unit: 'mm',
+            ...(screen.minWallAtMm ? { locationMm: screen.minWallAtMm } : {}),
+          });
+        }
+        // A sealed cavity is the one escape-passage witness a mesh can PROVE: there is
+        // no passage at all, so its size is 0. A passage that merely looks narrow from
+        // outside cannot be proved — the tunnel interior is not measured — so that case
+        // is disclosed as not-checked rather than passed (see the finding below).
+        const escape = profile.rules.escapePassageMinMm;
+        if (escape?.applies === true && escape.decidable === 'geometry' && typeof escape.value === 'number') {
+          for (const void_ of voids) {
+            witnesses.push({
+              rule: 'escapePassageMinMm',
+              measured: 0,
+              required: escape.value,
+              unit: 'mm',
+              locationMm: void_.center,
+            });
+          }
+        }
+        const escapeRule = profile.rules.escapePassageMinMm;
+        if (escapeRule?.applies === true && escapeRule.decidable === 'geometry' && typeof escapeRule.value === 'number') {
+          for (const hole of holes) {
+            const where = JSON.stringify(hole.centerMm);
+            if (hole.kind !== undefined && hole.kind !== 'round') {
+              if (!hole.through) {
+                undeterminedNotes.push(
+                  `排粉/排液通道 @ ${where} 是非圆截面盲特征（kind=${hole.kind}）：` +
+                  '盲特征是否积粉/积树脂无法仅由几何证明 —— 该处**未判定**，不是通过。',
+                );
+                continue;
+              }
+              // Non-circular + through: the width is now MEASURABLE — the bottleneck of the one
+              // passage this opening names, as the smallest maximum-inscribed-circle over
+              // transverse sections (worker op `passage_bottleneck`, anchored at this opening).
+              // Anchoring is not optional: on the same plane a wide passage masks a narrow one
+              // (measured: two parallel through holes Ø6 and Ø1, a global sweep reads 2.996 while
+              // the tightest passage is 0.500).
+              const passage = await (await ensurePythonWorker()).request<{
+                reachable?: boolean; throughAlongAxis?: boolean; bottleneckRadiusMm?: number | null;
+                tightestAtMm?: number[]; sectionsAccepted?: number; cuts?: number;
+                coveredMm?: number[]; micToleranceMm?: number; stepMm?: number;
+                endConditions?: Record<string, string>; refused?: string;
+              }>('passage_bottleneck', {
+                path: modelPath,
+                fromMm: hole.centerMm,
+                fromAxis: hole.axisMm,
+                fromSizeMm: Math.sqrt(Math.max(hole.areaMm2 ?? 1, 1e-6)),
+                budget: 200,
+              });
+              const radiusMm = passage.bottleneckRadiusMm;
+              if (passage.reachable === true && passage.throughAlongAxis === true
+                && typeof radiusMm === 'number') {
+                // Same rule as the round branch: the uncertainty is the measurement's own
+                // resolution, never an invented tolerance.
+                const noise = Math.max(passage.micToleranceMm ?? 0, 0.01);
+                const requiredRadius = escapeRule.value / 2;
+                if (radiusMm < requiredRadius - noise) {
+                  witnesses.push({
+                    rule: 'escapePassageMinMm',
+                    measured: +(2 * radiusMm).toFixed(3),
+                    required: escapeRule.value,
+                    unit: 'mm',
+                    locationMm: passage.tightestAtMm ?? hole.centerMm,
+                  });
+                } else if (radiusMm <= requiredRadius + noise) {
+                  marginalNotes.push(
+                    `排粉/排液通道余量过小（记为困难，不是通过）：非圆截面 @ ${where}，` +
+                    `量得瓶颈 Ø${(2 * radiusMm).toFixed(3)}，要求 Ø${escapeRule.value}，` +
+                    `余量 ${(2 * radiusMm - escapeRule.value).toFixed(3)}mm（≤ ${noise}mm）。`,
+                  );
+                }
+                continue;
+              }
+              undeterminedNotes.push(
+                `排粉/排液通道 @ ${where} 是非圆截面通道（kind=${hole.kind}）：` +
+                `量宽未成功（${passage.refused ? passage.refused.slice(0, 120) : '走查未覆盖整条通路'}）` +
+                `${typeof passage.sectionsAccepted === 'number' ? `；已取得 ${passage.sectionsAccepted} 个截面` : ''} ` +
+                '—— 该处**未判定**，不是通过。',
+              );
+              continue;
+            }
+            if (!hole.through) {
+              // A BLIND feature. Whether it traps powder/resin is not a geometric
+              // fact we can prove: a shallow dish drains, a deep well traps, and the
+              // depth criterion (can the constriction be enumerated?) says we cannot
+              // claim either. So it is UNDETERMINED — never a pass, and crucially
+              // never an exclusion, or a cosmetic dimple would condemn a part whose
+              // real drain hole is fine.
+              undeterminedNotes.push(
+                `排粉/排液通道 @ ${where} 是盲特征（Ø${hole.diameterMm}，深 ${hole.depthMm ?? '未知'}）：` +
+                '盲特征是否积粉/积树脂无法仅由几何证明（只有可穷举的短颈才可判）—— 该处**未判定**，不是通过。',
+              );
+              continue;
+            }
+            // Round + through: EXACT. The uncertainty is the circle-fit residual, not
+            // an invented tolerance — same rule as the voxel pitch elsewhere.
+            if (typeof hole.diameterMm !== 'number') {
+              // Cannot happen for a round hole (list_features sets the diameter only when the loop
+              // fits a circle), but a missing diameter must never become a silent pass.
+              undeterminedNotes.push(
+                `排粉/排液通道 @ ${where} 没有直径（kind=${hole.kind ?? 'unknown'}）：**未判定**，不是通过。`,
+              );
+              continue;
+            }
+            const noise = Math.max(hole.residualMm ?? 0, 0.01);
+            const radiusMm = hole.diameterMm / 2;
+            const requiredRadius = escapeRule.value / 2;
+            if (radiusMm < requiredRadius - noise) {
+              witnesses.push({
+                rule: 'escapePassageMinMm',
+                measured: +hole.diameterMm.toFixed(3),
+                required: escapeRule.value,
+                unit: 'mm',
+                locationMm: hole.centerMm,
+              });
+            } else if (radiusMm <= requiredRadius + noise) {
+              marginalNotes.push(
+                `排粉/排液通道余量过小（记为困难，不是通过）：Ø${hole.diameterMm} @ ${where}，` +
+                `要求 Ø${escapeRule.value}，余量 ${(hole.diameterMm - escapeRule.value).toFixed(3)}mm ` +
+                `（≤ ${noise}mm = 圆度拟合残差）。`,
+              );
+            }
+          }
+        }
+        const draftRule = profile.rules.draftMinDeg;
+        if (draftRule?.applies === true && draftRule.decidable === 'geometry' && typeof draftRule.value === 'number') {
+          const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+          if (existsSync(modelPath)) {
+            const solved = await (await ensurePythonWorker()).request<{ draft?: DraftSolve }>('check_printability', {
+              path: modelPath, samples: a.samples, draftMinDeg: draftRule.value,
+            });
+            const dr = solved.draft;
+            if (dr) {
+              if (dr.coneEmpty) {
+                // EXACT: no draw direction satisfies every face. The measured value is
+                // the best achievable worst-face draft, so the witness says how far off
+                // it is, and the location is a face that cannot make it.
+                witnesses.push({
+                  rule: 'draftMinDeg',
+                  measured: dr.bestWorstDraftDeg,
+                  required: draftRule.value,
+                  unit: 'deg',
+                  ...(dr.constrainingFaces?.[0]?.atMm ? { locationMm: dr.constrainingFaces[0].atMm } : {}),
+                });
+              } else if (typeof dr.bestMarginDeg === 'number' && dr.bestMarginDeg <= 0.5) {
+                // NOT a pass. Zero/near-zero margin is recorded as difficult
+                // (DECISION-LOG 2026-10-11): the 0.5 deg band is the normal-bucketing
+                // resolution, not an invented shop constant.
+                marginalNotes.push(
+                  `拔模余量过小（记为困难，不是通过）：最佳抽芯方向下的最差面拔模 ${dr.bestWorstDraftDeg}°，` +
+                  `要求 ${draftRule.value}°，余量 ${dr.bestMarginDeg}°（≤ 0.5° = 法线分桶分辨率）。` +
+                  (dr.constrainingFaces?.length
+                    ? `收紧它的面在 ${JSON.stringify(dr.constrainingFaces[0].atMm)}（该面拔模 ${dr.constrainingFaces[0].draftAtBestDeg}°，` +
+                      `单独放宽后可行域可到 ${dr.constrainingFaces[0].feasiblePctIfRelaxed}%）。`
+                    : ''),
+                );
+              }
+            }
+          }
+        }
+        const toolRadius = profile.rules.toolRadiusMm;
+        if (toolRadius?.applies === true && toolRadius.decidable === 'geometry' && typeof toolRadius.value === 'number') {
+          for (const bore of bores) {
+            const radiusMm = bore.diameterMm / 2;
+            if (radiusMm < toolRadius.value) {
+              witnesses.push({
+                rule: 'toolRadiusMm',
+                measured: +radiusMm.toFixed(3),
+                required: toolRadius.value,
+                unit: 'mm',
+                locationMm: bore.centerMm,
+              });
+            }
+          }
+        }
+        const holeAspect = profile.rules.holeAspectMax;
+        if (holeAspect?.applies === true && holeAspect.decidable === 'geometry' && typeof holeAspect.value === 'number') {
+          for (const bore of bores) {
+            if (bore.diameterMm <= 0) continue;
+            const aspect = bore.lengthMm / bore.diameterMm;
+            if (aspect > holeAspect.value) {
+              witnesses.push({
+                rule: 'holeAspectMax',
+                measured: +aspect.toFixed(2),
+                required: holeAspect.value,
+                unit: 'ratio',
+                locationMm: bore.centerMm,
+              });
+            }
+          }
+        }
+        evaluations.push({
+          profileId: profile.id,
+          profileHash: profileHash(profile),
+          verdict: witnesses.length > 0 ? 'excluded' : 'not-excluded',
+          witnesses,
+          notApplicable: notApplicable.map((r) => `${r.rule}: ${r.reason}`),
+          unevaluable: unevaluable.map((r) => `${r.rule} (${r.decidable}): ${r.reason}`),
+        });
+      }
+      const findings = [...(base?.findings ?? []), ...marginalNotes, ...undeterminedNotes];
+      // Disclose the coverage gap ONLY where the tool-radius rule is declared. A profile
+      // that merely caps hole aspect (FDM does — a deep narrow hole is a printing
+      // problem too) is not making a claim about cutters, and a coverage note there
+      // would be noise in `findings`, which must stay about the geometry.
+      const toolReachDeclared = resolved.profiles.some((profile) =>
+        profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry');
+      if (toolReachDeclared) {
+        findings.push(
+          `刀具可达性：只检查了 ${bores.length} 个**圆孔**（直径与深度是精确值）。` +
+          '非圆形的槽/窄凹腔需要体素可达性扫描，**本次未覆盖**——它们若窄于刀具直径，本报告不会发现；' +
+          '所以这里的"未排除"不等于"能加工"。',
+        );
+      }
+      if (needsEscape && voids.length === 0) {
+        findings.push(
+          '排粉/排液通道：未发现**封闭内腔**（无负体积壳）。注意这只否决了"完全封死"这一种情况——' +
+          '**通道内部的截面没有被测量**，所以"有通道但中途变细"无法在此被证明，也不构成通过。',
+        );
+      }
+      let verdict = base!.verdict;
+      if (resolved.source === 'builtin-default') {
+        const p = resolved.profiles[0]!;
+        findings.push(
+          `未声明工艺档案 —— 按内建默认档 "${p.id}"（hash ${profileHash(p)}）评估。` +
+          '该档每一个数都是 assumed（从未按任何机器标定），**它是让继承来的默认值可见，不是推荐**。' +
+          '要按真实工艺判断，请声明 profileIds 或 profilesJson。',
+        );
+        // "ok" would claim the part passed a process the caller never named. The
+        // geometry may be fine; the DECLARATION is missing, so the honest verdict is
+        // `check`. Declaring a profile is what turns this into a pass.
+        if (verdict === 'ok') verdict = 'check';
+      }
+      return { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
     },
   }));
 
-  // --- delivery_audit: 交付前的"证据体检"（DESGIGN §23）------------------------
+  // --- delivery_audit: 交付前的"证据体检"（DESIGN §23）------------------------
   //
   // microscope5 的教训：过期证据、红牌运行、未验证版本、契约缺机构接口、
   // 重复运行——这些事实全都在语料里，但**没有任何一处把它们摆在一起**，于是
@@ -3359,62 +3959,6 @@ export function registerCadTools(
     },
   }));
 
-  // --- check_connectivity: 零件必须是单一连通实体（DESGIGN §18）---------------
-  //
-  // 生成端已经报 `shells`（连通体数），但没有位置信息，模型无法判断"多出来的
-  // 体是什么、在哪"。本工具给出每个连通体的包围盒与尺寸，并把纪律落到结果
-  // 文本里：多体 = 要么 union 成一体，要么按多个零件分别建模。薄片检测
-  // （check_printability）回答"打不打得出来"，本工具回答"它是不是一个零件"。
-  registerTool(defineTool({
-    name: 'check_connectivity',
-    description:
-      'Connectivity check for a saved version: counts the mutually disconnected solids (bodies) in the mesh ' +
-      "and reports each body's bounding box and size. A part MUST be a single connected solid — run this " +
-      'when shells > 1 is reported at generation, when a part looks like floating fragments, or before ' +
-      'delivering. Multi-body means: either union the fragments into one solid, or model them as SEPARATE parts.',
-    parameters: {
-      versionId: { type: 'string', required: true, description: 'Saved version id to check, e.g. "v012".' },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          versionId: { type: 'string', required: true },
-          verdict: { type: 'string', required: true, description: '"single-body" | "multi-body".' },
-          bodies: { type: 'number', required: true },
-          bodySizes: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body: [dx, dy, dz] mm, largest first.' },
-          bodyCenters: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } }, description: 'Per body: bbox center [x, y, z] mm.' },
-          watertight: { type: 'boolean', required: true },
-          triangles: { type: 'number', required: true },
-        },
-      },
-      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
-    },
-    timeoutMs: 60_000,
-    async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string };
-      const { store } = await allStores(exec);
-      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(modelPath)) throw new Error(`version ${a.versionId} has no model.stl`);
-      // Connectivity is Python's (batch 1). Two things had to survive the move:
-      // connectivity by SHARED EDGE, and the strict manifold watertight test
-      // (every directed edge exactly once, its reverse present) — trimesh's own
-      // `is_watertight` is laxer and would have silently loosened this warning.
-      const solved = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
-      const size = (b: { min: number[]; max: number[] }) => b.max.map((n, i) => +(n - b.min[i]!).toFixed(2));
-      const center = (b: { min: number[]; max: number[] }) => b.min.map((n, i) => +((n + b.max[i]!) / 2).toFixed(2));
-      return {
-        versionId: a.versionId,
-        verdict: solved.count === 1 ? 'single-body' : 'multi-body',
-        bodies: solved.count,
-        bodySizes: solved.bodies.map(size),
-        bodyCenters: solved.bodies.map(center),
-        watertight: solved.watertight,
-        triangles: solved.triangles,
-      };
-    },
-  }));
 
   // Per-call usage telemetry (observer on llm/stream; never blocks anything).
   // Profile-wide on purpose: this observes every session at once, and the
@@ -3612,7 +4156,7 @@ export function registerCadTools(
   // --- recall_reference_image: bring a pruned user attachment back into vision ---
   //
   // WHY: the image-offload policy is OLDEST-FIRST with no user-image exemption
-  // (verified against the stock dsh 0.2.0 — DESGIGN §15.1), so the user's
+  // (verified against the stock dsh 0.2.0 — DESIGN §15.1), so the user's
   // reference image is always the FIRST occurrence pruned once the budget
   // fires. The route leaves a text placeholder naming the attachment and its
   // local path; this tool turns that name back into a visible image block on

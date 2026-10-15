@@ -78,6 +78,28 @@ const PACKAGES = [
   // aarch64, musllinux x86_64 / aarch64, macosx x86_64 / arm64, win_amd64), one
   // dependency (`numpy>=1.26`, already pinned at 2.5.3), no compiler.
   { name: 'shapely', version: '2.2.0' },
+  // --- CAD import formats (adopted 2026-10-15, DECISION-LOG same day; probe
+  // experiments/20261015_cad_import_probe.md) ---
+  // cascadio: OpenCASCADE compiled as a STEP→GLB converter; the GLB then loads
+  // through trimesh like any other mesh. Probe: colored.step → 242.2 mm³ solid
+  // (Manifold NoError), multibody.step → 10 bodies / 263544 mm³ / genus 12; the
+  // GLB declares METERS, so the worker scales ×1000 to mm. MIT, zero deps.
+  // Pinned on purpose: upstream deletes old releases from PyPI when it hits the
+  // size cap (README warning) — a floating pin would break provisioning someday.
+  // No musl wheels exist.
+  {
+    name: 'cascadio',
+    version: '0.1.1',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
+      reason: 'no musl wheel — STEP import unavailable there (host reports the skip)',
+    },
+  },
+  // ezdxf: DXF reader (entities, path flattening, $INSUNITS units). MIT,
+  // pure-python wheel. Its transitive deps (pyparsing, fonttools,
+  // typing_extensions, numpy) are all already pinned above, so it adds no new
+  // platform surface.
+  { name: 'ezdxf', version: '1.4.4' },
   {
     name: 'rapier3d',
     version: '0.36.1',
@@ -91,6 +113,137 @@ const PACKAGES = [
       reason: 'no darwin-x64 wheel — physics canonical stays the TS rapier3d-compat (HARNESS 12.5)',
     },
   },
+  // MPM kernel JIT engine (adopted 2026-10-14, DECISION-LOG same day; measurement
+  // experiments/20261014_numba_mpm_probe.md): the same kernel algorithm, compiled —
+  // 5.1–8.7× over the numpy kernel, 1.3–2.0× over the TS kernel on the pipe
+  // benchmark, with parity at float32 rounding scale. Engine selection lives in
+  // the worker (`worker._mpm_engine`, env `CAD_MPM_ENGINE`): numba when
+  // importable, numpy otherwise — so a target without wheels degrades to the
+  // slower kernel it already had, never to a broken tool.
+  // Requires numpy<2.6 (pin 2.5.3 satisfies) and llvmlite (pinned alongside).
+  // cp313 wheels exist for manylinux x86_64/aarch64, macOS arm64 and Windows
+  // x64/arm64 only — no musl, no darwin-x64.
+  {
+    name: 'numba',
+    version: '0.68.0',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'no cp313 wheel — MPM engine falls back to the numpy kernel (worker _mpm_engine)',
+    },
+  },
+  {
+    name: 'llvmlite',
+    version: '0.50.0',
+    // numba's hard dependency (llvmlite<0.51,>=0.50); pip --require-hashes
+    // needs every transitive dep pinned and hashed, so it travels in the lock
+    // with the same exclusion set as numba.
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'numba dependency, same cp313 wheel gaps as numba',
+    },
+  },
+  // --- XLB LBM engine stack (adopted 2026-10-15, DECISION-LOG same day + addendum) ---
+  // Probe: experiments/20261015_xlb_lbm_probe.md. Three known 0.3.1 defects are
+  // absorbed by the worker wrapper (lbm_xlb.py): ZouHe prescribed_values shim
+  // (mirrors upstream main verbatim, drop on next release), overlap-checker
+  // replacement (numpy 2.5 list+=ndarray semantic change), warp pin below.
+  {
+    name: 'xlb',
+    version: '0.3.1',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'LBM engine entry; useless without warp/jaxlib (same platform gaps)',
+    },
+  },
+  {
+    name: 'warp-lang',
+    version: '1.12.1',
+    // Pinned BELOW latest 1.18 on purpose: 1.18 removed warp.utils.ScopedTimer,
+    // which breaks `import xlb` at 0.3.1 (probe 2026-10-15). Revisit when xlb
+    // ships a release carrying its Warp upgrade (upstream PR #168).
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'no cp313 wheel on musl/darwin-x64 — xlb import requires warp (probe 2026-10-15)',
+    },
+  },
+  {
+    name: 'jax',
+    version: '0.11.2',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'needs jaxlib; LBM engine unavailable where jaxlib is excluded',
+    },
+  },
+  {
+    name: 'jaxlib',
+    version: '0.11.2',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      reason: 'no cp313 wheel on musl/darwin-x64 — jax compute stack unavailable',
+    },
+  },
+  {
+    name: 'ml_dtypes',
+    version: '0.6.0',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
+      reason: 'no cp313 musl wheel — jax dependency',
+    },
+  },
+  // --- XLB transitive closure (pip resolve 2026-10-15 under lock constraints;
+  // --require-hashes needs every transitive dep pinned and hashed) ---
+  {
+    name: 'matplotlib',
+    version: '3.11.2',
+    exclude: {
+      targets: ['linux-arm64-musl'],
+      reason: 'no cp313 musllinux aarch64 wheel — pyvista dependency',
+    },
+  },
+  { name: 'contourpy', version: '1.4.0' },
+  { name: 'cycler', version: '0.12.1' },
+  { name: 'fonttools', version: '4.66.1' },
+  { name: 'kiwisolver', version: '1.5.1' },
+  { name: 'pillow', version: '12.3.0' },
+  { name: 'pyparsing', version: '3.3.3' },
+  { name: 'python-dateutil', version: '2.9.0.post0' },
+  { name: 'six', version: '1.17.0' },
+  {
+    name: 'vtk',
+    version: '9.7.1',
+    exclude: {
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
+      reason: 'no cp313 musl wheel — pyvista dependency',
+    },
+  },
+  { name: 'pyvista', version: '0.49.1' },
+  { name: 'pooch', version: '1.9.0' },
+  { name: 'scooby', version: '0.12.0' },
+  { name: 'pyvista-validation', version: '0.2.2' },
+  { name: 'requests', version: '2.34.2' },
+  { name: 'urllib3', version: '2.8.0' },
+  { name: 'idna', version: '3.20' },
+  { name: 'charset-normalizer', version: '3.5.2' },
+  { name: 'certifi', version: '2026.7.22' },
+  { name: 'platformdirs', version: '4.13.0' },
+  { name: 'numpy-stl', version: '4.0.1' },
+  { name: 'python-utils', version: '4.1.2' },
+  { name: 'pydantic', version: '2.14.1' },
+  { name: 'pydantic_core', version: '2.50.1' },
+  { name: 'annotated-types', version: '0.8.0' },
+  { name: 'attrs', version: '26.1.0' },
+  { name: 'opt_einsum', version: '3.4.0' },
+  { name: 'typing_extensions', version: '4.16.0' },
+  { name: 'typing-inspection', version: '0.4.4' },
+  { name: 'ruff', version: '0.17.0' },
+  { name: 'cyclopts', version: '5.2.0' },
+  { name: 'docstring_parser', version: '0.18.0' },
+  { name: 'rich', version: '15.0.0' },
+  { name: 'rich-rst', version: '2.2.0' },
+  { name: 'markdown-it-py', version: '4.2.0' },
+  { name: 'mdurl', version: '0.1.2' },
+  { name: 'Pygments', version: '2.21.0' },
+  { name: 'packaging', version: '26.3' },
 ];
 
 function argOf(flag, fallback) {

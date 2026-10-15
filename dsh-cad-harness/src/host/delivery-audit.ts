@@ -1,4 +1,4 @@
-// Delivery audit (DESGIGN §23): one call that answers "is this corpus actually
+// Delivery audit (DESIGN §23): one call that answers "is this corpus actually
 // deliverable?", instead of relying on the model's memory of what it ran.
 //
 // WHY: microscope5 shipped with 66/69 runs citing superseded versions, only two

@@ -221,7 +221,7 @@ export function shellCount(mesh: ParsedMesh): number {
  * them; two cubes apart in space are TWO.
  *
  * This is the truth behind the discipline "a part must be a single connected
- * solid" (DESGIGN §18): `shells` above only counts; this locates each body so
+ * solid" (DESIGN §18): `shells` above only counts; this locates each body so
  * the model can tell which fragment is which.
  */
 export function connectedBodies(mesh: ParsedMesh): {

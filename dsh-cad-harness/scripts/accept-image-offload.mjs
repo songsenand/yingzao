@@ -1,4 +1,4 @@
-// Acceptance for the protected image-offload executor (DESGIGN §16).
+// Acceptance for the protected image-offload executor (DESIGN §16).
 //
 // The stock `@deepseek-ai/dsh-compaction-image-offload` picks the OLDEST
 // retained occurrences with no exemption, so the user's reference image is
@@ -173,7 +173,7 @@ const fixture = [
     JSON.stringify(stdSession.log));
 }
 
-// ── 4. the per-preset window (DESGIGN §16.4, plan B′) ───────────────────────
+// ── 4. the per-preset window (DESIGN §16.4, plan B′) ───────────────────────
 {
   check(CAD_IMAGE_WINDOW === 24, 'the cad window mirrors the DeepSeek count budget', String(CAD_IMAGE_WINDOW));
 
@@ -248,7 +248,7 @@ const fixture = [
     'no sessions service → not applicable');
 }
 
-// ── 4b. telemetry: every window observation is DATA (DESGIGN §23.5) ─────────
+// ── 4b. telemetry: every window observation is DATA (DESIGN §23.5) ─────────
 // The microscope5 post-mortem could not answer "did the window run?" without
 // the session log; this block proves the answer is now in a jsonl file, with
 // the reason when it did NOT apply.

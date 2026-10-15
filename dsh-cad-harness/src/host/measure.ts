@@ -35,15 +35,28 @@ export interface SnapResult {
   outside: boolean;
 }
 
-/** Project a point onto the nearest surface point; inside/outside via face normal. */
+/**
+ * Project a point onto the nearest surface point; inside/outside via face normal.
+ *
+ * The face normal is resolved through the BVH's OWN index/position arrays, never
+ * through the caller's `mesh`. `MeshBVH` reorders the index buffer it is handed, in
+ * place, so `faceIndex` only addresses the intended triangle if the array you look it
+ * up in is the one the BVH reordered. Today `buildMeshBvh(mesh)` aliases the caller's
+ * `triVerts`, so both views agree by accident — but the moment a caller passes a copy
+ * (`checkPrintabilityInTs` does, to pin its sampling order) `faceIndex` silently
+ * resolves to a DIFFERENT triangle. Measured on a 20mm cube with a copied index, two
+ * of four outside-probes flipped to "inside".
+ */
 function snapToSurface(bvh: MeshBVH, mesh: MeshData, p: [number, number, number]): SnapResult {
   const hit = bvh.closestPointToPoint(new Vector3(p[0], p[1], p[2]))!;
   const snapped: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
 
-  // geometric normal of the closest triangle
+  // geometric normal of the closest triangle, in the BVH's own ordering
+  const index = bvh.geometry.getIndex()!.array as ArrayLike<number>;
+  const position = bvh.geometry.getAttribute('position').array as ArrayLike<number>;
   const t = hit.faceIndex! * 3;
-  const ia = mesh.triVerts[t]! * 3, ib = mesh.triVerts[t + 1]! * 3, ic = mesh.triVerts[t + 2]! * 3;
-  const v = (i: number) => new Vector3(mesh.vertProperties[i]!, mesh.vertProperties[i + 1]!, mesh.vertProperties[i + 2]!);
+  const ia = index[t]! * 3, ib = index[t + 1]! * 3, ic = index[t + 2]! * 3;
+  const v = (i: number) => new Vector3(position[i]!, position[i + 1]!, position[i + 2]!);
   const va = v(ia), vb = v(ib), vc = v(ic);
   const n = vb.sub(va).clone().cross(vc.clone().sub(va)).normalize();
 

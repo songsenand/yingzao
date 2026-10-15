@@ -1,4 +1,4 @@
-// Acceptance for the browse categories (DESGIGN §20.4).
+// Acceptance for the browse categories (DESIGN §20.4).
 //
 // Two user-visible bugs lived in the category lists, both invisible until the
 // panel looked empty or doubled:

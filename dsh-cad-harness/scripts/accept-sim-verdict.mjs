@@ -1,4 +1,4 @@
-// Acceptance for the interference deliverability gate (DESGIGN §21).
+// Acceptance for the interference deliverability gate (DESIGN §21).
 //
 // The user-visible rule: a mechanism that RUNS but INTERFERES is not
 // deliverable. Verified against the REAL simulate_motion + check_assembly

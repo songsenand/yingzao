@@ -84,10 +84,17 @@ for (const od of [34, 60, 100]) {
     `自动那次的 warnings=${JSON.stringify((auto.warnings ?? []).map((w) => w.slice(0, 40)))}`);
 }
 
-// 同内腔、不同壁厚：到达率不应再随外径大幅漂移（缺陷时 0.443 vs 0.757）
+// 同内腔、不同壁厚：到达率不应再随外径大幅漂移（缺陷时 0.443 vs 0.757，跨度 0.32）。
+//
+// 阈值 0.15 → 0.20（2026-10-14，用户拍板，随 numba 引擎采纳落定，DECISION-LOG 同日）。
+// 依据（同机同种子实测）：该指标对舍入序敏感——numpy 引擎跨度 0.1337（对 0.15 的余量仅
+// 0.016，按 2026-10-11"零/过小余量记为困难"本就该标红），numba 引擎 0.1582（确定性逐位
+// 复现）；而项目 dt 细化研究（TOOL-RUNTIME-MATRIX row 16）证明该指标对离散化本身敏感
+// 0.123——0.15 从来都画在噪声地板里。缺陷信号 0.32 对新阈值仍有 1.6× 分离度，
+// 符号/掩码/穿透/种子记账的直接断言（本文件上方）不受此阈值影响。
 const spread = Math.max(...arrivals) - Math.min(...arrivals);
-check('同内腔不同壁厚，到达率不再大幅漂移', spread < 0.15,
-  `到达 ${arrivals.map((a) => a.toFixed(4)).join(' / ')}，跨度 ${spread.toFixed(4)}（要求 < 0.15）`);
+check('同内腔不同壁厚，到达率不再大幅漂移', spread < 0.20,
+  `到达 ${arrivals.map((a) => a.toFixed(4)).join(' / ')}，跨度 ${spread.toFixed(4)}（要求 < 0.20）`);
 
 console.log(`\n${fail === 0 ? 'OK' : `${fail} FAILURE(S)`}  (${pass} passed)`);
 process.exit(fail === 0 ? 0 : 1);

@@ -11,6 +11,7 @@
 import { compileStlOnly } from '../src/host/compile.ts';
 import { runMotion } from '../src/host/motion.ts';
 import { renderKeyframes } from '../src/host/physics.ts';
+import { createHash } from 'node:crypto';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
@@ -141,8 +142,14 @@ const c2Spec = {
     await writeFile(path, parts.find((x) => x.name === name).stl);
     stlFiles.push({ name, stlPath: path });
   }
-  const pngs = await renderKeyframes(report, stlFiles, join(MOTION_DIR, 'frames'));
-  check('c2 rendered ≥ 4 keyframe PNGs', pngs.length >= 4, `${pngs.length} frames`);
+  const { frames, warnings } = await renderKeyframes(report, stlFiles, join(MOTION_DIR, 'frames'));
+  check('c2 rendered ≥ 4 keyframe PNGs', frames.length >= 4, `${frames.length} frames`);
+  // A render that emits WARNING/ERROR must not pass silently: `rotate(m=…)` used to
+  // degenerate to the identity here, and the pictures were the only evidence.
+  check('c2 rendered without OpenSCAD warnings', warnings.length === 0, warnings.slice(0, 2).join(' | ') || 'clean');
+  const hashes = frames.map((f) => createHash('sha256').update(f.png).digest('hex'));
+  check('c2 keyframe images actually differ (the pose reached the renderer)',
+    new Set(hashes).size === hashes.length, `${new Set(hashes).size}/${hashes.length} distinct`);
 }
 
 // ---------------- case 3: negative (rod too long) ----------------

@@ -1,7 +1,7 @@
 // Preset-aware image-offload executor (plugin-side replacement for the stock
 // `@deepseek-ai/dsh-compaction-image-offload`, which cordis.patch.yml disables).
 //
-// THE RULE (user decision, DESGIGN §16–17): standard-mode sessions behave as
+// THE RULE (user decision, DESIGN §16–17): standard-mode sessions behave as
 // UNMODIFIED dsh; only 造物模式 (cad) sessions get image economy. Concretely:
 //
 //   * error-waterfall offloads (IMAGE_OFFLOAD_REQUIRED): a cad session never
@@ -91,7 +91,7 @@ import { recordImageWindow } from './usage.ts';
 
 /**
  * Images a 造物模式 (cad) session keeps in vision — the per-SESSION window
- * enforced here (DESGIGN §16.4), mirroring the DeepSeek route's count budget.
+ * enforced here (DESIGN §16.4), mirroring the DeepSeek route's count budget.
  * Standard-mode sessions are NEVER proactively pruned: the only image loss
  * there is the route's pathological-attachment fallback (`PI_AI_KEEP_BYTES`),
  * which ordinary chats never reach. Fairness was the user's explicit call.
@@ -314,7 +314,7 @@ export function applyProtectedImageOffload(ctx: any): void {
     return true;
   });
 
-  // Per-preset image window (DESGIGN §16.4): every request carries its
+  // Per-preset image window (DESIGN §16.4): every request carries its
   // sessionId; a 造物模式 session over the window gets a proactive offload
   // decision so the NEXT request fits. Standard-mode sessions are exempt —
   // that is the whole point of doing this here instead of in the route config.

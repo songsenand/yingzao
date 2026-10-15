@@ -39,7 +39,7 @@ function selectByIndex(index: number, value: string) {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }
-// The browse bar is now THREE selects for 零件 (DESGIGN §20): [0] 种类,
+// The browse bar is now THREE selects for 零件 (DESIGN §20): [0] 种类,
 // [1] 条目, [2] 版本 — but only TWO for the run categories (条目 IS the record).
 // The record select is therefore the LAST one present.
 const selectKind = (value: string) => selectByIndex(0, value);
@@ -151,7 +151,7 @@ if (q.get('assert') === 'insert') {
   const actx = { stub: 'actx' };
   const face = { stub: 'face' };
   const drafts = [{ id: 'draft-1', kind: 'image' }];
-  // The panel resolves the session structurally (DESGIGN §18) — both service
+  // The panel resolves the session structurally (DESIGN §18) — both service
   // views must see the same post-upgrade shape (NO `current`).
   setProjectServices({
     sessions: {
@@ -164,7 +164,7 @@ if (q.get('assert') === 'insert') {
     sessions: {
       // Post-upgrade shape: NO `current` — the panel must resolve the session
       // structurally (binding + mainView retention), which is what this stub
-      // exercises (DESGIGN §18).
+      // exercises (DESIGN §18).
       list: { getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1', cwd: '/tmp/sandbox' } } }) },
       binding: (id: string) => (id === 'session-1' ? { sessionId: id } : undefined),
       retainInfo: (id: string) => ({ getSnapshot: () => ({ retainedBy: { mainView: id === 'session-1' ? 1 : 0 } }) }),

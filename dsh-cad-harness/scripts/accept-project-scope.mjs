@@ -1,4 +1,4 @@
-// Acceptance for project-scoped storage (DESGIGN §13.13).
+// Acceptance for project-scoped storage (DESIGN §13.13).
 //
 // The bug this locks down: every store used to be opened once, at plugin apply,
 // from the plugin's own installation directory. A brand-new project therefore
@@ -76,7 +76,7 @@ section('project key = the session cwd');
   check(projectKey('/') .length > 0, 'a path with no basename still yields a key', projectKey('/'));
 }
 
-// --- 2. layout: one cad-data/ INSIDE each project (DESGIGN §19) --------------
+// --- 2. layout: one cad-data/ INSIDE each project (DESIGN §19) --------------
 section('storage layout');
 {
   check(dshHome() === FAKE_HOME, 'DSH_HOME is honoured', dshHome());
@@ -348,7 +348,7 @@ section('static invariants');
     'the migration script uses the runtime key function rather than a copy');
 }
 
-// ── client: which session is on stage (DESGIGN §18) ─────────────────────────
+// ── client: which session is on stage (DESIGN §18) ─────────────────────────
 // The 2026-10-03 dsh upgrade removed the list snapshot's `current` field; the
 // panel could no longer resolve the session on stage, every request lost its
 // `?project=`, and every project showed the host's own corpus. The fix mirrors

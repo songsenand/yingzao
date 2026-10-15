@@ -275,8 +275,23 @@ export interface PngRenderOptions {
   colorscheme?: string;
 }
 
-/** Render an arbitrary SCAD file to PNG using the shared X display. */
-export async function renderScadPng(scadPath: string, pngPath: string, opts: PngRenderOptions): Promise<boolean> {
+/**
+ * Render an arbitrary SCAD file to PNG using the shared X display.
+ *
+ * `onDiagnostics` is OPTIONAL and additive: when given, it receives the raw
+ * stdout+stderr of each attempt. Callers that only want a picture keep passing
+ * three arguments. It exists because "rendered successfully" and "rendered what
+ * you asked for" are different claims, and OpenSCAD reports the difference on
+ * stderr as `WARNING:` while still exiting 0 —
+ * `rotate(m=…)` (no such parameter; falls back to identity) shipped inert
+ * keyframe images for months behind exactly that gap.
+ */
+export async function renderScadPng(
+  scadPath: string,
+  pngPath: string,
+  opts: PngRenderOptions,
+  onDiagnostics?: (text: string) => void,
+): Promise<boolean> {
   const args: string[] = ['-o', pngPath];
   if (opts.target && opts.modelDiagonal) {
     const dist = ((opts.modelDiagonal * 1.8) / (opts.zoom && opts.zoom > 0 ? opts.zoom : 1)).toFixed(3);
@@ -292,9 +307,11 @@ export async function renderScadPng(scadPath: string, pngPath: string, opts: Png
   if (display) {
     const env = { ...(binaryEnv ?? process.env), DISPLAY: display };
     const r = await spawnOpenscad(bin, full, process.cwd(), env);
+    onDiagnostics?.(`${r.stdout}\n${r.stderr}`);
     if (r.code === 0) return true;
   }
   const r = await spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], process.cwd());
+  onDiagnostics?.(`${r.stdout}\n${r.stderr}`);
   return r.code === 0;
 }
 

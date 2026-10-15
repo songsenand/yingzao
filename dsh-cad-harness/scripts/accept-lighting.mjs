@@ -1,4 +1,4 @@
-// Acceptance for the viewport light rig (DESGIGN §6.11).
+// Acceptance for the viewport light rig (DESIGN §6.11).
 //
 // The complaint this answers: "细节一点的东西就看不清". Two measurable causes,
 // both provable without a GPU, because they are properties of the scene graph

@@ -51,30 +51,31 @@ export function unitToMm(unit: Unit): number {
 
 // ---------- format policy ----------
 
-/** Formats this build can actually read. */
-export const SUPPORTED_EXTENSIONS = ['.stl'] as const;
+/** Formats this build can actually read. STEP via cascadio/OpenCASCADE (worker),
+ *  DXF via ezdxf (worker): profiles extruded by depthMm, or 3D mesh entities. */
+export const SUPPORTED_EXTENSIONS = ['.stl', '.step', '.stp', '.dxf'] as const;
 
-/** Formats that need a B-rep kernel this build does not ship. */
-const BREP_EXTENSIONS = ['.step', '.stp', '.iges', '.igs', '.brep'];
+/** Formats no shipped reader can parse. IGES: cascadio fails silently on it
+ *  (probed 2026-10-15), and no other reader is bundled. */
+const BREP_EXTENSIONS = ['.iges', '.igs', '.brep'];
 
 /**
- * What to tell a caller who handed us a B-rep file.
+ * What to tell a caller who handed us a file no shipped reader can parse.
  *
- * The point is that "unsupported" is not a dead end: it names the fact (this
- * harness tessellates; it has no B-rep kernel), the planned route, and the
- * thing the person can do in the next two minutes. A silent "parse failed"
- * here would be worse than useless — it would look like a bug in their file.
+ * The point is that "unsupported" is not a dead end: it names the fact (verified,
+ * not guessed), the planned route, and the thing the person can do in the next
+ * two minutes. A silent "parse failed" here would be worse than useless — it
+ * would look like a bug in their file.
  */
 export function kernelBoundaryMessage(file: string): string {
   return (
-    `"${basename(file)}" is a B-rep format (STEP/IGES) and this harness has no B-rep kernel. ` +
-    `Its truth engine is mesh-based by design — Manifold booleans, BVH distances, rapier, MPM — and ` +
-    `neither OpenSCAD 2021.01 nor the bundled snapshot ships a step importer (verified via --export-format). ` +
-    `Two ways forward: (a) right now, export STL from your CAD tool (FreeCAD: File → Export → STL) and import that — ` +
-    `the mesh is what every tool here measures anyway; (b) the planned route is a tessellating kernel ` +
-    `(replicad + OpenCASCADE wasm), which would also bring STEP export and exact hole/axis datums extracted ` +
-    `from the B-rep. Note the trade honestly: STEP→mesh is standard tessellation, not reverse engineering, ` +
-    `but it is lossy — accuracy is bounded by the chosen deflection.`
+    `"${basename(file)}" is an IGES (or BREP) file and this harness cannot read IGES yet. ` +
+    `The OpenCASCADE bridge used for STEP (cascadio) does not parse IGES — verified 2026-10-15: ` +
+    `it fails silently, writing no output. ` +
+    `Two ways forward: (a) right now, re-export as STEP (.step/.stp — imported here through OpenCASCADE) ` +
+    `or STL (FreeCAD: File → Export) and import that — the mesh is what every tool here measures anyway; ` +
+    `(b) the planned route for IGES is the kernel evaluation already tracked in DESIGN.md ` +
+    `(FreeCAD headless → cadquery-ocp → replicad).`
   );
 }
 
@@ -84,9 +85,10 @@ function checkFormat(file: string): void {
   if (BREP_EXTENSIONS.includes(ext)) throw new Error(kernelBoundaryMessage(file));
   if (ext === '' || (SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) return;
   throw new Error(
-    `cannot import "${ext}" files. Supported today: ${SUPPORTED_EXTENSIONS.join(', ')} (binary and ASCII). ` +
+    `cannot import "${ext}" files. Supported today: ${SUPPORTED_EXTENSIONS.join(', ')} ` +
+    `(STEP through OpenCASCADE; DXF 2D profiles need depthMm to become a solid). ` +
     `3MF/OBJ/OFF import needs no new kernel and is a planned increment; ` +
-    `${BREP_EXTENSIONS.join('/')} need a B-rep kernel (see import_part notes).`,
+    `${BREP_EXTENSIONS.join('/')} have no reader yet (see import_part notes).`,
   );
 }
 
@@ -172,6 +174,9 @@ export interface ImportRequest {
   cwd: string;
   unit?: Unit;
   scale?: number;
+  /** Extrusion depth in mm for DXF 2D closed profiles. Required when a DXF has
+   *  no 3D mesh entities; ignored otherwise. */
+  depthMm?: number;
   allowNonSolid?: boolean;
 }
 
@@ -193,6 +198,7 @@ interface ImportSolve {
   reason: string | null;
   bbox: { min: number[]; max: number[]; size: number[] };
   appliedScale: number;
+  warnings?: string[];
   outBytes: number;
 }
 
@@ -256,14 +262,31 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
 
   const unit: Unit = req.unit ?? 'mm';
   if (!(unit in UNIT_TO_MM)) throw new Error(`unknown unit "${String(req.unit)}" (mm|cm|m|inch)`);
+  const ext = extname(resolvedPath).toLowerCase();
+  // A STEP file carries its own units: OpenCASCADE normalizes them and the worker
+  // folds the metres→mm step into appliedScale. A caller-declared unit would
+  // double-apply, so it is refused rather than silently ignored.
+  if ((ext === '.step' || ext === '.stp') && unit !== 'mm') {
+    throw new Error(
+      `"${basename(resolvedPath)}": STEP carries its own units — OpenCASCADE normalizes them and the import lands ` +
+      `in mm without a unit argument. Drop unit (use scale if the size still needs correcting) or export STL ` +
+      `and declare the unit there.`,
+    );
+  }
+  if (req.depthMm !== undefined && (!Number.isFinite(req.depthMm) || req.depthMm <= 0)) {
+    throw new Error(`depthMm must be a positive number of millimetres, got ${String(req.depthMm)}`);
+  }
+  if (req.depthMm !== undefined && ext !== '.dxf') {
+    warnings.push('depthMm applies to DXF only; it was ignored for this format.');
+  }
   const declared = req.scale ?? 1;
   if (!Number.isFinite(declared) || declared <= 0) throw new Error(`scale must be a positive number, got ${String(req.scale)}`);
   const appliedScale = unitToMm(unit) * declared;
 
   // 1–5. Parse, count shells, apply the declared scale, weld and ask Manifold
-  //      whether this is a body at all — all of that is Python's (batch 2). The
-  //      worker WRITES the welded, scaled mesh; that file is what the store holds,
-  //      so the picture and the version can never disagree.
+  //      whether this is a body at all. The worker WRITES the welded, scaled
+  //      mesh; that file is what the store holds, so the picture and the version
+  //      can never disagree.
   const scratch = await workerScratchDir();
   const weldedPath = join(scratch, `import-${randomUUID()}.stl`);
   let solved: ImportSolve;
@@ -271,6 +294,7 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
     solved = await (await ensurePythonWorker()).request<ImportSolve>('import_mesh', {
       path: resolvedPath,
       scale: appliedScale,
+      depthMm: req.depthMm,
       out: weldedPath,
     });
   } catch (e) {
@@ -282,6 +306,9 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
   const stl = new Uint8Array(await readFile(weldedPath));
   await rm(weldedPath, { force: true }).catch(() => {});
   const mesh = parseBinaryStl(stl);
+  // Format-specific facts from the worker (STEP unit normalization, DXF $INSUNITS,
+  // recovered-file errors) travel with the same result as the geometry facts.
+  warnings.push(...(solved.warnings ?? []));
 
   const volume = solved.signedVolumeMm3;
   const solid = solved.solid;
@@ -338,7 +365,7 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
     },
     genus: solved.genus,
     unit,
-    appliedScale,
+    appliedScale: solved.appliedScale,
     resolvedPath,
     sha256,
     bytes: bytes.length,

@@ -147,6 +147,26 @@ check(pocket && pocket.areaRatioToCircle < 0.7,
   'a 10×6 pocket keeps only ~0.56 of its fitted circle — the number that unmasks it',
   fmt(pocket?.areaRatioToCircle));
 
+// --- 5b. NON-CONVEX opening: the fitted-circle centre is not inside the opening --
+// The depth probe used to start from the FITTED-CIRCLE centre, which on a non-convex
+// opening lands in the material filling the missing corner: the probe hit material
+// 25/25 times along the wall thickness and a genuinely THROUGH hole was reported blind.
+// Measured 2026-10-13 with this exact fixture (a 40×40×6 plate with a through L slot):
+// fitted centre -> through false, depthMm 0.001; an interior point -> through true.
+const lSlot = await write('l-slot', 'difference(){ cube([40,40,6], center=true);'
+  + ' cube([30,6,20], center=true);'
+  + ' translate([-12,6,0]) cube([6,24,20], center=true); }');
+const lOut = await features(lSlot);
+const lHoles = lOut.faces.flatMap((f) => f.holes);
+check(lHoles.length === 2 && lHoles.every((h) => h.kind === 'non-circular'),
+  'L-shaped slot: both openings are reported, as non-circular',
+  JSON.stringify(lHoles.map((h) => h.kind)));
+check(lHoles.length === 2 && lHoles.every((h) => h.through === true),
+  'THROUGH L-shaped slot is NOT called blind (the probe starts inside the opening)',
+  JSON.stringify(lHoles.map((h) => ({ through: h.through, depthMm: h.depthMm }))));
+check(lHoles.every((h) => h.depthMm === undefined),
+  'THROUGH L-shaped slot reports no depth at all', JSON.stringify(lHoles.map((h) => h.depthMm)));
+
 // --- 6. open mesh ------------------------------------------------------------
 const openOut = await features(open);
 check(openOut.watertight === false && openOut.warnings.some((w) => w.includes('NOT watertight')),

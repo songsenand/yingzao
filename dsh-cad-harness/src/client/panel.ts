@@ -175,7 +175,7 @@ const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
   // the timestamp alone does not say it (a run can be newer and still not
   // supersede a different subject).
   const replaced = r.supersededBy ? `已被 ${r.supersededBy} 取代 · ` : '';
-  // Evidence expires with the version it cites (DESGIGN §22): a run that still
+  // Evidence expires with the version it cites (DESIGN §22): a run that still
   // says "pass" over geometry a part has since replaced must say so in the row.
   const stale = r.staleVersionIds?.length ? `⚠ 基于旧版本 ${r.staleVersionIds.join(', ')} · ` : '';
   return `${r.id} · ${RUN_KIND_LABEL[r.kind]} · ${replaced}${stale}${fmtTime(r.timestamp)} — ${r.summary || r.title}`.slice(0, 96);
@@ -237,7 +237,7 @@ function liveSession(): { sessionId: string; actx: any; face: any } | null {
       ?? sessionsService?.list?.get?.()
       ?? sessionsService?.list?.value;
     // `current` was removed from the list snapshot in the 2026-10-03 dsh
-    // upgrade (DESGIGN §18) — resolve structurally like project.ts does.
+    // upgrade (DESIGN §18) — resolve structurally like project.ts does.
     const sessionId = state?.current ?? currentSessionId();
     if (!sessionId) return null;
     const actx = sessionsService?.scope?.(sessionId);
@@ -656,7 +656,7 @@ export function CadPanel(): React.ReactElement {
 
   const SCENE = '__scene__';
   /**
-   * The first browse column (DESGIGN §20): 零件 / 组件 / 整体及仿真 / 装配契约.
+   * The first browse column (DESIGN §20): 零件 / 组件 / 整体及仿真 / 装配契约.
    * 零件 keeps the part+version machinery below untouched; the other three
    * categories flatten their runs into one list and hide the version column
    * (runs have no versions).
@@ -679,7 +679,7 @@ export function CadPanel(): React.ReactElement {
    * the first poll would briefly mount a scene run and then swap to the part,
    * burning a WebGL context and flashing the wrong thing.
    */
-  // 零件的记录列 = 版本 ONLY (DESGIGN §20): runs live in 仿真 / 组件 categories.
+  // 零件的记录列 = 版本 ONLY (DESIGN §20): runs live in 仿真 / 组件 categories.
   const records: PartRecord[] = (
     currentPart
       ? currentPart.versions.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
@@ -760,7 +760,7 @@ export function CadPanel(): React.ReactElement {
   const kindRef = useRef<BrowseKind | null>(null);
   // The categories with a flat list (仿真 / 组件 / 装配契约) have no 零件 subject,
   // so `records` is empty for them — the effect must follow their own list or
-  // switching category leaves the viewport blank (DESGIGN §20.4).
+  // switching category leaves the viewport blank (DESIGN §20.4).
   const activeList: PartRecord[] = flatCategoryRuns ?? records;
   const idsKey = `${kind}|${activeList.map((r) => r.id).join('|')}`;
   useEffect(() => {
@@ -1015,7 +1015,7 @@ export function CadPanel(): React.ReactElement {
     /** 用户自己的话，与自动说明合并成一条消息发出。 */
     text: string;
     noteOverride?: string;
-    /** Set when the capture came from a NON-latest version (DESGIGN §20). */
+    /** Set when the capture came from a NON-latest version (DESIGN §20). */
     stale?: { version: string; latest: string };
   } | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -1679,7 +1679,7 @@ export function CadPanel(): React.ReactElement {
       );
     }
     if (r.kind === 'assembly-check') {
-      // 装配契约报告 = 表格（DESGIGN §20）：接口 × 要求 × 实测 × 判定。
+      // 装配契约报告 = 表格（DESIGN §20）：接口 × 要求 × 实测 × 判定。
       const rows = (rep.results ?? rep.hardViolations ?? rep.intentFlags ?? []) as {
         interfaceId?: string; a?: string; b?: string; type?: string;
         expected?: { quantity?: string; min?: number; max?: number };
@@ -2173,7 +2173,7 @@ export function CadPanel(): React.ReactElement {
       ),
     ),
 
-    // ── the browse tree, ONE line, THREE columns (DESGIGN §20): 种类 → 条目 → 版本 ──
+    // ── the browse tree, ONE line, THREE columns (DESIGN §20): 种类 → 条目 → 版本 ──
     // 种类: 零件 / 组件 / 整体及仿真 / 装配契约. 条目: the concrete part or run.
     // 版本 exists only for 零件 and DEFAULTS to the newest — picking an older
     // one raises the stale-version banner over the viewport.
@@ -2204,7 +2204,7 @@ export function CadPanel(): React.ReactElement {
           // Distinct key per branch: React otherwise reconciles the flat-item
           // select into the part select in place, and the native dropdown can
           // show the previous category's options merged with the new ones
-          // (the "装配契约 + 零件" flicker, DESGIGN §20.4).
+          // (the "装配契约 + 零件" flicker, DESIGN §20.4).
           key: 'browse-subject',
           value: subjectId,
           onChange: (e: any) => {
@@ -2258,7 +2258,7 @@ export function CadPanel(): React.ReactElement {
           'aria-label': '版本',
           style: { ...S.select, flex: '1 1 0', minWidth: 0 },
         },
-        // 零件的记录列 = 版本 ONLY (DESGIGN §20): runs live in 仿真 / 组件.
+        // 零件的记录列 = 版本 ONLY (DESIGN §20): runs live in 仿真 / 组件.
         records.filter((r) => r.type === 'version').length === 0 &&
           React.createElement('option', { value: '' }, '暂无版本'),
         records.filter((r) => r.type === 'version').map((r) => React.createElement('option', { key: r.id, value: r.id },
@@ -2284,7 +2284,7 @@ export function CadPanel(): React.ReactElement {
     React.createElement(
       'div',
       { style: S.stage },
-      // Stale-version banner (DESGIGN §20): the user demanded it be obvious.
+      // Stale-version banner (DESIGN §20): the user demanded it be obvious.
       kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
         React.createElement('div', {
           style: {

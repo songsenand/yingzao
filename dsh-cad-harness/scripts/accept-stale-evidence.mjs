@@ -1,4 +1,4 @@
-// Acceptance for stale-evidence marking (DESGIGN §22).
+// Acceptance for stale-evidence marking (DESIGN §22).
 //
 // The rule the user asked to enforce: updating a part does NOT update the
 // whole-machine results that cite it — a rigid-body/physics/assembly run keeps

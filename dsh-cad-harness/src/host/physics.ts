@@ -9,7 +9,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { parseBinaryStl, shellCount } from './mesh.ts';
-import { spawn } from 'node:child_process';
+import { renderScadPng } from './compile.ts';
 
 export interface PhysicsPartInput {
   name: string;
@@ -608,13 +608,48 @@ export interface RenderPart {
   stlPath: string;
 }
 
+export interface KeyframeRender {
+  frames: { view: string; png: Uint8Array }[];
+  /** Diagnostics OpenSCAD printed while rendering the keyframes (WARNING/ERROR lines). */
+  warnings: string[];
+}
+
+/**
+ * One OpenSCAD scene per keyframe, then one PNG per scene.
+ *
+ * TWO THINGS HERE ARE LOAD-BEARING, and both were wrong until 2026-10-11:
+ *
+ * 1. THE POSE GOES THROUGH `multmatrix`, NOT `rotate(m=)`. OpenSCAD's `rotate()`
+ *    has no `m` parameter — it takes `a=[x,y,z]` or `a=deg, v=axis`. Passing a
+ *    matrix to `rotate` makes OpenSCAD print
+ *      `WARNING: variable "m" not specified as parameter` and
+ *      `WARNING: Problem converting rotate(a=undef) parameter`
+ *    then fall back to `rotate(a=undef)` = IDENTITY, at exit code 0. Every
+ *    simulator keyframe was therefore rendered in the part's INITIAL
+ *    orientation: for `simulate_motion` (pure spin, translation 0) all four
+ *    attached frames were byte-identical, and for `simulate_physics` a toppling
+ *    tower rendered as translated boxes. Verified on both the system OpenSCAD
+ *    2021.01 and the bundled 2026.09.23 snapshot — the parameter does not exist
+ *    in either.
+ *
+ * 2. THE RENDERER IS THE PLUGIN'S, not a bare `openscad` off PATH. The old
+ *    private `renderPng` hardcoded `xvfb-run -a openscad`, so keyframes came
+ *    from a different binary than every other picture in the plugin (no
+ *    `resolveBinary()` snapshot preference, no Manifold backend, no bundled
+ *    `LD_LIBRARY_PATH`, no shared display). It now goes through
+ *    `renderScadPng`, whose camera string for these options is identical.
+ *
+ * Diagnostics are RETURNED rather than swallowed: item 1 survived months of
+ * green runs precisely because the only signal was a WARNING line nobody read.
+ */
 export async function renderKeyframes(
   report: PhysicsReport,
   parts: RenderPart[],
   outDir: string,
-): Promise<{ view: string; png: Uint8Array }[]> {
+): Promise<KeyframeRender> {
   await mkdir(outDir, { recursive: true });
-  const pngs: { view: string; png: Uint8Array }[] = [];
+  const frames: { view: string; png: Uint8Array }[] = [];
+  const warnings: string[] = [];
   for (const kf of report.keyframes) {
     const lines: string[] = [];
     for (const part of parts) {
@@ -622,29 +657,38 @@ export async function renderKeyframes(
       if (!pose) continue;
       const [x, y, z, w] = pose.rotation;
       const m = quatToMatrix3({ x, y, z, w });
-      const mStr = m.map((row) => `[${row.map((v) => v.toFixed(6)).join(',')}]`).join(',');
-      lines.push(`translate([${pose.position.map((v) => v.toFixed(4)).join(',')}]) rotate(m=[${mStr}]) import("${part.stlPath}");`);
+      lines.push(`translate([${pose.position.map((v) => v.toFixed(4)).join(',')}]) ` +
+        `multmatrix(${homogeneous(m)}) import("${part.stlPath}");`);
     }
     const safe = kf.label.replace(/[^A-Za-z0-9\u4e00-\u9fff]+/g, '_').slice(0, 24);
-    const scadPath = join(outDir, `frame_${String(kf.step).padStart(5, '0')}_${safe}.scad`);
+    const stem = `frame_${String(kf.step).padStart(5, '0')}_${safe}`;
+    const scadPath = join(outDir, `${stem}.scad`);
     await writeFile(scadPath, lines.join('\n'), 'utf8');
-    const pngPath = join(outDir, `frame_${String(kf.step).padStart(5, '0')}_${safe}.png`);
-    const ok = await renderPng(scadPath, pngPath);
+    const pngPath = join(outDir, `${stem}.png`);
+    const diagnostics: string[] = [];
+    const ok = await renderScadPng(scadPath, pngPath, { rotate: [65, 0, 25], imgSize: 512 },
+      (text) => diagnostics.push(text));
+    for (const line of diagnostics.join('\n').split('\n')) {
+      const trimmed = line.trim();
+      if (/^(WARNING|ERROR):/.test(trimmed)) {
+        warnings.push(`${stem}: ${trimmed}`);
+      }
+    }
     if (ok) {
       const { readFile } = await import('node:fs/promises');
-      pngs.push({ view: `t${kf.timeSec}s ${kf.label}`, png: await readFile(pngPath) });
+      frames.push({ view: `t${kf.timeSec}s ${kf.label}`, png: await readFile(pngPath) });
     }
   }
-  return pngs;
+  return { frames, warnings };
 }
 
-function renderPng(scadPath: string, pngPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const child = spawn('xvfb-run', ['-a', 'openscad', '-o', pngPath,
-      '--camera=0,0,0,65,0,25,0', '--imgsize=512,512', '--viewall', '--autocenter',
-      '--projection=p', '--colorscheme=Tomorrow', scadPath], { cwd: join(scadPath, '..') });
-    const timer = setTimeout(() => child.kill('SIGKILL'), 30_000);
-    child.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
-    child.on('error', () => { clearTimeout(timer); resolve(false); });
-  });
+/** A 3×3 rotation as the 4×4 homogeneous matrix `multmatrix` takes. */
+function homogeneous(m: number[][]): string {
+  const rows = [
+    [m[0]![0]!, m[0]![1]!, m[0]![2]!, 0],
+    [m[1]![0]!, m[1]![1]!, m[1]![2]!, 0],
+    [m[2]![0]!, m[2]![1]!, m[2]![2]!, 0],
+    [0, 0, 0, 1],
+  ];
+  return `[${rows.map((row) => `[${row.map((v) => Number(v.toFixed(6))).join(',')}]`).join(',')}]`;
 }

@@ -1,4 +1,4 @@
-// Image-budget constants and the telemetry mirror (DESGIGN §16–17).
+// Image-budget constants and the telemetry mirror (DESIGN §16–17).
 //
 // POLICY (user decision, 2026-10-03): standard-mode sessions run on dsh
 // FACTORY DEFAULTS — no route-level budget is patched or written by this
@@ -10,7 +10,7 @@
 //
 // History: this module once wrote a pi-ai `maxRequestImageBytes` at boot
 // (2.5 MiB, then 256 KiB) and claimed a `maxRequestImages` knob that never
-// existed in any installed dsh — both removed. See DESGIGN §14–§16.
+// existed in any installed dsh — both removed. See DESIGN §14–§16.
 
 /** Retained images for a 造物模式 session; mirrors the deepseek count budget. */
 export const DEEPSEEK_KEEP_IMAGES = 24;

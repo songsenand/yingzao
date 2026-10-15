@@ -38,13 +38,13 @@ export function dshHome(): string {
   return fromEnv && isAbsolute(fromEnv) ? fromEnv : join(homedir(), '.dsh');
 }
 
-/** Profile-level siblings live here; `telemetry` is the one resident (DESGIGN §19). */
+/** Profile-level siblings live here; `telemetry` is the one resident (DESIGN §19). */
 export function projectsHome(): string {
   return join(dshHome(), 'cad');
 }
 
 /**
- * Per-project data lives INSIDE the project: `<cwd>/cad-data/` (DESGIGN §19).
+ * Per-project data lives INSIDE the project: `<cwd>/cad-data/` (DESIGN §19).
  *
  * The 2026-10-03 user decision: artifacts belong to the project folder, so
  * deleting the folder deletes the corpus and recreating a same-named project

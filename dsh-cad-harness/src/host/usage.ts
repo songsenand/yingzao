@@ -86,7 +86,7 @@ const base64Length = (bytes: number): number => Math.ceil(bytes / 3) * 4;
 /**
  * Which image budget applies to a request, and how that adapter accounts it.
  *
- * DESGIGN §16–17: the plugin applies NO route-level budget — standard mode
+ * DESIGN §16–17: the plugin applies NO route-level budget — standard mode
  * runs on factory defaults (no proactive pruning on either route). The
  * deepseek count numbers below PREDICT the 造物 (cad) session window the
  * executor enforces (24 retained), which is the closest honest model of what
@@ -162,7 +162,7 @@ const recent: UsageRecord[] = [];
 const MAX_RECENT = 300;
 
 /**
- * One image-window decision, written by the offload executor (DESGIGN §23.5).
+ * One image-window decision, written by the offload executor (DESIGN §23.5).
  *
  * WHY THIS EXISTS: the microscope5 post-mortem could not answer "did the cad
  * image window even run?" from the corpus — the answer had to be reconstructed
@@ -265,7 +265,7 @@ export async function usageReport(): Promise<Record<string, unknown>> {
     imageBudget: {
       deepseek: { cadWindow: DEEPSEEK_KEEP_IMAGES, quantum: DEEPSEEK_COUNT_QUANTUM, note: 'session-level window for the cad preset, enforced by the offload executor' },
       piAi: { budget: 'none', note: 'factory defaults on every preset; the cad window is session-level (image-offload.ts)' },
-      note: 'route knobs stay at dsh defaults for every preset; see DESGIGN §16–17',
+      note: 'route knobs stay at dsh defaults for every preset; see DESIGN §16–17',
     },
     imageWindow: imageWindowReport(),
     note: `image token estimate = ${IMAGE_TOKEN_ESTIMATE}/image (set CAD_IMAGE_TOKEN_ESTIMATE to calibrate); `

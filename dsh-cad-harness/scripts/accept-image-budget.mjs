@@ -1,4 +1,4 @@
-// Acceptance for image policy (DESGIGN §16–17): route knobs stay at dsh
+// Acceptance for image policy (DESIGN §16–17): route knobs stay at dsh
 // FACTORY DEFAULTS; the only active budget is the per-session 造物 (cad)
 // window enforced by the offload executor (accept-image-offload.mjs).
 //

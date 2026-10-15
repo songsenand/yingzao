@@ -1,4 +1,4 @@
-// Acceptance for check_connectivity (DESGIGN §18: a part must be ONE
+// Acceptance for check_connectivity (DESIGN §18: a part must be ONE
 // connected solid). Verified against the REAL tool code with a temp project
 // store:
 //
@@ -85,8 +85,8 @@ function cubeTris(x0, y0, z0, s) {
     fetch: { register: () => {} },
   };
   registerCadTools(ctx);
-  const tool = registered.find((t) => t.name === 'check_connectivity');
-  check(!!tool, 'check_connectivity is registered');
+  const tool = registered.find((t) => t.name === 'measure_part');
+  check(!!tool && JSON.stringify(tool.output?.schema ?? {}).includes('"bodies"'), 'measure_part is registered and carries the body fields (check_connectivity was merged into it)');
   check(registered.some((t) => t.name === 'generate_part'), 'generation tools still registered alongside');
 
   // A project with one multi-body version and one single-body version.
@@ -101,14 +101,14 @@ function cubeTris(x0, y0, z0, s) {
 
   const exec = { agent: { session: { header: { cwd: project } } } };
   const multi = await tool.execute({ versionId: 'v001' }, exec);
-  check(multi.verdict === 'multi-body' && multi.bodies === 2,
-    'tool: a two-fragment version reports multi-body', JSON.stringify({ verdict: multi.verdict, bodies: multi.bodies }));
+  check(multi.bodyVerdict === 'multi-body' && multi.bodies === 2,
+    'tool: a two-fragment version reports multi-body', JSON.stringify({ bodyVerdict: multi.bodyVerdict, bodies: multi.bodies }));
   check(JSON.stringify(multi.bodySizes[0]) === '[10,10,10]',
     'tool: per-body sizes are real mm', JSON.stringify(multi.bodySizes));
 
   const single = await tool.execute({ versionId: 'v002' }, exec);
-  check(single.verdict === 'single-body' && single.bodies === 1,
-    'tool: a single cube reports single-body', JSON.stringify({ verdict: single.verdict, bodies: single.bodies }));
+  check(single.bodyVerdict === 'single-body' && single.bodies === 1,
+    'tool: a single cube reports single-body', JSON.stringify({ bodyVerdict: single.bodyVerdict, bodies: single.bodies }));
 
   let refused = false;
   try { await tool.execute({ versionId: 'vXXX' }, exec); } catch (e) { refused = String(e.message).includes('no model.stl'); }
@@ -123,12 +123,21 @@ function cubeTris(x0, y0, z0, s) {
   const src = new URL('../src/host/tools.ts', import.meta.url);
   const { readFileSync } = await import('node:fs');
   const tools = readFileSync(src, 'utf8');
-  check(tools.includes('DISCIPLINE (DESGIGN §18)') && tools.includes('check_connectivity to see where each body sits'),
+  check(tools.includes('DISCIPLINE (DESIGN §18)') && tools.includes('Run measure_part to see where each body sits'),
     'generate_part warns with the single-solid discipline when shells > 1');
-  const skill = new URL('../skills/cad-toolbox/SKILL.md', import.meta.url);
-  const md = readFileSync(skill, 'utf8');
-  check(md.includes('A part is ONE connected solid') && md.includes('check_connectivity'),
-    'the skill carries the single-solid discipline and routes to the tool');
+  // Read the WHOLE skills tree, not one file: the skill was split into layers
+  // (tier-1 router + per-job skills + reference files), and a doc test pinned to a
+  // single path silently stops testing anything the moment prose moves.
+  const { readdirSync, statSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const skillsRoot = new URL('../skills', import.meta.url).pathname;
+  const walk = (dir) => readdirSync(dir).flatMap((e) => {
+    const full = join(dir, e);
+    return statSync(full).isDirectory() ? walk(full) : full.endsWith('.md') ? [full] : [];
+  });
+  const md = walk(skillsRoot).map((f) => readFileSync(f, 'utf8')).join('\n');
+  check(md.includes('ONE connected solid') && md.includes('measure_part'),
+    'the skill carries the single-solid discipline and routes to the tool (measure_part.bodies)');
 }
 
 console.log(`\n${failures === 0 ? 'OK' : `${failures} FAILURE(S)`}`);
