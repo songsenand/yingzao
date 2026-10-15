@@ -86,9 +86,13 @@ pip 车道分发成立（xlb 纯 py wheel + jaxlib cp313 wheel）；JAX CPU 上 
 **代码与脚本**
 - `experiments/scripts/20261015_xlb_channel_smoke.py` —— XLB 通道冒烟（含全部规避补丁：
   warp 版本注释、overlap 替换、EquilibriumBC 替代 ZouHe、正确循环约定、Poiseuille 检查）
-- `.tmp-su2-probe/`（SU2 对照组遗留，可删）：`channel.su2`、`channel.cfg`、
-  `config_template.cfg`（v8.5.0 官方模板，gitee 镜像拉取）、`CConfig.cpp`、
-  `option_structure.inl`、`su2_run.log` 系列、`xlb-venv/`（可删，重建命令见下）
+- `experiments/artifacts/20261015_cfd_probe/` —— 探针证据件（2026-10-15 清理时自
+  `.tmp-su2-probe/` 迁入，可重建大件已删）：SU2 手写算例（`channel.su2`/`channel.cfg`/
+  `make_mesh.py`）、`su2_run.log`（v8 配置迭代最后一轮报错）、`config_template.cfg`
+  （v8.5.0 官方模板，gitee 镜像可再取）、`CConfig.cpp`/`option_structure.inl`
+  （配置解析源码考古件）、`bc_zouhe_main.py`（上游 main 已修复版，撤 shim 时对照）、
+  `closure.txt`（锁闭包解析记录）。`xlb-venv/`、conda `env/`、pip 缓存等大件已删，
+  重建命令见下（保持不变）。
 
 **运行命令**
 ```bash
