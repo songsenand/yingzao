@@ -60,6 +60,9 @@ await mkdir(PROJ, { recursive: true });
 // a tool call on purpose (a 180 s timeout must not absorb a minutes-long pip
 // install), so provision up front — same pattern as accept-import-cad.mjs.
 {
+  // Keep the wheel cache outside the throwaway HOME: only the first run pays
+  // full price (see accept-import-cad.mjs / python-runtime.ts installDependencies).
+  process.env.DSH_CAD_PIP_CACHE_DIR ??= join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.tmp-pip-cache');
   const { pythonRuntimeStatus, repairPythonRuntime } = await import('../src/host/python-runtime.ts');
   const status = await pythonRuntimeStatus();
   if (status.state !== 'ready') {

@@ -2642,6 +2642,13 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   → 状态                              $DSH_HOME/cad/runtime/state.json
 ```
 
+- **wheel 缓存在 runtime root 内**（`cache/pip`，`--cache-dir` 显式指定；v2.33 起取代
+  `--no-cache-dir`）：重装/升级只重下锁里变化的包，缓存在 runtime root 内随其生死，
+  不碰宿主 `~/.cache/pip`；`--require-hashes` 对缓存 wheel 逐个复验 hash，投毒过不了
+  关。注意它**不加速单次冷装**（pip 无断点续传），救的是第二次以后。跨 HOME 共享缓存
+  用 `DSH_CAD_PIP_CACHE_DIR`（验收脚本即指向仓库根被 ignore 的 `.tmp-pip-cache/`，
+  只让第一轮付全价）。
+
 - 生成器 `scripts/gen-python-lock.mjs` 从官方 `SHA256SUMS` 与 PyPI JSON 重算锁；`--check`
   供 CI 检漂移。**锁变了，venv marker 就对不上，自动重装**（`repair` 是显式入口）。
 - **解包器自研**（`tar-extract.ts`）：不依赖系统 tar、不引 npm 依赖，拒绝绝对路径、

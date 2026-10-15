@@ -78,6 +78,10 @@ const fx = (name) => join(FIXTURES, name);
 // absorb a 6–11 min cold install), so the acceptance provisions up front — same
 // pattern as accept-lbm-channel.mjs. Later runs are warm.
 {
+  // A temp DSH_HOME would throw the wheel cache away on every run; keep it in a
+  // repo-ignored dir so only the FIRST run pays full price. (The runtime root's
+  // own cache dies with HOME; this override is exactly for that case.)
+  process.env.DSH_CAD_PIP_CACHE_DIR ??= join(HERE, '..', '..', '.tmp-pip-cache');
   const status = await pythonRuntimeStatus();
   if (status.state !== 'ready') {
     console.log(`runtime not ready (state: ${status.state}) — provisioning from the lock (takes minutes on first run)...`);

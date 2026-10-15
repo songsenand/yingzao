@@ -2607,3 +2607,28 @@ STEP 边界断言改为 IGES 边界；新增 `accept-import-cad.mjs`（样本取
 MIT 测试模型 + ezdxf 生成 DXF，入库 `scripts/fixtures/cad-import/`）；IGES 将来
 路线仍按 DESIGN 既定顺序（FreeCAD headless → cadquery-ocp → Replicad）评估，
 cadaclysm 仅可作为对照实验对象，不作运行时依赖。
+
+## 2026-10-15：pip wheel 缓存收进 runtime root（取代 --no-cache-dir）
+
+**触发条件：** 第 1 条（用户拍板："把缓存关进插件自己的笼子"）。
+
+**要解决的问题：** 冷供给要下整锁 ~600MB（vtk/jaxlib 各 ~90MB 为 XLB 栈所带），
+`--no-cache-dir` 使每次 venv 重建全额重下；本日三次冷供给两次撞 pip 超时。
+原标志在代码里无注释存档。
+
+**决策内容：** `installDependencies` 以 `--cache-dir <runtime root>/cache/pip`
+取代 `--no-cache-dir`（与解释器归档缓存同根、repair 时同生共死）；
+`DSH_CAD_PIP_CACHE_DIR` 可覆盖——accept-import(-cad).mjs 指向仓库根被 ignore 的
+`.tmp-pip-cache/`，重跑只让第一轮付全价。
+
+**理由：** 原 `--no-cache-dir` 的正当动机（不污染宿主 `~/.cache/pip`）由"缓存随
+runtime root 生死"完整保留；重装的最常见触发是锁升级，缓存命中后重下量从全量缩为
+仅变更包；`--require-hashes` 对缓存 wheel 逐个复验，投毒过不了关，安全不降。
+诚实边界：**不加速单次冷装**（pip 无断点续传），收益从第二次起。
+
+**依据：** 本日三次冷供给实录（一次 ~25min 成功、两次 45min 超时，均卡大轮子下载，
+同索引镜像）；python-runtime.ts 既有解释器归档验证缓存（repair 离线可得）与
+wheel 无缓存之间的不对称。
+
+**影响：** runtime root 磁盘占用上限 +~600MB（可随运行时整体删除）；换 index 源
+后命中率下降（预期内，不影响正确性）；DESIGN §26.3 已同步。

@@ -18,7 +18,10 @@
 // WHERE THINGS LIVE ($DSH_HOME/cad/runtime, shared by every project):
 //   python/<version>/   the extracted interpreter
 //   venv/               the dependency environment built from it
-//   cache/              verified archives, so a repair is offline
+//   cache/              verified interpreter archives + the pip wheel cache
+//                       (cache/pip), so a repair re-downloads nothing it
+//                       already has — every cached wheel is hash-rechecked
+//                       against the lock on reuse
 //   requirements.lock   the exact locked set pip installs
 //   state.json          phase + failure, readable without booting the plugin
 
@@ -709,6 +712,18 @@ async function installDependencies(
   const indexes = override ? [override] : [...PIP_INDEXES];
   const failures: string[] = [];
 
+  // The wheel cache lives INSIDE the runtime root — never the user's global
+  // ~/.cache/pip — so reinstalls (the common trigger being a lock bump) reuse
+  // every unchanged wheel while the cache still dies with the runtime it
+  // belongs to. This is safe under --require-hashes: pip re-verifies each
+  // cached wheel against the lock hashes, so a tampered cache entry fails the
+  // install instead of silently shipping different bytes. (It does NOT make a
+  // single cold install faster — pip does not resume partial downloads.) A
+  // deployment can share one cache across homes via DSH_CAD_PIP_CACHE_DIR;
+  // the acceptance scripts point it at a repo-ignored dir so reruns are warm.
+  const pipCache = envValue('DSH_CAD_PIP_CACHE_DIR') ?? join(root, 'cache', 'pip');
+  await mkdir(pipCache, { recursive: true });
+
   for (const index of indexes) {
     onProgress(`installing locked dependencies from ${new URL(index).host}`);
     const result = await runProcess(
@@ -717,7 +732,7 @@ async function installDependencies(
         '-m', 'pip', 'install',
         '--require-hashes',
         '--only-binary=:all:',
-        '--no-cache-dir',
+        '--cache-dir', pipCache,
         '--disable-pip-version-check',
         '--no-input',
         '--index-url', index,
