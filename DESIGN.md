@@ -1,7 +1,7 @@
 # 零件设计 Harness 设计文档
 
 > **文件名**：本文件原名 `DESGIGN.md`（拼写错误），2026-10-13 更正为 `DESIGN.md`。
-> 历史记录——`execution_summaries/`、`experiments/`、`verification/`、
+> 历史记录——`docs/archive/execution_summaries/`、`experiments/`、`verification/`、
 > `examples/*/execution_summaries/`、以及 `docs/DECISION-LOG.md` 的**既有条目**——
 > 是按发生时的事实留档的，其中出现的 `DESGIGN.md` 一律指本文件，**不回改**。
 > 活文档与代码里的引用已全部更新。
@@ -328,7 +328,7 @@ validateAssembly(parts, thresholdMm = 0.75): Promise<AssemblyReport>
 
 #### 6.4.1 装配清单检查（v1，2026-09-28 新增）
 
-**职责**：BOM + 可执行 ICD —— 把「谁和谁配合、什么类型、名义值、容差」写成 `assembly.json`，由引擎逐条核对，并反向发现未声明的邻近零件对。设计见 `ASSEMBLY-SCHEMA-PROPOSAL.md`，交付记录见 v2.7。
+**职责**：BOM + 可执行 ICD —— 把「谁和谁配合、什么类型、名义值、容差」写成 `assembly.json`，由引擎逐条核对，并反向发现未声明的邻近零件对。设计见 `docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md`，交付记录见 v2.7。
 
 - 实作：`manifest.ts`（清单读写/校验/遍历）+ `assembly-check.ts`（L0 算子 `distance` / `diameter-match`、hard/intent 双通道、邻接发现）
 - 工具 `check_assembly`；路由 `GET /api/cad/assembly/manifest`、`POST /api/cad/assembly/run`（人工发起②）、`GET /api/cad/assembly/check`
@@ -413,7 +413,7 @@ interface PhysicsResult {
 
 **实现要点**：
 - 单位制：毫米/s，重力 `[0,0,-9810]`；**dt 固定 4ms 不可调**（config 不暴露）
-- 粒子数：按 4-8 粒/格 × 流体域体积自动计算（典型 5 万-30 万），显式覆盖上限 1,000,000；**精度旋钮是 dx 不是粒子数**（基准见 M4-PREP 附录 A）
+- 粒子数：按 4-8 粒/格 × 流体域体积自动计算（典型 5 万-30 万），显式覆盖上限 1,000,000；**精度旋钮是 dx 不是粒子数**（基准见 docs/archive/M4-PREP.md 附录 A）
 - 边界：粒子-壁面 = SDF 投影回推（近壁掩膜 O(1) 预筛）；自由滑移 = G2P 排除固体格 + 流体权重重归一化（阈值 0.5）
 - 出口：escape 移除 + 守恒审计（到达率 = escaped/count0 可断言）；recycle 环绕续流为另一模式
 - 快照与数据：8 帧 PNG 进会话 + `frames.json` + 每帧 `.bin`（Float32 pos[3N]+speed[N]，16B/粒子）+ `wall.stl`；路由 `GET /api/cad/fluid[/manifest|/frame?i=|/wall]`
@@ -425,7 +425,7 @@ interface PhysicsResult {
 
 ### 6.7 MPM 后处理（Host）
 
-> **v2.4 重定义**：规则引擎与固定统计接口**取消**。插件只提供帧数据落盘/访问 + 参数化渲染 + 面板回放（见 M4-PREP §9）；死区/流量/守恒分析由 LLM 写脚本消费帧数据完成。以下为历史设计，保留备查。
+> **v2.4 重定义**：规则引擎与固定统计接口**取消**。插件只提供帧数据落盘/访问 + 参数化渲染 + 面板回放（见 docs/archive/M4-PREP.md §9）；死区/流量/守恒分析由 LLM 写脚本消费帧数据完成。以下为历史设计，保留备查。
 
 **职责**：从 MPM 结果提取统计量，规则引擎生成修改建议。
 
@@ -1094,11 +1094,11 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 ### M4：MPM 跑通（1 周）
 
-- MLS-MPM solver 集成（Node 侧 CPU 内核——架构依据与粒子数基准见 M4-PREP.md §1；WebGPU 移交后续交互面板）
+- MLS-MPM solver 集成（Node 侧 CPU 内核——架构依据与粒子数基准见 docs/archive/M4-PREP.md §1；WebGPU 移交后续交互面板）
 - 管道边界加载（STL → 窄带 SDF）
 - 粒子初始化和入口速度
 - 点云快照渲染（纯 JS PNG）+ 快照导出
-- `simulate_fluid` 工具 + 人工发起路由（M4-PREP.md §4.6）
+- `simulate_fluid` 工具 + 人工发起路由（docs/archive/M4-PREP.md §4.6）
 
 **验收**：直管离线跑通——粒子从入口流到出口、不穿透、粒子数守恒（默认 4-8 粒/格，典型 5 万-30 万粒子）。
 
@@ -1109,7 +1109,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - 行程/周期/相位指标 + 堵转（jammed）检测
 - `simulate_motion` 工具 + 人工发起路由
 
-**验收**：单缸四冲程——曲轴匀速（周期误差 <5%）、活塞行程 ≈ 2r、全周期运动干涉 = 0、关键帧可见四个冲程；机构装错时报 jammed/干涉（负样本必须能发现问题）。设计：M3.6-MOTION-PREP.md。
+**验收**：单缸四冲程——曲轴匀速（周期误差 <5%）、活塞行程 ≈ 2r、全周期运动干涉 = 0、关键帧可见四个冲程；机构装错时报 jammed/干涉（负样本必须能发现问题）。设计：docs/archive/M3.6-MOTION-PREP.md。
 
 ### M4R：场地化 + MPM 可视化一等公民（3-4 天，v2.4 新增，同日修订为场地思路）
 
@@ -1118,7 +1118,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - 帧 `.bin` 落盘 + manifest + GET 路由；MPM 面板 v2：three.js 粒子回放（时间轴/速度着色/剖切）
 - 工具层只保留插件不可替代的服务：图进会话、版本库、面板数据、人工按钮守卫运行器
 
-**验收**：LLM 全程用自有 shell + 库跑通一个表单表达不了的场景（计时阀门或双入口），无专用工具依赖；面板回放人工核判；LLM 消费帧数据写自己的死区分析；accept-m4 24 断言以示例脚本等价性回归通过。设计依据：M4-PREP.md §9。
+**验收**：LLM 全程用自有 shell + 库跑通一个表单表达不了的场景（计时阀门或双入口），无专用工具依赖；面板回放人工核判；LLM 消费帧数据写自己的死区分析；accept-m4 24 断言以示例脚本等价性回归通过。设计依据：docs/archive/M4-PREP.md §9。
 
 ### M5：MPM 分析（v2.4 重定义，1 周内）
 
@@ -1151,7 +1151,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 > **v2.11 更正**：原第 1/4/7/10 条与实作不符，逐条按现状改写（其余条款仍然有效）。
 
-1. **优先级**：M0 → M1 → M2 → M3 → M3.6 → M4 → M4R 已交付；当前主线为 **A0' 装配表示 + 装配视觉表达**（HARNESS.md §11），M5 已重定义为「解读归 LLM」
+1. **优先级**：M0 → M1 → M2 → M3 → M3.6 → M4 → M4R 已交付；当前主线为 **A0' 装配表示 + 装配视觉表达**（DESIGN.md §31.2），M5 已重定义为「解读归 LLM」
 2. **代码风格**：TypeScript 严格模式，函数式优先，避免类继承
 3. **错误处理**：所有外部调用（CLI、LLM、仿真）必须有超时和重试（编译 30s 超时 + 渲染失败重试；仿真由内核守卫与发散检测兜底）
 4. **日志**：**无统一 logger、无 `./logs/`**（原文与实作不符）。现为：进程内少量 `console.*`；结构化结果一律落盘 JSON（`data/<域>/<域>-report.json`），计量落 `data/usage/usage.jsonl`
@@ -1181,9 +1181,9 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 ### v2.2（2026-09-25）范围修订
 
-- **新增 M3.6 机构运动仿真（必须交付）**：装配体运动过程模拟（曲轴-连杆-活塞-气门四冲程为验收基准），rapier 扩展（prismatic/关节电机/kinematic 预设驱动）+ 运动干涉时间线（采样位姿 × Manifold 精确布尔）+ 堵转检测；§8 里程碑新增，§12 必办。设计：M3.6-MOTION-PREP.md
-- **M4 架构修订**：MLS-MPM 定为 Node 侧 CPU 内核（M3 headless 先例；粒子数扩展基准 ~0.34µs/粒子/步，8.8k→564k 实测——固定 dx 下精度由网格分辨率决定而非粒子数，M5 统计甜点 4-8 粒/格）；验收修订为「直管离线跑通」，粒子数 5 万-30 万不设 1 万上限；WebGPU 移交后续交互面板。依据：M4-PREP.md §1/§1.1/附录 A（内核已实现，`scripts/bench-mpm-scaling.mjs`）
-- **验证边界确立**：三层判据（L0 静态几何 / L1 刚体 / L2 流体），主语物态为唯一判据；L1 拆 `simulate_physics`（动力学行为）与 `simulate_motion`（机构联动）两工具，描述互相交叉引用；能力≠工具范围（MPM 可做刚体与定性应力，选型依据是更准更便宜）；人工发起三路径（会话点名 / POST 运行路由 / 面板按钮）。见 M4-PREP.md §4.6
+- **新增 M3.6 机构运动仿真（必须交付）**：装配体运动过程模拟（曲轴-连杆-活塞-气门四冲程为验收基准），rapier 扩展（prismatic/关节电机/kinematic 预设驱动）+ 运动干涉时间线（采样位姿 × Manifold 精确布尔）+ 堵转检测；§8 里程碑新增，§12 必办。设计：docs/archive/M3.6-MOTION-PREP.md
+- **M4 架构修订**：MLS-MPM 定为 Node 侧 CPU 内核（M3 headless 先例；粒子数扩展基准 ~0.34µs/粒子/步，8.8k→564k 实测——固定 dx 下精度由网格分辨率决定而非粒子数，M5 统计甜点 4-8 粒/格）；验收修订为「直管离线跑通」，粒子数 5 万-30 万不设 1 万上限；WebGPU 移交后续交互面板。依据：docs/archive/M4-PREP.md §1/§1.1/附录 A（内核已实现，`scripts/bench-mpm-scaling.mjs`）
+- **验证边界确立**：三层判据（L0 静态几何 / L1 刚体 / L2 流体），主语物态为唯一判据；L1 拆 `simulate_physics`（动力学行为）与 `simulate_motion`（机构联动）两工具，描述互相交叉引用；能力≠工具范围（MPM 可做刚体与定性应力，选型依据是更准更便宜）；人工发起三路径（会话点名 / POST 运行路由 / 面板按钮）。见 docs/archive/M4-PREP.md §4.6
 - **长期目标入库**：弹性本构扩展——mpm.ts 加变形梯度 F 与 fixed-corotated/neo-Hookean 预设，单体定性应力/变形验证，趋势判断非 FEA（§12 长期待办）
 - **补 M2/M3 缺口**：`measure_distance` 两点测量 + datum 锚点约定；`measure_closest` 最近点对求解器（零坐标、标注渲染）——测量家族补齐：整体(measure_part)/两点(measure_distance)/求解(measure_closest)/零件对(validate_assembly)
 
@@ -1201,7 +1201,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | M3.6 机构运动仿真 | motion.ts（rapier 纯约束 + Manifold 干涉时间线 + 双驱动）+ `simulate_motion` + `/api/cad/motion[/run]` | accept-m36.mjs 17/17 四冲程 |
 | 测量家族 | measure.ts：`measure_distance`（datum/吸附/跨零件）+ `measure_closest`（最近点对求解 + 标注渲染） | accept-measure.mjs 12/12 |
 | 人工 CAD 式标注 | 面板「📏 测量两点」（射线拾取+尺寸线）+ 截图烘焙 + 备注自动带精确数字 | 构建验证 + 与标注框链路同构 |
-| 方案与调查产出 | M4-PREP.md（含插件库 12005 项扫描：M4 域零重叠、CAD 查看域 6-8 个参考）、M3.6-MOTION-PREP.md（含 MPM 耦合四档探讨）、验证边界三层判据（§13.7 前置 M4-PREP §4.6） | — |
+| 方案与调查产出 | docs/archive/M4-PREP.md（含插件库 12005 项扫描：M4 域零重叠、CAD 查看域 6-8 个参考）、docs/archive/M3.6-MOTION-PREP.md（含 MPM 耦合四档探讨）、验证边界三层判据（§13.7 前置 docs/archive/M4-PREP.md §4.6） | — |
 
 **关键设计原则（本轮确立，后续沿用）**
 
@@ -1219,7 +1219,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - **M5 重定义**：取消规则引擎；插件供数据 + 渲染 + 面板，分析归 LLM
 - **保留**：mpm.ts/sdf.ts、内核数值防护、三发起路径、验收硬指标哲学
 - **诚实代价**：场地思路下第一义务变为**库卫生**——JSDoc、examples、fluid.ts 封闭语义拆原语（文档债就是代码债）；LLM 自跑路径由会话观察/审批兜底，人工按钮保留守卫运行器
-- 明细与工作分解：M4-PREP.md §9
+- 明细与工作分解：docs/archive/M4-PREP.md §9
 
 ### v2.5（2026-09-26）可视化回放交付（M4R 支柱 B）
 
@@ -1236,11 +1236,11 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - **核心命题**：CAD harness = 让 LLM 生成的几何**可验证、可迭代、可交付**的基础设施；产品是生成与真值之间的闭环，不是几何生成器；真正的资产是协议（v2.3 原则 1 的推广：内核无关的真值接口），不是插件。护城河 = 闭环，野心若以堆功能实现则沦为第 12006 个 CAD 插件
 - **设计者三分**：LLM 可替代操作员（M1 本质）/ 可增强检验员（M2-M4 本质，验证时机从事后移到全程）/ 不可替代设计者（意图、裁决、品味、责任）；验收三层分工（脚本硬指标/模型判读/人复核）与该分类同构
 - **能力开放三层原则（防矫枉过正）**：场地思路反对"收窄能力"（包工头），不反对"标注能力"（导览）——**库给能力，runtime 给执行，skill 给地图**；试金石：删掉 skill 后 LLM 读源码仍达同等效果 = 合格导览，删掉即失能力 = 伪 API
-- **STEP 实测结论**：未实现且当前内核不可实现（EXPORT_FORMATS 仅 stl/3mf/obj/off/wrl；snapshot `--help` 输出类型无 step、无 import_step）——网格 vs B-rep 的内核类别缺口，归期 = 内核可插拔（中期，首选 Replicad TS/WASM 路线）；过渡期 3MF 够用。顺带发现 snapshot 实验特性含 `python-engine`，**已试探确认可用（2026-09-28，HARNESS.md §7.1：子对象在前 API、真 Python traceback 错误反馈、datum 经 stderr print 零成本移植、36ms 法兰盘 Genus=7 精确；风险：内省可致 segfault，需稳定性冒烟；集成 ~半天 compile.ts 分支）**
+- **STEP 实测结论**：未实现且当前内核不可实现（EXPORT_FORMATS 仅 stl/3mf/obj/off/wrl；snapshot `--help` 输出类型无 step、无 import_step）——网格 vs B-rep 的内核类别缺口，归期 = 内核可插拔（中期，首选 Replicad TS/WASM 路线）；过渡期 3MF 够用。顺带发现 snapshot 实验特性含 `python-engine`，**已试探确认可用（2026-09-28，DECISION-LOG 2026-09-28（补记）：子对象在前 API、真 Python traceback 错误反馈、datum 经 stderr print 零成本移植、36ms 法兰盘 Genus=7 精确；风险：内省可致 segfault，需稳定性冒烟；集成 ~半天 compile.ts 分支）**
 - **装配表示立场修订**：放弃"先定规模再定表示"（5/20/50 门控），采纳**代码库类比**——大型代码库 harness 能编辑，装配同理，关键在表达；判断标准改为"新会话能否只靠局部视图+查询正确修改 50 件装配中的一个零件"；A0' 装配导航实验取代原规模探针（HARNESS.md §8）
 - **内核可插拔候选**（中期）：Replicad（TS+WASM+OCCT，Node 栈内）/ Build123d / FreeCAD headless（STEP 桥）；Blender bpy（玩具艺术面按需）；Zoo KCL 为竞品参照非依赖
 
-### v2.7（2026-09-28）装配清单 v1 交付（BOM + 可执行 ICD，ASSEMBLY-SCHEMA-PROPOSAL.md）
+### v2.7（2026-09-28）装配清单 v1 交付（BOM + 可执行 ICD，docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md）
 
 - **datum 三类扩展**（compile.ts）：`datum_axis/datum_plane/datum_cyl` 模块 + `parseDatumFeatures` → `DatumSet{points,axes,planes,cylinders}`；datums.json 新格式（向后兼容旧点数组，`readVersionDatums` 双读）；generate_part 全量入库
 - **manifest.ts**：assembly.json schema v0.1 读写/结构校验/遍历——节点同构可递归（part/assembly 同 schema）、接口挂装配节点（描述其直接子件间关系）、端点用 `<childId>.<datumName>` 地址引用；真相文件语言无关（JSON，裁决见提案 §9）
@@ -1300,7 +1300,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 ### v2.13（2026-09-28）运行时分工裁决：TS 接线层 + Python 领域运行时
 
-- **一句话原则（创始人原话）**：**TS 收缩为"平台接线层"，Python 扩张为"领域运行时"——不是"减少 TS"，是"让 TS 只干接线"**。完整规范见 HARNESS.md §12
+- **一句话原则（创始人原话）**：**TS 收缩为"平台接线层"，Python 扩张为"领域运行时"——不是"减少 TS"，是"让 TS 只干接线"**。完整规范见 DESIGN.md §31.3
 - **架构 A 裁决**：模型来源仍是 SCAD（LLM 写），Python 只做分析/仿真/装配检查，**不做几何生成**；**不使用 OpenSCAD 内嵌 python-engine**——实测 `ldd openscad` 链接 `libpython3.10.so.1.0`（ABI 绑死 3.10，换版本需自建 OpenSCAD），且内嵌解释器无 pip 环境、装不了目标生态。→ v2.7 试探结论转为存档备查，**python-engine 集成项取消**
 - **Worker 规范**：Python **3.13**（`cadquery-ocp` 有 cp311-314 wheel）；常驻进程 + JSON-lines 协议（带 `protocolVersion`）+ 大载荷走文件路径 + venv 锁定/health check/自动重启；宿主侧唯一接线点 `src/host/python-worker.ts`（延续"引擎只在少数几处导入"的纪律）；错误返回完整 traceback
 - **引擎默认策略（无脑选择）**：**能用 rapier 的都用 rapier**；只有用户明确强调或 LLM 明确要求时才走自实现 MPM 脚本。配套两条纪律：① 判据仍是 L0/L1/L2 主语物态（连续介质 → MPM），默认偏置不取消分层；② **防越界条款**——连续介质问题的答案必须来自 MPM，不允许 rapier 输出充当
@@ -1316,14 +1316,14 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - **修改**：**删除启动自动打开与会话切换重开**，改为
   1. Tab 类型仍声明 → 用户可在右栏单击激活（即"给个按钮"）
   2. **CAD 活动触发**：轮询 `/api/cad/manifest`，新版本时间戳出现时 openTab（即"由 LLM 主动唤起"）；**首次轮询只记基线，故加载绝不弹出**
-- **原则入档**：HARNESS.md §4 新增「**界面打扰原则**」——区分"加载即弹"（禁）与"相关事件即弹"（可），适用于所有面板
+- **原则入档**：DESIGN.md §30 新增「**界面打扰原则**」——区分"加载即弹"（禁）与"相关事件即弹"（可），适用于所有面板
 - **部署**：纯 client 侧改动，`esbuild` 重建 `lib/client.js` 即可，**无需重启宿主**（本次未改 host 代码），浏览器刷新生效
 - **补充（同日实机确认）**：**只声明 tab 类型不会在右栏出现入口**（实测无按钮）——类型只在右栏 guide 选择器里列出。故增加**显式入口**：会话头部工具区 `conversation.session.header.utilities`（list 槽）注册一个「CAD」按钮 → `sidebarRight.openTab`。**注意不能用 `conversation.session.header.corner`**：该槽是 `single` 且已被官方 sidebar-right 展开按钮占用（注册会遮蔽官方 UI）。注册失败会打 `console.warn`，成功打 `console.info` 便于诊断
 
 ### v2.15（2026-10-01）外部几何导入：STL 成为一等版本（`import_part`）
 
 - **需求来源**：创始人指出"从外部导入一个 STEP 或 STL 文件、当作零件用在项目里"这个能力不存在，**意味着靠多人协作 + 装配拼接的完整能力现在是断的**
-- **归因修正**：原文档把「STEP 导入导出」与「导入既有 CAD」并成一行判为"内核类别缺口（网格 vs B-rep）"——对 STEP 成立，**对 STL 不成立**（STL 就是网格，真值引擎全部是网格的）。真正的缺口是**几何不是可以独立存在的对象**：`generate_part` 是进版本库的唯一入口，且只收 SCAD 源码。详见 HARNESS.md §7.3
+- **归因修正**：原文档把「STEP 导入导出」与「导入既有 CAD」并成一行判为"内核类别缺口（网格 vs B-rep）"——对 STEP 成立，**对 STL 不成立**（STL 就是网格，真值引擎全部是网格的）。真正的缺口是**几何不是可以独立存在的对象**：`generate_part` 是进版本库的唯一入口，且只收 SCAD 源码。详见 DECISION-LOG 2026-10-01（补记）
 - **交付**：新工具 `import_part`（第 12 个 CAD 工具）+ `src/host/import.ts` + `src/host/solidify.ts`；`mesh.ts` 增 ASCII 解析、格式探测、二进制写回、壳数统计；`version.ts` 的 `scadCode` 变可选并新增 `source` 来源字段 + `import.json`；`products.ts`/`types.ts`/`panel.ts` 显示来源
 - **三条设计原则**：① **导入 = 验收不是搬运**（非实体默认拒收，`allowNonSolid` 才存且打标记）；② **导入 = 一个版本不是第二条通道**（11 个工具零改动生效）；③ **外部件必须能进契约**（`datums` 参数写进既有 `datums.json`）
 - **验收**：`scripts/accept-import.mjs` **35/35**（含 ASCII/二进制同网格、非实体拒收与打标、导入件+生成件的干涉体积 326.2mm³ 与间隙 1.998mm、导入件作 `diameter-match` 端点通过/失败两侧、英寸 = 25.4³、重导入成修订、面板来源标签、STEP 边界话术）；回归 `accept-assembly` / `accept-m2` / `accept-m3` / `accept-m36` / `accept-m4` / `accept-measure` / `accept-inspect` / `accept-tool-scope` / `accept-project-scope` 全绿
@@ -1344,7 +1344,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 装配清单 v1（BOM + 可执行 ICD） | ✅ 2026-09-28（datum 四类 / assembly.json / L0 算子 / 邻接发现；accept-assembly 14/14，v2.7） |
 | 外部几何导入（`import_part`） | ✅ 2026-10-01（STL 二进制/ASCII → 一等版本；非实体默认拒收；导入件可作接口端点；accept-import 35/35，v2.15） |
 
-### 12.2 当前主线（A0' 装配表示 + 装配视觉表达，HARNESS.md §11）
+### 12.2 当前主线（A0' 装配表示 + 装配视觉表达，DESIGN.md §31.2）
 
 | 项 | 说明 | 状态 |
 |---|---|---|
@@ -1363,10 +1363,10 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 人审反馈 A 路径（composer 草稿 chip） | 修复草稿 chip 不渲染（服务层已通）；修好后 tray「图+文」两步合并为「一键发送」。**当前替代**：剪贴板粘贴 + 标注链路可用 | 待办 |
 | 图片修剪扩展 | 多轮历史图片累积；**已实现（v2.13p，§13.10）**：DeepSeek 走 `maxImagesPerRequest=24`+`imageOffloadCountQuantum=8`（cordis.patch.yml），pi-ai 走 `maxRequestImages=24` + `maxRequestImageBytes=2.5MiB`（v2.16 补计数预算，§14；image-budget.ts 启动时写入 settings）。旧轮图片由适配器换成带路径的文本占位，`read_image` 可随时取回；实测语料 88 图峰值 → 24，图片 token 36.0M → 18.6M | ✅ 完成 |
 | 版本审批与回滚 | §6.8 标注的未实现项：`approved/rejected` 仅存在于类型定义，无路由无 UI；回滚无一键操作 | 待办 |
-| 权威编辑通道 | 约束保持的精确编辑 + 可追溯（HARNESS.md §4 生产力缺口；Customizer 只改顶层标量） | 待办 |
+| 权威编辑通道 | 约束保持的精确编辑 + 可追溯（DESIGN.md §30 生产力缺口；Customizer 只改顶层标量） | 待办 |
 | skill 化 | 三层判据选型、参数甜点、陷阱清单写成 skill（HARNESS.md §6；判据：删掉 skill 读源码仍可达成 = 合格导览） | 待办 |
-| python-engine 集成 | ~~试探已完成并确认可用~~ **已取消（v2.13）**：架构 A 不用 OpenSCAD 内嵌 Python（ABI 绑死 3.10 + 无 pip 生态）；试探结论存档 HARNESS.md §7.1 | ❌ 取消 |
-| **Python 领域运行时落地** | **供给 v1 已交付（v2.30，2026-10-08，§26）**：插件自带独立 CPython（python-build-standalone，pin 3.13.16）+ 锁定 venv + `run_python` / `python_runtime`；时机是运行期（首次调用/`eager` 预热），不是 postinstall（pnpm 11 拦脚本）。**待做**：§12.3 的常驻 worker + JSON-lines 协议，第一步接 M4R 支柱 A 的 `examples/` 场景脚本。规范见 HARNESS.md §12 | 🚧 v1 完成 / worker 待办 |
+| python-engine 集成 | ~~试探已完成并确认可用~~ **已取消（v2.13）**：架构 A 不用 OpenSCAD 内嵌 Python（ABI 绑死 3.10 + 无 pip 生态）；试探结论存档 DECISION-LOG 2026-09-28（补记） | ❌ 取消 |
+| **Python 领域运行时落地** | **供给 v1 已交付（v2.30，2026-10-08，§26）**：插件自带独立 CPython（python-build-standalone，pin 3.13.16）+ 锁定 venv + `run_python` / `python_runtime`；时机是运行期（首次调用/`eager` 预热），不是 postinstall（pnpm 11 拦脚本）。**待做**：§12.3 的常驻 worker + JSON-lines 协议，第一步接 M4R 支柱 A 的 `examples/` 场景脚本。规范见 DESIGN.md §31.3 | 🚧 v1 完成 / worker 待办 |
 | 草稿 chip 渲染调查 | 与 A 路径同源 | 与 A 合并 |
 
 ### 12.4 长期与中期储备
@@ -1376,7 +1376,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 特征识别 list_features | 网格面分割（平面/圆柱/孔）→ 特征级测量，模型零坐标引用 | 长期 |
 | 视觉指向 pixel-unproject | 渲染图像素 → 反投影射线 → 网格求交 → 3D 点；依赖渲染管线暴露相机参数 | 长期 |
 | 弹性本构扩展 | mpm.ts 加变形梯度 F + fixed-corotated/neo-Hookean（`material: 'fluid'\|'elastic'`），回答单体**定性**应力/变形；趋势非 FEA；**已降级（v2.13）**：软体默认归 rapier（Python 绑定有 `add_soft_body`），MPM 弹性仅"显式要求才做" | 长期（降级） |
-| 内核可插拔 / STEP | Replicad（TS+WASM+OCCT，留在 Node 栈）/ Build123d / FreeCAD headless；**STEP 导入已建（v2.32，2026-10-15）**：cascadio（OpenCASCADE→GLB）+ ezdxf 进锁、worker `import_mesh` 内嵌转换（HARNESS.md §7.3）；本行**剩余范围** = STEP 导出与 B-rep 级精确 datum，评估顺序仍是 FreeCAD headless → cadquery-ocp → Replicad（v2.13：`pythonocc-core` 实测不佳） | 中期（范围收窄） |
+| 内核可插拔 / STEP | Replicad（TS+WASM+OCCT，留在 Node 栈）/ Build123d / FreeCAD headless；**STEP 导入已建（v2.32，2026-10-15）**：cascadio（OpenCASCADE→GLB）+ ezdxf 进锁、worker `import_mesh` 内嵌转换（DECISION-LOG 2026-10-01（补记））；本行**剩余范围** = STEP 导出与 B-rep 级精确 datum，评估顺序仍是 FreeCAD headless → cadquery-ocp → Replicad（v2.13：`pythonocc-core` 实测不佳） | 中期（范围收窄） |
 | 文档回填纪律 | v2.11 §10.11：改实现同轮回填设计章节或以 §13 记差异 | 已立规矩 |
 
 ## 13. 实施实录（决策档案）
@@ -1501,7 +1501,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 出口 escape 移除 + 守恒审计 | 到达率 = escaped/count0 可断言；recycle（环绕续流）保留为另一模式 |
 | 零依赖 PNG 点云渲染（iso+side、速度着色、壁面灰点） | 模型判读通道；不依赖 OpenSCAD/X；1 万粒子渲染 <100ms |
 | 验收口径 = 零重力塞流 | 重力池化后入口推力对深池低效（物理正确但验收不聚焦）；重力保留为场景参数 |
-| 工具/面板/路由共用 runFluidJob | 人工发起三路径产出天然一致（M4-PREP §4.6） |
+| 工具/面板/路由共用 runFluidJob | 人工发起三路径产出天然一致（docs/archive/M4-PREP.md §4.6） |
 
 **问题与修复**
 
@@ -1927,7 +1927,7 @@ session-eecbcf56  Project/ToyMarker    preset=standard  37 tools 11064 tok  CAD 
 
 **触发**：创始人指出能力缺失——"从外部导入一个 STEP 或者 STL 文件，然后作为一个零件用在我们的项目里面，这个能力似乎还没有，意味着靠多人协作，然后靠装配和拼接的完整能力，现在是没有的"。
 
-**第一步不是写代码，是查这条缺口为什么会被漏掉。** 查到的是一条**归因错误**：HARNESS §7 的缺口表把「STEP 导入导出」与「导入既有 CAD」并成同一行，一起判为"内核类别缺口（网格 vs B-rep）"并一起后置。对 STEP 成立；对 STL **完全不成立**——STL 就是网格，而真值引擎（Manifold 布尔 / BVH 最近距离 / rapier / MPM / measure 家族）**全部是网格的**，`mesh.ts::parseBinaryStl` 已经存在数月并在 5 个模块里使用，`renderVersionFrame` 与 `physics.ts` 早就在用 `import("...stl")`。**一个不需要内核的能力，被一个需要内核的问题扣住了。**
+**第一步不是写代码，是查这条缺口为什么会被漏掉。** 查到的是一条**归因错误**：DECISION-LOG 2026-10-01（补记）里的缺口表把「STEP 导入导出」与「导入既有 CAD」并成同一行，一起判为"内核类别缺口（网格 vs B-rep）"并一起后置。对 STEP 成立；对 STL **完全不成立**——STL 就是网格，而真值引擎（Manifold 布尔 / BVH 最近距离 / rapier / MPM / measure 家族）**全部是网格的**，`mesh.ts::parseBinaryStl` 已经存在数月并在 5 个模块里使用，`renderVersionFrame` 与 `physics.ts` 早就在用 `import("...stl")`。**一个不需要内核的能力，被一个需要内核的问题扣住了。**
 
 第二步是找**真正**缺的那一环。不是"读 STL"，而是**"几何进不了版本库"**：`generate_part`（`tools.ts`）是唯一入口且只收 SCAD 源码，`saveVersion`（`version.ts`）的 `scadCode` 曾是必填并无条件写 `model.scad`。于是**版本库事实上等于"SCAD 源码库"，几何不是可以独立存在的对象**——协作（他人给的几何无法入库）与拼装（无法把外部件当装配成员参与验证）由同一个根因断开。
 
@@ -2514,7 +2514,7 @@ microscope5 复盘时，"cad 图片窗口到底有没有跑"这个问题**无法
 
 | # | 要求 | 为什么是这三条原则的必然结果 |
 |---|---|---|
-| 1 | **每个工具必须声明能力边界**：能算什么、不能算什么、单位与近似是什么 | 否则 LLM 会拿它去回答表达不了的问题，得出**语义不明的可信数字**——我们已在 `simulate_fluid` 上栽过一次（见 §24 与 `M4-M5-REVIEW.md`） |
+| 1 | **每个工具必须声明能力边界**：能算什么、不能算什么、单位与近似是什么 | 否则 LLM 会拿它去回答表达不了的问题，得出**语义不明的可信数字**——我们已在 `simulate_fluid` 上栽过一次（见 §24 与 `docs/archive/M4-M5-REVIEW.md`） |
 | 2 | **报告必须回显"实际算的是什么"**：材料、工况、网格、数值近似（如人工声速）、无量纲数 | 自建与预制两条路要**可比**，就得都能说清自己算了什么 |
 | 3 | **验收判据内置**：网格无关性、守恒、量纲、与解析解/手算对比 | LLM 不会主动做可信性判断（实测：`c-protrusion` 一次都没回去量被钉死的尺寸） |
 | 4 | **自建通道是一等公民**：LLM 自建的仿真产物要能登记、能被验收、能进语料 | 否则自建产物无法评估，"两条路可比"落空 |
@@ -2548,7 +2548,7 @@ microscope5 复盘时，"cad 图片窗口到底有没有跑"这个问题**无法
 | 模板 | 回答的决策 | 输入 | 内置对照 | 改进动作 | 现状 |
 |---|---|---|---|---|---|
 | **承力与加强** | 哪里会断？加筋够不够？ | 约束、载荷、材料 | 梁/板理论、网格无关性 | **加筋/圆角/加厚 → 复验** | ❌ 无（需 FEM 车道） |
-| **容器与流体通断** | 装得下吗？倒得出来吗？有死区吗？ | 容器几何、液量、倾角/开口 | 静力平衡、质量守恒 | 改口径/加导流/改底形 | ⚠️ 内核有，物性缺（§24、`M4-M5-REVIEW`） |
+| **容器与流体通断** | 装得下吗？倒得出来吗？有死区吗？ | 容器几何、液量、倾角/开口 | 静力平衡、质量守恒 | 改口径/加导流/改底形 | ⚠️ 内核有，物性缺（§24、`docs/archive/M4-M5-REVIEW.md`） |
 | **机构能不能动** | 转得动吗？行程够吗？会卡吗？ | 驱动、行程、铰链 | 运动学包络 | 改连杆/加让位 | ✅ M3.6 |
 | **稳定性** | 站得稳吗？多重才倒？ | 支撑面、重心、外载 | 静力倾覆平衡 | 加配重/加宽底面 | ⚠️ 部分 |
 | **可制造与装配** | 打得出吗？装得上吗？ | 几何 | 壁厚/悬垂/干涉 | 改壁厚/加拔模 | ✅ M2 |
@@ -2582,7 +2582,7 @@ simulate({ template: "reinforce-rib", geometry: {...},
 而是放在大后期做），是我的错，必须承认。"
 
 理由：MPM 的设定量最多（物性 + 声速/CFL + 网格无关性），而我们**连流体身份都没有**
-（见 `M4-M5-REVIEW.md §7` 与 §24）。把它放在早期，导致在基础设施最薄弱的地方做
+（见 `docs/archive/M4-M5-REVIEW.md §7` 与 §24）。把它放在早期，导致在基础设施最薄弱的地方做
 最难的事。**处置：MPM 降级为后期项**；已实现部分保留不删，但不再作为主线；
 `§24` 的复核议程（工况表达、物性）随之排到后期。
 
@@ -2604,14 +2604,14 @@ simulate({ template: "reinforce-rib", geometry: {...},
 MPM 纯流体且无 F 路径）。但 `sdf.ts` 的**逐格体素化**（`solidMask` + `solidNormal` +
 规则网格）恰好是 hex8 线弹性 FEM 所需的网格，绕开了体网格剖分与稀疏矩阵组装。
 ⇒ 走**小体素 FEM 车道**，第一条验证用**悬臂梁 vs 梁理论**。
-详见 `M4-M5-REVIEW.md §7`。
+详见 `docs/archive/M4-M5-REVIEW.md §7`。
 
 ---
 
 ## 26. 自带 Python 运行时：供给、工具与边界（v2.30，2026-10-08）
 
 **一句话**：解释器与依赖是**插件供给的产物**，不是宿主机器的能力。决策与实测见
-`docs/DECISION-LOG.md` 2026-10-08；规范与变量表见 `HARNESS.md §12.7`。
+`docs/DECISION-LOG.md` 2026-10-08；规范与变量表见 `DESIGN.md §26 与 README.md`。
 
 ### 26.1 为什么不是"用系统的 Python"
 
@@ -3006,3 +3006,272 @@ xlb 发版（携 ZouHe 修复与 PR #168 warp 升级）→ 升级撤双 shim（�
 pypi.org 降为兜底）——实测 pypi.org 的 files 通道对大闭包会拖 16 分钟以上甚至无限
 停滞且不触发轮内失败转移，aliyun 同闭包数分钟完成；`DSH_CAD_PYTHON_INDEX_URL`
 单源覆盖机制保留。解释器工件仍走 github + npmmirror（aliyun 无此镜像）。
+
+---
+
+## 30. 人的通道：面板与图像纪律（承 HARNESS §4，2026-10-16 迁入）
+
+> 本节是**当前有效的设计纪律**。原在 `HARNESS.md` §4 的实机踩坑叙事（四条静默失败的
+> 复盘）已迁入 `docs/DECISION-LOG.md` 2026-10-01 补记；此处只留结论与可验收的判据。
+
+**30.1 总原则**：**人指 WHAT、引擎算 WHERE、真值随产物流转**。
+
+**30.2 界面打扰**：面板**不因界面加载而自动弹出**——自动唤起只由**明确相关的事件**触发
+（本插件 = 会话出现 CAD 工具活动，即新版本产生），其余时候靠右栏 Tab 单击激活。理由是插件
+可能被装在通用工作区，启动即弹模型预览是噪声。区分"加载即弹"（禁）与"相关事件即弹"（可）。
+
+**30.3 面板布局**：视觉是一等公民，**模型预览必须占据首屏与最大面积**——视口置顶、吃掉
+所有余量（`aspect-ratio:1` 只作下限）；版本历史、参数、验证报告、导出折进一行式折叠区
+（默认收起）；底部允许一条 11px 单行状态带（结论 + 版本序号 + 出处）。空间不够时让路顺序
+是**先滚折叠区、再缩视口**。几何纪律：**视口变高不等于模型变大**（取景由短边决定），所以
+"比正方形矮"必须避免，"比正方形高"是白得的。实测见 §6.9/§6.10（v2.14b）。
+
+**30.4 零件从命名起就是版本控制对象**：不是"先做出零件、事后套版本"，而是**零件 = 版本
+库**——零件是仓库（可空存在）、版本是不可变提交（父子限同零件并校验）、运行是 CI 结果
+（挂版本上、可跨零件）。**身份靠显式声明而不是推断**（实测 33 个版本里 32 个无 parent、
+同一零件被造成 5 个互不相干的根，任何文本/链式推断都会把"同零件换参数"与"不同零件"混为
+一谈）。缺 HEAD/回滚/审批，所以面板上的「跟随最新/已钉住」只是视图偏好，别当模型状态。
+
+**30.5 光照是"看"的一部分**：视口的职责是让人**看清形状**，形状靠明暗变化。两条硬判据：
+① **主光必须跟着相机**（三点光挂在相机上）——世界固定的主光意味着转到背面就白转；
+② **环境光不能吃掉明暗**——环境占比 33% → 8%（key 2.4 / fill 0.5 / rim 0.85 / 半球 0.24），
+正对光与背对光的对比 3× → 11×，另加胶片式高光收束。判据可在**没有 GPU 的地方**验证为场景图
+性质（`scripts/accept-lighting.mjs`）；像素面靠 `sandbox/preview/shot-gl.mjs`（Xvfb +
+llvmpipe；本机 `firefox --headless` 建不出 WebGL 上下文）。
+
+**30.6 背景也让人自己选**：**零件与底色的明度差**决定读不读得出形——亮底（纸白 243）轮廓
+清楚、形体发闷；暗底（石墨 65 / 深蓝 38）亮面跳出来。两种都对，用途不同，所以给**四个预设
+让人选**（纸白 / 暖灰 / 石墨 / 深蓝，选择记进 localStorage），不替人决定。配套两条工程约束：
+① **覆盖层必须随底反色**（标尺与读数是 DOM；WCAG 对比度 ≥3:1，实测 9.0~13.4:1）；
+② **切换只改一个属性，不重建场景**（`scene.background = …`）。控件位置定死在视口右上角
+「复原」旁边的一个小色块，**不加第六个工具 chip**。
+
+**30.7 控件坐标系由父级决定**：绝对定位元素必须挂在它坐标所相对的那个容器里；本插件最终走
+overlay 的 `chrome` 槽，与「复原」同一坐标系。挂完**用 DOM 探针报坐标，不要在截图里找**。
+搬 JSX 的大段 `React.createElement` 括号**先 `tsc` 再看逻辑**。
+
+**30.8 同角落控件必须同款**：共用同一套底盘（白板 + `1px #d5d9dd` + `11px/16px`，与「复原」
+逐字段一致），图标家族也一致（`⤾ 复原` / `🎨 背景`）；色块本身当图标在浅底上读作"没勾的
+复选框"，弃用。
+
+**30.9 视口必须自带度量与方位**：任何 3D 视口要能回答"这有多大"（标尺）与"这是哪个方向"
+（三轴），并配**复原视图**。角标位置固定：**坐标系左下、标尺右下**。实现走 DOM 角标（每帧
+读活相机），不画进 WebGL——不被模型裁切、四视图复用、且无头浏览器能直接截到。
+
+**30.10 图像只有一条正路进上下文**：图像**不许**以 base64 或 data URI 写进文本，也**不许**
+把"复制到剪贴板、请用户自己粘"当作唯一路径。两个方向，且**上下文里永远只有引用、字节走
+附件通道**：
+
+| 谁产图 | 走哪条 | 关键调用 |
+|---|---|---|
+| 宿主工具（渲染图、求解标注图） | 工具结果的 `content` 里带 `ImageBlock` | `ctx.attachments.saveImages([{ data, mediaType, name }])` → `output.render(args, value)` / `finalizeContent(exec, result)` |
+| 浏览器面板（视口截图） | 直接发进会话 | `sessions.scope(id)` → `sessions.sessionOf(actx)` → `conversation.createDrafts(id, [file])` → `conversation.sendSession(face, text, ids, 'queue')` |
+
+三个易被"某处看到的示例"带偏的幻觉（对着 0.1.5-rc.3 的类型声明与打包产物核过）：
+`ctx.attachments.create({data, mimeType})` **不存在**（真名 `saveImage`/`saveImages`，字段是
+`mediaType`）；工具结果**没有** `attachments:` 字段；图像**不会**被框架自动加入。
+**交付任何图像功能前先问一句：模型下一回合真的能看到它吗？答不上来就是没做完。**
+
+**30.11 图片会累积，所以必须修枝**：会话每步重发全史，而每轮 `generate_part` 带 4 张图 →
+图片数单调累积（实测峰值 88 张/请求 ≈ 88k 图片 token）。规则五条：
+1. **保留窗口写死，不做启发式**：最新 6 轮（24 张），一次丢 2 轮（量子 8）→ 在飞 17..24 张；
+   量子存在的意义是**前缀稳定一段**，provider 前缀缓存不被每步打断。
+2. **只投影请求，不改日志，也不改界面**：`llm/stream` 是深冻结的（请求 content 是会话日志
+   的纯函数，架构上禁止改写）；durable 表面替换会连对话记录里的图一起抹掉。
+3. **占位必须可回取**：`offloadedImageText(ref, access)` 带附件身份**和本地规范化路径**，
+   模型真要看细节可以 `read_image` 取回；剪枝是省 token，不是删信息。
+4. **计费必须与实收一致**：适配器对已 offload 的图按 0 视觉 token 计。
+5. **遥测要报实收数**：`usage.jsonl` 的 `images` = 提供商实收张数，`imagesBeforePrune` =
+   历史张数。实现见 §13.10（`src/host/image-budget.ts` + `scripts/accept-image-budget.mjs`）。
+
+**30.12 模型可见的东西属于 agent plane**：DSH 是两层 composition——**profile（host plane）**
+装注册表/沙箱/持久化/模型路由，**preset（agent plane）**装工具、prompt section、projection，
+且只有选了该 preset 的会话看得见。
+1. **凡是"模型看得见"的开销，一律问它挂在哪一层**。工具表随每次请求发出，且被 harness 算作
+   请求信封的**唯一计价字段**（实测：不挂 CAD 27 工具 ≈ 6.8k token，挂 37~38 工具 ≈
+   11.1~11.4k = **+4.5k/请求**）。插件挂 profile 层 = 每个会话（含纯编程）都在替它付费。
+2. **系统提示词 ≠ 请求载荷**；插件"没改提示词"不等于"没有代价"。
+3. **不要为了摘工具而把插件行挪进 preset**（浏览器半边的发现依赖 profile 的 composed rows）。
+   正确做法是拆职责：路由/遥测/UI 留全局，**工具可见性按 preset 收窄**（`ctx.tools.restrict`，
+   必须在 agent 自己的 ctx 上调）。
+4. **"要求重开会话才生效"的改动只能装在项目开始前**：preset 是**会话的创建事实**，只在会话
+   还空白时可改（曾经中途上线 → 被否决并全量回退）。
+5. **验收要看"模型实际收到什么"**：会话日志的 `request/header` 是 durable 的工具表快照
+   （`scripts/inspect-tool-catalog.mjs`；不启动 dsh 的 prospective 版本是
+   `scripts/measure-tool-cost.mjs`）。
+6. **削成本优先于分层**：工具表 4,621 tok 里工具级描述只占 1,764、脚手架 1,698、参数级 1,152；
+   把"选型判据/全局约定/反直觉事实"搬进 **skill**（按需加载、发现根挂在 CAD preset 上）每次
+   请求省 1,227 tok（−27%）且对任何会话零打扰。
+7. **"零打扰"是硬门槛**：第一条不是"省多少"，而是"对正在进行的会话有没有影响"。
+
+**30.13 一个项目一份语料**：项目身份 = **会话的工作目录（cwd）**。规则：
+1. **两侧都必须带项目，缺一不可**：工具侧从 `exec.agent.session.header.cwd` 取（**没有模块级
+   store**）；浏览器侧走 `?project=<绝对目录>`，客户端用 `withProject()` 这**唯一**的 URL
+   构造器。只修面板等于只把症状盖住。
+2. **读取不创建，写入才落盘**：目录不存在 = 空语料 = 新项目的正常状态。
+3. **遥测反过来，留在 profile 层**：usage 量的是**请求**不是**设计**。
+4. **迁移必须可重跑**：按条目合并、冲突 id 拒绝覆盖并报出、遥测按行去重追加。
+5. **判据**：任何 `join(pluginRoot, …)` 形式的持久化路径，当场回答**"第二个项目来了会怎样"**。
+   实现见 §13.13（`src/host/project.ts` + `scripts/accept-project-scope.mjs`）。
+
+**30.14 两半作用域不一致时，面板必须说出来**：人的半边是全局的（路由、面板、遥测），模型的
+半边是按预设的（工具表、skill 目录），于是会出现静默失败——标准模式会话里面板一切正常、
+零件列表空空如也，而 Agent 一个 CAD 工具都没有（实测代价：Agent 自己读插件源码、用 bash 调
+OpenSCAD 硬画，最后报 `skill "cad-toolbox" is unknown`）。规矩：
+1. **"零打扰"不等于"零提示"**：能静默降级的是噪声（不自动弹面板），不能静默的是能力缺失。
+2. **不要让客户端去猜服务端的决定**：宿主把 `toolScope` 与开放它的 preset 列表用
+   `GET /api/cad/scope` 如实报出；客户端用 `cadToolsVisible(scope, preset)` 判定，**判据只有
+   一份**（宿主规则是 `src/host/tool-scope.ts` 的 `decideToolScope`；preset 未知就不提示，
+   宁可漏报不可误报）。
+3. **创建事实不可改，所以提示要给动作，而且要给对**：会话还空白 → "现在重新选一次还来得及"；
+   已经开始 → "新建会话，或在设置里把「造物模式」设为默认预设"。
+
+**30.15 面板交互：产物即主体，不给模式开关**：人**只选产物**（零件版本 / 验证运行），**呈现
+方式由产物自己是什么决定**——版本给几何视口，物理/机构运行给时间轴回放，流体运行给粒子
+回放，清单检查给报告卡片。**禁止让人先选"看什么类型的东西"再选产物**：那是把引擎内部的呈现
+差异泄漏成用户决策，而且必然会撒谎（旧版「动作/流体」Tab 取的是"最近一次运行"，与选中的
+版本无关）。推论：**产物必须自带身份与出处**（运行有 id/时间戳/kind/`sourceVersionIds`）；
+**"相关验证"由 provenance 生成**，不靠人记；默认跟随最新产物，可一键钉住。
+
+**30.16 生产力阶段的缺口——权威编辑**：真实场景里人会下精确命令（"这个孔改 10mm 且保持
+同心"）。不需要人回去拖鼠标建模，但需要**约束保持下的精确编辑 + 可追溯**。
+PARAMS/Customizer 只改顶层标量，够不上。**待建**。
+
+---
+
+## 31. 装配表示、运行时分工与引擎默认策略（承 HARNESS §8/§11/§12，2026-10-16 迁入）
+
+**31.1 装配表示：代码库类比**（立场 2026-09-27 修订）
+**工件的名字**：**BOM + 可执行 ICD 合并成一份 `assembly.json`**（职责见 §5.3；schema 与
+"接口条目 / 邻接兜底"的完整提案见 `docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md`）。
+**原立场（已放弃）**："5/20/50 件对应完全不同的表示，先定规模再定表示"——把规模当门控。
+**修订立场**：大型代码库 harness 能编辑（DSH 编辑几十万行），装配理论上同样可以。**关键不在
+规模门控，在表达。** 代码库规模的解法从来不是"把代码库塞进上下文"，而是**让大代码库可导航
+的表示与工具**。装配体与代码库结构同构：
+
+| 代码库 | 装配体 | 已有 / 待建 |
+|---|---|---|
+| 文件 = 持久状态 | 零件文件 + 版本 | 版本系统（需扩展到装配级版本图） |
+| import / API | 接口契约（谁配谁、间隙意图） | `datum()` 是种子，待推广 |
+| grep | 邻接查询 / 空间查询（谁碰到这个面） | 待建（装配 manifest 的查询面） |
+| LSP / go-to-def | datum / 接口名解析 | `datum()` 已有 |
+| 类型系统 | 配合类型不匹配 = 编译错误 | 待建（轻量契约） |
+| 测试 | L0/L1/L2 验证 | **已有** |
+| CI（变更传播） | 接口变更 → 波及零件重验 | 待建（增量验证） |
+| lint | 间隙 / 标准化检查 | `validate_assembly` 部分 |
+| PR review | 接口级人审 | 人审通道部分 |
+| 包管理（类型+实例） | 标准件复用（20 颗螺丝 = 1 类型 20 实例） | 待建 |
+
+**判断标准随之改变**：从"多少件装得进上下文"改为——**一个新会话能否只靠局部视图 + 查询，
+正确修改 50 件装配中的一个零件？**
+**实验 A0'（取代原 A0 规模探针）**：按代码库方式建装配表示（零件文件化 + 接口契约 + 邻接
+查询），在 50 件装配上测导航正确性：新会话（无历史上下文）能否在不读全部零件的前提下完成
+一次指定零件修改并通过 L0 验证。**定位：这是必做的第一步，不是"做不做"的可选探针**——实验
+只回答"表达方案是否正确"。此前识别的三个装配缺口不变：装配语义易失（joints 现场声明即丢）
+→ 契约文件；版本模型零件级 → 版本图；上下文装不下 → 懒加载 + 查询，而非缩小装配。
+
+**31.2 下一步排序**（2026-09-28 修订：装配与视觉表达优先，内核后置）
+1. **找一个真实项目做压力测试**——缺口的真伪由它裁决。
+2. **A0' 装配表示 + 装配视觉表达（主工作线，必做）**：代码面 v1 已交付 2026-09-28
+   （datum 三类扩展 / `assembly.json` / L0 算子 distance + diameter-match / hard-intent
+   双通道 / 邻接发现 / `check_assembly` 工具+路由 / `accept-assembly` 14/14；schema 见
+   `docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md`）；**待续**：层级递归（v2）、L1 运动接口（v2）、
+   spring/流道（v3）。视觉面：部件显隐/高亮、剖切、爆炸视图、接口（datum）可视化标记、装配
+   回放（motion playback 已有底子）——**未开工**。依据：复杂装配下渲染图判读会退化
+   （遮挡/细节小），"视觉管像不像、数值管对不对、**装配关系管接没接对**"。
+3. **skill 化**——把三层判据选型、参数甜点、陷阱清单写成 skill（HARNESS §6）。
+4. **权威编辑通道**——约束保持的精确编辑 + 可追溯（§30.16）。
+5. ~~python-engine 集成~~ **取消（2026-09-28）**——架构 A 不用 OpenSCAD 内嵌 Python。
+6. **Replicad/STEP 桥**（后置；内核可插拔是防御性储备，不是当前目标）。
+7. **Python 领域运行时落地**：供给 v1 已落地 2026-10-08；常驻 worker 亦已于 2026-10-08
+   落地（batch 0）。
+8. 每季度：竞态追踪（HARNESS §9）。
+
+**31.3 运行时分工**：**TS 是平台接线层，Python 是领域运行时**——不是"减少 TS"，而是让 TS
+只干接线。
+- **TS 不可动（平台规定）**：dsh 插件宿主面（`ctx.tools.register` / `connection.fetch.register`
+  / `ctx.attachments` / cordis 生命周期）、浏览器面板与回放。
+- **Python 扩张**：几何分析、仿真、装配检查、场景脚本。
+- **架构 A**：模型来源仍是 SCAD（LLM 写）；Python **不决定几何意图、不替代 OpenSCAD 求解**。
+  决策原文与边界漂移说明见 `docs/DECISION-LOG.md` 2026-09-28 补记。
+- **worker 规范**（协议、大载荷走文件、单线程串行、venv 锁定、traceback、生命周期归插件管、
+  "不是沙箱"）见 **§26**——那里是唯一权威副本，本节不重复。
+
+**31.4 引擎默认策略：rapier 优先**（2026-09-28 裁决）
+> **能用 rapier 的都用 rapier**（无脑默认）；只有用户明确强调或 LLM 明确要求时，才走自实现
+> 的 MPM 脚本。
+
+这是**默认偏置，不是取消分层判据**：判据仍是 L0/L1/L2 的**主语物态**——离散刚体/约束/接触/
+可变形体 → rapier；连续介质流动/颗粒流 → rapier 无求解器 → MPM。**软体也归 rapier**
+（rapier Python 绑定有 `add_soft_body` 系列，JS 绑定没有）→ MPM 弹性本构降级为"显式要求才
+做"。**防越界条款**：连续介质问题（流量/死区/灌装/颗粒）的答案必须来自 MPM，不允许用 rapier
+输出冒充；任一方向的越界使用都应说明理由供人审。
+**canonical 现状（2026-10-16 校订）**：物理/运动的 canonical 在 **Python worker**（`physics.ts`
+/`motion.ts` 内的注释 Q2=A），TS 侧 `runPhysicsInTs`/`runMotionInTs` 保留为 parity oracle，
+且只在 **darwin-x64**（锁里没有 `rapier3d` wheel）继续当 canonical。决策谱系见 DECISION-LOG
+2026-09-28 补记与 2026-10-08 各条。
+
+**31.5 B-rep / STEP 边界**（2026-10-16 校订）
+- 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy。
+- **导入**：STL（2026-10-01）、STEP/DXF（2026-10-15，`cascadio` + `ezdxf` 进锁，worker 内嵌
+  转换）已交付；**IGES 与 `.brep` 是可行动边界**（cascadio 0.1.1 对 IGES 静默失败已实测）。
+- **仍未做的**：STEP 导出、从 B-rep 抽取精确孔/轴 datum（网格细分只给网格级的）。评估顺序
+  仍是 FreeCAD headless → cadquery-ocp → Replicad（~55MB wasm，留在 Node 栈）；引入与否仍未
+  决定。
+
+---
+
+## 32. 环境变量与诊断开关（运维附录，承 HARNESS §12.7，2026-10-16 迁入）
+
+> **性质**：本附录是**内部表面**。面向用户的只有 `CAD_OPENSCAD_BIN` 与
+> `DSH_CAD_PYTHON` 两种用法（见 README §1/§4），其余为运维与定位用；
+> **诊断类绝不可在生产设置**，它们只影响日志与对照路径，不改变工具 schema。
+> 依赖与默认值的**唯一权威**是 `src/host/python-lock.ts`。
+
+### 32.1 运行时供给
+
+| 变量 | 作用 | 默认 |
+|---|---|---|
+| `DSH_CAD_PYTHON` | `auto` / `eager` / `off` / `system` | `auto`（启动只健康检查，首次调用才阻塞供给） |
+| `DSH_CAD_PYTHON_BIN` | `system` 模式下的解释器绝对路径 | PATH 上的 `python3`。**注意**：代码检查 CPython ≥3.10，但依赖锁按 pin 的 3.13.16 生成、编译类包只列 cp313 wheel ⇒ **实际可行的是 3.13**（待实测确认后收敛） |
+| `DSH_CAD_PYTHON_MIRROR` | 解释器归档的下载根 | `python-lock.ts` 内的镜像（npmmirror）；**当前没有 GitHub 回退** |
+| `DSH_CAD_PYTHON_INDEX_URL` | pip 索引单源覆盖 | `PIP_INDEXES`：阿里云优先，`pypi.org` 兜底 |
+| `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试 / 多实例） | `$DSH_HOME/cad/runtime` |
+| `DSH_CAD_PIP_CACHE_DIR` | pip wheel 缓存目录 | `<runtime root>/cache/pip` |
+
+### 32.2 工具与遥测
+
+| 变量 | 作用 |
+|---|---|
+| `CAD_OPENSCAD_BIN` | 指定 OpenSCAD 可执行文件（优先于自带快照与 PATH 上的 `openscad`） |
+| `CAD_IMAGE_TOKEN_ESTIMATE` | 图片 token 估算值（默认 1000/图），用于遥测标定 |
+| `CAD_TELEMETRY_DISABLE=1` | 关闭 usage 遥测 |
+| `CAD_SKIP_CONTACTS` | 物理接触采样跳过（诊断用） |
+
+### 32.3 Opt-in（默认关，标准会话行为不变）
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_CAD_IMAGE_WINDOW=1` | 让**没有预设名**的会话也套用造物模式的 24 张图像保留窗口。需要它的场景：headless（`dsh --profile headless`）不 compose 预设注册表，于是窗口不生效，多轮渲染会话会把请求堆到 64 张以上被上游拒绝。带真预设的会话不受影响 |
+
+### 32.4 诊断开关（**只用于定位，绝不可在生产设置**）
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_CAD_FLUID_PYTHON=0` | 让 `simulate_fluid` 回退到 TS oracle |
+| `CAD_FLUID_NO_PROJECT=1` | 跳过流场 SDF 投影（二分"投影 vs 内核"） |
+| `CAD_FLUID_DEBUG_PENETRATION=1` | `fluid_run` 返回穿透深度分布、梯度、投影 / 入口计数器 |
+| `CAD_FLUID_DEBUG_PROJECT=1` | TS 侧返回投影 / 入口计数器（与上一条对拍） |
+| `CAD_FLUID_DT` | 覆盖流场时间步（量"离散化 vs 舍入"；步数需同步调整） |
+| `CAD_MPM_JITTER_AMP` | 覆盖 MPM 初始抖动幅度（量结果对输入扰动的敏感度） |
+| `CAD_MPM_ENGINE=numba\|numpy` | 强制 MPM 内核；不可用即**响亮失败**，不静默回落 |
+| `CAD_LBM_ENGINE=off` | 关闭 LBM 车道（`off` 响亮拒绝，无回退引擎） |
+
+### 32.5 平台裁剪与"就绪"的判据
+
+- 平台缺 wheel 的包由锁里的 `cad-exclude` 注释逐包声明（`rapier3d` 缺 darwin-x64 → 物理
+  留在 TS canonical；`numba` / `llvmlite` / `xlb` / `warp-lang` / `jax` 缺 musl 与 darwin-x64
+  → MPM 回落 numpy 内核、LBM 车道不可用），安装期写进 `state.json.skipped` 并由
+  `python_runtime` 状态如实披露——**缺包必须看起来像设计，而不是像坏包**。
+- **"就绪"必须可被证伪**：除标记匹配外，venv 必须**真的 import 一遍锁定包**才算 current；
+  `python_runtime` 报 `missingPackages`，非空即 `state: failed`。

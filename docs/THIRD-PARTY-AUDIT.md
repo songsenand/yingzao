@@ -4,6 +4,8 @@
 > **范围**：`dsh-cad-harness` 插件的自研实现——Host TS 领域模块（16 文件 / 6635 行）、
 > Python worker 领域运行时（5270 行）、Client 面板（约 4700 行）、供给与工具链基础设施。
 > 不含 `examples/`、`verification/`、`lib/BOSL2`、`bench` 题库侧内容。
+> **题库侧素材的来源与许可另立清单**：`examples/bench/ATTRIBUTION.md`（一题一行；第三方几何
+> 一律物化不入库）。本节范围内的许可结论**不覆盖题库**——两边不要互相引用为"已审计"。
 > **性质**：证据型盘点 + 候选评估。**本文不做出任何引入决策**；引入属"不可逆或高成本决策"，
 > 需按 `AGENTS.md` §二 另行落 `docs/DECISION-LOG.md`。
 
@@ -59,12 +61,12 @@
 | 依赖的 install 构建脚本被 pnpm 门禁挡住 | `tar-extract.ts` 头注 L3-21、`python-runtime.ts` L3-16、DESIGN §4 | 新 npm 依赖须**纯 JS/WASM**，或**随包分发预编译产物**（被 esbuild 打包则安装期无风险） |
 | 插件自带 CPython，venv 锁 9 包，**7 个平台目标** | `python-lock.ts` L35-72（linux-gnu ×2、linux-musl ×2、darwin ×2、win-x64） | 新 Python 依赖要进 lock，且要有对应平台 wheel；缺平台要靠既有 fallback |
 | 不引入 Vite；Client 走自带 esbuild，除 react 外全部打进 bundle | `esbuild.mjs`、DESIGN §4.3 | 新 UI 依赖直接计入 `lib/client.js`（现 1.08 MB）与 `lib/index.js`（现 4.05 MB） |
-| "引擎只在少数几处导入" | HARNESS §12.3 | 替换要落在同一边界模块内 |
+| "引擎只在少数几处导入" | DESIGN §31.3 | 替换要落在同一边界模块内 |
 | 断言必须可重复 | `DECISION-LOG` 多条、`fluid.ts` L236-268 | 替换后行为需确定性（MPM 的 f32 保真是**刻意选择**） |
 | headless 无 X（OpenSCAD 除外，走共享 Xvfb） | `compile.ts` L174-213 | 依赖 GPU/GL 的库不可用于 Host 主路径 |
 | 已裁决：OpenSCAD WASM 不用 | DESIGN §4.3 | `compile.ts` 的 CLI 封装不在替代范围 |
-| 已裁决：`pythonocc-core`/`PyChrono` 不用（conda-only） | HARNESS §12.4 | B-rep/STEP 路线固定为 FreeCAD headless → OCP → Replicad |
-| 已裁决：能用 rapier 的都用 rapier | HARNESS §12.5 | 自研物理不是"缺库"，是表达层选择 |
+| 已裁决：`pythonocc-core`/`PyChrono` 不用（conda-only） | DECISION-LOG 2026-09-27（补记） | B-rep/STEP 路线固定为 FreeCAD headless → OCP → Replicad |
+| 已裁决：能用 rapier 的都用 rapier | DESIGN §31.4 | 自研物理不是"缺库"，是表达层选择 |
 
 > **重要背景**：项目**已经主动做过**"用现成库替掉自研数值"的动作，且方法成熟：
 > `experiments/20261013_section_mic_feasibility.md` 用 **shapely 的 `maximum_inscribed_circle`**
@@ -173,7 +175,7 @@
 ### A1. MPM 内核 → numba / warp / taichi（**唯一有明确收益的替换**）
 
 **动机不是"代码难看"**，而是性能已被项目自己判定为实际必需项：
-`docs/TOOL-RUNTIME-MATRIX.md` §7 结论是 `simulate_fluid` 比 TS 慢 **5–7×**（超出已批准的 2.5–4×），
+`docs/archive/TOOL-RUNTIME-MATRIX.md` §7 结论是 `simulate_fluid` 比 TS 慢 **5–7×**（超出已批准的 2.5–4×），
 "原生内核实测比 TS 快 3.7–4.6× ⇒ **已是该工具的实际必需项**"。
 自研内核的维护面同样真实：`_mpm_step_once` 里 float32 复用缓冲、按轴散射、秩 1 累加，
 都是为了绕开 numpy 表达式临时数组——这类优化手写一次就要一直维护。
@@ -212,7 +214,7 @@
 > 150 步宏观量（transits/escaped/activeN/平均与最大速度）两引擎完全一致；
 > 冷编译 1.6 s（常驻进程一次性）。
 >
-> **✅ 同日已采纳**（DECISION-LOG、`execution_summaries/20261014_feat_numba_mpm_adoption.md`）：
+> **✅ 同日已采纳**（DECISION-LOG、`docs/archive/execution_summaries/20261014_feat_numba_mpm_adoption.md`）：
 > `python/cad_worker/mpm_numba.py` 生产化，`worker._mpm_engine` 门控
 > （`CAD_MPM_ENGINE` 强制；musl/darwin-x64 无 wheel 自动回落 numpy 内核）；
 > 锁增 numba/llvmlite；全套验收在工作区 hermetic 运行时全绿
@@ -364,7 +366,7 @@ trimesh.proximity.thickness(mesh, points, exterior=False, normals=None, method="
 
 ## 8. 若采纳替换，必须遵守的迁移纪律
 
-沿用 `docs/TOOL-RUNTIME-MATRIX.md` §6 的既有纪律：
+沿用 `docs/archive/TOOL-RUNTIME-MATRIX.md` §6 的既有纪律：
 
 1. **工具名/schema 不变**，模型无感；
 2. **同输入同输出对照**：parity 或解析真值 + 耗时对比，写进 `scripts/accept-*.mjs`；
@@ -400,6 +402,6 @@ trimesh.proximity.thickness(mesh, points, exterior=False, normals=None, method="
 | 项目 7 个 Python 平台目标；rapier3d 缺 darwin-x64 有显式 `cad-exclude` 注释 | `python-lock.ts` L35-72、L85-88 |
 | `networkx` 零使用；`scikit-fem` 仅探针脚本使用 | 全仓库 grep（`worker.py` L136-137 仅版本清单） |
 | 当前 bundle 体积：`lib/client.js` 1.08 MB、`lib/index.js` 4.05 MB | `ls -la dsh-cad-harness/lib/` |
-| MPM 性能：TS 3.1/23.4/88.3 ms/步 @8.8k/70.6k/262k 粒子；Python 慢 2.5–4×；原生比 TS 快 3.7–4.6× | `experiments/20261008_python_migration_measurements.md` L200/L210-217、`TOOL-RUNTIME-MATRIX.md` §7 |
+| MPM 性能：TS 3.1/23.4/88.3 ms/步 @8.8k/70.6k/262k 粒子；Python 慢 2.5–4×；原生比 TS 快 3.7–4.6× | `experiments/20261008_python_migration_measurements.md` L200/L210-217、`docs/archive/TOOL-RUNTIME-MATRIX.md` §7 |
 | 已用 shapely `maximum_inscribed_circle` 替掉体素瓶颈法（替换先例） | `experiments/20261013_section_mic_feasibility.md` |
 | 已锁定的 trimesh 自带 `proximity.thickness`（`max_sphere` → `max_tangent_sphere`；`ray` → `longest_ray`） | 本地 venv `.tmp-measure-runtime/venv/lib/python3.13/site-packages/trimesh/proximity.py` L546-597 |
