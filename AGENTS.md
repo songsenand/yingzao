@@ -36,6 +36,9 @@ Decision: <可选：docs/DECISION-LOG.md YYYY-MM-DD：决策标题>
   `git log --follow -- <path>`（这个文件以前为什么改）、
   `git log --grep="Verified:"`（谁验过什么）、
   `git log --grep="Decision:"`（哪些改动源于决策）。
+- **每次提交要签名（DCO）**：`git commit -s`，会自动追加一行
+  `Signed-off-by: 名字 <邮箱>`。规则、补签方法与限制见 `CONTRIBUTING.md`
+  ——注意 **DCO 不等于 CLA**：本项目不能据 DCO 更换许可。
 - 类型沿用：`feat` / `fix` / `refactor` / `perf` / `docs` / `chore`。
 - 改动极小时 `Why` 一行即可，但 `Verified` 不要省略。
 

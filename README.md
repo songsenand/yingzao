@@ -150,6 +150,8 @@ cd /path/to/dsh-cad-harness && pnpm run build
 
 ## 十、参与贡献
 
+- **完整规则见 [CONTRIBUTING.md](CONTRIBUTING.md)**：每次提交都要 `git commit -s` **签名**（DCO 1.1）。
+  注意 DCO **不是** CLA——它不授权本项目更换许可（限制与理由写在 CONTRIBUTING 里）。
 - **提交信息**按 [AGENTS.md](AGENTS.md) 的规范写四行：`Why` / `Verified` / `Risk`（有方向取舍时加
   `Decision`）。其中 `Verified` 是硬要求：任何"已验证/已完成"的说法都必须能指名一个**可证伪的观察**。
 - **方向性决策**写进 [docs/DECISION-LOG.md](docs/DECISION-LOG.md)（append-only，不回改历史条目）。
