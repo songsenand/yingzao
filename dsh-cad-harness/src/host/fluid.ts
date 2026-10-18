@@ -27,7 +27,7 @@ export interface FluidScenario {
    *  outletAxis for turns (90° elbow escapes along the second leg). */
   outletPlaneMm?: number;
   outletAxis?: 0 | 1 | 2;
-  /** Target particles per cell over the seed region. Default 6 (M4-PREP §1.1 sweet spot 4-8). */
+  /** Target particles per cell over the seed region. Default 6 (docs/archive/M4-PREP.md §1.1 sweet spot 4-8). */
   particlesPerCell?: number;
   particleCount?: number;
   steps?: number;

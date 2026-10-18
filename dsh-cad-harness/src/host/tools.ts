@@ -1778,7 +1778,7 @@ export function registerCadTools(
     },
   }));
 
-  /** Shared by the simulate_physics tool and POST /api/cad/physics/run (M4-PREP §4.6 path ②). */
+  /** Shared by the simulate_physics tool and POST /api/cad/physics/run (docs/archive/M4-PREP.md §4.6 path ②). */
   async function runPhysicsJob(a: PhysicsToolArgs, project: ProjectStores) {
       const { runStore } = project;
       if (!Array.isArray(a.parts) || a.parts.length < 1) throw new Error('simulate_physics needs at least 1 part');
@@ -3524,7 +3524,7 @@ export function registerCadTools(
       // The field list lives in the output schema below, and the profile contract lives in
       // the cad-manufacturing skill (loaded on demand). What stays HERE is what a caller
       // must know at call time — every token in a tool description is paid on EVERY
-      // request, while the skill is not (HARNESS 12.5 / DESIGN 13.12).
+      // request, while the skill is not (DESIGN §31.4 / DESIGN 13.12).
       'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
       'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill.',
     parameters: {
@@ -4729,7 +4729,7 @@ export function registerCadTools(
       },
     });
 
-    // M4-PREP §4.6 manual-initiation path ②: import an external file without
+    // docs/archive/M4-PREP.md §4.6 manual-initiation path ②: import an external file without
     // going through the LLM. Body = import_part args. The file path is resolved
     // server-side against the project directory (or may be absolute), so this is
     // the door a script, a Makefile or a colleague's hand-off uses.
@@ -4751,7 +4751,7 @@ export function registerCadTools(
       },
     });
 
-    // M4-PREP §4.6 manual-initiation path ②: run a mechanism motion job
+    // docs/archive/M4-PREP.md §4.6 manual-initiation path ②: run a mechanism motion job
     // without going through the LLM. Body = simulate_motion tool args.
     void connection.fetch.register({
       path: '/api/cad/motion/run',
@@ -4769,7 +4769,7 @@ export function registerCadTools(
       },
     });
 
-    // M4-PREP §4.6 manual-initiation path ②: fluid run without the LLM
+    // docs/archive/M4-PREP.md §4.6 manual-initiation path ②: fluid run without the LLM
     void connection.fetch.register({
       path: '/api/cad/fluid/run',
       methods: ['POST'],

@@ -6,7 +6,7 @@
 // simulate_* family assume a closed 2-manifold, and a mesh that is a solid for
 // one caller but not for another is exactly the class of silent lie this
 // harness exists to prevent. Engine imports stay in few places on purpose
-// (HARNESS §12.3); this is the manifold one for "bytes → solid".
+// (DESIGN §31.3); this is the manifold one for "bytes → solid".
 //
 // Welding is `Mesh.merge()`: coincident vertices become shared, degenerate
 // triangles disappear. That is the ONLY repair performed here. A mesh Manifold

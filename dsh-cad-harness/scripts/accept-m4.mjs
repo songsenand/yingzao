@@ -1,4 +1,4 @@
-// M4 acceptance — fluid through-flow (design: M4-PREP.md §5).
+// M4 acceptance — fluid through-flow (design: docs/archive/M4-PREP.md §5).
 //
 // case 1  straight pipe: conservation audit, zero penetration, arrival ratio,
 //         section velocities, no divergence (numeric hard assertions)
@@ -59,7 +59,7 @@ check('c1 particle count ~10k (±40%)', m.particleCount0 > 6000 && m.particleCou
 check('c1 mass conservation (audit)', m.massConservationError < 1e-6, `${m.massConservationError}`);
 check('c1 zero penetration', m.penetrationCount === 0, `${m.penetrationCount}`);
 check('c1 no divergence', m.diverged === false, `${m.diverged}`);
-check('c1 arrival ratio ≥ 0.7 (no-slip wall film creep, see M4-PREP §13.7)', m.outletArrivalRatio >= 0.7, `${m.outletArrivalRatio}`);
+check('c1 arrival ratio ≥ 0.7 (no-slip wall film creep, see docs/archive/M4-PREP.md §13.7)', m.outletArrivalRatio >= 0.7, `${m.outletArrivalRatio}`);
 check('c1 outlet reached', m.timeToOutletSteps !== null && m.timeToOutletSteps > 0, `step ${m.timeToOutletSteps}`);
 check('c1 sections carry flow', m.sectionAvgVelocity.filter((s) => s.velocityMmPerSec > 10).length >= 10,
   `${m.sectionAvgVelocity.filter((s) => s.velocityMmPerSec > 10).length}/20 bins > 10mm/s`);

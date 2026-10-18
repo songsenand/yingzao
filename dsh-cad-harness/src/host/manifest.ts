@@ -1,5 +1,5 @@
 // Assembly manifest: the BOM + executable-ICD artifact (schema v0.1, see
-// ASSEMBLY-SCHEMA-PROPOSAL.md). JSON is the single source of truth and is
+// docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md). JSON is the single source of truth and is
 // deliberately language-neutral; every consumer (engine checks, panel, LLM
 // scripts) goes through this module or reads the JSON directly.
 //

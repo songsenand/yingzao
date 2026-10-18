@@ -110,7 +110,7 @@ const PACKAGES = [
     // broken" instead of "this platform uses the TS engine".
     exclude: {
       targets: ['darwin-x64'],
-      reason: 'no darwin-x64 wheel — physics canonical stays the TS rapier3d-compat (HARNESS 12.5)',
+      reason: 'no darwin-x64 wheel — physics canonical stays the TS rapier3d-compat (DESIGN §31.4)',
     },
   },
   // MPM kernel JIT engine (adopted 2026-10-14, DECISION-LOG same day; measurement

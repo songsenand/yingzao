@@ -227,7 +227,7 @@ export async function runPhysics(scenario: PhysicsScenario): Promise<PhysicsRepo
 
 /**
  * The TS implementation — the CANONICAL only on darwin-x64, where the lock ships
- * no `rapier3d` wheel (HARNESS §12.7). Everywhere else it is the parity oracle for
+ * no `rapier3d` wheel (DESIGN §31.4). Everywhere else it is the parity oracle for
  * the Python worker (`scripts/accept-physics-parity.mjs`), exactly like
  * `validateAssemblyInTs` / `importGeometry`'s predecessor.
  */

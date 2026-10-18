@@ -1,5 +1,5 @@
 // Acceptance for batch 0 — the resident Python worker and its JSON-lines
-// protocol (HARNESS §12.3, DECISION-LOG 2026-10-08).
+// protocol (DESIGN §31.3, DECISION-LOG 2026-10-08).
 //
 //   1. handshake: `protocolVersion`, python version, declared ops
 //   2. latency: ping round trip over the pipe (measured 0.02 ms, budget 1 ms)

@@ -1,5 +1,5 @@
 // Prototype + measurements for batch 0 — the resident Python worker and the
-// JSON-lines protocol HARNESS §12.3 specifies. Nothing here is wired into the
+// JSON-lines protocol DESIGN §31.3 specifies. Nothing here is wired into the
 // plugin: this is the evidence that decides the protocol's own design choices,
 // most importantly "大载荷走文件路径" (big payloads by file path) and the
 // `{id, op, params}` → `{id, ok, result|error+traceback}` frame shape.

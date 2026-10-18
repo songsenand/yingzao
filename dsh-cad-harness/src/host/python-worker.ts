@@ -1,7 +1,7 @@
 // The one place model-written Python is executed — and, since batch 0, the one
 // place the resident domain worker lives.
 //
-// TWO SHAPES, ONE WIRING POINT (HARNESS §12.3):
+// TWO SHAPES, ONE WIRING POINT (DESIGN §31.3):
 //   * `runPython` — a fresh process per call, for `run_python`. The escape hatch
 //     stays honest: no poisoned state, a guaranteed timeout, the real traceback.
 //   * `PythonWorker` / `ensurePythonWorker` — the resident worker the migrated
@@ -181,7 +181,7 @@ export async function runPython(request: RunPythonRequest, onProgress?: (message
 }
 
 // ---------------------------------------------------------------------------
-// batch 0: the resident domain worker (HARNESS §12.3)
+// batch 0: the resident domain worker (DESIGN §31.3)
 // ---------------------------------------------------------------------------
 
 export interface PythonWorkerHello {

@@ -1,4 +1,4 @@
-// Gain measurements for the "迁 Python" column of docs/TOOL-RUNTIME-MATRIX.md.
+// Gain measurements for the "迁 Python" column of docs/archive/TOOL-RUNTIME-MATRIX.md.
 //
 // The criterion is "默认迁 Python"; the matrix still has a 收益 column with
 // numbers I had not measured (MPM 5–20×, FEM faster, STL parse faster). This

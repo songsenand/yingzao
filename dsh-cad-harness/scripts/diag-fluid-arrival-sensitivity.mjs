@@ -1,7 +1,7 @@
 // DIAGNOSTIC (kept as evidence, not an acceptance): the TS arrival ratio for the
 // 50k-particle pipe is insensitive to a ±1% seed-density perturbation (three runs,
 // identical to four decimals) — which is why the Python run\x27s 0.098 is a systematic
-// difference and not a chaotic draw. See execution_summaries/20261012_refactor_simulate_fluid_wiring_open_defect.md
+// difference and not a chaotic draw. See docs/archive/execution_summaries/20261012_refactor_simulate_fluid_wiring_open_defect.md
 // Is the case-1b arrival ratio a STABLE property of the physics, or a realization
 // draw? Perturb the seed lattice density by fractions of a percent on the TS
 // canonical and watch the arrival ratio move.

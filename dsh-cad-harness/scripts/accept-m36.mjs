@@ -1,4 +1,4 @@
-// M3.6 acceptance — mechanism motion simulation (design: M3.6-MOTION-PREP.md).
+// M3.6 acceptance — mechanism motion simulation (design: docs/archive/M3.6-MOTION-PREP.md).
 //
 // case 1  slider-crank (kinematics): travel = 2R, period, no interference
 // case 2  single-cylinder four-stroke: crank + rod + piston + block + 2 valves

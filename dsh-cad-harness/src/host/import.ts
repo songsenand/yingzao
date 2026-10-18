@@ -5,7 +5,7 @@
 // version, and it only accepts SCAD source — so the version store was, in
 // practice, a source-code store, and geometry that came from anywhere else had
 // no way in. That is what made "one person designs a part, another uses it"
-// impossible, and it was mis-filed in HARNESS §7 as part of the STEP (B-rep)
+// impossible, and it was mis-filed in DECISION-LOG 2026-10-01（补记）as part of the STEP (B-rep)
 // gap. It is not: STL *is* a mesh, and the whole truth engine here is mesh-based
 // (Manifold booleans, BVH nearest-distance, rapier, MPM, the measure family).
 // Reading an STL was never the missing piece — `mesh.ts` has parsed them for

@@ -1,5 +1,5 @@
 // Assembly manifest L0 checks (v1): executable interface contracts + adjacency
-// discovery. See ASSEMBLY-SCHEMA-PROPOSAL.md.
+// discovery. See docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md.
 //
 // - contract checks resolve interface endpoints ("childId.datumName") to world
 //   datum features of the two referenced part versions, then run one operator:

@@ -258,7 +258,7 @@ export async function runMotion(scenario: MotionScenario): Promise<MotionReport>
 
 /**
  * The TS implementation — the CANONICAL only on darwin-x64, where the lock ships
- * no `rapier3d` wheel (HARNESS §12.7). Everywhere else it is the parity oracle for
+ * no `rapier3d` wheel (DESIGN §31.4). Everywhere else it is the parity oracle for
  * the worker's `simulate_motion`.
  */
 export async function runMotionInTs(scenario: MotionScenario): Promise<MotionReport> {
