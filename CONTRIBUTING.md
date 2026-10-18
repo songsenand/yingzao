@@ -1,8 +1,6 @@
 # 参与贡献
 
-感谢你愿意参与。本文件是**可执行的规则**，不是客套：
-
-- 本项目的编码与提交纪律见 [AGENTS.md](AGENTS.md)（提交信息必须写 `Why` / `Verified` / `Risk`）；
+- 编码与提交纪律见 [AGENTS.md](AGENTS.md)（提交信息必须写 `Why` / `Verified` / `Risk`）；
 - 方向性取舍写进 [docs/DECISION-LOG.md](docs/DECISION-LOG.md)（append-only，不回改历史条目）；
 - 提交贡献即表示你同意按本项目的许可（[Apache-2.0](LICENSE)）分发你的贡献，并需按下文**签名**。
 
