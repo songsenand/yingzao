@@ -3024,3 +3024,25 @@ MIT/Apache-2.0，`lib/BOSL2` 是 BSD-2-Clause，OpenSCAD（GPL-2.0）以独立�
 **要认的代价（已向用户说明）**：宽松许可**不可逆**——已发出的授权永久有效，将来若要改 AGPL
 （强制 SaaS 回流）需取得全部贡献者同意，故若留此路须从第一天起用 CLA/DCO 收拢贡献。
 
+## 2026-10-16：版权署名定为「笔名 + 邮箱 + 其他贡献者」（用户拍板）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（全仓长期有效的声明）。
+
+**决策内容：** `LICENSE` 附录与 `NOTICE` 的版权行写为
+`Copyright 2026 songsenand <songsenand@163.com> and other contributors`；两个 `package.json` 补 `author` 字段。
+
+**理由：** ① 用笔名而非真名，法律上成立——伯尔尼公约第 15 条与中国《著作权法》第十一条均为
+"署名推定"：无相反证明时，作品上署名者被推定为作者；② 附邮箱使笔名可对应到可联系的现实身份，
+比裸笔名更便于日后举证；③ `and other contributors` 是对贡献者的集体署名，社区项目惯例。
+
+**要注意（已向用户说明）：**
+- `and other contributors` **不构成权利收拢**：贡献者各自的贡献仍归各自所有。将来若要维权、
+  改许可（如换 AGPL）或签商业合同，必须先有 **CLA/DCO** 把权利归集到确定主体；
+- `LICENSE` / `NOTICE` 是永久公开文件，邮箱会被爬取；不想公开个人邮箱可换角色地址或仓库 URL。
+
+**依据：** 用户明确"写 songsenand（邮箱拥有者）以及其他贡献者"。用户原文邮箱写作
+`sognsenand@163.com`，按 git 配置与可核实的地址改为 `songsenand@163.com`（笔误已指出）。
+
+**影响：** `LICENSE`、`NOTICE`、两个 `package.json`；全仓 `The ToyMarker Authors` 字样清零。
+将来成立实体后，在 `NOTICE` 追加一行实体名即可——已发出的 Apache 授权不受影响。
+
