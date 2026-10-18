@@ -405,3 +405,27 @@ trimesh.proximity.thickness(mesh, points, exterior=False, normals=None, method="
 | MPM 性能：TS 3.1/23.4/88.3 ms/步 @8.8k/70.6k/262k 粒子；Python 慢 2.5–4×；原生比 TS 快 3.7–4.6× | `experiments/20261008_python_migration_measurements.md` L200/L210-217、`docs/archive/TOOL-RUNTIME-MATRIX.md` §7 |
 | 已用 shapely `maximum_inscribed_circle` 替掉体素瓶颈法（替换先例） | `experiments/20261013_section_mic_feasibility.md` |
 | 已锁定的 trimesh 自带 `proximity.thickness`（`max_sphere` → `max_tangent_sphere`；`ray` → `longest_ray`） | 本地 venv `.tmp-measure-runtime/venv/lib/python3.13/site-packages/trimesh/proximity.py` L546-597 |
+
+---
+
+## 2026-10-16：项目自身许可与依赖复核
+
+**项目许可：Apache-2.0**（全文见 `LICENSE`，第三方声明见 `NOTICE`）。
+
+**直接依赖（18 个）逐项复核结果——全部为 MIT 或 Apache-2.0，无任何 GPL/AGPL/LGPL：**
+
+| 许可 | 依赖 |
+|---|---|
+| Apache-2.0 | `@dimforge/rapier3d-compat`、`manifold-3d`、`puppeteer`、`@puppeteer/browsers`、`typescript` |
+| MIT | `@deepseek-ai/*`（cordis、dsh-api-session-controller、dsh-attachment、dsh-client-connection、dsh-tools）、`@types/*`、`esbuild`、`react`、`three`、`three-mesh-bvh` |
+
+**BOSL2 不随仓库分发：** 它在本地 `lib/BOSL2/`，而 `lib/` 在 `.gitignore` 中——**仓库里没有它**。
+其许可为 **BSD 2-Clause**（Copyright (c) 2015-2024 Revar Desmera），本项目提供
+`dsh-cad-harness/scripts/accept-bosl2.mjs` 作为使用者的**校验**入口（它只编译一个测试齿轮核对接线，不负责下载）。
+
+**运行期由用户获取、本项目不分发：** OpenSCAD（GPL-2.0，独立程序调用，非链接）、
+Python 运行时与科学计算包（`python_runtime` 在用户机器上下载）、题库第三方素材
+（Pixabay 等，**物化不入库**，逐项登记见 `examples/bench/ATTRIBUTION.md`）。
+
+**结论：** 以 Apache-2.0 发布不存在 copyleft 牵连；`NOTICE` 与本节共同满足 Apache-2.0 的声明义务。
+
