@@ -1,16 +1,21 @@
 {
-  "schemaVersion": 1,
-  "subject": "单目复式显微镜（参考图，物镜转换器已由用户从原图移除）",
-  "source": "显微镜参考图.png",
-  "purifiedBy": "examples/bench/tools/purify-reference.py",
-  "purifiedTo": "参考图.png",
+  "schemaVersion": 3,
+  "subject": "单目复式显微镜（本项目自绘技术插图，无物镜转换器）",
+  "source": "Pixabay content 34792（Clker-Free-Vector-Images），Pixabay Content License；本项目编辑：删除台下反光镜及支臂",
+  "figure": "参考图.png",
+  "whySelfDrawn": "自建路线（手绘 SVG、3D 模型渲染）已停用。现参考图是开放版权现成插画（Pixabay 34792），本项目只做一处编辑（删反光镜）；素材按题库纪律物化使用、不入库，仓库只留授权登记与测量数字。",
   "method": {
-    "mask": "not-background: sum(RGB) >= 720 and channel spread <= 12",
-    "component": "largest connected component (watermark specks dropped)",
-    "marginPx": 60,
-    "droppedSpecks": true
+    "mask": "not-background: min(RGB) < 250 (pure-white background)",
+    "component": "largest connected component",
+    "bands": 10,
+    "normalizedBy": "subject pixel height"
   },
-  "measuredOnSource": {
+  "measuredOnFigure": {
+    "objectWPx": 570,
+    "objectHPx": 895,
+    "aspectHW": 1.57
+  },
+  "measuredOnOldPhotoArchive": {
     "objectWPx": 410,
     "objectHPx": 767,
     "aspectHW": 1.871
@@ -19,6 +24,18 @@
     "bands": 10,
     "normalizedBy": "subject pixel height",
     "values": [
+      0.153,
+      0.18,
+      0.194,
+      0.323,
+      0.334,
+      0.513,
+      0.446,
+      0.402,
+      0.604,
+      0.606
+    ],
+    "photoValues20261005": [
       0.104,
       0.153,
       0.289,
@@ -30,10 +47,8 @@
       0.503,
       0.253
     ],
-    "excludedBands": [
-      4
-    ],
-    "excludedReason": "band 4 (40%-50% height) is the objective-turret band; the prompt forbids a turret, so scoring this band would penalise compliance"
+    "excludedBands": [],
+    "excludedReason": "十段全用。2026-10-05 曾排除 band4（40%-50% 高度带），因为当时参考图里有物镜转换器；现参考图（Pixabay 34792）天生单物镜、无转换器，排除理由已消失。"
   },
   "howToUse": "Render front and side at the frozen camera (azimuth ≈ 35°, elevation ≈ 15°) with an empty background, threshold the same way, take the ten-band profile, drop the excluded bands, and compare L1 distance against this profile."
 }

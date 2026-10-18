@@ -210,8 +210,10 @@ examples/bench/
 ├── README.md                     ← 【操作手册】备料 / 逐题场地 / 怎么发 / 记分 / 复核
 │                                    （在考生侧上一层；只写"怎么跑"，不含判据与答案）
 ├── tools/                        ← 评分方工具
-│   ├── purify-reference.py       ←   净化参考图（去水印）+ 生成 landmarks.json
-│   └── materialize-01b.mjs       ←   物化 01b 的待诊断证据/语料到 subjects/
+│   ├── make-reference-figure.py  ←   渲染 03 参考模型 + 测量/写 landmarks（唯一权威）
+│   ├── materialize-01b.mjs       ←   物化 01b 的待诊断证据/语料到 subjects/
+│   ├── bench-run.mjs / bench-score.mjs / check-rubric-ids.mjs
+│   └── ATTRIBUTION.md（在 examples/bench/ 下）← 题库素材来源与许可清单
 │
 ├── subjects/                     ← 【考生侧】会话 cwd 只允许落在这里
 │   │                                （只列有考生的题；`00-smoke` 无考生，故不在树下）
@@ -320,7 +322,7 @@ examples/bench/
 `02` 首轮修复后重跑得 0.4173，**归因是模型自己的参数选择**（子代理把种子区限定为
 进汽口 7×7×16mm），不是仪器缺陷；但正因为约定未定，**不计入模型短板**。
 
-插件侧的问题与复核议程见根目录 **`M4-M5-REVIEW.md`**（用户定性为"基础设施级"）。
+插件侧的问题与复核议程见根目录 **`docs/archive/M4-M5-REVIEW.md`**（用户定性为"基础设施级"）。
 `DESIGN.md:1512` 那条"到达率断言定 0.7/0.75/0.5"也需一并复核——它是在**直管 +
 默认种子盒 + 默认速度**下测的，换外径即漂。
 

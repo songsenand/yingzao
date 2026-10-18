@@ -105,9 +105,9 @@
     },
     {
       "id": "g-no-turret",
-      "desc": "不得出现物镜转换器 / 台下聚光镜 / 反光镜（参考图清单明确不还原）",
+      "desc": "不得出现物镜转换器 / 台下聚光镜；反光镜只允许作为**外购件声明**，不得建模镜体",
       "via": "零件清单 + 渲染",
-      "expect": "无对应零件",
+      "expect": "渲染里无转换器、无聚光镜；反光镜若出现，必须在契约里是\"未建模的外购件\"",
       "inSkill": false,
       "stage": "A"
     },
@@ -245,17 +245,26 @@
       "expect": "include <BOSL2/gears.scad>（或 threading/screws）且用到对应模块；手写渐开线不得分",
       "weight": 2,
       "evidence": "microscope5 因 BOSL2 接线 bug 手搓了渐开线齿轮与螺纹；接线已于 2026-10-05 修复（accept-bosl2 14/14）"
+    },
+    {
+      "id": "c-accessory-interface",
+      "desc": "外构件接口：弯臂下端 / 台下支架上有**一个 M3 接口**（螺孔有效牙深 ≥6mm，或 Ø3.2 通孔），并按声明实测一致",
+      "via": "assembly.json + measure_distance",
+      "expect": "接口存在且实测尺寸与声明一致（±0.2mm）；外购件在 assembly.json 里列为未建模件（名称 + 规格 + 来源）",
+      "weight": 2,
+      "inSkill": false,
+      "stage": "A"
     }
   ],
   "features": [
     {
       "id": "f-silhouette-profile",
-      "desc": "九段归一化宽度剖面与参考图的 L1 距离（band4 已排除，见 landmarks.json）",
+      "desc": "十段归一化宽度剖面与参考图的 L1 距离（见 landmarks.json）",
       "kind": "auto",
-      "metric": "L1 distance over bands [0,1,2,3,5,6,7,8,9]",
+      "metric": "L1 distance over bands [0..9]",
       "pass": 0.08,
       "weight": 3,
-      "evidence": "两版参考图之间九段差值 ≤0.004，说明该度量可复现；band4 是转换器带，故排除",
+      "evidence": "同一张参考图两次测量逐段一致（差 0），说明该度量可复现；2026-10-05 起曾排除 band4（当时参考图有转换器），现参考图无转换器，十段全用",
       "inSkill": false,
       "stage": "A"
     },

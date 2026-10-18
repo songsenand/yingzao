@@ -103,10 +103,15 @@ node examples/bench/tools/materialize-01b.mjs corpus
 ### 3.4 换了参考图才要做的事
 
 ```bash
-python3 examples/bench/tools/purify-reference.py <原图> examples/bench/graders/03-microscope/参考图.png
+python3 examples/bench/tools/make-reference-figure.py --write-landmarks   # 重渲 3D 参考模型 + 重写 landmarks
+python3 examples/bench/tools/make-reference-figure.py --check             # 只测量，与原照片值对差（存档对照）
 ```
 
-脚本会剥掉非主体碎片（水印）并重算 `landmarks.json`；**裁切后若仍残留碎片它会拒绝写文件**。
+参考图是**本项目自建 3D 模型**（`graders/03-microscope/reference-model.scad`）的渲染，由 `make-reference-figure.py` 用冻结相机出图并测量；形状由几何保证，不含第三方素材。
+`--check` 会打印十段剖面与 2026-10-05 冻结值的逐段差值；参与评分的九段应在 ±0.01 内。
+
+> **不得用网络检索到的图片做参考图**，无论是否经过 AI 修改——AI 修改不清洗版权。
+> 素材来源与许可见 `ATTRIBUTION.md`。
 
 ---
 
