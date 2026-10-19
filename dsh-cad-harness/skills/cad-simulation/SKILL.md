@@ -109,6 +109,12 @@ out to the surface (R² is reported; the acceptance bands it at −6% on a canti
   (usually what breaks first) is invisible to it. The tiers in `normalization`
   (`warnAt`/`badAt`, derived from the declared strength) are a **colour scale**.
 
+**Deliver against `delivery`, not `verdict`.** `verdict` is a human summary; `delivery` is the
+judgement: an allowable-stress requirement plus **excluded / difficult / not-excluded** with witnesses
+(rule, measured, required, location), and `unevaluable` for numbers this mesh cannot decide — a missing
+number is NOT a pass. The geometry suspects in `attention` are DETECTION (where to look) and are never
+witnesses: a reentrant corner must not fail a part that has no load case behind it.
+
 **The refusal is a feature.** Every region carries `localThicknessCells`,
 `minExtentCells`, `fitR2` and `trustworthy`/`whyUntrustworthy`. A member thinner than
 the voxel is smeared into a thicker one, which reads stiff and safe — so on such a part

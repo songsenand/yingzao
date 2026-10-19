@@ -362,6 +362,122 @@ export function geometrySuspectLayer(
   };
 }
 
+
+/**
+ * The DELIVERY half, in the repo's established three-valued form (check_printability's
+ * precedent + DECISION-LOG 2026-10-11 "零/过小余量记为困难，不得放过"):
+ *
+ *   excluded     — a witness contradicts the requirement (measured vs required, located)
+ *   difficult    — the two bounds straddle it: the margin is inside the instrument's noise
+ *   not-excluded — no counter-example was found. NEVER "ok", NEVER "safe".
+ *   unevaluable  — listed separately: a number the mesh cannot decide. A missing number is
+ *                  NOT "no constraint".
+ *
+ * DETECTION IS NOT DELIVERY. The geometry suspects (where to LOOK) live in `attention`;
+ * they are never witnesses here. A tool going quiet is an attention failure, but a suspect
+ * is not evidence of a delivery failure — conflating them would let a reentrant corner
+ * "fail" a part with no load case behind it.
+ *
+ * The two stress numbers are used as BOUNDS, which is the honest way to judge with a
+ * quantity we cannot read at the surface:
+ *   lower = the declared-distance reading (it under-reads a bending/notch surface);
+ *   upper = the extrapolated surface value, only when it passed the stability gate.
+ * The allowable line is the declared material strength divided by `badFactor`.
+ */
+export interface StressDelivery {
+  requirement: { kind: string; valueMPa: number | null; source: string };
+  verdicts: {
+    question: string;
+    verdict: 'excluded' | 'difficult' | 'not-excluded';
+    witnesses: { rule: string; measured: number; required: number; unit: string; locationMm?: number[] }[];
+    unevaluable: string[];
+  }[];
+}
+
+export function stressDelivery(input: {
+  material: StressMaterial;
+  result: StressSolveResult;
+  warnFactor: number;
+  badFactor: number;
+}): StressDelivery {
+  const { material, result, badFactor } = input;
+  const allowable = material.strengthMPa / badFactor;
+  const certified = result.regions.filter(
+    (r) => r.trustworthy && r.extrapolationCrossResolutionPct !== null && r.extrapolationCrossResolutionPct !== undefined,
+  );
+  const lower = result.peakDeclaredDepthMPa;
+  const uppers = certified
+    .map((r) => r.surfaceExtrapolatedMPa)
+    .filter((v): v is number => typeof v === 'number');
+  const upper = uppers.length ? Math.max(...uppers) : null;
+  const allRegions = result.regions;
+  const worst = allRegions.length
+    ? allRegions.reduce((a, b) => (b.peakVonMisesMPa > a.peakVonMisesMPa ? b : a))
+    : null;
+
+  const unevaluable: string[] = [];
+  if (result.regionsTrustworthy === 0) {
+    unevaluable.push(
+      'the surface stress: no region could be certified at this dxMm (members thinner than the voxel, ' +
+        'or the depth fit / cross-resolution check failed) — only the declared-distance reading is available',
+    );
+  }
+  if (!result.meshIndependence.checked) {
+    unevaluable.push('mesh independence: no coarser grid was solved, so stability is UNKNOWN');
+  }
+
+  let verdict: 'excluded' | 'difficult' | 'not-excluded' = 'not-excluded';
+  const witnesses: StressDelivery['verdicts'][number]['witnesses'] = [];
+  if (lower > allowable) {
+    // The LOWER bound already breaks the line: this is the safe direction, so it excludes.
+    verdict = 'excluded';
+    witnesses.push({
+      rule: 'declaredDistanceReadingLowerBound',
+      measured: lower,
+      required: allowable,
+      unit: 'MPa',
+      locationMm: result.peakDeclaredDepthAtMm,
+    });
+  } else if (upper === null) {
+    verdict = 'not-excluded';
+  } else if (upper > allowable) {
+    verdict = lower > allowable * 0.8 ? 'difficult' : 'excluded';
+    witnesses.push({
+      rule: 'surfaceUpperEstimate',
+      measured: upper,
+      required: allowable,
+      unit: 'MPa',
+      locationMm: worst?.atMm,
+    });
+  } else {
+    witnesses.push({
+      rule: 'surfaceUpperEstimate',
+      measured: upper,
+      required: allowable,
+      unit: 'MPa',
+      locationMm: worst?.atMm,
+    });
+  }
+
+  return {
+    requirement: {
+      kind: 'allowable-stress',
+      valueMPa: Number(allowable.toFixed(4)),
+      source:
+        `declared-material ${material.id}${material.assumed ? ' (ASSUMED — not calibrated)' : ''}: ` +
+        `strengthMPa ${material.strengthMPa} / badFactor ${badFactor}`,
+    },
+    verdicts: [
+      {
+        question: 'does any certifiable region exceed the allowable stress?',
+        verdict,
+        witnesses,
+        unevaluable,
+      },
+    ],
+  };
+}
+
 export interface StressAttentionInput {
   versionId: string;
   material: StressMaterial;

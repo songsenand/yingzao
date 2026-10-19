@@ -35,7 +35,7 @@ import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
-import { geometrySuspectLayer, readStressField, resolveStressMaterial, solveStress, stressAttention, type GeometrySuspect } from './stress.ts';
+import { geometrySuspectLayer, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -4101,6 +4101,7 @@ export function registerCadTools(
       'DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). ' +
       'DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part\'s layer-direction weakness — usually what breaks first — is invisible to it. ' +
       'Peaks are read at `criticalDistanceMm` inside the surface (a declared distance; the distance actually used comes back as effectiveSampleDistanceMm) — that declared-distance reading is the number to quote. A region\'s `surfaceExtrapolatedMPa` (the depth profile fitted out to the surface) is a HIGHER estimate and is only quoted when it passes BOTH its own fit check and a cross-resolution check (`extrapolationCrossResolutionPct`), because a good fit R^2 is not sufficient: on a fillet the fit looked fine (R^2 0.90) while the value moved 17% between grids. Every region also carries the wall thickness it tunnels through in cells and a `trustworthy` flag with `whyUntrustworthy`; an untrustworthy region means the position/value may not be quoted — refine dxMm. ' +
+      'Deliver against `delivery` (excluded / difficult / not-excluded, with witnesses), NOT against `verdict`: a missing number is not a pass, and the geometry suspects in `attention` are DETECTION (where to look), never delivery evidence. ' +
       'THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). ' +
       'A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. ' +
       'Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.',
@@ -4182,7 +4183,8 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
-          verdict: { type: 'string', required: true, description: '"ok" | "check" | "overstressed". Never "ok" when the mesh-independence check is drifting or the material is assumed — read `checks` and `material.assumed`.' },
+          verdict: { type: 'string', required: true, description: '"ok" | "check" | "overstressed" — a SUMMARY for a human, NOT the delivery form. Deliver against `delivery` (excluded / difficult / not-excluded), which is the two-or-three-valued judgement with witnesses.' },
+          delivery: { type: 'object', required: true, additionalProperties: true, description: 'The delivery discipline: an allowable-stress requirement and a three-valued verdict — "excluded" (a witness contradicts it), "difficult" (the bounds straddle it), "not-excluded" (no counter-example; NEVER "ok"); plus `unevaluable` for numbers this mesh cannot decide. DETECTION IS NOT DELIVERY: the geometry suspects live in `attention`, never as witnesses here.' },
           material: { type: 'object', required: true, additionalProperties: true },
           method: { type: 'object', required: true, additionalProperties: true, description: 'What was actually solved: grid, degrees of freedom, CG iterations and residual, the sampling distance, the field file, how many cells the report excluded. A result without this is not reproducible.' },
           checks: { type: 'object', required: true, additionalProperties: true, description: 'Self-checks that do not need the answer to be right: equilibrium residual, strain-energy balance, mesh-independence deltas.' },
@@ -4369,6 +4371,7 @@ export function registerCadTools(
       await run.json('report.json', {
         versionId: a.versionId,
         verdict,
+        delivery: stressDelivery({ material, result, warnFactor, badFactor }),
         material,
         method: { dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm },
         checks: {

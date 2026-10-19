@@ -105,6 +105,18 @@ check(/scan_attention/.test(block) && /geometrySuspectLayer/.test(block),
   'the tool falls back to the geometry scan instead of returning an empty field',
   'never-silent rule');
 check(/NEVER SILENT/.test(block), 'and its description says so at call time');
+// The DELIVERY discipline, and its separation from DETECTION (user-stated principle):
+// a verdict is excluded / difficult / not-excluded with witnesses; the geometry suspects
+// are where-to-look, never evidence about the part.
+const stressSrc = readFileSync(join(ROOT, 'src/host/stress.ts'), 'utf8');
+check(/delivery: stressDelivery\(/.test(block), 'the tool reports the delivery half explicitly');
+check(/'excluded' \| 'difficult' \| 'not-excluded'/.test(stressSrc),
+  'delivery is three-valued: excluded / difficult / not-excluded');
+const dl = stressSrc.slice(stressSrc.indexOf('export function stressDelivery'));
+check(dl.length > 0 && !/suspect/i.test(dl),
+  'detection is NOT an input to the delivery verdict',
+  'geometry suspects cannot fail a part with no load case behind it');
+check(/unevaluable/.test(dl), 'and a number the mesh cannot decide is reported as unevaluable, not as a pass');
 
 // --- 5. the honesty half on the real part --------------------------------
 const b = out.toyBalanceBeam;
