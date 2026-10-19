@@ -34,6 +34,8 @@ against it, and read a reference only when the skill tells you to.
 | "is it watertight", "do these two parts overlap", "what's the gap" | `validate_assembly` | `simulate_physics` |
 | "will it topple", "does it rest stably", "does the hinge hold", "does it sink" | `simulate_physics` | `validate_assembly` |
 | "does the mechanism move correctly", "what's the stroke", "does it jam mid-travel" | `simulate_motion` | `simulate_physics` |
+| "how strong is it", "where does it break", "what is the stress at this section" | `simulate_stress` | anything else — it is the only tool that reports a force |
+| **"where should I even look", "any sharp internal corner", "is this mesh clean"** | **`scan_attention`** | waiting for a render to reveal it |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
 | "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `simulate_lbm` | embedded solids (box walls only for now) |
 | "how big / how many holes / is it watertight", whole-part numbers | `measure_part` | renders |
@@ -183,6 +185,15 @@ near-touching pairs were never declared).
   but a warning after the fact is cheaper than a rework, only if you obey it.
 - Renders are seductive: a shape can look right and measure wrong. Anything with
   a tolerance in it gets a `measure_*` call before it gets a verdict.
+- **`simulate_motion` compensates each part's re-based pivot by `R·pivot`, and refuses a
+  run whose joints are not assembled at t=0.** If you pass a `pivot` that is not on the
+  part's own initial-rotation axis, the identity still holds — that is the point of the
+  compensation — but the run now measures every joint's anchor gap BEFORE stepping and
+  refuses with the joint named when it exceeds 2mm. A refusal means *your* anchors or
+  placements disagree, not that the tool is unhappy: fix those, do not widen the tolerance.
+  `cycles` accepts fractions — a balance whose range is ±14° is 0.078 of a turn, and asking
+  for a whole turn answers a different question (the beam becomes a windmill and everything
+  collides).
 - `simulate_physics` with parts placed exactly touching starts in penetration;
   place them slightly separated and let gravity close the gap.
 - A "gap" between two probe points that are not roughly facing each other is not

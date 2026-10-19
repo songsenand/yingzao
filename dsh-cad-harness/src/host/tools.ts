@@ -12,7 +12,11 @@ import { buildProducts } from './products.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
-import type { InterfaceCheckResult } from './assembly-check.ts';
+import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
+// `Json` gives an interface the index signature the output schema's free-form objects
+// require (`additionalProperties: true` infers `Record<string, JsonValue>`); without it a
+// typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
+import type { Json } from './inspect.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
@@ -24,7 +28,7 @@ import {
 } from './process-profile.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
-import { runMotion } from './motion.ts';
+import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
@@ -551,7 +555,7 @@ export function registerCadTools(
     cycles?: number;
   }, project: ProjectStores) {
     const { runStore } = project;
-    const parts = [];
+    const parts: MotionPartInput[] = [];
     const stlFiles: { name: string; stlPath: string }[] = [];
     const usedVersions: (string | null)[] = [];
     const geometries: { name: string; stl: Uint8Array }[] = [];
@@ -568,9 +572,22 @@ export function registerCadTools(
     // So each part is re-based on a pivot BEFORE it reaches the engine: the
     // geometry is shifted by −pivot, the body is placed at position+pivot, and
     // every joint anchor that names the part is shifted the same way. The world
-    // pose of every point is unchanged (R(local−p) + (pos+p) = R·local + pos),
-    // and the stored STL is the re-based one, so the panel's playback and the
-    // keyframe renders stay consistent with the trajectory.
+    // pose of every point is then unchanged:
+    //
+    //     R(local − p) + (pos + R·p) = R·local + pos
+    //
+    // THE BODY OFFSET IS R·p, NOT p, and getting that wrong is silent. The −p
+    // shift happens in the part's file frame, but the body is then rotated by R,
+    // so the compensation rotates with it. `pos + p` is right only when
+    // R·p = p — identity rotation, or a pivot lying on the rotation axis.
+    // The toy-balance beam (R = 90° about x, p = [0,84,5]) broke it by
+    // |p − R·p| = 119.0mm: the beam sat 119mm from its own pin, its kinematic
+    // body could not be pulled back, and the solver dragged the two pans across
+    // the machine to the wrong anchors — while the report said "0 joint drift,
+    // 0 interference, travel 160.2mm, pass". Nothing in that run was evidence.
+    //
+    // The stored STL is the re-based one and the trajectory is the engine's own,
+    // so the panel's playback and the keyframe renders stay consistent.
     const jointsIn = a.joints ?? [];
     const pivotOf = new Map<string, [number, number, number]>();
     const pivots: Record<string, [number, number, number]> = {};
@@ -596,7 +613,7 @@ export function registerCadTools(
         name: p.name,
         stl,
         bodyType: p.bodyType as 'dynamic' | 'fixed' | 'kinematic',
-        position: [p.position[0]! + pivot[0], p.position[1]! + pivot[1], p.position[2]! + pivot[2]] as [number, number, number],
+        position: rebasedBodyPosition(p.position, pivot, p.rotation as [number, number, number] | undefined),
         rotation: p.rotation as [number, number, number] | undefined,
       });
     }
@@ -609,6 +626,14 @@ export function registerCadTools(
         anchorB: [j.anchorB[0]! - pb[0], j.anchorB[1]! - pb[1], j.anchorB[2]! - pb[2]],
       };
     });
+
+    // ---- initial-assembly gate --------------------------------------------
+    // Measured BEFORE anything moves (see assertAssembledAtStart for why a gap
+    // detected after the warm-up is worthless): a scenario that is not assembled
+    // is refused with the joint named, instead of producing a run that looks
+    // healthy while describing a pose nobody designed.
+    const initialGaps = assertAssembledAtStart(parts, rebasedJoints as unknown as MotionJointInput[]);
+
     const sourceVersionIds = collectVersions(usedVersions);
 
     // The run owns its geometry: parts are written where the panel can fetch
@@ -2214,7 +2239,12 @@ export function registerCadTools(
           },
         },
       },
-      cycles: { type: 'number', description: 'Drive cycles to simulate. Default 2.' },
+      cycles: {
+        type: 'number',
+        description: 'Drive cycles to simulate. Default 2. FRACTIONAL values are meaningful and are honoured: ' +
+          'a balance whose design range is ±14° sweeps 0.078 of a turn, and asking for a whole turn instead ' +
+          'answers a different question (the beam becomes a windmill and every part of it collides).',
+      },
     },
     output: {
       schema: {
@@ -2426,7 +2456,7 @@ export function registerCadTools(
           : peakRatio >= 0.6
             ? 'developing'
             : 'underdeveloped';
-      return { overallStatus, metrics: result };
+      return { overallStatus, metrics: result as unknown as { [key: string]: Json } };
     },
     finalizeContent(_exec, result) {
       const value = (result as { value?: { overallStatus: string; metrics: Record<string, unknown> } }).value;
@@ -4238,7 +4268,7 @@ export function registerCadTools(
         resultants?: { axis: string; atMm: number }[];
         runConvergence?: boolean;
       };
-      const { store } = await allStores(exec);
+      const { store, runStore } = await allStores(exec);
       const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) {
         throw new Error(`version ${a.versionId} has no model.stl under ${store.root}`);
@@ -4347,7 +4377,7 @@ export function registerCadTools(
       return {
         versionId: a.versionId,
         verdict,
-        material,
+        material: material as unknown as { [key: string]: Json },
         method: {
           solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
           dxMm: result.dxMm,
@@ -4361,6 +4391,10 @@ export function registerCadTools(
           excludedCells: result.excludedCells,
           fieldPath,
         },
+        // The schema declares these objects free-form, which infers `Record<string, JsonValue>`;
+        // `meshIndependence` carries optional members (`Json | undefined`) and the resultants are
+        // a typed interface, so both need the index signature. What reaches the model is the
+        // JSON-serialised form, where an absent member is simply absent.
         checks: {
           equilibriumErrorPct: result.equilibriumErrorPct,
           energyBalancePct: result.energyBalancePct,
@@ -4368,8 +4402,8 @@ export function registerCadTools(
           appliedN: result.appliedN,
           meshIndependence: result.meshIndependence,
           displacementAtProbeMm: result.probeDisplacementMm,
-        },
-        resultants: result.resultants,
+        } as unknown as { [key: string]: Json },
+        resultants: result.resultants as unknown as { [key: string]: Json }[],
         capability: {
           canReport: [
             'integrals: reaction, section force/moment/area/second moment, strain energy (equilibrium and energy balance are built-in self-checks)',

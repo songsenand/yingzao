@@ -24,6 +24,16 @@
 //        place instead of orbiting the origin.
 //     5. Joint anchors are shifted by the same amount, so joint drift stays
 //        small through a full turn.
+//     6. The compensation ROTATES WITH THE PART: the body goes to
+//        `position + R·pivot`, not `position + pivot`. Every fixture in 1–5 has
+//        an identity initial rotation, where the two are equal — which is why
+//        the difference went unnoticed until the toy-balance beam (R = 90° about
+//        x, p = [0,84,5]) was simulated 119.0mm from its own pin. The engine
+//        could not move the driven beam, so it dragged both pans across the
+//        machine onto the wrong anchors, and the report still said "0 joint
+//        drift, 0 interference, pass" (run r055).
+//     7. A mechanism that is NOT assembled at t=0 is refused, with the joint
+//        named, before anything moves.
 //
 //   Hermetic: DSH_HOME and the workspace live in temp dirs.
 //
@@ -98,7 +108,12 @@ const run = async (extraParts = [], joints = null, pivotForBar = undefined) =>
     cycles: 1,
     parts: [
       { name: 'crank', bodyType: 'kinematic', position: [0, 0, 0], scadCode: crankScad },
-      { name: 'bar', bodyType: 'dynamic', position: [0, 0, 0], scadCode: barScad, ...(pivotForBar ? { pivot: pivotForBar } : {}) },
+      // Placed at −120 so the bar's own anchor [120,0,0] lands ON the crank's [0,0,0].
+      // At position [0,0,0] the two anchors start 120mm apart: the fixture would then
+      // describe two parts that are NOT connected, and the solver would drag the bar
+      // onto the crank while "0 joint drift" was measured after the fact. That is the
+      // same vacuous-evidence shape the gate in section 7 now refuses.
+      { name: 'bar', bodyType: 'dynamic', position: [-120, 0, 0], scadCode: barScad, ...(pivotForBar ? { pivot: pivotForBar } : {}) },
       ...extraParts,
     ],
     joints: joints ?? [
@@ -149,6 +164,78 @@ check('max joint drift through a full turn is sub-0.05mm', (r1.value.maxJointDri
 check('no joint violations', (r1.value.jointViolations ?? []).length === 0,
   JSON.stringify(r1.value.jointViolations ?? []));
 check('a full turn actually ran', (r1.value.stepsRun ?? 0) > 10, `${r1.value.stepsRun} steps`);
+
+// ---------- 6. the compensation must rotate with the part (R·pivot) ----------
+console.log('\n--- 6  a ROTATED part is placed at position + R·pivot ---');
+// `arm` is authored 140mm up (+z) and placed with a 90° rotation about x, so its
+// authored world centre is (0,-140,0) — horizontal, 140mm from the origin. Its pivot
+// [0,0,140] is NOT on that rotation axis, so `position+pivot` and `position+R·pivot`
+// differ by |p − R·p| = 198.0mm. Every fixture above has identity rotation, where the
+// two agree — which is exactly why this went unseen.
+const armScad = 'translate([0,0,140]) cube([8,8,100], center=true);';
+const postScad = 'cube([10,10,10], center=true);';
+
+const r6 = await call('simulate_motion', {
+  cycles: 1,
+  parts: [
+    { name: 'post', bodyType: 'fixed', position: [0, 0, 0], scadCode: postScad },
+    { name: 'arm', bodyType: 'kinematic', position: [0, 0, 0], rotation: [90, 0, 0], pivot: [0, 0, 140], scadCode: armScad },
+  ],
+  joints: [{ type: 'revolute', bodyA: 'post', bodyB: 'arm', anchorA: [0, 0, 0], anchorB: [0, 0, 0], axis: [0, 0, 1] }],
+  drive: { body: 'arm', axis: [0, 0, 1], omegaRadPerSec: 1 },
+});
+check('the rotated fixture runs at all (its anchors coincide at t=0)',
+  (r6.value?.stepsRun ?? 0) > 10, `${r6.value?.stepsRun} steps`);
+check('  …with no joint drift', (r6.value?.maxJointDriftMm ?? 99) < 0.05,
+  `${(r6.value?.maxJointDriftMm ?? NaN).toFixed(4)}mm`);
+
+const runs6 = (await runsIndex()).filter((r) => r.kind === 'motion');
+const run6 = runs6[runs6.length - 1];
+const traj6 = JSON.parse(await readFile(join(project.root, 'runs', run6.id, 'trajectory.json'), 'utf8'));
+const armFrame = traj6.trajectory.parts.find((p) => p.name === 'arm')?.frames?.[0];
+const armStl = new Uint8Array(await readFile(join(project.root, 'runs', run6.id, 'parts', 'arm.stl')));
+const drawnCentre = (() => {
+  const mesh = parseBinaryStl(armStl);
+  const v = mesh.vertProperties;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < v.length; i += 3) {
+    for (let k = 0; k < 3; k++) { const x = v[i + k]; if (x < lo[k]) lo[k] = x; if (x > hi[k]) hi[k] = x; }
+  }
+  const [x, y, z] = [0, 1, 2].map((k) => (lo[k] + hi[k]) / 2);
+  const [qx, qy, qz, qw] = armFrame.slice(3, 7);
+  const ix = qw * x + qy * z - qz * y, iy = qw * y + qz * x - qx * z;
+  const iz = qw * z + qx * y - qy * x, iw = -qx * x - qy * y - qz * z;
+  return [
+    ix * qw + iw * -qx + iy * -qz - iz * -qy + armFrame[0],
+    iy * qw + iw * -qy + iz * -qx - ix * -qz + armFrame[1],
+    iz * qw + iw * -qz + ix * -qy - iy * -qx + armFrame[2],
+  ];
+})();
+check('  …and the arm is drawn where it was AUTHORED (0,-140,0)',
+  closeTo(drawnCentre, [0, -140, 0], 0.5), `drawn centre ${fmt(drawnCentre)}`);
+check('  …i.e. the old `position+pivot` placement (0,0,140), 198.0mm away, is gone',
+  !closeTo(drawnCentre, [0, 0, 140], 5), `drawn centre ${fmt(drawnCentre)}`);
+
+// ---------- 7. an unassembled mechanism is refused, not simulated ----------
+console.log('\n--- 7  a mechanism that is not assembled at t=0 is REFUSED ---');
+let refusal = '';
+try {
+  await call('simulate_motion', {
+    cycles: 1,
+    parts: [
+      { name: 'post', bodyType: 'fixed', position: [0, 0, 0], scadCode: postScad },
+      { name: 'arm', bodyType: 'kinematic', position: [0, 0, 0], rotation: [90, 0, 0], pivot: [0, 0, 140], scadCode: armScad },
+    ],
+    joints: [{ type: 'revolute', bodyA: 'post', bodyB: 'arm', anchorA: [0, 0, 0], anchorB: [30, 0, 0], axis: [0, 0, 1] }],
+    drive: { body: 'arm', axis: [0, 0, 1], omegaRadPerSec: 1 },
+  });
+} catch (err) {
+  refusal = String((err && err.message) || err);
+}
+check('the run is refused with the joint named and the gap measured',
+  /not assembled at t=0/.test(refusal) && /post↔arm/.test(refusal) && /30\.00mm/.test(refusal),
+  refusal.split('\n')[0].slice(0, 150) || '(no refusal)');
 
 console.log(fail === 0 ? '\nALL PASS' : `\n${fail} FAILURES`);
 process.exit(fail === 0 ? 0 : 1);

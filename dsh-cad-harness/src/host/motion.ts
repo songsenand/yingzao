@@ -19,6 +19,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { parseBinaryStl } from './mesh.ts';
+import { rotateVec } from './assembly-check.ts';
 import type { PhysicsReport, PoseSample, Trajectory } from './physics.ts';
 
 export interface MotionPartInput {
@@ -29,6 +30,86 @@ export interface MotionPartInput {
   position: [number, number, number];
   /** Initial rotation, degrees XYZ. */
   rotation?: [number, number, number];
+}
+
+/**
+ * Where a part's body goes so that re-basing its geometry on `pivot` leaves the
+ * world pose unchanged: `position + R·pivot`, where R is the part's own initial
+ * rotation.
+ *
+ * WHY R·pivot AND NOT pivot. The geometry is shifted by −pivot in the part's FILE
+ * frame, but the body is then rotated by R, so the compensation has to be rotated
+ * with it: R(local − p) + (pos + R·p) = R·local + pos. Using `pos + p` is correct
+ * only when R·p = p — identity rotation, or a pivot sitting on the rotation axis —
+ * and wrong by |p − R·p| otherwise. The toy-balance beam (R = 90° about x,
+ * p = [0,84,5]) was off by 119.0mm: it sat 119mm from its own pin, its kinematic
+ * body could not be pulled back, and the solver dragged both pans to the wrong
+ * anchors while the run still reported "0 drift, 0 interference, pass".
+ */
+export function rebasedBodyPosition(
+  position: number[],
+  pivot: number[],
+  rotation?: [number, number, number],
+): [number, number, number] {
+  const r = rotateVec([pivot[0]!, pivot[1]!, pivot[2]!], rotation);
+  return [position[0]! + r[0]!, position[1]! + r[1]!, position[2]! + r[2]!];
+}
+
+export interface InitialJointGap {
+  joint: string;
+  /** Distance between the two anchors as the scenario is authored, mm. */
+  gapMm: number;
+}
+
+/**
+ * Measure every joint's anchor gap in the STARTING pose, and refuse a scenario that
+ * is not assembled.
+ *
+ * A revolute joint constrains two anchor POINTS to coincide, so a scenario that
+ * starts with them apart is simulated as the solver drags one body onto the other.
+ * That is intended for the small authored gaps the warm-up absorbs — and ruinous
+ * when the gap is a construction error, because then every number the run produces
+ * (drift, interference, travel) describes a pose nobody designed. Measured after a
+ * warm-up, drift reads ~0 in exactly that case; measured here, it cannot.
+ *
+ * A prismatic joint may legitimately start anywhere ALONG its axis: only the
+ * perpendicular offset means the two bodies are not on one rail.
+ */
+export function assertAssembledAtStart(
+  parts: MotionPartInput[],
+  joints: MotionJointInput[],
+  toleranceMm = 2,
+): InitialJointGap[] {
+  const gaps: InitialJointGap[] = [];
+  for (const j of joints) {
+    const a = parts.find((p) => p.name === j.bodyA);
+    const b = parts.find((p) => p.name === j.bodyB);
+    if (!a || !b) continue;
+    const ra = rotateVec([j.anchorA[0]!, j.anchorA[1]!, j.anchorA[2]!], a.rotation);
+    const rb = rotateVec([j.anchorB[0]!, j.anchorB[1]!, j.anchorB[2]!], b.rotation);
+    let dx = ra[0]! + a.position[0]! - (rb[0]! + b.position[0]!);
+    let dy = ra[1]! + a.position[1]! - (rb[1]! + b.position[1]!);
+    let dz = ra[2]! + a.position[2]! - (rb[2]! + b.position[2]!);
+    if (j.type === 'prismatic') {
+      const len = Math.hypot(j.axis[0]!, j.axis[1]!, j.axis[2]!) || 1;
+      const ax = [j.axis[0]! / len, j.axis[1]! / len, j.axis[2]! / len];
+      const along = dx * ax[0]! + dy * ax[1]! + dz * ax[2]!;
+      dx -= along * ax[0]!; dy -= along * ax[1]!; dz -= along * ax[2]!;
+    }
+    const gapMm = Math.hypot(dx, dy, dz);
+    gaps.push({ joint: `${j.bodyA}↔${j.bodyB}`, gapMm: +gapMm.toFixed(4) });
+    if (gapMm > toleranceMm) {
+      throw new Error(
+        `simulate_motion REFUSED: the mechanism is not assembled at t=0 — joint ${j.bodyA}↔${j.bodyB} ` +
+        `starts with its anchors ${gapMm.toFixed(2)}mm apart (tolerance ${toleranceMm}mm), ` +
+        `at [${[ra[0]! + a.position[0]!, ra[1]! + a.position[1]!, ra[2]! + a.position[2]!].map((v) => v.toFixed(2)).join(', ')}] ` +
+        `and [${[rb[0]! + b.position[0]!, rb[1]! + b.position[1]!, rb[2]! + b.position[2]!].map((v) => v.toFixed(2)).join(', ')}]. ` +
+        'Every result such a run could produce (drift, interference, travel) would describe that ' +
+        'unassembled pose, not the design — fix the anchors, the placement or the pivot instead.',
+      );
+    }
+  }
+  return gaps;
 }
 
 export interface MotionJointInput {

@@ -5138,7 +5138,12 @@ def op_simulate_motion(params: dict) -> dict:
 
     scenario = params["scenario"]
     dt = 1 / 2000
-    cycles = int(scenario.get("cycles") or 2)
+    # FRACTIONAL cycles are meaningful and must not be truncated: the design range of a
+    # balance is ±14°, which is 0.078 of a turn. `int()` here silently turned a request
+    # for a partial sweep into a whole revolution (or, below 1, into a single step) — the
+    # caller asked one question and the tool answered another. The TS oracle never
+    # truncated, so the two implementations also disagreed.
+    cycles = float(scenario.get("cycles") or 2)
     sample_per_cycle = int(scenario.get("samplePerCycle") or 24)
     oscillator_inputs = scenario.get("oscillators") or []
     drive = scenario.get("drive")

@@ -59,7 +59,16 @@ Motion is kinematics with an exact interference timeline; physics is rigid bodie
   it — i.e. its own axis — else the geometry centre) and puts the body there, so
   the motion you get is the motion you drew. Pass `pivot` per part only when the
   rotation axis passes through neither. The run's `pivots` field reports what
-  was used.
+  was used. The compensation is `position + R·pivot` — it rotates with the part,
+  so a pivot off the part's own initial-rotation axis is still handled — and the
+  run now measures every joint's anchor gap BEFORE stepping and REFUSES (naming
+  the joint and both anchor positions) when it exceeds 2mm. A refusal means your
+  anchors or placements disagree, not that the tool is unhappy; do not widen the
+  tolerance. `cycles` accepts fractions: a balance whose range is ±14° sweeps
+  0.078 of a turn, while a whole turn makes the beam a windmill and collides with
+  everything. Note what is never reported: collisions between two parts JOINED by
+  a revolute joint (that overlap is a bearing) — a stopper contact lives on
+  exactly that pair, so verify a limit stop another way.
 
 ## `simulate_stress` — the one that reports a force, and the only one with a refusal
 
