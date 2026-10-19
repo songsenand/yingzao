@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { browseCategories } from './browse';
 import {
   currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice,
-  refreshProjectScope, withProject,
+  refreshProjectScope, withProject, setProjectOverride, sessionCwd,
   type CadScope,
 } from './project';
 import * as THREE from 'three';
@@ -21,7 +21,7 @@ import {
   overlayInk, VIEWPORT_BACKGROUNDS,
 } from './lighting';
 import type {
-  PartProduct, PartRecord, ProductsResponse, RunKind, RunProduct, RunStatus, VersionProduct,
+  PartProduct, PartRecord, ProductsResponse, RunKind, RunProduct, RunStatus, VersionProduct, WorkspaceEntry,
 } from '../shared/types';
 
 const ANN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
@@ -527,6 +527,23 @@ export function CadPanel(): React.ReactElement {
   const [followLatest, setFollowLatest] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /**
+   * Which corpus the panel is looking at. '' = follow the session (the default);
+   * any other value is an absolute project dir pinned via the workspace
+   * dropdown. Writes are unaffected: the agent always writes the session corpus.
+   */
+  const [workspaceCwd, setWorkspaceCwd] = useState<string>('');
+  /** Corpora discoverable under the session's workspace root. */
+  const [workspaces, setWorkspaces] = useState<WorkspaceEntry[]>([]);
+  /** Bumped on a session switch so the discovery effect re-runs. */
+  const [scopeTick, setScopeTick] = useState(0);
+  /**
+   * The session cwd as the last poll resolved it. State (not the module getter)
+   * because the discovery effect must re-run the moment the session list
+   * resolves — on first mount the cwd is still '' and a one-shot fetch would be
+   * lost, leaving the dropdown empty forever.
+   */
+  const [sessionDir, setSessionDir] = useState('');
+  /**
    * What the host says about tool visibility (null until it answers). The
    * panel's own half of this plugin is global while the model's half is
    * preset-scoped, so the human can be looking at a CAD panel whose session
@@ -714,6 +731,10 @@ export function CadPanel(): React.ReactElement {
     // Re-read the project every poll: this tab is shared by every session, so a
     // session switch must swap the corpus, not merge it.
     const { switched } = refreshProjectScope();
+    setSessionDir((cur) => {
+      const now = sessionCwd();
+      return cur === now ? cur : now;
+    });
     if (switched) {
       // Nothing from the previous project survives the switch.
       prevIdsRef.current = new Set();
@@ -724,6 +745,10 @@ export function CadPanel(): React.ReactElement {
       setRecordId(null);
       setRunReport(null);
       setError(null);
+      // A pinned workspace belongs to the old session's tree; follow the new one.
+      setWorkspaceCwd('');
+      setWorkspaces([]);
+      setScopeTick((t) => t + 1);
     }
     fetch(withProject('/api/cad/products'))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -813,6 +838,22 @@ export function CadPanel(): React.ReactElement {
     const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
   }, []);
+
+  // Discover the corpora under this SESSION's workspace root (read-only).
+  // Deliberately keyed on the session cwd, not on the pinned workspace: the
+  // list must stay stable while you browse, and a session switch re-runs it.
+  useEffect(() => {
+    const root = sessionDir;
+    if (!root) return;
+    let dead = false;
+    fetch(`/api/cad/projects?root=${encodeURIComponent(root)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { workspaces?: WorkspaceEntry[] }) => {
+        if (!dead) setWorkspaces(d.workspaces ?? []);
+      })
+      .catch(() => { /* discovery is a convenience; "follow session" always works */ });
+    return () => { dead = true; };
+  }, [scopeTick, sessionDir]);
 
   // (Re)build the Three.js scene whenever the selected *version* changes.
   // Run products render through their own view instead.
@@ -2180,6 +2221,39 @@ export function CadPanel(): React.ReactElement {
     React.createElement(
       'div',
       { style: S.bar },
+      // 工作目录: which corpus the panel LOOKS AT. Writes are untouched — the
+      // agent always writes the session's own corpus, so this is browse-only
+      // and says so in the tooltip. Invisible when there is nowhere else to go.
+      (workspaces.length > 1 || workspaceCwd) && React.createElement(
+        'select',
+        {
+          key: 'workspace',
+          value: workspaceCwd,
+          onChange: (e: any) => {
+            const next = e.target.value;
+            setWorkspaceCwd(next);
+            setProjectOverride(next || null);
+            // Nothing from the previous corpus survives the switch.
+            prevIdsRef.current = new Set();
+            subjectRef.current = '';
+            setParts([]);
+            setScene([]);
+            setSubjectId('');
+            setRecordId(null);
+            setFollowLatest(true);
+            setError(null);
+          },
+          title: '工作目录：面板看哪份 CAD 语料（只读浏览）\nAgent 的工具始终写入会话所在目录，切换不会改变写入位置',
+          'aria-label': '工作目录',
+          style: { ...S.select, flex: 'none', maxWidth: 172 },
+        },
+        React.createElement('option', { value: '' },
+          `跟随会话 · ${sessionDir ? (sessionDir.replace(/\/+$/, '').split('/').pop() || '') : ''}`.trim()),
+        workspaces
+          .filter((w) => w.cwd !== sessionDir)
+          .map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
+            `${w.rel === '.' ? '根语料' : w.rel} · ${w.parts}零件/${w.versions}版`)),
+      ),
       React.createElement(
         'select',
         {

@@ -16,6 +16,7 @@ import type { InterfaceCheckResult } from './assembly-check.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
+import { discoverWorkspaces } from './workspaces.ts';
 import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
 import {
   builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile,
@@ -38,7 +39,7 @@ import {
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 
 interface GeneratePartArgs {
   scadCode: string;
@@ -4439,6 +4440,31 @@ export function registerCadTools(
         // discard the reply of the one it just left.
         const payload = { ...buildProducts(vm.versions, parts, runs), project: cwd };
         return new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    // --- workspaces: which corpora the panel may VIEW ------------------------
+    // The write side stays bound to the session cwd; this endpoint only answers
+    // "what else is here to look at". `root` is an absolute workspace root (the
+    // session cwd), so a project with components/ or examples/ exposes them
+    // without anyone opening a session inside each one.
+    void connection.fetch.register({
+      path: '/api/cad/projects',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const q = new URL(request.url).searchParams;
+        const { cwd } = requestStores(request);
+        const rootParam = q.get('root')?.trim();
+        // Only an absolute path names a discovery root; a relative or missing
+        // value falls back to the corpus already being viewed. Discovery reads
+        // shallowly and never creates anything, so this cannot escape the demo.
+        const root = rootParam && isAbsolute(rootParam) ? rootParam : cwd;
+        const workspaces = await discoverWorkspaces(root);
+        return new Response(JSON.stringify({ root, workspaces }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });

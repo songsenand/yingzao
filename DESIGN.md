@@ -2268,6 +2268,33 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 - 视觉存档：`verification/shots/browse3-contract-table.png`、
   `browse3-stale-shot.png`。
 
+### 20.4 补充（2026-10-19）：工作目录选择器——看哪份语料，写哪份语料
+
+**需求**：一个大项目下多个组件并行推进，或仓库里保留多套示例语料时，面板只看得见
+会话 cwd 的那一份（`<cwd>/cad-data/`，§19）。其余语料必须另开会话才能看，找也不方便、
+看也不方便。
+
+**形状**（只读浏览，不动写路径）：
+
+- 新端点 `GET /api/cad/projects?root=<绝对路径>` → `discoverWorkspaces(root)`
+  （`src/host/workspaces.ts`）：在 root 及其下两层内找 `<dir>/cad-data`（有
+  `manifest.json` 或 `versions/` 即算），返回 `{cwd, rel, name, parts, versions, latest}`。
+  深度 ≤2、skip 列表挡掉 `node_modules`/`lib`/`out` 等重目录，总目录数 ≤400；
+  **只读**，不建目录、不改 manifest；单份语料读不动只跳过该项，不拖垮整个列表。
+- 面板 `S.bar` 最左侧「工作目录」下拉：默认「跟随会话 · <名>」，列出发现到的其余语料
+  （`rel · N零件/M版`）。切换只改 `?project=`（`client/project.ts` 的
+  `setProjectOverride`），读数即换语料；列表 ≤1 项或发现失败时不显示，行为与旧版一致。
+- **写路径不变**：Agent 的工具仍写会话 cwd 的语料（`projectStoresFor`）。「看 A 写 B」
+  在结构上不可能；下拉的 tooltip 明说"只读浏览"。
+
+**边界**：会话切换（`refreshProjectScope` 返回 switched）自动清空 override，避免钉在
+上一个会话的语料上；发现范围永远相对**会话** cwd，不受当前浏览目标影响；不引入
+语料内"组件"分组——跨组件的联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
+
+**验证**：`discoverWorkspaces(仓库根)` 返回 7 份语料（根 + 5 套显微镜 + 多旋翼螺旋桨），
+耗时 9ms；不存在的 root → `[]`；单语料 root（`examples/microscope5`）→ `[.] v83`。
+host/client 两端 `esbuild` 构建通过，`tsc` 对本轮改动文件无报错。
+
 ---
 
 ## 21. 运动干涉 = 交付阻塞（v2.24，2026-10-03）

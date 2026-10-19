@@ -112,3 +112,31 @@ export interface ProductsResponse {
    */
   project?: string;
 }
+
+/**
+ * One browsable corpus: the unit of the panel's workspace dropdown.
+ *
+ * Discovery is read-only and separate from the WRITE scope (the session cwd);
+ * the panel may look at any of these without changing where new versions land.
+ */
+export interface WorkspaceEntry {
+  /** Project directory — the one that contains `cad-data/`. */
+  cwd: string;
+  /** Path relative to the discovery root; `.` for the root itself. */
+  rel: string;
+  /** Basename of {@link cwd}, for a compact label. */
+  name: string;
+  /** Parts declared in `parts/manifest.json` (0 when absent). */
+  parts: number;
+  /** Versions in `manifest.json` (counted from `versions/` when absent). */
+  versions: number;
+  /** Newest version timestamp (ISO) or null. */
+  latest: string | null;
+}
+
+/** Reply of `GET /api/cad/projects`. */
+export interface WorkspacesResponse {
+  /** The absolute root discovery ran against (echoed for the panel's cache key). */
+  root: string;
+  workspaces: WorkspaceEntry[];
+}

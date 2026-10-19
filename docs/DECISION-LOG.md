@@ -3107,3 +3107,38 @@ v024-v028 共 24 个仍完整存于插件数据根快照 `~/.dsh/cad/ToyMarker-3
 （assembly-check pass）与 r011（间隙复检 pass）。今后新增语料照此口径：展示件进根，
 测试/负样本进 `archive/`。`archive/` 与根语料同属 gitignore 生成物，不入库。
 
+## 2026-10-19：面板新增"工作目录"选择器——语料可切换查看，写入仍锚定会话 cwd
+
+**触发条件：** 第 1 条（用户拍板："是否有必要新增一个工作目录的概念……examples 下面的都挤在
+根目录下的 CAD 预览下面了"）+ 第 4 条（从此读、写两个作用域分开定义）。
+
+**要解决的问题：** 语料地址 = 会话 cwd（§19），面板只看得见那一份。大项目下多个组件并行
+推进、或仓库里保留多套示例语料时，其余语料"找不着、看不见"——必须为每份语料另开一个会话
+才能查看。
+
+**决策内容：** 把**读作用域**与**写作用域**分开：
+
+- 新端点 `GET /api/cad/projects?root=<绝对路径>` → `discoverWorkspaces`（新增
+  `src/host/workspaces.ts`）：在 root 及其下两层内发现全部 `<dir>/cad-data`，返回
+  `{cwd, rel, name, parts, versions, latest}`。深度 ≤2、skip 重目录（`node_modules`/`lib`/
+  `out` 等）、总目录数 ≤400；**只读**，不建目录、不改 manifest；单份读不动只跳过该项。
+- 面板 `S.bar` 最左侧「工作目录」下拉：默认「跟随会话」，列出发现到的其余语料；切换只改
+  `?project=`（`client/project.ts` 的 `setProjectOverride`），列表 ≤1 项或发现失败时不显示。
+- **写路径不变**：Agent 的工具仍写会话 cwd 的语料（`projectStoresFor`），"看 A 写 B"在结构上
+  不可能；会话切换自动清空 override。
+- 不做语料内"组件"分组：跨组件的联合装配检查仍要求所有零件在同一份语料里，那是另一个问题。
+
+**理由：** ① 不动契约——`versions/vNNN/model.stl` 与平铺 manifest 是 18 个工具和全部验收
+脚本的前提；② 面板本就是只读通道，"看哪份"和"写哪份"分离天然成立；③ 与 §19"语料跟着项目
+文件夹走"一致：组件就是一个子目录，不需要新增存储层。
+
+**依据：** 用户拍板原话；实现核验：`discoverWorkspaces(仓库根)` 返回 7 份语料（根 + 5 套
+显微镜 + 多旋翼螺旋桨），耗时 9ms；不存在的 root → `[]`；单语料 root（`examples/microscope5`）
+→ `[.] v83`；host/client 两端 esbuild 构建通过；`tsc` 对本轮改动文件无报错（`tools.ts:2411`
+的 metrics 类型错误为既有问题，与本次无关）。
+
+**影响：** 新增只读端点 `/api/cad/projects` 与面板控件；`client/project.ts` 的
+`currentProject()` 语义变为"当前查看的语料"（override ?? cwd），`withProject` 随之；
+GUI 需重启 dsh 进程才会加载新的 host 端点（client 包随页面刷新即可）。后续若确需
+"组件内联合装配"，须另立语料内分组方案，不在本条范围。
+

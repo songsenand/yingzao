@@ -20,9 +20,39 @@ export function setProjectServices(opts: { sessions?: any }): void {
 
 let cwd = '';
 
+/**
+ * A corpus the human pinned in the panel's workspace dropdown, or null.
+ *
+ * Deliberately separate from `cwd`: `cwd` stays the session fact (what the
+ * agent's tools write to), while `override` is only the VIEW target. Switching
+ * the dropdown therefore never changes where new versions land — the panel is
+ * read-only, and "look at one corpus, write to another" must not be possible.
+ */
+let override: string | null = null;
+
 /** The project currently on stage ('' until the session list resolves). */
 export function currentProject(): string {
+  return override ?? cwd;
+}
+
+/** The session's own working directory, ignoring any pinned view override. */
+export function sessionCwd(): string {
   return cwd;
+}
+
+/**
+ * Pin the panel to another corpus (read-only browse); null follows the session.
+ *
+ * A session switch calls this with null (see `refreshProjectScope`): the pin
+ * means "this corpus", never "this corpus in any project".
+ */
+export function setProjectOverride(dir: string | null): void {
+  override = dir && dir.trim() ? dir : null;
+}
+
+/** The pinned view corpus, or null when following the session. */
+export function projectOverride(): string | null {
+  return override;
 }
 
 /**
@@ -209,11 +239,15 @@ export function refreshProjectScope(): { cwd: string; switched: boolean } {
   const next = currentSessionCwd();
   const switched = next !== cwd;
   cwd = next;
+  // A pinned corpus belongs to the old session's tree: following the new
+  // session is the only safe interpretation of a switch.
+  if (switched) override = null;
   return { cwd: next, switched };
 }
 
 /** Append the project to a `/api/cad/...` URL. The one way to build one. */
 export function withProject(url: string): string {
-  if (!cwd) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}project=${encodeURIComponent(cwd)}`;
+  const target = currentProject();
+  if (!target) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}project=${encodeURIComponent(target)}`;
 }
