@@ -92,6 +92,19 @@ if (existsSync(realPath)) {
   PARTS.push({ id: 'v900', label: 'real part: 整机.stl (28,830 tris)' });
 }
 
+// A REAL part whose 45° strut faces sit exactly on the threshold. This is the case that
+// hid the bug: one ULP decided 8 faces / 50.1 mm² (3.4%) and the two implementations
+// disagreed. Synthetic parts do not reproduce it.
+for (const [id, rel] of [
+  ['v901', ['examples', 'toy-balance', 'cad-data', 'versions', 'v069', 'model.stl']],
+]) {
+  const abs = join(REPO, ...rel);
+  if (!existsSync(abs)) { console.log(`      (skipping ${id}: ${rel.join('/')} not present)`); continue; }
+  mkdirSync(join(storeRoot, 'versions', id), { recursive: true });
+  writeFileSync(join(storeRoot, 'versions', id, 'model.stl'), readFileSync(abs));
+  PARTS.push({ id, label: `real part: toy-balance 吊盘 v069 (45° faces on the threshold)` });
+}
+
 console.log('--- check_printability parity: Python worker vs TS oracle ---');
 for (const part of PARTS) {
   const options = { versionId: part.id };
@@ -123,6 +136,22 @@ for (const part of PARTS) {
   const thinDelta = Math.abs(py.thinSamples - ts.thinSamples) / Math.max(1, ts.sampled);
   check(thinDelta <= 0.01, `${part.label}: thin-sample count within 1% of samples`, `${py.thinSamples} vs ${ts.thinSamples} of ${ts.sampled}`);
   check(py.watertight === ts.watertight, `${part.label}: watertight flag`, `${py.watertight}`);
+
+  // The attention field is the same OBJECT in both implementations, or the picture and
+  // the digest would drift apart (HARNESS §11.14).
+  const layersOf = (report) => (report.attention?.layers ?? []).map((layer) => layer.id).join(',');
+  check(layersOf(py) === layersOf(ts), `${part.label}: attention layers`, `${layersOf(py)} vs ${layersOf(ts)}`);
+  const peaksOf = (report) => (report.attention?.layers ?? []).map((layer) => layer.peaks.length).join('/');
+  check(
+    peaksOf(py) === peaksOf(ts),
+    `${part.label}: attention peaks per layer (same samples, same clustering)`,
+    `${peaksOf(py)} vs ${peaksOf(ts)}`,
+  );
+  const firstProbe = ts.attention?.layers?.flatMap((layer) => layer.peaks).find((peak) => peak.probe);
+  check(
+    !firstProbe || (typeof firstProbe.probe.args?.versionId === 'string' && firstProbe.probe.args.versionId === part.id),
+    `${part.label}: every peak carries a RUNNABLE probe (versionId filled in)`,
+  );
 
   console.log(`      overhang ${py.overhangAreaMm2} mm² · min wall ${py.minWallMm ?? '—'} mm · thin ${py.thinSamples}/${py.sampled} · verdict ${py.verdict}`);
   if (py.findings.length) console.log(`      py findings: ${py.findings.map((f) => f.slice(0, 56)).join(' || ')}`);

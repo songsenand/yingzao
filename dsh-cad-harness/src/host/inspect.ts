@@ -35,6 +35,19 @@ export interface PrintabilityOptions {
   wallMinMm?: number;
   overhangDeg?: number;
   samples?: number;
+  /**
+   * Also return the per-sample values behind the field. They are what a heatmap is
+   * drawn from, and they are deliberately NOT part of the report the model reads —
+   * the caller writes them into a run and hands the digest to the LLM.
+   */
+  withSampleField?: boolean;
+}
+
+/** The values behind an attention layer: one point per sample, in the part's frame. */
+export interface AttentionFieldSamples {
+  id: string;
+  samples: { [layerId: string]: { p: number[]; v: number }[] };
+  normalization: { [layerId: string]: { [key: string]: Json } };
 }
 
 /** The screen's report — the tool's output schema, field for field. */
@@ -61,6 +74,8 @@ export interface PrintabilityReport {
   overhangZRange: number[];
   findings: string[];
   watertight: boolean;
+  /** Where to look next, per quantity — empty layers when nothing was measured. */
+  attention: AttentionField;
 }
 
 /**
@@ -74,6 +89,118 @@ const OPPOSITE_WALL_DOT = -0.5;
 /** A single sampled face must not decide a red verdict — the thin region must be sustained. */
 const UNPRINTABLE_MIN_THIN_AREA_MM2 = 50;
 const UNPRINTABLE_MIN_THIN_AREA_FRACTION = 0.01;
+
+/** A JSON value, so the `probe`/`look` a tool hands out is storable as-is. */
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+/** A place the field is extreme at — the index into the picture, and a runnable re-measure. */
+export interface AttentionPeak {
+  atMm: number[];
+  value: number;
+  normalMm?: number[];
+  evidence: string;
+  probe: { tool: string; args: { [key: string]: Json } };
+}
+
+/** A connected region above a tier — what a human points at and an LLM can act on. */
+export interface AttentionRegion {
+  tier: 'warn' | 'bad';
+  areaMm2: number;
+  atMm: number[];
+  bboxMm: number[][];
+  look: { tool: string; args: { [key: string]: Json } };
+  [key: string]: Json | undefined;
+}
+
+/** One scalar quantity over the part — the layer a heatmap would draw. */
+export interface AttentionLayer {
+  id: string;
+  quantity: string;
+  units: string;
+  direction: string;
+  domain: { [key: string]: Json };
+  normalization: { [key: string]: Json };
+  stats: { [key: string]: Json };
+  peaks: AttentionPeak[];
+  regions: AttentionRegion[];
+}
+
+/**
+ * The ATTENTION half of a screen: one field, two views. The panel draws each layer as a
+ * heatmap; the LLM gets this digest (peaks + regions + runnable probes) instead of a
+ * grid. Both come from the same object — a picture may never outlive the geometry it
+ * describes, which is why `id` carries the version and the parameters.
+ */
+export interface AttentionField {
+  id: string;
+  layers: AttentionLayer[];
+}
+
+/**
+ * Union-find over 3D points with a link radius, bucketed so it stays linear.
+ * Grouping only: it decides "these samples are one place", never "this is a defect".
+ */
+function clusterPoints(points: [number, number, number][], radiusMm = 6): number[][] {
+  const cell = (v: number) => Math.floor(v / radiusMm);
+  const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
+  const grid = new Map<string, number[]>();
+  points.forEach((p, i) => {
+    const k = key(cell(p[0]), cell(p[1]), cell(p[2]));
+    const bucket = grid.get(k);
+    if (bucket) bucket.push(i); else grid.set(k, [i]);
+  });
+  const parent = points.map((_, i) => i);
+  const find = (a: number): number => {
+    let x = a;
+    while (parent[x] !== x) { parent[x] = parent[parent[x]!]!; x = parent[x]!; }
+    return x;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[Math.max(ra, rb)] = Math.min(ra, rb);
+  };
+  const r2 = radiusMm * radiusMm;
+  points.forEach((p, i) => {
+    const cx = cell(p[0]), cy = cell(p[1]), cz = cell(p[2]);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      for (const j of grid.get(key(cx + dx, cy + dy, cz + dz)) ?? []) {
+        if (j <= i) continue;
+        const q = points[j]!;
+        const d2 = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+        if (d2 <= r2) union(i, j);
+      }
+    }
+  });
+  const groups = new Map<number, number[]>();
+  points.forEach((_, i) => {
+    const r = find(i);
+    const g = groups.get(r);
+    if (g) g.push(i); else groups.set(r, [i]);
+  });
+  return [...groups.values()];
+}
+
+/**
+ * Fill the versionId into every runnable command the field hands out. The worker
+ * measures a file and does not know which version it is; the caller does. Both the
+ * production path and the TS oracle go through here, so their outputs stay identical.
+ */
+function withVersionInAttention(attention: AttentionField, versionId: string): AttentionField {
+  return {
+    id: `${versionId}:${attention.id}`,
+    layers: attention.layers.map((layer) => ({
+      ...layer,
+      peaks: layer.peaks.map((peak) => ({
+        ...peak,
+        probe: { ...peak.probe, args: { versionId, ...peak.probe.args } },
+      })),
+      regions: layer.regions.map((region) => ({
+        ...region,
+        look: { ...region.look, args: { versionId, ...region.look.args } },
+      })),
+    })),
+  };
+}
 
 /**
  * The TS implementation — the parity oracle for the worker's `check_printability`.
@@ -124,12 +251,21 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       let minWallAt: [number, number, number] | null = null;
       let thinSamples = 0;
       let thinArea = 0;
+      const thinPts: { p: [number, number, number]; n: [number, number, number]; wall: number; area: number }[] = [];
+      const overTris: number[] = [];
       let measured = 0;
       let sampled = 0;
       let overhangArea = 0;
       let overhangZMin = Infinity;
       let overhangZMax = -Infinity;
-      const overhangSin = Math.sin((overhangDeg * Math.PI) / 180);
+      // Threshold margin: a face sitting exactly on the limit (mathematically 45.000°) is
+      // one ULP away from it in float64 and a different ULP in float32, so a strict `<`
+      // lets rounding decide whether it needs support. Measured on toy-balance v069: 8
+      // such faces, 50.1 mm² = 3.4% of the overhang area, flipped between the two
+      // implementations. A face ON the limit is bridge-able, so it is not an overhang;
+      // the 1e-9 slack is 7 orders above the noise and 7 below any meaningful angle.
+      const OVERHANG_SIN_SLACK = 1e-9;
+      const overhangSin = Math.sin((overhangDeg * Math.PI) / 180) + OVERHANG_SIN_SLACK;
       // The overhang half is arithmetic, so it runs over EVERY triangle: summing only
       // the sampled 1/step of them measures a fraction of the true area and reports it
       // as mm². The wall half stays sampled — it is the expensive ray cast.
@@ -150,6 +286,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
         // down-facing overhang: normal points below horizontal by overhangDeg
         if (n.z < -overhangSin && centroid.z - zFloor > 0.8) {
           overhangArea += area;
+          overTris.push(t);
           overhangZMin = Math.min(overhangZMin, centroid.z);
           overhangZMax = Math.max(overhangZMax, centroid.z);
         }
@@ -191,7 +328,11 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
         if (wall !== null && Number.isFinite(wall)) {
           measured++;
           if (wall < minWall) { minWall = wall; minWallAt = [centroid.x, centroid.y, centroid.z]; }
-          if (wall < wallMinMm) { thinSamples++; thinArea += area; }
+          if (wall < wallMinMm) {
+            thinSamples++;
+            thinArea += area;
+            thinPts.push({ p: [centroid.x, centroid.y, centroid.z], n: [n.x, n.y, n.z], wall, area });
+          }
         }
       }
 
@@ -199,6 +340,167 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       thinArea *= triCount / Math.max(1, sampled);
       const thinAreaPct = surfaceArea > 0 ? (thinArea / surfaceArea) * 100 : 0;
       const wallMeasured = measured > 0;
+
+      // ---- the attention field: one field, two views -------------------------
+      // A screen used to answer "thin area = x mm²" plus one thinnest point. A defect is
+      // a PLACE; this groups the samples (and the overhang triangles) into layers, each
+      // with peaks, regions and a runnable next observation. Grouping changes no verdict.
+      const layers: AttentionLayer[] = [];
+      const scale = triCount / Math.max(1, sampled);
+      const round = (v: number, d: number) => +v.toFixed(d);
+      const wallLayer: AttentionLayer = {
+        id: 'wall',
+        quantity: 'wall-thickness',
+        units: 'mm',
+        direction: 'smaller-is-worse',
+        domain: { kind: 'surface-samples', samples: sampled, measured },
+        normalization: { mode: 'absolute', warnAt: wallMinMm, badAt: round(wallMinMm * 0.4, 3), source: 'declared-arg' },
+        stats: {
+          minWallMm: Number.isFinite(minWall) ? round(minWall, 3) : null,
+          thinSamples,
+          thinAreaMm2: round(thinArea, 1),
+        },
+        peaks: [],
+        regions: [],
+      };
+      if (thinPts.length) {
+        const thinGroups = clusterPoints(thinPts.map((sp) => sp.p));
+        const clusters = thinGroups.map((idx) => {
+          const walls = idx.map((i) => thinPts[i]!.wall);
+          const minW = Math.min(...walls);
+          const at = thinPts[idx[walls.indexOf(minW)]!]!;
+          const xs = idx.map((i) => thinPts[i]!.p[0]);
+          const ys = idx.map((i) => thinPts[i]!.p[1]);
+          const zs = idx.map((i) => thinPts[i]!.p[2]);
+          return {
+            n: idx.length,
+            minW,
+            at,
+            bbox: [[Math.min(...xs), Math.min(...ys), Math.min(...zs)],
+                   [Math.max(...xs), Math.max(...ys), Math.max(...zs)]],
+            area: idx.reduce((acc, i) => acc + thinPts[i]!.area, 0) * scale,
+          };
+        });
+        wallLayer.peaks = [...clusters].sort((a, b) => a.minW - b.minW).slice(0, 6).map((c) => ({
+          atMm: c.at.p.map((v) => round(v, 2)),
+          value: round(c.minW, 3),
+          normalMm: c.at.n.map((v) => round(v, 4)),
+          evidence: `${c.n} 个采样面低于 ${wallMinMm}mm，最薄 ${c.minW.toFixed(2)}mm，约 ${c.area.toFixed(1)}mm²`,
+          probe: {
+            tool: 'measure_thickness',
+            args: {
+              from: c.at.p.map((v, k) => round(v + c.at.n[k]! * 0.5, 3)),
+              directionVector: c.at.n.map((v) => round(-v, 4)),
+            },
+          },
+        }));
+        wallLayer.regions = [...clusters].sort((a, b) => b.area - a.area).slice(0, 8).map((c) => {
+          const ext = [0, 1, 2].map((k) => c.bbox[1]![k]! - c.bbox[0]![k]!);
+          const axisIndex = ext.indexOf(Math.min(...ext));
+          const atMm = (c.bbox[0]![axisIndex]! + c.bbox[1]![axisIndex]!) / 2;
+          return {
+            tier: (c.minW < wallMinMm * 0.4 ? 'bad' : 'warn') as 'warn' | 'bad',
+            areaMm2: round(c.area, 1),
+            samples: c.n,
+            minWallMm: round(c.minW, 3),
+            atMm: c.at.p.map((v) => round(v, 2)),
+            bboxMm: c.bbox.map((row) => row.map((v) => round(v, 2))),
+            look: { tool: 'render_part', args: { section: { axis: 'xyz'[axisIndex]!, atMm: round(atMm, 2) } } },
+          };
+        });
+      }
+      layers.push(wallLayer);
+
+      if (overTris.length) {
+        const edgeMap = new Map<string, number[]>();
+        const corners = (t: number) => [mesh.triVerts[t * 3]!, mesh.triVerts[t * 3 + 1]!, mesh.triVerts[t * 3 + 2]!];
+        for (const t of overTris) {
+          const [a, b, c] = corners(t);
+          for (const [u, vv] of [[a, b], [b, c], [c, a]]) {
+            const k = u! < vv! ? `${u},${vv}` : `${vv},${u}`;
+            const arr = edgeMap.get(k);
+            if (arr) arr.push(t); else edgeMap.set(k, [t]);
+          }
+        }
+        const parent = new Map<number, number>();
+        overTris.forEach((t) => parent.set(t, t));
+        const find = (a: number): number => {
+          let x = a;
+          while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x)!)!); x = parent.get(x)!; }
+          return x;
+        };
+        const union = (a: number, b: number) => {
+          const ra = find(a), rb = find(b);
+          if (ra !== rb) parent.set(Math.max(ra, rb), Math.min(ra, rb));
+        };
+        for (const faces of edgeMap.values()) for (let i = 1; i < faces.length; i++) union(faces[0]!, faces[i]!);
+        const patchGroups = new Map<number, number[]>();
+        for (const t of overTris) {
+          const r = find(t);
+          const g = patchGroups.get(r);
+          if (g) g.push(t); else patchGroups.set(r, [t]);
+        }
+        const z0 = bb.min[2], z1 = bb.max[2];
+        const patches = [...patchGroups.values()].map((tris) => {
+          let areaP = 0;
+          const acc: [number, number, number] = [0, 0, 0];
+          let best = -1, bestArea = -1, bestAt: [number, number, number] = [0, 0, 0];
+          let xmin = Infinity, ymin = Infinity, zmin = Infinity, xmax = -Infinity, ymax = -Infinity, zmax = -Infinity;
+          for (const t of tris) {
+            const { centroid, area } = normalOf(t);
+            areaP += area;
+            acc[0] += centroid.x * area; acc[1] += centroid.y * area; acc[2] += centroid.z * area;
+            if (area > bestArea) { bestArea = area; best = t; bestAt = [centroid.x, centroid.y, centroid.z]; }
+            for (const vi of corners(t)) {
+              const x = mesh.vertProperties[vi * 3]!, y = mesh.vertProperties[vi * 3 + 1]!, z = mesh.vertProperties[vi * 3 + 2]!;
+              xmin = Math.min(xmin, x); ymin = Math.min(ymin, y); zmin = Math.min(zmin, z);
+              xmax = Math.max(xmax, x); ymax = Math.max(ymax, y); zmax = Math.max(zmax, z);
+            }
+          }
+          void best;
+          return {
+            area: areaP,
+            triangles: tris.length,
+            centroid: [acc[0] / Math.max(1e-12, areaP), acc[1] / Math.max(1e-12, areaP), acc[2] / Math.max(1e-12, areaP)] as [number, number, number],
+            at: bestAt,
+            bbox: [[xmin, ymin, zmin], [xmax, ymax, zmax]] as number[][],
+          };
+        }).sort((a, b) => b.area - a.area);
+        const look = (c: [number, number, number]) => ({
+          tool: 'render_part',
+          args: { section: { axis: 'z', fraction: round((c[2] - z0) / Math.max(1e-9, z1 - z0), 3) } },
+        });
+        layers.push({
+          id: 'overhang',
+          quantity: 'down-facing-area',
+          units: 'mm2',
+          direction: 'larger-is-more-support',
+          domain: { kind: 'triangles', triangles: overTris.length },
+          normalization: { mode: 'absolute', warnAt: 20, source: 'declared-arg' },
+          stats: {
+            areaMm2: round(overhangArea, 1),
+            zRangeMm: Number.isFinite(overhangZMin) ? [round(overhangZMin, 1), round(overhangZMax, 1)] : [],
+          },
+          peaks: patches.slice(0, 6).map((pch) => ({
+            atMm: pch.at.map((v) => round(v, 2)),
+            value: round(pch.area, 1),
+            evidence: `${pch.area.toFixed(0)}mm² 朝下悬垂（${pch.triangles} 个三角面）`,
+            probe: look(pch.at),
+          })),
+          regions: patches.filter((pch) => pch.area >= 5).slice(0, 8).map((pch) => ({
+            tier: 'warn' as const,
+            areaMm2: round(pch.area, 1),
+            triangles: pch.triangles,
+            atMm: pch.centroid.map((v) => round(v, 2)),
+            bboxMm: pch.bbox.map((row) => row.map((v) => round(v, 2))),
+            look: look(pch.centroid),
+          })),
+        });
+      }
+      const attention: AttentionField = {
+        id: `check_printability:s${sampled}-w${wallMinMm}-o${overhangDeg}`,
+        layers,
+      };
 
       const findings: string[] = [];
       if (!watertight) {
@@ -243,6 +545,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
         overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
         findings,
         watertight,
+        attention: withVersionInAttention(attention, options.versionId),
       };
 }
 
@@ -261,13 +564,64 @@ type PrintabilitySolve = Omit<PrintabilityReport, 'versionId'>;
 export async function checkPrintability(store: VersionStore, options: PrintabilityOptions): Promise<PrintabilityReport> {
   const path = join(store.root, 'versions', options.versionId, 'model.stl');
   const worker = await ensurePythonWorker();
-  const solved = await worker.request<PrintabilitySolve>('check_printability', {
+  const solved = await worker.request<PrintabilitySolve & { field?: AttentionFieldSamples }>('check_printability', {
     path,
     wallMinMm: options.wallMinMm ?? 1.2,
     overhangDeg: options.overhangDeg ?? 45,
     samples: Math.max(100, Math.min(options.samples ?? 600, 4000)),
+    ...(options.withSampleField ? { withSampleField: true } : {}),
   });
-  return { versionId: options.versionId, ...solved };
+  const { field, ...rest } = solved;
+  // The worker measures but does not know which version it is reading; the caller
+  // does. Every "go look here" command must be runnable as-is, so inject it once —
+  // and the field's id carries the version, so a picture cannot outlive its geometry.
+  return {
+    versionId: options.versionId,
+    ...rest,
+    attention: withVersionInAttention(rest.attention, options.versionId),
+    ...(field ? { field } : {}),
+  };
+}
+
+/** One place worth looking at, from the geometry scan — a location, not a verdict. */
+export interface AttentionScanSuspect {
+  kind: 'reentrant-corner' | 'degenerate-faces' | 'non-manifold' | 'multi-body';
+  where: { atMm?: number[]; bboxMm: number[][] };
+  why: string;
+  severity: 'likely-defect' | 'look';
+  look?: { tool: string; args: { [key: string]: Json } };
+}
+
+export interface AttentionScanReport {
+  versionId: string;
+  stats: { [key: string]: Json };
+  suspects: AttentionScanSuspect[];
+}
+
+/**
+ * Where to look, geometrically: mesh health plus reentrant corners (concave edges
+ * sharper than a right angle, chained and located). The measurement is the worker's;
+ * this side adds the version and fills the versionId into every runnable command.
+ */
+export async function scanAttention(
+  store: VersionStore,
+  options: { versionId: string; concaveMinDeg?: number; minChainMm?: number },
+): Promise<AttentionScanReport> {
+  const path = join(store.root, 'versions', options.versionId, 'model.stl');
+  const worker = await ensurePythonWorker();
+  const solved = await worker.request<Omit<AttentionScanReport, 'versionId'>>('scan_attention', {
+    path,
+    ...(options.concaveMinDeg !== undefined ? { concaveMinDeg: options.concaveMinDeg } : {}),
+    ...(options.minChainMm !== undefined ? { minChainMm: options.minChainMm } : {}),
+  });
+  return {
+    versionId: options.versionId,
+    ...solved,
+    suspects: (solved.suspects ?? []).map((suspect) => ({
+      ...suspect,
+      ...(suspect.look ? { look: { ...suspect.look, args: { versionId: options.versionId, ...suspect.look.args } } } : {}),
+    })),
+  };
 }
 
 interface MeasureSolve {

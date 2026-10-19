@@ -17,7 +17,7 @@ import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { discoverWorkspaces } from './workspaces.ts';
-import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, type RenderPartRequest } from './inspect.ts';
+import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import {
   builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile,
   type ProcessProfile,
@@ -31,6 +31,7 @@ import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
+import { readStressField, resolveStressMaterial, solveStress, stressAttention } from './stress.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -2569,7 +2570,7 @@ export function registerCadTools(
     // axis simply became optional (absent = no projection block).
     async execute(args: unknown, exec: unknown) {
       const a = args as { versionId: string; axis?: string; axisVector?: number[] };
-      const { store } = await allStores(exec);
+      const { store, runStore } = await allStores(exec);
       const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) throw new Error(`version ${a.versionId} has no model.stl`);
       const worker = await ensurePythonWorker();
@@ -3557,6 +3558,68 @@ export function registerCadTools(
           findings: { type: 'array', required: true, items: { type: 'string' } },
           minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found — the witness a human can go and look at.' },
           watertight: { type: 'boolean', required: true },
+          attention: {
+            type: 'object', required: true, additionalProperties: false,
+            description: 'Where to LOOK, not what to conclude: one field per quantity (wall thickness, down-facing area), each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
+            properties: {
+              id: { type: 'string', required: true, description: 'version + tool + parameters: a picture may not outlive the geometry it describes.' },
+              layers: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    id: { type: 'string', required: true, description: '"wall" | "overhang".' },
+                    quantity: { type: 'string', required: true, description: 'The physical quantity, named honestly: "wall-thickness", not "stress".' },
+                    units: { type: 'string', required: true },
+                    direction: { type: 'string', required: true, description: 'How to read the colour ramp, e.g. "smaller-is-worse".' },
+                    domain: { type: 'object', required: true, additionalProperties: true },
+                    normalization: { type: 'object', required: true, additionalProperties: true, description: 'Where the colour scale comes from: absolute thresholds and their source. Without it a heatmap is decoration.' },
+                    stats: { type: 'object', required: true, additionalProperties: true },
+                    peaks: {
+                      type: 'array', required: true,
+                      description: 'Local extremes, few and precise — the index into the picture.',
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        properties: {
+                          atMm: { type: 'array', required: true, items: { type: 'number' } },
+                          value: { type: 'number', required: true },
+                          normalMm: { type: 'array', items: { type: 'number' } },
+                          evidence: { type: 'string', required: true },
+                          probe: {
+                            type: 'object', required: true, additionalProperties: false,
+                            properties: {
+                              tool: { type: 'string', required: true },
+                              args: { type: 'object', required: true, additionalProperties: true, description: 'Ready to pass to that tool (versionId already filled in).' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    regions: {
+                      type: 'array', required: true,
+                      description: 'Connected areas above a tier, with a bbox and a ready render command.',
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        properties: {
+                          tier: { type: 'string', required: true, description: '"warn" | "bad".' },
+                          areaMm2: { type: 'number', required: true },
+                          atMm: { type: 'array', required: true, items: { type: 'number' } },
+                          bboxMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                          look: {
+                            type: 'object', required: true, additionalProperties: false,
+                            properties: {
+                              tool: { type: 'string', required: true },
+                              args: { type: 'object', required: true, additionalProperties: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           profileSource: { type: 'string', required: true, description: '"declared" | "builtin-default". The latter means NO process was declared: the numbers come from an uncalibrated fallback that the findings name.' },
           profiles: {
             type: 'array', required: true,
@@ -3596,7 +3659,7 @@ export function registerCadTools(
         versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
         profileIds?: string[]; profilesJson?: string;
       };
-      const { store } = await allStores(exec);
+      const { store, runStore } = await allStores(exec);
       const resolved = await resolveProcessProfiles(a);
       if (resolved.errors.length > 0) {
         throw new Error(`invalid process profile:\n  - ${resolved.errors.join('\n  - ')}`);
@@ -3963,7 +4026,438 @@ export function registerCadTools(
         // `check`. Declaring a profile is what turns this into a pass.
         if (verdict === 'ok') verdict = 'check';
       }
-      return { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
+      const result = { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
+
+      // The attention field is also a PRODUCT, not just a reply: the panel draws it as a
+      // heatmap, and a picture needs the per-sample values that would be noise in the
+      // model's context. They travel in the run; the reply carries the digest only.
+      const { field, ...forModel } = result as typeof result & { field?: AttentionFieldSamples };
+      if (field) {
+        const run = await beginRun(runStore, {
+          kind: 'printability',
+          title: `制造筛查 · ${a.versionId} · ${verdict}`,
+        });
+        await run.json('report.json', forModel);
+        await run.json('attention.json', {
+          id: forModel.attention.id,
+          versionId: a.versionId,
+          normalization: field.normalization,
+          samples: field.samples,
+        });
+        await run.commit({
+          status: verdict === 'ok' ? 'pass' : verdict === 'unprintable' ? 'fail' : 'check',
+          summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
+          title: `制造筛查 · ${a.versionId}`,
+          sourceVersionIds: [a.versionId],
+          subject: `printability:${a.versionId}`,
+        });
+      }
+      return forModel;
+    },
+  }));
+
+  // --- simulate_stress: 内部应力的"注意力场"（DECISION-LOG 2026-10-19）--------
+  //
+  // 与 check_printability 共用 attention 形状：同一个场对象既画热力图、也给 LLM 读
+  // （图与 JSON 同源，不许各说一套）。能力边界写死在描述里（DESIGN §25.2 要求 1），
+  // 因为 2026-10-08 的探针测出这条车道的两半极不对称：积分量精确、热点位置可用，
+  // 而"取最大单元应力"在加密下发散（圆孔 1.002→1.184，①填充比加权也救不了）。
+  // 求解器在 python/cad_worker/stress_fem.py；本工具的产出里**没有**那个字段。
+  registerTool(defineTool({
+    name: 'simulate_stress',
+    description:
+      'Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG). You must declare the CASE — material, supports and loads — because "the stress" without one is not a number. ' +
+      'TRUST from this tool: the integrals (reaction, section force/moment, compliance, strain energy), the hot-spot LOCATIONS, and the surface stress recovered by extrapolating the depth profile inward from each hot spot. ' +
+      'DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). ' +
+      'DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part\'s layer-direction weakness — usually what breaks first — is invisible to it. ' +
+      'Peaks are sampled at `criticalDistanceMm` inside the surface (a declared distance, reported back as effectiveSampleDistanceMm), and every region carries the wall thickness it tunnels through in cells plus a `trustworthy` flag. An untrustworthy region means REFINE dxMm before quoting its position or value; the number to compare against a material is that region\'s `surfaceExtrapolatedMPa`. ' +
+      'A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. ' +
+      'Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version id to analyse, e.g. "v050".' },
+      loads: {
+        type: 'array',
+        required: true,
+        description: 'The load case. Each entry is a force in N applied either to a whole bounding-box face or to the nodes within radiusMm of atMm.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            forceN: { type: 'array', required: true, items: { type: 'number' }, description: 'Force [fx,fy,fz] in N (mm / N / MPa units throughout).' },
+            face: {
+              type: 'object', additionalProperties: false,
+              description: 'Spread the force over a bounding-box face, e.g. a weight sitting on a pan.',
+              properties: {
+                axis: { type: 'string', required: true, description: 'x | y | z' },
+                side: { type: 'string', description: '"min" (default) or "max".' },
+              },
+            },
+            atMm: { type: 'array', items: { type: 'number' }, description: 'Apply near this point in mm instead of on a face.' },
+            radiusMm: { type: 'number', description: 'Radius around atMm that shares the force. Default 1.5 cells.' },
+          },
+        },
+      },
+      supports: {
+        type: 'array',
+        description: 'Where the part is held. A face locks the outermost node layer; atMm locks the nodes within radiusMm (e.g. a knife edge resting on a pin). An unsupported load is a rigid-body mode and is REFUSED, not fudged.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            face: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                axis: { type: 'string', required: true, description: 'x | y | z' },
+                side: { type: 'string', description: '"min" (default) or "max".' },
+              },
+            },
+            atMm: { type: 'array', items: { type: 'number' }, description: 'Lock the nodes near this point.' },
+            radiusMm: { type: 'number', description: 'Radius around atMm. Default 1.5 cells.' },
+          },
+        },
+      },
+      excludeFromReport: {
+        type: 'array',
+        description: 'Cells to drop from the reported field, peaks, regions and percentiles — for SUPPORT and LOAD patches, whose stress is an artifact of the idealisation (a clamped patch is not a knife edge on a pin). The excluded cell count comes back in method.excludedCells, so the exclusion is declared rather than silent.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            atMm: { type: 'array', required: true, items: { type: 'number' } },
+            radiusMm: { type: 'number', description: 'Default 2 cells.' },
+          },
+        },
+      },
+      materialIds: { type: 'array', items: { type: 'string' }, description: 'Shipped materials, e.g. ["fdm-pla"]. The strength behind the tiers is the LAYER-ADHESION band, not the bulk figure. Omit (with materialJson) for your own; the built-in is marked assumed.' },
+      materialJson: { type: 'string', description: 'Inline material: {"id","name","youngModulusMPa","poissonRatio","strengthMPa"}. Use for a filament you have data for.' },
+      dxMm: { type: 'number', description: 'Voxel size in mm. Default: 8 cells across the thinnest dimension. Halving it costs ~8x. A hot spot thinner than ~8 cells needs a finer grid before its position is trustworthy.' },
+      criticalDistanceMm: { type: 'number', description: 'Distance inside the surface at which peaks are read. Default 1.0 mm (the grid cannot sample closer than one cell; the distance actually used comes back as effectiveSampleDistanceMm).' },
+      probeAtMm: { type: 'array', items: { type: 'number' }, description: 'Watch this point: report its displacement, e.g. a pan centre or a beam tip.' },
+      resultants: {
+        type: 'array',
+        description: 'Section resultants to integrate — the trustworthy half of this tool: axial force, shear, bending moment, plus the section area and its second moment so an analytic check can be closed on a profile too complex to hand-compute. Place the cut AWAY from a support: a cut through the support patch swallows part of the reaction.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            axis: { type: 'string', required: true, description: 'Cut normal: x | y | z' },
+            atMm: { type: 'number', required: true, description: 'Position of the cut along that axis, mm.' },
+          },
+        },
+      },
+      runConvergence: { type: 'boolean', description: 'Also solve a coarser grid and report the deltas (default true; costs ~30% more). A drifting verdict means refine before quoting.' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          verdict: { type: 'string', required: true, description: '"ok" | "check" | "overstressed". Never "ok" when the mesh-independence check is drifting or the material is assumed — read `checks` and `material.assumed`.' },
+          material: { type: 'object', required: true, additionalProperties: true },
+          method: { type: 'object', required: true, additionalProperties: true, description: 'What was actually solved: grid, degrees of freedom, CG iterations and residual, the sampling distance, the field file, how many cells the report excluded. A result without this is not reproducible.' },
+          checks: { type: 'object', required: true, additionalProperties: true, description: 'Self-checks that do not need the answer to be right: equilibrium residual, strain-energy balance, mesh-independence deltas.' },
+          resultants: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          capability: { type: 'object', required: true, additionalProperties: true, description: 'What this run may and may not be used to claim.' },
+          attention: {
+            type: 'object', required: true, additionalProperties: false,
+            description: 'Where to LOOK, not what to conclude: one field per quantity, each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
+            properties: {
+              id: { type: 'string', required: true, description: 'version + tool + the parameters that change the numbers: a picture may not outlive the case it describes.' },
+              layers: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    id: { type: 'string', required: true, description: '"von-mises".' },
+                    quantity: { type: 'string', required: true, description: 'The physical quantity, named honestly: "von-mises-stress".' },
+                    units: { type: 'string', required: true },
+                    direction: { type: 'string', required: true, description: 'How to read the colour ramp: "larger-is-worse".' },
+                    domain: { type: 'object', required: true, additionalProperties: true },
+                    normalization: { type: 'object', required: true, additionalProperties: true, description: 'Where the colour scale comes from: the declared material strength and its factors. Without it a heatmap is decoration.' },
+                    stats: { type: 'object', required: true, additionalProperties: true },
+                    peaks: {
+                      type: 'array', required: true,
+                      description: 'Local extremes, few and precise — the index into the picture. Each was sampled at the declared distance inside the surface.',
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        properties: {
+                          atMm: { type: 'array', required: true, items: { type: 'number' } },
+                          value: { type: 'number', required: true },
+                          normalMm: { type: 'array', items: { type: 'number' } },
+                          evidence: { type: 'string', required: true },
+                          probe: {
+                            type: 'object', required: true, additionalProperties: false,
+                            properties: {
+                              tool: { type: 'string', required: true },
+                              args: { type: 'object', required: true, additionalProperties: true, description: 'Ready to pass to that tool (versionId already filled in).' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    regions: {
+                      type: 'array', required: true,
+                      description: 'Connected areas above a tier, with a bbox, the wall thickness in cells and a ready render command.',
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        properties: {
+                          tier: { type: 'string', required: true, description: '"warn" | "bad".' },
+                          areaMm2: { type: 'number', required: true, description: 'Projected surface patch (volume / mean depth), not a measured surface area — see domain.regionAreaIs.' },
+                          atMm: { type: 'array', required: true, items: { type: 'number' } },
+                          bboxMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                          look: {
+                            type: 'object', required: true, additionalProperties: false,
+                            properties: {
+                              tool: { type: 'string', required: true },
+                              args: { type: 'object', required: true, additionalProperties: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 600_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string;
+        loads: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
+        supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
+        excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
+        materialIds?: string[];
+        materialJson?: string;
+        dxMm?: number;
+        criticalDistanceMm?: number;
+        probeAtMm?: number[];
+        resultants?: { axis: string; atMm: number }[];
+        runConvergence?: boolean;
+      };
+      const { store } = await allStores(exec);
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) {
+        throw new Error(`version ${a.versionId} has no model.stl under ${store.root}`);
+      }
+      const material = resolveStressMaterial(a.materialJson, a.materialIds);
+      const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
+      const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
+
+      const fieldDir = join(store.root, 'stress');
+      await mkdir(fieldDir, { recursive: true });
+      const fieldPath = join(
+        fieldDir,
+        `${safeArtifactName(`${a.versionId}-${material.id}-${a.dxMm ?? 'auto'}`)}.f32`,
+      );
+
+      const result = await solveStress({
+        path: modelPath,
+        material,
+        dxMm: a.dxMm,
+        loads: a.loads.map((l) => ({
+          forceN: l.forceN,
+          face: l.face
+            ? { axis: l.face.axis as 'x' | 'y' | 'z', side: (l.face.side as 'min' | 'max') ?? 'min' }
+            : undefined,
+          atMm: l.atMm,
+          radiusMm: l.radiusMm,
+        })),
+        fixedFaces: (a.supports ?? [])
+          .filter((s) => s.face)
+          .map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
+        fixedPoints: (a.supports ?? [])
+          .filter((s) => s.atMm)
+          .map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
+        excludeFromReport: a.excludeFromReport ?? [],
+        probeAtMm: a.probeAtMm,
+        resultants: a.resultants?.map((r) => ({ axis: r.axis as 'x' | 'y' | 'z', atMm: r.atMm })),
+        criticalDistanceMm: a.criticalDistanceMm,
+        runConvergence: a.runConvergence,
+        fieldPath,
+      });
+      if (result.refused) throw new Error(`simulate_stress refused ${a.versionId}: ${result.refused}`);
+      const field = await readStressField(fieldPath);
+
+      // The tiers. These factors are the colour scale's premise and NOT a safety
+      // factor: the peak method under-reads at the declared distance, and the model
+      // is isotropic while an FDM part's weakness is between layers.
+      const warnFactor = 2.5;
+      const badFactor = 1.5;
+      const attention = stressAttention({
+        versionId: a.versionId,
+        material,
+        result,
+        bbox,
+        warnFactor,
+        badFactor,
+      });
+      const bad = result.regions.filter((r) => r.tier === 'bad' && r.trustworthy);
+      const warn = result.regions.filter((r) => r.tier === 'warn' && r.trustworthy);
+      const drifting = result.meshIndependence.verdict === 'drifting';
+      // "ok" is impossible for an assumed material, an unchecked mesh, or a part whose
+      // members are thinner than the voxel: the verdict may not be greener than its
+      // premises (the rule check_printability follows for its built-in profile).
+      const verdict =
+        bad.length > 0
+          ? 'overstressed'
+          : drifting || warn.length > 0 || material.assumed || result.regionsTrustworthy === 0
+            ? 'check'
+            : 'ok';
+
+      // The field is a PRODUCT, not just a reply: the panel draws it as a heatmap and
+      // needs the per-sample values that would be noise in the model's context. They
+      // travel in the run, in the same `attention.json` shape check_printability
+      // writes, so the panel needs no second format and the picture cannot drift from
+      // the digest (DECISION-LOG 2026-10-19).
+      const run = await beginRun(runStore, {
+        kind: 'stress',
+        title: `应力分析 · ${a.versionId} · ${verdict}`,
+      });
+      await run.json('report.json', {
+        versionId: a.versionId,
+        verdict,
+        material,
+        method: { dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm },
+        checks: {
+          equilibriumErrorPct: result.equilibriumErrorPct,
+          energyBalancePct: result.energyBalancePct,
+          meshIndependence: result.meshIndependence,
+        },
+        resultants: result.resultants,
+        attention,
+      });
+      await run.json('attention.json', {
+        id: attention.id,
+        versionId: a.versionId,
+        normalization: field.normalization,
+        samples: field.samples,
+      });
+      await run.commit({
+        status: verdict === 'ok' ? 'pass' : verdict === 'overstressed' ? 'fail' : 'check',
+        summary: `${material.id} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
+        title: `应力分析 · ${a.versionId}`,
+        sourceVersionIds: [a.versionId],
+        subject: `stress:${a.versionId}`,
+      });
+
+      return {
+        versionId: a.versionId,
+        verdict,
+        material,
+        method: {
+          solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
+          dxMm: result.dxMm,
+          gridCells: result.gridCells,
+          solidCells: result.solidCells,
+          freeDof: result.freeDof,
+          cgIterations: result.cgIterations,
+          cgResidualRel: result.cgResidualRel,
+          criticalDistanceMm: result.criticalDistanceMm,
+          effectiveSampleDistanceMm: result.effectiveDistanceMm,
+          excludedCells: result.excludedCells,
+          fieldPath,
+        },
+        checks: {
+          equilibriumErrorPct: result.equilibriumErrorPct,
+          energyBalancePct: result.energyBalancePct,
+          reactionN: result.reactionN,
+          appliedN: result.appliedN,
+          meshIndependence: result.meshIndependence,
+          displacementAtProbeMm: result.probeDisplacementMm,
+        },
+        resultants: result.resultants,
+        capability: {
+          canReport: [
+            'integrals: reaction, section force/moment/area/second moment, strain energy (equilibrium and energy balance are built-in self-checks)',
+            'hot-spot locations with their extent and local wall thickness in cells (feature >= ~8 cells)',
+            'surface stress per trustworthy region, extrapolated from the depth profile',
+          ],
+          cannotReport: [
+            'the largest element stress (not convergent on a curved or notched boundary: 1.002 -> 1.184 under refinement)',
+            'a safety factor (the peak method under-reads at the declared distance; the model is isotropic)',
+            'layer-direction failure of a printed part, fatigue, creep, buckling, contact/Hertz, dynamics',
+            'anything about a member thinner than the voxel: it is smeared into a thicker one, which reads stiff and safe',
+          ],
+          tiers: `warn above ${(material.strengthMPa / warnFactor).toFixed(2)} MPa, bad above ${(material.strengthMPa / badFactor).toFixed(2)} MPa (strength ${material.strengthMPa} MPa / ${warnFactor}, / ${badFactor}) — a colour scale, not a safety factor`,
+        },
+        attention,
+      };
+    },
+  }));
+
+  // --- scan_attention: 把注意力指向可能出错的几何（HARNESS §11.14）------------
+  //
+  // 这个工具不判"能不能造"、不排序、不给结论。它回答的是"我该看哪里"：网格表示层
+  // 的问题（不闭合、多个体）与几何层的应力集中起点（内凹尖角——法向夹角越大，
+  // 材料侧凹角越尖）。每条 suspect 都带坐标、包围盒与一条可执行的观测命令，因为
+  // 一个没有位置的告警等于把找缺陷的活退回给使用者。判定留给设计者。
+  registerTool(defineTool({
+    name: 'scan_attention',
+    description:
+      'Where to LOOK on a saved version — not a verdict. Mesh health (watertight, body count) plus ' +
+      'REENTRANT CORNERS: concave edges whose face normals turn by more than `concaveMinDeg` (default 100°), ' +
+      'chained and located. θ=90° is an ordinary T-junction (not reported); θ=135° is a 45° V-notch; ' +
+      'θ→180° is a knife slit. A notch is where printed parts initiate cracks, so each one comes back with ' +
+      'a coordinate, a bbox and a runnable next observation. Run it on a new part, and again after any ' +
+      'geometry change: it is how a fix is shown to have worked (the repaired part must go quiet).',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version id to scan, e.g. "v012".' },
+      concaveMinDeg: { type: 'number', description: 'Report concave edges sharper than this face-normal angle. Default 100 (just past a right angle).' },
+      minChainMm: { type: 'number', description: 'Ignore chained edges shorter than this, mm. Default 0.5.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          stats: { type: 'object', required: true, additionalProperties: true },
+          suspects: {
+            type: 'array', required: true,
+            description: 'Places to look, worst first. Never a ranking of the part, never a pass/fail.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                kind: { type: 'string', required: true, description: '"reentrant-corner" | "degenerate-faces" | "non-manifold" | "multi-body".' },
+                where: {
+                  type: 'object', required: true, additionalProperties: false,
+                  properties: {
+                    atMm: { type: 'array', items: { type: 'number' } },
+                    bboxMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                  },
+                },
+                why: { type: 'string', required: true, description: 'The evidence, with numbers.' },
+                severity: { type: 'string', required: true, description: '"likely-defect" | "look".' },
+                look: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    tool: { type: 'string', required: true },
+                    args: { type: 'object', required: true, additionalProperties: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: [
+          `scan_attention ${value.versionId} — faces ${value.stats?.faces} · watertight ${value.stats?.watertight} · bodies ${value.stats?.bodies}`,
+          ...(value.suspects ?? []).map((s: any) =>
+            `  [${s.severity}] ${s.kind} @ ${JSON.stringify(s.where?.atMm ?? s.where?.bboxMm)} — ${s.why}`),
+          ...((value.suspects ?? []).length === 0 ? ['  （无可疑处）'] : []),
+        ].join('\n'),
+      }],
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string; concaveMinDeg?: number; minChainMm?: number };
+      const { store } = await allStores(exec);
+      return scanAttention(store, a);
     },
   }));
 
@@ -4510,6 +5004,10 @@ export function registerCadTools(
       },
     });
     runFileRoute('/api/cad/run/report', () => 'report.json', 'no report for this run', 'application/json');
+    // The panel's heatmap source: per-sample values for the attention field, written by
+    // check_printability. Kept OUT of the tool reply (a 700-point field is noise to the
+    // model and the whole picture to a human) and served to the browser instead.
+    runFileRoute('/api/cad/run/attention', () => 'attention.json', 'no attention field for this run', 'application/json');
     runFileRoute('/api/cad/run/trajectory', () => 'trajectory.json', 'no trajectory for this run', 'application/json');
     runFileRoute('/api/cad/run/fluid-manifest', () => 'fluid-manifest.json', 'not a fluid run', 'application/json');
     runFileRoute('/api/cad/run/stl', (q) => {
@@ -4905,6 +5403,36 @@ export function registerCadTools(
         } catch {
           return new Response('no fluid frames yet', { status: 404 });
         }
+      },
+    });
+
+    // The attention field for a VERSION (not a run): the newest printability run that
+    // measured it. The panel asks by version because that is what its preview shows;
+    // asking it to know run ids would be the client guessing at server bookkeeping.
+    void connection.fetch.register({
+      path: '/api/cad/attention',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const { store, runStore } = requestStores(request);
+        const wanted = new URL(request.url).searchParams.get('v');
+        if (!wanted) return new Response('missing v', { status: 400 });
+        const runs = await listRuns(runStore);
+        const candidates = runs
+          .filter((r) => (r.kind === 'printability' || r.kind === 'stress') && (r.sourceVersionIds ?? []).includes(wanted))
+          .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+        for (const run of candidates) {
+          const path = runFilePath(runStore, run.id, 'attention.json');
+          if (!path) continue;
+          try {
+            const body = await readFile(path);
+            return new Response(body as unknown as BodyInit, {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          } catch { /* try the next one */ }
+        }
+        return new Response(`no attention field for ${wanted}`, { status: 404 });
       },
     });
 

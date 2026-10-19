@@ -12,6 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playback';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { fitDistance } from './fit';
+import { buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
 import {
   axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
   planeToWorld, projectToCutPlane, sectionLoops, sectionSegments,
@@ -32,6 +33,8 @@ const RUN_KIND_LABEL: Record<RunKind, string> = {
   physics: '刚体物理',
   motion: '机构运动',
   fluid: '流体仿真',
+  printability: '制造筛查',
+  stress: '应力分析',
 };
 
 /** Status glyph for a run/product verdict. */
@@ -565,6 +568,8 @@ export function CadPanel(): React.ReactElement {
   const [runReport, setRunReport] = useState<any>(null);
   const [fluidBusy, setFluidBusy] = useState(false);
   const [section, setSection] = useState(false);
+  /** Attention heatmap: the layer's own legend, or null when it is off. */
+  const [heat, setHeat] = useState<{ legend: string } | null>(null);
   /** Set when this environment cannot give us a WebGL context at all. */
   const [glError, setGlError] = useState<string | null>(null);
   const [measureMode, setMeasureMode] = useState(false);
@@ -1078,6 +1083,7 @@ export function CadPanel(): React.ReactElement {
     setThickMode(false);
     setSection(false);
     setSectionPos(0.5);
+    setHeat(null);
   }, [versionId]);
   const overlayRef = useRef<HTMLDivElement>(null);
   const rectRef = useRef<{ x0: number; y0: number; x1: number; y1: number; el: HTMLDivElement } | null>(null);
@@ -1258,6 +1264,44 @@ export function CadPanel(): React.ReactElement {
     setHint('壁厚已读取 — 已退出壁厚模式；再点「▤壁厚」测别处');
   };
   const clearThick = () => { setThick(null); };
+
+  // 🔥 Heatmap: fetch the per-sample values behind the attention field and colour the
+  // surface by the layer's OWN thresholds. Off = restore the flat material; nothing is
+  // cached across versions, because a picture must not outlive the geometry it shows.
+  const toggleHeat = async () => {
+    const mesh = meshRef.current;
+    const geo = mesh?.geometry as THREE.BufferGeometry | undefined;
+    const mat = mesh?.material as THREE.MeshStandardMaterial | undefined;
+    if (!geo || !mat || !versionId) return;
+    if (heat) {
+      geo.deleteAttribute('color');
+      mat.vertexColors = false;
+      mat.needsUpdate = true;
+      setHeat(null);
+      return;
+    }
+    try {
+      const res = await fetch(withProject(`/api/cad/attention?v=${encodeURIComponent(versionId)}`));
+      if (!res.ok) {
+        setHint('这个版本还没有注意力场 — 先对这个版本跑一次 check_printability');
+        return;
+      }
+      const payload = (await res.json()) as AttentionPayload;
+      const layer = pickHeatLayer(payload);
+      if (!layer) {
+        setHint('有注意力场但没有可画的层（薄区与悬垂都没测到）');
+        return;
+      }
+      const { colors } = buildHeatColors(geo, layer);
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      mat.vertexColors = true;
+      mat.needsUpdate = true;
+      setHeat({ legend: layer.legend });
+      setHint(null);
+    } catch (err) {
+      setHint(`热力图取数失败：${String(err).slice(0, 80)}`);
+    }
+  };
 
   // add/remove probe dots + dimension lines inside the scene
   useEffect(() => {
@@ -2513,6 +2557,12 @@ export function CadPanel(): React.ReactElement {
         onClick: () => setSection((v) => !v),
         style: viewToolStyle(section, '#8e44ad'),
       }, '◐剖切'),
+      React.createElement('button', {
+        type: 'button',
+        title: '热力图：把检查工具测到的逐点数值画在零件表面上（颜色含义见图例；没有场数据时提示先跑 check_printability）',
+        onClick: () => { void toggleHeat(); },
+        style: viewToolStyle(Boolean(heat), '#c0392b'),
+      }, '🔥热力图'),
     ),
   ),            // closes the panel's createElement (children resume below)
 
@@ -2526,6 +2576,9 @@ export function CadPanel(): React.ReactElement {
         style: { fontSize: 12, fontWeight: 700, color: '#c0392b', flex: 'none', lineHeight: '18px' },
       }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : '已选 1 点…'),
       measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, '清除测量'),
+      heat && React.createElement('span', {
+        style: { fontSize: 11, color: '#c0392b', flex: '1 1 auto', lineHeight: '16px' },
+      }, heat.legend),
       thick && React.createElement('span', {
         style: { fontSize: 12, fontWeight: 700, color: '#00838f', flex: 'none', lineHeight: '18px' },
       }, `壁厚 ${thick.dist.toFixed(2)} mm（沿视线）`),

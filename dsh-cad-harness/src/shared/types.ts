@@ -20,7 +20,7 @@ export interface EchoResponse {
 // inside it; the record's own `type` decides how it is presented.
 // ---------------------------------------------------------------------------
 
-export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid';
+export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid' | 'printability' | 'stress';
 export type RunStatus = 'pass' | 'check' | 'fail';
 
 export interface RunProduct {

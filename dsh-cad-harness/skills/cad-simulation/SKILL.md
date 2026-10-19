@@ -60,3 +60,51 @@ Motion is kinematics with an exact interference timeline; physics is rigid bodie
   the motion you get is the motion you drew. Pass `pivot` per part only when the
   rotation axis passes through neither. The run's `pivots` field reports what
   was used.
+
+## `simulate_stress` — the one that reports a force, and the only one with a refusal
+
+Voxel hex8 linear-elastic statics for **one saved version under one declared case**
+(material + supports + loads). It is the only `simulate_*` that answers "where does it
+break", and it is also the only one that will tell you it cannot.
+
+**Declare the case or the number means nothing.** Supports (a bbox face, or the nodes
+within `radiusMm` of `atMm` — the latter is how a knife edge on a pin is modelled) and
+loads (a face, or a point patch). An unsupported load is a rigid-body mode and is
+**refused**, not fudged.
+
+**Trust these**: the integrals — reaction, section `axialForceN`/`shearN`/`momentNmm`,
+`areaMm2`, `secondMomentMm4` (enough to close a hand check on a profile you cannot
+compute by hand), plus `checks.equilibriumErrorPct` and `checks.energyBalancePct`,
+which are machine-precision and do not depend on the answer being right.
+
+**Peaks are read at a declared distance, never at the surface.** `criticalDistanceMm`
+(default 1.0) is floored by one cell; the distance actually used comes back as
+`effectiveSampleDistanceMm`. The number to compare against a material is a region's
+`surfaceExtrapolatedMPa` — the depth profile walked inward from the hot spot and fitted
+out to the surface (R² is reported; the acceptance bands it at −6% on a cantilever).
+
+**Two things you must not ask it for.**
+- *"the largest element stress"* — there is no such field. On a curved or notched
+  boundary it grows without bound under refinement (measured 1.002 → 1.184; fill-ratio
+  weighting did not fix it, 1.184 → 1.169). Where the boundary is a staircase, the cell
+  maximum is a property of the staircase. Use `surfaceExtrapolatedMPa` or a section
+  resultant.
+- *a safety factor* — the model is isotropic, so an FDM part's layer-direction weakness
+  (usually what breaks first) is invisible to it. The tiers in `normalization`
+  (`warnAt`/`badAt`, derived from the declared strength) are a **colour scale**.
+
+**The refusal is a feature.** Every region carries `localThicknessCells`,
+`minExtentCells`, `fitR2` and `trustworthy`/`whyUntrustworthy`. A member thinner than
+the voxel is smeared into a thicker one, which reads stiff and safe — so on such a part
+the verdict comes back `check` with zero trustworthy regions and `meshIndependence.verdict
+= "drifting"`. That is the tool saying "refine, or use the integrals only", and it is the
+correct answer: the toy-balance beam (members ~1.2 mm at a 1.25 mm voxel) is exactly this
+case. Do not quote a hot spot from a run that says this.
+
+**Exclude the idealisation, not the evidence.** `excludeFromReport` drops the support and
+load patches from the field, peaks and percentiles, because a clamped patch is not a
+knife edge on a pin; the excluded cell count is reported in `method.excludedCells`.
+
+**Place section cuts away from a support** — a cut through the support patch swallows part
+of the reaction and the moment comes out wrong (measured: 22.1 vs 62.8 N·mm on the
+toy-balance beam). Cut at mid-span and check the analytic invariant `M = F·L`.

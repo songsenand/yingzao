@@ -110,6 +110,8 @@ OPS = [
     "simulate_motion",
     "measure_part",
     "check_printability",
+    "scan_attention",
+    "stress_field",
     "mpm_create",
     "mpm_step",
     "mpm_state",
@@ -4392,7 +4394,12 @@ def op_check_printability(params: dict) -> dict:
 
     # down-facing overhang: normal points below horizontal by overhangDeg
     overhang_sin = math.sin(overhang_deg * math.pi / 180)
-    overhang_mask = (all_normals[:, 2] < -overhang_sin) & (all_centroids[:, 2] - z_floor > 0.8)
+    # 阈值余量：正好 45° 的面（数学上恰在界上）在 float32/float64 之间只差 1 ULP，
+    # 严格 `<` 会让它们的归属由浮点噪声决定——实测 toy-balance v069：8 个 45° 面
+    # 合计 50.1mm²（占悬垂面积 3.4%）在两种实现间翻来覆去。界上的面按"可桥接"处理，
+    # 不算悬垂；1e-9 的松弛比噪声大 7 个数量级，比任何有意义的角差小 7 个数量级。
+    OVERHANG_SIN_SLACK = 1e-9
+    overhang_mask = (all_normals[:, 2] < -(overhang_sin + OVERHANG_SIN_SLACK)) & (all_centroids[:, 2] - z_floor > 0.8)
     overhang_area = float(np.sum(all_areas[overhang_mask]))
     overhang_z_min = float(np.min(all_centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("inf")
     overhang_z_max = float(np.max(all_centroids[overhang_mask][:, 2])) if bool(overhang_mask.any()) else float("-inf")
@@ -4413,6 +4420,13 @@ def op_check_printability(params: dict) -> dict:
     thin_samples = 0
     thin_area = 0.0
     measured = 0
+    # 每个低于阈值的采样面都要留下位置，聚类之后才可能被"指出来"。
+    # 只报一个最薄点是本轮 toy-balance 漏检的直接原因：注意力没有落点。
+    field_wall: list = []          # 全部测到壁厚的采样点（热力图的底图）
+    thin_points: list = []
+    thin_normals: list = []
+    thin_walls: list = []
+    thin_areas: list = []
     mesh = trimesh.Trimesh(vertices=points, faces=triangles, process=False)
     origins = centroids + normals * 0.05
     directions = -normals
@@ -4464,17 +4478,222 @@ def op_check_printability(params: dict) -> dict:
             continue
         wall = float(t[facing].min()) - 0.05
         measured += 1
+        field_wall.append((centroids[ray_index].copy(), wall))
         if wall < min_wall:
             min_wall = wall
             min_wall_at = [float(v) for v in centroids[ray_index]]
         if wall < wall_min_mm:
             thin_samples += 1
             thin_area += float(areas[ray_index])
+            thin_points.append(centroids[ray_index].copy())
+            thin_normals.append(normals[ray_index].copy())
+            thin_walls.append(wall)
+            thin_areas.append(float(areas[ray_index]))
 
     # the thin half is measured on a 1/step sample → scale it back to the surface
     thin_area *= tri_count / max(1, sampled)
     thin_area_pct = (thin_area / surface_area * 100.0) if surface_area > 0 else 0.0
     wall_measured = measured > 0
+
+    # ---- 注意力场（attention field）----------------------------------------
+    # 画面给人、摘要给 LLM，两者同源。这里只做几何分组与描述，不改判定：
+    # 阈值、面积、verdict 全部照旧；新增的是"哪里、多大、下一步怎么复测"。
+    layers: list = []
+    scale = tri_count / max(1, sampled)
+    if thin_points:
+        pts = np.asarray(thin_points, dtype=np.float64)
+        nrm = np.asarray(thin_normals, dtype=np.float64)
+        try:
+            from scipy.spatial import cKDTree
+            pairs = cKDTree(pts).query_pairs(r=6.0, output_type="ndarray")
+        except BaseException:  # noqa: BLE001 - 无 scipy 时退化成"一簇"，绝不静默丢弃
+            pairs = np.zeros((0, 2), dtype=np.int64)
+        parent = list(range(len(pts)))
+
+        def _find(a: int) -> int:
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+
+        def _union(a: int, b: int) -> None:
+            ra, rb = _find(a), _find(b)
+            if ra != rb:
+                parent[max(ra, rb)] = min(ra, rb)
+
+        for a, b in pairs:
+            _union(int(a), int(b))
+        groups: dict = {}
+        for i in range(len(pts)):
+            groups.setdefault(_find(i), []).append(i)
+
+        clusters = []
+        for idx in groups.values():
+            sub = pts[idx]
+            walls = np.asarray([thin_walls[i] for i in idx])
+            j = int(np.argmin(walls))
+            i_min = idx[j]
+            n_min = nrm[i_min]
+            out = pts[i_min] + n_min * 0.5          # 从表面外 0.5mm 起量
+            clusters.append({
+                "samples": len(idx),
+                "minWallMm": round(float(walls[j]), 3),
+                "atMm": [round(float(v), 2) for v in pts[i_min]],
+                "normalMm": [round(float(v), 4) for v in n_min],
+                "probeFromMm": [round(float(v), 3) for v in out],
+                "bboxMm": [[round(float(v), 2) for v in sub.min(axis=0)],
+                           [round(float(v), 2) for v in sub.max(axis=0)]],
+                "areaMm2": round(float(sum(thin_areas[i] for i in idx)) * scale, 1),
+            })
+        clusters.sort(key=lambda c: c["minWallMm"])
+        peaks = [{
+            "atMm": c["atMm"],
+            "value": c["minWallMm"],
+            "normalMm": c["normalMm"],
+            "evidence": f"{c['samples']} 个采样面低于 {wall_min_mm}mm，最薄 {c['minWallMm']:.2f}mm，约 {c['areaMm2']:.1f}mm²",
+            "probe": {"tool": "measure_thickness",
+                      "args": {"from": c["probeFromMm"],
+                               "directionVector": [round(-v, 4) for v in c["normalMm"]]}},
+        } for c in clusters[:6]]
+        regions = []
+        for c in sorted(clusters, key=lambda c: -c["areaMm2"])[:8]:
+            ext = [c["bboxMm"][1][k] - c["bboxMm"][0][k] for k in range(3)]
+            axis_i = int(np.argmin(ext))
+            at = (c["bboxMm"][0][axis_i] + c["bboxMm"][1][axis_i]) / 2
+            regions.append({
+                "tier": "bad" if c["minWallMm"] < wall_min_mm * 0.4 else "warn",
+                "areaMm2": c["areaMm2"],
+                "samples": c["samples"],
+                "minWallMm": c["minWallMm"],
+                "atMm": c["atMm"],
+                "bboxMm": c["bboxMm"],
+                "look": {"tool": "render_part",
+                         "args": {"section": {"axis": "xyz"[axis_i], "atMm": round(float(at), 2)}}},
+            })
+        layers.append({
+            "id": "wall",
+            "quantity": "wall-thickness",
+            "units": "mm",
+            "direction": "smaller-is-worse",
+            "domain": {"kind": "surface-samples", "samples": sampled, "measured": int(measured)},
+            "normalization": {"mode": "absolute", "warnAt": wall_min_mm,
+                              "badAt": round(wall_min_mm * 0.4, 3), "source": "declared-arg"},
+            "stats": {"minWallMm": round(float(min_wall), 3) if math.isfinite(min_wall) else None,
+                      "thinSamples": thin_samples, "thinAreaMm2": round(float(thin_area), 1)},
+            "peaks": peaks,
+            "regions": regions,
+        })
+    else:
+        layers.append({
+            "id": "wall",
+            "quantity": "wall-thickness",
+            "units": "mm",
+            "direction": "smaller-is-worse",
+            "domain": {"kind": "surface-samples", "samples": sampled, "measured": int(measured)},
+            "normalization": {"mode": "absolute", "warnAt": wall_min_mm,
+                              "badAt": round(wall_min_mm * 0.4, 3), "source": "declared-arg"},
+            "stats": {"minWallMm": round(float(min_wall), 3) if math.isfinite(min_wall) else None,
+                      "thinSamples": 0, "thinAreaMm2": 0.0},
+            "peaks": [],
+            "regions": [],
+        })
+
+    if bool(overhang_mask.any()):
+        over_tris = [int(t) for t in np.where(overhang_mask)[0]]
+        edge_faces: dict = {}
+        for t in over_tris:
+            a, b, c = (int(x) for x in triangles[t])
+            for u, v in ((a, b), (b, c), (c, a)):
+                key = (u, v) if u < v else (v, u)
+                edge_faces.setdefault(key, []).append(t)
+        parent2 = {t: t for t in over_tris}
+
+        def _find2(a: int) -> int:
+            while parent2[a] != a:
+                parent2[a] = parent2[parent2[a]]
+                a = parent2[a]
+            return a
+
+        def _union2(a: int, b: int) -> None:
+            ra, rb = _find2(a), _find2(b)
+            if ra != rb:
+                parent2[max(ra, rb)] = min(ra, rb)
+
+        for faces_ in edge_faces.values():
+            for other in faces_[1:]:
+                _union2(faces_[0], other)
+        groups2: dict = {}
+        for t in over_tris:
+            groups2.setdefault(_find2(t), []).append(t)
+        patches = []
+        for tris in groups2.values():
+            verts = np.unique(triangles[tris].reshape(-1))
+            vp = points[verts]
+            area_p = float(np.sum(all_areas[tris]))
+            if area_p <= 0:
+                continue
+            w = all_areas[tris]
+            centroid = (all_centroids[tris] * w[:, None]).sum(axis=0) / area_p
+            i_rep = int(tris[int(np.argmax(all_areas[tris]))])
+            patches.append({
+                "areaMm2": round(area_p, 1),
+                "triangles": len(tris),
+                "centroidMm": [round(float(v), 2) for v in centroid],
+                "atMm": [round(float(v), 2) for v in all_centroids[i_rep]],
+                "bboxMm": [[round(float(v), 2) for v in vp.min(axis=0)],
+                           [round(float(v), 2) for v in vp.max(axis=0)]],
+            })
+        patches.sort(key=lambda p_: -p_["areaMm2"])
+        z0 = float(points[:, 2].min())
+        z1 = float(points[:, 2].max())
+
+        def _look(p_: dict) -> dict:
+            frac = (p_["centroidMm"][2] - z0) / max(1e-9, (z1 - z0))
+            return {"tool": "render_part",
+                    "args": {"section": {"axis": "z", "fraction": round(float(frac), 3)}}}
+
+        layers.append({
+            "id": "overhang",
+            "quantity": "down-facing-area",
+            "units": "mm2",
+            "direction": "larger-is-more-support",
+            "domain": {"kind": "triangles", "triangles": len(over_tris)},
+            "normalization": {"mode": "absolute", "warnAt": 20.0, "source": "declared-arg"},
+            "stats": {"areaMm2": round(float(overhang_area), 1),
+                      "zRangeMm": ([round(float(overhang_z_min), 1), round(float(overhang_z_max), 1)]
+                                   if math.isfinite(overhang_z_min) else [])},
+            "peaks": [{"atMm": p_["atMm"], "value": p_["areaMm2"],
+                       "evidence": f"{p_['areaMm2']:.0f}mm² 朝下悬垂（{p_['triangles']} 个三角面）",
+                       "probe": _look(p_)} for p_ in patches[:6]],
+            "regions": [{"tier": "warn", "areaMm2": p_["areaMm2"], "triangles": p_["triangles"],
+                         "atMm": p_["centroidMm"], "bboxMm": p_["bboxMm"], "look": _look(p_)}
+                        for p_ in patches[:8] if p_["areaMm2"] >= 5],
+        })
+
+    field_id = f"check_printability:s{sampled}-w{wall_min_mm}-o{overhang_deg}"
+
+    field_payload = {
+        "id": field_id,
+        # 热力图要的是**完整底图**：壁上每个测过的地方有多厚（不只是薄的地方），
+        # 以及每个三角面朝下到什么程度（不朝下的记 0）。只给"可疑的那些点"会让
+        # 画面把整片未测区域按最近的可疑点着色——那是编造。
+        "samples": {
+            "wall": [
+                {"p": [round(float(v), 3) for v in p_], "v": round(float(v_), 4)}
+                for p_, v_ in field_wall
+            ],
+            "overhang": [
+                {"p": [round(float(v), 3) for v in all_centroids[int(t)]],
+                 "v": round(float(all_areas[int(t)]), 4) if bool(overhang_mask[int(t)]) else 0.0}
+                for t in range(tri_count)
+            ],
+        },
+        "normalization": {
+            "wall": {"warnAt": wall_min_mm, "badAt": round(wall_min_mm * 0.4, 3),
+                     "direction": "smaller-is-worse"},
+            "overhang": {"warnAt": 20.0, "direction": "larger-is-more-support"},
+        },
+    }
 
     # ---- draft (molding): the FEASIBLE DRAW-DIRECTION CONE --------------------
     #
@@ -4674,7 +4893,167 @@ def op_check_printability(params: dict) -> dict:
         **({"draft": draft} if draft else {}),
         "findings": findings,
         "watertight": watertight,
+        "attention": {"id": field_id, "layers": layers},
+        # 逐采样点的场数据：只为面板画热力图。宿主会把它写进 run 文件并从
+        # LLM 看到的返回值里剥掉——一个 700 点的场对模型是纯噪声，对画面是全部。
+        **({"field": field_payload} if params.get("withSampleField") else {}),
     }
+
+
+def op_scan_attention(params: dict) -> dict:
+    """把注意力指向可能出错的几何（HARNESS §11.14 的第一块工具落点）。
+
+    只做两件便宜的事，不碰求解器：
+
+      P1 网格体检   是否闭合、几个连通体、退化面 —— 表示层的缺陷
+      P2 内凹尖角   内凹棱的二面角 θ —— 几何层的应力集中 / 层间裂纹起点
+
+    判据是几何的，不是工艺的：内凹棱的法向夹角 θ 越大，材料侧的凹角越尖。
+      θ = 90°  → 直角凹槽（普通 T 形相交，FDM 常见，不报）
+      θ = 135° → 45° 的 V 形缺口（toy-balance 吊盘肘部就是这一种）
+      θ → 180° → 刀口缝
+
+    输出是"去哪看"：每条结论都带坐标、包围盒与一句证据；它不是判定，也不排序
+    零件的"好坏"。工具只负责把注意力放到位置上，改不改由设计判断。
+    """
+    import numpy as np
+    import trimesh
+
+    concave_min_deg = float(params.get("concaveMinDeg") or 100.0)
+    min_chain_mm = float(params.get("minChainMm") or 0.5)
+
+    raw = _parse_stl_raw(params["path"])
+    vertices, faces, degenerate = _weld_raw(raw)
+    points = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    watertight = _is_watertight(triangles)
+
+    # 焊接时塌掉的三角形（顶点两两重合，规则同 `_weld`）：不是"多出来的面"，而是回转体
+    # 端盖扇／尖角处留下的零面积碎片。保留它们的工具（严格流形测试、部分切片器）会看到
+    # 一堆互不相连的碎片甚至判非水密；丢掉它们的核（Manifold）量到的是同一个实体。
+    # 两种说法都对，但**必须说清是哪一种**——toy-balance 的砝码 v058 就曾被记成
+    # "769 分片的破网格"，而它的体积与重建版 v071 完全相同。
+    raw_pts = np.asarray(raw, dtype=np.float64).reshape(-1, 3, 3)
+    raw_keys = np.round(raw_pts * 1e5).astype(np.int64)
+    collapsed = ((raw_keys[:, 0] == raw_keys[:, 1])
+                 | (raw_keys[:, 1] == raw_keys[:, 2])
+                 | (raw_keys[:, 0] == raw_keys[:, 2]))
+
+    mesh = trimesh.Trimesh(vertices=points, faces=triangles, process=False)
+    mesh.merge_vertices()
+
+    suspects: list = []
+    stats = {"faces": int(len(mesh.faces)), "watertight": bool(watertight)}
+
+    # ---- P1 网格体检 -------------------------------------------------------
+    bodies = mesh.split(only_watertight=False)
+    body_faces = sorted((int(len(b.faces)) for b in bodies), reverse=True)
+    stats["bodies"] = len(bodies)
+    stats["body_faces"] = body_faces[:8]
+    stats["degenerateFaces"] = int(degenerate)
+    if degenerate:
+        pts = raw_pts[collapsed] if bool(collapsed.any()) else raw_pts
+        flat = pts.reshape(-1, 3)
+        suspects.append({
+            "kind": "degenerate-faces",
+            "where": {"atMm": [round(float(v), 2) for v in flat.mean(axis=0)],
+                      "bboxMm": [[round(float(v), 2) for v in flat.min(axis=0)],
+                                 [round(float(v), 2) for v in flat.max(axis=0)]]},
+            "why": (f"{degenerate} 个三角形在焊接后塌掉（顶点重合，零面积）——"
+                    "保留它们的工具会报一堆不相连的碎片或非水密，丢掉它们的核量到的是同一个实体；"
+                    "清掉它们只是去掉垃圾面，几何不变"),
+            "severity": "look",
+        })
+    if not watertight:
+        suspects.append({
+            "kind": "non-manifold",
+            "where": {"bboxMm": [[round(float(v), 2) for v in mesh.bounds[0]],
+                                 [round(float(v), 2) for v in mesh.bounds[1]]]},
+            "why": f"严格流形测试为 false；{len(bodies)} 个连通体（前几个的面数 {body_faces[:5]}）",
+            "severity": "likely-defect",
+        })
+    elif len(bodies) > 1:
+        extra = bodies[1]
+        suspects.append({
+            "kind": "multi-body",
+            "where": {"atMm": [round(float(v), 2) for v in extra.centroid],
+                      "bboxMm": [[round(float(v), 2) for v in extra.bounds[0]],
+                                 [round(float(v), 2) for v in extra.bounds[1]]]},
+            "why": f"{len(bodies)} 个互不相连的实体（第二大的体有 {body_faces[1]} 个三角面）",
+            "severity": "likely-defect",
+        })
+
+    # ---- P2 内凹尖角 -------------------------------------------------------
+    sharp_edges = 0
+    if watertight and len(mesh.faces):
+        angles = np.degrees(np.asarray(mesh.face_adjacency_angles, dtype=np.float64))
+        convex = np.asarray(mesh.face_adjacency_convex, dtype=bool)
+        edges = np.asarray(mesh.face_adjacency_edges, dtype=np.int64)
+        concave = ~convex
+        sharp = concave & (angles > concave_min_deg)
+        idx = np.where(sharp)[0]
+        sharp_edges = int(len(idx))
+        stats["concave_edges"] = int(concave.sum())
+        stats["sharp_concave_edges"] = sharp_edges
+        if len(idx):
+            parent = list(range(len(idx)))
+
+            def _find(a: int) -> int:
+                while parent[a] != a:
+                    parent[a] = parent[parent[a]]
+                    a = parent[a]
+                return a
+
+            def _union(a: int, b: int) -> None:
+                ra, rb = _find(a), _find(b)
+                if ra != rb:
+                    parent[max(ra, rb)] = min(ra, rb)
+
+            by_vert: dict = {}
+            for k, e in enumerate(idx):
+                for v in edges[e]:
+                    by_vert.setdefault(int(v), []).append(int(k))
+            for group in by_vert.values():
+                for other in group[1:]:
+                    _union(group[0], other)
+
+            chains: dict = {}
+            for k in range(len(idx)):
+                chains.setdefault(_find(k), []).append(k)
+
+            for members in chains.values():
+                length = 0.0
+                pts = []
+                thetas = []
+                for k in members:
+                    a, b = edges[idx[k]]
+                    pa, pb = points[a], points[b]
+                    length += float(np.linalg.norm(pb - pa))
+                    pts.extend([pa, pb])
+                    thetas.append(float(angles[idx[k]]))
+                if length < min_chain_mm:
+                    continue
+                pts_a = np.asarray(pts)
+                worst = max(thetas)
+                center = pts_a.mean(axis=0)
+                suspects.append({
+                    "kind": "reentrant-corner",
+                    "where": {
+                        "atMm": [round(float(v), 2) for v in center],
+                        "bboxMm": [[round(float(v), 2) for v in pts_a.min(axis=0)],
+                                   [round(float(v), 2) for v in pts_a.max(axis=0)]],
+                    },
+                    "why": (f"内凹棱链：长 {length:.1f}mm，二面角最大 {worst:.0f}°"
+                            f"（void 角 {180 - worst:.0f}°，材料侧 {180 + worst:.0f}°）——"
+                            "应力集中/层间裂纹起点"),
+                    "severity": "likely-defect" if worst >= 120 else "look",
+                    "look": {"tool": "render_part", "args": {"section": {
+                        "axis": "y", "atMm": round(float(center[1]), 2)}}},
+                })
+
+    order = {"likely-defect": 0, "look": 1}
+    suspects.sort(key=lambda s: order.get(s["severity"], 2))
+    return {"stats": stats, "suspects": suspects}
 
 
 def op_measure_part(params: dict) -> dict:
@@ -5872,6 +6251,51 @@ def op_merge_solids(params: dict) -> dict:
     }
 
 
+_STRESS_FEM_MODULE = None
+
+
+def _load_stress_fem():
+    """Load the sibling voxel-FEM module by explicit path.
+
+    Same reason as `_load_mpm_numba`: the worker runs with `python -I`, so the
+    script directory is not on sys.path and a plain `import stress_fem` fails even
+    though the file sits next to this one.
+    """
+    global _STRESS_FEM_MODULE
+    if _STRESS_FEM_MODULE is not None:
+        return _STRESS_FEM_MODULE
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stress_fem.py")
+    spec = importlib.util.spec_from_file_location("stress_fem", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load stress_fem from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["stress_fem"] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop("stress_fem", None)
+        raise
+    _STRESS_FEM_MODULE = module
+    return module
+
+
+def op_stress_field(params: dict) -> dict:
+    """Voxel hex8 linear-elastic static analysis (the `simulate_stress` engine).
+
+    The capability boundary this result must be read with is in `stress_fem.py`,
+    and the tool face repeats it. Two things the caller has to know here:
+
+      * large grids go BY FILE (`fieldPath`) — the same rule every other voxel op
+        follows, because a megabyte-scale array through the pipe costs 148x more;
+      * a non-watertight mesh is REFUSED, not repaired: `.fill()` on an open shell
+        silently invents solid interior, which would show up as a plausible stress
+        field for a part that cannot be printed at all.
+    """
+    return _load_stress_fem().run(params)
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
@@ -5898,6 +6322,8 @@ HANDLERS = {
     "lbm_channel": op_lbm_channel,
     "simulate_motion": op_simulate_motion,
     "measure_part": op_measure_part,
+    "scan_attention": op_scan_attention,
+    "stress_field": op_stress_field,
     "check_printability": op_check_printability,
     "mpm_create": op_mpm_create,
     "mpm_step": op_mpm_step,

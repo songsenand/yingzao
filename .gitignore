@@ -37,6 +37,9 @@ verification/tmp/
 # ---- 一次性扫描 / 探针脚本与输出 ----
 /.tmp-*/
 /.scan.mjs
+# 插件内的临时运行时（venv 符号链接 + state.json 副本，供验收脚本在没有可写
+# $DSH_HOME 时使用）；只在本机有意义，绝不入库
+dsh-cad-harness/.tmp-*/
 
 # ---- 验证截图（根 verification 与插件内 verification）----
 verification/shots/
