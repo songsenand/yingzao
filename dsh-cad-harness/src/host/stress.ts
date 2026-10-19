@@ -282,6 +282,86 @@ function lookAt(versionId: string, bbox: number[][], atMm: number[]): { tool: st
   return { tool: 'render_part', args: { versionId, section: { axis: axis.axis, fraction: Number(fraction.toFixed(4)) } } };
 }
 
+/** What `scan_attention` returns per suspect (fields optional: the mapper is defensive
+ *  on purpose — a courtesy scan must never break the stress result). */
+export interface GeometrySuspect {
+  kind?: string;
+  where?: { atMm?: number[]; bboxMm?: number[][] };
+  atMm?: number[];
+  why?: string;
+  evidence?: string;
+  /** `scan_attention` reports a WORD ("likely-defect"), not a number. */
+  severity?: number | string;
+}
+
+/**
+ * The layer that keeps `simulate_stress` from going SILENT (HARNESS §11.14, DESIGN §30).
+ *
+ * When the stress half certifies nothing — the common case for the toy-balance parts,
+ * whose members are thinner than the voxel — returning an empty field tells the reader
+ * "all fine", which is exactly the attention failure §11.14 forbids. This layer carries
+ * the geometric places worth looking at, labelled for what they are: a corner angle,
+ * NOT a stress. `areaMm2` is 0 by construction (a corner is a line, not an area) and
+ * `domain.regionAreaIs` says so.
+ */
+export function geometrySuspectLayer(
+  versionId: string,
+  partBbox: number[][],
+  suspects: GeometrySuspect[],
+): AttentionLayer {
+  const at = (s: GeometrySuspect): number[] => s.where?.atMm ?? s.atMm ?? [0, 0, 0];
+  const why = (s: GeometrySuspect): string =>
+    [s.evidence ?? s.why ?? `${s.kind ?? 'geometric suspect'} — reported by scan_attention`,
+     typeof s.severity === 'string' ? `severity: ${s.severity}` : null]
+      .filter(Boolean)
+      .join(' · ');
+  // The ramp needs a number; the WORD goes in the evidence. 'likely-defect' must not be
+  // silently dropped just because the schema asks for a value.
+  const weight = (s: GeometrySuspect): number =>
+    typeof s.severity === 'number'
+      ? s.severity
+      : s.severity === 'likely-defect'
+        ? 1
+        : s.severity === 'check'
+          ? 0.5
+          : 0;
+  const peaks: AttentionPeak[] = suspects.slice(0, 6).map((s) => ({
+    atMm: at(s),
+    value: weight(s),
+    evidence: why(s),
+    probe: lookAt(versionId, partBbox, at(s)),
+  }));
+  const regions: AttentionRegion[] = suspects.slice(0, 8).map((s) => ({
+    tier: 'warn',
+    areaMm2: 0,
+    atMm: at(s),
+    bboxMm: s.where?.bboxMm ?? partBbox,
+    look: lookAt(versionId, partBbox, at(s)),
+    kind: s.kind ?? 'geometric-suspect',
+  }));
+  return {
+    id: 'geometry-suspects',
+    quantity: 'reentrant-corner-angle',
+    units: 'deg',
+    direction: 'larger-is-sharper',
+    domain: {
+      kind: 'geometry-scan',
+      source: 'scan_attention',
+      regionAreaIs: 'a corner is a line, not an area: areaMm2 is 0 by construction',
+      notAStressResult: true,
+    },
+    normalization: { mode: 'absolute', warnAt: 100, source: 'scan_attention concaveMinDeg default' },
+    stats: {
+      suspects: suspects.length,
+      note:
+        'the stress half certified NO region at this resolution, so THIS layer carries the ' +
+        'places to look at instead of an empty field (HARNESS §11.14); it is geometry, not stress',
+    },
+    peaks,
+    regions,
+  };
+}
+
 export interface StressAttentionInput {
   versionId: string;
   material: StressMaterial;

@@ -35,7 +35,7 @@ import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
-import { readStressField, resolveStressMaterial, solveStress, stressAttention } from './stress.ts';
+import { geometrySuspectLayer, readStressField, resolveStressMaterial, solveStress, stressAttention, type GeometrySuspect } from './stress.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -4101,6 +4101,7 @@ export function registerCadTools(
       'DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). ' +
       'DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part\'s layer-direction weakness — usually what breaks first — is invisible to it. ' +
       'Peaks are read at `criticalDistanceMm` inside the surface (a declared distance; the distance actually used comes back as effectiveSampleDistanceMm) — that declared-distance reading is the number to quote. A region\'s `surfaceExtrapolatedMPa` (the depth profile fitted out to the surface) is a HIGHER estimate and is only quoted when it passes BOTH its own fit check and a cross-resolution check (`extrapolationCrossResolutionPct`), because a good fit R^2 is not sufficient: on a fillet the fit looked fine (R^2 0.90) while the value moved 17% between grids. Every region also carries the wall thickness it tunnels through in cells and a `trustworthy` flag with `whyUntrustworthy`; an untrustworthy region means the position/value may not be quoted — refine dxMm. ' +
+      'THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). ' +
       'A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. ' +
       'Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.',
     parameters: {
@@ -4325,6 +4326,24 @@ export function registerCadTools(
         warnFactor,
         badFactor,
       });
+      // HARNESS §11.14: a tool may not go silent. When the stress half certifies nothing
+      // (sub-voxel members — the usual answer for the toy-balance parts), an empty field
+      // reads as "all fine", which is the attention failure the principle forbids. The
+      // geometry scan already knows the suspects, so hand them over instead.
+      if (result.regionsTrustworthy === 0) {
+        try {
+          const scan = await (await ensurePythonWorker()).request<{ suspects?: GeometrySuspect[] }>(
+            'scan_attention',
+            { path: modelPath },
+          );
+          const suspects = scan.suspects ?? [];
+          if (suspects.length > 0) {
+            attention.layers.push(geometrySuspectLayer(a.versionId, bbox, suspects));
+          }
+        } catch {
+          // A courtesy scan must never turn a stress run into a failure.
+        }
+      }
       const bad = result.regions.filter((r) => r.tier === 'bad' && r.trustworthy);
       const warn = result.regions.filter((r) => r.tier === 'warn' && r.trustworthy);
       const drifting = result.meshIndependence.verdict === 'drifting';

@@ -99,6 +99,12 @@ check(/DO NOT ASK IT FOR "the largest element stress"/.test(block),
   'the tool description states the boundary at call time');
 check(/cannotReport/.test(block) && /a safety factor/.test(block),
   'the capability block spells out what may not be claimed');
+// HARNESS §11.14 / DESIGN §25.7: a tool may not go silent. When it certifies no region it
+// must still hand over the geometric suspects it already knows about.
+check(/scan_attention/.test(block) && /geometrySuspectLayer/.test(block),
+  'the tool falls back to the geometry scan instead of returning an empty field',
+  'never-silent rule');
+check(/NEVER SILENT/.test(block), 'and its description says so at call time');
 
 // --- 5. the honesty half on the real part --------------------------------
 const b = out.toyBalanceBeam;

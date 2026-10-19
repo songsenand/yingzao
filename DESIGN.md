@@ -2600,7 +2600,7 @@ simulate({ template: "reinforce-rib", geometry: {...},
            load: { endForceN: 500 },          // 只填量级，模板给默认与合理区间
            action: "add-rib" })
 → { whatWasSimulated: {...},                  // 回显：材料/工况/网格/无量纲数
-    diagnosis: { maxStressMPa, safetyFactor, hotSpots: [...] },
+    diagnosis: { resultants: {...}, hotSpots: [...], attention: { peaks, regions } },  // 没有 safetyFactor —— 见 §25.4 的边界
     validity: { gridConvergence, equilibrium, analyticComparison },
     afterAction: { maxStressMPa, massDeltaG },  // 处方复验
     warnings: [...] }
@@ -2637,6 +2637,28 @@ MPM 纯流体且无 F 路径）。但 `sdf.ts` 的**逐格体素化**（`solidMa
 规则网格）恰好是 hex8 线弹性 FEM 所需的网格，绕开了体网格剖分与稀疏矩阵组装。
 ⇒ 走**小体素 FEM 车道**，第一条验证用**悬臂梁 vs 梁理论**。
 详见 `docs/archive/M4-M5-REVIEW.md §7`。
+
+---
+
+### 25.7 注意力义务：检查/仿真工具**不许沉默**（承 HARNESS §11.14，2026-10-19）
+
+HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是：把一条通过结论交给没见过这个
+零件的人，他应当知道下一步去看哪里。对检查/仿真工具，这条推论出三条硬要求：
+
+1. **每个 verdict/场都要带可疑位置**（坐标 + 为什么 + 一条可执行的观测命令）。只有整体结论
+   等于把找缺陷的活退回给使用者。
+2. **不许沉默**：工具算不出可信的量时，**不能返回空场**——空场读作"都没事"，那正是这条义务
+   禁止的失败模式。此时必须交出它**已经知道的**几何嫌疑位置，并明确标注"这是几何，不是应力"。
+   实测判例：`simulate_stress` 在玩具天平各件上必然认证不出热点（构件比体素薄），
+   于是它回退调用 `scan_attention`，把再入角以 `geometry-suspects` 图层交出（v050 上给出
+   4 处刀口根部，`severity: likely-defect`）——**这才是那 4 处 V 形缺口在注意力层面的解法**，
+   与能不能算出 Kt 无关。
+3. **图与 JSON 同源**：面板画的场与 LLM 读的摘要是同一个对象（§4 双通道；`attention` 契约）。
+
+**由此得出的选型判据（写给未来的自己）**：评价一条力学车道的首要标准**不是**峰值精度，
+而是**它能不能把注意力引到对的位置**。Kt 精度只在"已经指对了、现在要判够不够"时才是问题。
+这解释了为什么体素车道（秒级、积分量准、能给 d_c 口径读数）配一次几何扫描，比追一条
+高保真 FEM 车道更值。
 
 ---
 
