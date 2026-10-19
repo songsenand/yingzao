@@ -4148,6 +4148,10 @@ export function registerCadTools(
           },
         },
       },
+      mode: {
+        type: 'string',
+        description: '"judge" (default) returns ONLY the delivery judgement; "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The default is the stricter half (DESIGN §25.7).',
+      },
       excludeFromReport: {
         type: 'array',
         description: 'Cells to drop from the reported field, peaks, regions and percentiles — for SUPPORT and LOAD patches, whose stress is an artifact of the idealisation (a clamped patch is not a knife edge on a pin). The excluded cell count comes back in method.excludedCells, so the exclusion is declared rather than silent.',
@@ -4260,6 +4264,7 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as {
         versionId: string;
+        mode?: 'judge' | 'scan' | 'both';
         loads: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
         supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
         excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
@@ -4396,7 +4401,7 @@ export function registerCadTools(
         subject: `stress:${a.versionId}`,
       });
 
-      return {
+      const out: Record<string, unknown> = {
         versionId: a.versionId,
         verdict,
         material: material as unknown as { [key: string]: Json },
@@ -4442,6 +4447,19 @@ export function registerCadTools(
         },
         attention,
       };
+      // The two channels are separated STRUCTURALLY, not by convention: scan mode has no
+      // verdict at all, so a risk map cannot be misread as a gate; judge mode has no
+      // attention field, so a verdict cannot be mistaken for a fingerprint of where it
+      // looked. Default = judge (the stricter half, DESIGN §25.7).
+      const mode = a.mode ?? 'judge';
+      if (mode === 'scan') {
+        delete out.verdict;
+        delete out.delivery;
+      }
+      if (mode === 'judge') {
+        delete out.attention;
+      }
+      return out;
     },
   }));
 
@@ -4535,6 +4553,17 @@ export function registerCadTools(
         type: 'string',
         description: 'Assembly manifest to audit against. Defaults to assembly/assembly.json in the session workspace.',
       },
+      claims: {
+        type: 'array',
+        description: 'Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength | motion | assembly | manufacturability | appearance | review. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            kind: { type: 'string', required: true, description: 'strength | motion | assembly | manufacturability | appearance | review' },
+            statement: { type: 'string', required: true, description: 'The claim in words, e.g. "the beam carries 80 g without yielding".' },
+          },
+        },
+      },
     },
     output: {
       schema: {
@@ -4572,7 +4601,10 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { manifestPath?: string };
       const project = await allStores(exec);
-      const report = await auditDelivery(project, { manifestPath: a.manifestPath });
+      const report = await auditDelivery(project, {
+        manifestPath: a.manifestPath,
+        claims: (args as { claims?: import('./delivery-audit.ts').DeliveryClaim[] }).claims,
+      });
       const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
       const warn = report.findings.filter((f) => f.severity === 'warn').length;
       const info = report.findings.filter((f) => f.severity === 'info').length;

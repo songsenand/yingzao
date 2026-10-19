@@ -117,6 +117,13 @@ check(dl.length > 0 && !/suspect/i.test(dl),
   'detection is NOT an input to the delivery verdict',
   'geometry suspects cannot fail a part with no load case behind it');
 check(/unevaluable/.test(dl), 'and a number the mesh cannot decide is reported as unevaluable, not as a pass');
+// Detection and delivery are separated STRUCTURALLY (DESIGN §25.7): scan mode emits no
+// verdict, judge mode emits no attention — so neither can be misread as the other.
+check(/mode === 'scan'/.test(block) && /delete out\.verdict/.test(block),
+  'scan mode carries NO verdict — a risk map cannot be read as a gate');
+check(/mode === 'judge'/.test(block) && /delete out\.attention/.test(block),
+  'judge mode carries NO attention field — a verdict cannot pose as a fingerprint');
+check(/const mode = a\.mode \?\? 'judge'/.test(block), 'the default is the stricter half (judge)');
 
 // --- 5. the honesty half on the real part --------------------------------
 const b = out.toyBalanceBeam;

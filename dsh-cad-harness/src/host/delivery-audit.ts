@@ -24,6 +24,27 @@ export interface AuditFinding {
   detail: string;
 }
 
+/**
+ * A delivery CLAIM, declared by the caller (DESIGN §25.7: an undecidable judgement may
+ * only be DECLARED, never certified). The audit does not judge whether the claim is true;
+ * it checks that the corpus carries the kind of evidence the claim needs, and reports the
+ * gap by name. That is the machine-enforceable half of "we looked at it / we checked it".
+ */
+export interface DeliveryClaim {
+  kind: 'strength' | 'motion' | 'assembly' | 'manufacturability' | 'appearance' | 'review';
+  statement: string;
+}
+
+/** What each claim kind needs, and how to say it in a finding. */
+const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: string }> = {
+  strength: { kinds: ['stress'], label: 'a fresh stress run citing the newest version' },
+  motion: { kinds: ['motion', 'physics'], label: 'a fresh motion/physics run' },
+  assembly: { kinds: ['assembly-check'], label: 'a fresh assembly check' },
+  manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY part' },
+  appearance: { kinds: ['assembly'], label: 'a fresh assembly run carrying the renders' },
+  review: { kinds: ['assembly'], label: 'a fresh assembly render to look at' },
+};
+
 export interface DeliveryAudit {
   verdict: 'blocked' | 'attention' | 'ok';
   findings: AuditFinding[];
@@ -54,7 +75,7 @@ const newestOf = <T extends { timestamp: string }>(list: T[]): T | undefined =>
 /** The audit itself: reads the stores, never writes. */
 export async function auditDelivery(
   project: ProjectStores,
-  opts: { manifestPath?: string; workspace?: string } = {},
+  opts: { manifestPath?: string; workspace?: string; claims?: DeliveryClaim[] } = {},
 ): Promise<DeliveryAudit> {
   const [versions, parts, runs] = await Promise.all([
     listVersions(project.store), listParts(project.partStore), listRuns(project.runStore),
@@ -151,9 +172,54 @@ export async function auditDelivery(
     );
   } catch { /* no readable manifest: the other findings still stand */ }
 
-  // ── findings, worst first ─────────────────────────────────────────────────
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
+
+  // ── claims → evidence (declared, not inferred) ────────────────────────────
+  //
+  // "必须看过渲染图" cannot be verified by content (DESIGN §25.7 gate rule): a machine can
+  // only witness existence + currency. So a judgement is REGISTERED here as a claim, and
+  // the audit answers the question it can answer — is there fresh evidence of the right
+  // kind behind it? — instead of pretending to have checked the looking.
+  const staleIds = new Set(staleRuns.map((r) => r.id));
+  const newestVersions = new Set([...newestOfPart.values()]);
+  const freshRuns = runs.filter((r) => !staleIds.has(r.id));
+  const freshOfKind = (kinds: string[]) =>
+    freshRuns.filter(
+      (r) => kinds.includes(r.kind) && (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
+    );
+  const partsMissingPrintability = [...newestOfPart.entries()]
+    .filter(
+      ([, vid]) =>
+        !freshRuns.some((r) => r.kind === 'printability' && (r.sourceVersionIds ?? []).includes(vid)),
+    )
+    .map(([pid]) => parts.find((x) => x.id === pid)?.name ?? pid);
+  const claims = opts.claims ?? [];
+  for (const claim of claims) {
+    const spec = CLAIM_EVIDENCE[claim.kind];
+    if (!spec) {
+      push('warn', 'unknown-claim-kind', `claim "${claim.statement}" has an unknown kind "${claim.kind}" — it cannot be backed or checked`);
+      continue;
+    }
+    if (claim.kind === 'manufacturability') {
+      if (partsMissingPrintability.length > 0) {
+        push('blocked', 'claim-without-evidence',
+          `claim "${claim.statement}" needs ${spec.label}; missing for: ${partsMissingPrintability.join(', ')}`);
+      }
+      continue;
+    }
+    if (freshOfKind(spec.kinds).length === 0) {
+      push('blocked', 'claim-without-evidence',
+        `claim "${claim.statement}" needs ${spec.label}, and no such run cites the newest version of any part`);
+    }
+  }
+  if (claims.length === 0) {
+    push('info', 'no-claims-declared',
+      'audited the CORPUS only: with no claims declared this audit cannot say whether a delivery claim is backed — ' +
+      'declare `claims` to make it answer that question (a green corpus is not a delivered design)');
+  }
+
+  // ── findings, worst first ─────────────────────────────────────────────────
 
   for (const [kind, latest] of Object.entries(latestByKind)) {
     if (latest.status === 'fail') {
