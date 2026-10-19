@@ -77,6 +77,13 @@ loads (a face, or a point patch). An unsupported load is a rigid-body mode and i
 compute by hand), plus `checks.equilibriumErrorPct` and `checks.energyBalancePct`,
 which are machine-precision and do not depend on the answer being right.
 
+**Quote the declared-distance reading, not the extrapolated one.** `stats.peakAtDeclaredDistanceMPa`
+is the number that survives refinement; a region's `surfaceExtrapolatedMPa` is a higher estimate and is
+only emitted when it passes a cross-resolution stability check (`extrapolationCrossResolutionPct`) —
+a good fit R² is NOT sufficient (measured on a fillet: R² 0.90 while the value moved 17% between grids).
+Setting `runConvergence: false` therefore leaves every region untrustworthy: the stability check is part
+of the peak claim, not an extra.
+
 **Peaks are read at a declared distance, never at the surface.** `criticalDistanceMm`
 (default 1.0) is floored by one cell; the distance actually used comes back as
 `effectiveSampleDistanceMm`. The number to compare against a material is a region's

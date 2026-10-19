@@ -122,6 +122,9 @@ export interface StressRegion {
   peakDepthCells: number;
   peakDepthMm: number;
   surfaceExtrapolatedMPa: number | null;
+  /** The same estimate on the coarser grid — the stability check the peak needs. */
+  extrapolationCoarseMPa?: number;
+  extrapolationCrossResolutionPct?: number | null;
   pathSamples: number;
   pathDepthMm: number[];
   pathVonMisesMPa: number[];
@@ -143,6 +146,9 @@ export interface StressSolveResult {
   cgResidualRel: number;
   criticalDistanceMm: number;
   effectiveDistanceMm: number;
+  /** Cells dropped from the field/peaks/percentiles: the support and load patches
+   *  are an idealisation, not evidence (see `excludeFromReport`). */
+  excludedCells: number;
   peakDeclaredDepthMPa: number;
   peakDeclaredDepthAtMm: number[];
   peakDepthCells: number;
@@ -318,6 +324,8 @@ export function stressAttention(input: StressAttentionInput): AttentionField {
     peakVonMisesMPa: r.peakVonMisesMPa,
     peakDepthMm: r.peakDepthMm,
     surfaceExtrapolatedMPa: r.surfaceExtrapolatedMPa,
+    extrapolationCoarseMPa: r.extrapolationCoarseMPa ?? null,
+    extrapolationCrossResolutionPct: r.extrapolationCrossResolutionPct ?? null,
     localThicknessCells: r.localThicknessCells,
     minExtentCells: r.minExtentCells,
     fitR2: r.fitR2,
@@ -348,7 +356,9 @@ export function stressAttention(input: StressAttentionInput): AttentionField {
       badAt: Number((material.strengthMPa / badFactor).toFixed(4)),
       source: `declared-material ${material.id}${material.assumed ? ' (ASSUMED — not calibrated)' : ''}: strengthMPa ${material.strengthMPa}`,
       caveat:
-        'isotropic model: layer-direction weakness of a printed part is NOT represented, so a tier is not a safety factor',
+        'isotropic model: layer-direction weakness of a printed part is NOT represented, so a tier is not a safety factor; ' +
+        'surfaceExtrapolatedMPa is only quoted for regions that also passed the cross-resolution stability check ' +
+        '(a good fit R^2 alone is not enough — measured: R^2 0.90 with a 17% move on a fillet)',
     },
     stats: {
       peakAtDeclaredDistanceMPa: result.peakDeclaredDepthMPa,

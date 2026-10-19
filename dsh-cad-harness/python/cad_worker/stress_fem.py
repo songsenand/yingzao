@@ -649,6 +649,10 @@ def run(params: dict) -> dict:
     else:
         critical_distance_mm = 1.0  # mm; floored by one cell inside `_solve_once`
     cg_tol = float(params.get("cgTolerance") or 1e-8)
+    # 探针 3 的估计子对比（experiments/20261019_fillet_kt_voxel_fem_probe.md）测出：
+    # 线性外推在圆角上跨分辨率偏 +17%，而拟合 R² 从 0.876 升到 0.901 照样好看。
+    # 所以 **R² 不是充分条件**，必须另加跨分辨率判据；否则工具会交付一个看着成立的错峰值。
+    stability_pct = float(params.get("stabilityPct") or 10.0)
     cg_max_iter = int(params.get("cgMaxIterations") or 20000)
 
     yield_mpa = params.get("yieldMPa")
@@ -801,6 +805,50 @@ def run(params: dict) -> dict:
         )
 
     regions = sorted(fine["regions"], key=lambda r: (r["tier"] != "bad", -r["volumeMm3"]))[:REGIONS_MAX]
+
+    # 跨分辨率稳定性门禁：按峰值位置把细网格的区域配到粗网格的区域，比"外推的表面值"。
+    # 比外推值而不是"声明距离读数"，是因为声明距离被格宽兜底（dx 越粗，采样点越深），
+    # 跨分辨率比它是拿两个不同物理距离读数相比——那会误杀收敛量。
+    for g in regions:
+        why = g.get("whyUntrustworthy")
+        if coarse is None:
+            g["extrapolationCrossResolutionPct"] = None
+            g["trustworthy"] = False
+            g["whyUntrustworthy"] = (
+                "no coarser grid was solved, so the peak's stability across resolutions is "
+                "UNKNOWN and the extrapolated value may not be quoted; " + (why or "")
+            )
+            continue
+        match = None
+        for c in coarse["regions"]:
+            d = float(np.linalg.norm(np.asarray(g["atMm"], dtype=float) - np.asarray(c["atMm"], dtype=float)))
+            if match is None or d < match[0]:
+                match = (d, c)
+        if (
+            match
+            and match[0] <= max(3.0, 2.0 * coarse["dxMm"])
+            and g["surfaceExtrapolatedMPa"]
+            and match[1]["surfaceExtrapolatedMPa"]
+        ):
+            ref = float(match[1]["surfaceExtrapolatedMPa"])
+            pct = 100.0 * abs(float(g["surfaceExtrapolatedMPa"]) - ref) / max(abs(ref), 1e-9)
+            g["extrapolationCoarseMPa"] = round(ref, 3)
+            g["extrapolationCrossResolutionPct"] = round(pct, 3)
+            if pct > stability_pct:
+                g["trustworthy"] = False
+                g["whyUntrustworthy"] = (
+                    f"the extrapolated surface value moves {pct:.1f}% between dx {fine['dxMm']} and "
+                    f"dx {coarse['dxMm']} (rule: <= {stability_pct}%) — a good R^2 is NOT enough "
+                    f"(measured on a fillet: R^2 0.90 with a 17% move). " + (why or "")
+                )
+        else:
+            g["extrapolationCrossResolutionPct"] = None
+            g["trustworthy"] = False
+            g["whyUntrustworthy"] = (
+                "no matching region on the coarser grid, so the extrapolated value's stability "
+                "cannot be checked; " + (why or "")
+            )
+
     trustworthy = [r for r in regions if r["trustworthy"]]
 
     return {
