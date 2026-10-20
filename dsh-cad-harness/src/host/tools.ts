@@ -3812,11 +3812,17 @@ export function registerCadTools(
         const rules = evaluableRules(profile);
         const wall = rules.find((r) => r.rule === 'wallMinMm');
         const overhang = rules.find((r) => r.rule === 'overhangDeg');
+        // `withSampleField` is what makes the heatmap POSSIBLE: the tool persists a run
+        // carrying the per-sample values, and the panel draws those. Without it the
+        // panel's /api/cad/attention finds no field and the 🔥 button does nothing —
+        // which is exactly how the first version shipped (the option existed, the
+        // caller never asked for it).
         const screen = await checkPrintability(store, {
           versionId: a.versionId,
           wallMinMm: wall?.value ?? a.wallMinMm,
           overhangDeg: overhang?.value ?? a.overhangDeg,
           samples: a.samples,
+          withSampleField: true,
         });
         base = base ?? screen;
         const { notApplicable, unevaluable } = disclosureLists(profile);
@@ -4478,7 +4484,11 @@ export function registerCadTools(
       if (mode === 'judge') {
         delete out.attention;
       }
-      return out;
+      // `out` is assembled in a MODE-DEPENDENT shape (scan mode carries no verdict, judge
+      // mode no field), so its static type is a record even though every key it can emit
+      // is declared in `output.schema` and validated there at the boundary. The cast
+      // bridges exactly that gap; it does not loosen what the caller receives.
+      return out as any;
     },
   }));
 

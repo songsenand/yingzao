@@ -1272,7 +1272,17 @@ export function CadPanel(): React.ReactElement {
     const mesh = meshRef.current;
     const geo = mesh?.geometry as THREE.BufferGeometry | undefined;
     const mat = mesh?.material as THREE.MeshStandardMaterial | undefined;
-    if (!geo || !mat || !versionId) return;
+    // A silent early return is how the first build "did nothing": the click was ignored
+    // and the user had no way to tell a missing mesh from a missing field from a missing
+    // route. Every exit now says something.
+    if (!geo || !mat) {
+      setHint('热力图需要先有一个版本的 3D 预览（当前视图里没有可着色的零件）');
+      return;
+    }
+    if (!versionId) {
+      setHint('热力图按版本取场数据，但当前预览没有 versionId');
+      return;
+    }
     if (heat) {
       geo.deleteAttribute('color');
       mat.vertexColors = false;
@@ -1281,15 +1291,17 @@ export function CadPanel(): React.ReactElement {
       return;
     }
     try {
+      setHint('热力图取数中…');
       const res = await fetch(withProject(`/api/cad/attention?v=${encodeURIComponent(versionId)}`));
       if (!res.ok) {
-        setHint('这个版本还没有注意力场 — 先对这个版本跑一次 check_printability');
+        setHint(`热力图：服务器上没有 ${versionId} 的场数据（HTTP ${res.status}）— 先对这个版本跑一次 check_printability 生成 run；` +
+          '如果刚更新过插件，还需要重启 dsh 进程，新路由才会存在');
         return;
       }
       const payload = (await res.json()) as AttentionPayload;
       const layer = pickHeatLayer(payload);
       if (!layer) {
-        setHint('有注意力场但没有可画的层（薄区与悬垂都没测到）');
+        setHint(`场数据回来了（${payload.samples ? Object.keys(payload.samples).join('/') : '空'}），但没有可画的层：壁厚与悬垂采样都少于 8 个`);
         return;
       }
       const { colors } = buildHeatColors(geo, layer);
