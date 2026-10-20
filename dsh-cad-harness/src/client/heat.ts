@@ -49,7 +49,20 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
   const wallNorm = payload.normalization?.wall ?? {};
   const overhangNorm = payload.normalization?.overhang ?? {};
 
-  // Wall thickness first: a thin wall is a defect, an overhang is a process cost.
+  // The FUSED risk map first (analyze): |u| already means "how far from its own comfort
+  // band", so the ramp spans 0..1 with no re-normalisation — each quantity was made
+  // comparable by its own DECLARED band, not by a weight invented here.
+  const fused = payload.samples?.fused ?? [];
+  if (fused.length >= 8) {
+    return {
+      id: 'fused',
+      samples: fused,
+      legend: `风险 |u|（距各自舒适带）：红 ≥ 0.5（过半）· 蓝 = 舒适区 · 采样 ${fused.length} 点 · 读数=最坏那一路`,
+      score: (v) => Math.min(1, Math.max(0, v)),
+    };
+  }
+
+  // Wall thickness next: a thin wall is a defect, an overhang is a process cost.
   if (wall.length >= 8) {
     const warn = wallNorm.warnAt ?? 1.2;
     const bad = wallNorm.badAt ?? warn * 0.4;

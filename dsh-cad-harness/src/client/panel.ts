@@ -35,6 +35,7 @@ const RUN_KIND_LABEL: Record<RunKind, string> = {
   fluid: '流体仿真',
   printability: '制造筛查',
   stress: '应力分析',
+  analyze: '风险图',
 };
 
 /** Status glyph for a run/product verdict. */

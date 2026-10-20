@@ -122,7 +122,7 @@ function cornerU(s: SuspectLike, band?: BandNorm): number {
  */
 export function analyzeVersion(
   input: { suspects?: readonly SuspectLike[]; field?: SampleFieldLike; wallBand: BandNorm; cornerBand?: BandNorm; cellMm?: number },
-): { peaks: AnalyzePeak[]; layers: Record<string, number>; notMapped: string[] } {
+): { peaks: AnalyzePeak[]; samples: { fused: { p: number[]; v: number }[] }; layers: Record<string, number>; notMapped: string[] } {
   const cell = input.cellMm ?? 8;
   const key = (p: readonly number[]) => p.map((x) => Math.floor(x / cell)).join(',');
   const buckets = new Map<string, { at: number[]; risk: number; layers: Set<string>; count: number }>();
@@ -156,8 +156,23 @@ export function analyzeVersion(
   const wallPts = input.field?.samples?.wall ?? [];
   for (const p of wallPts) if (p.p?.length === 3) add('wall', p.p, signedOf(p.v, input.wallBand));
 
+  // The heat map needs EVERY sampled point (including comfortable ones) so the surface
+  // is covered; `peaks` is the other view (only where it matters). Same buckets, two
+  // projections — never two computations.
+  const cellRisk = new Map<string, number>();
+  for (const [k, b] of buckets) cellRisk.set(k, b.risk);
+  const allPts: { p: number[]; v: number }[] = [];
+  for (const p2 of [...(input.field?.samples?.wall ?? []), ...(input.field?.samples?.overhang ?? [])]) {
+    if (p2.p?.length !== 3) continue;
+    allPts.push({ p: p2.p, v: cellRisk.get(key(p2.p)) ?? 0 });
+  }
+  for (const s2 of input.suspects ?? []) {
+    const at = s2.where?.atMm ?? s2.atMm;
+    if (at && at.length === 3) allPts.push({ p: [...at], v: cellRisk.get(key(at)) ?? 0 });
+  }
+
   const peaks = [...buckets.values()]
     .map((b) => ({ atMm: b.at, risk: b.risk, count: b.count, layers: [...b.layers].sort() }))
     .sort((a, b) => b.risk - a.risk || b.count - a.count || 0);
-  return { peaks, layers, notMapped: [] };
+  return { peaks, samples: { fused: allPts }, layers, notMapped: [] };
 }

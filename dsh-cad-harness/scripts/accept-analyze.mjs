@@ -34,6 +34,21 @@ check(fuseAt([]).risk === 0 && fuseAt([]).worst === null, 'nothing to say -> ris
 // A broken declaration must not quietly score 0 as "safe" without being noticed elsewhere:
 check(signedOf(5, { ...wall, scaleHi: 0 }) === 0, 'a zero scale is inert (declared-broken, never a silent pass)');
 
+// ── The human's channel: the panel must DRAW the fused layer ──────────────────
+// The map is only useful if a person can look at it; this is the "two readers, one
+// object" half of the contract (the JSON is the LLM's view, the ramp is the human's).
+import { pickHeatLayer } from '../src/client/heat.ts';
+const payload = {
+  id: 'analyze', versionId: 'v-test',
+  normalization: { fused: { mode: 'absolute', warnAt: 0.5, badAt: 1.0, source: 'test' } },
+  samples: { fused: Array.from({ length: 10 }, (_, i) => ({ p: [i, 0, 0], v: i / 9 })) },
+};
+const hl = pickHeatLayer(payload);
+check(hl?.id === 'fused', 'the panel prefers the fused risk layer', hl?.id ?? 'null');
+check(hl && near(hl.score(0), 0) && near(hl.score(1), 1) && near(hl.score(0.25), 0.25),
+  'and |u| maps straight onto the ramp (no re-normalisation, no invented weight)');
+check(hl && /风险/.test(hl.legend) && /0\.5/.test(hl.legend), 'the legend states the 0.5 half-way line');
+
 // ── The toy-balance control (SKIP without the corpus) ─────────────────────────
 // Directional and falsifiable: the pan elbow must light up in v069 and NOT in v077.
 import { controlAvailable, runControl, atElbow } from './analyze-control.mjs';

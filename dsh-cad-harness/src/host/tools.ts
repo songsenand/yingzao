@@ -4847,6 +4847,25 @@ export function registerCadTools(
         suspects = scan.suspects ?? [];
       } catch { /* the map still has the field layers */ }
       const out = analyzeVersion({ suspects, field: screen.field as never, wallBand, cellMm: a.cellMm });
+      // Persist the map so the panel can DRAW it and a later reader can audit it: the
+      // heat map and the JSON come from the same object (one surface, two readers).
+      const run = await beginRun(project.runStore, {
+        kind: 'analyze',
+        title: `风险图 · ${a.versionId}`,
+        sourceVersionIds: [a.versionId],
+        subject: `analyze:${a.versionId}`,
+      });
+      await run.json('report.json', { peaks: out.peaks, layers: out.layers, bands: { wall: wallBand }, notMapped: out.notMapped });
+      await run.json('attention.json', {
+        id: 'analyze',
+        versionId: a.versionId,
+        normalization: { fused: { mode: 'absolute', warnAt: 0.5, badAt: 1.0, source: 'each quantity\'s declared band' } },
+        samples: { fused: out.samples.fused },
+      });
+      await run.commit({
+        status: out.peaks.length > 0 ? 'check' : 'pass',
+        summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'}`,
+      });
       return {
         ...out,
         bands: { wall: wallBand },
@@ -5739,7 +5758,7 @@ export function registerCadTools(
         if (!wanted) return new Response('missing v', { status: 400 });
         const runs = await listRuns(runStore);
         const candidates = runs
-          .filter((r) => (r.kind === 'printability' || r.kind === 'stress') && (r.sourceVersionIds ?? []).includes(wanted))
+          .filter((r) => (r.kind === 'printability' || r.kind === 'stress' || r.kind === 'analyze') && (r.sourceVersionIds ?? []).includes(wanted))
           .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
         for (const run of candidates) {
           const path = runFilePath(runStore, run.id, 'attention.json');
