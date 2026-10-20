@@ -32,6 +32,7 @@ import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJoin
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { asJudgement } from '../shared/judgement.ts';
+import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
@@ -4657,6 +4658,102 @@ export function registerCadTools(
   // Profile-wide on purpose: this observes every session at once, and the
   // numbers describe the request, not the project (project.ts → telemetryRoot).
   registerUsageObserver(ctx);
+
+  // --- preflight: the mandatory sequence as ONE call -------------------------
+  //
+  // WHY one tool: the failure this kills is "the gate was forgotten". Six names to
+  // remember is six chances to skip one; one call is one. Steps NOT orchestrated here
+  // are reported as not-run WITH a reason — never silently green (DESIGN §25.7).
+  registerTool(defineTool({
+    name: 'preflight',
+    description:
+      'Run the mandatory delivery sequence in one call: printability for every part (newest version) ' +
+      'and the corpus audit with your `claims`; steps this first cut does not orchestrate (assembly ' +
+      'contracts, mesh health, simulation evidence, render freshness) come back as ran:false WITH a ' +
+      'reason, never as a silent pass. `judgement` is the WORST step. Read `unevaluable` before claiming ' +
+      'anything: not-excluded means "no counter-example", never "ok" and never "safe".',
+    parameters: {
+      claims: {
+        type: 'array',
+        description: 'Delivery claims to back with evidence: {kind, statement}. kind = strength | motion | assembly | manufacturability | appearance | review.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            kind: { type: 'string', required: true },
+            statement: { type: 'string', required: true },
+          },
+        },
+      },
+      profileIds: { type: 'array', items: { type: 'string' }, description: 'Declared process profiles to screen against (same meaning as in check_printability).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          judgement: { type: 'string', required: true, description: 'The WORST step: excluded | difficult | not-excluded.' },
+          steps: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          ran: { type: 'array', required: true, items: { type: 'string' } },
+          notRun: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          summary: { type: 'string', required: true },
+        },
+      },
+      render: (_a, v) => {
+        const out = v as { judgement: string; ran: string[]; notRun: { step: string; why: string }[]; summary: string };
+        return [
+          { type: 'text', text: `preflight → ${out.judgement}\n${out.summary}` },
+        ] as never;
+      },
+    },
+    async run(_args, exec) {
+      const a = args as { claims?: { kind: string; statement: string }[]; profileIds?: string[] };
+      const parts = await listParts(project.partStore);
+      const versions = await listVersions(project.store);
+      const newest = new Map<string, string>();
+      for (const v of versions) {
+        if (!v.partId) continue;
+        const cur = newest.get(v.partId);
+        const curT = cur ? (versions.find((x) => x.id === cur)?.timestamp ?? '') : '';
+        if (!cur || v.timestamp > curT) newest.set(v.partId, v.id);
+      }
+
+      const steps: PreflightStep[] = [];
+      for (const part of parts) {
+        const vid = newest.get(part.id);
+        if (!vid) {
+          steps.push({ step: `printability:${part.name}`, ran: false, judgement: 'difficult', detail: 'no version for this part' });
+          continue;
+        }
+        const screen = await checkPrintability(project.store, { versionId: vid, withSampleField: true });
+        steps.push({
+          step: `printability:${part.name}@${vid}`,
+          ran: true,
+          judgement: asJudgement(screen.verdict),
+          detail: `verdict ${screen.verdict} · ${screen.findings.length} finding(s)`,
+        });
+      }
+
+      const audit = await auditDelivery(project, { claims: a.claims as never });
+      steps.push({ step: 'audit', ran: true, judgement: audit.verdict, detail: `${audit.findings.length} finding(s), claims ${a.claims?.length ?? 0}` });
+
+      // Declared gaps — the honest part. Each is a step this cut does not run.
+      for (const [step, why] of [
+        ['assembly', 'this first cut does not orchestrate check_assembly; run it and pass the result as a claim'],
+        ['mesh-health', 'not orchestrated — measure_part is still an explicit step'],
+        ['simulation-evidence', 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)'],
+        ['render', 'the assembly render is a HUMAN look: preflight can check freshness, not content'],
+      ] as const) {
+        steps.push({ step, ran: false, judgement: 'difficult', detail: why });
+      }
+
+      const summary = preflightSummary(steps);
+      return {
+        ...summary,
+        steps,
+        summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} not run · judgment ${summary.judgement} — read unevaluable before claiming anything`,
+      };
+    },
+  }));
 
   // --- assembly manifest v1: executable interface contracts (L0) ---
   // Shared by the check_assembly tool (LLM-initiated) and the manual
