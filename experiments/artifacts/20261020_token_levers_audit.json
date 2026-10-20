@@ -1,0 +1,2845 @@
+{
+ "rows": [
+  {
+   "level": "01-mortise-bench",
+   "run": "recovered-01-mortise-bench",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--tmp-bench-01-mortise-bench-default-glm53-high--/session-7889e680-753c-429a-a1a4-3de3f80ae834/session.v4.jsonl.zstd",
+   "steps": 33,
+   "billed": 2987186,
+   "ctx_total": 2906442,
+   "peak": 128017,
+   "P": 14678,
+   "static": 484374,
+   "recon_nonimg": 2553753,
+   "charged": {
+    "text:system": 21681,
+    "text:user": 42075,
+    "tool-call": 498046,
+    "text:tool": 415165,
+    "reasoning": 1076872,
+    "text:assistant": 15540
+   },
+   "img_weighted": 232,
+   "reasoning_new": 45694,
+   "delta_with_img": 2964.0,
+   "delta_no_img": 1443.0,
+   "n_with_img": 3,
+   "n_no_img": 29,
+   "images": {
+    "count": 15,
+    "unique": 11,
+    "offloaded": 0,
+    "bytes": 44976,
+    "by_owner": {
+     "tool-result": 15
+    },
+    "dims": {
+     "512x512": 15
+    }
+   },
+   "calls": 47,
+   "dups": {
+    "count": 4,
+    "false_hits": 4,
+    "rounded": 4,
+    "groups": [
+     {
+      "tool": "check_assembly",
+      "count": 3,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     },
+     {
+      "tool": "delivery_audit",
+      "count": 1,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 147030.7960907919,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.19904787032178892,
+    "image": 0.050587899600539735,
+    "reasoning": 0.44252804281230096,
+    "tool-call": 0.20466621995046325,
+    "text:assistant": 0.006385982535810343,
+    "text:tool": 0.17060723548775428,
+    "text:user": 0.01729023263798071,
+    "text:system": 0.008909555171100649
+   }
+  },
+  {
+   "level": "01b-diagnosis",
+   "run": "recovered-01b-diagnosis",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--tmp-bench-01b-diagnosis-default-glm53-high--/session-77cbbc3c-3d92-4687-aac1-56312d71a547/session.v4.jsonl.zstd",
+   "steps": 11,
+   "billed": 540340,
+   "ctx_total": 523379,
+   "peak": 70804,
+   "P": 14678,
+   "static": 161458,
+   "recon_nonimg": 428151,
+   "charged": {
+    "text:system": 6560,
+    "text:user": 10520,
+    "reasoning": 34433,
+    "tool-call": 14338,
+    "text:tool": 199908,
+    "text:assistant": 934
+   },
+   "img_weighted": 0,
+   "reasoning_new": 9889,
+   "delta_with_img": null,
+   "delta_no_img": 4271.0,
+   "n_with_img": 0,
+   "n_no_img": 10,
+   "images": {
+    "count": 0,
+    "unique": 0,
+    "offloaded": 0,
+    "bytes": 0,
+    "by_owner": {},
+    "dims": {}
+   },
+   "calls": 11,
+   "dups": {
+    "count": 0,
+    "false_hits": 0,
+    "rounded": 0,
+    "groups": []
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 0.0,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.36845261930251993,
+    "image": 0.0,
+    "reasoning": 0.07857727111969472,
+    "tool-call": 0.032719801159184006,
+    "text:assistant": 0.002131419604036676,
+    "text:tool": 0.4561968203466423,
+    "text:user": 0.024006995968378835,
+    "text:system": 0.014970141972677296
+   }
+  },
+  {
+   "level": "02-steam-engine",
+   "run": "02-steam-engine-glm53-high",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--home-songsenand-bench-runs-02-steam-engine-glm53-high--/session-4769cc38-a926-4c7d-b67a-db8ea69f9c86/session.v4.jsonl.zstd",
+   "steps": 105,
+   "billed": 24104994,
+   "ctx_total": 23073403,
+   "peak": 319427,
+   "P": 16381,
+   "static": 1720005,
+   "recon_nonimg": 12338701,
+   "charged": {
+    "text:system": 54697,
+    "text:user": 124505,
+    "reasoning": 6750605,
+    "tool-call": 1944632,
+    "text:tool": 1671407,
+    "text:assistant": 72850
+   },
+   "img_weighted": 9260,
+   "reasoning_new": 97990,
+   "delta_with_img": 1978.0,
+   "delta_no_img": 2044.0,
+   "n_with_img": 5,
+   "n_no_img": 93,
+   "images": {
+    "count": 139,
+    "unique": 83,
+    "offloaded": 0,
+    "bytes": 1259693,
+    "by_owner": {
+     "tool-result": 139
+    },
+    "dims": {
+     "512x512": 135,
+     "1024x512": 4
+    }
+   },
+   "calls": 124,
+   "dups": {
+    "count": 4,
+    "false_hits": 4,
+    "rounded": 4,
+    "groups": [
+     {
+      "tool": "check_assembly",
+      "count": 3,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     },
+     {
+      "tool": "delivery_audit",
+      "count": 1,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "scan_attention",
+     "tok": 257,
+     "desc": 144,
+     "params": 99,
+     "chars": 1026
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "simulate_stress",
+     "tok": 1447,
+     "desc": 389,
+     "params": 1043,
+     "chars": 5786
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 5868556.77500316,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.08903411181874286,
+    "image": 0.2543429235385504,
+    "reasoning": 0.34943742629478675,
+    "tool-call": 0.10066167420112476,
+    "text:assistant": 0.00377099778546889,
+    "text:tool": 0.08651849136056555,
+    "text:user": 0.006444860388192232,
+    "text:system": 0.0028313282892490303
+   }
+  },
+  {
+   "level": "03-microscope",
+   "run": "03-microscope-glm53-high",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--home-songsenand-bench-runs-03-microscope-glm53-high--/session-f502ea6d-7902-4b58-98a5-c324bb81ead2/session.v4.jsonl.zstd",
+   "steps": 153,
+   "billed": 43340106,
+   "ctx_total": 43084307,
+   "peak": 442065,
+   "P": 16441,
+   "static": 2515473,
+   "recon_nonimg": 30395196,
+   "charged": {
+    "text:system": 100016,
+    "text:user": 243504,
+    "reasoning": 17717360,
+    "tool-call": 6725082,
+    "text:tool": 2894975,
+    "text:assistant": 198786
+   },
+   "img_weighted": 13610,
+   "reasoning_new": 161851,
+   "delta_with_img": 1845.0,
+   "delta_no_img": 988.0,
+   "n_with_img": 11,
+   "n_no_img": 138,
+   "images": {
+    "count": 178,
+    "unique": 147,
+    "offloaded": 0,
+    "bytes": 2482963,
+    "by_owner": {
+     "tool-result": 178
+    },
+    "dims": {
+     "1024x1024": 2,
+     "512x512": 172,
+     "640x640": 4
+    }
+   },
+   "calls": 203,
+   "dups": {
+    "count": 16,
+    "false_hits": 10,
+    "rounded": 16,
+    "groups": [
+     {
+      "tool": "check_assembly",
+      "count": 9,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     },
+     {
+      "tool": "measure_gap",
+      "count": 1,
+      "args": "{\"aDatum\":\"肩面\",\"bDatum\":\"台面\",\"bOn\":\"v011\",\"versionId\":\"v035\"}"
+     },
+     {
+      "tool": "measure_gap",
+      "count": 1,
+      "args": "{\"aDatum\":\"物镜座面\",\"bDatum\":\"筒轴\",\"versionId\":\"v042\"}"
+     },
+     {
+      "tool": "check_assembly",
+      "count": 1,
+      "args": "{\"manifestPath\":\"assembly/neg-C-光阑+1mm.json\"}"
+     },
+     {
+      "tool": "check_printability",
+      "count": 1,
+      "args": "{\"versionId\":\"v001\"}"
+     },
+     {
+      "tool": "check_printability",
+      "count": 1,
+      "args": "{\"profilesJson\":\"{\\\"id\\\": \\\"fdm-pla-0.4-draft\\\", \\\"material\\\": \\\"PLA\\\", \\\"notes\\\": \\\"未标定草稿：全部 rule-of-thumb。\\\", \\\"process\\\": \\\"FDM\\\", \\\"rules\\\": {\\\"bridgeMaxMm\\\": {\\\"applies\\\": tru"
+     },
+     {
+      "tool": "check_printability",
+      "count": 1,
+      "args": "{\"profilesJson\":\"{\\\"id\\\": \\\"fdm-pla-0.4-draft\\\", \\\"material\\\": \\\"PLA\\\", \\\"notes\\\": \\\"未标定草稿。\\\", \\\"process\\\": \\\"FDM\\\", \\\"rules\\\": {\\\"bridgeMaxMm\\\": {\\\"applies\\\": true, \\\"decidable\\\":"
+     },
+     {
+      "tool": "read_image",
+      "count": 1,
+      "args": "{\"file_path\":\"/home/songsenand/bench-runs/03-microscope-glm53-high/参考图.png\"}"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "scan_attention",
+     "tok": 257,
+     "desc": 144,
+     "params": 99,
+     "chars": 1026
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 1041,
+     "desc": 64,
+     "params": 963,
+     "chars": 4163
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "simulate_stress",
+     "tok": 1447,
+     "desc": 389,
+     "params": 1043,
+     "chars": 5786
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 8625384.201705508,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.06973309178412512,
+    "image": 0.20019781684559781,
+    "reasoning": 0.49115466198698504,
+    "tool-call": 0.18643044881092652,
+    "text:assistant": 0.005510678263451485,
+    "text:tool": 0.0802535178822224,
+    "text:user": 0.0067503355360211004,
+    "text:system": 0.00277260972702989
+   }
+  },
+  {
+   "level": "04-rack-connector",
+   "run": "04-rack-connector-glm53-high",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--home-songsenand-bench-runs-04-rack-connector-glm53-high--/session-9539bf4b-62e1-47c3-a793-baa804c809b8/session.v4.jsonl.zstd",
+   "steps": 42,
+   "billed": 4948079,
+   "ctx_total": 4864989,
+   "peak": 180790,
+   "P": 14678,
+   "static": 616476,
+   "recon_nonimg": 3423733,
+   "charged": {
+    "text:system": 27019,
+    "text:user": 48708,
+    "reasoning": 1244774,
+    "tool-call": 232548,
+    "text:tool": 1227325,
+    "text:assistant": 26883
+   },
+   "img_weighted": 441,
+   "reasoning_new": 52904,
+   "delta_with_img": null,
+   "delta_no_img": 1616.0,
+   "n_with_img": 0,
+   "n_no_img": 41,
+   "images": {
+    "count": 17,
+    "unique": 17,
+    "offloaded": 0,
+    "bytes": 134320,
+    "by_owner": {
+     "tool-result": 17
+    },
+    "dims": {
+     "512x512": 17
+    }
+   },
+   "calls": 80,
+   "dups": {
+    "count": 3,
+    "false_hits": 3,
+    "rounded": 3,
+    "groups": [
+     {
+      "tool": "check_assembly",
+      "count": 2,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     },
+     {
+      "tool": "delivery_audit",
+      "count": 1,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 279485.2632587898,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.15134660520101728,
+    "image": 0.057448282670071765,
+    "reasoning": 0.30559554490765434,
+    "tool-call": 0.05709119308178448,
+    "text:assistant": 0.0065998526911330655,
+    "text:tool": 0.3013117659541305,
+    "text:user": 0.011957952047007751,
+    "text:system": 0.006633241076580899
+   }
+  },
+  {
+   "level": "05-rack-assembly",
+   "run": "05-rack-assembly-glm53-high",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--home-songsenand-bench-runs-05-rack-assembly-glm53-high--/session-af29ccc2-fae7-47fd-8340-f53fb9ffd547/session.v4.jsonl.zstd",
+   "steps": 64,
+   "billed": 13897023,
+   "ctx_total": 13696559,
+   "peak": 290087,
+   "P": 16381,
+   "static": 1048384,
+   "recon_nonimg": 8703004,
+   "charged": {
+    "text:system": 35586,
+    "text:user": 65292,
+    "reasoning": 3621838,
+    "tool-call": 714970,
+    "text:tool": 3190986,
+    "text:assistant": 25948
+   },
+   "img_weighted": 740,
+   "reasoning_new": 96146,
+   "delta_with_img": null,
+   "delta_no_img": 1201.0,
+   "n_with_img": 0,
+   "n_no_img": 59,
+   "images": {
+    "count": 17,
+    "unique": 17,
+    "offloaded": 0,
+    "bytes": 85543,
+    "by_owner": {
+     "tool-result": 17
+    },
+    "dims": {
+     "512x512": 17
+    }
+   },
+   "calls": 68,
+   "dups": {
+    "count": 4,
+    "false_hits": 2,
+    "rounded": 4,
+    "groups": [
+     {
+      "tool": "check_assembly",
+      "count": 4,
+      "args": "{\"manifestPath\":\"assembly/assembly.json\"}"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "scan_attention",
+     "tok": 257,
+     "desc": 144,
+     "params": 99,
+     "chars": 1026
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "simulate_stress",
+     "tok": 1447,
+     "desc": 389,
+     "params": 1043,
+     "chars": 5786
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 468977.5392551121,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.09142127723322171,
+    "image": 0.03424053729517845,
+    "reasoning": 0.31583184776934525,
+    "tool-call": 0.06234687918113642,
+    "text:assistant": 0.0022627198637594974,
+    "text:tool": 0.2782606523500256,
+    "text:user": 0.005693598941906317,
+    "text:system": 0.003103173619228668
+   }
+  },
+  {
+   "level": "06-measure",
+   "run": "recovered-06-measure",
+   "sessionPath": "/home/songsenand/.dsh/sessions/--tmp-bench-06-measure-default-glm53-high--/session-c1804e17-cd5f-4c28-ae87-a89ee380e13b/session.v4.jsonl.zstd",
+   "steps": 14,
+   "billed": 529410,
+   "ctx_total": 513207,
+   "peak": 50574,
+   "P": 14678,
+   "static": 205492,
+   "recon_nonimg": 432462,
+   "charged": {
+    "text:system": 8515,
+    "text:user": 16809,
+    "reasoning": 63774,
+    "tool-call": 21684,
+    "text:tool": 113795,
+    "text:assistant": 2393
+   },
+   "img_weighted": 49,
+   "reasoning_new": 9182,
+   "delta_with_img": 4036.0,
+   "delta_no_img": 2371.0,
+   "n_with_img": 1,
+   "n_no_img": 12,
+   "images": {
+    "count": 5,
+    "unique": 5,
+    "offloaded": 0,
+    "bytes": 27353,
+    "by_owner": {
+     "tool-result": 5
+    },
+    "dims": {
+     "512x512": 5
+    }
+   },
+   "calls": 31,
+   "dups": {
+    "count": 0,
+    "false_hits": 0,
+    "rounded": 0,
+    "groups": []
+   },
+   "tools": [
+    {
+     "name": "bash",
+     "tok": 556,
+     "desc": 185,
+     "params": 360,
+     "chars": 2223
+    },
+    {
+     "name": "check_assembly",
+     "tok": 369,
+     "desc": 182,
+     "params": 173,
+     "chars": 1475
+    },
+    {
+     "name": "check_printability",
+     "tok": 490,
+     "desc": 210,
+     "params": 263,
+     "chars": 1959
+    },
+    {
+     "name": "create_goal",
+     "tok": 145,
+     "desc": 56,
+     "params": 75,
+     "chars": 577
+    },
+    {
+     "name": "create_part",
+     "tok": 99,
+     "desc": 42,
+     "params": 44,
+     "chars": 394
+    },
+    {
+     "name": "delivery_audit",
+     "tok": 175,
+     "desc": 117,
+     "params": 45,
+     "chars": 700
+    },
+    {
+     "name": "edit",
+     "tok": 269,
+     "desc": 15,
+     "params": 243,
+     "chars": 1076
+    },
+    {
+     "name": "exit_plan_mode",
+     "tok": 118,
+     "desc": 63,
+     "params": 42,
+     "chars": 472
+    },
+    {
+     "name": "generate_part",
+     "tok": 420,
+     "desc": 93,
+     "params": 313,
+     "chars": 1677
+    },
+    {
+     "name": "get_goal",
+     "tok": 43,
+     "desc": 22,
+     "params": 9,
+     "chars": 170
+    },
+    {
+     "name": "glob",
+     "tok": 188,
+     "desc": 59,
+     "params": 118,
+     "chars": 750
+    },
+    {
+     "name": "grep",
+     "tok": 176,
+     "desc": 52,
+     "params": 113,
+     "chars": 702
+    },
+    {
+     "name": "import_part",
+     "tok": 710,
+     "desc": 115,
+     "params": 582,
+     "chars": 2839
+    },
+    {
+     "name": "interrupt_agent",
+     "tok": 110,
+     "desc": 51,
+     "params": 46,
+     "chars": 440
+    },
+    {
+     "name": "job_kill",
+     "tok": 93,
+     "desc": 13,
+     "params": 68,
+     "chars": 370
+    },
+    {
+     "name": "job_list",
+     "tok": 42,
+     "desc": 22,
+     "params": 9,
+     "chars": 168
+    },
+    {
+     "name": "job_output",
+     "tok": 154,
+     "desc": 29,
+     "params": 112,
+     "chars": 615
+    },
+    {
+     "name": "list_agents",
+     "tok": 166,
+     "desc": 69,
+     "params": 83,
+     "chars": 661
+    },
+    {
+     "name": "list_features",
+     "tok": 450,
+     "desc": 213,
+     "params": 224,
+     "chars": 1800
+    },
+    {
+     "name": "measure_angle",
+     "tok": 687,
+     "desc": 187,
+     "params": 486,
+     "chars": 2746
+    },
+    {
+     "name": "measure_gap",
+     "tok": 655,
+     "desc": 158,
+     "params": 484,
+     "chars": 2619
+    },
+    {
+     "name": "measure_part",
+     "tok": 335,
+     "desc": 193,
+     "params": 128,
+     "chars": 1339
+    },
+    {
+     "name": "measure_section",
+     "tok": 480,
+     "desc": 186,
+     "params": 279,
+     "chars": 1917
+    },
+    {
+     "name": "measure_thickness",
+     "tok": 444,
+     "desc": 164,
+     "params": 265,
+     "chars": 1776
+    },
+    {
+     "name": "merge_parts",
+     "tok": 379,
+     "desc": 78,
+     "params": 288,
+     "chars": 1514
+    },
+    {
+     "name": "python_runtime",
+     "tok": 174,
+     "desc": 120,
+     "params": 38,
+     "chars": 693
+    },
+    {
+     "name": "read",
+     "tok": 110,
+     "desc": 14,
+     "params": 84,
+     "chars": 438
+    },
+    {
+     "name": "read_image",
+     "tok": 98,
+     "desc": 44,
+     "params": 41,
+     "chars": 389
+    },
+    {
+     "name": "recall_reference_image",
+     "tok": 263,
+     "desc": 133,
+     "params": 113,
+     "chars": 1050
+    },
+    {
+     "name": "render_part",
+     "tok": 267,
+     "desc": 37,
+     "params": 217,
+     "chars": 1067
+    },
+    {
+     "name": "run_python",
+     "tok": 423,
+     "desc": 207,
+     "params": 204,
+     "chars": 1692
+    },
+    {
+     "name": "send_message",
+     "tok": 132,
+     "desc": 43,
+     "params": 76,
+     "chars": 527
+    },
+    {
+     "name": "set_datums",
+     "tok": 347,
+     "desc": 87,
+     "params": 248,
+     "chars": 1387
+    },
+    {
+     "name": "simulate_fluid",
+     "tok": 344,
+     "desc": 38,
+     "params": 292,
+     "chars": 1373
+    },
+    {
+     "name": "simulate_lbm",
+     "tok": 255,
+     "desc": 68,
+     "params": 174,
+     "chars": 1020
+    },
+    {
+     "name": "simulate_motion",
+     "tok": 982,
+     "desc": 64,
+     "params": 904,
+     "chars": 3925
+    },
+    {
+     "name": "simulate_physics",
+     "tok": 767,
+     "desc": 65,
+     "params": 688,
+     "chars": 3067
+    },
+    {
+     "name": "skill",
+     "tok": 83,
+     "desc": 35,
+     "params": 37,
+     "chars": 332
+    },
+    {
+     "name": "subagent",
+     "tok": 244,
+     "desc": 109,
+     "params": 123,
+     "chars": 974
+    },
+    {
+     "name": "subagent_fork",
+     "tok": 254,
+     "desc": 110,
+     "params": 131,
+     "chars": 1014
+    },
+    {
+     "name": "todo_write",
+     "tok": 214,
+     "desc": 80,
+     "params": 122,
+     "chars": 856
+    },
+    {
+     "name": "update_goal",
+     "tok": 246,
+     "desc": 6,
+     "params": 227,
+     "chars": 984
+    },
+    {
+     "name": "validate_assembly",
+     "tok": 532,
+     "desc": 47,
+     "params": 470,
+     "chars": 2126
+    },
+    {
+     "name": "web_fetch",
+     "tok": 61,
+     "desc": 19,
+     "params": 30,
+     "chars": 242
+    },
+    {
+     "name": "web_search",
+     "tok": 81,
+     "desc": 26,
+     "params": 43,
+     "chars": 323
+    },
+    {
+     "name": "workflow",
+     "tok": 848,
+     "desc": 417,
+     "params": 416,
+     "chars": 3389
+    },
+    {
+     "name": "write",
+     "tok": 200,
+     "desc": 11,
+     "params": 178,
+     "chars": 799
+    }
+   ],
+   "img_tokens": 31053.918139865535,
+   "alpha": 1.1943685877313828,
+   "share": {
+    "schema": 0.47823429888933183,
+    "image": 0.060509537359906496,
+    "reasoning": 0.14841898554380825,
+    "tool-call": 0.050464409987329296,
+    "text:assistant": 0.005569144673477172,
+    "text:tool": 0.26483109825254275,
+    "text:user": 0.039118994072911736,
+    "text:system": 0.019816659797182664
+   }
+  }
+ ],
+ "fit": {
+  "alpha": 1.1943685877313828,
+  "img_tokens": 633.7534314258272
+ }
+}
