@@ -26,6 +26,9 @@ check(s.unevaluable[0].startsWith('assembly:'), 'and its reason reaches unevalua
 const src = await readFile(join(ROOT, 'src/host/tools.ts'), 'utf8');
 check(/name: 'preflight'/.test(src), 'the tool is registered');
 check(/ran: false/.test(src) && /does not orchestrate/.test(src), 'un-orchestrated steps are declared, not skipped silently');
+check(/'connectivity'/.test(src) && /mesh-health:/.test(src), 'mesh-health is orchestrated through the same engine op measure_part uses');
+check(!/\['mesh-health', /.test(src), 'and it is no longer a declared gap');
+check(/assembly lane has uncommitted edits/.test(src), 'the remaining assembly gap names its real blocker, not a vague "later"');
 check(CAD_TOOL_GROUPS.deliver.includes('preflight'), 'preflight is in the deliver group (a group-scoped session still sees it)');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');

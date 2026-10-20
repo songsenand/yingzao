@@ -4746,13 +4746,40 @@ export function registerCadTools(
         });
       }
 
+      // mesh-health: the SAME engine op measure_part uses (`connectivity`), so this is not
+      // a second implementation of the check — and a broken mesh is a hard fact, so it can
+      // exclude rather than merely warn.
+      const worker = await ensurePythonWorker();
+      for (const part of parts) {
+        const vid = newest.get(part.id);
+        if (!vid) continue;
+        const modelPath = join(project.store.root, 'versions', vid, 'model.stl');
+        try {
+          const conn = await worker.request<Record<string, unknown>>('connectivity', { path: modelPath });
+          const watertight = conn.watertight !== false;
+          const bodies = Number(conn.bodies ?? conn.components ?? conn.shells ?? 1);
+          steps.push({
+            step: `mesh-health:${part.name}@${vid}`,
+            ran: true,
+            judgement: !watertight ? 'excluded' : bodies > 1 ? 'difficult' : 'not-excluded',
+            detail: `watertight ${watertight} · bodies ${bodies} · keys ${Object.keys(conn).join(',')}`,
+          });
+        } catch (e) {
+          steps.push({
+            step: `mesh-health:${part.name}@${vid}`,
+            ran: false,
+            judgement: 'difficult',
+            detail: `connectivity failed: ${String((e as Error)?.message ?? e)}`,
+          });
+        }
+      }
+
       const audit = await auditDelivery(project, { claims: a.claims as never });
       steps.push({ step: 'audit', ran: true, judgement: audit.verdict, detail: `${audit.findings.length} finding(s), claims ${a.claims?.length ?? 0}` });
 
       // Declared gaps — the honest part. Each is a step this cut does not run.
       for (const [step, why] of [
-        ['assembly', 'this first cut does not orchestrate check_assembly; run it and pass the result as a claim'],
-        ['mesh-health', 'not orchestrated — measure_part is still an explicit step'],
+        ['assembly', 'check_assembly evaluates the contracts INSIDE its tool closure; extracting that needs assembly-check.ts/manifest.ts to be quiet first (the assembly lane has uncommitted edits) — run check_assembly and pass it as a claim until then'],
         ['simulation-evidence', 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)'],
         ['render', 'the assembly render is a HUMAN look: preflight can check freshness, not content'],
       ] as const) {
@@ -4834,7 +4861,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'check_assembly',
     description:
-      'Validate the assembly manifest (BOM + interface contracts): distance, diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator come back in `skipped` with what would make them checkable. mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
+      'Validate the assembly manifest (BOM + interface contracts): distance, diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
     parameters: {
       manifestPath: {
         type: 'string',
