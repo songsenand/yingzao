@@ -6,7 +6,32 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-two tools, seven jobs. The tool descriptions say what each one *is*; this file
+Twenty-five tools, but **three jobs first**. Almost every task starts by picking the
+group, not the tool — and the group tells you what the output is allowed to mean:
+
+| 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
+| --- | --- | --- | --- | --- |
+| **交付** | 能不能交？ | `check_printability` · `check_assembly` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
+| **检测** | 该往哪看？ | `scan_attention` · 各工具的 `attention` 场 | 坐标 + 为什么可疑 + 可执行观测 | **永不阻止**，永不沉默 |
+| **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据槽 | 产**证据**，不自己判交付 |
+
+**Markdown 纪律（这是本文件最重要的四条）：**
+
+1. **先结账，再交付**：任何"可以交了"之前，`check_printability`（每个零件）与
+   `check_assembly`（每份契约）都要跑过；最后跑 `delivery_audit`，**并把你要主张的
+   东西写进 `claims`**。证据缺了它会报 `claim-without-evidence`——那是门在工作，不是你出错。
+2. **`not-excluded` 不是"ok"，更不是"安全"**：它只表示"没有找到反例"。`difficult` 表示
+   余量落在仪器噪声内，**不许当过**。全库没有 "safe" 这个词可报。
+3. **检测 ≠ 交付**：`attention` 里的可疑位置是"去看这里"，**不是**判定证据；
+   反过来，工具沉默是检测的失败，但"检测到嫌疑"也不构成交付失败。
+4. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
+   仿真的读数一律是**方向性**的——可做相对比较，不能当安全系数。
+
+**默认路径**：`check_printability`(judge) → `check_assembly` → 有强度/运动主张才 `simulate_*`
+→ `render_part` + 装配渲染（人看）→ `delivery_audit({claims})`。任何一步报 `difficult` /
+`unevaluable` 时，**回到本文件查该组的原子工具**，或加载对应的四本深度 skill。
+
+Seven jobs follow; the tool map below is the authority on which tool answers which. The tool descriptions say what each one *is*; this file
 says **which one the question belongs to**, what its boundary is, and the discipline
 that keeps a green number from being read as a finished design.
 
