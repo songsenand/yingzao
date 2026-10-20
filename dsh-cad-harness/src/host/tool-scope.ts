@@ -49,6 +49,12 @@
 /** How the plugin decides which sessions may call the CAD tools. */
 import { toolsInGroups } from './tool-groups.ts';
 
+/**
+ * The job groups a session can declare (DESIGN §25.7). Declared here because
+ * tool-scope is the module that consumes them; tool-groups owns the roster.
+ */
+export type CadToolGroup = 'deliver' | 'detect' | 'simulate' | 'instrument';
+
 export interface ToolScopeConfig {
   /**
    * `'global'` (default) leaves the plain behaviour: every session may call the

@@ -3,7 +3,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import { compileAndRender, compileStlOnly, renderScadPng } from './compile.ts';
-import { datumNames, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
+import { datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
 import {
   attachVersion, createUniquePart, derivePartName, ensurePart, findPartById, findPartByName,
   listParts, type PartEntry,
@@ -4699,14 +4699,15 @@ export function registerCadTools(
         },
       },
       render: (_a, v) => {
-        const out = v as { judgement: string; ran: string[]; notRun: { step: string; why: string }[]; summary: string };
+        const out = v as unknown as { judgement: string; ran: string[]; notRun: { step: string; why: string }[]; summary: string };
         return [
           { type: 'text', text: `preflight → ${out.judgement}\n${out.summary}` },
         ] as never;
       },
     },
-    async run(_args, exec) {
+    async execute(args: unknown, exec: unknown) {
       const a = args as { claims?: { kind: string; statement: string }[]; profileIds?: string[] };
+      const project = await allStores(exec);
       const parts = await listParts(project.partStore);
       const versions = await listVersions(project.store);
       const newest = new Map<string, string>();
@@ -4733,6 +4734,18 @@ export function registerCadTools(
         });
       }
 
+      // The profile declarations are a real contract. This cut screens with the
+      // built-in fallback only; say so instead of letting a caller read the
+      // fallback verdict as "judged against my process".
+      if (a.profileIds?.length) {
+        steps.push({
+          step: 'printability-profile',
+          ran: false,
+          judgement: 'difficult',
+          detail: `declared profileIds (${a.profileIds.join(', ')}) are not applied by this cut — run check_printability per part for the declared-process verdict`,
+        });
+      }
+
       const audit = await auditDelivery(project, { claims: a.claims as never });
       steps.push({ step: 'audit', ran: true, judgement: audit.verdict, detail: `${audit.findings.length} finding(s), claims ${a.claims?.length ?? 0}` });
 
@@ -4747,11 +4760,13 @@ export function registerCadTools(
       }
 
       const summary = preflightSummary(steps);
+      // The schema's object type has an index signature; PreflightStep is a typed
+      // record. The values are identical — the cast is the boundary, not a dodge.
       return {
         ...summary,
         steps,
         summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} not run · judgment ${summary.judgement} — read unevaluable before claiming anything`,
-      };
+      } as never;
     },
   }));
 
