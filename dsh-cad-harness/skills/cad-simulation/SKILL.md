@@ -72,6 +72,19 @@ Motion is kinematics with an exact interference timeline; physics is rigid bodie
 
 ## `simulate_stress` — the one that reports a force, and the only one with a refusal
 
+**Two channels, and you must pick one.** `mode: 'judge'` (default) returns the delivery
+judgement only; `mode: 'scan'` returns the attention field only and **no verdict** (a risk
+map must never be read as a gate); `'both'` returns the two halves as separate keys. A
+`scan`-mode reply that looks "empty" is not a pass — it means nothing was certified.
+
+**Deliver against `delivery`, not `verdict`.** `verdict` is a human summary. `delivery` is
+`excluded` / `difficult` / `not-excluded` with witnesses plus `unevaluable` for numbers this
+mesh cannot decide. `not-excluded` means "no counter-example", never "ok", never "safe".
+
+**Simulations produce EVIDENCE; `preflight` checks that it exists.** A strength claim needs
+a fresh stress run citing the newest version; run one, then declare the claim — do not expect
+`preflight` to invent a load case for you.
+
 Voxel hex8 linear-elastic statics for **one saved version under one declared case**
 (material + supports + loads). It is the only `simulate_*` that answers "where does it
 break", and it is also the only one that will tell you it cannot.

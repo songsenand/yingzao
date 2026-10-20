@@ -126,7 +126,11 @@ not calibrated anything, say so in `notes`, mark the numbers `assumed`, and tell
 measured value sits within one resolution step of the requirement are the ones that
 actually decide this part. Do not present a draft as a standard.
 
-**3. Validate by using it.** Pass the draft to `check_printability` (`profilesJson`). An
+**3. Two modes, one tool.** `mode: 'judge'` (default) returns the verdict/profiles only;
+`'scan'` returns the sampled field only and **no verdict**; `'both'` returns both. The run
+always records both halves — the mode trims the reply, not the record.
+
+**3b. Validate by using it.** Pass the draft to `check_printability` (`profilesJson`). An
 invalid profile is REFUSED with the offending rule named — there is no separate validator
 tool, and no partial application: a profile with one bad rule is not "mostly fine".
 

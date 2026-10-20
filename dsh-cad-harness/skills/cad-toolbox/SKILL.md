@@ -6,7 +6,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-five tools, but **three jobs first**. Almost every task starts by picking the
+Twenty-seven tools, but **three jobs first**. Almost every task starts by picking the
 group, not the tool — and the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
@@ -22,9 +22,13 @@ group, not the tool — and the group tells you what the output is allowed to me
    东西写进 `claims`**。证据缺了它会报 `claim-without-evidence`——那是门在工作，不是你出错。
 2. **`not-excluded` 不是"ok"，更不是"安全"**：它只表示"没有找到反例"。`difficult` 表示
    余量落在仪器噪声内，**不许当过**。全库没有 "safe" 这个词可报。
-3. **检测 ≠ 交付**：`attention` 里的可疑位置是"去看这里"，**不是**判定证据；
+3. **交付要主张，主张要证据**：`delivery_audit({claims})` 里声明你要主张什么——
+   `strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。
+   缺对应新鲜证据就报 `claim-without-evidence`（直接 blocked）。**不声明 claim 时它只审语料
+   一致性**（并显式报 `no-claims-declared`）：绿色语料不等于已交付。
+4. **检测 ≠ 交付**：`attention` 里的可疑位置是"去看这里"，**不是**判定证据；
    反过来，工具沉默是检测的失败，但"检测到嫌疑"也不构成交付失败。
-4. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
+5. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
    仿真的读数一律是**方向性**的——可做相对比较，不能当安全系数。
 
 **默认路径**：想知道**往哪看** → `analyze`（一次调用给出 |u| 风险图 + 峰表；`attention.json`

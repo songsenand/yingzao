@@ -2741,6 +2741,18 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 同属两侧，但第一版不接（需要装配语境）。验收：`accept-analyze.mjs`（死区为 0、两侧与单侧、
 饱和、融合=max+count、坏声明不静默给 0 分）。
 
+**三个入口与两种读者（2026-10-20）。** 工具按组切开之后，日常只剩三个入口，原子工具留给深挖：
+
+| 入口 | 回答 | 产出 | 会阻止吗 |
+|---|---|---|---|
+| `preflight` | 能不能交 | 逐步骤三值 + `unevaluable` + 未编排步骤的**原因**（worst-of-steps） | 可以（blocked） |
+| `analyze` | 该往哪看 | `\|u\|` 风险图（壁厚/再入角/悬垂）+ 峰表 + `attention.json` 的 `fused` 层 | 永不 |
+| `simulate_*` | 这种工况下会怎样 | 方向性读数 + 可靠性 + 证据（写 run，供 claim 检查） | 永不（由 `preflight` 判定） |
+
+`analyze` **写 run（`kind:'analyze'`）并落 `attention.json`**，其 `samples.fused` 就是面板
+`pickHeatLayer` 优先绘制的那一层——**同一次计算，两个读者**（LLM 读 `report.json` 的峰表，
+人看 `ramp()` 的图）。`peaks` 与 `samples.fused` 共用同一批 bucket：两个投影，不是两次计算。
+
 **工具作用域与分组声明（2026-10-20）。** `tool-scope` 仍守一条不变量：**模块里不许出现工具名**
 （花名册由注册推导，改名/新增不会静默漏掉）。分组表因此放在注册旁（`tool-groups.ts`），
 由 `accept-tool-groups.mjs` 检查"每个注册工具都归了组"来防过期。声明有两个来源：
