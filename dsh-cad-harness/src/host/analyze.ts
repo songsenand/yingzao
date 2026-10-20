@@ -142,11 +142,22 @@ export function analyzeVersion(
     const at = s.where?.atMm ?? s.atMm;
     if (at && at.length === 3) add(s.kind ?? 'corner', at, cornerU(s, input.cornerBand));
   }
+  // OVERHANG: measured 2026-10-20 — the sample value spans 0..20 on a part whose
+  // triangles are a few mm², and the layer only ever CONTAINS faces already flatter than
+  // the threshold. So the value is a per-triangle AREA (a weight), not an angle: every
+  // sample is past the limit by construction. Scored as binary 1, weighted by area when
+  // ranking, so a big flat face outranks a sliver — never normalised as degrees.
+  const overhangPts = input.field?.samples?.overhang ?? [];
+  for (const p of overhangPts) {
+    if (p.p?.length !== 3) continue;
+    const w = Number.isFinite(p.v) ? Math.max(0, p.v) : 0;
+    add('overhang', p.p, w > 0 ? 1 : 0);
+  }
   const wallPts = input.field?.samples?.wall ?? [];
   for (const p of wallPts) if (p.p?.length === 3) add('wall', p.p, signedOf(p.v, input.wallBand));
 
   const peaks = [...buckets.values()]
     .map((b) => ({ atMm: b.at, risk: b.risk, count: b.count, layers: [...b.layers].sort() }))
     .sort((a, b) => b.risk - a.risk || b.count - a.count || 0);
-  return { peaks, layers, notMapped: ['overhang (sample value 0..20 is not an angle — units not established)'] };
+  return { peaks, layers, notMapped: [] };
 }

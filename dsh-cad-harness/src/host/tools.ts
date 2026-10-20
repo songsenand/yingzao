@@ -33,6 +33,7 @@ import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { asJudgement } from '../shared/judgement.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
+import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
@@ -4794,6 +4795,63 @@ export function registerCadTools(
         steps,
         summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} not run · judgment ${summary.judgement} — read unevaluable before claiming anything`,
       } as never;
+    },
+  }));
+
+  // --- analyze: the risk map (detection only; never gates) ------------------
+  registerTool(defineTool({
+    name: 'analyze',
+    description:
+      'Build the risk map for a version and say where to LOOK: geometry corners (scan_attention) + ' +
+      'measured wall thickness + overhang faces, each normalised to |u| in [0,1] against its own DECLARED ' +
+      'band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus ' +
+      'an agreement count. It never gates and never returns a verdict: a peak means "look here", not "this ' +
+      'will break". Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v069".' },
+      cellMm: { type: 'number', description: 'Clustering cell for peaks (default 8 mm).' },
+      wallMinMm: { type: 'number', description: 'Wall band lower edge (default 1.2 mm, or the profile).' },
+      wallMaxMm: { type: 'number', description: 'Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          peaks: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          layers: { type: 'object', required: true, additionalProperties: true },
+          notMapped: { type: 'array', required: true, items: { type: 'string' } },
+          bands: { type: 'object', required: true, additionalProperties: true },
+          note: { type: 'string', required: true },
+        },
+      },
+      render: (_a, v) => {
+        const out = v as unknown as { peaks: { atMm: number[]; risk: number; count: number; layers: string[] }[]; note: string };
+        const lines = [out.note];
+        for (const p of out.peaks.slice(0, 8)) {
+          lines.push(`  |u|=${p.risk.toFixed(2)} count=${p.count} at=[${p.atMm.map((x) => x.toFixed(1))}] ${p.layers.join('+')}`);
+        }
+        return [{ type: 'text', text: lines.join('\n') }] as never;
+      },
+    },
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string; cellMm?: number; wallMinMm?: number; wallMaxMm?: number };
+      const project = await allStores(exec);
+      const wallMin = a.wallMinMm ?? 1.2;
+      const wallMax = a.wallMaxMm ?? 4.0;
+      const wallBand: BandNorm = { id: 'wall', quantity: 'wall-thickness', units: 'mm', lo: wallMin, hi: wallMax, scaleLo: wallMin, scaleHi: wallMax, source: `wallMinMm ${wallMin} / wallMaxMm ${wallMax} (declared)` };
+      const screen = await checkPrintability(project.store, { versionId: a.versionId, withSampleField: true });
+      const modelPath = join(project.store.root, 'versions', a.versionId, 'model.stl');
+      let suspects: SuspectLike[] = [];
+      try {
+        const scan = await (await ensurePythonWorker()).request<{ suspects?: SuspectLike[] }>('scan_attention', { path: modelPath });
+        suspects = scan.suspects ?? [];
+      } catch { /* the map still has the field layers */ }
+      const out = analyzeVersion({ suspects, field: screen.field as never, wallBand, cellMm: a.cellMm });
+      return {
+        ...out,
+        bands: { wall: wallBand },
+        note: `${out.peaks.length} peak(s) · ${suspects.length} corner suspect(s) · |u| is "how far from its own comfort band", max per location; peaks mean LOOK, not BREAK`,
+      };
     },
   }));
 
