@@ -11,8 +11,8 @@ group, not the tool — and the group tells you what the output is allowed to me
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
-| **交付** | 能不能交？ | `check_printability` · `check_assembly` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
-| **检测** | 该往哪看？ | `scan_attention` · 各工具的 `attention` 场 | 坐标 + 为什么可疑 + 可执行观测 | **永不阻止**，永不沉默 |
+| **交付** | 能不能交？ | **`preflight`（入口，一次调用）** · `check_printability` · `check_assembly` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
+| **检测** | 该往哪看？ | **`analyze`（合成风险图）** · `scan_attention` · 各工具的 `attention` 场 | 坐标 + \|u\| + 几路一致 + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据槽 | 产**证据**，不自己判交付 |
 
 **Markdown 纪律（这是本文件最重要的四条）：**
@@ -27,9 +27,10 @@ group, not the tool — and the group tells you what the output is allowed to me
 4. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
    仿真的读数一律是**方向性**的——可做相对比较，不能当安全系数。
 
-**默认路径**：`check_printability`(judge) → `check_assembly` → 有强度/运动主张才 `simulate_*`
-→ `render_part` + 装配渲染（人看）→ `delivery_audit({claims})`。任何一步报 `difficult` /
-`unevaluable` 时，**回到本文件查该组的原子工具**，或加载对应的四本深度 skill。
+**默认路径**：想知道**往哪看** → `analyze`（一次调用给出 |u| 风险图 + 峰表；`attention.json`
+的 `fused` 层就是面板画的那张图）；要**交付** → `preflight`（一次调用跑必跑序列，未编排的步骤
+会带原因报出来）→ 有强度/运动主张才 `simulate_*` → `delivery_audit({claims})`。任何一步报
+`difficult` / `unevaluable` 时，**回到本文件查该组的原子工具**，或加载对应的四本深度 skill。
 
 Seven jobs follow; the tool map below is the authority on which tool answers which. The tool descriptions say what each one *is*; this file
 says **which one the question belongs to**, what its boundary is, and the discipline
