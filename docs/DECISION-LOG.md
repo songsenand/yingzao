@@ -3414,3 +3414,92 @@ DESIGN §25.7。
 - **报告侧**：`experiments/20261020_token_efficiency_analysis.md` 的补记是本条的依据来源；
   其中 C/D/E 三行的分项估算已被该补记取代，不要再引用。
 
+
+---
+
+## 2026-10-20：工具契约必须自描述；"缺判据"不得给绿
+
+**触发条件：** 1（用户拍板：`root must be an assembly node` 暴露的核心是"工具的错误输出失败"）、
+2（实测：25/25 空绿、16 次 schema 探针 run、116 mm 轴偏移报 pass）、4（影响所有装配清单与交付语义）。
+
+**要解决的问题：** 一次玩具天平复跑里，`check_assembly` 的清单校验只回一句
+`root must be an assembly node`，模型试了 7 种 `root` 写法、外加 `{}` 触发
+`Cannot read properties of undefined (reading 'id')`，共花 16 个探针 run 才反推出文档形状。
+同类问题的另一面是：25 条接口全部没有 `tolerance`，旧规则
+`in_range = tolerance ? … : true` 把"没有判据"当"在范围内"，于是
+`beam.左叉孔`（x=−58）配到 `stirrupL.吊眼`（x=+58）、测得 116 mm 轴偏移仍然 `pass`。
+两个方向（缺字段→崩、缺判据→绿）是同一个病：工具没有把"我不知道/没有判据"当成必须说出的状态。
+
+**决策内容：**
+
+1. **清单校验器自描述**（`src/host/manifest.ts` + `schemas/assembly-manifest.schema.json`）：
+   返回 `{path, expected, got, hint}` 的数组；错误正文附最小可运行清单、端点语法
+   `<childId>.<datum>`、`kind` 判别字段提示、schema 文件路径；空清单不再抛 TypeError。
+2. **端点/节点形状一次性说清**：端点缺 `.` 时直接给出修正串（`base:V轴` → `base.V轴`）；
+   `type` 与 `kind` 混用时提示判别字段是 `kind`；`interfaces` 必挂在直接子节点的父节点上。
+3. **缺判据 = skipped，永不 pass**（Python `_assembly_verdict` 与 TS `verdictFor` 同步）：
+   无 `tolerance` 的接口返回 `skipped` 并写明 `add tolerance {min,max}; a missing criterion is NOT a pass`；
+   `skipped` 计入 `overallStatus`（→ `check`，不再是 `pass`）。
+4. **skill 只留最小骨架**（`skills/cad-assembly/SKILL.md` 约 20 行）：一份能跑的最小清单 +
+   四条易错点 + "读错误里的路径，不要猜形状"。完整 schema 放文件，不塞进 skill。
+5. **顺手修好两处同类缺口**：`preflight` 注册成 `run` 而 `defineTool` 只认 `execute`
+   （且函数体引用了未定义的 `args`/`project`）；`tool-scope.ts` 漏导出的 `CadToolGroup` 类型。
+
+**理由：** 模型猜形状不是因为笨，是因为契约只存在于校验器内部；把契约随拒绝一起返回，
+一次失败就能改对。反过来，"没有判据就给绿"会让最该被拦下的接口通过（本轮的 25/25 与
+116 mm 偏移），比报错更贵。skill 的空间有限，不能承担"完整 schema"的职责——这正是
+工具自描述要解决的。
+
+**依据：**
+
+- `examples/toy-balance2/README.md` §4.2/§4.6；`experiments/20261020_toy_balance2_skill_grouping.md`；
+  子智能体会话日志 16 次 `assembly-check` 探针；
+- `scripts/accept-manifest-errors.mjs`：空清单、`type`/`kind`、`:` 端点、owner 端点、重复 id、
+  示例自洽、issue 结构，全 PASS；
+- `scripts/accept-check-assembly-parity.mjs`：Python 与 TS 在 2 fixture + 2 corpus + 1 synthetic
+  （17 接口、五种算子）上逐字段一致，OK；
+- `scripts/accept-assembly.mjs`：good/bad/transform 三案全 PASS。
+
+**影响：**
+
+- 现有清单若没写 `tolerance`，重启后从 `pass` 变成 `skipped`，`overallStatus` 变 `check`；
+  本示例应为 0 pass / 25 skipped。这是有意的：以前那些绿没有判据。
+- 修完需重启 GUI 会话（`patchReload: startup`）；`lib/` 已重建。
+- 未修（下一步）：`check_printability` 的 `attention` 条件必填 / `regions[].triangles` / `-0`；
+  `$fn` 的 `-D` 覆盖；`merge_parts` 研究件标记。
+
+## 2026-10-20：风险图的归一化——死区 + 双侧饱和，融合取 max+count；判定词汇单一来源
+
+**触发条件：** 第 1 条（用户拍板"就按照这个思路来"）＋第 2 条（有实测与对照实验）。
+
+**要解决的问题：** ① 热点图要把壁厚(mm)、应力(MPa)、尖角(deg)、悬垂 放在一张图上，跨量纲
+无法融合；② 同一三态判定在语料里有四个名字（blocked/attention/ok、unprintable/check/ok、
+fail/check/ok、excluded/difficult/not-excluded），管理无法用一个键问"有没有被否决"。
+
+**决策内容：**
+
+1. **归一化是"提示风险"不是"融合数据"**：每路检测器声明一个**死区 + 双侧饱和**变换，
+   `u = −clamp((lo−v)/scaleLo)` / `0` / `+clamp((v−hi)/scaleHi)`，单侧风险 = 把区间开到无穷
+   （应力 lo=−∞、钝角 hi=+∞）。之后 **|u| 无因次可比**。
+2. **融合**：显示层取 **max |u|**，摘要取 **count（几路 ≥0.5）**；**禁止**加权总分与
+   `1−Π(1−|u|)`（无法提供依据=伪造置信度）。JSON 保留带符号 u 与原始值，图只画 |u|。
+3. **判定词汇单一来源**（`src/shared/judgement.ts`）：`excluded / difficult / not-excluded`；
+   未知词→`difficult`（沉默不得当通过）；`info` 级发现**不降级**判定。
+4. **检测 ≠ 交付**：`simulate_stress`/`check_printability` 的 `attention` 与 `delivery`
+   在**回复层面结构互斥**（scan 模式无 verdict，judge 模式无 attention）；`delivery_audit`
+   接受声明的 `claims`，只检查证据是否新鲜，不判断主张真假。
+
+**理由：** 风险确实出现在两端，而"极端"必须相对该量自己的舒适区来读——这样既不需要跨量纲
+权重，也不会把"应力极低"这种良性值误报。命名统一是管理的前提：一个键，一种含义。
+
+**依据：** 实测①：v069（4 处 V 形缺口）融合后 `[-37,8,42]`/`[37,8,42]` 出峰（count=2，
+reentrant-corner+wall），v077 同位置消失；壁厚层单独无法区分两者（最小壁厚同为 1.000mm）。
+实测②：`scan_attention` 报的二面角**全部等于 135°（阈值本身）**，故该检测器无梯度，
+"用数值角做连续 u"不可行（曾试，导致肘部 count 2→1，已回滚）。实测③：悬垂样本值域 0..20
+且该层只含已过 45° 的面，故按"二值 + 面积权重"接入，不按度。
+
+**影响：** `src/host/analyze.ts`（契约+融合+两/三路）、`src/host/tools.ts`（analyze 工具与
+run 落盘）、`src/client/heat.ts`（fused 层优先绘制）、`src/shared/judgement.ts`、
+`delivery-audit.ts`（verdict 改名 + claims）。验收：`accept-analyze`（含天平正负对照）、
+`accept-tool-groups`、`accept-delivery-audit`、`accept-stress`。
+
