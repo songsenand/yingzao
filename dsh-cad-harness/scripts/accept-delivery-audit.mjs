@@ -30,7 +30,7 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   console.log(`      verdict=${report.verdict} findings=${report.findings.length} summary: ` +
     `${report.versions.total}v/${report.parts.total}p/${report.runs.total}r stale=${report.runs.stale.length}`);
 
-  check(report.verdict === 'blocked', 'microscope5 audits as BLOCKED', report.verdict);
+  check(report.verdict === 'excluded', 'microscope5 audits as EXCLUDED (a witness contradicts it)', report.verdict);
   check(report.parts.newestNeverValidated.length === 0,
     'every part\'s newest version WAS cited by some run (so the audit stays silent here)',
     `${report.parts.newestNeverValidated.length} flagged`);
@@ -106,7 +106,7 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   }, null, 2));
 
   const clean = await auditDelivery(projectStores(workspace), { manifestPath: join(workspace, 'assembly', 'assembly.json') });
-  check(clean.verdict !== 'blocked',
+  check(clean.verdict === 'not-excluded',
     'a clean corpus (newest version validated, green run) is NOT blocked',
     `${clean.verdict}: ${clean.findings.map((f) => f.code).join(', ') || '(no findings)'}`);
   check(!clean.parts.newestNeverValidated.includes('支架'),

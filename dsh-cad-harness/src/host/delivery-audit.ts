@@ -46,7 +46,8 @@ const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: st
 };
 
 export interface DeliveryAudit {
-  verdict: 'blocked' | 'attention' | 'ok';
+  /** Canonical since 2026-10-20 (was blocked/attention/ok). */
+  verdict: 'excluded' | 'difficult' | 'not-excluded';
   findings: AuditFinding[];
   versions: { total: number; neverCited: string[]; newest: string | null; newestTimestamp: string | null };
   parts: { total: number; newestNeverValidated: string[] };
@@ -265,8 +266,17 @@ export async function auditDelivery(
       `${duplicateGroups.length} group(s) repeat the same kind+geometry+outcome — ${wasted} run(s) spent without new information`);
   }
 
-  const verdict: DeliveryAudit['verdict'] = findings.some((f) => f.severity === 'blocked') ? 'blocked'
-    : findings.length > 0 ? 'attention' : 'ok';
+  // The canonical three (src/shared/judgement.ts). The severity words stay as they are —
+  // 'blocked'/'warn'/'info' describe a FINDING, not the judgement — but the verdict says
+  // what a manager needs to query, and 'ok' no longer exists.
+  // 'difficult' means a WARNING makes the margin unclear. An `info` finding (duplicate runs,
+  // no-claims-declared) is information, not a downgrade — otherwise every real corpus reads
+  // 'difficult' and the signal dies.
+  const verdict: DeliveryAudit['verdict'] = findings.some((f) => f.severity === 'blocked')
+    ? 'excluded'
+    : findings.some((f) => f.severity === 'warn')
+      ? 'difficult'
+      : 'not-excluded';
 
   return {
     verdict,

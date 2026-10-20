@@ -31,6 +31,7 @@ import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport 
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
+import { asJudgement } from '../shared/judgement.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
@@ -4588,7 +4589,8 @@ export function registerCadTools(
         type: 'object',
         additionalProperties: false,
         properties: {
-          verdict: { type: 'string', required: true, description: '"blocked" | "attention" | "ok".' },
+          verdict: { type: 'string', required: true, description: '"excluded" | "difficult" | "not-excluded" (canonical since 2026-10-20; was blocked/attention/ok).' },
+          judgement: { type: 'string', required: true, description: 'The canonical judgement for management: excluded | difficult | not-excluded. Read THIS, not `verdict`, when deciding whether something is excluded (src/shared/judgement.ts).' },
           findings: {
             type: 'array', required: true,
             items: {
@@ -4628,6 +4630,9 @@ export function registerCadTools(
       const info = report.findings.filter((f) => f.severity === 'info').length;
       return {
         ...report,
+        // The single key management and the delivery audit read (DESIGN §25.7). `verdict` is
+        // kept because the panel and the skills display it; `judgement` is the canonical one.
+        judgement: asJudgement(report.verdict),
         summary: `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
           `${blocked} blocked · ${warn} warn · ${info} info · ` +
           `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}`,

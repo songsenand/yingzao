@@ -2702,6 +2702,21 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 该主张所需的、引用最新版本的**新鲜证据**，缺了就是 `claim-without-evidence`（blocked）。
 不声明 claim 时它只审语料一致性，并显式报 `no-claims-declared`——**绿色语料不等于已交付**。
 
+**判定词汇的单一来源（2026-10-20）。** 同一个三态在语料里曾有四个名字，管理因此无法用
+一个键去问"有没有东西被否决"。现在权威定义在 `src/shared/judgement.ts`，各工具的 `verdict`
+只作**展示**，**管理读 `judgement`**：
+
+| 工具 | 旧值 | → 权威 |
+|---|---|---|
+| `delivery_audit` | `blocked` / `attention` / `ok` | `excluded` / `difficult` / `not-excluded`（**已改名**） |
+| `check_printability` | `unprintable` / `check` / `ok` | 同上（**映射已就位，值待改名**） |
+| `check_assembly` | `fail` / `check` / `ok` | 同上（**映射已就位，值待改名**） |
+| `simulate_stress` | `overstressed` / `check` / `ok`（外加 `delivery` 已是权威值） | 同上 |
+
+规则：**`info` 级发现不降级判定**（否则每个真实语料都变 `difficult`，信号就死了）；
+未知的 legacy 词一律映射为 `difficult`——沉默不能被当成通过。
+"值待改名"的两项属另一条线的面板与 README 文案，等它回来再动。
+
 **现状（2026-10-19 实测）**：唯一的机器门是 `delivery_audit`；"必须看过装配渲染图、每个零件
 都要跑 `check_printability`"过去只是 `generate_part` 输出里的一句散文义务。本次把
 "每件都要有 printability"落成 `manufacturability` 主张的检查（缺件即 blocked）。
