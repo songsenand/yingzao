@@ -47,6 +47,8 @@
 // in any session; only the agent's tool access narrows.
 
 /** How the plugin decides which sessions may call the CAD tools. */
+import { toolsInGroups } from './tool-groups.ts';
+
 export interface ToolScopeConfig {
   /**
    * `'global'` (default) leaves the plain behaviour: every session may call the
@@ -64,6 +66,8 @@ export interface ToolScopeConfig {
    * `DSH_CAD_PYTHON` overrides this value.
    */
   pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
+  /** Declared job groups (DESIGN §25.7). Absent = the whole catalog (capability open). */
+  groups?: readonly CadToolGroup[];
 }
 
 /** What the scope decided for one agent, for logging and for the acceptance test. */
@@ -140,6 +144,9 @@ export function effectivePresetOf(agent: any): string | null {
  * @param config - plugin config.
  */
 export function applyPresetToolScope(ctx: any, toolNames: readonly string[], config: ToolScopeConfig): void {
+  // Declared groups narrow THIS session's catalog; no declaration keeps it whole.
+  const declared = toolsInGroups(config.groups);
+  const names = declared ? toolNames.filter((n) => declared.includes(n)) : toolNames;
   const presetIds = config.presets?.length ? [...config.presets] : ['cad'];
   /** session id → the live agent (needed to re-decide when its preset changes). */
   const agents = new Map<string, any>();
@@ -151,7 +158,7 @@ export function applyPresetToolScope(ctx: any, toolNames: readonly string[], con
     } catch { /* logging must never break agent creation */ }
   };
 
-  log('info', `tool scope: preset ${presetIds.join('/')} keeps ${toolNames.length} CAD tools; every other named preset hides them`);
+  log('info', `tool scope: preset ${presetIds.join('/')} keeps ${names.length} CAD tools; every other named preset hides them`);
 
   /** Re-decide one agent and move it into the decided state (idempotent). */
   const apply = (agent: any, trigger: string) => {
@@ -183,8 +190,8 @@ export function applyPresetToolScope(ctx: any, toolNames: readonly string[], con
         log('warn', `${label}: no agent-scoped tools service; CAD tools stay visible`);
         return;
       }
-      denials.set(sessionId, agentCtx.tools.restrict({ deny: [...toolNames] }));
-      log('info', `${label}: hid ${toolNames.length} CAD tools — ${decision.reason} (${trigger})`);
+      denials.set(sessionId, agentCtx.tools.restrict({ deny: [...names] }));
+      log('info', `${label}: hid ${names.length} CAD tools — ${decision.reason} (${trigger})`);
     } catch (e) {
       log('warn', `could not hide the CAD tools (${String((e as Error)?.message ?? e)}); they stay visible`);
     }
