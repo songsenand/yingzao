@@ -34,5 +34,21 @@ check(fuseAt([]).risk === 0 && fuseAt([]).worst === null, 'nothing to say -> ris
 // A broken declaration must not quietly score 0 as "safe" without being noticed elsewhere:
 check(signedOf(5, { ...wall, scaleHi: 0 }) === 0, 'a zero scale is inert (declared-broken, never a silent pass)');
 
+// ── The toy-balance control (SKIP without the corpus) ─────────────────────────
+// Directional and falsifiable: the pan elbow must light up in v069 and NOT in v077.
+import { controlAvailable, runControl, atElbow } from './analyze-control.mjs';
+if (await controlAvailable()) {
+  const out = await runControl();
+  const elbows069 = out.v069.peaks.filter((p) => atElbow(p));
+  const elbows077 = out.v077.peaks.filter((p) => atElbow(p));
+  check(elbows069.length >= 1, 'v069: the map points at the pan elbow',
+    elbows069.slice(0, 2).map((p) => `[${p.atMm.map((x) => x.toFixed(1))}] u=${p.risk.toFixed(2)}`).join(' ') || 'no elbow peak');
+  check(elbows069.every((p) => p.risk >= 0.5), 'v069: and the elbow peak was not averaged away');
+  check(elbows077.length === 0, 'v077: the repaired pan no longer flags the elbow',
+    elbows077.map((p) => `[${p.atMm.map((x) => x.toFixed(1))}]`).join(' ') || 'clean');
+} else {
+  console.log('SKIP  the toy-balance control — corpus absent (examples/toy-balance/cad-data is gitignored)');
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);
