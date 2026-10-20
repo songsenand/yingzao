@@ -252,6 +252,12 @@ export async function readStressField(path: string): Promise<StressFieldPayload>
 }
 
 export async function solveStress(req: StressSolveRequest): Promise<StressSolveResult> {  const worker = await ensurePythonWorker();
+  // A static solve is MINUTES, not seconds: at dx=1.25 on the toy-balance pan the
+  // voxelise+assemble stage alone took 223s (measured), and the host's default
+  // worker-request timeout of 120s killed the call before it could even report the
+  // "no constrained node" refusal. Worse, a timed-out request does not stop the
+  // worker: the next request queues behind the abandoned solve. So the timeout is
+  // declared here, scaled to what the lane actually costs.
   return worker.request<StressSolveResult>('stress_field', {
     path: req.path,
     dxMm: req.dxMm,
@@ -268,7 +274,7 @@ export async function solveStress(req: StressSolveRequest): Promise<StressSolveR
     coarsenFactor: req.coarsenFactor,
     runConvergence: req.runConvergence,
     fieldPath: req.fieldPath,
-  });
+  }, { timeoutMs: 900_000 });
 }
 
 /** A runnable way to LOOK at a location: a section cut through it. `fraction` is the
@@ -384,6 +390,32 @@ export function geometrySuspectLayer(
  *   upper = the extrapolated surface value, only when it passed the stability gate.
  * The allowable line is the declared material strength divided by `badFactor`.
  */
+/**
+ * Make a reply the harness will accept: `-0` is not lossless JSON.
+ *
+ * Found the hard way — `simulate_stress` returned "value is not lossless JSON" and the
+ * tool call produced no answer at all. The offending values were numpy's `-0.0` inside
+ * `checks.reactionN` and `resultants[].shearN`/`momentNmm`: JSON cannot distinguish -0
+ * from 0, so a value that survives a round trip cannot be "lossless". `undefined` is
+ * dropped for the same reason (an absent key, not a hole).
+ */
+export function jsonSafe<T>(value: T): T {
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'number') return Object.is(v, -0) ? 0 : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (x === undefined) continue;
+        out[k] = walk(x);
+      }
+      return out;
+    }
+    return v;
+  };
+  return walk(value) as T;
+}
+
 export interface StressDelivery {
   requirement: { kind: string; valueMPa: number | null; source: string };
   verdicts: {

@@ -36,7 +36,7 @@ import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
-import { geometrySuspectLayer, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
+import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -4488,7 +4488,9 @@ export function registerCadTools(
       // mode no field), so its static type is a record even though every key it can emit
       // is declared in `output.schema` and validated there at the boundary. The cast
       // bridges exactly that gap; it does not loosen what the caller receives.
-      return out as any;
+      // `jsonSafe` normalises numpy's -0 (JSON cannot represent it losslessly) — without
+      // it the whole tool call fails as "value is not lossless JSON".
+      return jsonSafe(out) as any;
     },
   }));
 
