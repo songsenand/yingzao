@@ -3558,8 +3558,13 @@ export function registerCadTools(
       // must know at call time — every token in a tool description is paid on EVERY
       // request, while the skill is not (DESIGN §31.4 / DESIGN 13.12).
       'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
-      'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill.',
+      'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. ' +
+      'JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).',
     parameters: {
+      mode: {
+        type: 'string',
+        description: '"judge" (default) returns ONLY the judgement half (verdict / findings / profiles, no attention field); "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The run ALWAYS records both halves (report.json + attention.json) — the mode trims the reply, not the record (DESIGN §25.7).',
+      },
       versionId: { type: 'string', required: true, description: 'Saved version id to screen, e.g. "v012".' },
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width).' },
       overhangDeg: {
@@ -4082,7 +4087,20 @@ export function registerCadTools(
           subject: `printability:${a.versionId}`,
         });
       }
-      return forModel;
+      // DESIGN §25.7: the two channels are separated STRUCTURALLY in the REPLY. The run
+      // keeps both halves — trimming the record would make the panel lose the field
+      // whenever the model happened to ask for judge.
+      const mode = (args as { mode?: string }).mode ?? 'judge';
+      const reply: Record<string, unknown> = { ...forModel };
+      if (mode === 'scan') {
+        delete reply.verdict;
+        delete reply.profiles;
+        delete reply.profileSource;
+      }
+      if (mode === 'judge') {
+        delete reply.attention;
+      }
+      return reply as typeof forModel;
     },
   }));
 
