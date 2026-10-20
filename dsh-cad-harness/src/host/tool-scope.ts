@@ -66,8 +66,11 @@ export interface ToolScopeConfig {
    * `DSH_CAD_PYTHON` overrides this value.
    */
   pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
-  /** Declared job groups (DESIGN §25.7). Absent = the whole catalog (capability open). */
+  /** Declaration source ①: job groups for ALL CAD sessions. Absent = whole catalog. */
   groups?: readonly CadToolGroup[];
+  /** Declaration source ② (the useful one): preset id → the groups THAT preset works in.
+   *  Per-session by construction — a session that switches preset switches its roster. */
+  presetGroups?: Record<string, readonly CadToolGroup[]>;
 }
 
 /** What the scope decided for one agent, for logging and for the acceptance test. */
@@ -161,6 +164,12 @@ export function applyPresetToolScope(ctx: any, toolNames: readonly string[], con
   log('info', `tool scope: preset ${presetIds.join('/')} keeps ${names.length} CAD tools; every other named preset hides them`);
 
   /** Re-decide one agent and move it into the decided state (idempotent). */
+  /** The roster for THIS session: its preset's groups if declared, else the global set. */
+  const namesForPreset = (preset: string | null): readonly string[] => {
+    const declared = toolsInGroups((preset ? config.presetGroups?.[preset] : undefined) ?? config.groups);
+    return declared ? toolNames.filter((n) => declared.includes(n)) : toolNames;
+  };
+
   const apply = (agent: any, trigger: string) => {
     const sessionId = String(agent?.session?.header?.id ?? '');
     const label = `agent${sessionId ? ` ${sessionId}` : ''}`;
@@ -184,6 +193,8 @@ export function applyPresetToolScope(ctx: any, toolNames: readonly string[], con
       return;
     }
     if (denials.has(sessionId)) return; // already hidden
+    // Per-session: a preset that declares its groups sees only those tools.
+    const names = namesForPreset(decision.preset ?? null);
     try {
       const agentCtx = agent?.ctx;
       if (typeof agentCtx?.tools?.restrict !== 'function') {

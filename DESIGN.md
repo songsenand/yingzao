@@ -2717,6 +2717,13 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 未知的 legacy 词一律映射为 `difficult`——沉默不能被当成通过。
 "值待改名"的两项属另一条线的面板与 README 文案，等它回来再动。
 
+**工具作用域与分组声明（2026-10-20）。** `tool-scope` 仍守一条不变量：**模块里不许出现工具名**
+（花名册由注册推导，改名/新增不会静默漏掉）。分组表因此放在注册旁（`tool-groups.ts`），
+由 `accept-tool-groups.mjs` 检查"每个注册工具都归了组"来防过期。声明有两个来源：
+① `groups`（所有 CAD 会话）；② **`presetGroups`（preset id → 组，按会话）**——后者才是常用的，
+因为它在切换 preset 时自动重算花名册（`agent-preset/selected` 本来就会重新 apply）。
+**默认不声明 = 全量**：收窄必须显式，否则 skill 会变成"描述了一堆调不到的工具"的伪 API（§13.12）。
+
 **现状（2026-10-19 实测）**：唯一的机器门是 `delivery_audit`；"必须看过装配渲染图、每个零件
 都要跑 `check_printability`"过去只是 `generate_part` 输出里的一句散文义务。本次把
 "每件都要有 printability"落成 `manufacturability` 主张的检查（缺件即 blocked）。

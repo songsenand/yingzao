@@ -29,5 +29,12 @@ check(toolsInGroups(undefined) === null && toolsInGroups([]) === null,
 check(CAD_TOOL_GROUPS.deliver.every((n) => typeof n === 'string') && CAD_TOOL_GROUPS.deliver.includes('delivery_audit'),
   'the gate group names the audit');
 
+// The declaration source: a preset may carry its own groups, so switching preset
+// re-scopes the session's roster (the switch path already re-applies the scope).
+const scopeSrc = await readFile(join(ROOT, 'src/host/tool-scope.ts'), 'utf8');
+check(/presetGroups\?\.\[preset\]/.test(scopeSrc), 'a preset can declare its own groups (per-session roster)');
+check(/const names = namesForPreset\(decision\.preset/.test(scopeSrc), 'and the hide step resolves the roster from the session\'s preset');
+check(!/check_printability|generate_part/.test(scopeSrc), 'tool-scope.ts still names no tool (the invariant that bit last time)');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);
