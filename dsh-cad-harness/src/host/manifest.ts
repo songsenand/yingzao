@@ -12,8 +12,10 @@
 //   external (port) interfaces appear in its parent's interfaces list
 // - mm / z-up everywhere
 
+import { existsSync } from 'node:fs';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------- types ----------
 
@@ -177,12 +179,20 @@ export async function resolveAssemblyManifestPath(
 }
 
 export async function loadAssemblyManifest(path: string): Promise<AssemblyManifest> {
-  const raw = JSON.parse(await readFile(path, 'utf8')) as AssemblyManifest;
-  const problems = validateManifest(raw);
-  if (problems.length > 0) {
-    throw new Error(`invalid assembly manifest: ${problems.join('; ')}`);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(path, 'utf8'));
+  } catch (e) {
+    throw new Error(
+      `assembly manifest is not readable JSON: ${(e as Error).message}\n` +
+        `  file: ${path}\n${manifestShapeHelp()}`,
+    );
   }
-  return raw;
+  const issues = validateManifest(raw);
+  if (issues.length > 0) {
+    throw new Error(`${formatManifestIssues(issues)}\n  file: ${path}\n${manifestShapeHelp()}`);
+  }
+  return raw as AssemblyManifest;
 }
 
 export async function saveAssemblyManifest(path: string, manifest: AssemblyManifest): Promise<void> {
@@ -191,39 +201,324 @@ export async function saveAssemblyManifest(path: string, manifest: AssemblyManif
 }
 
 // ---------- validation ----------
+//
+// WHY THIS RETURNS ISSUES, NOT A STRING. The old validator returned prose like
+// "root must be an assembly node". That sentence is true and useless: it does
+// not say which field carries the discriminator, what value is legal, or what a
+// legal document looks like. A real run spent 16 probe runs and ~10 rounds
+// guessing `type` vs `kind`, where `interfaces` lives, and the endpoint
+// separator — every guess rejected by a different sentence. The tool KNOWS the
+// contract (it is the thing validating it), so the contract has to come back
+// with the rejection: a path, the expected shape, what was found, and a hint
+// for the mistakes we have actually seen. The published contract is
+// schemas/assembly-manifest.schema.json; the minimal example below is the
+// short form, because a skill cannot carry the whole schema and an error
+// message must not require one.
 
-function collectIds(node: ManifestNode, ids: Map<string, string[]>): void {
-  if (ids.has(node.id)) throw new Error(`duplicate node id "${node.id}"`);
-  ids.set(node.id, []);
-  for (const child of node.children ?? []) collectIds(child, ids);
+/** One structural problem, addressed by its JSON-pointer-like path. */
+export interface ManifestIssue {
+  /** e.g. "/root/kind", "/root/children/2/version", "/root/interfaces/0/a" */
+  path: string;
+  expected: string;
+  got: string;
+  hint?: string;
+}
+
+type Json = Record<string, unknown>;
+
+/** The shortest document that passes validateManifest — carried in every error. */
+export const MANIFEST_EXAMPLE = {
+  schemaVersion: 1,
+  name: 'example',
+  unit: 'mm',
+  up: 'z',
+  root: {
+    id: 'machine',
+    kind: 'assembly',
+    children: [
+      { id: 'base', name: '底座', kind: 'part', version: 'v001' },
+      {
+        id: 'beam', name: '横梁', kind: 'part', version: 'v002',
+        transform: { translate: [0, 0, 50] },
+      },
+    ],
+    interfaces: [
+      { id: 'I1', a: 'base.V轴', b: 'beam.刀口', type: '转动副', severity: 'hard', check: 'coaxial' },
+    ],
+  },
+};
+
+const OPERATORS = ['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload'];
+const IFACE_TYPES = ['贴合', '间隙', '紧固', '转动副', '滑动副', '弹簧', '流道'];
+const NODE_KINDS = ['assembly', 'part'];
+const DATUM_KINDS = ['point', 'axis', 'plane', 'cylinder'];
+
+const isObj = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+const got = (v: unknown): string => {
+  if (v === undefined) return 'undefined (missing)';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (typeof v === 'number' || typeof v === 'boolean' || v === null) return String(v);
+  return Array.isArray(v) ? `array(${v.length})` : `object(${Object.keys(v as Json).join(',') || 'empty'})`;
+};
+
+/** Locate the published schema from either src/host/ or the bundled lib/. */
+export function manifestSchemaPath(): string | null {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    for (let dir = here, i = 0; i < 4; i++, dir = dirname(dir)) {
+      const candidate = join(dir, 'schemas', 'assembly-manifest.schema.json');
+      if (existsSync(candidate)) return candidate;
+      if (dir === dirname(dir)) break;
+    }
+  } catch { /* not a file URL (some test runners) — the example still carries the shape */ }
+  return null;
+}
+
+/** The short form of the contract, appended to every validation error. */
+export function manifestShapeHelp(): string {
+  const schema = manifestSchemaPath();
+  return [
+    'minimal valid manifest:',
+    JSON.stringify(MANIFEST_EXAMPLE, null, 2),
+    'endpoint syntax: "<direct child id>.<datum name>"  e.g. "base.V轴"  (a dot, NOT ":" or "/")',
+    'node discriminator: `kind` ("assembly" | "part"), NOT `type`',
+    'interfaces live on the node whose DIRECT children they connect: root.interfaces',
+    schema ? `full schema: ${schema}` : 'full schema: schemas/assembly-manifest.schema.json',
+  ].join('\n');
+}
+
+/** Render issues as a numbered, path-addressed error body. */
+export function formatManifestIssues(issues: readonly ManifestIssue[]): string {
+  const lines = [`invalid assembly manifest — ${issues.length} problem(s):`];
+  issues.forEach((p, i) => {
+    lines.push(`  ${i + 1}. ${p.path || '/'}: expected ${p.expected}, got ${p.got}`);
+    if (p.hint) lines.push(`     hint: ${p.hint}`);
+  });
+  return lines.join('\n');
+}
+
+function checkTransform(t: unknown, ptr: string, issues: ManifestIssue[]): void {
+  if (t === undefined) return;
+  if (!isObj(t)) {
+    issues.push({ path: ptr, expected: 'an object {translate?, rotate?, pose?}', got: got(t) });
+    return;
+  }
+  for (const key of ['translate', 'rotate'] as const) {
+    const v = t[key];
+    if (v === undefined) continue;
+    if (!Array.isArray(v) || v.length !== 3 || !v.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      issues.push({ path: `${ptr}/${key}`, expected: 'an array of 3 finite numbers (mm / degrees)', got: got(v) });
+    }
+  }
+  const pose = t.pose;
+  if (pose !== undefined) {
+    if (!isObj(pose)) {
+      issues.push({ path: `${ptr}/pose`, expected: 'an object {datum?, axis?, angleDeg}', got: got(pose) });
+    } else if (typeof pose.angleDeg !== 'number' || !Number.isFinite(pose.angleDeg)) {
+      issues.push({ path: `${ptr}/pose/angleDeg`, expected: 'a finite number of degrees', got: got(pose.angleDeg) });
+    }
+  }
+}
+
+function checkInterfaces(node: Json, childIds: Map<string, Set<string>>, nodePtr: string, issues: ManifestIssue[]): void {
+  const list = node.interfaces;
+  if (list === undefined) return;
+  if (!Array.isArray(list)) {
+    issues.push({ path: `${nodePtr}/interfaces`, expected: 'an array of interface objects', got: got(list) });
+    return;
+  }
+  const ids = new Set<string>();
+  const allChildIds = new Set([...childIds.values()].flatMap((set) => [...set]));
+  list.forEach((iface: unknown, i: number) => {
+    const ptr = `${nodePtr}/interfaces/${i}`;
+    if (!isObj(iface)) {
+      issues.push({ path: ptr, expected: 'an interface object {id, a, b, type, severity}', got: got(iface) });
+      return;
+    }
+    if (typeof iface.id !== 'string' || !iface.id) {
+      issues.push({ path: `${ptr}/id`, expected: 'a unique string, e.g. "I1"', got: got(iface.id) });
+    } else if (ids.has(iface.id)) {
+      issues.push({ path: `${ptr}/id`, expected: 'a unique id within this node', got: got(iface.id) });
+    } else ids.add(iface.id);
+    for (const end of ['a', 'b'] as const) {
+      const value = iface[end];
+      const p = `${ptr}/${end}`;
+      if (typeof value !== 'string' || !value) {
+        issues.push({ path: p, expected: '"<direct child id>.<datum name>", e.g. "base.V轴"', got: got(value) });
+        continue;
+      }
+      if (!value.includes('.')) {
+        const hint = value.includes(':')
+          ? `use a dot, not ":": "${value.replace(':', '.')}"`
+          : value.includes('/')
+            ? `use a dot, not "/": "${value.replace('/', '.')}"`
+            : 'the separator is "." — child id, then the datum name that version declares';
+        issues.push({ path: p, expected: '"<direct child id>.<datum name>", e.g. "base.V轴"', got: got(value), hint });
+        continue;
+      }
+      const childId = value.slice(0, value.indexOf('.'));
+      if (!allChildIds.has(childId)) {
+        const isSelf = childId === node.id;
+        issues.push({
+          path: p,
+          expected: `a direct child of "${node.id}" (children: ${[...allChildIds].join(', ') || 'none'})`,
+          got: got(value),
+          hint: isSelf
+            ? 'endpoints are relative to the owning node; name the child, not the owner'
+            : 'the part before the dot must be a DIRECT child id of this node',
+        });
+      }
+    }
+    // `type` is the FIT kind and drives the default operator. Many authors write
+    // the operator here instead ("coaxial"); that is tolerated when `check` says
+    // the same thing explicitly, because the checker never needs `type` then.
+    // Without `check`, `type` must be a fit kind or there is no operator to run.
+    if (iface.type === undefined) {
+      if (iface.check === undefined) {
+        issues.push({ path: `${ptr}/type`, expected: `one of ${IFACE_TYPES.join(' | ')} (or set \`check\`)`, got: 'undefined (missing)' });
+      }
+    } else if (!IFACE_TYPES.includes(iface.type as string)
+      && !(iface.check !== undefined && OPERATORS.includes(iface.check as string))) {
+      issues.push({
+        path: `${ptr}/type`,
+        expected: `one of ${IFACE_TYPES.join(' | ')} (or set \`check\` to an operator)`,
+        got: got(iface.type),
+        hint: '`type` is the fit kind; the evaluated operator is `check`',
+      });
+    }
+    if (iface.severity === undefined) {
+      issues.push({ path: `${ptr}/severity`, expected: '"hard" (engine error) or "intent" (human flag)', got: 'undefined (missing)' });
+    } else if (iface.severity !== 'hard' && iface.severity !== 'intent') {
+      issues.push({ path: `${ptr}/severity`, expected: '"hard" or "intent"', got: got(iface.severity) });
+    }
+    // An unknown operator is NOT a structural error: the checker answers it as
+    // `skipped` with the operator named ("L0 check \"teleport\" is unknown"), which
+    // is the useful outcome and the one the parity fixture exercises. Only the
+    // shape is validated here.
+    if (iface.check !== undefined && typeof iface.check !== 'string') {
+      issues.push({ path: `${ptr}/check`, expected: `a string operator, normally one of ${OPERATORS.join(' | ')}`, got: got(iface.check) });
+    }
+    const nominal = iface.nominal;
+    if (nominal !== undefined && !isObj(nominal)) {
+      issues.push({ path: `${ptr}/nominal`, expected: 'an object {quantity, value}', got: got(nominal) });
+    }
+    const tolerance = iface.tolerance;
+    if (tolerance !== undefined) {
+      if (!isObj(tolerance) || typeof tolerance.min !== 'number' || typeof tolerance.max !== 'number') {
+        issues.push({ path: `${ptr}/tolerance`, expected: 'an object {min: number, max: number}', got: got(tolerance) });
+      }
+    }
+  });
+}
+
+function checkNode(node: unknown, ptr: string, isRoot: boolean, ids: Set<string>, issues: ManifestIssue[]): void {
+  if (!isObj(node)) {
+    issues.push({ path: ptr, expected: 'an assembly node object', got: got(node) });
+    return;
+  }
+  if (typeof node.id !== 'string' || !node.id) {
+    issues.push({ path: `${ptr}/id`, expected: 'a stable non-empty node id, e.g. "base"', got: got(node.id) });
+  } else if (ids.has(node.id)) {
+    issues.push({ path: `${ptr}/id`, expected: 'a node id unique across the whole tree', got: got(node.id) });
+  } else ids.add(node.id);
+
+  if (node.kind === undefined) {
+    const hint = node.type !== undefined
+      ? 'the discriminator is `kind`, not `type`: {"kind": "assembly" | "part"}'
+      : 'every node needs kind: "assembly" (has children) or "part" (has version)';
+    issues.push({
+      path: `${ptr}/kind`,
+      expected: isRoot ? '"assembly" (the root)' : '"assembly" | "part"',
+      got: 'undefined (missing)',
+      hint,
+    });
+  } else if (isRoot && node.kind !== 'assembly') {
+    issues.push({
+      path: `${ptr}/kind`,
+      expected: '"assembly" (the root is the assembly, not a part)',
+      got: got(node.kind),
+      hint: 'put the parts under root.children and the contracts under root.interfaces',
+    });
+  } else if (!NODE_KINDS.includes(node.kind as string)) {
+    issues.push({ path: `${ptr}/kind`, expected: '"assembly" | "part"', got: got(node.kind) });
+  }
+
+  if (!isRoot && node.kind === 'part') {
+    if (node.version !== undefined && typeof node.version !== 'string') {
+      issues.push({ path: `${ptr}/version`, expected: 'a version id like "v001"', got: got(node.version) });
+    } else if (node.version === undefined && node.source !== 'stock') {
+      issues.push({
+        path: `${ptr}/version`,
+        expected: 'a version id like "v001" (or source:"stock" for a purchased part with no geometry)',
+        got: 'undefined (missing)',
+      });
+    }
+  }
+
+  if (node.children !== undefined && !Array.isArray(node.children)) {
+    issues.push({ path: `${ptr}/children`, expected: 'an array of child nodes', got: got(node.children) });
+    return;
+  }
+  if (node.kind === 'assembly' && !Array.isArray(node.children)) {
+    issues.push({ path: `${ptr}/children`, expected: 'an array of child nodes (may be empty)', got: 'undefined (missing)' });
+  }
+
+  checkTransform(node.transform, `${ptr}/transform`, issues);
+
+  if (node.datums !== undefined) {
+    if (!Array.isArray(node.datums)) {
+      issues.push({ path: `${ptr}/datums`, expected: 'an array of {name, kind} declarations', got: got(node.datums) });
+    } else {
+      node.datums.forEach((d: unknown, i: number) => {
+        if (!isObj(d) || typeof d.name !== 'string' || !DATUM_KINDS.includes(d.kind as string)) {
+          issues.push({ path: `${ptr}/datums/${i}`, expected: `{name: string, kind: ${DATUM_KINDS.join(' | ')}}`, got: got(d) });
+        }
+      });
+    }
+  }
+
+  const childIds = new Map<string, Set<string>>();
+  if (Array.isArray(node.children)) {
+    const direct = new Set<string>();
+    for (const child of node.children) {
+      if (isObj(child) && typeof child.id === 'string' && child.id) direct.add(child.id);
+    }
+    childIds.set(ptr, direct);
+  }
+  checkInterfaces(node, childIds, ptr, issues);
+
+  if (Array.isArray(node.children)) {
+    node.children.forEach((child: unknown, i: number) => checkNode(child, `${ptr}/children/${i}`, false, ids, issues));
+  }
 }
 
 /**
- * Structural checks only — no geometry. Returns problem descriptions;
+ * Structural checks only — no geometry. Returns path-addressed issues;
  * an empty list means the manifest is well-formed.
  */
-export function validateManifest(m: AssemblyManifest): string[] {
-  const problems: string[] = [];
-  if (m.schemaVersion !== 1) problems.push(`schemaVersion must be 1, got ${m.schemaVersion}`);
-  if (!m.root || m.root.kind !== 'assembly') problems.push('root must be an assembly node');
-
-  const ids = new Map<string, string[]>();
-  try { collectIds(m.root, ids); } catch (e) { problems.push((e as Error).message); }
-
-  const walk = (node: ManifestNode, path: string[]) => {
-    const childIds = new Set((node.children ?? []).map((c) => c.id));
-    for (const iface of node.interfaces ?? []) {
-      for (const end of [iface.a, iface.b]) {
-        const childId = end.split('.')[0]!;
-        if (!childIds.has(childId)) {
-          problems.push(`interface ${iface.id}: endpoint "${end}" must reference a direct child of "${node.id}"`);
-        }
-      }
-    }
-    for (const child of node.children ?? []) walk(child, [...path, child.id]);
-  };
-  walk(m.root, [m.root.id]);
-  return problems;
+export function validateManifest(m: unknown): ManifestIssue[] {
+  const issues: ManifestIssue[] = [];
+  if (!isObj(m)) {
+    issues.push({ path: '/', expected: 'a manifest object', got: got(m) });
+    return issues;
+  }
+  if (m.schemaVersion !== 1) {
+    issues.push({ path: '/schemaVersion', expected: '1', got: got(m.schemaVersion) });
+  }
+  if (m.root === undefined) {
+    issues.push({
+      path: '/root',
+      expected: 'the root node: {id, kind: "assembly", children: [...]}',
+      got: 'undefined (missing)',
+    });
+    return issues;
+  }
+  if (!isObj(m.root)) {
+    issues.push({ path: '/root', expected: 'an assembly node object', got: got(m.root) });
+    return issues;
+  }
+  checkNode(m.root, '/root', true, new Set(), issues);
+  return issues;
 }
 
 // ---------- traversal ----------

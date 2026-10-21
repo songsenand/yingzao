@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/cad/assembly-manifest.schema.json",
+  "title": "Assembly manifest (schemaVersion 1)",
+  "description": "BOM + executable interface contracts. mm, z-up. A node's interfaces connect its DIRECT children; endpoint strings are \"<childId>.<datumName>\". The root is the assembly. Distinct from `type` on an interface (the fit kind, e.g. 转动副): the node discriminator is `kind`.",
+  "type": "object",
+  "required": ["schemaVersion", "root"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string" },
+    "unit": { "const": "mm" },
+    "up": { "const": "z" },
+    "root": { "$ref": "#/$defs/node" }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "transform": {
+      "type": "object",
+      "description": "world = translate ∘ rotate(euler XYZ) ∘ pose; all in the part's local frame.",
+      "properties": {
+        "translate": { "$ref": "#/$defs/vec3" },
+        "rotate": { "$ref": "#/$defs/vec3", "description": "degrees, XYZ order (matching Manifold rotate)" },
+        "pose": {
+          "type": "object",
+          "description": "Rotation about a named datum axis (assembly/meshing pose); the datum follows the part.",
+          "required": ["angleDeg"],
+          "properties": {
+            "datum": { "type": "string" },
+            "axis": { "$ref": "#/$defs/vec3" },
+            "angleDeg": { "type": "number" }
+          }
+        }
+      }
+    },
+    "datumDecl": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "enum": ["point", "axis", "plane", "cylinder"] }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "required": ["id", "a", "b", "severity"],
+      "properties": {
+        "id": { "type": "string", "description": "unique within the owning node, e.g. \"I1\"" },
+        "a": { "type": "string", "pattern": "^[^.]+\\.[^.]+$", "description": "\"<direct child id>.<datum name>\"; a dot, not ':' or '/'" },
+        "b": { "type": "string", "pattern": "^[^.]+\\.[^.]+$" },
+        "type": {
+          "enum": ["贴合", "间隙", "紧固", "转动副", "滑动副", "弹簧", "流道"],
+          "description": "fit kind; drives the default operator/layer"
+        },
+        "severity": { "enum": ["hard", "intent"], "description": "hard = engine error; intent = human flag" },
+        "check": {
+          "type": "string",
+          "description": "Explicit operator; overrides the one derived from type. Implemented: distance, diameter-match, coaxial, motion-clearance, spring-preload. An unknown operator is not a schema error — it comes back skipped with its name.",
+          "examples": ["distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload"]
+        },
+        "nominal": {
+          "type": "object",
+          "required": ["quantity", "value"],
+          "properties": {
+            "quantity": { "enum": ["距离", "直径", "同轴度", "角度", "预紧力"] },
+            "value": { "type": "number" }
+          }
+        },
+        "tolerance": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": { "min": { "type": "number" }, "max": { "type": "number" } }
+        },
+        "layer": { "enum": ["L0", "L1", "L2"] },
+        "params": {
+          "type": "object",
+          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}",
+          "additionalProperties": true
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "stable, unique across the tree" },
+        "name": { "type": "string", "description": "human-facing; Chinese allowed" },
+        "part": { "type": "string", "description": "accepted alias for a part's display name (ignored by the checker)" },
+        "kind": { "enum": ["assembly", "part"], "description": "THE node discriminator (not `type`)" },
+        "version": { "type": "string", "pattern": "^v\\d{3,}$", "description": "part only: version id in the store" },
+        "source": { "enum": ["generated", "imported", "stock"] },
+        "material": { "type": "string" },
+        "qty": { "type": "integer", "minimum": 1 },
+        "stockRef": { "type": "string" },
+        "transform": { "$ref": "#/$defs/transform" },
+        "datums": { "type": "array", "items": { "$ref": "#/$defs/datumDecl" } },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" },
+          "description": "assembly only (may be empty)"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/interface" },
+          "description": "contracts between this node's DIRECT children"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "assembly" } }, "required": ["kind"] },
+          "then": { "required": ["children"] }
+        }
+      ]
+    }
+  }
+}

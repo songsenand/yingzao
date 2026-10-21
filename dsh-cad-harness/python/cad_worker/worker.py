@@ -1438,8 +1438,18 @@ def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
     That difference is reproduced deliberately: the parity acceptance is what proves
     the migration changed no number and no word."""
     tolerance = iface.get("tolerance")
-    in_range = True if not tolerance else (measured >= tolerance["min"] and measured <= tolerance["max"])
     severity = iface["severity"]
+    if not tolerance:
+        # A measured quantity without a criterion is NOT a pass. The old rule was
+        # `in_range = True` when tolerance was absent, so a coaxial interface with
+        # a 116 mm axis offset printed "pass" (observed on the 2026-10-20 toy
+        # balance: all 25 interfaces declared no tolerance and all 25 "passed").
+        # The honest answer is skipped, with the fix named.
+        verdict = "skipped"
+        detail = detail + " — no tolerance declared: add tolerance {min,max}; a missing criterion is NOT a pass"
+    else:
+        in_range = measured >= tolerance["min"] and measured <= tolerance["max"]
+        verdict = "pass" if in_range else ("hard-violation" if severity == "hard" else "intent-flag")
     out = {
         "interfaceId": iface["id"],
         "ownerPath": iface.get("ownerPath") or [],
@@ -1449,7 +1459,7 @@ def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
         "severity": severity,
         "layer": iface.get("layer") or "L0",
         "check": iface.get("check") or "distance",
-        "verdict": "pass" if in_range else ("hard-violation" if severity == "hard" else "intent-flag"),
+        "verdict": verdict,
         "measured": measured,
         "detail": detail,
     }
@@ -1650,7 +1660,9 @@ def op_assembly_contracts(params: dict) -> dict:
             "skipped": skipped,
             "undeclared": len(undeclared),
         },
-        "overallStatus": "fail" if hard > 0 else ("check" if intents + len(undeclared) > 0 else "pass"),
+        # skipped is not a pass either: an interface nobody could decide leaves the
+        # manifest unverified, so the report must say "check", not "pass".
+        "overallStatus": "fail" if hard > 0 else ("check" if intents + len(undeclared) + skipped > 0 else "pass"),
     }
 
 
@@ -4495,6 +4507,24 @@ UNPRINTABLE_MIN_THIN_AREA_MM2 = 50.0
 UNPRINTABLE_MIN_THIN_AREA_FRACTION = 0.01
 
 
+def _json_safe(value):
+    """Normalise -0.0 to 0.0 recursively before a reply leaves the worker.
+
+    JSON.stringify(-0) is "0", so a reply containing -0 is NOT a lossless round-trip
+    and the host rejects the whole tool result as `value is not lossless JSON`
+    (observed on the toy-balance base: a `directionVector` component of -0.0, and a
+    region centroid rounded to -0.0, made the scan-mode reply undeliverable).
+    Rounding at every call site would miss one eventually; this pass cannot.
+    """
+    if isinstance(value, float):
+        return 0.0 if value == 0 else value
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def op_check_printability(params: dict) -> dict:
     """Manufacturability screen (FDM bias): sampled wall thickness by a ray along the
     inward normal, plus down-facing overhang area — the `checkPrintabilityInTs` of
@@ -5018,7 +5048,7 @@ def op_check_printability(params: dict) -> dict:
     # `ok` means "this part passed the screen". A screen that could not measure the
     # wall has not passed anything, so it can never return `ok`.
     verdict = "unprintable" if severe else ("ok" if (wall_measured and not findings) else "check")
-    return {
+    return _json_safe({
         "verdict": verdict,
         **({"minWallMm": float(_js_to_fixed(min_wall, 3))} if math.isfinite(min_wall) else {}),
         # The LOCATION of the thinnest wall. A number is not a witness: "0.60mm" is
@@ -5042,7 +5072,7 @@ def op_check_printability(params: dict) -> dict:
         # 逐采样点的场数据：只为面板画热力图。宿主会把它写进 run 文件并从
         # LLM 看到的返回值里剥掉——一个 700 点的场对模型是纯噪声，对画面是全部。
         **({"field": field_payload} if params.get("withSampleField") else {}),
-    }
+    })
 
 
 def op_scan_attention(params: dict) -> dict:

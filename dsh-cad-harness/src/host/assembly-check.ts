@@ -306,8 +306,15 @@ export interface AssemblyCheckReport {
 /** Compare a measured value against the tolerance interval; honour severity. */
 function verdictFor(iface: ManifestInterface, measured: number, detail: string): InterfaceCheckResult {
   const tol = iface.tolerance;
-  const inRange = tol ? measured >= tol.min && measured <= tol.max : true;
-  const verdict = inRange ? 'pass' : iface.severity === 'hard' ? 'hard-violation' : 'intent-flag';
+  // No tolerance = no criterion = NOT a pass. See the Python twin
+  // (_assembly_verdict): the toy-balance manifest declared none and every
+  // interface "passed", including two axes 116 mm apart.
+  const verdict = !tol
+    ? 'skipped'
+    : measured >= tol.min && measured <= tol.max
+      ? 'pass'
+      : iface.severity === 'hard' ? 'hard-violation' : 'intent-flag';
+  if (!tol) detail += ' — no tolerance declared: add tolerance {min,max}; a missing criterion is NOT a pass';
   return {
     interfaceId: iface.id,
     ownerPath: [],
@@ -618,7 +625,8 @@ export async function runAssemblyCheckInTs(
       interfaces: results.length, pass, hardViolations: hard, intentFlags: intents,
       skipped, undeclared: undeclared.length,
     },
-    overallStatus: hard > 0 ? 'fail' : intents + undeclared.length > 0 ? 'check' : 'pass',
+    // skipped is not a pass either (missing tolerance / unimplemented operator).
+    overallStatus: hard > 0 ? 'fail' : intents + undeclared.length + skipped > 0 ? 'check' : 'pass',
   };
   return report;
 }

@@ -425,6 +425,19 @@ export function registerCadTools(
   const allStores = (exec: unknown): Promise<ProjectStores> => projectStoresFor(exec);
 
   /**
+   * The message for "I cannot find this version" — including what a version IS.
+   * Observed: `measure_part(v999)` said only "version v999 has no model.stl"; the
+   * caller had a part id, not a version id, and nothing said so. A rejected input
+   * is where a caller learns the vocabulary, so the ids that DO exist ride along.
+   */
+  async function versionNotFound(store: ProjectStores['store'], id: string, where = ''): Promise<string> {
+    const ids = (await listVersions(store)).map((v) => v.id);
+    return `unknown version "${id}"${where} — this project has ${ids.length} version(s): ` +
+      `${ids.slice(0, 8).join(', ')}${ids.length > 8 ? ', …' : ''}. ` +
+      'A version id looks like "v001"; a part id ("p001") or a run id ("r044") is not one.';
+  }
+
+  /**
    * Which part a new version belongs to.
    *
    * A declared `part` wins; otherwise the parent's part is inherited; otherwise
@@ -1512,7 +1525,7 @@ export function registerCadTools(
       const known = entry ?? (await versionExists(store, a.versionId)
         ? { userIntent: '(not in the version index)', source: undefined as undefined }
         : null);
-      if (!known) throw new Error(`unknown version ${a.versionId}`);
+      if (!known) throw new Error(await versionNotFound(store, a.versionId));
       const warnings: string[] = entry ? [] : [`${a.versionId} exists on disk but is not in the version index`];
       const current = await readVersionDatums(store, a.versionId);
       const summarise = (set: typeof current) => ({
@@ -1933,7 +1946,7 @@ export function registerCadTools(
             name: { type: 'string', required: true, description: 'Unique part name.' },
             scadCode: { type: 'string', description: 'Complete OpenSCAD source for this part. Give this OR versionId.' },
             versionId: { type: 'string', description: 'Use a saved version\'s model.stl as this part\'s geometry (records provenance: the run then lists that version as its source). Overrides scadCode.' },
-            bodyType: { type: 'string', required: true, description: '"dynamic" (moves) or "fixed" (immovable boundary).' },
+            bodyType: { type: 'string', required: true, enum: ['dynamic', 'fixed'], description: '"dynamic" (moves) or "fixed" (immovable boundary).' },
             position: {
               type: 'array', required: true,
               description: 'Initial position [x,y,z] mm. For a fixed ground plate remember cube(..., center=true) vs corner-origin.',
@@ -2193,7 +2206,7 @@ export function registerCadTools(
             name: { type: 'string', required: true, description: 'Unique part name.' },
             scadCode: { type: 'string', description: 'Complete OpenSCAD source for this part. Give this OR versionId.' },
             versionId: { type: 'string', description: 'Use a saved version\'s model.stl as this part\'s geometry (records provenance: the run then lists that version as its source). Overrides scadCode.' },
-            bodyType: { type: 'string', required: true, description: '"dynamic" (follows joints), "fixed" (frame), or "kinematic" (driven/prescribed).' },
+            bodyType: { type: 'string', required: true, enum: ['dynamic', 'fixed', 'kinematic'], description: '"dynamic" (follows joints), "fixed" (frame), or "kinematic" (driven/prescribed).' },
             position: { type: 'array', required: true, description: 'Initial position [x,y,z] mm.', items: { type: 'number' } },
             rotation: { type: 'array', description: 'Initial rotation [rx,ry,rz] degrees XYZ.', items: { type: 'number' } },
             pivot: { type: 'array', description: 'Point the body turns/slides about, in the part\'s own file frame [x,y,z] mm. Default: the anchor of the first joint naming this part (its axis), else the geometry centre. Geometry is re-based on it automatically — set it explicitly only when the rotation axis passes through neither.', items: { type: 'number' } },
@@ -2608,7 +2621,7 @@ export function registerCadTools(
       const a = args as { versionId: string; axis?: string; axisVector?: number[] };
       const { store, runStore } = await allStores(exec);
       const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(modelPath)) throw new Error(`version ${a.versionId} has no model.stl`);
+      if (!existsSync(modelPath)) throw new Error(await versionNotFound(store, a.versionId));
       const worker = await ensurePythonWorker();
       // BODY COUNT FIRST, and never let a broken mesh hide it. This is the one
       // field that must survive an open/non-manifold model — it is precisely when
@@ -2783,7 +2796,7 @@ export function registerCadTools(
       const { store } = await allStores(exec);
       const versionStl = (id: string) => join(store.root, 'versions', id, 'model.stl');
       if (a.versionId !== undefined && !existsSync(versionStl(a.versionId))) {
-        throw new Error(`version ${a.versionId} has no model.stl`);
+        throw new Error(await versionNotFound(store, a.versionId));
       }
 
       // Name the endpoints first: exactly one spelling each, and the same KIND on
@@ -2907,7 +2920,7 @@ export function registerCadTools(
 
       // ---- snapped pair: point / datum --------------------------------------
       const bPart = a.bOn ?? a.versionId;
-      if (!existsSync(versionStl(bPart))) throw new Error(`version ${bPart} has no model.stl (bOn)`);
+      if (!existsSync(versionStl(bPart))) throw new Error(await versionNotFound(store, bPart, ' (bOn)'));
       const resolve = async (part: string, datumName?: string, point?: number[]): Promise<[number, number, number]> => {
         if (!datumName) return point as [number, number, number];
         const datums = await readVersionDatumPoints(store, part);
@@ -3039,8 +3052,8 @@ export function registerCadTools(
       };
       const { store } = await allStores(exec);
       const versionStl = (v: string) => join(store.root, 'versions', v, 'model.stl');
-      if (!existsSync(versionStl(a.versionId))) throw new Error(`version ${a.versionId} has no model.stl`);
-      if (a.bVersionId && !existsSync(versionStl(a.bVersionId))) throw new Error(`version ${a.bVersionId} has no model.stl`);
+      if (!existsSync(versionStl(a.versionId))) throw new Error(await versionNotFound(store, a.versionId));
+      if (a.bVersionId && !existsSync(versionStl(a.bVersionId))) throw new Error(await versionNotFound(store, a.bVersionId));
 
       let from: [number, number, number];
       if (a.fromDatum) {
@@ -3230,7 +3243,7 @@ export function registerCadTools(
       };
       const { store } = await allStores(exec);
       const path = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
       const out = await (await ensurePythonWorker()).request<ListFeaturesSolve>('list_features', {
         path,
         minFaceAreaMm2: a.minFaceAreaMm2,
@@ -3371,7 +3384,7 @@ export function registerCadTools(
       };
       const { store } = await allStores(exec);
       const path = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(path)) throw new Error(`version ${a.versionId} has no model.stl`);
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
       const out = await (await ensurePythonWorker()).request<MeasureSectionSolve>('measure_section', {
         path,
         axis: a.axis ?? 'z',
@@ -3569,6 +3582,7 @@ export function registerCadTools(
     parameters: {
       mode: {
         type: 'string',
+        enum: ['judge', 'scan', 'both'],
         description: '"judge" (default) returns ONLY the judgement half (verdict / findings / profiles, no attention field); "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The run ALWAYS records both halves (report.json + attention.json) — the mode trims the reply, not the record (DESIGN §25.7).',
       },
       versionId: { type: 'string', required: true, description: 'Saved version id to screen, e.g. "v012".' },
@@ -3604,8 +3618,8 @@ export function registerCadTools(
           minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found — the witness a human can go and look at.' },
           watertight: { type: 'boolean', required: true },
           attention: {
-            type: 'object', required: true, additionalProperties: false,
-            description: 'Where to LOOK, not what to conclude: one field per quantity (wall thickness, down-facing area), each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
+            type: 'object', additionalProperties: false,
+            description: 'Where to LOOK, not what to conclude (absent in judge mode): one field per quantity (wall thickness, down-facing area), each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
             properties: {
               id: { type: 'string', required: true, description: 'version + tool + parameters: a picture may not outlive the geometry it describes.' },
               layers: {
@@ -3644,7 +3658,10 @@ export function registerCadTools(
                       type: 'array', required: true,
                       description: 'Connected areas above a tier, with a bbox and a ready render command.',
                       items: {
-                        type: 'object', additionalProperties: false,
+                        // Per-layer extras are part of the answer: `triangles` on an
+                        // overhang patch, `samples`/`minWallMm` on a wall patch. A
+                        // closed list rejected the field it was describing.
+                        type: 'object', additionalProperties: true,
                         properties: {
                           tier: { type: 'string', required: true, description: '"warn" | "bad".' },
                           areaMm2: { type: 'number', required: true },
@@ -3665,10 +3682,10 @@ export function registerCadTools(
               },
             },
           },
-          profileSource: { type: 'string', required: true, description: '"declared" | "builtin-default". The latter means NO process was declared: the numbers come from an uncalibrated fallback that the findings name.' },
+          profileSource: { type: 'string', description: '"declared" | "builtin-default" (absent in scan mode). The latter means NO process was declared: the numbers come from an uncalibrated fallback that the findings name.' },
           profiles: {
-            type: 'array', required: true,
-            description: 'One entry per declared profile (or the single built-in fallback). Two-valued on purpose: "excluded" carries a witness, "not-excluded" means no geometric counter-example was found.',
+            type: 'array',
+            description: 'One entry per declared profile (or the single built-in fallback; absent in scan mode). Two-valued on purpose: "excluded" carries a witness, "not-excluded" means no geometric counter-example was found.',
             items: {
               type: 'object', additionalProperties: false,
               properties: {
@@ -4119,7 +4136,9 @@ export function registerCadTools(
       if (mode === 'judge') {
         delete reply.attention;
       }
-      return reply as typeof forModel;
+      // The output schema now allows per-layer region extras (triangles/samples/…),
+      // so its inferred type carries an index signature the typed layers lack.
+      return reply as never;
     },
   }));
 
@@ -4187,6 +4206,7 @@ export function registerCadTools(
       },
       mode: {
         type: 'string',
+        enum: ['judge', 'scan', 'both'],
         description: '"judge" (default) returns ONLY the delivery judgement; "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The default is the stricter half (DESIGN §25.7).',
       },
       excludeFromReport: {
@@ -4224,16 +4244,19 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
-          verdict: { type: 'string', required: true, description: '"ok" | "check" | "overstressed" — a SUMMARY for a human, NOT the delivery form. Deliver against `delivery` (excluded / difficult / not-excluded), which is the two-or-three-valued judgement with witnesses.' },
-          delivery: { type: 'object', required: true, additionalProperties: true, description: 'The delivery discipline: an allowable-stress requirement and a three-valued verdict — "excluded" (a witness contradicts it), "difficult" (the bounds straddle it), "not-excluded" (no counter-example; NEVER "ok"); plus `unevaluable` for numbers this mesh cannot decide. DETECTION IS NOT DELIVERY: the geometry suspects live in `attention`, never as witnesses here.' },
+          // Mode-trimmed below exactly like check_printability: judge drops `attention`,
+          // scan drops `verdict`+`delivery`. A static required list made BOTH modes
+          // fail, so the default call was broken. The run record keeps both halves.
+          verdict: { type: 'string', description: '"ok" | "check" | "overstressed" (absent in scan mode) — a SUMMARY for a human, NOT the delivery form. Deliver against `delivery` (excluded / difficult / not-excluded), which is the two-or-three-valued judgement with witnesses.' },
+          delivery: { type: 'object', additionalProperties: true, description: 'The delivery discipline: an allowable-stress requirement and a three-valued verdict — "excluded" (a witness contradicts it), "difficult" (the bounds straddle it), "not-excluded" (no counter-example; NEVER "ok"); plus `unevaluable` for numbers this mesh cannot decide. DETECTION IS NOT DELIVERY: the geometry suspects live in `attention`, never as witnesses here.' },
           material: { type: 'object', required: true, additionalProperties: true },
           method: { type: 'object', required: true, additionalProperties: true, description: 'What was actually solved: grid, degrees of freedom, CG iterations and residual, the sampling distance, the field file, how many cells the report excluded. A result without this is not reproducible.' },
           checks: { type: 'object', required: true, additionalProperties: true, description: 'Self-checks that do not need the answer to be right: equilibrium residual, strain-energy balance, mesh-independence deltas.' },
           resultants: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
           capability: { type: 'object', required: true, additionalProperties: true, description: 'What this run may and may not be used to claim.' },
           attention: {
-            type: 'object', required: true, additionalProperties: false,
-            description: 'Where to LOOK, not what to conclude: one field per quantity, each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
+            type: 'object', additionalProperties: false,
+            description: 'Where to LOOK, not what to conclude (absent in judge mode): one field per quantity, each with peaks, regions and a runnable next observation. The panel draws each layer as a heatmap from the same object — the picture and this digest cannot drift apart. Read an empty layer as "nothing found here", never as "clean".',
             properties: {
               id: { type: 'string', required: true, description: 'version + tool + the parameters that change the numbers: a picture may not outlive the case it describes.' },
               layers: {
@@ -4272,7 +4295,10 @@ export function registerCadTools(
                       type: 'array', required: true,
                       description: 'Connected areas above a tier, with a bbox, the wall thickness in cells and a ready render command.',
                       items: {
-                        type: 'object', additionalProperties: false,
+                        // The region carries its own evidence (volumeMm3, peak depth,
+                        // extrapolation R², trustworthy/whyUntrustworthy, …). It is the
+                        // point of the field, so the schema must not close it.
+                        type: 'object', additionalProperties: true,
                         properties: {
                           tier: { type: 'string', required: true, description: '"warn" | "bad".' },
                           areaMm2: { type: 'number', required: true, description: 'Projected surface patch (volume / mean depth), not a measured surface area — see domain.regionAreaIs.' },
@@ -4316,7 +4342,7 @@ export function registerCadTools(
       const { store, runStore } = await allStores(exec);
       const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) {
-        throw new Error(`version ${a.versionId} has no model.stl under ${store.root}`);
+        throw new Error(await versionNotFound(store, a.versionId));
       }
       const material = resolveStressMaterial(a.materialJson, a.materialIds);
       const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
@@ -4406,6 +4432,7 @@ export function registerCadTools(
       // travel in the run, in the same `attention.json` shape check_printability
       // writes, so the panel needs no second format and the picture cannot drift from
       // the digest (DECISION-LOG 2026-10-19).
+      const delivery = stressDelivery({ material, result, warnFactor, badFactor });
       const run = await beginRun(runStore, {
         kind: 'stress',
         title: `应力分析 · ${a.versionId} · ${verdict}`,
@@ -4413,7 +4440,7 @@ export function registerCadTools(
       await run.json('report.json', {
         versionId: a.versionId,
         verdict,
-        delivery: stressDelivery({ material, result, warnFactor, badFactor }),
+        delivery,
         material,
         method: { dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm },
         checks: {
@@ -4441,6 +4468,9 @@ export function registerCadTools(
       const out: Record<string, unknown> = {
         versionId: a.versionId,
         verdict,
+        // It was written to the run report but never to the REPLY, so "deliver against
+        // `delivery`" was impossible: judge mode returned a verdict with no judgement.
+        delivery: delivery as unknown as { [key: string]: Json },
         material: material as unknown as { [key: string]: Json },
         method: {
           solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
@@ -4574,6 +4604,9 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { versionId: string; concaveMinDeg?: number; minChainMm?: number };
       const { store } = await allStores(exec);
+      if (!existsSync(join(store.root, 'versions', a.versionId, 'model.stl'))) {
+        throw new Error(await versionNotFound(store, a.versionId));
+      }
       return scanAttention(store, a);
     },
   }));
@@ -4636,7 +4669,9 @@ export function registerCadTools(
       render: (_args: unknown, value: any) => [{
         type: 'text',
         text: [
-          `${value.verdict === 'blocked' ? '❌ BLOCKED' : value.verdict === 'attention' ? '⚠ NEEDS ATTENTION' : '✓ OK'} — ${value.summary}`,
+          // Canonical vocabulary (src/shared/judgement.ts): the render still compared
+          // the retired words, so a corpus with a blocked finding printed "✓ OK".
+          `${value.verdict === 'excluded' ? '❌ BLOCKED' : value.verdict === 'difficult' ? '⚠ DIFFICULT' : '✓ NOT-EXCLUDED'} — ${value.summary}`,
           ...(value.findings ?? []).map((f: any) => `  [${f.severity}] ${f.code}: ${f.detail}`),
         ].join('\n'),
       }],
@@ -4710,10 +4745,29 @@ export function registerCadTools(
         },
       },
       render: (_a, v) => {
-        const out = v as unknown as { judgement: string; ran: string[]; notRun: { step: string; why: string }[]; summary: string };
-        return [
-          { type: 'text', text: `preflight → ${out.judgement}\n${out.summary}` },
-        ] as never;
+        const out = v as unknown as {
+          judgement: string;
+          steps: { step: string; ran: boolean; judgement: string; detail: string }[];
+          ran: string[];
+          notRun: { step: string; why: string }[];
+          unevaluable: string[];
+          summary: string;
+        };
+        // A one-line summary is not an error report: "excluded" must name the step
+        // that excluded it, and a step that did not run must say why. The model reads
+        // THIS text, not the value object.
+        const lines = [`preflight → ${out.judgement}`, out.summary];
+        const flagged = (out.steps ?? []).filter((s) => s.ran && (s.judgement === 'excluded' || s.judgement === 'difficult'));
+        if (flagged.length) {
+          lines.push('flagged:');
+          for (const s of flagged.slice(0, 12)) lines.push(`  - ${s.step}: ${s.judgement} — ${s.detail}`);
+          if (flagged.length > 12) lines.push(`  … ${flagged.length - 12} more`);
+        }
+        if (out.unevaluable?.length) {
+          lines.push('unevaluable:');
+          for (const u of out.unevaluable) lines.push(`  - ${u}`);
+        }
+        return [{ type: 'text', text: lines.join('\n') }] as never;
       },
     },
     async execute(args: unknown, exec: unknown) {

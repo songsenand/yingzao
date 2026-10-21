@@ -3503,3 +3503,34 @@ run 落盘）、`src/client/heat.ts`（fused 层优先绘制）、`src/shared/ju
 `delivery-audit.ts`（verdict 改名 + claims）。验收：`accept-analyze`（含天平正负对照）、
 `accept-tool-groups`、`accept-delivery-audit`、`accept-stress`。
 
+
+## 2026-10-20（补）：mode 裁剪与静态 required 的冲突——一次修完
+
+**触发条件：** 2（实测：printability 三模式全挂、stress 默认 judge 挂）、4（所有带 mode 的工具）。
+
+**要解决的问题：** 上一节的"未修"清单里还剩 `check_printability` 的 `attention`/`triangles`/`-0`。
+检查时发现同一病因还多两处：`check_printability` 的 `scan` 缺 `verdict/profileSource/profiles`
+（静态 required 与 mode 裁剪互斥），`simulate_stress` 的 `judge` 缺 `attention`、
+`scan` 缺 `verdict/delivery`——即 stress 的**默认调用**也是坏的。`analyze` 另有三个问题：
+角扫描失败被 `catch` 吞掉、`notMapped` 恒空、`sourceVersionIds` 传给了 `beginRun`（被丢弃）。
+
+**决策内容：**
+
+1. **mode 裁剪的字段一律不设 `required`**（printability 的 verdict/attention/profiles/profileSource；
+   stress 的 verdict/delivery/attention）。回复形状由 mode 决定，记录仍两半都存；静态 required 只能
+   表达"任何时候都在"的字段。
+2. **attention 的 regions 改为 `additionalProperties: true`**（printability 与 stress 两处）：
+   `triangles`、`samples`、`minWallMm`、`trustworthy` 等是各层的证据，不是 schema 噪音。
+3. **`-0` 在源头归一**（`inspect.ts` 的 round）：`-0 → 0`，否则 JSON 不可无损往返。
+4. **analyze 的失败要说话**：角扫描失败写进 `notMapped`；`sourceVersionIds`/`subject` 移到
+   `run.commit`（beginRun 不接收它们，之前被静默丢弃）。
+5. **未知版本报错带可用 id**：`versionNotFound()` 统一 8 个调用点，消息说明
+   "vNNN 是版本号，pNNN/rNNN 不是"。
+6. **闭集参数加 enum**（mode: judge|scan|both；bodyType），让拼写错误在框架层就被点名。
+
+**依据：** `accept-printability-parity.mjs` all checks passed；`accept-analyze.mjs` OK；
+`accept-manifest-errors.mjs` ALL PASS；`accept-tool-groups.mjs` OK；`tsc --noEmit` 0。
+
+**影响：** 重启 DSH web 进程后，`check_printability` 三种 mode 与 `simulate_stress` 三种 mode
+应都能返回；`analyze` 的 run 会正确挂到版本上。若 `both` 仍报 lossless JSON，说明还有别的 `-0`
+来源，按报错继续收口。
