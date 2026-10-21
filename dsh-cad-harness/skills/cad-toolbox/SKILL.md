@@ -57,6 +57,10 @@ four per-job skills — load one when the work turns to that job:
 | authoring, importing, measuring geometry | `cad-modeling-measure` | drawing or measuring a part |
 | can it be made, and by which processes | `cad-manufacturing` | before delivering, or any wall/threshold question |
 
+**参数与最小调用**：`docs/TOOL-CONTRACTS.md` 由 `scripts/audit-tool-contracts.mjs --write` 生成，
+列出每个工具的参数（类型 / 枚举 / 默认 / 含义）与一行可跑的调用示例——**别手改**，它与代码同源，
+`--check` 会在漏掉工具时红。
+
 Reference material and long case histories live in each skill's `references/` directory.
 The loader prints that directory when the skill is loaded; resolve relative paths
 against it, and read a reference only when the skill tells you to.

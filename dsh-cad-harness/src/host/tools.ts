@@ -2844,7 +2844,12 @@ export function registerCadTools(
       if (solvedA) {
         // ---- solved pair: solid / sphere, no coordinates from the caller ------
         if (a.aSphere && a.bSphere) {
-          throw new Error('sphere-vs-sphere: subtract the centres yourself — the distance is analytic');
+          throw new Error(
+          'measure_gap does not screen sphere-vs-sphere: the analytic centre distance is what you want ' +
+            '(subtract the two centres). Supported kinds: ' +
+            'part-vs-part (mesh distance), sphere-vs-part, sphere-vs-plane. ' +
+            'Signature: measure_gap({ a: { versionId, kind: "sphere", centreMm, radiusMm }, b: {…} })',
+        );
         }
         const warnIfOpen = (v: string, label: string, watertight: boolean) => {
           if (!watertight) {
