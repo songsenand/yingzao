@@ -33,6 +33,7 @@ import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { asJudgement } from '../shared/judgement.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
+import { withDeadline } from './deadline.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
@@ -3690,6 +3691,7 @@ export function registerCadTools(
                 },
                 notApplicable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules this process does not govern, with the reason. Never silently dropped: calling an SLS part overhang "needs support" is wrong, not conservative.' },
                 unevaluable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules a tool cannot decide from the mesh (cost, tolerance capability) or that were never declared. A missing number is not "no constraint".' },
+          timings: { type: 'object', required: true, additionalProperties: true, description: 'Per-step wall time in ms. A step that blew its budget is reported in notRun/unevaluable WITH the reason — the tool never sits waiting without saying so.' },
               },
             },
           },
@@ -4728,13 +4730,20 @@ export function registerCadTools(
       }
 
       const steps: PreflightStep[] = [];
+      const timings: Record<string, number> = {};
       for (const part of parts) {
         const vid = newest.get(part.id);
         if (!vid) {
           steps.push({ step: `printability:${part.name}`, ran: false, judgement: 'difficult', detail: 'no version for this part' });
           continue;
         }
-        const screen = await checkPrintability(project.store, { versionId: vid, withSampleField: true });
+        const r = await withDeadline(checkPrintability(project.store, { versionId: vid, withSampleField: true }), 45_000, `printability ${part.name}`);
+        timings[`printability:${part.name}`] = r.ms;
+        if (!r.ok) {
+          steps.push({ step: `printability:${part.name}@${vid}`, ran: false, judgement: 'difficult', detail: r.reason });
+          continue;
+        }
+        const screen = r.value;
         steps.push({
           step: `printability:${part.name}@${vid}`,
           ran: true,
@@ -4764,7 +4773,10 @@ export function registerCadTools(
         if (!vid) continue;
         const modelPath = join(project.store.root, 'versions', vid, 'model.stl');
         try {
-          const conn = await worker.request<Record<string, unknown>>('connectivity', { path: modelPath });
+          const rConn = await withDeadline(worker.request<Record<string, unknown>>('connectivity', { path: modelPath }), 30_000, `connectivity ${part.name}`);
+          timings[`mesh-health:${part.name}`] = rConn.ms;
+          if (!rConn.ok) throw new Error(rConn.reason); // the catch below reports it as ran:false
+          const conn = rConn.value;
           const watertight = conn.watertight !== false;
           const bodies = Number(conn.bodies ?? conn.components ?? conn.shells ?? 1);
           steps.push({
@@ -4786,10 +4798,17 @@ export function registerCadTools(
       // support: mass-based, so a bowl is not "1 m² of overhang"; a real hanging plate is.
       // It is a process COST (supports / reorient), never an exclusion.
       try {
-        const sup = await worker.request<{ regions?: { massG: number; atMm: number[] }[]; totals?: { massG?: number } }>(
-          'support_map',
-          { path: join(project.store.root, 'versions', newest.get(parts[0]?.id ?? '') ?? '', 'model.stl'), dxMm: 1.0 },
+        const rSup = await withDeadline(
+          worker.request<{ regions?: { massG: number; atMm: number[] }[]; totals?: { massG?: number } }>('support_map', {
+            path: join(project.store.root, 'versions', newest.get(parts[0]?.id ?? '') ?? '', 'model.stl'),
+            dxMm: 1.0,
+          }),
+          45_000,
+          'support',
         );
+        timings.support = rSup.ms;
+        if (!rSup.ok) throw new Error(rSup.reason);
+        const sup = rSup.value;
         const regions = sup.regions ?? [];
         steps.push({
           step: 'support',
@@ -4803,7 +4822,10 @@ export function registerCadTools(
         steps.push({ step: 'support', ran: false, judgement: 'difficult', detail: `support_map failed: ${String((e as Error)?.message ?? e)}` });
       }
 
-      const audit = await auditDelivery(project, { claims: a.claims as never });
+      const rAudit = await withDeadline(auditDelivery(project, { claims: a.claims as never }), 30_000, 'audit');
+      timings.audit = rAudit.ms;
+      if (!rAudit.ok) throw new Error(rAudit.reason);
+      const audit = rAudit.value;
       const blockedFindings = audit.findings.filter((f) => f.severity === 'blocked');
       steps.push({
         step: 'audit',
@@ -4819,7 +4841,10 @@ export function registerCadTools(
       // real contract evaluation, not a second implementation. Absence of a manifest is
       // NOT a pass: it comes back as ran:false with the reason.
       try {
-        const { report, manifestFile } = await runAssemblyCheckJob(undefined, project);
+        const rAsm = await withDeadline(runAssemblyCheckJob(undefined, project), 60_000, 'assembly');
+        timings.assembly = rAsm.ms;
+        if (!rAsm.ok) throw new Error(rAsm.reason);
+        const { report, manifestFile } = rAsm.value;
         const hard = (report.results ?? []).filter((r) => r.verdict === 'hard-violation').length;
         const skipped = (report.results ?? []).filter((r) => r.verdict === 'skipped').length;
         const intent = (report.results ?? []).filter((r) => r.verdict === 'intent-flag').length;
@@ -4852,6 +4877,7 @@ export function registerCadTools(
       return {
         ...summary,
         steps,
+        timings,  // a blown budget must be visible, not felt as a pause
         summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} not run · judgment ${summary.judgement} — read unevaluable before claiming anything`,
       } as never;
     },
@@ -4912,33 +4938,54 @@ export function registerCadTools(
             `Pass a version id from generate_part/import_part (a part id like "p001" is not a version id).`,
         );
       }
-      const screen = await checkPrintability(project.store, { versionId: a.versionId, withSampleField: true });
+      const t0 = Date.now();
+      const timings: Record<string, number> = {};
+      // The field is the primary input: if it cannot answer inside its budget the call
+      // fails FAST with the reason, instead of occupying the harness for two silent minutes.
+      const rScreen = await withDeadline(checkPrintability(project.store, { versionId: a.versionId, withSampleField: true }), 45_000, 'printability field');
+      timings.printability = rScreen.ms;
+      if (!rScreen.ok) throw new Error(rScreen.reason);
+      const screen = rScreen.value;
       let suspects: SuspectLike[] = [];
       let cornerError: string | null = null;
-      try {
-        const scan = await (await ensurePythonWorker()).request<{ suspects?: SuspectLike[] }>('scan_attention', { path: modelPath });
-        suspects = scan.suspects ?? [];
-      } catch (e) {
-        // A missing layer is NOT "no corners". The map must say which route is absent
-        // (the same rule as `notMapped` on the stress tool).
-        cornerError = (e as Error).message;
+      {
+        const rScan = await withDeadline(
+          (await ensurePythonWorker()).request<{ suspects?: SuspectLike[] }>('scan_attention', { path: modelPath }),
+          30_000,
+          'scan_attention',
+        );
+        timings.scan = rScan.ms;
+        if (rScan.ok) {
+          suspects = rScan.value.suspects ?? [];
+        } else {
+          // A missing layer is NOT "no corners". The map must say which route is absent
+          // (the same rule as `notMapped` on the stress tool).
+          cornerError = rScan.reason;
+        }
       }
       // Support adequacy, by MASS (not area): a little overhang is free, a 3 g plate with
       // nothing beneath it is not. Declared thresholds; the answer is "needs support",
       // never "will fail".
       let support: Record<string, unknown> | null = null;
-      try {
-        support = await (await ensurePythonWorker()).request<Record<string, unknown>>('support_map', {
-          path: modelPath,
-          dxMm: a.dxMm ?? 1.0,
-          minMassG: a.minMassG ?? 1.0,
-          bridgeMaxMm: a.bridgeMaxMm ?? 10.0,
-        });
-      } catch {
-        support = null; // the rest of the map stands; the absence is reported in `note`
+      let supportError: string | null = null;
+      {
+        const rSup = await withDeadline(
+          (await ensurePythonWorker()).request<Record<string, unknown>>('support_map', {
+            path: modelPath,
+            dxMm: a.dxMm ?? 1.0,
+            minMassG: a.minMassG ?? 1.0,
+            bridgeMaxMm: a.bridgeMaxMm ?? 10.0,
+          }),
+          45_000,
+          'support_map',
+        );
+        timings.support = rSup.ms;
+        if (rSup.ok) support = rSup.value;
+        else supportError = rSup.reason; // reported, never swallowed
       }
       const out = analyzeVersion({ suspects, field: screen.field as never, wallBand, cellMm: a.cellMm });
-      if (cornerError) out.notMapped.push(`corner-scan: scan_attention failed — ${cornerError}`);
+      if (cornerError) out.notMapped.push(`corner-scan: ${cornerError}`);
+      if (supportError) out.notMapped.push(`support: ${supportError}`);
       if (!screen.field) out.notMapped.push('wall-field: per-sample field missing — wall layer absent from this map');
       // Persist the map so the panel can DRAW it and a later reader can audit it: the
       // heat map and the JSON come from the same object (one surface, two readers).
@@ -4970,6 +5017,7 @@ export function registerCadTools(
       return {
         ...forModel,
         support,
+        timings: { ...timings, total: Date.now() - t0 },
         bands: { wall: wallBand },
         note: `${out.peaks.length} peak(s) · ${suspects.length} corner suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
       } as never;

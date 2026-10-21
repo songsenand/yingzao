@@ -5,7 +5,17 @@
 // acceptance asserts exactly the same thing (SKIPs when the corpus is absent).
 import { runControl, atElbow, ROOT } from './analyze-control.mjs';
 
-const out = await runControl(undefined, (m) => console.error(m));
+// WATCHDOG: never sit waiting in silence. If the whole probe exceeds its budget, say which
+// step was last and exit non-zero — the same discipline the tools now follow.
+const budgetMs = Number(process.env.PROBE_BUDGET_MS ?? 180_000);
+let last = 'start';
+const wd = setTimeout(() => {
+  console.error(`[watchdog] no completion after ${(budgetMs / 1000).toFixed(0)}s; last step: ${last}`);
+  process.exit(2);
+}, budgetMs);
+wd.unref?.();
+const out = await runControl(undefined, (m) => { last = m; console.error(m); });
+clearTimeout(wd);
 for (const [vid, r] of Object.entries(out)) {
   const elbows = r.peaks.filter((p) => atElbow(p));
   console.log(`${vid}: peaks=${r.peaks.length} elbowPeaks=${elbows.length} layers=${JSON.stringify(r.layers)}`);
