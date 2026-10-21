@@ -34,6 +34,7 @@ import { auditDelivery } from './delivery-audit.ts';
 import { asJudgement } from '../shared/judgement.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { withDeadline } from './deadline.ts';
+import { argError } from './arg-error.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
@@ -958,7 +959,8 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { name: string };
       const { partStore } = await allStores(exec);
-      if (!a?.name?.trim()) throw new Error('create_part needs a non-empty name');
+      if (!a?.name?.trim()) throw argError('create_part', 'name', 'is required (a non-empty string)', 'a display name, e.g. "吊盘架" — it becomes the part name everywhere',
+          { example: 'create_part({ name: "吊盘架" })', received: a?.name });
       const existing = await findPartByName(partStore, a.name);
       if (existing) return { partId: existing.id, name: existing.name, created: false };
       const part = await createUniquePart(partStore, a.name, 'agent');
@@ -1024,7 +1026,8 @@ export function registerCadTools(
   async function importPartJob(a: ImportPartArgs, project: ProjectStores): Promise<ImportPartResult> {
     const started = Date.now();
     const { store, partStore } = project;
-    if (!a?.file?.trim()) throw new Error('import_part needs a file path');
+    if (!a?.file?.trim()) throw argError('import_part', 'file', 'is required', 'a path to an STL/3MF/STEP/DXF inside the session workspace (absolute, or relative to it)',
+          { example: 'import_part({ file: "models/pan.stl" })', received: a?.file });
 
     const part = await resolvePartForWrite({
       part: a.part,
@@ -1275,9 +1278,11 @@ export function registerCadTools(
   async function mergePartsJob(a: MergePartsArgs, project: ProjectStores): Promise<MergePartsResult> {
     const started = Date.now();
     const { store, partStore } = project;
-    if (!Array.isArray(a.parts) || a.parts.length < 2) throw new Error('merge_parts needs at least 2 parts');
+    if (!Array.isArray(a.parts) || a.parts.length < 2) throw argError('merge_parts', 'parts', 'needs at least 2 parts (a merge of one is not a merge)', 'an array of { name, versionId } with ≥2 entries',
+          { example: 'merge_parts({ parts: [{ name: "a", versionId: "v001" }, { name: "b", versionId: "v002" }], userIntent: "…" })', received: a?.parts });
     assertPartNames(a.parts, 'merge_parts');
-    if (!a.userIntent?.trim()) throw new Error('merge_parts needs a userIntent — it names the merged part');
+    if (!a.userIntent?.trim()) throw argError('merge_parts', 'userIntent', 'is required', 'one sentence naming the merged part — it becomes the new part name',
+          { example: 'merge_parts({ parts: […], userIntent: "把吊盘与立柱合成整机" })', received: a?.userIntent });
 
     const part = await resolvePartForWrite({
       part: a.part,
@@ -1680,7 +1685,8 @@ export function registerCadTools(
       const project = await allStores(exec);
       const { runStore, store } = project;
       if (!Array.isArray(a.parts) || a.parts.length < 2) {
-        throw new Error('validate_assembly needs at least 2 parts');
+        throw argError('validate_assembly', 'parts', 'needs at least 2 parts', 'an array of { name, versionId } — per-pair interference needs two solids',
+          { example: 'validate_assembly({ parts: [{ name: "a", versionId: "v001" }, { name: "b", versionId: "v002" }] })', received: a?.parts });
       }
       assertPartNames(a.parts, 'validate_assembly');
       const inputs: AssemblyPartInput[] = [];
@@ -1827,7 +1833,8 @@ export function registerCadTools(
   /** Shared by the simulate_physics tool and POST /api/cad/physics/run (docs/archive/M4-PREP.md §4.6 path ②). */
   async function runPhysicsJob(a: PhysicsToolArgs, project: ProjectStores) {
       const { runStore } = project;
-      if (!Array.isArray(a.parts) || a.parts.length < 1) throw new Error('simulate_physics needs at least 1 part');
+      if (!Array.isArray(a.parts) || a.parts.length < 1) throw argError('simulate_physics', 'parts', 'needs at least 1 part', 'an array of { name, versionId } plus the body settings',
+          { example: 'simulate_physics({ parts: [{ name: "a", versionId: "v001" }] })', received: a?.parts });
       assertPartNames(a.parts, 'simulate_physics');
 
       const parts: PhysicsPartInput[] = [];
@@ -2289,8 +2296,9 @@ export function registerCadTools(
     timeoutMs: 300_000,
     async execute(args: unknown, exec: unknown) {
       const a = args as Parameters<typeof runMotionJob>[0];
-      if (!Array.isArray(a.parts) || a.parts.length < 2) throw new Error('simulate_motion needs at least 2 parts');
-      if (!a.drive) throw new Error('simulate_motion needs a drive (crank) specification');
+      if (!Array.isArray(a.parts) || a.parts.length < 2) throw argError('simulate_motion', 'parts', 'needs at least 2 parts', 'an array of { name, versionId } — a mechanism has at least two bodies',
+          { example: 'simulate_motion({ parts: […], joints: […], drive: {…} })', received: a?.parts });
+      if (!a.drive) throw argError('simulate_motion', 'drive', 'is required', 'a constant-speed crank drive object — its exact field shape is in docs/TOOL-CONTRACTS.md §simulate_motion (not reproduced here on purpose: a wrong example is worse than none)', { received: a?.drive });
       const result = await runMotionJob(a, await allStores(exec));
       motionRefsForFinalize = motionRefsForFinalize ?? { refs: [] };
       return result;
@@ -2836,10 +2844,8 @@ export function registerCadTools(
         [0, 1, 2].map((i) => +(q[i]! - p[i]!).toFixed(3)) as [number, number, number];
 
       if (!solvedA && a.versionId === undefined) {
-        throw new Error(
-          'a point/datum endpoint needs `versionId` — the part it belongs to (a bPoint/bDatum may name ' +
-          'another part with `bOn`). Only a solid/sphere pair can be measured without a base part.',
-        );
+        throw argError('measure_gap', 'versionId', 'is required for a point/datum endpoint', 'the version the endpoint belongs to; a b-side point/datum may instead name another part with `bOn`. Only a solid/sphere pair can be measured without a base part',
+          { example: 'measure_gap({ versionId: "v050", aVersionId: "v050", aDatum: "中心", bDatum: "顶尖", bOn: "v058" })' });
       }
       if (solvedA) {
         // ---- solved pair: solid / sphere, no coordinates from the caller ------

@@ -33,5 +33,19 @@ check(/^```js\n[a-z_]+\(\{/m.test(sheet), 'and every section carries a runnable 
 const lint = run('audit-arg-errors.mjs');
 check(lint.status === 0, 'every argument error names the offending field', (lint.stdout ?? '').trim().split('\n').pop());
 
+// The argument-error shape itself: it must always say what is ACCEPTED, and show a call
+// when one is given. (The migration of the remaining throw sites is tracked separately.)
+const { argError } = await import('../src/host/arg-error.ts');
+const msg = argError('merge_parts', 'parts', 'needs at least 2 parts', 'an array of { name, versionId } with ≥2 entries', {
+  example: 'merge_parts({ parts: […] })',
+  received: [{ name: 'a' }],
+}).message;
+check(/^merge_parts: parts /.test(msg), 'an argument error starts with tool + field');
+check(/received:/.test(msg) && /\[\{"name":"a"\}\]/.test(msg), 'and echoes what actually arrived');
+check(/accepts:\s+an array of/.test(msg), 'and states what is accepted');
+check(/example:\s+merge_parts\(/.test(msg), 'and shows a runnable call');
+const bare = argError('x', 'f', 'is required', 'a string').message;
+check(!/example:/.test(bare), 'no example is invented when none was given');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);
