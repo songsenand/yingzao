@@ -2,7 +2,7 @@
 //
 // WHY: the corpus had three dialects for the same three states —
 //   delivery_audit      blocked / attention / ok
-//   check_printability  unprintable / check / ok
+//   check_printability  unprintable / check / ok   (RENAMED to the canonical three, 2026-10-20)
 //   check_assembly      fail / check / ok
 //   simulate_stress     excluded / difficult / not-excluded  (the canonical one)
 // Management cannot answer "is anything excluded?" across tools that spell it differently,

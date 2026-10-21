@@ -5,6 +5,7 @@ import ManifoldModule from 'manifold-3d';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { asJudgement } from '../shared/judgement.ts';
 import { ensurePythonWorker } from './python-worker.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Vector3, Ray, DoubleSide } from 'three';
@@ -53,7 +54,8 @@ export interface AttentionFieldSamples {
 /** The screen's report — the tool's output schema, field for field. */
 export interface PrintabilityReport {
   versionId: string;
-  verdict: 'ok' | 'check' | 'unprintable';
+  /** Canonical since 2026-10-20 (was ok/check/unprintable). */
+  verdict: 'not-excluded' | 'difficult' | 'excluded';
   minWallMm?: number;
   /** Where the thinnest wall was found — the witness a human can go and look at. */
   minWallAtMm?: number[];
@@ -72,6 +74,8 @@ export interface PrintabilityReport {
   thinAreaPct: number;
   overhangAreaMm2: number;
   overhangZRange: number[];
+  /** The per-sample values behind the attention digest (withSampleField). */
+  field?: AttentionFieldSamples;
   findings: string[];
   watertight: boolean;
   /** Where to look next, per quantity — empty layers when nothing was measured. */
@@ -347,7 +351,10 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       // with peaks, regions and a runnable next observation. Grouping changes no verdict.
       const layers: AttentionLayer[] = [];
       const scale = triCount / Math.max(1, sampled);
-      const round = (v: number, d: number) => +v.toFixed(d);
+      // +v.toFixed(d) turns a tiny negative coordinate into -0, and JSON cannot
+      // round-trip -0 losslessly (-0 → "0" → +0), which failed the reply
+      // validator as "value is not lossless JSON". Normalise it at the source.
+      const round = (v: number, d: number) => { const r = +v.toFixed(d); return Object.is(r, -0) ? 0 : r; };
       const wallLayer: AttentionLayer = {
         id: 'wall',
         quantity: 'wall-thickness',
@@ -530,7 +537,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       // not measure the wall has not passed anything — so it can never be `ok`.
       const severe = wallMeasured && Number.isFinite(minWall) && minWall < wallMinMm * 0.4 &&
         thinArea >= Math.max(UNPRINTABLE_MIN_THIN_AREA_MM2, UNPRINTABLE_MIN_THIN_AREA_FRACTION * surfaceArea);
-      const verdict = severe ? 'unprintable' : wallMeasured && findings.length === 0 ? 'ok' : 'check';
+      const verdict = severe ? 'excluded' : wallMeasured && findings.length === 0 ? 'not-excluded' : 'difficult';
       return {
         versionId: options.versionId,
         verdict,
@@ -578,6 +585,11 @@ export async function checkPrintability(store: VersionStore, options: Printabili
   return {
     versionId: options.versionId,
     ...rest,
+    // One normalisation point: the engine's own word (ok / check / unprintable, produced by
+    // the Python path too) becomes the canonical three (src/shared/judgement.ts). Doing it
+    // HERE rather than in the worker keeps the engine vocabulary internal and stops the two
+    // implementations from drifting — which is what the parity acceptance compares.
+    verdict: asJudgement(rest.verdict),
     attention: withVersionInAttention(rest.attention, options.versionId),
     ...(field ? { field } : {}),
   };

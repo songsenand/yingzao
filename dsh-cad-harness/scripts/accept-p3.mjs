@@ -563,16 +563,16 @@ const vCeil = (await call('generate_part', {
 
 const good = await call('check_printability', { versionId: vGood, profileIds: ['fdm-pla-0.4'] });
 check('a chunky cube screens ok (min wall 12mm, no overhang)',
-  good.value.verdict === 'ok' && Math.abs(good.value.minWallMm - 12) < 0.5 && good.value.findings.length === 0,
+  good.value.verdict === 'not-excluded' && Math.abs(good.value.minWallMm - 12) < 0.5 && good.value.findings.length === 0,
   JSON.stringify(good.value));
 const thin = await call('check_printability', { versionId: vThin });
-check('a 0.4mm plate is flagged unprintable with min wall ≈0.4 and a located finding',
-  thin.value.verdict === 'unprintable' && Math.abs(thin.value.minWallMm - 0.4) < 0.1 &&
+check('a 0.4mm plate is flagged EXCLUDED with min wall ≈0.4 and a located finding',
+  thin.value.verdict === 'excluded' && Math.abs(thin.value.minWallMm - 0.4) < 0.1 &&
     /最薄壁/.test(thin.value.findings[0] ?? ''),
   JSON.stringify({ v: thin.value.verdict, w: thin.value.minWallMm, f: thin.value.findings }));
 const ceil = await call('check_printability', { versionId: vCeil });
 check('a 30×30 slab on a 4×4 post is flagged for its unsupported ceiling',
-  ceil.value.verdict === 'check' && ceil.value.overhangAreaMm2 > 700 &&
+  ceil.value.verdict === 'difficult' && ceil.value.overhangAreaMm2 > 700 &&
     /悬垂/.test(ceil.value.findings.find((f) => /悬垂/.test(f)) ?? ''),
   JSON.stringify({ v: ceil.value.verdict, area: ceil.value.overhangAreaMm2, f: ceil.value.findings }));
 const openShot = await call('check_printability', { versionId: vOpen });
@@ -587,11 +587,11 @@ check('an open mesh carries the watertight warning into its findings',
   // A clean part with NO declared profile must not read as a pass: the geometry is
   // fine, the DECLARATION is missing. Declaring a profile is what earns "ok".
   const cleanNoProfile = await call('check_printability', { versionId: vGood });
-  check('no profile declared → a clean part reports check, not ok',
-    cleanNoProfile.value.verdict === 'check', String(cleanNoProfile.value.verdict));
+  check('no profile declared → a clean part reports DIFFICULT, not not-excluded',
+    cleanNoProfile.value.verdict === 'difficult', String(cleanNoProfile.value.verdict));
   const cleanDeclared = await call('check_printability', { versionId: vGood, profileIds: ['fdm-pla-0.4'] });
   check('…and declaring a profile is what earns ok',
-    cleanDeclared.value.verdict === 'ok', String(cleanDeclared.value.verdict));
+    cleanDeclared.value.verdict === 'not-excluded', String(cleanDeclared.value.verdict));
 
   const noProfile = await call('check_printability', { versionId: vThin });
   check('no profile declared → profileSource says so (no silent default)',

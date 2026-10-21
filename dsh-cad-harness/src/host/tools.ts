@@ -3586,7 +3586,11 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
-          verdict: { type: 'string', required: true, description: '"ok" | "check" | "unprintable". "ok" is impossible when wallMeasured is false.' },
+          // verdict / attention / profiles / profileSource are MODE-TRIMMED below
+          // (judge drops attention; scan drops verdict+profiles+profileSource).
+          // A static required list would reject every trimmed reply — that is how
+          // all three modes came to fail at once. The run record keeps both halves.
+          verdict: { type: 'string', description: '"not-excluded" | "difficult" | "excluded" (absent in scan mode; canonical since 2026-10-20, was ok/check/unprintable). "not-excluded" is impossible when wallMeasured is false, and it never means "safe".' },
           minWallMm: { type: 'number' },
           wallMeasured: { type: 'boolean', required: true, description: 'False = the ray half measured nothing (typically a broken ray engine). Never trust the rest of the report then, and never read it as a pass.' },
           thinSamples: { type: 'number', required: true },
@@ -4067,10 +4071,12 @@ export function registerCadTools(
           '该档每一个数都是 assumed（从未按任何机器标定），**它是让继承来的默认值可见，不是推荐**。' +
           '要按真实工艺判断，请声明 profileIds 或 profilesJson。',
         );
-        // "ok" would claim the part passed a process the caller never named. The
-        // geometry may be fine; the DECLARATION is missing, so the honest verdict is
-        // `check`. Declaring a profile is what turns this into a pass.
-        if (verdict === 'ok') verdict = 'check';
+        // "not-excluded" would claim the part passed a process the caller never named.
+        // The geometry may be fine; the DECLARATION is missing, so the honest verdict is
+        // `difficult`. Declaring a profile is what turns this into a pass.
+        // (This guard used to test for the literal 'ok'; when the values were renamed it
+        // silently stopped firing — caught by accept-p3.)
+        if (verdict === 'not-excluded') verdict = 'difficult';
       }
       const result = { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
 
@@ -4091,7 +4097,7 @@ export function registerCadTools(
           samples: field.samples,
         });
         await run.commit({
-          status: verdict === 'ok' ? 'pass' : verdict === 'unprintable' ? 'fail' : 'check',
+          status: verdict === 'not-excluded' ? 'pass' : verdict === 'excluded' ? 'fail' : 'check',
           summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
           title: `制造筛查 · ${a.versionId}`,
           sourceVersionIds: [a.versionId],
