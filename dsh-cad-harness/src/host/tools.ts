@@ -4887,6 +4887,8 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'analyze',
     description:
+      'EXPERIMENTAL — do not base a delivery claim on this yet: its overhang handling is still AREA-based, ' +
+      'which lights up whole regions (the toy-balance pan showed 1041 of 2871 samples red) instead of pointing. ' +
       'Build the risk map for a version and say where to LOOK: geometry corners (scan_attention) + ' +
       'measured wall thickness + overhang faces, each normalised to |u| in [0,1] against its own DECLARED ' +
       'band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus ' +

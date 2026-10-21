@@ -12,7 +12,7 @@ group, not the tool — and the group tells you what the output is allowed to me
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
 | **交付** | 能不能交？ | **`preflight`（入口，一次调用）** · `check_printability` · `check_assembly` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
-| **检测** | 该往哪看？ | **`analyze`（合成风险图）** · `scan_attention` · 各工具的 `attention` 场 | 坐标 + \|u\| + 几路一致 + 可执行观测 | **永不阻止**，永不沉默 |
+| **检测** | 该往哪看？ | `analyze`（**实验性，不可作交付依据**） · `scan_attention` · 各工具的 `attention` 场 | 坐标 + \|u\| + 几路一致 + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据槽 | 产**证据**，不自己判交付 |
 
 **Markdown 纪律（这是本文件最重要的四条）：**
@@ -30,6 +30,13 @@ group, not the tool — and the group tells you what the output is allowed to me
    反过来，工具沉默是检测的失败，但"检测到嫌疑"也不构成交付失败。
 5. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
    仿真的读数一律是**方向性**的——可做相对比较，不能当安全系数。
+
+**报错怎么读（别把工具 bug 当自己的输入错）：**
+
+- `invalid arguments: ...` —— 入参形状错，消息里已经点名（`"parts[0].position"` 缺失 / `"versionId" must be a string`）。照路径改。
+- `unknown version "v999"` —— 给的是**版本号** `vNNN`，不是零件 id（`p001`）或 run id（`r044`）。
+- `tool "X" returned invalid output: ...` —— 工具的**返回**不合它自己的输出契约，不是你的入参错。**重试同一个调用不会变**：换同组的原子工具，或把这条记为工具 bug（带上报错原文）。
+- 结构文件（装配清单）被拒时，错误里带 **path + expected + 最小清单**；按 path 改，不要换一种形状再猜。
 
 **默认路径**：想知道**往哪看** → `analyze`（一次调用给出 |u| 风险图 + 峰表；`attention.json`
 的 `fused` 层就是面板画的那张图）；要**交付** → `preflight`（一次调用跑必跑序列，未编排的步骤
