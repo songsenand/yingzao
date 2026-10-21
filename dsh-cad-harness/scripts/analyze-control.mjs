@@ -17,17 +17,24 @@ export async function controlAvailable() {
 }
 
 /** Run the map for the two versions and return their peaks. */
-export async function runControl(versionIds = ['v069', 'v077']) {
+export async function runControl(versionIds = ['v069', 'v077'], onStep) {
+  const t0 = Date.now();
+  const step = (m) => onStep?.(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
   process.env.DSH_CAD_PYTHON_ROOT ??= join(ROOT, '.tmp-cad-runtime');
   const { projectStores } = await import('../src/host/project.ts');
   const { checkPrintability } = await import('../src/host/inspect.ts');
   const { analyzeVersion } = await import('../src/host/analyze.ts');
+  step('imports done');
   const project = await projectStores(resolve(ROOT, '..', 'examples', 'toy-balance'));
+  step('projectStores done');
   const wallBand = { id: 'wall', quantity: 'wall-thickness', units: 'mm', lo: 1.2, hi: 4.0, scaleLo: 1.2, scaleHi: 4.0, source: 'wallMinMm 1.2 / wallMaxMm 4.0 (declared)' };
   const out = {};
   for (const vid of versionIds) {
+    step(`${vid}: checkPrintability begin (this is the bundled-runtime path)`);
     const rep = await checkPrintability(project.store, { versionId: vid, withSampleField: true });
+    step(`${vid}: checkPrintability done`);
     const suspects = await scanAttention(join(project.store.root, 'versions', vid, 'model.stl'));
+    step(`${vid}: scan done (${suspects.length} suspects)`);
     out[vid] = analyzeVersion({ suspects, field: rep.field, wallBand });
   }
   return out;

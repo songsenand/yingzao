@@ -4859,6 +4859,7 @@ export function registerCadTools(
           peaks: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
           layers: { type: 'object', required: true, additionalProperties: true },
           notMapped: { type: 'array', required: true, items: { type: 'string' } },
+          partNotes: { type: 'object', required: true, additionalProperties: true, description: 'Per-PART facts that are not places: overhang faces/area (a global support cost). Deliberately not a point layer — scoring it per sample paints whole bowls red and buries the local signals.' },
           bands: { type: 'object', required: true, additionalProperties: true },
           note: { type: 'string', required: true },
         },

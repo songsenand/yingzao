@@ -122,7 +122,7 @@ function cornerU(s: SuspectLike, band?: BandNorm): number {
  */
 export function analyzeVersion(
   input: { suspects?: readonly SuspectLike[]; field?: SampleFieldLike; wallBand: BandNorm; cornerBand?: BandNorm; cellMm?: number },
-): { peaks: AnalyzePeak[]; samples: { fused: { p: number[]; v: number }[] }; layers: Record<string, number>; notMapped: string[] } {
+): { peaks: AnalyzePeak[]; samples: { fused: { p: number[]; v: number }[] }; layers: Record<string, number>; notMapped: string[]; partNotes: { overhangFaces: number; overhangAreaMm2: number; note: string } | null } {
   const cell = input.cellMm ?? 8;
   const key = (p: readonly number[]) => p.map((x) => Math.floor(x / cell)).join(',');
   const buckets = new Map<string, { at: number[]; risk: number; layers: Set<string>; count: number }>();
@@ -142,19 +142,30 @@ export function analyzeVersion(
     const at = s.where?.atMm ?? s.atMm;
     if (at && at.length === 3) add(s.kind ?? 'corner', at, cornerU(s, input.cornerBand));
   }
-  // OVERHANG: measured 2026-10-20 — the sample value spans 0..20 on a part whose
-  // triangles are a few mm², and the layer only ever CONTAINS faces already flatter than
-  // the threshold. So the value is a per-triangle AREA (a weight), not an angle: every
-  // sample is past the limit by construction. Scored as binary 1, weighted by area when
-  // ranking, so a big flat face outranks a sliver — never normalised as degrees.
-  const overhangPts = input.field?.samples?.overhang ?? [];
-  for (const p of overhangPts) {
-    if (p.p?.length !== 3) continue;
-    const w = Number.isFinite(p.v) ? Math.max(0, p.v) : 0;
-    add('overhang', p.p, w > 0 ? 1 : 0);
-  }
+  // OVERHANG IS NOT A PLACE. Measured 2026-10-20 on the toy-balance pan: scoring it per
+  // sample as binary "past the limit" painted 1041 of 2871 samples red (the whole rim and
+  // bowl underside) and buried the 8 real corner signals — the map stopped guiding
+  // attention and started describing the part's shape. Overhang has no "how extreme"
+  // gradient (every sample in the layer is already past the limit) and it is a GLOBAL
+  // process cost, so it is reported as one number per part (`partNotes`), never as points.
+  // The pan's mesh is fine (watertight, 1 body, 2156 tris): the streaks in a viewport are
+  // low-poly facet edges, not defects.
   const wallPts = input.field?.samples?.wall ?? [];
-  for (const p of wallPts) if (p.p?.length === 3) add('wall', p.p, signedOf(p.v, input.wallBand));
+  // THIN is a place (thicken HERE); THICK is a region (sink/warp over an area) — the same
+  // granularity argument as overhang. Measured on the toy-balance pan: the two-sided band
+  // put |u|=1 on every solid mass (the pan body is 75 mm thick, saturating against a 4 mm
+  // upper edge), 73 of the peaks were the part describing its own shape. Thin stays a
+  // point layer; thick becomes one number per part in `partNotes`.
+  let maxWallMm = 0;
+  let thickSamples = 0;
+  for (const p of wallPts) {
+    if (p.p?.length !== 3) continue;
+    if (Number.isFinite(p.v)) maxWallMm = Math.max(maxWallMm, p.v);
+    if (Number.isFinite(p.v) && p.v > input.wallBand.hi) thickSamples += 1;
+    // Only the LOWER side of the band scores points.
+    const u = signedOf(p.v, input.wallBand);
+    add('wall', p.p, u < 0 ? u : 0);
+  }
 
   // The heat map needs EVERY sampled point (including comfortable ones) so the surface
   // is covered; `peaks` is the other view (only where it matters). Same buckets, two
@@ -162,7 +173,7 @@ export function analyzeVersion(
   const cellRisk = new Map<string, number>();
   for (const [k, b] of buckets) cellRisk.set(k, b.risk);
   const allPts: { p: number[]; v: number }[] = [];
-  for (const p2 of [...(input.field?.samples?.wall ?? []), ...(input.field?.samples?.overhang ?? [])]) {
+  for (const p2 of input.field?.samples?.wall ?? []) {
     if (p2.p?.length !== 3) continue;
     allPts.push({ p: p2.p, v: cellRisk.get(key(p2.p)) ?? 0 });
   }
@@ -171,8 +182,23 @@ export function analyzeVersion(
     if (at && at.length === 3) allPts.push({ p: [...at], v: cellRisk.get(key(at)) ?? 0 });
   }
 
+  const overhangPts = input.field?.samples?.overhang ?? [];
+  const partNotes: { overhangFaces: number; overhangAreaMm2: number; maxWallMm: number; thickSamples: number; thickLimitMm: number; note: string } | null =
+    overhangPts.length === 0
+      ? null
+      : {
+          overhangFaces: overhangPts.length,
+          overhangAreaMm2: +overhangPts.reduce((a, p) => a + (Number.isFinite(p.v) ? Math.max(0, p.v) : 0), 0).toFixed(1),
+          maxWallMm: +maxWallMm.toFixed(2),
+          thickSamples,
+          thickLimitMm: input.wallBand.hi,
+          note:
+            '悬垂与厚壁都是整件/成片性质（要支撑、会缩痕），不是局部风险：它们满布碗底与实体，' +
+            '逐点着色会把注意力从真正的信号上引开，所以只作为整件事实报告；逐点层只留薄壁与再入角。',
+        };
+
   const peaks = [...buckets.values()]
     .map((b) => ({ atMm: b.at, risk: b.risk, count: b.count, layers: [...b.layers].sort() }))
     .sort((a, b) => b.risk - a.risk || b.count - a.count || 0);
-  return { peaks, samples: { fused: allPts }, layers, notMapped: [] };
+  return { peaks, samples: { fused: allPts }, layers, notMapped: [], partNotes };
 }

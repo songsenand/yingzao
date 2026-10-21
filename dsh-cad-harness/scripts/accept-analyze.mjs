@@ -59,6 +59,13 @@ if (await controlAvailable()) {
   check(elbows069.length >= 1, 'v069: the map points at the pan elbow',
     elbows069.slice(0, 2).map((p) => `[${p.atMm.map((x) => x.toFixed(1))}] u=${p.risk.toFixed(2)}`).join(' ') || 'no elbow peak');
   check(elbows069.every((p) => p.risk >= 0.5), 'v069: and the elbow peak was not averaged away');
+  // THE ATTENTION TEST (measured 2026-10-20): a map that lights up the whole rim is
+  // describing the part's shape, not guiding attention. After overhang and thick-wall
+  // were moved to per-PART facts, v069 has 8 peaks (the 8 corner suspects) instead of 73.
+  check(out.v069.peaks.length <= 12, 'v069: the map no longer describes the shape (peaks ≤ 12)', String(out.v069.peaks.length));
+  check((out.v069.partNotes?.overhangAreaMm2 ?? 0) > 0, 'the global process fact is still reported (overhang area per part)');
+  check((out.v069.partNotes?.maxWallMm ?? 0) > (out.v069.partNotes?.thickLimitMm ?? 0),
+    'and the thick-wall fact too, without scoring it as places');
   check(elbows077.length === 0, 'v077: the repaired pan no longer flags the elbow',
     elbows077.map((p) => `[${p.atMm.map((x) => x.toFixed(1))}]`).join(' ') || 'clean');
 } else {
