@@ -407,6 +407,22 @@ export async function ensurePythonWorker(options: PythonWorkerOptions = {}): Pro
     detached: process.platform !== 'win32',
   });
   const worker = new PythonWorker(child, options.onLog);
+  // THE EXIT TRAP (bug, measured 2026-10-21): the worker is a DETACHED child with piped
+  // stdio, so its stdin/stdout/stderr handles keep the parent's event loop non-empty.
+  // A script that finished its work therefore never exited — it printed its results and
+  // then sat there until an external `timeout` killed it (jobs appeared to "hang halfway";
+  // the work was done, the process was not). Unref the handles so the loop can drain, and
+  // kill the child on exit so nothing is orphaned.
+  child.unref();  // ProcessWrap: the child handle itself also holds the loop
+  for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    (stream as unknown as { unref?: () => void })?.unref?.();
+  }
+  const shutdown = () => {
+    try { worker.stop(); } catch { /* already gone */ }
+  };
+  process.once('exit', shutdown);
+  process.once('SIGINT', () => { shutdown(); process.exit(130); });
+  process.once('SIGTERM', () => { shutdown(); process.exit(143); });
   try {
     await worker.waitForHello(options.startupTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS);
   } catch (error) {
