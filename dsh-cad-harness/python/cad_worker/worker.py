@@ -91,6 +91,7 @@ OPS = [
     "closest_points",
     "closest_mesh_mesh",
     "closest_mesh_sphere",
+    "support_map",
     "connectivity",
     "validate_assembly",
     "merge_solids",
@@ -904,6 +905,150 @@ def op_passage_bottleneck(params: dict) -> dict:
         ),
     }
 
+
+
+def op_support_map(params: dict) -> dict:
+    """Does anything actually HOLD UP an overhang? (mass, not area)
+
+    WHY: the area-based overhang screen is unactionable — it lights up a whole bowl
+    underside (the toy-balance pan: 1451 mm² flagged) and says nothing about whether the
+    print will hold. What matters is unsupported MASS: a 0.2 g sliver is free, a 12 g
+    plate with nothing beneath it is not. So: voxelise, sweep z upward, mark a solid cell
+    supported if the layer below has material within the support cone, let bridgeable
+    spans through, and report the remaining unsupported regions with their mass.
+
+    DECLARED, not measured: the support cone (45° default), the bridgeable span, and the
+    density. This answers "does this need support / a redesign", never "will it fail".
+    """
+    path = str(params.get("path") or "")
+    dx = float(params.get("dxMm") or 1.0)
+    angle = float(params.get("supportAngleDeg") or 45.0)
+    bridge_mm = float(params.get("bridgeMaxMm") or 10.0)
+    density = float(params.get("densityGPerMm3") or 0.00124)  # PLA
+    min_mass = float(params.get("minMassG") or 1.0)
+    if not (0.05 <= dx <= 5.0):
+        raise ValueError("dxMm must be within 0.05..5")
+    import numpy as np
+    import trimesh
+    from scipy import ndimage
+
+    mesh = trimesh.load(path, process=True)
+    vox = mesh.voxelized(pitch=dx).fill()
+    grid = np.asarray(vox.matrix, dtype=bool)
+    if grid.ndim != 3 or not grid.any():
+        return {"regions": [], "totals": {"unsupportedCells": 0, "bridgedCells": 0, "massG": 0.0}, "dxMm": dx}
+
+    grid = np.moveaxis(grid, 2, 0)           # trimesh indexes (x,y,z) -> use (z,y,x)
+    nz, ny, nx = grid.shape
+    off = np.asarray(vox.translation, dtype=float)   # (x0,y0,z0)
+
+    def dilate26(m):
+        """8-neighbourhood in the layer below, WITHOUT wrap-around (np.roll wraps, which
+        invents support across the array edge — it made a 30 mm flange 'bridged')."""
+        out = m.copy()
+        pad = np.zeros((m.shape[0] + 2, m.shape[1] + 2), dtype=bool)
+        pad[1:-1, 1:-1] = m
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                out |= pad[1 + dy:1 + dy + m.shape[0], 1 + dx:1 + dx + m.shape[1]]
+        return out
+
+    # REACHABILITY from the bed through a 45-degree support path. Everything solid that
+    # cannot be reached this way is material hanging in the air — that is the mass that
+    # needs support (for the toy-balance T-shape: the whole 30x30x10 flange, ~11 g, not
+    # just its bottom skin, which a per-layer test would have measured as 0.9 g).
+    reach = np.zeros_like(grid)
+    reach[0] = grid[0]
+    for k in range(1, nz):
+        reach[k] = grid[k] & dilate26(reach[k - 1])
+    unreachable = grid & ~reach
+
+    # BRIDGING: a short horizontal gap whose two ends are already reachable can be printed
+    # without support (declared span). Only the COLUMNS hanging off that gap are excused —
+    # a bridge does not excuse a big plate that merely touches one.
+    max_run = max(1, int(round(bridge_mm / dx)))
+    gap_ok = np.zeros_like(unreachable)
+    for axis in (2, 1):
+        moved = np.moveaxis(unreachable, axis, 0).copy()
+        rea = np.moveaxis(reach, axis, 0)
+        brv = np.zeros_like(moved)
+        n = moved.shape[0]
+        for j in range(moved.shape[1]):
+            for k in range(moved.shape[2]):
+                row = moved[:, j, k]
+                ok = rea[:, j, k]
+                i = 0
+                while i < n:
+                    if not row[i]:
+                        i += 1
+                        continue
+                    a0 = i
+                    while i < n and row[i]:
+                        i += 1
+                    a1 = i - 1
+                    if a0 > 0 and a1 + 1 < n and ok[a0 - 1] and ok[a1 + 1] and (a1 - a0 + 1) <= max_run:
+                        brv[a0:a1 + 1, j, k] = True
+        gap_ok |= np.moveaxis(brv, 0, axis)
+
+    # A column is excused only if its LOWEST unreachable cell sits in a bridgeable gap.
+    column_bridged = np.zeros((ny, nx), dtype=bool)
+    first = np.full((ny, nx), nz, dtype=int)
+    for k in range(nz):
+        m = unreachable[k] & (first == nz)
+        first[m] = k
+    for k in range(nz):
+        sel = (first == k) & gap_ok[k]
+        column_bridged |= sel
+    bridged = unreachable & column_bridged[None, :, :]
+    unsupported = unreachable
+    need = unsupported & ~bridged
+    # Connected regions (26-connectivity) over the cells that still need support.
+    labels, count = ndimage.label(need, structure=np.ones((3, 3, 3), dtype=bool))
+    off = np.asarray(vox.translation, dtype=float)
+    regions = []
+    total_mass = 0.0
+    for idx in range(1, count + 1):
+        cells = np.argwhere(labels == idx)
+        if cells.size == 0:
+            continue
+        vol = cells.shape[0] * dx ** 3
+        mass = vol * density
+        total_mass += mass
+        zyx_lo = cells.min(axis=0)[::-1]
+        zyx_hi = (cells.max(axis=0) + 1)[::-1]
+        zyx_ctr = (cells.mean(axis=0) + 0.5)[::-1]
+        lo = off + zyx_lo * dx
+        hi = off + zyx_hi * dx
+        ctr = off + zyx_ctr * dx
+        span = float(max(hi[0] - lo[0], hi[1] - lo[1]))  # horizontal extent
+        if mass < min_mass:
+            continue
+        regions.append({
+            "atMm": [round(float(ctr[0]), 2), round(float(ctr[1]), 2), round(float(ctr[2]), 2)],
+            "bboxMm": [[round(float(lo[0]), 2), round(float(lo[1]), 2), round(float(lo[2]), 2)],
+                       [round(float(hi[0]), 2), round(float(hi[1]), 2), round(float(hi[2]), 2)]],
+            "massG": round(float(mass), 3),
+            "volumeMm3": round(float(vol), 1),
+            "spanMm": round(span, 2),
+            "cells": int(cells.shape[0]),
+        })
+    regions.sort(key=lambda r: -r["massG"])
+    return {
+        "dxMm": dx,
+        "supportAngleDeg": angle,
+        "bridgeMaxMm": bridge_mm,
+        "minMassG": min_mass,
+        "densityGPerMm3": density,
+        "regions": regions,
+        "totals": {
+            "unsupportedCells": int(unsupported.sum()),
+            "bridgedCells": int((unsupported & bridged).sum()),
+            "neededCells": int(need.sum()),
+            "massG": round(float(total_mass), 3),
+            "regionsAboveThreshold": len(regions),
+        },
+        "note": "支撑需求估计（质量口径），不是会不会塌：阈值与锥角均为声明值。",
+    }
 
 def op_connectivity(params: dict) -> dict:
     """Connected bodies + strict watertight test for one saved version.
@@ -6308,6 +6453,7 @@ HANDLERS = {
     "closest_points": op_closest_points,
     "closest_mesh_mesh": op_closest_mesh_mesh,
     "closest_mesh_sphere": op_closest_mesh_sphere,
+    "support_map": op_support_map,
     "connectivity": op_connectivity,
     "validate_assembly": op_validate_assembly,
     "merge_solids": op_merge_solids,

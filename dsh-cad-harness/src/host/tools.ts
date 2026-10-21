@@ -4783,6 +4783,26 @@ export function registerCadTools(
         }
       }
 
+      // support: mass-based, so a bowl is not "1 m² of overhang"; a real hanging plate is.
+      // It is a process COST (supports / reorient), never an exclusion.
+      try {
+        const sup = await worker.request<{ regions?: { massG: number; atMm: number[] }[]; totals?: { massG?: number } }>(
+          'support_map',
+          { path: join(project.store.root, 'versions', newest.get(parts[0]?.id ?? '') ?? '', 'model.stl'), dxMm: 1.0 },
+        );
+        const regions = sup.regions ?? [];
+        steps.push({
+          step: 'support',
+          ran: true,
+          judgement: regions.length > 0 ? 'difficult' : 'not-excluded',
+          detail: regions.length > 0
+            ? `${regions.length} 处悬空质量超阈（最大 ${Math.max(...regions.map((r) => r.massG)).toFixed(2)} g）——需支撑或改朝向，不是失败`
+            : `无超阈悬空区（总计 ${sup.totals?.massG ?? 0} g）`,
+        });
+      } catch (e) {
+        steps.push({ step: 'support', ran: false, judgement: 'difficult', detail: `support_map failed: ${String((e as Error)?.message ?? e)}` });
+      }
+
       const audit = await auditDelivery(project, { claims: a.claims as never });
       const blockedFindings = audit.findings.filter((f) => f.severity === 'blocked');
       steps.push({
@@ -4851,6 +4871,9 @@ export function registerCadTools(
       cellMm: { type: 'number', description: 'Clustering cell for peaks (default 8 mm).' },
       wallMinMm: { type: 'number', description: 'Wall band lower edge (default 1.2 mm, or the profile).' },
       wallMaxMm: { type: 'number', description: 'Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement).' },
+      dxMm: { type: 'number', description: 'Voxel size for the support estimate (default 1.0 mm).' },
+      minMassG: { type: 'number', description: 'Unsupported MASS above which a hanging region is reported (default 1.0 g, declared). A 0.2 g sliver is free.' },
+      bridgeMaxMm: { type: 'number', description: 'Horizontal span a printer can bridge without support (default 10 mm, declared).' },
     },
     output: {
       schema: {
@@ -4860,6 +4883,7 @@ export function registerCadTools(
           layers: { type: 'object', required: true, additionalProperties: true },
           notMapped: { type: 'array', required: true, items: { type: 'string' } },
           partNotes: { type: 'object', required: true, additionalProperties: true, description: 'Per-PART facts that are not places: overhang faces/area (a global support cost). Deliberately not a point layer — scoring it per sample paints whole bowls red and buries the local signals.' },
+          support: { type: 'object', additionalProperties: true, description: 'Support adequacy by MASS: regions of material with no 45-degree support path to the bed, above `minMassG`, with bridgeable spans excused. null when the runtime could not run it (the reply says so).' },
           bands: { type: 'object', required: true, additionalProperties: true },
           note: { type: 'string', required: true },
         },
@@ -4879,21 +4903,48 @@ export function registerCadTools(
       const wallMin = a.wallMinMm ?? 1.2;
       const wallMax = a.wallMaxMm ?? 4.0;
       const wallBand: BandNorm = { id: 'wall', quantity: 'wall-thickness', units: 'mm', lo: wallMin, hi: wallMax, scaleLo: wallMin, scaleHi: wallMax, source: `wallMinMm ${wallMin} / wallMaxMm ${wallMax} (declared)` };
-      const screen = await checkPrintability(project.store, { versionId: a.versionId, withSampleField: true });
       const modelPath = join(project.store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) {
+        const ids = (await listVersions(project.store)).map((v) => v.id);
+        throw new Error(
+          `unknown version "${a.versionId}" — this project has ${ids.length} version(s): ` +
+            `${ids.slice(0, 6).join(', ')}${ids.length > 6 ? ', …' : ''}. ` +
+            `Pass a version id from generate_part/import_part (a part id like "p001" is not a version id).`,
+        );
+      }
+      const screen = await checkPrintability(project.store, { versionId: a.versionId, withSampleField: true });
       let suspects: SuspectLike[] = [];
+      let cornerError: string | null = null;
       try {
         const scan = await (await ensurePythonWorker()).request<{ suspects?: SuspectLike[] }>('scan_attention', { path: modelPath });
         suspects = scan.suspects ?? [];
-      } catch { /* the map still has the field layers */ }
+      } catch (e) {
+        // A missing layer is NOT "no corners". The map must say which route is absent
+        // (the same rule as `notMapped` on the stress tool).
+        cornerError = (e as Error).message;
+      }
+      // Support adequacy, by MASS (not area): a little overhang is free, a 3 g plate with
+      // nothing beneath it is not. Declared thresholds; the answer is "needs support",
+      // never "will fail".
+      let support: Record<string, unknown> | null = null;
+      try {
+        support = await (await ensurePythonWorker()).request<Record<string, unknown>>('support_map', {
+          path: modelPath,
+          dxMm: a.dxMm ?? 1.0,
+          minMassG: a.minMassG ?? 1.0,
+          bridgeMaxMm: a.bridgeMaxMm ?? 10.0,
+        });
+      } catch {
+        support = null; // the rest of the map stands; the absence is reported in `note`
+      }
       const out = analyzeVersion({ suspects, field: screen.field as never, wallBand, cellMm: a.cellMm });
+      if (cornerError) out.notMapped.push(`corner-scan: scan_attention failed — ${cornerError}`);
+      if (!screen.field) out.notMapped.push('wall-field: per-sample field missing — wall layer absent from this map');
       // Persist the map so the panel can DRAW it and a later reader can audit it: the
       // heat map and the JSON come from the same object (one surface, two readers).
       const run = await beginRun(project.runStore, {
         kind: 'analyze',
         title: `风险图 · ${a.versionId}`,
-        sourceVersionIds: [a.versionId],
-        subject: `analyze:${a.versionId}`,
       });
       await run.json('report.json', { peaks: out.peaks, layers: out.layers, bands: { wall: wallBand }, notMapped: out.notMapped });
       await run.json('attention.json', {
@@ -4903,14 +4954,25 @@ export function registerCadTools(
         samples: { fused: out.samples.fused },
       });
       await run.commit({
+        // Provenance belongs to the COMMIT: beginRun only names the run.
+        sourceVersionIds: [a.versionId],
+        subject: `analyze:${a.versionId}`,
         status: out.peaks.length > 0 ? 'check' : 'pass',
-        summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'}`,
+        summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'}` +
+          (cornerError ? ' · 角扫描失败（见 notMapped）' : ''),
       });
+      // `samples` is the panel's fused field (already in the run's attention.json).
+      // It is not in the reply schema and MUST NOT ride into the model's context:
+      // the schema is closed, so it rejected the whole reply
+      // (`"value.samples" is not a declared property`).
+      const { samples: _samples, ...forModel } = out;
+      void _samples;
       return {
-        ...out,
+        ...forModel,
+        support,
         bands: { wall: wallBand },
-        note: `${out.peaks.length} peak(s) · ${suspects.length} corner suspect(s) · |u| is "how far from its own comfort band", max per location; peaks mean LOOK, not BREAK`,
-      };
+        note: `${out.peaks.length} peak(s) · ${suspects.length} corner suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
+      } as never;
     },
   }));
 
