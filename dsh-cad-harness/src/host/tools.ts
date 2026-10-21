@@ -4784,11 +4784,42 @@ export function registerCadTools(
       }
 
       const audit = await auditDelivery(project, { claims: a.claims as never });
-      steps.push({ step: 'audit', ran: true, judgement: audit.verdict, detail: `${audit.findings.length} finding(s), claims ${a.claims?.length ?? 0}` });
+      const blockedFindings = audit.findings.filter((f) => f.severity === 'blocked');
+      steps.push({
+        step: 'audit',
+        ran: true,
+        judgement: audit.verdict,
+        // A count is not a reason: name the blocked finding(s) in the step detail,
+        // otherwise "excluded" sends the reader to a second tool call to learn why.
+        detail: `${audit.findings.length} finding(s), claims ${a.claims?.length ?? 0}` +
+          (blockedFindings.length ? ` — ${blockedFindings.slice(0, 2).map((f) => f.detail).join(' | ')}` : ''),
+      });
+
+      // assembly: the SAME job check_assembly runs (runAssemblyCheckJob), so this is the
+      // real contract evaluation, not a second implementation. Absence of a manifest is
+      // NOT a pass: it comes back as ran:false with the reason.
+      try {
+        const { report, manifestFile } = await runAssemblyCheckJob(undefined, project);
+        const hard = (report.results ?? []).filter((r) => r.verdict === 'hard-violation').length;
+        const skipped = (report.results ?? []).filter((r) => r.verdict === 'skipped').length;
+        const intent = (report.results ?? []).filter((r) => r.verdict === 'intent-flag').length;
+        steps.push({
+          step: 'assembly',
+          ran: true,
+          judgement: hard > 0 ? 'excluded' : skipped > 0 || intent > 0 ? 'difficult' : 'not-excluded',
+          detail: `${manifestFile} · hard ${hard} · skipped ${skipped} · intent ${intent}`,
+        });
+      } catch (e) {
+        steps.push({
+          step: 'assembly',
+          ran: false,
+          judgement: 'difficult',
+          detail: `no assembly contract was evaluated (${String((e as Error)?.message ?? e)}) — an absent manifest is NOT a pass`,
+        });
+      }
 
       // Declared gaps — the honest part. Each is a step this cut does not run.
       for (const [step, why] of [
-        ['assembly', 'check_assembly evaluates the contracts INSIDE its tool closure; extracting that needs assembly-check.ts/manifest.ts to be quiet first (the assembly lane has uncommitted edits) — run check_assembly and pass it as a claim until then'],
         ['simulation-evidence', 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)'],
         ['render', 'the assembly render is a HUMAN look: preflight can check freshness, not content'],
       ] as const) {

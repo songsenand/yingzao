@@ -39,7 +39,7 @@ export function atElbow(p, tol = ELBOW.tolMm) {
   return Math.abs(Math.abs(x) - ELBOW.xMm) <= tol && Math.abs(z - ELBOW.zMm) <= tol;
 }
 
-function scanAttention(path) {
+export function scanAttention(path) {
   const PY = join(ROOT, '.tmp-cad-runtime', 'venv', 'bin', 'python');
   return new Promise((res, rej) => {
     const p = spawn(PY, ['-I', 'python/cad_worker/worker.py'], { cwd: ROOT, stdio: ['pipe', 'pipe', 'inherit'] });

@@ -60,7 +60,15 @@ const versionVerdict = (runs: RunProduct[]): RunStatus | null => {
 
 const VERDICT_WORD: Record<string, string> = {
   pass: '通过', check: '待复核', fail: '失败', draft: '未验证',
+  // The canonical three (src/shared/judgement.ts). 'not-excluded' is deliberately NOT
+  // 通过: it means no counter-example was found, never "safe" (DESIGN §25.7).
+  'not-excluded': '不排除可行', difficult: '困难', excluded: '否决',
+  // Assembly interface words — kept distinct from the three above.
+  'hard-violation': '硬冲突', 'intent-flag': '意图标记', skipped: '跳过',
 };
+const verdictColorWord = (v: string | null): string =>
+  v === 'not-excluded' ? '#1e8449' : v === 'excluded' || v === 'hard-violation' ? '#c0392b'
+    : v === 'difficult' || v === 'intent-flag' || v === 'skipped' ? '#9c6f0a' : '#8a94a0';
 const verdictColor = (v: string | null): string =>
   v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
 
