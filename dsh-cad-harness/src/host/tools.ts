@@ -1623,6 +1623,8 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           overallStatus: { type: 'string', required: true },
+          judgement: { type: 'string', required: true, description: '"excluded" | "difficult" | "not-excluded" — the canonical judgement (src/shared/judgement.ts); read THIS, not overallStatus.' },
+          judgedBy: { type: 'object', required: true, additionalProperties: true, description: 'Counts the judgement was derived from: hardViolations / intentFlags / skipped / undeclared. A skipped interface is "unevaluable" and must never read as a pass.' },
           parts: {
             type: 'array', required: true,
             items: {
@@ -5053,6 +5055,23 @@ export function registerCadTools(
         summary: report.summary,
         hardViolations: report.results.filter((r) => r.verdict === 'hard-violation').map(trim),
         intentFlags: report.results.filter((r) => r.verdict === 'intent-flag').map(trim),
+        // The canonical judgement (src/shared/judgement.ts). Derived, not re-decided:
+        //   hard-violation -> excluded   (a witness contradicts the contract)
+        //   skipped/intent -> difficult  (an interface nobody evaluated, or a soft signal:
+        //                                 a skipped check is exactly "unevaluable", and it
+        //                                 must never read as pass — microscope2 had two)
+        //   none           -> not-excluded
+        judgement: report.results.some((r) => r.verdict === 'hard-violation')
+          ? 'excluded'
+          : report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag')
+            ? 'difficult'
+            : 'not-excluded',
+        judgedBy: {
+          hardViolations: report.results.filter((r) => r.verdict === 'hard-violation').length,
+          intentFlags: report.results.filter((r) => r.verdict === 'intent-flag').length,
+          skipped: report.results.filter((r) => r.verdict === 'skipped').length,
+          undeclared: (report.undeclared ?? []).length,
+        },
         // The skips carry the instructions for how to make them checkable; a
         // bare count let "overallStatus: pass" read as "everything was verified"
         // (the microscope2 run had two interfaces nobody ever evaluated).

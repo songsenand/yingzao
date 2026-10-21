@@ -10,6 +10,66 @@ Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 
 A green assembly check means the declared interfaces were machine-checked against their operators. It is not a statement that the parts are manufacturable, printable or strong.
 
+## The document shape: do not guess it — the validator prints it
+
+The manifest is a contract with a published schema (`schemas/assembly-manifest.schema.json`).
+An invalid document is rejected with **path-addressed issues** (`/root/kind: expected "assembly",
+got ...`) plus a **minimal valid example** and the endpoint syntax. When that happens, fix the
+named path; do not try another shape.
+
+The minimum that parses (same as the example in every validation error):
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "example",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "machine",
+    "kind": "assembly",
+    "children": [
+      { "id": "base", "name": "底座", "kind": "part", "version": "v001" },
+      { "id": "beam", "name": "横梁", "kind": "part", "version": "v002",
+        "transform": { "translate": [0, 0, 50] } }
+    ],
+    "interfaces": [
+      { "id": "I1", "a": "base.V轴", "b": "beam.刀口",
+        "type": "转动副", "severity": "hard", "check": "coaxial",
+        "tolerance": { "min": -0.05, "max": 0.05 } }
+    ]
+  }
+}
+```
+
+Four facts the shape does not make obvious:
+
+- the node discriminator is `kind` (`"assembly"` | `"part"`), **not** `type`;
+- interfaces sit on the node whose **DIRECT** children they connect (`root.interfaces`), and an
+  endpoint is `"<childId>.<datumName>"` — a dot, not `:` or `/`;
+- `tolerance: {min,max}` is the pass/fail criterion — **no tolerance means skipped, never pass**;
+- a part node names its version with `version` (e.g. `"v003"`), or `source: "stock"` if it has no
+  geometry.
+
+## Where this sits in the delivery discipline (updated 2026-10-20)
+
+`check_assembly` is a **delivery tool**: `validate_assembly` measures, this one judges against
+the contract. Read its **`judgement`**, not `overallStatus`:
+
+| what happened | judgement |
+|---|---|
+| any `hardViolation` | **excluded** — a witness contradicts the contract |
+| any `skipped` or `intentFlag` | **difficult** — an interface nobody evaluated, or a soft signal. A skipped check is exactly "unevaluable" and never a pass |
+| none of the above | **not-excluded** — no counter-example; never "ok", never "safe" |
+
+`judgedBy` breaks those counts down so the reader does not have to re-count the arrays.
+
+**`preflight` does not orchestrate this yet** (its contract evaluation lives inside the tool
+closure; extracting it is gated on this lane being quiet). Until then: run `check_assembly`
+yourself and declare the result as an `assembly` claim to `delivery_audit` / `preflight` —
+a claim with no fresh check comes back as `claim-without-evidence`, which is the gate
+working, not an error.
+
 ## Facts that are not obvious from the tool descriptions
 
 - **`check_assembly` machine-checks five operators.** `distance` (point datums)
