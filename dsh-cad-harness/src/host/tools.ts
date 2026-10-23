@@ -23,7 +23,7 @@ import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores }
 import { discoverWorkspaces } from './workspaces.ts';
 import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import {
-  builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile,
+  builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile, violatesRule,
   type ProcessProfile,
 } from './process-profile.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
@@ -37,6 +37,7 @@ import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
 import { withOutputContract } from './tool-contract.ts';
+import { nextLookFor } from './next-look.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
@@ -2971,13 +2972,26 @@ export function registerCadTools(
           warnIfOpen(a.bVersionId!, 'b', solved.watertightB);
         }
 
-        // annotated render: parts + marker spheres + connector
+        // Annotated render: parts + marker spheres + connector.
+        //
+        // The INPUTS are scratch (a temp dir, deleted at the end); the OUTPUT is a single
+        // cache file beside the corpus that is overwritten each call. Before this, every
+        // call left `measure/a.stl`, `b.stl` and a new `gap_<timestamp>.scad/.png` behind
+        // forever, and the pair files were shared names two concurrent calls could fight
+        // over (2026-10-23 audit, FIX-E4).
         const measureDir = join(store.root, 'measure');
         await mkdir(measureDir, { recursive: true });
+        const scratchDir = await mkdtemp(join(tmpdir(), 'cad-measure-'));
+        let scratchCleaned = false;
+        const cleanScratch = async () => {
+          if (scratchCleaned) return;
+          scratchCleaned = true;
+          await rm(scratchDir, { recursive: true, force: true }).catch(() => {});
+        };
         const partScad = async (versionId: string | undefined, color: string, name: string): Promise<string> => {
           if (!versionId) return '';
           const bytes = await readFile(join(store.root, 'versions', versionId, 'model.stl'));
-          const path = join(measureDir, `${name}.stl`);
+          const path = join(scratchDir, `${name}.stl`);
           await writeFile(path, bytes);
           return `color("${color}", 0.7) import("${path}");\n`;
         };
@@ -2991,11 +3005,14 @@ export function registerCadTools(
         scad += `color("royalblue") translate([${f(pointB)}]) sphere(r=2.2, $fn=32);\n`;
         scad += `color("black") hull() { translate([${f(pointA)}]) sphere(r=0.5, $fn=16); translate([${f(pointB)}]) sphere(r=0.5, $fn=16); }\n`;
 
-        const scadPath = join(measureDir, `gap_${Date.now()}.scad`);
-        const pngPath = scadPath.replace(/\.scad$/, '.png');
+        const scadPath = join(scratchDir, 'gap.scad');
+        // One overwritten cache, not an ever-growing pile: the annotated render is a
+        // convenience for the current answer, and the reply carries the numbers anyway.
+        const pngPath = join(measureDir, 'last-gap.png');
         await writeFile(scadPath, scad, 'utf8');
         const ok = await renderScadPng(scadPath, pngPath, { rotate: [65, 0, 25] });
         const frame = ok ? pngPath : '';
+        await cleanScratch();
         try {
           await ctx.attachments.saveImages([{ data: await readFile(pngPath), mediaType: 'image/png', name: 'gap-closest-points' }]);
         } catch { /* headless: frame on disk is enough */ }
@@ -3806,7 +3823,7 @@ export function registerCadTools(
       const witnesses: ProfileEvaluation['witnesses'] = [];
       // Only a HARD constraint excludes. A too-steep overhang needs supports; it does
       // not make the part impossible, so it stays a finding, not a witness.
-      if (wall && screen.wallMeasured && screen.minWallMm !== undefined && screen.minWallMm < wall.value) {
+      if (wall && screen.wallMeasured && screen.minWallMm !== undefined && violatesRule(screen.minWallMm, wall)) {
         witnesses.push({
           rule: 'wallMinMm',
           measured: screen.minWallMm,
@@ -3976,7 +3993,7 @@ export function registerCadTools(
       if (toolRadius?.applies === true && toolRadius.decidable === 'geometry' && typeof toolRadius.value === 'number') {
         for (const bore of bores) {
           const radiusMm = bore.diameterMm / 2;
-          if (radiusMm < toolRadius.value) {
+          if (violatesRule(radiusMm, toolRadius as { value: number; direction: 'min' | 'max' })) {
             witnesses.push({
               rule: 'toolRadiusMm',
               measured: +radiusMm.toFixed(3),
@@ -3992,7 +4009,7 @@ export function registerCadTools(
         for (const bore of bores) {
           if (bore.diameterMm <= 0) continue;
           const aspect = bore.lengthMm / bore.diameterMm;
-          if (aspect > holeAspect.value) {
+          if (violatesRule(aspect, holeAspect as { value: number; direction: 'min' | 'max' })) {
             witnesses.push({
               rule: 'holeAspectMax',
               measured: +aspect.toFixed(2),
@@ -4093,6 +4110,10 @@ export function registerCadTools(
     }
     if (mode === 'judge') {
       delete reply.attention;
+      // HARNESS §11.14: a verdict without a place is the failure this whole lane exists to
+      // prevent. The field is trimmed (it is a picture, not context), so the reply carries
+      // runnable next observations instead of an empty space (2026-10-23 audit, FIX-B3).
+      reply.nextLook = nextLookFor({ source: 'printability', versionId: a.versionId, judgement: verdict });
     }
     // The output schema now allows per-layer region extras (triangles/samples/…),
     // so its inferred type carries an index signature the typed layers lack.
@@ -4131,6 +4152,18 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
+          nextLook: {
+            type: 'array',
+            description: 'Present in judge mode: RUNNABLE next observations ({tool, args, why}) — judge trims the per-sample field on purpose, so the verdict must still say where to look (HARNESS §11.14).',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                tool: { type: 'string', required: true },
+                args: { type: 'object', required: true, additionalProperties: true },
+                why: { type: 'string', required: true },
+              },
+            },
+          },
           // verdict / attention / profiles / profileSource are MODE-TRIMMED below
           // (judge drops attention; scan drops verdict+profiles+profileSource).
           // A static required list would reject every trimmed reply — that is how
@@ -4357,6 +4390,18 @@ export function registerCadTools(
           // Mode-trimmed below exactly like check_printability: judge drops `attention`,
           // scan drops `verdict`+`delivery`. A static required list made BOTH modes
           // fail, so the default call was broken. The run record keeps both halves.
+          nextLook: {
+            type: 'array',
+            description: 'Present in judge mode: RUNNABLE next observations ({tool, args, why}) — judge trims the per-sample field on purpose, so the verdict must still say where to look (HARNESS §11.14).',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                tool: { type: 'string', required: true },
+                args: { type: 'object', required: true, additionalProperties: true },
+                why: { type: 'string', required: true },
+              },
+            },
+          },
           verdict: { type: 'string', description: '"ok" | "check" | "overstressed" (absent in scan mode) — a SUMMARY for a human, NOT the delivery form. Deliver against `delivery` (excluded / difficult / not-excluded), which is the two-or-three-valued judgement with witnesses.' },
           delivery: { type: 'object', additionalProperties: true, description: 'The delivery discipline: an allowable-stress requirement and a three-valued verdict — "excluded" (a witness contradicts it), "difficult" (the bounds straddle it), "not-excluded" (no counter-example; NEVER "ok"); plus `unevaluable` for numbers this mesh cannot decide. DETECTION IS NOT DELIVERY: the geometry suspects live in `attention`, never as witnesses here.' },
           material: { type: 'object', required: true, additionalProperties: true },
@@ -4458,12 +4503,17 @@ export function registerCadTools(
       const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
       const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
 
-      const fieldDir = join(store.root, 'stress');
-      await mkdir(fieldDir, { recursive: true });
-      const fieldPath = join(
-        fieldDir,
-        `${safeArtifactName(`${a.versionId}-${material.id}-${a.dxMm ?? 'auto'}`)}.f32`,
-      );
+      // The field is an artifact of ONE run, so it lives IN that run (2026-10-23 audit,
+      // FIX-E4). Previously the filename was `<version>-<material>-<dx>`, which says
+      // nothing about the LOAD CASE: two different loads on the same version overwrote
+      // each other, and the report handed the model a path whose contents might belong to
+      // a different question. The run id makes it addressable and immutable.
+      const run = await beginRun(runStore, {
+        kind: 'stress',
+        title: `应力分析 · ${a.versionId}`,   // final title (with verdict) is set at commit
+      });
+      await mkdir(run.dir, { recursive: true });
+      const fieldPath = join(run.dir, 'stress-field.f32');
 
       const result = await solveStress({
         path: modelPath,
@@ -4496,8 +4546,13 @@ export function registerCadTools(
       // The tiers. These factors are the colour scale's premise and NOT a safety
       // factor: the peak method under-reads at the declared distance, and the model
       // is isotropic while an FDM part's weakness is between layers.
+      // Declared heuristics, not calibrated: `badFactor` is the divisor that produces the
+      // allowable stress, so it is a DESIGN decision, not a colour knob. Named here and
+      // echoed in the report's `method` block so a reader can see the premise
+      // (2026-10-23 audit, FIX-B6).
       const warnFactor = 2.5;
       const badFactor = 1.5;
+      const FACTOR_SOURCE = 'declared heuristic (strength/warn, strength/bad) — not calibrated; DESIGN §27.1';
       const attention = stressAttention({
         versionId: a.versionId,
         material,
@@ -4543,16 +4598,17 @@ export function registerCadTools(
       // writes, so the panel needs no second format and the picture cannot drift from
       // the digest (DECISION-LOG 2026-10-19).
       const delivery = stressDelivery({ material, result, warnFactor, badFactor });
-      const run = await beginRun(runStore, {
-        kind: 'stress',
-        title: `应力分析 · ${a.versionId} · ${verdict}`,
-      });
       await run.json('report.json', {
         versionId: a.versionId,
         verdict,
         delivery,
         material,
-        method: { dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm },
+        method: {
+          dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm,
+          // The factors decide the allowable stress; a reader must be able to see that they
+          // are a declared heuristic, not a calibration (DESIGN §27.1).
+          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
+        },
         checks: {
           equilibriumErrorPct: result.equilibriumErrorPct,
           energyBalancePct: result.energyBalancePct,
@@ -4576,7 +4632,7 @@ export function registerCadTools(
           : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
             : 'not-excluded',
         summary: `${material.id} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
-        title: `应力分析 · ${a.versionId}`,
+        title: `应力分析 · ${a.versionId} · ${verdict}`,
         sourceVersionIds: [a.versionId],
         subject: `stress:${a.versionId}`,
       });
@@ -4590,6 +4646,7 @@ export function registerCadTools(
         material: material as unknown as { [key: string]: Json },
         method: {
           solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
+          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
           dxMm: result.dxMm,
           gridCells: result.gridCells,
           solidCells: result.solidCells,
@@ -4641,6 +4698,15 @@ export function registerCadTools(
       }
       if (mode === 'judge') {
         delete out.attention;
+        // Same obligation as check_printability: judge mode trims the field, so it must
+        // point somewhere runnable (HARNESS §11.14; 2026-10-23 audit, FIX-B3).
+        out.nextLook = nextLookFor({
+          source: 'stress',
+          versionId: a.versionId,
+          judgement: (delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
+            : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
+              : 'not-excluded'),
+        });
       }
       // `out` is assembled in a MODE-DEPENDENT shape (scan mode carries no verdict, judge
       // mode no field), so its static type is a record even though every key it can emit
@@ -5146,8 +5212,9 @@ export function registerCadTools(
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v069".' },
       cellMm: { type: 'number', description: 'Clustering cell for peaks (default 8 mm).' },
-      wallMinMm: { type: 'number', description: 'Wall band lower edge (default 1.2 mm, or the profile).' },
+      wallMinMm: { type: 'number', description: 'Wall band lower edge (default: the declared profile\'s wallMinMm, else 1.2 mm — and the reply says which).' },
       wallMaxMm: { type: 'number', description: 'Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement).' },
+      profileIds: { type: 'array', items: { type: 'string' }, description: 'Process profiles to take the wall band from (same meaning as in check_printability). Omit and the band source says "no profile" — an unsigned threshold, which DESIGN §27.1 exists to prevent.' },
       dxMm: { type: 'number', description: 'Voxel size for the support estimate (default 1.0 mm).' },
       minMassG: { type: 'number', description: 'Unsupported MASS above which a hanging region is reported (default 1.0 g, declared). A 0.2 g sliver is free.' },
       bridgeMaxMm: { type: 'number', description: 'Horizontal span a printer can bridge without support (default 10 mm, declared).' },
@@ -5180,11 +5247,33 @@ export function registerCadTools(
         // Declared in `parameters` above; the cast used to omit them, so `tsc` flagged the
         // three reads below as errors on a type that the runtime does populate.
         dxMm?: number; minMassG?: number; bridgeMaxMm?: number;
+        profileIds?: string[];
       };
       const project = await allStores(exec);
-      const wallMin = a.wallMinMm ?? 1.2;
+      // The band is a DECLARED claim, so the reply must say where it came from. Before this,
+      // the source string said "(declared)" for numbers this very function had just
+      // invented — a declaration with no author (2026-10-23 audit, FIX-B6).
+      let wallMin = a.wallMinMm ?? 1.2;
       const wallMax = a.wallMaxMm ?? 4.0;
-      const wallBand: BandNorm = { id: 'wall', quantity: 'wall-thickness', units: 'mm', lo: wallMin, hi: wallMax, scaleLo: wallMin, scaleHi: wallMax, source: `wallMinMm ${wallMin} / wallMaxMm ${wallMax} (declared)` };
+      let bandSource = 'declared heuristic: lower 1.2 mm / upper 4.0 mm — NO process profile ' +
+        '(DESIGN §27.1: an unsigned threshold quietly shapes the design)';
+      if (a.profileIds?.length) {
+        const resolvedBand = await resolveProcessProfiles({ profileIds: a.profileIds });
+        if (resolvedBand.errors.length > 0) {
+          throw new Error(`invalid process profile:\n  - ${resolvedBand.errors.join('\n  - ')}`);
+        }
+        const prof = resolvedBand.profiles[0]!;
+        const wallRule = evaluableRules(prof).find((r) => r.rule === 'wallMinMm');
+        if (wallRule) {
+          wallMin = a.wallMinMm ?? wallRule.value;
+          bandSource = `profile ${prof.id} (hash ${profileHash(prof)}) rule wallMinMm=${wallRule.value}` +
+            (wallRule.direction === 'max' ? ' — declared direction "max", i.e. read here as an UPPER bound' : '');
+        }
+      }
+      const wallBand: BandNorm = {
+        id: 'wall', quantity: 'wall-thickness', units: 'mm',
+        lo: wallMin, hi: wallMax, scaleLo: wallMin, scaleHi: wallMax, source: bandSource,
+      };
       const modelPath = join(project.store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) {
         const ids = (await listVersions(project.store)).map((v) => v.id);

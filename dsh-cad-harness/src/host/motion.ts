@@ -75,6 +75,14 @@ export interface InitialJointGap {
  * A prismatic joint may legitimately start anywhere ALONG its axis: only the
  * perpendicular offset means the two bodies are not on one rail.
  */
+/**
+ * How far a joint anchor may drift over a run before the run's numbers stop being evidence.
+ * Named once: it appeared as a bare `2` in the drift check, the clean verdict and the
+ * default starting-gap tolerance, i.e. three places that could drift apart
+ * (2026-10-23 audit, FIX-B6).
+ */
+export const JOINT_DRIFT_TOLERANCE_MM = 2;
+
 export function assertAssembledAtStart(
   parts: MotionPartInput[],
   joints: MotionJointInput[],
@@ -686,7 +694,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       drift = Math.hypot(d[0] - along * axis[0], d[1] - along * axis[1], d[2] - along * axis[2]);
     }
     if (drift > maxJointDriftMm) maxJointDriftMm = drift;
-    if (drift > 2) jointViolations.push(`${j.bodyA}↔${j.bodyB}: anchor drift ${drift.toFixed(2)}mm`);
+    if (drift > JOINT_DRIFT_TOLERANCE_MM) jointViolations.push(`${j.bodyA}↔${j.bodyB}: anchor drift ${drift.toFixed(2)}mm`);
   }
 
   // ---- keyframes: initial + crank milestones + first interference + final ----
@@ -714,7 +722,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     keyframes.push({ step: steps, timeSec: +sampleTimes[k]!.toFixed(4), label: 'final', poses: samplePoses[k]! });
   }
 
-  const clean = interferenceCount === 0 && !diverged && maxJointDriftMm <= 2;
+  const clean = interferenceCount === 0 && !diverged && maxJointDriftMm <= JOINT_DRIFT_TOLERANCE_MM;
 
   // Playback timeline: t=0 assembly pose + every simulation sample, per part.
   const toFlat = (poses: Record<string, PoseSample>, name: string): number[] => {

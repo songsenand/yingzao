@@ -4037,3 +4037,51 @@ run.json 重建，且读操作不改文件）。**未测**：check_assembly 的�
 
 **影响：** 本报告新增 §0.5（甄别规则 + 已判定的条目表）；DESIGN 头部写入优先级；
 后续每条修复的提交信息与报告条目都要带"谁过期"。
+
+## 2026-10-23：判定必须指路；规则的方向与阈值必须可追溯；应力场随运行落盘
+
+**触发条件：** 4（影响两个判定工具、工艺档案、应力车道）+ 2（审计实测：judge 模式删掉 attention 后没有任何指向；`direction` 声明了却从不被读；stress 的 badFactor 直接当允许应力的分母却无出处；场文件名不含载荷）。
+
+**要解决的问题：**
+
+1. **判定指路**：`check_printability` / `simulate_stress` 的默认 `mode='judge'` 裁剪掉 `attention`
+   是刻意的（场是给人的图，不是模型的上下文），但裁掉之后**回复里没有任何"下一步看哪"**。
+   HARNESS §11.14 要求任何通过/不通过都附可疑位置——这与本次用户重申的"`HARNESS.md` 一定对"
+   一致：不能靠补一段文档消解，**代码要让步**。
+2. **规则方向被忽略**：`direction: 'min'|'max'` 在档案里声明、校验、由 `evaluableRules` 返回，
+   然后被每一处比较忽略（全部假设"越小越坏"）。声明 `max` 的档案会被当 min 读，且不报错。
+3. **阈值无出处**：`analyze` 把自己临时定的 1.2/4.0 标成 "(declared)"；stress 的 `warnFactor 2.5`
+   / `badFactor 1.5` 里，1.5 是**允许应力的分母**（不是配色），报告里没有一句话说它从哪来。
+4. **应力场被覆盖**：`stress/<version>-<material>-<dx>.f32` 不含载荷——同一版本两种载荷会互相
+   覆盖，而报告把这个路径交给模型当证据。
+5. **measure 的临时文件只增不减**：每次 `measure_gap` 写 `measure/{a,b}.stl` + `gap_<ts>.scad/png`。
+
+**决策内容：**
+
+1. **judge 模式必须带 `nextLook`**：`src/host/next-look.ts` 返回**可执行**观测
+   （`{tool, args, why}`，工具与参数都是真实的、指向同一版本），printability 指向
+   `check_printability(mode=scan)` + `analyze`，stress 指向 `scan_attention` +
+   `check_printability(mode=scan)`。默认仍是 `judge`——**"选 both 还是拆工具"留待后续**，
+   但"沉默"这条路被堵死了。
+2. **方向由 `violatesRule()` 统一消费**：`min` 违反 = 低于值，`max` 违反 = 高于值；
+   wall/toolRadius/holeAspect 三处改为调用它，验收禁止裸比较。
+3. **阈值带出处**：`analyze` 接受 `profileIds`，band 的 `source` 写明 `profile <id> (hash …) rule …`
+   或 **"NO process profile"**；stress 的 `method` 块带 `warnFactor/badFactor/factorSource`。
+4. **应力场进 run 目录**（`runs/rNNN/stress-field.f32`）：run 在求解前创建（终态标题在 commit 时补），
+   于是"这次计算的场"不再被下一次覆盖。
+5. **measure 的输入进临时目录、输出只留一个覆盖写的缓存**（`measure/last-gap.png`）；
+   DESIGN §6.8 明确列出不进证据的缓存文件。
+
+**理由：** 判定的价值取决于"下一步去哪"；阈值若没有作者，就会静静地塑造设计（§27.1）；
+而一个会被覆盖的证据路径，比没有路径更危险——它看起来像证据。
+
+**依据（实测）：** `accept-next-look.mjs` 22/22（两个工具 × 三种判定 × 可执行/同版本/有理由；
+并断言 trim 与 pointer 在同一分支、schema 已声明）；`accept-threshold-provenance.mjs` 17/17
+（方向语义六条、无裸比较、band 出处、factor 出处、drift 常量唯一）；
+`accept-tool-contracts` / `accept-tool-output` 全绿；`tsc` 0。
+**未测**：两个工具的端到端（需 Python worker，本沙箱 EROFS）。
+
+**影响：** `src/host/next-look.ts`（新）、`stress.ts`（无认证区 → difficult）、
+`tools.ts`（两处 nextLook、三处 violatesRule、analyze profileIds、stress 场路径、measure 缓存）、
+`motion.ts`（`JOINT_DRIFT_TOLERANCE_MM`）、`process-profile.ts`（`violatesRule`）、DESIGN §6.8/§25.7。
+回滚 = revert 本提交；`nextLook` 是新增可选字段。

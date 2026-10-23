@@ -195,6 +195,25 @@ export function disclosureLists(profile: ProcessProfile): { notApplicable: NotAp
 }
 
 /** Rules a tool can actually evaluate from the mesh alone, with their thresholds. */
+/**
+ * Does `measured` violate a declared rule?
+ *
+ * `direction` was declared, validated, returned by `evaluableRules` — and then IGNORED by
+ * every comparison, which all assumed "smaller is worse". A profile declaring
+ * `wallMinMm: { direction: 'max' }` was therefore read as a minimum and nothing said so
+ * (2026-10-23 audit, FIX-B6). One function, used by every rule, so the declaration means
+ * what it says.
+ *
+ *   direction 'min'  -> the value is a LOWER bound; violating means measured < value
+ *   direction 'max'  -> the value is an UPPER bound; violating means measured > value
+ */
+export function violatesRule(
+  measured: number,
+  rule: { value: number; direction: 'min' | 'max' },
+): boolean {
+  return rule.direction === 'min' ? measured < rule.value : measured > rule.value;
+}
+
 export function evaluableRules(profile: ProcessProfile): { rule: RuleName; value: number; direction: 'min' | 'max' }[] {
   const out: { rule: RuleName; value: number; direction: 'min' | 'max' }[] = [];
   for (const name of RULE_NAMES) {

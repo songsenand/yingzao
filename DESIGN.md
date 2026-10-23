@@ -500,12 +500,19 @@ interface PostProcessResponse {
     manifest.json          # { runs: [{id,kind,timestamp,title,status,summary,sourceVersionIds,hasGeometry,parts,placements?}] }
     r007/
       run.json             # 自描述副本；索引损坏/丢失时 `readRunManifest` 用它重建（2026-10-23）
+      stress-field.f32     # stress 运行的原始场（每 run 一份；文件名曾按 version-material-dx，
+                           #   不含载荷 → 不同载荷互相覆盖，2026-10-23 改为随 run 落盘）
       report.json          # 该 kind 的完整报告
       trajectory.json      # motion / physics
       fluid-manifest.json  # fluid（面板 scrub 的帧索引）
       parts/<name>.stl     # 这次运行算的几何（装配还带 placements）
       frames/<file>        # 关键帧 PNG / 流体 .bin
 ```
+**不进入证据的缓存文件（2026-10-23 明确）**：`<project>/measure/last-gap.png`（最近一次
+`measure_gap` 的标注图，覆盖写）、`versions/vNNN/export_*`（导出缓存）、
+`versions/vNNN/preview_*.scad|png`（`render_part` 的一次性帧）。它们**不是版本、不是运行、
+不是证据**：可以随时删，`delivery_audit` 的未登记扫描不把它们当几何。
+
 
 profile 层（不属于任何项目）：
 

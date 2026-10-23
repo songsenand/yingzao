@@ -10,8 +10,9 @@ EXPERIMENTAL — do not base a delivery claim on this yet: its overhang handling
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version id, e.g. "v069". |
 | `cellMm` | number | — | Clustering cell for peaks (default 8 mm). |
-| `wallMinMm` | number | — | Wall band lower edge (default 1.2 mm, or the profile). |
+| `wallMinMm` | number | — | Wall band lower edge (default: the declared profile's wallMinMm, else 1.2 mm — and the reply says which). |
 | `wallMaxMm` | number | — | Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement). |
+| `profileIds` | array | — | Process profiles to take the wall band from (same meaning as in check_printability). Omit and the band source says "no profile" — an unsigned threshold, which DESIGN §27.1 exists to prevent. |
 | `dxMm` | number | — | Voxel size for the support estimate (default 1.0 mm). |
 | `minMassG` | number | — | Unsupported MASS above which a hanging region is reported (default 1.0 g, declared). A 0.2 g sliver is free. |
 | `bridgeMaxMm` | number | — | Horizontal span a printer can bridge without support (default 10 mm, declared). |
@@ -57,7 +58,7 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 check_printability({ versionId: "…" })
 ```
 
-returns: `versionId`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `overhangAreaMm2`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
+returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `overhangAreaMm2`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
 ## `create_part`
@@ -515,7 +516,7 @@ Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG)
 simulate_stress({ versionId: "…", loads: [] })
 ```
 
-returns: `versionId`, `verdict`, `delivery`, `material`, `method`, `checks`, `resultants`, `capability`, `attention`
+returns: `versionId`, `nextLook`, `verdict`, `delivery`, `material`, `method`, `checks`, `resultants`, `capability`, `attention`
 
 
 ## `validate_assembly`

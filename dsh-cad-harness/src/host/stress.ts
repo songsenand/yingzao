@@ -471,7 +471,14 @@ export function stressDelivery(input: {
       locationMm: result.peakDeclaredDepthAtMm,
     });
   } else if (upper === null) {
-    verdict = 'not-excluded';
+    // No certifiable region at all: the question cannot be answered, so the honest answer
+    // is `difficult` (unevaluable) — `not-excluded` would be a claim about a measurement
+    // that does not exist (2026-10-23 audit, FIX-B7).
+    verdict = 'difficult';
+    unevaluable.push(
+      'surface upper estimate: no certifiable region — the peak cannot be located, so "no counter-example" ' +
+      'would be a statement about a number this run never produced',
+    );
   } else if (upper > allowable) {
     verdict = lower > allowable * 0.8 ? 'difficult' : 'excluded';
     witnesses.push({
