@@ -159,7 +159,9 @@
           # A SECOND discovery provider, not an edit of any row above: skill
           # discovery is layered per preset, so the CAD skill is invisible to
           # every session that does not name this preset — which is what lets
-          # it be as detailed as the work needs.
+          # NOTE: the directory below is the path on the machine that RAN this
+          # it be as detailed as the work needs. Re-run this script after
+          # cloning/moving the plugin, or the skills silently stop being found
           - id: cad-skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:

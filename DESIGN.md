@@ -11,6 +11,11 @@
 **场景**：开放的 CAD harness（2026-09-27 起，原为小团队内部工具）；定位与哲学见 HARNESS.md
 **底座**：dsh 插件
 
+> **冲突时的优先级（2026-10-23 明确）**：`HARNESS.md` 的定位语句 > `DECISION-LOG` 判例 >
+> 本文件 > 代码。本文件与代码冲突时，**先判断是"文档滞后"还是"实现违约"**：
+> 代码里的事实若已有提交/决策出处，就是文档滞后（改本文件）；若代码违背的是一条原则或契约
+> 且找不到推翻它的决策，就是实现违约（改代码）。**不允许用改文档的方式消解 HARNESS 层的矛盾。**
+
 ---
 
 ## 1. 项目概述
@@ -151,90 +156,68 @@
 
 ### 5.1 目录结构
 
-```
-dsh-cad-harness/
-  package.json           # dsh.bundle.patch + dsh.client 声明（platform: 'web'）
-  cordis.patch.yml       # 宿主插件补丁层（package.json 的 dsh.bundle.patch 指向它）
-  esbuild.mjs            # 构建：Host → lib/index.js（ESM bundle）；Client → lib/client.js（ModuleLoader 工厂 CJS）
-  tsconfig.json
-  src/
-    shared/types.ts      # Host/Client 共享类型
-    host/
-      index.ts           # 插件入口：inject ['tools','attachments']；注册工具 +（web profile 时）cad/echo RPC 探针
-      tools.ts           # 10 个工具的注册 + 全部 /api/cad/* 精确路由（路由集中于此）
-      compile.ts         # OpenSCAD CLI 封装、datum 前置区、参数解析、多格式导出、PNG 渲染
-      version.ts         # 版本库（vNNN 不可变 + manifest.json 索引 + datums.json）
-      manifest.ts        # 装配清单 assembly.json：读写/结构校验/遍历（节点同构、地址引用）
-      assembly.ts        # 装配间隙验证：Manifold 布尔干涉 + BVH 最小间隙 + 水密
-      assembly-check.ts  # 装配清单 L0 检查：distance / diameter-match / 邻接发现 / 报告
-      physics.ts         # M3 刚体动力学（rapier headless、事件关键帧、轨迹时间线）
-      motion.ts          # M3.6 机构运动（纯约束求解 + Manifold 干涉时间线 + 驱动）
-      mpm.ts             # MLS-MPM 内核（纯计算，无 I/O）
-      sdf.ts             # STL → 窄带 SDF（固体掩膜/法向/trilinear）
-      fluid.ts           # 流体场景组装：粒子/驱动/守恒审计/分段速度/预设推导
-      fluid-render.ts    # 零依赖 PNG 点云渲染器（node:zlib 手写）
-      measure.ts         # 测量引擎：表面吸附、最近点对、球探针解析分支
-      inspect.ts         # measure_part / render_part 的版本级实现
-      unregistered.ts    # 未登记几何扫描（delivery_audit 与面板未登记类目共用）+ 工作区路径守卫（§30.18）
-      mesh.ts            # STL 解析、水密判定、体积、包围盒
-      usage.ts           # llm/stream 计量 → data/usage/usage.jsonl
-      runs.ts            # 运行库：data/runs/rNNN 的写入/索引/寻址（产物浏览的基础，v2.13）
-    client/
-      index.ts           # 右栏 Tab 注册 + 自动打开（sidebarRight / sidebarRightTabs / slots）
-      panel.ts           # 单一面板：产物选择器 + 方形视口（按产物种类渲染）+ 参数/导出/报告折叠区
-      playback.ts        # 运行回放视图：MotionPlaybackView / FluidPlaybackView / StaticPartsView
-      local-file.tsx     # 按路径导入对话框（默认开在导入页）；浏览器端预览只是那条路的兜底（§30.18）
-      local-file-request.ts # 导入请求的纯函数（目标语料/单位/零件名/DXF 深度，可脱离 DOM 测试）
-  lib/
-    index.js             # Host 产物（宿主加载）
-    client.js            # Client 产物（宿主经 /plugins 路由提供）
-  scripts/               # accept-*.mjs / smoke-*.mjs / bench-mpm-scaling.mjs / regen-playback-data.mjs / migrate-runs.mjs
-  sandbox/preview/       # 面板 UI 沙箱（v2.13）：真实 panel.ts + mock /api/cad/* + 无头 Firefox 出图，见其 README
-  data/                  # versions/ + assembly|physics|motion|fluid|usage|bench 各域产物（不进 files 发布列表）
+> **2026-10-23 改法**：这一节以前是一棵树，每加一个文件就要手改一次，于是它总是落后
+> （审计时缺 20+ 个文件）。现在只写**分层约定**——真实清单用命令取，不会过期：
+
+```bash
+git ls-files dsh-cad-harness/src           # 当前源文件清单
+node scripts/audit-tool-contracts.mjs      # 当前工具表（含参数与返回）
 ```
 
-实作与原文的差异要点：**没有独立 LLM 模块**（评审走会话原生 + 附件，§6.3）；**没有 MPM 后处理模块**（v2.4 取消，§6.7）；**没有 config.ts**（参数是工具入参，见 §7.3）；**Client 没有 per-panel 的模式分支**（呈现由产物类型决定；面板之外拆出的是可测试的小模块——
-browse / fit / heat / lighting / overlay / project / section / local-file，不是另一套 viewer 实现）；
-物理/渲染/MPM 的实现仍在 Host。
+| 层 | 目录 | 职责 | 不许出现 |
+|---|---|---|---|
+| 平台接线 | `src/host/index.ts`、`tools.ts` 的注册段、路由段 | dsh 宿主面：`ctx.tools.register` / `connection.fetch.register` / `ctx.attachments` / 生命周期 | 几何算法、仿真内核 |
+| 领域（TS） | `src/host/*.ts`（compile/assembly/motion/fluid/mpm/measure/process-profile/…） | 版本库、真值引擎封装、判据与报告；部分模块是 Python 权威的 parity oracle | dsh API（除 `tools.ts` 内的接线） |
+| 领域（Python） | `dsh-cad-harness/python/cad_worker/` | 几何分析、仿真、装配契约、工艺档案求解 | 插件宿主生命周期 |
+| 浏览器 | `src/client/` | 面板、回放、视口角标、热力图、背景、本地文件 | 任何主机能力（只经精确路由取数） |
+| 共享 | `src/shared/` | `types.ts`（Host/Client 契约）、`judgement.ts`（**判定词汇的唯一来源**） | 任一侧的私有实现 |
 
-### 5.2 package.json（当前实作）
+**两条分层硬约束**（有验收守着）：
 
-```jsonc
-{
-  "name": "dsh-cad-harness",
-  "private": true,                       // 仍不发布公共 npm（开放化未定，见 HARNESS.md §10）
-  "type": "module",
-  "main": "lib/index.js",
-  "exports": { ".": {...}, "./client": { "default": "./lib/client.js" } },
-  "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "external": ["@deepseek-ai/dsh-api-session-controller/client"] }
-  },
-  "files": ["lib/", "cordis.patch.yml"],
-  "scripts": { "build": "node esbuild.mjs", "watch": "node esbuild.mjs --watch" },
-  "dependencies": {
-    "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",
-    "@deepseek-ai/dsh-attachment": "0.1.5-rc.3",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
-    "@dimforge/rapier3d-compat": "^0.20.0",
-    "manifold-3d": "^3.5.3",
-    "three": "^0.170.0",
-    "three-mesh-bvh": "^0.9.15"
-  },
-  "devDependencies": { "esbuild": "^0.24.0", "typescript": "^5.6.0", "react": "^18.2.0", "@types/react": "~18.3.1", "@types/three": "^0.186.0", "@types/node": "^26.6.2", "@deepseek-ai/cordis": "4.0.2", "@deepseek-ai/dsh-client-connection": "0.1.5-rc.3" }
-}
-```
+- `tool-scope.ts` 里**不许出现工具名**（花名册由注册推导；`accept-tool-scope.mjs`）；
+  分组表在注册旁（`tool-groups.ts`；`accept-tool-groups.mjs`）。
+- **输出契约在注册层自检**（`tool-contract.ts`；`accept-tool-output.mjs`）：
+  `accept-*.mjs` 直接调 `exec` 绕过运行时边界，不在这里补就等于没测。
 
-更正原文三点：① `dsh.client` **无 `entry` 字段**（宿主按约定取 `./client` 导出），`external` 是 `@deepseek-ai/dsh-api-session-controller/client`（会话控制器基座），React 由 ModuleLoader 平台表提供、不必声明；② `dsh.bundle.patch` → `cordis.patch.yml` 是宿主补丁层入口；③ three / rapier / manifold-3d / three-mesh-bvh **都打进插件自身 bundle**（manifold-3d 在 Host 侧为 external）。
+### 5.2 package.json：字段含义（不是快照）
+
+> 以前这里贴整个文件，每次改依赖或脚本就过期。现在只记**为什么这么写**，
+> 具体版本看文件本身（`git log -- package.json` 有历史）。
+
+| 字段 | 形状 | 为什么 |
+|---|---|---|
+| `private` | `true` | 未决定公开分发（HARNESS §10）；**不要在未决策前改成 public 或改包名** |
+| `main` / `types` | `lib/index.js` / `lib/types/index.d.ts` | 宿主加载 Host 半；`tsc` 产出声明 |
+| `exports./client` | `./lib/client.js` | 宿主按约定的 `./client` 导出取客户端包（**没有 `entry` 字段**） |
+| `dsh.bundle.patch` | **数组**：`cordis.patch.yml` + `presets/cad/preset.patch.yml` | 先是宿主行（工具作用域、图像裁剪执行器），再是造物模式预设；顺序有意义 |
+| `dsh.client.platform` | `'web'` | 静态客户端插件 |
+| `dsh.client.external` | `['@deepseek-ai/dsh-api-session-controller/client']` | 会话控制器基座由宿主提供；React 走 ModuleLoader 平台表，不必声明 |
+| `files` | `lib/ python/ skills/ presets/ cordis.patch.yml schemas/` | 发布白名单；`src/` 不进包（宿主只加载 `lib/`） |
+| `scripts.build` | `npm run typecheck && node esbuild.mjs` | **类型检查是构建的前置**：esbuild 不做类型检查（2026-10-23 审计 A2） |
+| `scripts.typecheck` | `tsc --noEmit` | 同上 |
+| `scripts.accept` | 串起 8 支离线验收 | 结构、词表、索引、契约、面板 |
+
+打包事实：three / rapier / three-mesh-bvh 打进客户端 bundle；`manifold-3d` 在 Host 侧为
+external；**不引入 Vite**（Client 用自带 esbuild）。
 
 ### 5.3 Host/Client 接线（当前实作）
 
-- **工具**：`ctx.tools.register(defineTool({...}))` ×10 —— `generate_part`、`validate_assembly`、`check_assembly`、`simulate_physics`、`simulate_motion`、`simulate_fluid`、`render_part`、`measure_part`、`measure_distance`、`measure_closest`
-- **精确路由**：`connection.fetch.register({ path: '/api/cad/...', methods: [...] })`（STL/PNG/帧二进制、报告 JSON、参数预览、导出、人工发起 POST run）。`connection` 经 **`ctx.reflect.get('connection')` 轮询获取**（不声明 inject）——headless profile 没有该服务，路由整段跳过
-- **RPC**：仅存 M0 遗留的 `cad/echo` intercept 探针（`index.ts`），业务不用 RPC（大载荷走精确 GET）
-- **UI 面板**：Client 半注册到 **右栏 Tab**（`sidebarRightTabs.register` + `slots.register('sidebar.right.pane.tab', {key})` + `sidebarRight.openTab`），不是 layout main slot；会话保持中栏
-- **附件**：`ctx.attachments.saveImages` → 工具结果 image block → 会话（图片只能落 user role）
-- **构建**：`pnpm run build` 一次产出 `lib/index.js` + `lib/client.js`；`lib/client.js` 缺失时宿主激活会大声失败。**不引入 Vite**（Client 用自带 esbuild）
+- **工具**：27 个（25 个 CAD + `run_python` / `python_runtime`）。名册与参数见
+  `docs/TOOL-CONTRACTS.md`（由 `scripts/audit-tool-contracts.mjs --write` 生成，`--check` 比对全文）。
+  分组（交付 / 检测 / 仿真 / 仪器）在 `src/host/tool-groups.ts`。
+- **精确路由**：`connection.fetch.register({ path: '/api/cad/...' })`，`connection` 经
+  `ctx.reflect.get('connection')` 取得（不声明 inject；headless 无该服务则整段跳过）。
+  当前 20 条，按用途分四类：
+  - **产物浏览**：`/products`、`/manifest`、`/run`、`/run/frame`、`/stl`、`/file`、`/unregistered`、`/projects`、`/attention`
+  - **导出与导入**：`/export`、`/import`
+  - **人工发起**（三发起路径②）：`/physics/run`、`/motion/run`、`/fluid/run`、`/fluid/frame`、`/assembly/run`
+  - **装配清单**：`/assembly/manifest`、`/assembly/check`（顺指针读运行，回报 `runId`）
+  - **运维**：`/scope`（两半作用域的判据）、`/usage`（遥测）
+- **RPC**：业务**不用** RPC；M0 的 `cad/echo` 拦截器与 `/api/cad/test.stl` 已于 2026-10-23 删除（无人调用）。
+- **UI 面板**：Client 半注册到**右栏 Tab**（`sidebarRightTabs.register` +
+  `slots.register('sidebar.right.pane.tab', {key})` + `sidebarRight.openTab`），不是 layout main slot。
+- **附件**：`ctx.attachments.saveImages` → 工具结果 image block → 会话（图片只能落 user role）。
+- **构建**：`pnpm run build` 产出 `lib/index.js` + `lib/client.js`；`lib/client.js` 缺失时宿主激活大声失败。
 
 ---
 
@@ -249,15 +232,21 @@ browse / fit / heat / lighting / overlay / project / section / local-file，不�
 **实作接口**（`compile.ts`）：
 
 ```typescript
-compileAndRender(scadCode): Promise<CompileResult>   // STL + 四视角 PNG + datums
-compileStlOnly(scadCode): Promise<CompileResult>     // 仅 STL（装配/仿真批量编译用）
-renderScadPng(scadPath, pngPath, PngRenderOptions)   // 任意视角/缩放/剖切渲染
-exportScad(scadPath, outPath, format): Promise<Uint8Array>  // stl|3mf|obj|off|wrl
-parseParams(scad): ScadParam[]                       // `name = value; // PARAMS 描述`
-parseDatums / parseDatumFeatures / makeDatumSet      // 点 / 轴 / 面 / 圆柱
-parseMessages(raw): { errors, warnings }
+compileAndRender(scadCode: string): Promise<CompileResult>   // STL + 四视角 PNG + datums
+compileStlOnly(scadCode: string): Promise<CompileResult>     // 仅 STL（装配/仿真批量编译用）
+renderScadPng(scadPath, pngPath, PngRenderOptions)           // 任意视角/缩放/剖切渲染
+exportScad(scadPath, outPath, format): Promise<Uint8Array>   // stl|3mf|obj|off|wrl
+parseParams(scad: string): Promise<ScadParam[]>              // `name = value; // PARAMS 描述`（async）
+scadParseOutput(raw: string): Promise<ScadParseSolve>        // datum echo 行的解析（Python worker）
+parseMessages(raw: string): { errors: string[]; warnings: string[] }
+emptyDatumSet(): DatumSet   /   datumPrelude(): Promise<string>
 // CompileResult = { success, stl?, renders?, errors, warnings, datums, datumSet?, durationMs }
+// datum 四类（点/轴/面/圆柱）由 Python 的 `scad_parse` 解析，TS 只做形状归一
 ```
+
+> **2026-10-23 更正**：原文列出的 `parseDatums` / `parseDatumFeatures` / `makeDatumSet`
+> 三个函数**已不存在**（datum 解析迁到 Python worker，TS 侧只剩 `scadParseOutput` 与
+> `emptyDatumSet`）；`parseParams` 是 **async**。
 
 **实现要点**：
 - **二进制解析链**：`CAD_OPENSCAD_BIN` → `bin/squashfs-root/usr/bin/openscad`（2026.09.23 snapshot）→ 系统 `openscad`；版本 ≥ 2025 显式加 `--backend=Manifold`；snapshot 自动补 `LD_LIBRARY_PATH`
@@ -265,7 +254,9 @@ parseMessages(raw): { errors, warnings }
 - **共享 Xvfb**：`-displayfd` 自选显示号 + GL 预热 + `unref`，只在 PNG 渲染路径需要（渲染管线 15.7s → ~1.0s）
 - 临时目录 `mkdtemp`（非固定路径）；超时 30s；STL 一律 `--export-format binstl -D $fn=64`
 - **datum 前置区**：编译前 prepend `DATUM_PRELUDE`（`datum` / `datum_axis` / `datum_plane` / `datum_cyl` 四个模块，echo 行解析），错误行号偏移由注释声明接受
-- 参数面板：`parseParams` 解析顶层 `// PARAMS` 数值；`POST /api/cad/preview` 按覆盖值替换源码后重渲染（防抖预览）
+- `// PARAMS`：`parseParams` 仍解析顶层 `name = value; // 描述`（供脚本与未来的权威编辑用），
+  但**面板的参数滑块与 `/api/cad/{params,preview,apply-params}` 三条路由已于 v2.13k 删除**
+  （2026-10-23 连路由一并清掉）——改参数目前走会话（"孔径改 22"）
 - 导出：版本目录内 STL 直出，其他格式转换一次并缓存
 
 **验收**：语法错误返回 `success:false` 与可读错误；合法 SCAD 30s 内出 STL；输出水密（由 §6.4 的水密检查确认）。性能矩阵见 v2.1。
@@ -327,7 +318,9 @@ validateAssembly(parts, thresholdMm = 0.75): Promise<AssemblyReport>
 - 最小间隙：双向顶点采样（≤1200）对另一件 MeshBVH 最近三角形查询取 min（Manifold 无距离查询）
 - 水密：有向边计数（每条有向边恰出现一次且反向存在）+ `solid.status() === 'NoError'`
 - 阈值判定：`intersectionVolume > 0` → `interference`；`minDistance < threshold` → `too_tight`；否则 `ok`
-- 报告落 `data/runs/rNNN/report.json`（v2.13 起；旧路径 `data/assembly/assembly-report.json` 与 `GET /api/cad/assembly` 已废弃，仅留「最近一次」别名），面板经 `GET /api/cad/products` + `GET /api/cad/run/report?id=` 消费
+- 报告落 **运行的 `runs/rNNN/report.json`**（v2.13 起）；旧路径 `data/assembly/assembly-report.json` 已废弃，
+  **没有** `GET /api/cad/assembly` 别名（2026-10-23 核对：该路由不存在）。面板经
+  `GET /api/cad/products` + `GET /api/cad/run/report?id=` 消费
 
 **验收**：干涉体积与解析解差 <0.5%；1mm 间隙精确测得 1.000；阈值判定（0.75 ok / 1.5 too_tight）正确。
 
@@ -420,13 +413,17 @@ interface PhysicsResult {
 | `fluid-render.ts` | 零依赖 PNG 点云渲染（`node:zlib` 手写 PNG，双视角 + 速度着色 + 壁面参照 + z-buffer） |
 
 **实现要点**：
-- 单位制：毫米/s，重力 `[0,0,-9810]`；**dt 固定 4ms 不可调**（config 不暴露）
+- 单位制：毫米/s，重力 `[0,0,-9810]`；**dt 固定 4ms**——不暴露配置，但诊断开关
+  `CAD_FLUID_DT` 可覆盖（§32.4，只用于定位"离散化 vs 舍入"）
 - 粒子数：按 4-8 粒/格 × 流体域体积自动计算（典型 5 万-30 万），显式覆盖上限 1,000,000；**精度旋钮是 dx 不是粒子数**（基准见 docs/archive/M4-PREP.md 附录 A）
 - 边界：粒子-壁面 = SDF 投影回推（近壁掩膜 O(1) 预筛）；自由滑移 = G2P 排除固体格 + 流体权重重归一化（阈值 0.5）
 - 出口：escape 移除 + 守恒审计（到达率 = escaped/count0 可断言）；recycle 环绕续流为另一模式
 - 快照与数据：8 帧 PNG 进会话 + `frames.json` + 每帧 `.bin`（Float32 pos[3N]+speed[N]，16B/粒子）+ `wall.stl`；路由 `GET /api/cad/fluid[/manifest|/frame?i=|/wall]`
 - 面板：`FluidPlaybackView`（three.js Points 速度着色 + 透明管壁 + 时间轴 scrub/播放）——**面板与 LLM 消费同一批帧数据**（场地原则第一次落地）
-- M4R 场地化：`simulate_fluid` 降级为示例脚本形态，src 模块作为**真实库**开放给会话 agent 的 shell/Node；插件只保留不可替代的服务（图进会话、版本库、面板数据、人工守卫运行器）
+- M4R 场地化：**目标**是 `simulate_fluid` 降级为示例脚本形态、src 模块作为**真实库**开放给
+  会话 agent 的 shell/Node（插件只留图进会话、版本库、面板数据、人工守卫运行器）。
+  **现状（2026-10-23）**：库化拆分与 `examples/` 场景脚本**仍未做**（§12.3 待办），
+  `simulate_fluid` 仍是完整工具；本条记录的是方向，不是已完成状态
 - 未做（诚实边界）：流固耦合不支持（固体边界全程固定）；精确 CFD 不做（趋势判断）；弹性本构为长期候选
 
 **验收**：`accept-m4.mjs` 24/24 五案例（直管 11.9k 到达 0.72 / 38.7k 到达 0.845、穿透 0、守恒 0；静水沉降稳定；90° 弯管转向 0.63；渲染帧可判读）。
@@ -478,15 +475,18 @@ interface PostProcessResponse {
 
 > **v2.10 回填**：原文目录结构中的 `render_composite.png`、`review.json`、`validation.json`、`physics.json`、`mpm.json` 均**不存在于实作**（无 2×2 拼图；评审是会话原生行为不落盘；各类验证报告按域落在同一 store 目录，不按版本分目录）。实作口径如下。
 >
-> **v2.13s 更正**：下面的根**不再是插件的 `data/`**，而是**每个项目一个目录** `<DSH_HOME>/cad/<basename>-<sha1(cwd)[0:8]>/`（项目 = 会话 cwd；见 §13.13）。`usage/` 是唯一例外，它留在 profile 层 `<DSH_HOME>/cad/telemetry/`。
+> **v2.13s 更正，2026-10-23 再更正**：下面的根**不是插件的 `data/`**，而是**每个项目一个目录
+> `<cwd>/cad-data/`**（项目 = 会话 cwd；§19 从 `$DSH_HOME/cad/<basename>-<sha1>/` 搬到这里，
+> 目录名里的哈希随之取消）。`usage/` 是唯一例外，它留在 profile 层
+> `<DSH_HOME>/cad/telemetry/`——遥测量的是**请求**，不属于任何设计。
 
 **职责**：每轮迭代存代码、STL、四视角渲染图与 datum 全集，并以 manifest 索引。
 
 **实作目录结构**（`version.ts`；根 = 项目目录）：
 
 ```
-<DSH_HOME>/cad/<project>/
-  project.json             # { schemaVersion, cwd, key, title, createdAt } —— 哈希目录名的权威解释
+<cwd>/cad-data/
+  project.json             # { schemaVersion, cwd, key, title, createdAt } —— 语料根的权威解释（目录名不再含哈希）
   versions/
     v001/
       model.scad
@@ -1032,6 +1032,10 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 改动 Host 代码后需 `pnpm run build` 重建 `lib/`，并**重启 dsh 进程**（宿主 bundle 不热重载）。
 
+**换机器/换克隆位置后必须重跑 `node scripts/sync-cad-preset.mjs`**：`presets/cad/preset.patch.yml`
+是生成的，其中 `customSkillDirs` 是**绝对路径**。路径不对时失败是静默的（有工具、没 skill），
+所以宿主启动时会比对并告警，指出这条命令（2026-10-23 审计 D21）。
+
 ### 7.2 版本约定（当前）
 
 - `package.json` version 仍为 `0.1.0`；**无 git tag 流程**（项目当前不是 git 仓库）
@@ -1055,7 +1059,10 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 ### 7.4 运行时数据位置
 
-`<plugin>/data/`（各域报告、版本库、帧数据、计量）。虚拟 DSH 沙箱的 **DSH_HOME** 在 `examples/dsh-home`，二者互不重叠：前者是插件产物，后者是会话/凭证/配置。
+**语料在项目里**：`<cwd>/cad-data/`（版本、运行、装配清单、帧数据——见 §6.8 的目录图）。
+**遥测在 profile 层**：`<DSH_HOME>/cad/telemetry/usage.jsonl`（跨项目，量的是请求）。
+**插件自带的 `data/` 只剩研究存档**：`data/bench/mpm-scaling.json`。
+虚拟 DSH 沙箱的 `DSH_HOME` 在 `examples/dsh-home`，与用户仓库互不重叠。
 
 ---
 
@@ -1162,7 +1169,9 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 1. **优先级**：M0 → M1 → M2 → M3 → M3.6 → M4 → M4R 已交付；当前主线为 **A0' 装配表示 + 装配视觉表达**（DESIGN.md §31.2），M5 已重定义为「解读归 LLM」
 2. **代码风格**：TypeScript 严格模式，函数式优先，避免类继承
 3. **错误处理**：所有外部调用（CLI、LLM、仿真）必须有超时和重试（编译 30s 超时 + 渲染失败重试；仿真由内核守卫与发散检测兜底）
-4. **日志**：**无统一 logger、无 `./logs/`**（原文与实作不符）。现为：进程内少量 `console.*`；结构化结果一律落盘 JSON（`data/<域>/<域>-report.json`），计量落 `data/usage/usage.jsonl`
+4. **日志**：**无统一 logger、无 `./logs/`**。现为：进程内少量 `console.*`；结构化结果一律落盘
+   JSON——**每个项目**的 `<cwd>/cad-data/`（版本 `versions/`、运行 `runs/rNNN/`），计量落
+   profile 层 `<DSH_HOME>/cad/telemetry/usage.jsonl`
 5. **测试**：每个模块至少一个验收脚本，放 `./scripts/`（`accept-*.mjs` 断言 + `smoke-*.mjs` 冒烟 + `bench-*.mjs` 基准）
 6. **不引入**：数据库、消息队列、Docker、CI/CD、Vite
 7. **配置**：**无 `config.ts`、无 dsh Config schema**——可调参数是工具入参（见 §7.3）；若要集中配置需新建 Config schema（开放化待办）
@@ -2719,13 +2728,28 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 | 工具 | 旧值 | → 权威 |
 |---|---|---|
 | `delivery_audit` | `blocked` / `attention` / `ok` | `excluded` / `difficult` / `not-excluded`（**已改名**） |
-| `check_printability` | `unprintable` / `check` / `ok` | 同上（**映射已就位，值待改名**） |
-| `check_assembly` | `fail` / `check` / `ok` | 同上（**映射已就位，值待改名**） |
+| `check_printability` | `unprintable` / `check` / `ok` | **已改名**（2026-10-23 核对：返回的是三值） |
+| `check_assembly` | `fail` / `check` / `ok` | **已改名**；另：**零接口清单 = difficult**（空契约不是通过） |
 | `simulate_stress` | `overstressed` / `check` / `ok`（外加 `delivery` 已是权威值） | 同上 |
 
 规则：**`info` 级发现不降级判定**（否则每个真实语料都变 `difficult`，信号就死了）；
 未知的 legacy 词一律映射为 `difficult`——沉默不能被当成通过。
-"值待改名"的两项属另一条线的面板与 README 文案，等它回来再动。
+旧词只在**旧语料**与 parity oracle 里存在；`asJudgement()` 认识它们（未知词 → `difficult`），
+新代码不再产出。
+
+**两个读者要的东西不同，所以有 `mode`（2026-10-20 定型，2026-10-23 补记）。**
+`check_printability` / `simulate_stress` 接受 `mode`：
+
+| mode | 返回 | 用在哪 |
+|---|---|---|
+| `judge`（默认） | 判定块（`verdict`/`delivery`/`profiles`），**不含** `attention` | 交付决策：这里只允许三值 + 见证 |
+| `scan` | `attention` 场（峰、区域、可执行观测），**不含**判定 | 找缺陷：场不是门 |
+| `both` | 两半都在，分两个键 | 要同时看结论与位置 |
+
+**无论哪种 mode，运行记录都同时保存两半**（`report.json` + `attention.json`）——mode 裁剪的是
+回复，不是记录。**注意**：默认 `judge` 会把"该看哪里"从回复里拿掉，这与 HARNESS §11.14
+"任何通过/不通过都要附可疑位置"存在张力；2026-10-23 审计把这条列为 B3，处置方式是
+**判定块必须能指到下一步观测**（`nextLook`）或把默认改成 `both`——由用户拍板，未决。
 
 **风险图的归一化契约（2026-10-20，用户提出并拍板）。** 热点图**不是**把不同量纲融合成一个
 数——是**提示风险**。观察到的规律是风险出现在**两端**，所以每一路检测器声明的变换是
@@ -2853,7 +2877,7 @@ pnpm 11 默认拦下依赖构建脚本：postinstall 下载器会让 `dsh plugin
 
 | `pythonRuntime` / `DSH_CAD_PYTHON` | 行为 |
 |---|---|
-| `auto`（默认） | 启动只做健康检查；首次 `run_python` 阻塞供给（带进度） |
+| `auto`（默认） | **启动什么都不做**；首次 `run_python` 阻塞供给（带进度）。原先写"启动只做健康检查"，但健康检查要 spawn 解释器，违背"启动零成本"——代码选择了更省的实现 |
 | `eager` | 启动即后台预热（适合批量 Python 工作前的部署） |
 | `off` | 完全不碰 Python（`run_python` 明确报错） |
 | `system` | 用系统 CPython 3.10+（`DSH_CAD_PYTHON_BIN` 可指定），仍建自己的 venv |
@@ -2927,6 +2951,11 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 
 ### 26.4 工具面与用法
 
+> **工具名的时间线（2026-10-23 核对）**：下面按批次记录的是**迁移当时**的工具名。
+> 2026-10-11 合并之后：`measure_closest` + `measure_distance` → **`measure_gap`**；
+> `check_connectivity` + `measure_extent` → **`measure_part`** 的一部分。
+> 历史名字保留（它们说明了当时的边界），但**今天按新名字查**。
+
 - **常驻 worker（batch 0，2026-10-08 落地）**：`python/cad_worker/worker.py` + 宿主侧
   `PythonWorker` / `ensurePythonWorker()`（单例、崩溃重启）。协议 `{id, op, params}` →
   `{id, ok, result|error+traceback}`，hello 带 `protocolVersion`；**大载荷走文件路径**
@@ -2934,7 +2963,7 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   base64 16 ms / 文件 0.92 ms）。v1 ops：ping / versions / stl_stats / closest_points / crash。
   worker **单线程串行**（两个并发请求 = 串行和，实测 116 ms → 230 ms）——宿主必须把排队
   算进超时预算。验收 `scripts/accept-python-worker.mjs`：最近点结果与 TS 的 three-mesh-bvh
-  **Δ=0**，kill 后能重启。
+  **最大差 < 1e-6 mm**（不是恰好 0——两条独立实现给出同一个浮点数才是意外），kill 后能重启。
 - **第一个迁移的工具：`measure_closest`（2026-10-08）。** 求解在 worker 的
   `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与
   标注渲染（渲染与附件是 ① 平台接线，不迁）。TS 的最近点实现保留为 **parity oracle**，
@@ -3083,8 +3112,9 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 
 - **不是沙箱**：子进程以宿主用户身份运行，文件访问与 `bash` 同级。本插件的主张是**可复现**，
   不是隔离；把它说成沙箱才是真的撒谎。
-- **§12.3 的常驻 worker 尚未实现**：v1 每次调用一个全新进程（无残留状态、超时可靠、
-  traceback 干净）。领域 worker（几何/仿真库的常驻进程 + JSON-lines）后续挂在同一接线点旁。
+- **常驻 worker 已落地（2026-10-08，batch 0）**：`python-worker.ts` 是单例 + 崩溃重启，见 §26.4。
+  v1 曾是"每次调用一个全新进程"（无残留状态、超时可靠、traceback 干净），后来改成常驻——
+  迁移后的工具要复用已加载的库（numpy/trimesh/manifold3d 的 import 代价按秒计）。
 - **rapier3d 无 darwin-x64 wheel → 该平台物理继续用 TS**（用户 2026-10-08 拍板）。
   锁里 `# cad-exclude: darwin-x64 | <原因>` 裁剪该块，**原因随包走**：写进
   `state.json.skipped`，由 `python_runtime` 明确报出（"没有 wheel，物理留在 TS canonical"）。
@@ -3310,15 +3340,29 @@ pypi.org 降为兜底）——实测 pypi.org 的 files 通道对大闭包会拖
 
 **30.1 总原则**：**人指 WHAT、引擎算 WHERE、真值随产物流转**。
 
+**三发起路径（HARNESS §4/§84 引用的术语，定义在此）**：同一条验证链有三种入口，
+按"人介入的深度"分，**产出必须同构**（同一个 job、同一份报告结构）：
+
+| 路径 | 机制 | 经 LLM？ | 现状（2026-10-23） |
+|---|---|---|---|
+| ① 会话点名 | 人说"用流体仿真验证 v005 的流道"，Agent 只做参数装配 | 是（手段由人锁定） | 工具面天然可用 |
+| ② Host 运行路由 | `POST /api/cad/{physics,motion,fluid,assembly,import}/run`，body 与工具入参同构，直调同一 job | **否** | 已交付 |
+| ③ 面板按钮 | 选中产物 → 一键跑 | **否** | 只有流体按钮 + 未登记导入（走②的入口）；刚体/机构的按钮仍未做 |
+
+判据：②与①必须产出**同构**的报告（`accept-m4` 有一条断言守着"人工路径与工具路径同一入口"）。
+
 **30.2 界面打扰**：面板**不因界面加载而自动弹出**——自动唤起只由**明确相关的事件**触发
 （本插件 = 会话出现 CAD 工具活动，即新版本产生），其余时候靠右栏 Tab 单击激活。理由是插件
 可能被装在通用工作区，启动即弹模型预览是噪声。区分"加载即弹"（禁）与"相关事件即弹"（可）。
 
 **30.3 面板布局**：视觉是一等公民，**模型预览必须占据首屏与最大面积**——视口置顶、吃掉
-所有余量（`aspect-ratio:1` 只作下限）；版本历史、参数、验证报告、导出折进一行式折叠区
-（默认收起）；底部允许一条 11px 单行状态带（结论 + 版本序号 + 出处）。空间不够时让路顺序
-是**先滚折叠区、再缩视口**。几何纪律：**视口变高不等于模型变大**（取景由短边决定），所以
-"比正方形矮"必须避免，"比正方形高"是白得的。实测见 §6.9/§6.10（v2.14b）。
+所有余量；版本历史、验证报告、导出折进一行式折叠区（默认收起）；底部一条 11px 单行状态带。
+空间不够时让路顺序是**先滚折叠区、再缩视口**。几何纪律：**视口变高不等于模型变大**
+（取景由短边决定），所以模型视觉尺寸由**短边**决定。
+
+比例：`16:9` 是**最扁允许值**（CSS 基准），自动档取 `4:3`，分隔条可在 `4:3 → 16:9` 之间调
+（§6.9j，2026-09-30 用户拍板"不再坚持正方形"）。**参数面板已删除**（v2.13k），折叠区只有
+概览 / 验证 / 导出 / 用法四项。实测见 §6.9/§6.10。
 
 **30.4 零件从命名起就是版本控制对象**：不是"先做出零件、事后套版本"，而是**零件 = 版本
 库**——零件是仓库（可空存在）、版本是不可变提交（父子限同零件并校验）、运行是 CI 结果
@@ -3567,7 +3611,7 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 |---|---|---|
 | `DSH_CAD_PYTHON` | `auto` / `eager` / `off` / `system` | `auto`（启动只健康检查，首次调用才阻塞供给） |
 | `DSH_CAD_PYTHON_BIN` | `system` 模式下的解释器绝对路径 | PATH 上的 `python3`。**注意**：代码检查 CPython ≥3.10，但依赖锁按 pin 的 3.13.16 生成、编译类包只列 cp313 wheel ⇒ **实际可行的是 3.13**（待实测确认后收敛） |
-| `DSH_CAD_PYTHON_MIRROR` | 解释器归档的下载根 | `python-lock.ts` 内的镜像（npmmirror）；**当前没有 GitHub 回退** |
+| `DSH_CAD_PYTHON_MIRROR` | 解释器归档的下载根 | **GitHub 优先，npmmirror 兜底**（`python-lock.ts` 的 `baseUrl` + `mirrors`；`python-runtime.ts` 依次尝试）。原文档写反了（2026-10-23 核对） |
 | `DSH_CAD_PYTHON_INDEX_URL` | pip 索引单源覆盖 | `PIP_INDEXES`：阿里云优先，`pypi.org` 兜底 |
 | `DSH_CAD_PYTHON_ROOT` | 运行时落点覆盖（测试 / 多实例） | `$DSH_HOME/cad/runtime` |
 | `DSH_CAD_PIP_CACHE_DIR` | pip wheel 缓存目录 | `<runtime root>/cache/pip` |

@@ -49,6 +49,10 @@ dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 
 # 修改插件源码后需重新构建并重启 dsh（宿主部分不热重载）
 cd /path/to/dsh-cad-harness && pnpm run build
+
+# 预设里的 skill 目录是“生成时这台机器”的绝对路径：
+# 换机器/换克隆位置后跑一次，否则 CAD 会话有工具但没有 skill（宿主启动会告警提示这条命令）
+cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
 ```
 
 **开启**：新建会话时选预设 **「造物模式」**（也可以在设置里把它设为默认）。

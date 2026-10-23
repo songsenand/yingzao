@@ -125,6 +125,8 @@ Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellati
 | `unit` | string | — | The source file's unit as DECLARED by you: mm (default), cm, m or inch. STL carries no unit, so this is never inferred. STEP self-declares (mm only accepted); DXF $INSUNITS wins when set. |
 | `scale` | number | — | Extra multiplier applied on top of unit, e.g. 0.5 for a half-scale model. |
 | `depthMm` | number | — | Extrusion depth in mm for DXF 2D closed profiles, e.g. 10 for a 10mm plate. Required when a DXF has no 3D mesh entities; ignored otherwise. |
+| `tolLinear` | number | — | Tessellation linear tolerance for STEP/3MF, mm (ignored for STL/DXF). Default is OpenCASCADE's ~0.01; lower = more triangles. Measured: 0.01 -> 3074 triangles, 0.002 -> 12254, volume differs <0.3%. |
+| `tolAngular` | number | — | Tessellation angular tolerance for STEP/3MF, radians (ignored for STL/DXF). Lower = finer around curved faces. |
 | `datums` | array | — | Anchors making the imported part an assembly interface endpoint (check_assembly addresses "<partId>.<datumName>"). Coordinates are in the file's own frame, after unit/scale. |
 | `allowNonSolid` | boolean | — | Store it even though it is not a closed solid (holes, T-junctions, inside-out winding); the geometric tools will then refuse this version. Default false. |
 | `render` | boolean | — | Render four views into the conversation (default true, same views as generate_part). |

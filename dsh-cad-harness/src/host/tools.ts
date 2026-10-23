@@ -1017,6 +1017,9 @@ export function registerCadTools(
     scale?: number;
     /** Extrusion depth (mm) for DXF 2D closed profiles. */
     depthMm?: number;
+    /** Tessellation tolerances for STEP/3MF (ignored for STL/DXF). */
+    tolLinear?: number;
+    tolAngular?: number;
     datums?: DatumInput[];
     allowNonSolid?: boolean;
     render?: boolean;
@@ -1063,6 +1066,8 @@ export function registerCadTools(
       unit: a.unit,
       scale: a.scale,
       depthMm: a.depthMm,
+      tolLinear: a.tolLinear,
+      tolAngular: a.tolAngular,
       allowNonSolid: a.allowNonSolid,
     });
     const datumSet = normalizeDatums(a.datums);
@@ -1192,6 +1197,14 @@ export function registerCadTools(
       depthMm: {
         type: 'number',
         description: 'Extrusion depth in mm for DXF 2D closed profiles, e.g. 10 for a 10mm plate. Required when a DXF has no 3D mesh entities; ignored otherwise.',
+      },
+      tolLinear: {
+        type: 'number',
+        description: 'Tessellation linear tolerance for STEP/3MF, mm (ignored for STL/DXF). Default is OpenCASCADE\'s ~0.01; lower = more triangles. Measured: 0.01 -> 3074 triangles, 0.002 -> 12254, volume differs <0.3%.',
+      },
+      tolAngular: {
+        type: 'number',
+        description: 'Tessellation angular tolerance for STEP/3MF, radians (ignored for STL/DXF). Lower = finer around curved faces.',
       },
       datums: {
         type: 'array',

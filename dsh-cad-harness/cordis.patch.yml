@@ -15,7 +15,7 @@
       name: 'dsh-cad-harness'
       config:
         # Keep the CAD tool catalog out of sessions that did not ask for it.
-        # This bundle mounts on the PROFILE plane, so its twelve tools would
+        # This bundle mounts on the PROFILE plane, so its 27 tools would
         # otherwise land in every agent's request: measured from this
         # workspace's own durable request headers, a clean catalog is 27 tools
         # ~= 6,833 token and with the CAD catalog 38 tools ~= 11,449 token, on

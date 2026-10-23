@@ -179,6 +179,13 @@ export interface ImportRequest {
   /** Extrusion depth in mm for DXF 2D closed profiles. Required when a DXF has
    *  no 3D mesh entities; ignored otherwise. */
   depthMm?: number;
+  /**
+   * Tessellation tolerances for STEP/3MF (forwarded to `import_mesh`; ignored for STL/DXF).
+   * DESIGN §28.2 claimed these were pass-through while nothing exposed them — a doc claim
+   * with no caller is a capability gap, not a stale sentence (2026-10-23 audit, D14).
+   */
+  tolLinear?: number;
+  tolAngular?: number;
   allowNonSolid?: boolean;
   /**
    * PREVIEW, not a version: return the mesh even when a storage policy would
@@ -306,6 +313,8 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
       path: resolvedPath,
       scale: appliedScale,
       depthMm: req.depthMm,
+      ...(req.tolLinear !== undefined ? { tolLinear: req.tolLinear } : {}),
+      ...(req.tolAngular !== undefined ? { tolAngular: req.tolAngular } : {}),
       out: weldedPath,
     });
   } catch (e) {
