@@ -514,8 +514,9 @@ interface PostProcessResponse {
       frames/<file>        # 关键帧 PNG / 流体 .bin
 ```
 **不进入证据的缓存文件（2026-10-23 明确）**：`<project>/measure/last-gap.png`（最近一次
-`measure_gap` 的标注图，覆盖写）、`versions/vNNN/export_*`（导出缓存）、
-`versions/vNNN/preview_*.scad|png`（`render_part` 的一次性帧）。它们**不是版本、不是运行、
+`measure_gap` 的标注图，覆盖写）、`<project>/render/<versionId>-<label>.png`（`render_part`
+按"版本 + 相机"定名覆盖；它以前写成 `versions/vNNN/inspect_<ts>.png`，只增不减，把一次观看
+留成了版本的一部分）、`versions/vNNN/export_*`（导出缓存）、`versions/vNNN/preview_*.scad|png`。它们**不是版本、不是运行、
 不是证据**：可以随时删，`delivery_audit` 的未登记扫描不把它们当几何。
 
 

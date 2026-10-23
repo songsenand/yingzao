@@ -109,6 +109,16 @@ numbers, and inventing them is the one thing this whole design refuses to do (a 
 material table cannot be self-verified, decays, and stale-but-authoritative is worse than
 absent — DECISION-LOG 2026-10-11). So the work is yours, and these are the norms.
 
+**1a. A rule also declares its DIRECTION, and the tool obeys it.** `applies: true`
+needs `value` + `direction` + `source`; a profile missing any of them is refused with
+the rule named. `direction: 'min'` means the value is a LOWER bound (violating =
+measured below it — walls, cutter radius, clearance); `'max'` means an UPPER bound
+(violating = measured above it — overhang angle, hole aspect). The comparison is one
+function (`violatesRule`), so a declared `max` is not silently read as a minimum.
+Adjacent to this: the *gray band* of a measurement is not a second declared number —
+it comes from the measurement's own resolution (a wall screen's samples sit
+`sqrt(area / sampleCount)` apart), and the tool says so in the band's `source`.
+
 **1. The trust ladder — always the weakest honest label.** Every rule carries
 `source.kind`, in descending trust:
 

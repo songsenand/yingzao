@@ -62,9 +62,10 @@ Motion is kinematics with an exact interference timeline; physics is rigid bodie
   was used. The compensation is `position + R·pivot` — it rotates with the part,
   so a pivot off the part's own initial-rotation axis is still handled — and the
   run now measures every joint's anchor gap BEFORE stepping and REFUSES (naming
-  the joint and both anchor positions) when it exceeds 2mm. A refusal means your
-  anchors or placements disagree, not that the tool is unhappy; do not widen the
-  tolerance. `cycles` accepts fractions: a balance whose range is ±14° sweeps
+  the joint and both anchor positions) when it exceeds 2mm. The reply reports the
+  numbers either way — `initialJointGaps` and `jointToleranceMm` — so a marginal
+  case is visible without a refusal. A refusal means your anchors or placements
+  disagree, not that the tool is unhappy; do not widen the tolerance. `cycles` accepts fractions: a balance whose range is ±14° sweeps
   0.078 of a turn, while a whole turn makes the beam a windmill and collides with
   everything. Note what is never reported: collisions between two parts JOINED by
   a revolute joint (that overlap is a bearing) — a stopper contact lives on

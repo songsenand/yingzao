@@ -105,7 +105,9 @@ against it, and read a reference only when the skill tells you to.
 | "the runtime is missing / broken / I want it warm" | `python_runtime` | re-running a failing tool and hoping |
 
 **An imported part is not a special kind of part.** `import_part` lands the file
-as an ordinary version, so every other row of this table applies to it unchanged:
+as an ordinary version, so every other row of this table applies to it unchanged
+(STEP/3MF tessellation is yours to choose: `tolLinear` mm / `tolAngular` rad —
+0.01 mm vs 0.002 mm was 3074 vs 12254 triangles with <0.3% volume change):
 measure it, render it, put it in `validate_assembly` next to a part you generated,
 run a mechanism through it. The only thing it cannot do by itself is *be an
 interface endpoint* — that needs datums, which an STL does not carry (see below).
@@ -163,6 +165,13 @@ near-touching pairs were never declared).
   `gears.scad`, `walls.scad`, `threading.scad`, `sliders.scad`,
   `ball_bearings.scad`). Use the library module instead of hand-rolling a thread,
   a gear or a fillet.
+- **`judge` / `scan` / `both`.** The judgement tools (`check_printability`,
+  `simulate_stress`) take `mode`: `judge` (default) returns the verdict and NO
+  field, `scan` returns the field and NO verdict, `both` returns both as separate
+  keys. The RUN always records both halves — the mode trims the reply, not the
+  record. In `judge` mode the reply still carries `nextLook`: runnable observations
+  (`{tool, args, why}`) for this same version, because a verdict without a place is
+  the failure HARNESS §11.14 exists to prevent.
 - **Rigid simulation costs seconds, fluid costs minutes.** Ask for the cheap
   check first.
 - **Images are the biggest context spend.** Each attached render lives in your
@@ -184,12 +193,12 @@ near-touching pairs were never declared).
 - **Read the tool's own caveat fields before its headline number.** Each of these
   is the tool telling you its result cannot be read the way you are about to read
   it:
-  - `simulate_fluid`: `warnings` (a `stacksPerSeed` above 1.5 means the requested
-    count exceeded the seed lattice, so extra particles are duplicates on the same
-    spot) and `seedStats.solidFraction` (the share of the seed box that is metal —
-    high enough on a thick-walled part that the lattice is coarse where the flow
-    is). Its arrival ratio is a *sampled* number: state it as a range, and treat
-    `overallStatus: pass` as a floor, not a quality claim.
+  - `simulate_fluid`: `metrics.warnings` (a `metrics.seedStats.stacksPerSeed` above
+    1.5 means the requested count exceeded the seed lattice, so extra particles are
+    duplicates on the same spot) and `metrics.seedStats.solidFraction` (the share of
+    the seed box that is metal — high enough on a thick-walled part that the lattice
+    is coarse where the flow is). Its arrival ratio is a *sampled* number: state it
+    as a range, and treat `overallStatus: pass` as a floor, not a quality claim.
   - `simulate_lbm`: `metrics.peakUx` against the Poiseuille peak (`1.5×latticeVelocity`)
     — `overallStatus: developing/underdeveloped` means the profile is still entering
     the duct, so quote the shape, not drag numbers; `metrics.stable: false` reports
@@ -197,15 +206,21 @@ near-touching pairs were never declared).
     partial answer. Mirror symmetry (`metrics.mirrorError`) is the cheap honesty
     check — a symmetric profile with a wrong peak means "not developed yet", never
     "the theory is off".
-  - `simulate_physics`: `metrics.notes` (they say when the run's own geometry
-    makes a figure an artefact — e.g. several disconnected shells — and when an
-    analysis is analytic rather than solved), `settled` (means "still moving at
-    the end", not "did not drift"), `jointViolations` (hinge anchor drift / slide
-    cross-axis motion beyond its threshold).
+  - `simulate_physics`: the REPLY has `notes` (honest-input caveats: several
+    disconnected shells make a figure an artefact; an analysis that is analytic
+    rather than solved) and `settledPenetrationMm`; the run report's `metrics`
+    adds `settled` (still moving at the end — not "did not drift") and
+    `jointViolations` (hinge anchor drift / slide cross-axis motion beyond
+    `JOINT_DRIFT_TOLERANCE_MM` = 2 mm).
   - `check_printability`: `samples` sets the triangle stride (`triangles / samples`),
     so a thin feature between samples is missed — raise it for a big or
-    safety-critical part. Walls are measured to the nearest opposite wall;
-    `verdict` is one of `ok` / `check` (answer the finding) / `unprintable`.
+    safety-critical part. Walls are measured to the nearest opposite wall.
+    `verdict` is the canonical three-value judgement — `excluded` / `difficult` /
+    `not-excluded` (it was `ok` / `check` / `unprintable` until 2026-10-20; old
+    corpora still carry those words, and `not-excluded` never means "can be made").
+    `surfaceAreaMm2` is published because the band's width is `sqrt(area / sampled)`:
+    below that spacing two walls are the same wall to this screen — a "1.19 vs 1.20"
+    difference is not one it resolved.
 
 - **Check the operator, not just the interface count.** For every interface whose
   `type` is a joint (转动副 / 滑动副), look at its `check` operator: an interface
@@ -217,8 +232,10 @@ near-touching pairs were never declared).
   plugin's pinned Python runtime; `python_runtime` reports, provisions or repairs
   it, and the runtime-not-ready error already names that fix. `run_python` shares
   the same pinned environment and is the escape hatch for checks the CAD tools do
-  not cover. `check_assembly`, `delivery_audit`, `create_part`, `set_datums`,
-  `render_part`, `recall_reference_image` do not need it.
+  not cover. `delivery_audit`, `create_part`, `set_datums`, `render_part`,
+  `recall_reference_image` do not need it. **`check_assembly` does**: its contract
+  solver (distance / diameter-match / coaxial / motion-clearance / spring-preload)
+  runs in the worker; only the manifest read and the adjacency geometry are local.
 
 - **Installing a package is allowed — do it when the task needs it.** This is the
   user's own machine; `python_runtime action=install packages=["x==1.2"]` puts a
@@ -318,10 +335,14 @@ near-touching pairs were never declared).
    cannot fail on.
 7. **Run `delivery_audit` before any delivery claim, and answer its findings.**
    It reads the corpus (not your memory) and returns: failing runs that are
-   still newest of their kind, stale evidence, versions nobody checked,
-   contract gaps, replaced versions in the manifest, repeated runs. A
-   `blocked` verdict means the corpus contradicts the claim — fix it, or state
-   the exception explicitly to the user. Citing a green number that the audit
+   still newest of their kind, stale evidence (`stale-evidence`), versions nobody
+   checked (`versions-never-cited`, `newest-version-unvalidated`), contract gaps
+   (`contract-without-motion`, `contract-stale-nodes`), **merged bodies built from
+   versions a part has since replaced** (`merged-stale`), repeated runs
+   (`duplicate-runs`), and mesh files no version accounts for
+   (`unregistered-geometry`). A
+   verdict of `excluded` (or any `blocked`-severity finding) means the corpus
+   contradicts the claim — fix it, or state the exception explicitly to the user. Citing a green number that the audit
    flags as stale is exactly the failure this step exists to prevent.
 
 

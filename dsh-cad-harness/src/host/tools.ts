@@ -2633,7 +2633,13 @@ export function registerCadTools(
       const a = args as RenderPartRequest & { versionId: string };
       const { store } = await allStores(exec);
       const { png, label } = await renderVersionFrame(store, a, `${Date.now()}`);
-      const pngPath = join(store.root, 'versions', a.versionId, `inspect_${Date.now()}.png`);
+      // A bounded cache, not a growing pile in the version directory: each call used to
+      // leave `versions/vNNN/inspect_<ts>.png` behind forever, and a version is supposed to
+      // hold the artifacts of its own creation, not every look anybody took at it
+      // (2026-10-23, E4 follow-up). Same version + same camera => same path, overwritten.
+      const renderDir = join(store.root, 'render');
+      await mkdir(renderDir, { recursive: true });
+      const pngPath = join(renderDir, `${safeArtifactName(`${a.versionId}-${label}`) ?? `${a.versionId}-${label}`}.png`);
       await writeFile(pngPath, png);
       const [ref] = await ctx.attachments.saveImages([{ data: png, mediaType: 'image/png', name: `render-${a.versionId}` }]);
       pendingRenderRefs.set(`${a.versionId}:${label}`, [{ view: label, ref }]);

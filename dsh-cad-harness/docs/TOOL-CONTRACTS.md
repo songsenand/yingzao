@@ -195,11 +195,11 @@ How far apart two things are, however you name them. Each endpoint is ONE of: a 
 |---|---|---|---|
 | `versionId` | string | — | The base part: it owns endpoint A and, unless bOn says otherwise, endpoint B. Required for point/datum endpoints; a solid/sphere pair does not need it. |
 | `aVersionId` | string | — | Endpoint A as a whole solid: saved version id. |
-| `aSphere` | object | **required** | Endpoint A as an analytic sphere probe {center:[x,y,z], radius} — solved exactly. |
+| `aSphere` | object | — | Endpoint A as an analytic sphere probe {center:[x,y,z], radius} — solved exactly. |
 | `aPoint` | array | — | Endpoint A as a coordinate [x,y,z] mm — approximate is fine (snapped to versionId's surface). Give this OR aDatum. |
 | `aDatum` | string | — | Endpoint A as a datum anchor declared via datum("name",[x,y,z]). Resolved EXACT (no snapping) — prefer over aPoint. |
 | `bVersionId` | string | — | Endpoint B as a whole solid: saved version id. |
-| `bSphere` | object | **required** | Endpoint B as an analytic sphere probe. |
+| `bSphere` | object | — | Endpoint B as an analytic sphere probe. |
 | `bPoint` | array | — | Endpoint B as a coordinate [x,y,z] mm — snapped to bOn's surface (bOn defaults to versionId). Give this OR bDatum. |
 | `bDatum` | string | — | Endpoint B as a datum anchor on bOn (defaults to versionId). Resolved EXACT — prefer over bPoint. |
 | `bOn` | string | — | Which part a bPoint/bDatum endpoint belongs to. Defaults to versionId. (This is what the retired measure_distance meant by bVersionId.) |
@@ -353,7 +353,7 @@ One image of a saved version with explicit camera control: preset view, custom r
 | `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — overrides view. |
 | `zoom` | number | — | Zoom over auto-fit: 2 = twice as close, 0.5 = further out. Default 1. |
 | `imgSize` | integer | — | Image size in px (default 512). |
-| `section` | object | **required** | Optional cross-section cut. |
+| `section` | object | — | Optional cross-section cut. |
 
 ```js
 render_part({ versionId: "…" })
@@ -422,7 +422,7 @@ MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conse
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `pipeScad` | string | **required** | Complete OpenSCAD source of the pipe/cavity (the SOLID; the fluid flows through its bore). Self-contained, $fn=48+. |
-| `fluidRegionMm` | object | **required** | Particle seed box {min:[x,y,z], max:[x,y,z]} in mm. Default: derived from the pipe (30% of the length at the inlet end, 3mm wall clearance). |
+| `fluidRegionMm` | object | — | Particle seed box {min:[x,y,z], max:[x,y,z]} in mm. Default: derived from the pipe (30% of the length at the inlet end, 3mm wall clearance). |
 | `inletVelocityMmPerSec` | number | — | Inlet axial speed. Default 100 mm/s. |
 | `particleCount` | number | — | Explicit particle count. Default auto (4-8 particles/cell, typically 50k-300k). |
 | `particlesPerCell` | number | — | Seed density (sweet spot 4-8). Default 6. |

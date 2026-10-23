@@ -102,9 +102,11 @@ working, not an error.
   (default 1e-3) tells `validate_assembly` where residual ends and clash begins.
 - **An imported part has no datums until you declare them.** Generated parts get
   them from `datum()` / `datum_cyl()` in their SCAD; an STL carries none, so
-  `import_part`'s `datums` argument is the only way to make the part an interface
-  endpoint. Without it the part is still fully measurable and assemblable, just
-  not *addressable* by `check_assembly`.
+  either `import_part`'s `datums` argument or `set_datums` afterwards makes the
+  part an interface endpoint. `set_datums` in write mode creates a NEW version
+  (the mesh is copied, not changed) — point the manifest at the returned id.
+  Without either, the part is still fully measurable and assemblable, just not
+  *addressable* by `check_assembly`.
 - **Stock (purchased) parts without a version cannot be interface endpoints**:
   they have no geometry to measure. Their influence has to be folded into the
   datums of the parts that surround them, and that assumption should be written

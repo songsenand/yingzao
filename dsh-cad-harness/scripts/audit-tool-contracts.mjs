@@ -94,7 +94,11 @@ function sheetText() {
     for (const [n, p] of Object.entries(ps2.properties)) {
       const ty = Array.isArray(p?.type) ? p.type.join(' \\| ') : (p?.type ?? '—');
       const en = Array.isArray(p?.enum) ? ` (${p.enum.join(' \\| ')})` : '';
-      const dflt = p?.default !== undefined ? `\`${JSON.stringify(p.default)}\`` : (req2.has(n) || p?.required ? '**required**' : '—');
+      // `p.required` is the DSL's per-property flag (boolean). An OBJECT property can also
+      // carry a nested `required` ARRAY (aSphere.required = ['center','radius']), which is
+      // truthy — that made the sheet claim the whole sphere endpoint was required, i.e. the
+      // opposite of "give this OR that" (2026-10-23, found while checking the skill).
+      const dflt = p?.default !== undefined ? `\`${JSON.stringify(p.default)}\`` : (req2.has(n) || p?.required === true ? '**required**' : '—');
       lines.push(`| \`${n}\` | ${ty}${en} | ${dflt} | ${String(p?.description ?? '**UNDOCUMENTED**').replace(/\|/g, '\\|')} |`);
     }
     if (t.output?.schema?.properties) {

@@ -34,6 +34,11 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   is refused with the body count, because this harness's unit is one connected
   part. **IGES is not readable**: the tool says so with the conversion route
   (re-export STEP or STL) instead of failing mysteriously.
+- **Tessellation is a choice you own for STEP/3MF.** `tolLinear` (mm) and
+  `tolAngular` (rad) trade triangles for fidelity: at 0.01 mm a small bracket was
+  3074 triangles, at 0.002 mm 12254, with <0.3% volume change — so the default is
+  fine for measurement and you lower it only when curvature IS the question (a
+  thread, a fillet radius). STL/DXF ignore both (the mesh is already given).
 - **`merge_parts` is for "one rigid body", not for tidying a corpus.** Use it when
   a whole machine has to be a single body (`simulate_physics` topple, a
   whole-assembly `measure_part`), because `simulate_physics` takes only
