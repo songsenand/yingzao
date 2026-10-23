@@ -207,6 +207,24 @@ export function disclosureLists(profile: ProcessProfile): { notApplicable: NotAp
  *   direction 'min'  -> the value is a LOWER bound; violating means measured < value
  *   direction 'max'  -> the value is an UPPER bound; violating means measured > value
  */
+/**
+ * The width of a rule's "gray band", from the measurement's OWN resolution.
+ *
+ * DESIGN §27.4: a band must not be invented — a sampled field knows how far apart its
+ * samples are, and that spacing is the smallest difference it can honestly resolve. For
+ * the wall screen the samples sit on the surface with spacing ≈ sqrt(area / count)
+ * (2026-10-23, user decision: derive, do not declare a new constant).
+ *
+ * Returns 0 when the measurement cannot say (no area, no samples), and callers then fall
+ * back to the absolute band — an unknown resolution must not pretend to be a known one.
+ */
+export function measuredResolutionMm(input: { surfaceAreaMm2?: number; sampled?: number }): number {
+  const area = input.surfaceAreaMm2 ?? 0;
+  const sampled = input.sampled ?? 0;
+  if (!(area > 0) || !(sampled > 0)) return 0;
+  return Math.sqrt(area / sampled);
+}
+
 export function violatesRule(
   measured: number,
   rule: { value: number; direction: 'min' | 'max' },

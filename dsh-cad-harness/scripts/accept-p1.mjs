@@ -165,12 +165,22 @@ const written = await call('set_datums', {
   // box's 顶面 at [20,20,20] — the interface below must then measure 0.
   datums: [{ name: '底面', kind: 'point', point: [20, 20, 0] }],
 });
-check('set_datums writes an anchor onto the SAME version',
-  written.value.mode === 'merged' && written.value.counts.points === 1,
+// 2026-10-23: anchors are what interfaces RESOLVE against, so declaring them creates a
+// version instead of rewriting history (user decision; DESIGN §6.8/C4).
+check('set_datums writes the anchor onto a NEW version',
+  written.value.mode === 'versioned' && written.value.counts.points === 1,
   JSON.stringify(written.value.datums));
+check('  …and names the version it read',
+  written.value.previousVersionId === vUpper && written.value.versionId !== vUpper,
+  `${written.value.previousVersionId} → ${written.value.versionId}`);
 const versionsAfter = JSON.parse(await readFile(join(project.root, 'manifest.json'), 'utf8')).versions.length;
-check('  …without creating a version (no "geometry unchanged" round)',
-  versionsAfter === versionsBefore, `${versionsBefore} → ${versionsAfter}`);
+check('  …so exactly one version was added', versionsAfter === versionsBefore + 1,
+  `${versionsBefore} → ${versionsAfter}`);
+const vNew = written.value.versionId;
+check('  …the old version still declares nothing (its history is intact)',
+  !(await exists(join(project.root, 'versions', vUpper, 'datums.json'))), vUpper);
+check('  …and the new one carries them',
+  await exists(join(project.root, 'versions', vNew, 'datums.json')), vNew);
 
 // The real payoff: an interface that addresses the anchor just added.
 const manifest = {
@@ -179,7 +189,8 @@ const manifest = {
     id: 'fixture', name: 'P1 fixture', kind: 'assembly',
     children: [
       { id: 'lower', name: '底座', kind: 'part', version: vLower },
-      { id: 'upper', name: '立柱', kind: 'part', version: vUpper, transform: { translate: [0, 0, 20] } },
+      // re-pointed at the version that now carries the anchor
+      { id: 'upper', name: '立柱', kind: 'part', version: vNew, transform: { translate: [0, 0, 20] } },
     ],
     interfaces: [{
       id: 'if-seat', a: 'lower.顶面', b: 'upper.底面', type: '贴合',

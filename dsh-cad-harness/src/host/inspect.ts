@@ -72,6 +72,12 @@ export interface PrintabilityReport {
   thinAreaMm2: number;
   /** …as a percentage of the whole surface — what tells a shell from a blunt edge. */
   thinAreaPct: number;
+  /**
+   * The measured surface area. Published because the sampling spacing (and therefore the
+   * smallest wall difference this screen can resolve) is sqrt(area / sampled) — a band
+   * without it would be invented (DESIGN §27.4, 2026-10-23).
+   */
+  surfaceAreaMm2: number;
   overhangAreaMm2: number;
   overhangZRange: number[];
   /** The per-sample values behind the attention digest (withSampleField). */
@@ -544,6 +550,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
         wallMeasured,
         thinAreaMm2: +thinArea.toFixed(1),
         thinAreaPct: +thinAreaPct.toFixed(2),
+        surfaceAreaMm2: +surfaceArea.toFixed(2),
         ...(Number.isFinite(minWall) ? { minWallMm: +minWall.toFixed(3) } : {}),
         ...(minWallAt ? { minWallAtMm: minWallAt.map((v) => +v.toFixed(2)) } : {}),
         thinSamples,

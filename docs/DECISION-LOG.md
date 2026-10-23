@@ -4085,3 +4085,32 @@ run.json 重建，且读操作不改文件）。**未测**：check_assembly 的�
 `tools.ts`（两处 nextLook、三处 violatesRule、analyze profileIds、stress 场路径、measure 缓存）、
 `motion.ts`（`JOINT_DRIFT_TOLERANCE_MM`）、`process-profile.ts`（`violatesRule`）、DESIGN §6.8/§25.7。
 回滚 = revert 本提交；`nextLook` 是新增可选字段。
+
+## 2026-10-23：三个待定项的处置（用户拍板）
+
+**触发条件：** 1（用户拍板）+ 4（影响余量带、版本语义与文档维护方式）。
+
+**决策内容：**
+
+1. **B2c 数值带：从测量数据推导，不新增常数。**
+   壁厚的带宽容差取**采样间距** `sqrt(面积 / 采样数)`（`measuredResolutionMm`），
+   `analyze` 的 wall band 用 `scaleLo/scaleHi = 分辨率`，`source` 写明面积、采样数与公式；
+   分辨率未知（缺面积/缺采样）时退回绝对边界并**明说**。刀径等其余规则沿用同一函数的口径。
+   `check_printability` 的合格门仍是**档案声明的硬阈值**——门是声明，带是分辨率，两者不混。
+2. **C4 锚点：写入产生新版本。**
+   `set_datums` 的写入不再原地改 `datums.json`：复制网格逐字节、`parentVersion` = 被读版本、
+   锚点写进新版本，回复带 `previousVersionId` 并提醒"指向旧版本的接口需要改指新 id"。
+   理由：锚点是接口**解析**的对象，原地改会让引用它的旧 run 的数字仍然成立而含义已经改变。
+   列表模式不变（只读）。代价：一次锚点声明产生一个版本（无语义变更的版本会出现在历史里，
+   由 `userIntent` 标注"锚点变更（源自 vNNN）"）。
+3. **D16 版本记录 = git log。**
+   DESIGN §11 冻结于 v2.15（历史留档不回改），此后"这一版改了什么"看
+   `git log --oneline -- DESIGN.md`，取舍看本文件；头部只维护一行当前版本号（v2.33）。
+
+**依据：** `accept-threshold-provenance.mjs`（分辨率三条 + 落位断言）、
+`accept-set-datums-versioned.mjs` 16/16（新版本、旧版本不变、网格逐字节相同、父指针、
+partId 继承、合并语义、目录数）、DESIGN 头部与 §11 的冻结说明。
+
+**影响：** `process-profile.ts`（`measuredResolutionMm`）、`inspect.ts`（`surfaceAreaMm2` 公开）、
+`tools.ts`（analyze band、set_datums 写入、printability schema）、`version.ts` 的调用方、
+`skills/cad-toolbox/SKILL.md`、DESIGN §6.8/§11、`accept-p1.mjs`（断言改为"新版本"）。

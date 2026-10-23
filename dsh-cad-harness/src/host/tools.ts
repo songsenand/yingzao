@@ -23,7 +23,7 @@ import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores }
 import { discoverWorkspaces } from './workspaces.ts';
 import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import {
-  builtinDefaultProfile, disclosureLists, evaluableRules, profileHash, validateProfile, violatesRule,
+  builtinDefaultProfile, disclosureLists, evaluableRules, measuredResolutionMm, profileHash, validateProfile, violatesRule,
   type ProcessProfile,
 } from './process-profile.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
@@ -1525,7 +1525,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'set_datums',
     description:
-      'Read or write the datum anchors of an EXISTING version, without creating a new one. Call it with only versionId to list what a version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to add or replace anchors on that same version, since datums are metadata and do not change the mesh.',
+      'Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Version to read or edit, e.g. "v003".' },
       datums: {
@@ -1551,9 +1551,10 @@ export function registerCadTools(
         type: 'object',
         additionalProperties: false,
         properties: {
-          versionId: { type: 'string', required: true },
+          versionId: { type: 'string', required: true, description: 'The version these anchors belong to. In write mode this is the NEW version; in list mode it is the one you asked about.' },
+          previousVersionId: { type: 'string', description: 'Write mode only: the version that was read (its anchors are unchanged).' },
           userIntent: { type: 'string', required: true },
-          mode: { type: 'string', required: true },
+          mode: { type: 'string', required: true, description: 'list | versioned (a new version now carries these anchors) — the merge/replace distinction is reported in warnings.' },
           datums: { type: 'array', required: true, items: { type: 'string' } },
           counts: { type: 'object', required: true, additionalProperties: true },
           warnings: { type: 'array', required: true, items: { type: 'string' } },
@@ -1615,11 +1616,30 @@ export function registerCadTools(
         // rather than letting check_assembly report it as an unknown endpoint.
         warnings.push(`replaced: dropped ${removed.length} existing anchor(s) — ${removed.join(', ')}`);
       }
-      await writeVersionDatums(store, a.versionId, next);
+      // An anchor is not metadata: it is what an interface RESOLVES against (§6.4), so
+      // rewriting it in place silently changes the meaning of every run that cited it.
+      // Write a new version instead (user decision 2026-10-23, DESIGN §6.8/C4): the mesh
+      // is copied byte-for-byte, the old anchors stay where they were, and the caller is
+      // told which id now carries the new ones.
+      const srcDir = join(store.root, 'versions', a.versionId);
+      const stl = new Uint8Array(await readFile(join(srcDir, 'model.stl')));
+      const newId = await saveVersion(store, {
+        userIntent: `${known.userIntent} · 锚点变更（源自 ${a.versionId}）`,
+        parentVersion: a.versionId,
+        stl,
+        datumSet: next,
+        ...(entry?.partId ? { partId: entry.partId } : {}),
+        ...(known.source ? { source: known.source } : {}),
+        solid: true,
+      });
+      warnings.push(
+        `${a.versionId} still declares its previous anchors; interfaces pointing at it must be re-pointed to ${newId}.`,
+      );
       return {
-        versionId: a.versionId,
-        userIntent: known.userIntent,
-        mode: a.replace ? 'replaced' : 'merged',
+        versionId: newId,
+        previousVersionId: a.versionId,
+        userIntent: a.replace ? known.userIntent : known.userIntent,
+        mode: 'versioned',
         datums: describe(next),
         counts: summarise(next),
         warnings,
@@ -4175,6 +4195,7 @@ export function registerCadTools(
           sampled: { type: 'number', required: true },
           thinAreaMm2: { type: 'number', required: true, description: 'Area of the sub-threshold region, scaled from the sample to the whole surface.' },
           thinAreaPct: { type: 'number', required: true, description: 'That area as a % of the whole surface — a thin SHELL spans a lot of it, a blunt edge only a strip.' },
+          surfaceAreaMm2: { type: 'number', required: true, description: 'Measured surface area; sqrt(area / sampled) is the sampling spacing, i.e. the smallest wall difference this screen can resolve (the band width, DESIGN §27.4).' },
           overhangAreaMm2: { type: 'number', required: true, description: 'Exact: summed over every triangle, not sampled.' },
           overhangZRange: { type: 'array', items: { type: 'number' } },
           findings: { type: 'array', required: true, items: { type: 'string' } },
@@ -5270,10 +5291,6 @@ export function registerCadTools(
             (wallRule.direction === 'max' ? ' — declared direction "max", i.e. read here as an UPPER bound' : '');
         }
       }
-      const wallBand: BandNorm = {
-        id: 'wall', quantity: 'wall-thickness', units: 'mm',
-        lo: wallMin, hi: wallMax, scaleLo: wallMin, scaleHi: wallMax, source: bandSource,
-      };
       const modelPath = join(project.store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) {
         const ids = (await listVersions(project.store)).map((v) => v.id);
@@ -5291,6 +5308,25 @@ export function registerCadTools(
       timings.printability = rScreen.ms;
       if (!rScreen.ok) throw new Error(rScreen.reason);
       const screen = rScreen.value;
+
+      // §27.4: the band's width is the measurement's resolution, not a second invented
+      // number. A wall screen samples the surface, so its spacing is ≈ sqrt(area/count);
+      // below that, "1.15 vs 1.20 mm" is not a difference the screen can resolve.
+      const wallResolutionMm = measuredResolutionMm({
+        surfaceAreaMm2: screen.surfaceAreaMm2,
+        sampled: screen.sampled,
+      });
+      const wallBand: BandNorm = {
+        id: 'wall', quantity: 'wall-thickness', units: 'mm',
+        lo: wallMin, hi: wallMax,
+        scaleLo: wallResolutionMm > 0 ? wallResolutionMm : wallMin,
+        scaleHi: wallResolutionMm > 0 ? wallResolutionMm : wallMax,
+        source: wallResolutionMm > 0
+          ? `${bandSource}; 灰带 ±${wallResolutionMm.toFixed(3)}mm = 测量分辨率 ` +
+            `sqrt(面积 ${screen.surfaceAreaMm2.toFixed(1)}mm² / 采样 ${screen.sampled})`
+          : `${bandSource}; 分辨率未知，灰带退回绝对边界`,
+      };
+
       let suspects: SuspectLike[] = [];
       let cornerError: string | null = null;
       {

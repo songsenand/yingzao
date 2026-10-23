@@ -15,7 +15,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { violatesRule } = await import('../src/host/process-profile.ts');
+const { violatesRule, measuredResolutionMm } = await import('../src/host/process-profile.ts');
+const TOOLS_SRC = await readFile(join(ROOT, 'src', 'host', 'tools.ts'), 'utf8');
 const { JOINT_DRIFT_TOLERANCE_MM } = await import('../src/host/motion.ts');
 
 let failures = 0;
@@ -34,8 +35,17 @@ check(violatesRule(45.1, max) === true, 'max: above the value violates', '45.1 >
 check(violatesRule(45, max) === false, 'max: exactly the value does NOT violate');
 check(violatesRule(44, max) === false, 'max: below the value is fine');
 
+// ── the band's width is the measurement's resolution (B2c) ─────────────────
+check(measuredResolutionMm({ surfaceAreaMm2: 1000, sampled: 100 }).toFixed(4) === '3.1623',
+  'resolution = sqrt(area / samples)', measuredResolutionMm({ surfaceAreaMm2: 1000, sampled: 100 }).toFixed(4));
+check(measuredResolutionMm({ surfaceAreaMm2: 0, sampled: 100 }) === 0, 'no area -> no resolution (0)');
+check(measuredResolutionMm({ surfaceAreaMm2: 100, sampled: 0 }) === 0, 'no samples -> no resolution (0)');
+check(measuredResolutionMm({}) === 0, 'nothing known -> 0, never a made-up spacing');
+check(/scaleLo: wallResolutionMm > 0 \? wallResolutionMm : wallMin/.test(TOOLS_SRC),
+  'analyze uses the resolution as the band width, and falls back to the absolute edge');
+
 // ── no comparison bypasses it ──────────────────────────────────────────────
-const tools = await readFile(join(ROOT, 'src', 'host', 'tools.ts'), 'utf8');
+const tools = TOOLS_SRC;
 const bare = [
   /minWallMm\s*<\s*wall\.value/,
   /radiusMm\s*<\s*toolRadius\.value/,

@@ -58,7 +58,7 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 check_printability({ versionId: "…" })
 ```
 
-returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `overhangAreaMm2`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
+returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
 ## `create_part`
@@ -400,7 +400,7 @@ returns: `versionId`, `stats`, `suspects`
 
 ## `set_datums`
 
-Read or write the datum anchors of an EXISTING version, without creating a new one. Call it with only versionId to list what a version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to add or replace anchors on that same version, since datums are metadata and do not change the mesh.
+Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -412,7 +412,7 @@ Read or write the datum anchors of an EXISTING version, without creating a new o
 set_datums({ versionId: "…" })
 ```
 
-returns: `versionId`, `userIntent`, `mode`, `datums`, `counts`, `warnings`
+returns: `versionId`, `previousVersionId`, `userIntent`, `mode`, `datums`, `counts`, `warnings`
 
 
 ## `simulate_fluid`

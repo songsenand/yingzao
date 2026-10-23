@@ -6,7 +6,9 @@
 > 是按发生时的事实留档的，其中出现的 `DESGIGN.md` 一律指本文件，**不回改**。
 > 活文档与代码里的引用已全部更新。
 
-**版本**：v2.0
+**版本**：v2.33（2026-10-23）
+> **版本记录 = git log（用户拍板 2026-10-23）。** §11 的逐版清单冻结于 v2.15：它写多读少，且
+> 每轮都滞后。此后"这一版改了什么"看 `git log --oneline -- DESIGN.md`，取舍看 `DECISION-LOG.md`。
 **目标读者**：编码 Agent
 **场景**：开放的 CAD harness（2026-09-27 起，原为小团队内部工具）；定位与哲学见 HARNESS.md
 **底座**：dsh 插件
@@ -493,6 +495,9 @@ interface PostProcessResponse {
       model.stl
       render_{front,side,top,iso}.png
       datums.json          # {points, axes, planes, cylinders}；兼容旧的裸点数组
+                           #   只写不改：set_datums 的写入会落成**新版本**（父 = 被读的那版，
+                           #   网格逐字节复制）。锚点是接口解析的对象，原地改等于改历史 run 的含义
+                           #   （2026-10-23 用户拍板，审计 C4）
     v002/
   manifest.json            # { versions: [{ id, timestamp, userIntent, parentVersion, status }] }
   assembly/                # assembly.json（输入清单）/ assembly-check-report.json（指向最近一次运行的**指针**）
@@ -1190,6 +1195,12 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 ---
 
 ## 11. 版本记录
+
+> **本节冻结（2026-10-23，用户拍板）。** 下面 v2.0–v2.15 的条目是历史留档，不回改。
+> 之后的版本记录**以 `git log` 为准**（`git log --oneline -- DESIGN.md`），取舍以
+> `DECISION-LOG.md` 为准。理由：逐版清单每加一次改动就要手写一次，永远滞后于代码；
+> 而 git 本来就记着"哪个文件什么时候为什么改"。头部只保留一行当前版本号。
+
 
 ### v2.1（2026-09-25）实现修订
 

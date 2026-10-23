@@ -145,12 +145,15 @@ near-touching pairs were never declared).
   coordinates** (a transform at the call site does not move the echoed value).
   Datums do not affect the mesh. Extended kinds exist for assemblies:
   `datum_axis`, `datum_plane`, `datum_cyl`.
-- **Anchors are metadata, not geometry.** If you forgot one, or need the exact
+- **Anchors are declarations, not metadata.** If you forgot one, or need the exact
   names and coordinates to write an interface against, use `set_datums` on the
   version you already have — `set_datums(versionId)` lists, `set_datums(versionId,
-  datums)` adds or replaces. Do **not** spend a `generate_part` round on a version
-  whose only change is an anchor: that buries the real revisions in the history
-  (the microscope2 corpus has three such versions) and costs four renders.
+  datums)` records. Recording creates a **new version** (parent = the one you gave;
+  the mesh is copied byte-for-byte, so no renders and no recompile): an interface
+  RESOLVES against an anchor, so moving it in place would change what old runs meant.
+  Point your manifest at the returned version id. Do **not** spend a `generate_part`
+  round on a version whose only change is an anchor — that costs four renders and
+  rewrites the geometry for nothing.
 - **The assembly manifest is an ordinary file in your workspace**, by default
   `<workspace>/assembly/assembly.json`, and `check_assembly` resolves a relative
   `manifestPath` against the workspace first (the plugin data root is only a
