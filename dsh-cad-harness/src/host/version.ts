@@ -10,7 +10,7 @@
 // case. Absent `source` means `generated` — the pre-import corpora stay valid
 // with no migration.
 
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 /**
@@ -65,6 +65,12 @@ export interface VersionManifestEntry {
    * consumer that needs a solid must say so rather than measure a broken mesh.
    */
   solid?: boolean;
+  /**
+   * Set when this row was REBUILT from the `versions/` directory because the index
+   * was missing or unreadable. Its intent/parent/part are unknowable in that case, and
+   * saying so is the point: a recovered row must not look like a normal one.
+   */
+  recovered?: boolean;
 }
 
 export interface VersionStore {
@@ -90,12 +96,116 @@ async function nextVersionId(store: VersionStore): Promise<string> {
   return `v${String(max + 1).padStart(3, '0')}`;
 }
 
+/**
+ * Read the version index, repairing it from `versions/` when it is missing or broken.
+ *
+ * WHY: the directory is the durable record (each `vNNN/` carries model.scad/stl, its
+ * renders and datums). The index is an optimisation over it. Treating invalid JSON as an
+ * empty index made a torn write look like "this project has no versions", and the next
+ * `saveVersion` wrote that emptiness back — losing intent/parent/part for every version
+ * while the directories sat there intact (2026-10-23 audit, FIX-C3).
+ *
+ * Recovered rows say so (`recovered: true`) and keep a null parent/part: inventing them
+ * would be worse than admitting the loss. The file itself is NOT rewritten on read (a
+ * read must not mutate); the next `saveVersion` persists the healed index.
+ */
 export async function readManifest(store: VersionStore): Promise<{ versions: VersionManifestEntry[] }> {
+  let raw: string;
   try {
-    return JSON.parse(await readFile(join(store.root, 'manifest.json'), 'utf8'));
+    raw = await readFile(join(store.root, 'manifest.json'), 'utf8');
   } catch {
-    return { versions: [] };
+    return { versions: await recoverFromDirectories(store) };
   }
+  try {
+    const parsed = JSON.parse(raw) as { versions?: VersionManifestEntry[] };
+    const versions = Array.isArray(parsed?.versions) ? parsed.versions : [];
+    // An index that is valid JSON but lost rows is healed too: a version directory the
+    // index does not mention is a version the panel and every tool would refuse to see.
+    const known = new Set(versions.map((v) => v.id));
+    const missing = (await listVersionDirs(store)).filter((id) => !known.has(id));
+    if (missing.length === 0) return { versions };
+    const recovered = await recoverFromDirectories(store, versions);
+    return { versions: recovered };
+  } catch {
+    return { versions: await recoverFromDirectories(store) };
+  }
+}
+
+/** Version ids present on disk, in numeric order. */
+async function listVersionDirs(store: VersionStore): Promise<string[]> {
+  try {
+    return (await readdir(versionsDir(store)))
+      .filter((name) => /^v\d{3,}$/.test(name))
+      .sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Rebuild index rows from the version directories. `keep` (an already-parsed index) is
+ * preserved for the ids it still knows; only the unknown ones are reconstructed.
+ */
+async function recoverFromDirectories(
+  store: VersionStore,
+  keep: VersionManifestEntry[] = [],
+): Promise<VersionManifestEntry[]> {
+  const byId = new Map(keep.map((v) => [v.id, v]));
+  for (const id of await listVersionDirs(store)) {
+    if (byId.has(id)) continue;
+    const dir = join(versionsDir(store), id);
+    let timestamp = new Date(0).toISOString();
+    try { timestamp = (await stat(dir)).mtime.toISOString(); } catch { /* keep epoch */ }
+    // Sidecars carry what the index lost, when the version was imported or merged.
+    let userIntent = 'unknown (recovered from the directory)';
+    let source: VersionSource | undefined;
+    for (const [file, kind] of [['import.json', 'imported'], ['source.json', 'merged']] as const) {
+      try {
+        const meta = JSON.parse(await readFile(join(dir, file), 'utf8')) as Record<string, unknown>;
+        if (typeof meta.userIntent === 'string') userIntent = meta.userIntent;
+        if (meta.kind === kind) source = meta as unknown as VersionSource;
+        if (typeof meta.parentVersion === 'string') { /* parent is part-relative; keep null */ }
+        break;
+      } catch { /* no sidecar */ }
+    }
+    byId.set(id, {
+      id, timestamp, userIntent, parentVersion: null, status: 'draft',
+      ...(source ? { source } : {}),
+      recovered: true,
+    });
+  }
+  return [...byId.values()].sort((a, b) => parseInt(a.id.slice(1), 10) - parseInt(b.id.slice(1), 10));
+}
+
+/**
+ * Compare the index with the directories WITHOUT healing either side.
+ *
+ * Used by the acceptance (and available to a future audit finding): "the index and the
+ * files agree" is a property DESIGN §6.8 claims and nothing checked.
+ */
+export async function diagnoseManifest(store: VersionStore): Promise<{
+  onDisk: string[];
+  inIndex: string[];
+  onlyOnDisk: string[];
+  onlyInIndex: string[];
+  parseError: string | null;
+}> {
+  const onDisk = await listVersionDirs(store);
+  let inIndex: string[] = [];
+  let parseError: string | null = null;
+  try {
+    const parsed = JSON.parse(await readFile(join(store.root, 'manifest.json'), 'utf8')) as { versions?: { id: string }[] };
+    inIndex = (parsed?.versions ?? []).map((v) => v.id);
+  } catch (e) {
+    parseError = String((e as Error)?.message ?? e);
+  }
+  return {
+    onDisk,
+    inIndex,
+    onlyOnDisk: onDisk.filter((id) => !inIndex.includes(id)),
+    onlyInIndex: inIndex.filter((id) => !onDisk.includes(id)),
+    parseError,
+  };
 }
 
 export interface SaveVersionInput {
@@ -120,6 +230,11 @@ export interface SaveVersionInput {
 /** Persist one generation round; returns the created version id. */
 export async function saveVersion(store: VersionStore, input: SaveVersionInput): Promise<string> {
   const id = await nextVersionId(store);
+  // Read the index BEFORE this version's directory exists. The loader heals itself from
+  // the directories, so creating the directory first made it "recover" the version that
+  // was about to be appended — and the index ended up with that id twice
+  // (caught by accept-version-index).
+  const manifest = await readManifest(store);
   const dir = join(versionsDir(store), id);
   await mkdir(dir, { recursive: true });
   if (input.scadCode !== undefined) await writeFile(join(dir, 'model.scad'), input.scadCode, 'utf8');
@@ -154,7 +269,6 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
   for (const r of input.renders ?? []) {
     await writeFile(join(dir, `render_${r.view}.png`), r.png);
   }
-  const manifest = await readManifest(store);
   manifest.versions.push({
     id,
     timestamp: new Date().toISOString(),
@@ -165,7 +279,13 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
     ...(input.source ? { source: input.source } : {}),
     ...(input.solid === false ? { solid: false } : {}),
   });
-  await writeFile(join(store.root, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  // tmp + rename, like `runs.ts` and `parts.ts`. A torn write here used to lose the
+  // WHOLE history: `readManifest` treated invalid JSON as an empty index, and the next
+  // save rewrote it with a single row (2026-10-23 audit, FIX-C3).
+  await mkdir(store.root, { recursive: true });
+  const tmp = join(store.root, 'manifest.json.tmp');
+  await writeFile(tmp, JSON.stringify(manifest, null, 2));
+  await rename(tmp, join(store.root, 'manifest.json'));
   return id;
 }
 
