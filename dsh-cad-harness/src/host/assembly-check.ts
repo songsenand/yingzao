@@ -15,7 +15,7 @@
 // mm / z-up. Datums are part-local; transforms are applied here (rotate about
 // X then Y then Z in degrees, matching Manifold rotate, then translate).
 
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { compileStlOnly, type DatumSet } from './compile.ts';
@@ -27,6 +27,7 @@ import {
 } from './manifest.ts';
 import type { VersionStore } from './version.ts';
 import { listVersions, readVersionDatums } from './version.ts';
+import { newestVersionPerPart, supersededVersionIds } from './latest.ts';
 import type { RunEntry } from './runs.ts';
 
 type Vec3 = [number, number, number];
@@ -412,19 +413,8 @@ export async function runAssemblyCheckInTs(
   // Evidence expires with the version it cites (DESIGN §22): a cited run whose
   // geometry predates the CURRENT version of any of its parts is not evidence.
   const versionList = await listVersions(store);
-  const versionById = new Map(versionList.map((v) => [v.id, v]));
-  const newestOfPart = new Map<string, string>();
-  for (const v of versionList) {
-    if (!v.partId) continue;
-    const current = newestOfPart.get(v.partId);
-    if (!current || (versionById.get(current)?.timestamp ?? '') < v.timestamp) newestOfPart.set(v.partId, v.id);
-  }
-  const staleCitations = (run: RunEntry): string[] =>
-    run.sourceVersionIds.filter((id) => {
-      const version = versionById.get(id);
-      if (!version?.partId) return false;
-      return newestOfPart.get(version.partId) !== id;
-    });
+  const newestOfPart = newestVersionPerPart(versionList);
+  const staleCitations = (run: RunEntry): string[] => supersededVersionIds(versionList, run.sourceVersionIds);
 
   for (const flat of flattenParts(manifest.root)) {
     if (flat.node.source === 'stock') {
@@ -704,20 +694,10 @@ export async function runAssemblyCheck(
   // is a store question, so the worker is told the answer per run rather than the
   // whole version history.
   const versionList = await listVersions(store);
-  const versionById = new Map(versionList.map((v) => [v.id, v]));
-  const newestOfPart = new Map<string, string>();
-  for (const v of versionList) {
-    if (!v.partId) continue;
-    const current = newestOfPart.get(v.partId);
-    if (!current || (versionById.get(current)?.timestamp ?? '') < v.timestamp) newestOfPart.set(v.partId, v.id);
-  }
+  const newestOfPart = newestVersionPerPart(versionList);
   const runPayload: Record<string, unknown> = {};
   for (const run of opts.runs ?? []) {
-    const staleVersionIds = run.sourceVersionIds.filter((id) => {
-      const version = versionById.get(id);
-      if (!version?.partId) return false;
-      return newestOfPart.get(version.partId) !== id;
-    });
+    const staleVersionIds = supersededVersionIds(versionList, run.sourceVersionIds);
     runPayload[run.id] = {
       kind: run.kind,
       status: run.status,
@@ -767,13 +747,33 @@ export async function runAssemblyCheck(
 }
 
 /**
- * Persist the check report next to the manifest. NOTE: distinct filename from
- * validate_assembly's `assembly-report.json` — the two reports have different
- * schemas and the panel parses the validate_assembly one.
+ * A POINTER to the immutable run, written next to the manifest under the historical
+ * filename. It is not a second copy of the report (2026-10-23 audit, FIX-C1).
+ *
+ * WHY: the report used to be written here AND into the run store. Two copies of the same
+ * conclusion drift — microscope2 still holds two `assembly-check-report.json` files that
+ * disagree by 25 minutes, one of them naming a manifest path that has since moved — and
+ * a fixed filename always describes "the last check", with no way to tell which run it
+ * was. The run is immutable and addressable; this file exists so scripts and humans have
+ * a stable path to FIND it, and it carries the `runId` that makes that possible.
  */
-export async function saveAssemblyReport(manifestPath: string, report: AssemblyCheckReport): Promise<string> {
+export interface AssemblyCheckPointer {
+  runId: string;
+  checkedAt: string;
+  /** The manifest this check read, as resolved at run time. */
+  manifestPath: string;
+  /** What the pointer replaced: readers that expected a full report must follow `runId`. */
+  schema: 'assembly-check-pointer/v1';
+}
+
+export async function saveAssemblyCheckPointer(
+  manifestPath: string,
+  pointer: AssemblyCheckPointer,
+): Promise<string> {
   const path = join(manifestPath, '..', 'assembly-check-report.json');
   await mkdir(join(manifestPath, '..'), { recursive: true });
-  await writeFile(path, JSON.stringify(report, null, 2));
+  const tmp = `${path}.tmp`;
+  await writeFile(tmp, JSON.stringify(pointer, null, 2));
+  await rename(tmp, path);
   return path;
 }

@@ -69,9 +69,6 @@ const VERDICT_WORD: Record<string, string> = {
   // Assembly interface words — kept distinct from the three above.
   'hard-violation': '硬冲突', 'intent-flag': '意图标记', skipped: '跳过',
 };
-const verdictColorWord = (v: string | null): string =>
-  v === 'not-excluded' ? '#1e8449' : v === 'excluded' || v === 'hard-violation' ? '#c0392b'
-    : v === 'difficult' || v === 'intent-flag' || v === 'skipped' ? '#9c6f0a' : '#8a94a0';
 const verdictColor = (v: string | null): string =>
   v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? '#c0392b' : v === 'difficult' ? '#9c6f0a'
     : v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
@@ -206,7 +203,7 @@ const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
     const tag = isLatestVersion ? '最新 · ' : '';
     // "导入" rides in the row, not only in the tooltip: which revisions came
     // from outside is the thing a human scans a part's history for.
-    const from = r.source === 'imported' ? '导入 · ' : '';
+    const from = r.source === 'imported' ? '导入 · ' : r.source === 'merged' ? '合并 · ' : '';
     const broken = r.solid === false ? '非实体 · ' : '';
     return `${r.id} · ${tag}${from}${broken}${fmtTime(r.timestamp)} — ${r.title || '(无意图描述)'}`.slice(0, 96);
   }
@@ -530,12 +527,6 @@ const S: Record<string, React.CSSProperties> = {
     border: '1px solid #d5d9dd', background: '#fff', color: '#26303a', flex: 'none', whiteSpace: 'nowrap',
   },
 };
-
-const tabStyle = (active: boolean, color = '#4a7dbd'): React.CSSProperties => ({
-  cursor: 'pointer', borderRadius: 6, padding: '3px 9px', fontSize: 12, lineHeight: '18px',
-  border: active ? `1.5px solid ${color}` : '1px solid #d5d9dd',
-  background: active ? '#e8f0fa' : '#fff', color: '#26303a', whiteSpace: 'nowrap', flex: 'none',
-});
 
 /** Section tab in the strip. Same border width in both states (see iconBtnStyle). */
 const tabBtnStyle = (active: boolean): React.CSSProperties => ({
@@ -1446,7 +1437,9 @@ export function CadPanel(): React.ReactElement {
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       mat.vertexColors = true;
       mat.needsUpdate = true;
-      setHeat({ legend: layer.legend });
+      // Name the source run in the legend: the same version can have a press field and a
+      // stress field, and "which one am I looking at" must not be a guess (FIX-E5).
+      setHeat({ legend: payload.source ? `${layer.legend} · 来源 ${payload.source.runId}（${payload.source.kind}）` : layer.legend });
       setHint(null);
     } catch (err) {
       setHint(`热力图取数失败：${String(err).slice(0, 80)}`);
@@ -2340,6 +2333,13 @@ export function CadPanel(): React.ReactElement {
           `导入自 ${version.origin ?? '外部文件'}`,
           version.solid === false && React.createElement('span', { style: { color: '#c0392b' } },
             ' · 非实体（几何工具会拒绝这个版本）')),
+        // A merged body expires with its inputs, and that is worth a line: it looks like a
+        // normal version until you know which revisions it was built from (FIX-C5).
+        version?.source === 'merged' && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+          (version.staleMergedInputs?.length ?? 0) > 0
+            ? React.createElement('span', { style: { color: '#c0392b' } },
+              `合并件已过期：输入 ${version.staleMergedInputs!.join(', ')} 已被同一零件的新版本取代 —— 需要重新合并`)
+            : '合并件：由多个零件的版本合成（输入仍是最新）'),
         run && sourceVersionChips(run),
         // A brand-new project has no parts at all — this is the one place a
         // human can start from THEIR file without an agent turn. Kept in the

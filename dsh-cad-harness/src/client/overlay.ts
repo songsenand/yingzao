@@ -30,10 +30,6 @@ const AXES: { label: string; dir: [number, number, number]; color: string }[] = 
   { label: 'Z', dir: [0, 0, 1], color: '#2471a3' },
 ];
 
-/** Round millimetre lengths the bar may snap to (mm is the app's only unit). */
-const NICE_MM = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-
-/** Largest round length whose bar still fits the target pixel width. */
 /** The scale bar never changes length; only its readout does. */
 const SCALE_BAR_PX = 52;
 

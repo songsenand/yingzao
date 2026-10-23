@@ -337,7 +337,10 @@ validateAssembly(parts, thresholdMm = 0.75): Promise<AssemblyReport>
 
 - 实作：`manifest.ts`（清单读写/校验/遍历）+ `assembly-check.ts`（L0 算子 `distance` / `diameter-match`、hard/intent 双通道、邻接发现）
 - 工具 `check_assembly`；路由 `GET /api/cad/assembly/manifest`、`POST /api/cad/assembly/run`（人工发起②）、`GET /api/cad/assembly/check`
-- 报告落 **`data/assembly/assembly-check-report.json`**（工具契约的落盘位置，`GET /api/cad/assembly/check` 读它）+ 同时登记为一条 `assembly-check` 运行（`data/runs/rNNN/report.json`，v2.13）——面板浏览运行，脚本继续读文件
+- **结论只有一份：运行**（`runs/rNNN/report.json`，不可变、可寻址）。清单同目录下的
+  `assembly-check-report.json` 自 2026-10-23 起是**指针**（`{schema:'assembly-check-pointer/v1', runId, checkedAt, manifestPath}`），
+  不再是第二份报告——两份会漂移（microscope2 仍留着两份差 25 分钟、其中一份指向已迁走路径的文件）。
+  `GET /api/cad/assembly/check` 顺着指针读运行并回报 `runId`；旧语料里的整份报告仍按原样返回。
 - datum 三类扩展（axis/plane/cylinder）落在 `compile.ts` 的 `DATUM_PRELUDE`，datums.json 存 `{points, axes, planes, cylinders}`（兼容旧点数组）
 - 验收：`accept-assembly.mjs` 14/14（豚鼠=显微镜第一级：正样本 3 接口精确命中、负样本硬违反 Ø-0.8、邻接发现 deliberate 未声明的 0.1mm 配合）
 
@@ -492,11 +495,11 @@ interface PostProcessResponse {
       datums.json          # {points, axes, planes, cylinders}；兼容旧的裸点数组
     v002/
   manifest.json            # { versions: [{ id, timestamp, userIntent, parentVersion, status }] }
-  assembly/                # assembly.json（输入清单）/ assembly-check-report.json（check_assembly 的落盘契约）
+  assembly/                # assembly.json（输入清单）/ assembly-check-report.json（指向最近一次运行的**指针**）
   runs/
     manifest.json          # { runs: [{id,kind,timestamp,title,status,summary,sourceVersionIds,hasGeometry,parts,placements?}] }
     r007/
-      run.json             # 自描述副本（索引丢失也能恢复）
+      run.json             # 自描述副本；索引损坏/丢失时 `readRunManifest` 用它重建（2026-10-23）
       report.json          # 该 kind 的完整报告
       trajectory.json      # motion / physics
       fluid-manifest.json  # fluid（面板 scrub 的帧索引）
@@ -2795,6 +2798,11 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 `analyze` **写 run（`kind:'analyze'`）并落 `attention.json`**，其 `samples.fused` 就是面板
 `pickHeatLayer` 优先绘制的那一层——**同一次计算，两个读者**（LLM 读 `report.json` 的峰表，
 人看 `ramp()` 的图）。`peaks` 与 `samples.fused` 共用同一批 bucket：两个投影，不是两次计算。
+
+**场必须署名（2026-10-23）。** 同一个版本可能同时有 printability / stress / analyze 三种场，
+`GET /api/cad/attention?v=` 取最新那份，于是"我看到的是哪一次算的"不能靠猜：路由在返回里带
+`source: {runId, kind, timestamp}`，面板把它写进图例（`来源 rNNN（kind）`）。仍缺：让人**选**
+用哪一份场（现在是最新优先），见 AUDIT E5 的剩余部分。
 
 **交付纪律：不许静默等待（2026-10-21，用户提出）。** 出现过多次"跑一半停住、只能傻等"的情况，
 这类工具不可交付。规则：① 每个外部步骤（worker op、装配检查、审计）都必须有**预算**；② 超预算

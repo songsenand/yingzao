@@ -3962,3 +3962,41 @@ DESIGN §26.3b、cad-toolbox skill。**逃生口**：删掉 `user-site-override/
 `tools.ts`（五处 commit + 空契约 + 余量 + 初始失配）、`delivery-audit.ts`（空语料/清单不可读/
 扫描关闭/失败 run 不算证据）、`assembly-check.ts`、`src/client/verdict.ts`（新）、`panel.ts`、
 `shared/judgement.ts`（补装配词）。回滚 = revert 本提交；`judgement` 是可选字段，旧运行记录不受影响。
+
+## 2026-10-23：一条结论一份权威；「没有零件」的版本不参与过期判定
+
+**触发条件：** 4（影响面板、交付审计、装配检查与 panel 三处）+ 2（审计实测：装配结论两份落盘且实测差 25 分钟；「哪版最新」四份实现且对 legacy 版本结论相反；merged 整机无过期检查）。
+
+**要解决的问题：** 三处同源——**同一个事实存了两份或算了四遍**：
+① 装配检查的结论既写清单同目录的固定名文件、又写运行库，两份会漂移，且固定名文件无法回答"这是哪一次运行"；
+② "这个零件的哪一版是当前版"由 products / delivery-audit / assembly-check 的两处各写一遍，
+   对**没有 partId 的旧版本**行为相反（面板折进 `p000` 于是两个 legacy 版本互相判过期；其余三处直接跳过）；
+③ `merge_parts` 的整机件是**派生**几何，输入被替换后没有任何检查，面板还把它显示成 `generated`。
+
+**决策内容：**
+
+1. **装配结论的唯一权威是不可变运行**；清单同目录的 `assembly-check-report.json` 降级为指针
+   （`assembly-check-pointer/v1`：`runId` + `checkedAt` + `manifestPath`），原子写。
+   `GET /api/cad/assembly/check` 顺指针读运行并回报 `runId`，旧语料的整份报告原样返回。
+2. **"哪版最新"只有一条规则**（`src/host/latest.ts`）：按 partId 分组、按时间戳取最新；
+   **没有 partId 的版本不参与比较**（它的零件未知，因此"被取代"不可能是真的；
+   猜错会把好证据判成过期）。面板的 `p000` 只是浏览分桶，不是零件。
+3. **派生件随输入过期**：merged 版本的 `from[].versionId` 若已被同零件新版本取代，
+   版本条目带 `staleMergedInputs`，面板显示"合并件已过期"，`delivery_audit` 出
+   `merged-stale`（warn）。
+4. **运行索引同样可从 `run.json` 自愈**（与版本索引同构），并回答 DESIGN §6.8 那句
+   "索引丢失也能恢复"——它此前只写不读。
+
+**理由：** 一份结论两处落盘，迟早会以"看起来都对"的形式出现；一个事实四种算法，
+迟早会在边界上分叉——而这里的分叉方向恰好是"同一条证据对面板过期、对契约检查新鲜"。
+
+**依据（实测）：** `accept-assembly-report-pointer.mjs` 12/12（指针形状、原子写、
+没有第二份 writer、指针写在 commit 之后、路由与 accept-p3 都顺指针）；
+`accept-newest-per-part.mjs` 15/15（含 legacy 版本互不取代、merged 只在输入被替换时过期、
+三处源码不再各自实现该规则）；`accept-run-index.mjs` 10/10（撕裂/丢失/漏行的索引都从
+run.json 重建，且读操作不改文件）。**未测**：check_assembly 的端到端（需 Python worker）。
+
+**影响：** `src/host/latest.ts`（新）、`products.ts`、`delivery-audit.ts`、`assembly-check.ts`、
+`runs.ts`、`tools.ts`（路由 + 指针写入）、`shared/types.ts`（`source: 'merged'` +
+`staleMergedInputs`）、`client/panel.ts`、`client/heat.ts`、验收三支、DESIGN §6.4.1/§6.8/§6.9。
+回滚 = revert 本提交；旧语料的整份报告仍可读。

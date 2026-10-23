@@ -178,7 +178,9 @@ const coaxR = coax.value;
 check('coaxial measures the axis-to-axis offset (0.5mm parallel axes)',
   coaxR.summary.pass === 1 && coaxR.summary.skipped === 0,
   `pass=${coaxR.summary.pass} skipped=${coaxR.summary.skipped}`);
-const reportPath = join(workspace, 'assembly', 'assembly-check-report.json');
+// The file beside the manifest is a POINTER to the immutable run (FIX-C1); follow it.
+const reportPointer = JSON.parse(await readFile(join(workspace, 'assembly', 'assembly-check-report.json'), 'utf8'));
+const reportPath = join(project.runStore.root, reportPointer.runId, 'report.json');
 const coaxReport = JSON.parse(await readFile(reportPath, 'utf8'));
 const axResult = coaxReport.results.find((r) => r.interfaceId === 'if-ax');
 check('  …measured 0.5mm, not a point distance (points are 10mm apart)',

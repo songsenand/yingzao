@@ -32,6 +32,8 @@ export interface AttentionPayload {
   versionId: string;
   normalization: Record<string, AttentionLayerNormalization>;
   samples: Record<string, AttentionSample[]>;
+  /** Which run produced this field (the route fills it; older payloads omit it). */
+  source?: { runId: string; kind: string; timestamp: string; title?: string };
 }
 
 export interface HeatLayer {

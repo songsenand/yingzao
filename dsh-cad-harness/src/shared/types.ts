@@ -101,9 +101,15 @@ export interface VersionProduct {
    * "who made this and from what" is the first question a human asks of a part
    * that arrived from someone else.
    */
-  source: 'generated' | 'imported';
+  source: 'generated' | 'imported' | 'merged';
   /** Imported only: the file name it came from. */
   origin?: string;
+  /**
+   * Merged only: input versions that their part has since replaced. A merged body is a
+   * DERIVED artifact, so it expires when its inputs do — and before this field existed
+   * nothing looked (2026-10-23 audit, FIX-C5).
+   */
+  staleMergedInputs?: string[];
   /** False = stored with allowNonSolid; the geometric tools refuse it. */
   solid: boolean;
 }

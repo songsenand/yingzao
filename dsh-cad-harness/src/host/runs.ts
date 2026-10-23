@@ -44,13 +44,81 @@ export function openRunStore(dataRoot: string): RunStore {
 
 const MANIFEST = 'manifest.json';
 
+/**
+ * Read the run index, repairing it from `runs/rNNN/run.json` when it is missing or broken.
+ *
+ * WHY: every run writes a self-describing `run.json` beside its artifacts, and this
+ * loader is the only thing that reads it (2026-10-23 audit, FIX-E3). Treating a broken
+ * index as "no runs" made 36 runs of history look like an empty project — the same
+ * failure the version index had (FIX-C3). A read does not rewrite the index; the next
+ * `commit` persists the healed list.
+ */
 export async function readRunManifest(store: RunStore): Promise<RunManifest> {
+  let raw: string;
   try {
-    const raw = JSON.parse(await readFile(join(store.root, MANIFEST), 'utf8')) as RunManifest;
-    return { schemaVersion: 1, runs: Array.isArray(raw.runs) ? raw.runs : [] };
+    raw = await readFile(join(store.root, MANIFEST), 'utf8');
   } catch {
-    return { schemaVersion: 1, runs: [] };
+    return { schemaVersion: 1, runs: await recoverRuns(store) };
   }
+  try {
+    const parsed = JSON.parse(raw) as RunManifest;
+    const runs = Array.isArray(parsed?.runs) ? parsed.runs : [];
+    const known = new Set(runs.map((r) => r.id));
+    const missing = (await listRunDirs(store)).filter((id) => !known.has(id));
+    if (missing.length === 0) return { schemaVersion: 1, runs };
+    return { schemaVersion: 1, runs: [...runs, ...await recoverRuns(store, known)] };
+  } catch {
+    return { schemaVersion: 1, runs: await recoverRuns(store) };
+  }
+}
+
+async function listRunDirs(store: RunStore): Promise<string[]> {
+  try {
+    return (await readdir(store.root)).filter((n) => /^r\d{3,}$/.test(n)).sort();
+  } catch {
+    return [];
+  }
+}
+
+/** Rebuild index rows from each run's own `run.json` (the artifact that survives a lost index). */
+async function recoverRuns(store: RunStore, known: Set<string> = new Set()): Promise<RunEntry[]> {
+  const out: RunEntry[] = [];
+  for (const id of await listRunDirs(store)) {
+    if (known.has(id)) continue;
+    try {
+      const entry = JSON.parse(await readFile(join(store.root, id, 'run.json'), 'utf8')) as RunEntry;
+      if (entry && entry.id === id) out.push(entry);
+    } catch { /* a run dir without a readable run.json has nothing to recover */ }
+  }
+  return out;
+}
+
+/**
+ * Compare the index with the run directories WITHOUT healing either side.
+ * `run.json` is the authoritative per-run copy; this says where the two disagree.
+ */
+export async function diagnoseRunManifest(store: RunStore): Promise<{
+  onDisk: string[];
+  inIndex: string[];
+  onlyOnDisk: string[];
+  onlyInIndex: string[];
+  parseError: string | null;
+}> {
+  const onDisk = await listRunDirs(store);
+  let inIndex: string[] = [];
+  let parseError: string | null = null;
+  try {
+    const parsed = JSON.parse(await readFile(join(store.root, MANIFEST), 'utf8')) as { runs?: { id: string }[] };
+    inIndex = (parsed?.runs ?? []).map((r) => r.id);
+  } catch (e) {
+    parseError = String((e as Error)?.message ?? e);
+  }
+  return {
+    onDisk, inIndex,
+    onlyOnDisk: onDisk.filter((id) => !inIndex.includes(id)),
+    onlyInIndex: inIndex.filter((id) => !onDisk.includes(id)),
+    parseError,
+  };
 }
 
 /** Runs newest-first (the order the product list wants). */

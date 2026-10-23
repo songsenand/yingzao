@@ -191,13 +191,6 @@ export function offloadMessageImages(message: any, indexes: readonly number[]): 
   return { ...message, content };
 }
 
-/** Whether a projected message's blocks contain an image at top level. */
-// (kept for future diagnostics; the projection itself no longer refuses
-// user-image targets — non-cad presets must replay stock decisions verbatim)
-function hasTopLevelImage(content: any): boolean {
-  return Array.isArray(content) && content.some((b) => b?.type === 'image');
-}
-
 /**
  * The durable projection, replayed by live sessions and detached replays.
  * Validation semantics are identical to the stock executor's; the only

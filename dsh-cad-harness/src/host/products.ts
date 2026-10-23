@@ -9,6 +9,7 @@ import type { PartEntry } from './parts.ts';
 import type { RunEntry } from './runs.ts';
 import type { VersionManifestEntry } from './version.ts';
 import { basename } from 'node:path';
+import { mergedInputVersionIds, supersededVersionIds } from './latest.ts';
 
 /** Versions without a part id are surfaced here rather than dropped. */
 export const UNFILED_PART_ID = 'p000';
@@ -31,8 +32,12 @@ export function buildProducts(
       title: v.userIntent,
       parentVersion: v.parentVersion ?? null,
       partId: v.partId ?? UNFILED_PART_ID,
-      source: imported ? 'imported' : 'generated',
+      source: imported ? 'imported' : v.source?.kind === 'merged' ? 'merged' : 'generated',
       ...(imported ? { origin: basename(imported.file) } : {}),
+      // A merged body is derived: it expires when the versions it was made of do.
+      ...(v.source?.kind === 'merged'
+        ? { staleMergedInputs: supersededVersionIds(versions, mergedInputVersionIds(v)) }
+        : {}),
       solid: v.solid !== false,
     };
   });
@@ -50,19 +55,11 @@ export function buildProducts(
   const ownersOfRun = (r: RunEntry): string[] =>
     [...new Set(r.sourceVersionIds.map(partIdOfVersion))];
 
-  // Newest version per part — the yardstick for "is this run's evidence stale".
-  const newestOfPart = new Map<string, string>();
-  for (const [pid, list] of versionsOfPart) {
-    const newest = newestFirst(list)[0];
-    if (newest) newestOfPart.set(pid, newest.id);
-  }
+  // Newest version per part — ONE rule for the whole harness (src/host/latest.ts).
+  // It deliberately does NOT fold versions without a partId into a synthetic part: that
+  // made two legacy versions supersede each other (2026-10-23 audit, FIX-C2).
   /** Versions a run cites that a part has since replaced (DESIGN §22). */
-  const staleSourceVersions = (r: RunEntry): string[] =>
-    r.sourceVersionIds.filter((id) => {
-      const version = versionById.get(id);
-      if (!version) return false; // unknown id: not our call to judge
-      return newestOfPart.get(version.partId) !== id;
-    });
+  const staleSourceVersions = (r: RunEntry): string[] => supersededVersionIds(versions, r.sourceVersionIds);
 
   const runsOfPart = new Map<string, RunProduct[]>();
   const sceneRuns: RunProduct[] = [];

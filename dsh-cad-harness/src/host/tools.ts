@@ -5283,7 +5283,7 @@ export function registerCadTools(
     opts: { adjacencyThresholdMm?: number } = {},
   ): Promise<{ report: Awaited<ReturnType<typeof import('./assembly-check.ts').runAssemblyCheck>>; manifestFile: string; origin: string }> {
     const { store, runStore } = project;
-    const { runAssemblyCheck, saveAssemblyReport } = await import('./assembly-check.ts');
+    const { runAssemblyCheck, saveAssemblyCheckPointer } = await import('./assembly-check.ts');
     const resolved = await resolveAssemblyManifestPath(manifestPath, {
       workspace: project.cwd,
       dataRoot: store.root,
@@ -5296,7 +5296,6 @@ export function registerCadTools(
       adjacencyThresholdMm: opts.adjacencyThresholdMm,
       runs,
     });
-    await saveAssemblyReport(path, report);
 
     // Provenance: manifest part nodes name their version, so the check is tied
     // to exactly the versions it audited.
@@ -5334,6 +5333,14 @@ export function registerCadTools(
       // design change replaces the previous verdict, while a negative control
       // (a different manifest) stays a separate, still-meaningful record.
       subject: `manifest:${relativeSubject(project, path)}`,
+    });
+    // ONE authority: the run holds the report; the file next to the manifest is a
+    // pointer that names it (2026-10-23 audit, FIX-C1).
+    await saveAssemblyCheckPointer(path, {
+      runId: run.id,
+      checkedAt: report.checkedAt,
+      manifestPath: path,
+      schema: 'assembly-check-pointer/v1',
     });
     return { report, manifestFile: path, origin: resolved.origin };
   }
@@ -5891,6 +5898,19 @@ export function registerCadTools(
             { workspace: project.cwd, dataRoot: project.root },
           );
           const raw = await readFile(join(path, '..', 'assembly-check-report.json'), 'utf8');
+          // That file is a POINTER to the immutable run (FIX-C1). Follow it, and say which
+          // run the answer came from — a consumer must be able to cite it. Old corpora
+          // still hold a full report there; those are returned as-is.
+          let parsed: { schema?: string; runId?: string } | null = null;
+          try { parsed = JSON.parse(raw) as { schema?: string; runId?: string }; } catch { parsed = null; }
+          if (parsed?.schema === 'assembly-check-pointer/v1' && typeof parsed.runId === 'string') {
+            const reportPath = runFilePath(project.runStore, parsed.runId, 'report.json');
+            if (!reportPath) return new Response('pointer names an unsafe run id', { status: 500 });
+            const report = JSON.parse(await readFile(reportPath, 'utf8')) as Record<string, unknown>;
+            return new Response(JSON.stringify({ ...report, runId: parsed.runId }), {
+              status: 200, headers: { 'content-type': 'application/json' },
+            });
+          }
           return new Response(raw, { status: 200, headers: { 'content-type': 'application/json' } });
         } catch {
           return new Response('no assembly check report yet', { status: 404 });
@@ -5932,67 +5952,6 @@ export function registerCadTools(
           });
         } catch (e) {
           return new Response(`assembly check failed: ${String((e as Error).message ?? e)}`, { status: 500 });
-        }
-      },
-    });
-
-    void connection.fetch.register({
-      path: '/api/cad/params',
-      methods: ['GET'],
-      requestBody: 'buffered',
-      fetch: async (request: Request) => {
-        const { store } = requestStores(request);
-        const v = new URL(request.url).searchParams.get('v');
-        if (!v) return new Response('missing v', { status: 400 });
-        try {
-          const scad = await readFile(join(store.root, 'versions', v, 'model.scad'), 'utf8');
-          const { parseParams } = await import('./compile.ts');
-          return new Response(JSON.stringify({ versionId: v, params: await parseParams(scad) }), {
-            status: 200, headers: { 'content-type': 'application/json' },
-          });
-        } catch {
-          return new Response('no such version', { status: 404 });
-        }
-      },
-    });
-
-    void connection.fetch.register({
-      path: '/api/cad/preview',
-      methods: ['POST'],
-      requestBody: 'buffered',
-      fetch: async (request: Request) => {
-        const { store } = requestStores(request);
-        try {
-          const body = await request.json() as { versionId: string; overrides?: Record<string, number>; rotate?: number[]; zoom?: number; section?: { axis: 'x'|'y'|'z'; fraction: number } };
-          const scad = await readFile(join(store.root, 'versions', body.versionId, 'model.scad'), 'utf8');
-          const { parseParams, renderScadPng } = await import('./compile.ts');
-          const bb = boundingBoxOf(parseBinaryStl(await readFile(join(store.root, 'versions', body.versionId, 'model.stl'))));
-          // Apply overrides by substituting values into the source text (the
-          // saved STL/bbox stay as-authored; only the preview geometry changes).
-          let source = scad;
-          for (const p of await parseParams(scad)) {
-            const o = body.overrides?.[p.name];
-            if (o !== undefined && o !== p.value) {
-              source = source.replace(new RegExp(`(\\b${p.name}\\s*=\\s*)-?\\d+(?:\\.\\d+)?\\s*;`), `$1${o};`);
-            }
-          }
-          if (body.section) {
-            const axisIdx = { x: 0, y: 1, z: 2 }[body.section.axis];
-            const cut = bb.min[axisIdx]! + (bb.max[axisIdx]! - bb.min[axisIdx]!) * Math.min(1, Math.max(0, body.section.fraction));
-            const BIG = Math.max(...[0,1,2].map(i => bb.max[i]! - bb.min[i]!)) * 10 + 100;
-            const center = [0,1,2].map(i => i === axisIdx ? cut + BIG/2 : 0);
-            source = `intersection() { ${scad}\ntranslate([${center.join(',')}]) cube([${BIG},${BIG},${BIG}], center=true); }`;
-          }
-          const tmp = join(store.root, 'versions', body.versionId, `preview_${Date.now()}.scad`);
-          await writeFile(tmp, source);
-          const pngPath = tmp.replace(/\.scad$/, '.png');
-          const rotate = (body.rotate ?? [65, 0, 25]) as [number, number, number];
-          const ok = await renderScadPng(tmp, pngPath, { rotate, zoom: body.zoom, imgSize: 512, target: [(bb.min[0]+bb.max[0])/2, (bb.min[1]+bb.max[1])/2, (bb.min[2]+bb.max[2])/2], modelDiagonal: Math.hypot(bb.max[0]-bb.min[0], bb.max[1]-bb.min[1], bb.max[2]-bb.min[2]) });
-          if (!ok) return new Response('render failed', { status: 500 });
-          const png = await readFile(pngPath);
-          return new Response(png as unknown as BodyInit, { status: 200, headers: { 'content-type': 'image/png' } });
-        } catch (e: any) {
-          return new Response(`preview failed: ${String(e?.message ?? e)}`, { status: 500 });
         }
       },
     });
@@ -6046,44 +6005,6 @@ export function registerCadTools(
           });
         } catch (e: any) {
           return new Response(`export failed: ${String(e?.message ?? e)}`, { status: 500 });
-        }
-      },
-    });
-
-    void connection.fetch.register({
-      path: '/api/cad/apply-params',
-      methods: ['POST'],
-      requestBody: 'buffered',
-      fetch: async (request: Request) => {
-        const project = requestStores(request);
-        const { store, partStore } = project;
-        try {
-          const body = await request.json() as { versionId: string; overrides: Record<string, number>; intent?: string };
-          if (!body.versionId || !body.overrides) return new Response('bad request', { status: 400 });
-          const scad = await readFile(join(store.root, 'versions', body.versionId, 'model.scad'), 'utf8');
-          let source = scad;
-          for (const [name, value] of Object.entries(body.overrides)) {
-            source = source.replace(new RegExp(`(\\b${name}\\s*=\\s*)-?\\d+(?:\\.\\d+)?\\s*;`), `$1${value};`);
-          }
-          if (source === scad) return new Response('no overrides applied', { status: 400 });
-          const c = await compileStlOnly(source);
-          if (!c.success || !c.stl) return new Response(`compile failed: ${c.errors.join('; ')}`, { status: 500 });
-          // A parameter tweak is a revision of whatever part the source
-          // version belongs to — never a new part.
-          const sourceEntry = await readVersionEntry(store, body.versionId);
-          const newId = await saveVersion(store, {
-            scadCode: source,
-            stl: c.stl,
-            userIntent: `参数调整自 ${body.versionId}: ${Object.entries(body.overrides).map(([k, v]) => `${k}=${v}`).join(', ')}`,
-            parentVersion: body.versionId,
-            ...(sourceEntry?.partId ? { partId: sourceEntry.partId } : {}),
-          });
-          if (sourceEntry?.partId) await attachVersion(partStore, sourceEntry.partId, newId);
-          return new Response(JSON.stringify({ versionId: newId }), {
-            status: 200, headers: { 'content-type': 'application/json' },
-          });
-        } catch (e: any) {
-          return new Response(`apply failed: ${String(e?.message ?? e)}`, { status: 500 });
         }
       },
     });
@@ -6261,7 +6182,16 @@ export function registerCadTools(
           if (!path) continue;
           try {
             const body = await readFile(path);
-            return new Response(body as unknown as BodyInit, {
+            const field = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+            // WHICH run this field came from is part of the picture: several runs can
+            // carry a field for the same version (press/stress/analyze) and the newest
+            // wins here, so a legend that does not name its source is unattributable
+            // (2026-10-23 audit, FIX-E5). The client renders this.
+            const payload = {
+              ...field,
+              source: { runId: run.id, kind: run.kind, timestamp: run.timestamp, title: run.title },
+            };
+            return new Response(JSON.stringify(payload), {
               status: 200,
               headers: { 'content-type': 'application/json' },
             });

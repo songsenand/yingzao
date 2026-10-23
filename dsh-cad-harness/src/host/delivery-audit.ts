@@ -16,6 +16,7 @@ import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts
 import { listParts } from './parts.ts';
 import { listRuns, type RunEntry } from './runs.ts';
 import { listVersions, type VersionManifestEntry } from './version.ts';
+import { mergedInputVersionIds, newestVersionPerPart, supersededVersionIds } from './latest.ts';
 // The unregistered-geometry scan lives in its own module because the panel's
 // 未登记 category consumes the SAME list: two implementations would drift and
 // the human would see a different list than the machine flags.
@@ -100,19 +101,9 @@ export async function auditDelivery(
   const versionById = new Map(versions.map((v) => [v.id, v]));
   const versionList = versions.map((v) => ({ ...v })) as VersionManifestEntry[];
 
-  // Newest version per part — the yardstick for "is this evidence current".
-  const newestOfPart = new Map<string, string>();
-  for (const v of versionList) {
-    if (!v.partId) continue;
-    const current = newestOfPart.get(v.partId);
-    if (!current || (versionById.get(current)?.timestamp ?? '') < v.timestamp) newestOfPart.set(v.partId, v.id);
-  }
-  const superseded = (ids: readonly string[]): string[] =>
-    ids.filter((id) => {
-      const v = versionById.get(id);
-      if (!v?.partId) return false;
-      return newestOfPart.get(v.partId) !== id;
-    });
+  // Newest version per part — the shared rule (src/host/latest.ts).
+  const newestOfPart = newestVersionPerPart(versionList);
+  const superseded = (ids: readonly string[]): string[] => supersededVersionIds(versionList, ids);
 
   const cited = new Set<string>();
   for (const r of runs) for (const id of r.sourceVersionIds ?? []) cited.add(id);
@@ -298,6 +289,17 @@ export async function auditDelivery(
   if (neverCited.length > 0) {
     push('warn', 'versions-never-cited',
       `${neverCited.length}/${versionList.length} versions were never used by any run: ${neverCited.slice(0, 12).join(', ')}${neverCited.length > 12 ? ' …' : ''}`);
+  }
+  // A merged body is DERIVED: if a part it was built from moved on, the merged geometry
+  // describes an older design and nothing used to say so (2026-10-23 audit, FIX-C5).
+  const staleMerged = versionList
+    .map((v) => ({ id: v.id, stale: supersededVersionIds(versionList, mergedInputVersionIds(v)) }))
+    .filter((x) => x.stale.length > 0);
+  if (staleMerged.length > 0) {
+    push('warn', 'merged-stale',
+      `${staleMerged.length} merged version(s) were built from versions a part has since replaced — ` +
+      `the merged body describes an older design: ${staleMerged.slice(0, 5).map((x) => `${x.id} <- ${x.stale.join(',')}`).join('; ')}` +
+      ' — merge again from the current versions, or cite the stale inputs explicitly');
   }
   if (staleRuns.length > 0) {
     const sample = staleRuns.slice(-5).map((r) => `${r.id}(${r.kind}, superseded ${r.superseded.join('/')})`);
