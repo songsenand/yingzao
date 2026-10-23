@@ -625,8 +625,12 @@ export async function runAssemblyCheckInTs(
       interfaces: results.length, pass, hardViolations: hard, intentFlags: intents,
       skipped, undeclared: undeclared.length,
     },
-    // skipped is not a pass either (missing tolerance / unimplemented operator).
-    overallStatus: hard > 0 ? 'fail' : intents + undeclared.length + skipped > 0 ? 'check' : 'pass',
+    // Skipped is not a pass either (missing tolerance / unimplemented operator), and
+    // neither is a manifest that declares NO interface: an empty contract has not been
+    // satisfied, it has not been written (2026-10-23 audit, FIX-B4).
+    overallStatus: hard > 0 ? 'fail'
+      : (results.length === 0 || intents + undeclared.length + skipped > 0) ? 'check'
+        : 'pass',
   };
   return report;
 }

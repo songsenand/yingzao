@@ -157,11 +157,14 @@ export async function auditDelivery(
   const contract: DeliveryAudit['contract'] = {
     name: null, interfaces: 0, byCheck: {}, staleNodes: [], geometryNewerThanCheck: false,
   };
+  let contractPath: string | null = null;
+  let contractError: string | null = null;
   try {
     const resolved = await resolveAssemblyManifestPath(opts.manifestPath, {
       workspace: opts.workspace ?? project.cwd,
       dataRoot: project.root,
     });
+    contractPath = resolved.path;
     const manifest = await loadAssemblyManifest(resolved.path);
     contract.name = manifest.name ?? null;
     const root: any = (manifest as any).root ?? manifest;
@@ -187,7 +190,12 @@ export async function auditDelivery(
     contract.geometryNewerThanCheck = Boolean(
       newestCheck && newestVersion && newestVersion.timestamp > newestCheck.timestamp,
     );
-  } catch { /* no readable manifest: the other findings still stand */ }
+  } catch (e) {
+    // Distinguish "there is no manifest" (normal for a single part) from "a manifest is
+    // there and cannot be read" (which silently erased three contract findings — the
+    // 2026-10-23 audit's FIX-B4). Only the second one is a finding.
+    contractError = String((e as Error)?.message ?? e);
+  }
 
   // ── geometry on disk that no version accounts for ─────────────────────────
   //
@@ -203,6 +211,24 @@ export async function auditDelivery(
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
 
+  // A corpus with nothing in it is not a clean corpus (2026-10-23 audit, FIX-B4): the
+  // audit used to answer `not-excluded` for an empty project, which reads as "nothing
+  // wrong found" when the truth is "there was nothing to look at".
+  if (versionList.length === 0 && parts.length === 0 && runs.length === 0) {
+    push('warn', 'empty-corpus',
+      'this project has no version, no part and no run — the audit found nothing to check, which is NOT a clean bill');
+  }
+  if (contractPath && contractError && existsSync(contractPath)) {
+    push('warn', 'manifest-unreadable',
+      `an assembly manifest exists at ${contractPath} but could not be read (${contractError}) — its interfaces, ` +
+      'stale nodes and motion coverage are UNKNOWN, so the contract findings below are not evidence of anything');
+  }
+  if (scanPaths.length === 0) {
+    push('info', 'scan-disabled',
+      'scanPaths was [] — the unregistered-geometry scan (the check that can BLOCK a delivery) did not run; ' +
+      'pass explicit roots, or [] only when you are auditing a corpus with no files on disk');
+  }
+
   // ── claims → evidence (declared, not inferred) ────────────────────────────
   //
   // "必须看过渲染图" cannot be verified by content (DESIGN §25.7 gate rule): a machine can
@@ -212,14 +238,19 @@ export async function auditDelivery(
   const staleIds = new Set(staleRuns.map((r) => r.id));
   const newestVersions = new Set([...newestOfPart.values()]);
   const freshRuns = runs.filter((r) => !staleIds.has(r.id));
+  // A run that FAILED is not evidence that a claim holds: it is evidence that something
+  // is wrong (2026-10-23 audit, FIX-B4). `check` still counts — an inconclusive run is
+  // better than no run, and the verdict already carries the doubt.
   const freshOfKind = (kinds: string[]) =>
     freshRuns.filter(
-      (r) => kinds.includes(r.kind) && (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
+      (r) => kinds.includes(r.kind) && r.status !== 'fail' &&
+        (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
     );
   const partsMissingPrintability = [...newestOfPart.entries()]
     .filter(
       ([, vid]) =>
-        !freshRuns.some((r) => r.kind === 'printability' && (r.sourceVersionIds ?? []).includes(vid)),
+        !freshRuns.some((r) => r.kind === 'printability' && r.status !== 'fail' &&
+          (r.sourceVersionIds ?? []).includes(vid)),
     )
     .map(([pid]) => parts.find((x) => x.id === pid)?.name ?? pid);
   const claims = opts.claims ?? [];

@@ -467,7 +467,7 @@ Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic fol
 simulate_motion({ parts: [], joints: [], drive: {} })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `blocking`, `deliverability`, `maxJointDriftMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `blocking`, `deliverability`, `maxJointDriftMm`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`

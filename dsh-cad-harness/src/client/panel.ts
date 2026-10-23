@@ -24,8 +24,9 @@ import {
   overlayInk, VIEWPORT_BACKGROUNDS,
 } from './lighting';
 import type {
-  PartProduct, PartRecord, ProductsResponse, RunKind, RunProduct, RunStatus, VersionProduct, WorkspaceEntry,
+  PartProduct, PartRecord, ProductsResponse, RunJudgement, RunKind, RunProduct, RunStatus, VersionProduct, WorkspaceEntry,
 } from '../shared/types';
+import { judgementOf, versionVerdict } from './verdict';
 
 const ANN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
@@ -48,20 +49,20 @@ const statusGlyph = (status: string): React.ReactNode => {
 };
 
 /**
- * Which runs audited this revision — and what the worst of them said. A version
- * itself carries no verdict (it is only ever `draft`: a revision exists whether
- * or not anyone checked it), so "is this revision OK?" is *derived* from the
- * runs that named it, and `null` honestly means "nobody has looked".
+ * Glyph for a canonical judgement. 'not-excluded' gets a hollow dot, NOT a check:
+ * the word (不排除可行) is the claim, and a ✅ would silently drop its two negations.
  */
-const versionVerdict = (runs: RunProduct[]): RunStatus | null => {
-  if (runs.length === 0) return null;
-  if (runs.some((r) => r.status === 'fail')) return 'fail';
-  if (runs.some((r) => r.status === 'check')) return 'check';
-  return 'pass';
+const judgementGlyph = (j: RunJudgement | null): React.ReactNode => {
+  const color = j === 'excluded' ? '#c0392b' : j === 'difficult' ? '#b8860b' : j === 'not-excluded' ? '#2f7d5d' : '#8a94a0';
+  const glyph = j === 'excluded' ? '✕' : j === 'difficult' ? '!' : j === 'not-excluded' ? '◦' : '·';
+  return React.createElement('span', { style: { color, fontWeight: 700 } }, glyph);
 };
 
 const VERDICT_WORD: Record<string, string> = {
-  pass: '通过', check: '待复核', fail: '失败', draft: '未验证',
+  // The band only ever shows a canonical judgement; `unjudged` is a run that judged
+  // nothing, `draft` a version no run named. The legacy status words stay for rows.
+  unjudged: '未判定', draft: '未验证',
+  pass: '通过', check: '待复核', fail: '失败',
   // The canonical three (src/shared/judgement.ts). 'not-excluded' is deliberately NOT
   // 通过: it means no counter-example was found, never "safe" (DESIGN §25.7).
   'not-excluded': '不排除可行', difficult: '困难', excluded: '否决',
@@ -72,7 +73,8 @@ const verdictColorWord = (v: string | null): string =>
   v === 'not-excluded' ? '#1e8449' : v === 'excluded' || v === 'hard-violation' ? '#c0392b'
     : v === 'difficult' || v === 'intent-flag' || v === 'skipped' ? '#9c6f0a' : '#8a94a0';
 const verdictColor = (v: string | null): string =>
-  v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
+  v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? '#c0392b' : v === 'difficult' ? '#9c6f0a'
+    : v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
 
 /**
  * One row of the 未登记 list. The host's scan (shared with delivery_audit) says
@@ -2020,7 +2022,7 @@ export function CadPanel(): React.ReactElement {
   // A run shows the judgement it actually made; a run that judged nothing (risk map,
   // fluid trend) shows 未判定 rather than borrowing its `status` as if it were one.
   const verdict: RunJudgement | null = run
-    ? (run.judgement ?? null)
+    ? judgementOf(run)
     : version ? versionVerdict(runsOnVersion) : null;
   const revIndex = version && currentPart
     ? currentPart.versions.findIndex((v) => v.id === version.id) : -1;
@@ -3083,10 +3085,10 @@ export function CadPanel(): React.ReactElement {
     React.createElement(
       'div',
       { style: S.status, title: statusTooltip },
-      record && React.createElement('span', { style: { flex: 'none' } }, statusGlyph(verdict ?? 'draft')),
+      record && React.createElement('span', { style: { flex: 'none' } }, judgementGlyph(verdict)),
       record && React.createElement('span', {
         style: { flex: 'none', fontWeight: 600, color: verdictColor(verdict) },
-      }, VERDICT_WORD[verdict ?? 'draft']),
+      }, VERDICT_WORD[verdict ?? (run ? 'unjudged' : 'draft')]),
       React.createElement('span', { style: S.statusText },
         statusDetail ? `${statusIdentity} — ${statusDetail}` : statusIdentity),
       record && provenance && React.createElement('span', {

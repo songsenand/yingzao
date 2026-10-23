@@ -123,7 +123,12 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
       id: 'root', name: 'clean', kind: 'assembly',
       children: [{ id: 'a', name: '支架', kind: 'part', version: v1 }],
       interfaces: [{
-        id: 'if-motion', a: '支架.角点', b: '支架.角点', type: '滑动副',
+        // Endpoints are "<DIRECT childId>.<datum>" — the child id is 'a', not the part
+        // name. This fixture was invalid all along and the audit's silent `catch` hid it
+        // (2026-10-23 audit, FIX-B4): the "clean corpus" was only clean because its
+        // contract had been thrown away. Now that an unreadable manifest is a finding,
+        // the fixture has to be a manifest that actually parses.
+        id: 'if-motion', a: 'a.角点', b: 'a.角点', type: '滑动副',
         severity: 'intent', layer: 'L1', check: 'motion-clearance', params: {},
       }],
     },

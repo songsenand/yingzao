@@ -27,10 +27,17 @@ export function asJudgement(legacy: string | undefined | null): Judgement {
     case 'fail':
     case 'unprintable':
     case 'overstressed':
+    case 'hard-violation':
       return 'excluded';
     case 'difficult':
     case 'attention':
     case 'check':
+    // Assembly-interface words (2026-10-23): a skipped interface is "nobody evaluated
+    // it" and an intent-flag is a soft signal — both are difficult, and NEITHER is a
+    // pass. The mapping used to be hand-written at one call site because this function
+    // did not know the words, which is how a "single source" grows a second copy.
+    case 'skipped':
+    case 'intent-flag':
       return 'difficult';
     case 'not-excluded':
     case 'pass':

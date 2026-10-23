@@ -2773,6 +2773,25 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 判据：**验收必须经过真实边界**——`accept-*.mjs` 直接调 `def.execute()`，若不在这里补，
 测的就不是模型实际收到的东西（四个工具因此带着坏契约发布，见 `docs/AUDIT-2026-10-23.md` A1）。
 
+**判定随运行走（2026-10-23）。** 运行记录携带 `judgement`（`src/shared/types.ts` 的
+`RunJudgement`），面板回答「这一版能不能交」时**只读它**：
+
+- 有 `judgement` 的运行取最劣（excluded > difficult > not-excluded）；
+- **没有** `judgement` 的运行（风险图、流体趋势）不参与——一个版本只有这类运行时显示
+  「未验证」，不是通过；
+- 旧语料只有 `status`：`fail` 仍是否决、`check` 仍是困难，而 `pass` **不贡献任何结论**
+  （「工具跑成功了」不是「设计没问题」）。这条是 §25.7 那句「只有三值、永不出现 ok」在
+  像素上的落地——之前状态带把 `status: 'pass'` 直接渲染成「通过」。
+
+**空契约不是通过（2026-10-23）。** `check_assembly` 对**一条接口都没有**的清单给 `difficult`：
+空清单不是「满足了契约」，它是「契约还没写」。同理 `delivery_audit` 对空语料报
+`empty-corpus`（warn），不再回 `not-excluded`。
+
+**余量进判定（2026-10-23）。** `marginalNotes`（余量落在测量噪声内，如拔模 ≤0.5°、通道 ≤
+圆度残差）此前只进 `findings`，判定仍是 `not-excluded`；现在它把判定降为 `difficult`。
+关节初始失配同源：`simulate_motion` 在**步进之前**测的 `initialJointGaps` 随回复返回
+（此前算了就丢），超容差则拒跑、未超也报出余量（HARNESS §11.16）。
+
 `analyze` **写 run（`kind:'analyze'`）并落 `attention.json`**，其 `samples.fused` 就是面板
 `pickHeatLayer` 优先绘制的那一层——**同一次计算，两个读者**（LLM 读 `report.json` 的峰表，
 人看 `ramp()` 的图）。`peaks` 与 `samples.fused` 共用同一批 bucket：两个投影，不是两次计算。

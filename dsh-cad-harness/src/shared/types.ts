@@ -22,6 +22,18 @@ export interface EchoResponse {
 
 export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid' | 'printability' | 'stress' | 'analyze';
 export type RunStatus = 'pass' | 'check' | 'fail';
+/**
+ * The canonical judgement (src/shared/judgement.ts) as it travels on a run.
+ *
+ * WHY it lives on the RUN and not only in the tool's reply: the panel has to answer
+ * "is this revision OK?" from the runs that named it, and `status` cannot answer it —
+ * `pass`/`check`/`fail` is the tool's own two-or-three-value word, not the delivery
+ * vocabulary. A run that never judged anything (a risk map, a fluid trend) carries NO
+ * judgement, and that absence must read as "not a check", never as "clean"
+ * (2026-10-23 audit, FIX-B5).
+ */
+export type RunJudgement = 'excluded' | 'difficult' | 'not-excluded';
+
 export interface RunProduct {
   type: 'run';
   id: string;
@@ -31,6 +43,8 @@ export interface RunProduct {
   /** Human one-liner: what the run was about. */
   title: string;
   status: RunStatus;
+  /** The canonical judgement, present only when this run JUDGED something. */
+  judgement?: RunJudgement;
   /** One-line metrics for the record list. */
   summary: string;
   /** Saved versions the geometry came from; empty = an inline-SCAD scene. */

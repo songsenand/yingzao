@@ -21,7 +21,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readPythonOverlay } from './python-runtime.ts';
-import type { RunKind, RunProduct, RunStatus } from '../shared/types.ts';
+import type { RunJudgement, RunKind, RunProduct, RunStatus } from '../shared/types.ts';
 
 export type { RunKind, RunStatus } from '../shared/types.ts';
 
@@ -141,6 +141,12 @@ export interface RunWriter {
   /** Logical path the panel fetches (parts/foo.stl, frames/bar.bin). */
   commit(final: {
     status: RunStatus;
+    /**
+     * The canonical judgement, when this run actually judged something (DESIGN §25.7).
+     * Omit it for evidence-only runs (a risk map, a fluid trend): the panel treats a
+     * missing judgement as "not a delivery check", which is different from "clean".
+     */
+    judgement?: RunJudgement;
     summary: string;
     title?: string;
     sourceVersionIds?: string[];
@@ -241,6 +247,9 @@ export async function beginRun(
         timestamp: init.timestamp ?? new Date().toISOString(),
         title: final.title ?? init.title,
         status: final.status,
+        // Absent stays absent: "this run did not judge anything" is information the panel
+        // needs, and defaulting it to 'not-excluded' would manufacture a clean bill.
+        ...(final.judgement ? { judgement: final.judgement } : {}),
         summary: final.summary,
         sourceVersionIds: [...new Set(final.sourceVersionIds ?? [])].filter(Boolean).sort(),
         hasGeometry: parts.length > 0,

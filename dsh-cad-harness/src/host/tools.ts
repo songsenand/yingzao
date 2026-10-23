@@ -714,7 +714,14 @@ export function registerCadTools(
       title: `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
       sourceVersionIds,
       status: motionStatus,
+      // Interference is a witness (the solid overlaps in a real pose) -> excluded.
+      // Anchor drift / constraint violations mean the numbers are not trustworthy
+      // -> difficult, never a clean bill.
+      judgement: interferenceBlocking ? 'excluded'
+        : (report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
+          : 'not-excluded',
       summary: (interferenceBlocking ? '❌ 不可交付 · ' : '') +
+        (initialGaps.length ? `初始最大失配 ${Math.max(...initialGaps.map((g) => g.gapMm)).toFixed(2)}mm · ` : '') +
         `干涉 ${report.metrics.interferenceCount} 次` +
         (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : ''),
     });
@@ -733,6 +740,11 @@ export function registerCadTools(
       interferenceCount: report.metrics.interferenceCount,
       interferenceEvents: report.metrics.interferenceEvents,
       maxJointDriftMm: report.metrics.maxJointDriftMm,
+      // Measured BEFORE stepping (assertAssembledAtStart). It used to be computed and
+      // thrown away, so a scenario 1.9mm from assembled passed under a 2mm tolerance with
+      // no trace of how close it was (2026-10-23 audit, FIX-B2).
+      initialJointGaps: initialGaps,
+      jointToleranceMm: 2,
       jointViolations: report.metrics.jointViolations,
       keyframes: keep.map((f) => f.view),
       stepsRun: report.stepsRun,
@@ -1787,22 +1799,12 @@ export function registerCadTools(
 
       const tight = report.pairs.filter((x) => x.status === 'too_tight').length;
       const clash = report.pairs.filter((x) => x.status === 'interference').length;
-      await run.commit({
-        title: `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
-        sourceVersionIds,
-        status: report.overallStatus === 'pass' ? 'pass' : 'fail',
-        summary: `${report.pairs.length} 对 · 干涉 ${clash} · 过紧 ${tight}`,
-        // Same part set = same question re-asked; the newest answer is the one
-        // that counts, so older runs about this exact set become history.
-        subject: `parts:${a.parts.map((p) => p.name).slice().sort().join('+')}`,
-      });
-
-      assemblyRefsForFinalize = { refs, views: pngs.length, runId: run.id, thresholdMm: report.thresholdMm };
       // The canonical judgement (src/shared/judgement.ts). L0 geometry has no noise band:
       // a witness either contradicts the declared clearance (interference, or a measured
       // gap below `clearanceThreshold`) or nothing was found. So the honest mapping is
       // two-valued, and `difficult` is deliberately never emitted here — the margin lives
       // in `pairs[].minDistance` vs `clearanceThresholdMm`, both of which travel with it.
+      // Computed ONCE, before the commit, so the run and the reply cannot disagree.
       const nonWatertight = report.parts.filter((p) => !p.watertight).map((p) => p.name);
       const judgement = nonWatertight.length > 0 || clash > 0 || tight > 0 ? 'excluded' : 'not-excluded';
       const judgedBy = {
@@ -1814,6 +1816,20 @@ export function registerCadTools(
         clearanceThresholdMm: report.thresholdMm,
         interferenceEpsilonMm3: report.interferenceEpsilonMm3,
       };
+      await run.commit({
+        title: `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
+        sourceVersionIds,
+        status: report.overallStatus === 'pass' ? 'pass' : 'fail',
+        // Same value the tool returns; the run carries it so the panel can answer
+        // "is this revision excluded?" without parsing a report.
+        judgement,
+        summary: `${report.pairs.length} 对 · 干涉 ${clash} · 过紧 ${tight}`,
+        // Same part set = same question re-asked; the newest answer is the one
+        // that counts, so older runs about this exact set become history.
+        subject: `parts:${a.parts.map((p) => p.name).slice().sort().join('+')}`,
+      });
+
+      assemblyRefsForFinalize = { refs, views: pngs.length, runId: run.id, thresholdMm: report.thresholdMm };
       return {
         overallStatus: report.overallStatus,
         judgement,
@@ -2317,6 +2333,18 @@ export function registerCadTools(
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
           deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
+          initialJointGaps: {
+            type: 'array', required: true,
+            description: 'Per joint: the anchor gap measured in the STARTING pose, before the first step. The run refuses a gap over the tolerance; this is how close the accepted ones were (margin, not just a pass/fail).',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                joint: { type: 'string', required: true },
+                gapMm: { type: 'number', required: true },
+              },
+            },
+          },
+          jointToleranceMm: { type: 'number', required: true, description: 'The tolerance the starting gaps were judged against.' },
           jointViolations: { type: 'array', required: true, items: { type: 'string' } },
           pivots: { type: 'object', required: true, additionalProperties: true, description: 'Per part: the point its body rotates/slides about, in the part\'s own file frame. Geometry is re-based on it before the run.' },
           keyframes: { type: 'array', required: true, items: { type: 'string' } },
@@ -4006,6 +4034,13 @@ export function registerCadTools(
       // silently stopped firing — caught by accept-p3.)
       if (verdict === 'not-excluded') verdict = 'difficult';
     }
+    // A margin inside the instrument's noise is 'difficult', never a pass — and putting
+    // it only in `findings` left the VERDICT saying not-excluded (2026-10-23 audit,
+    // FIX-B2). Friendly escape-passage and draft checks both write `marginalNotes`.
+    if (marginalNotes.length > 0 && verdict === 'not-excluded') {
+      verdict = 'difficult';
+      findings.push('余量落在测量噪声以内 —— 判定降为「困难」，不是通过（见上面每条的余量与分辨率）。');
+    }
     const result = { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
 
     // The attention field is also a PRODUCT, not just a reply: the panel draws it as a
@@ -4026,6 +4061,7 @@ export function registerCadTools(
       });
       await run.commit({
         status: verdict === 'not-excluded' ? 'pass' : verdict === 'excluded' ? 'fail' : 'check',
+        judgement: verdict,
         summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
         title: `制造筛查 · ${a.versionId}`,
         sourceVersionIds: [a.versionId],
@@ -4520,6 +4556,12 @@ export function registerCadTools(
       });
       await run.commit({
         status: verdict === 'ok' ? 'pass' : verdict === 'overstressed' ? 'fail' : 'check',
+        // The DELIVERY half, not the display word: a stress run with no trustworthy
+        // region is `difficult`, which `ok` could never express. `verdicts` is a list
+        // (one per question), so the run carries the WORST of them.
+        judgement: delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
+          : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
+            : 'not-excluded',
         summary: `${material.id} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
         title: `应力分析 · ${a.versionId}`,
         sourceVersionIds: [a.versionId],
@@ -5205,7 +5247,10 @@ export function registerCadTools(
         // Provenance belongs to the COMMIT: beginRun only names the run.
         sourceVersionIds: [a.versionId],
         subject: `analyze:${a.versionId}`,
-        status: out.peaks.length > 0 ? 'check' : 'pass',
+        // Always 'check': a risk map is something to look at, and "no peaks" is not a
+        // clean bill (the tool says so itself). It carries no judgement, so the revision
+        // band reads 未验证 rather than borrowing this word (2026-10-23 audit, FIX-B4).
+        status: 'check',
         summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'}` +
           (cornerError ? ' · 角扫描失败（见 notMapped）' : ''),
       });
@@ -5275,6 +5320,13 @@ export function registerCadTools(
     await run.json('report.json', report);
     await run.commit({
       sourceVersionIds,
+      // The canonical judgement (same derivation as the tool's reply): a hard violation
+      // is a witness; a skipped/intent interface is "nobody evaluated it" -> difficult.
+      judgement: report.results.some((r) => r.verdict === 'hard-violation')
+        ? 'excluded'
+        : (report.results.length === 0 || report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag'))
+          ? 'difficult'
+          : 'not-excluded',
       status: report.overallStatus,
       summary: `${report.summary.interfaces} 接口 · 通过 ${report.summary.pass} · ` +
         `硬冲突 ${report.summary.hardViolations} · 未声明 ${report.summary.undeclared}`,
@@ -5421,8 +5473,8 @@ export function registerCadTools(
         //   none           -> not-excluded
         judgement: report.results.some((r) => r.verdict === 'hard-violation')
           ? 'excluded'
-          : report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag')
-            ? 'difficult'
+          : (report.results.length === 0 || report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag'))
+            ? 'difficult'   // an EMPTY contract is an unevaluated one, not a satisfied one
             : 'not-excluded',
         judgedBy: {
           hardViolations: report.results.filter((r) => r.verdict === 'hard-violation').length,

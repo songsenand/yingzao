@@ -3925,3 +3925,40 @@ DESIGN §26.3b、cad-toolbox skill。**逃生口**：删掉 `user-site-override/
 `scripts/{accept-tool-output,accept-tool-contracts,audit-arg-errors,accept-python}.mjs`、
 `docs/TOOL-CONTRACTS.md`（重新生成）、DESIGN §25.7。回滚 = revert 本提交；
 `coverage` 是新增字段，旧调用方不受影响。
+
+## 2026-10-23：判定必须随运行走；空契约不是通过；余量进判定
+
+**触发条件：** 4（影响面板、运行库与三张交付判定）+ 2（审计实测：`analyze` 空峰 → `status:'pass'`
+→ 面板 ✅ 通过；零接口清单 → `pass`；`marginalNotes` 不进判定）。
+
+**要解决的问题：** 三处同源：① 面板的"这一版能不能交"读的是 `run.status`，而 `status` 是工具
+自己的结果词——风险图没找到峰是 `pass`、流体跑完是 `pass`，都不是对零件的判定，渲染成「通过」
+正是 §25.7 禁止的 ok/safe 声明；② `check_assembly` 对**零接口**清单回 `pass`，而逐接口规则坚持
+「没有 tolerance 就是 skipped，不是通过」——清单为空时那条规则根本没机会说话；③ 拔模/通道的
+余量落在测量噪声内时只写进 `findings`，判定字段仍是 `not-excluded`，「记为困难」没有落地。
+
+**决策内容：**
+
+1. **运行携带 `judgement`**（`RunJudgement`，与 `src/shared/judgement.ts` 同一套词）：
+   `validate_assembly` / `check_assembly` / `check_printability` / `simulate_stress` /
+   `simulate_motion` 在 commit 时写入；无判定的运行（`analyze` / 流体 / 物理趋势）**不写**。
+2. **面板只从 `judgement` 推导版本结论**（`src/client/verdict.ts`）：没有判定 = 未验证；
+   旧语料的 `status: 'fail'` 仍否决、`'check'` 仍困难、`'pass'` 不贡献结论。
+3. **空契约 = difficult**（`check_assembly` 同时把 `overallStatus` 降为 `check`）。
+4. **余量进判定**：`marginalNotes` 非空时 `verdict` 降为 `difficult`。
+5. **初始失配随回复返回**：`simulate_motion` 的 `initialJointGaps` / `jointToleranceMm`。
+
+**理由：** 判定的主语必须是零件，不是工具；一个"跑成功了"的状态词被当成"设计没问题"，
+是把静默放行装进像素。而把"未覆盖/未编排/余量过小"从判定里抹掉，三值词汇就退化成两值。
+
+**依据（实测）：** `accept-panel-verdict.mjs`（11 条：空运行 → null、裸 pass 不贡献、
+旧 fail 仍否决、任何输入都不产生 `pass`）；`accept-judgement-vocabulary.mjs`（23 个词全映射、
+未知词 → difficult）；`accept-delivery-audit.mjs`（修好后 27 条全 PASS，其中"clean corpus"
+的夹具原本因清单不合法而被 `catch{}` 吞掉——正是本条要修的病）；`accept-preflight.mjs` 全 PASS；
+`accept-tool-contracts` / `accept-tool-output` 全 PASS；`tsc` 0。
+**未测**：需要 Python worker 的端到端（check_printability / stress / motion 的真实运行）。
+
+**影响：** `src/shared/types.ts`（`RunJudgement`）、`runs.ts`（commit 接受 `judgement`）、
+`tools.ts`（五处 commit + 空契约 + 余量 + 初始失配）、`delivery-audit.ts`（空语料/清单不可读/
+扫描关闭/失败 run 不算证据）、`assembly-check.ts`、`src/client/verdict.ts`（新）、`panel.ts`、
+`shared/judgement.ts`（补装配词）。回滚 = revert 本提交；`judgement` 是可选字段，旧运行记录不受影响。
