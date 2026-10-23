@@ -189,3 +189,33 @@ export function buildHeatColors(
   }
   return { colors, colored };
 }
+
+/** Run kinds that can own an `attention.json`. */
+export const ATTENTION_RUN_KINDS = ['printability', 'stress', 'analyze'] as const;
+
+export interface HeatQuery {
+  /** Query string for `/api/cad/attention`. */
+  query: string;
+  /** True when the answer must come from THIS run (id=) rather than the version's newest. */
+  pinnedToRun: boolean;
+}
+
+/**
+ * Which field to ask for.
+ *
+ * "产物即主体" (DESIGN §6.9b/§30.15): when the human has selected a RUN that owns a field,
+ * the picture must be THAT run's field — not the newest one for the version. Otherwise
+ * selecting the stress run and seeing the printability map is the same class of lie as the
+ * old "latest run" tabs. With a version selected, the newest field wins and the legend
+ * names it (2026-10-23 audit, FIX-E5).
+ */
+export function attentionQuery(source: {
+  run?: { id: string; kind: string } | null;
+  versionId: string;
+}): HeatQuery {
+  const { run, versionId } = source;
+  if (run && (ATTENTION_RUN_KINDS as readonly string[]).includes(run.kind)) {
+    return { query: `id=${encodeURIComponent(run.id)}`, pinnedToRun: true };
+  }
+  return { query: `v=${encodeURIComponent(versionId)}`, pinnedToRun: false };
+}

@@ -14,7 +14,7 @@ import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overla
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
-import { buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
+import { attentionQuery, buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
 import {
   axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
   planeToWorld, projectToCutPlane, sectionLoops, sectionSegments,
@@ -1421,7 +1421,17 @@ export function CadPanel(): React.ReactElement {
     }
     try {
       setHint('热力图取数中…');
-      const res = await fetch(withProject(`/api/cad/attention?v=${encodeURIComponent(versionId)}`));
+      // A selected run owns its field; a version asks for the newest one (see attentionQuery).
+      const q = attentionQuery({ run: run ? { id: run.id, kind: run.kind } : null, versionId });
+      let res = await fetch(withProject(`/api/cad/attention?${q.query}`));
+      let fellBack = false;
+      if (!res.ok && q.pinnedToRun) {
+        // The selected run predates attention fields (or is a kind without one): fall back
+        // to the version's newest field, and SAY SO — a silent substitution would be the
+        // same "latest wins" lie the pinning exists to remove.
+        res = await fetch(withProject(`/api/cad/attention?v=${encodeURIComponent(versionId)}`));
+        fellBack = res.ok;
+      }
       if (!res.ok) {
         setHint(`热力图：服务器上没有 ${versionId} 的场数据（HTTP ${res.status}）— 先对这个版本跑一次 check_printability 生成 run；` +
           '如果刚更新过插件，还需要重启 dsh 进程，新路由才会存在');
@@ -1440,7 +1450,9 @@ export function CadPanel(): React.ReactElement {
       // Name the source run in the legend: the same version can have a press field and a
       // stress field, and "which one am I looking at" must not be a guess (FIX-E5).
       setHeat({ legend: payload.source ? `${layer.legend} · 来源 ${payload.source.runId}（${payload.source.kind}）` : layer.legend });
-      setHint(null);
+      setHint(fellBack
+        ? '选中的运行没有场数据，已显示该版本最新的一份（来源写在图例里）'
+        : null);
     } catch (err) {
       setHint(`热力图取数失败：${String(err).slice(0, 80)}`);
     }

@@ -6273,8 +6273,29 @@ export function registerCadTools(
       requestBody: 'buffered',
       fetch: async (request: Request) => {
         const { store, runStore } = requestStores(request);
-        const wanted = new URL(request.url).searchParams.get('v');
-        if (!wanted) return new Response('missing v', { status: 400 });
+        const params = new URL(request.url).searchParams;
+        // `?id=<runId>` pins the field to the artifact the human selected (DESIGN §6.9b:
+        // the product is the subject). `?v=<versionId>` keeps the old "newest field for
+        // this version" behaviour for the version view, and the response names the run.
+        const pinnedId = params.get('id');
+        if (pinnedId) {
+          if (!/^r\d{3,}$/.test(pinnedId)) return new Response('bad run id', { status: 400 });
+          const pinnedPath = runFilePath(runStore, pinnedId, 'attention.json');
+          if (!pinnedPath) return new Response('bad run id', { status: 400 });
+          try {
+            const body = await readFile(pinnedPath);
+            const run = (await listRuns(runStore)).find((r) => r.id === pinnedId);
+            const field = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+            return new Response(JSON.stringify({
+              ...field,
+              source: { runId: pinnedId, kind: run?.kind ?? 'unknown', timestamp: run?.timestamp ?? '', title: run?.title },
+            }), { status: 200, headers: { 'content-type': 'application/json' } });
+          } catch {
+            return new Response(`run ${pinnedId} has no attention field`, { status: 404 });
+          }
+        }
+        const wanted = params.get('v');
+        if (!wanted) return new Response('missing v (or id)', { status: 400 });
         const runs = await listRuns(runStore);
         const candidates = runs
           .filter((r) => (r.kind === 'printability' || r.kind === 'stress' || r.kind === 'analyze') && (r.sourceVersionIds ?? []).includes(wanted))
