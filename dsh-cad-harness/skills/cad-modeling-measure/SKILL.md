@@ -1,6 +1,6 @@
 ---
 name: cad-modeling-measure
-description: "Depth for generating, importing and measuring geometry: OpenSCAD authoring traps (degrees vs radians, linear_extrude twist direction, a render that exits 0 yet is wrong), STL units, why STEP/IGES are unsupported, merge_parts vs separate parts, and which measurement tool answers which question when you did NOT draw the geometry."
+description: "Depth for generating, importing and measuring geometry: OpenSCAD authoring traps (degrees vs radians, linear_extrude twist direction, a render that exits 0 yet is wrong), which formats import (STL/STEP/3MF/DXF) and their unit rules, why IGES/OBJ are unsupported, merge_parts vs separate parts, and which measurement tool answers which question when you did NOT draw the geometry."
 whenToUse: "Authoring or importing a part, measuring geometry you did not create, or debugging a measurement that looks wrong."
 ---
 
@@ -22,14 +22,18 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   declaration, applied once before measurement and recorded in the version's
   provenance. A 25.4x wrong part is the classic failure here, so check the
   reported `sizeMm` against what you expected before trusting anything else.
-  STEP and DXF carry their own units: STEP self-declares (only `mm` accepted,
-  `scale` still works); DXF `$INSUNITS` wins when set, otherwise your `unit`.
-- **Formats: STL / STEP / DXF in — IGES still out.** `import_part` reads STEP/STP
-  (tessellated through OpenCASCADE in the worker; the result is a mesh, so
-  accuracy is bounded by the tessellation tolerance) and DXF (closed 2D profiles
-  become a solid only when you pass `depthMm` — a profile is not a body; 3D mesh
-  entities come in as-is). **IGES is not readable**: the tool says so with the
-  conversion route (re-export STEP or STL) instead of failing mysteriously.
+  STEP, 3MF and DXF carry their own units: STEP self-declares and 3MF declares
+  `model@unit` (both accept only `mm`/omitted — the file wins; `scale` still
+  works); DXF `$INSUNITS` wins when set, otherwise your `unit`.
+- **Formats: STL / STEP / 3MF / DXF in — IGES and OBJ/OFF out.** `import_part`
+  reads STEP/STP (tessellated through OpenCASCADE in the worker), 3MF (trimesh's
+  reader: build transforms and `<components>` are baked; the result is a mesh, so
+  accuracy is bounded by the tessellation) and DXF (closed 2D profiles become a
+  solid only when you pass `depthMm` — a profile is not a body; 3D mesh entities
+  come in as-is). **A 3MF must contain ONE object**: a slicer's "plate of parts"
+  is refused with the body count, because this harness's unit is one connected
+  part. **IGES is not readable**: the tool says so with the conversion route
+  (re-export STEP or STL) instead of failing mysteriously.
 - **`merge_parts` is for "one rigid body", not for tidying a corpus.** Use it when
   a whole machine has to be a single body (`simulate_physics` topple, a
   whole-assembly `measure_part`), because `simulate_physics` takes only

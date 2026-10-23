@@ -11,6 +11,8 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playback';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
+import { LocalFileDialog } from './local-file';
+import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
 import { buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
 import {
@@ -71,6 +73,30 @@ const verdictColorWord = (v: string | null): string =>
     : v === 'difficult' || v === 'intent-flag' || v === 'skipped' ? '#9c6f0a' : '#8a94a0';
 const verdictColor = (v: string | null): string =>
   v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
+
+/**
+ * One row of the 未登记 list. The host's scan (shared with delivery_audit) says
+ * whether a file is importable and previewable; the panel does not re-derive it.
+ */
+export interface UnregisteredFileRow {
+  path: string;
+  bytes: number;
+  modified: string;
+  severity: 'blocked' | 'warn';
+  format: string;
+  importable: boolean;
+  previewable: boolean;
+}
+
+/** Facts the preview route returns as headers — a file has no version to read them from. */
+export interface FileMeta {
+  format: string;
+  /** False for STL: its numbers are whatever the author used, and we say so. */
+  unitsMm: boolean;
+  solid: boolean;
+  shells: number;
+  warnings: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Measurement annotations
@@ -378,6 +404,16 @@ const fmtTime = (ts: string): string => {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+/** A file's size, in the unit a human reads (the list shows bytes otherwise). */
+const fmtBytes = (n: number): string =>
+  n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+
+/** Compact input used by the 未登记 import form (the dialog owns its own styles). */
+const fieldStyle: React.CSSProperties = {
+  fontSize: 11, padding: '2px 4px', border: '1px solid #d5d9dd', borderRadius: 4,
+  minWidth: 0, boxSizing: 'border-box', background: '#fff',
+};
+
 const S: Record<string, React.CSSProperties> = {
   panel: {
     padding: 12, display: 'flex', flexDirection: 'column', gap: 5,
@@ -576,6 +612,13 @@ export function CadPanel(): React.ReactElement {
   bgRef.current = bg;
   const [runReport, setRunReport] = useState<any>(null);
   const [fluidBusy, setFluidBusy] = useState(false);
+  /** 本地 STL 对话框：预览（不登记）或按路径导入为版本。 */
+  const [fileOpen, setFileOpen] = useState(false);
+  /**
+   * A version id to select once the products poll sees it. Set by the human
+   * import path, which returns an id before the panel's 3s poll has refreshed.
+   */
+  const pendingFocusRef = useRef<string | null>(null);
   const [section, setSection] = useState(false);
   /** Attention heatmap: the layer's own legend, or null when it is off. */
   const [heat, setHeat] = useState<{ legend: string } | null>(null);
@@ -692,8 +735,26 @@ export function CadPanel(): React.ReactElement {
    * categories flatten their runs into one list and hide the version column
    * (runs have no versions).
    */
-  type BrowseKind = 'part' | 'assembly' | 'sim' | 'contract';
+  type BrowseKind = 'part' | 'assembly' | 'sim' | 'contract' | 'unregistered';
   const [kind, setKind] = useState<BrowseKind>('part');
+  /**
+   * 未登记: workspace mesh files no version accounts for. It is a KIND of the
+   * same browse axis, not a modal — the human browses it where they browse
+   * everything else (DESIGN §30.18). The list comes from the host's scan, the
+   * bytes from /api/cad/file; neither can create a version.
+   */
+  const [unregistered, setUnregistered] = useState<UnregisteredFileRow[]>([]);
+  const [unregError, setUnregError] = useState<string | null>(null);
+  const [fileSubject, setFileSubject] = useState<string>('');
+  const [fileMeta, setFileMeta] = useState<FileMeta | null>(null);
+  // The 未登记 import form (inline, not a modal): the file is already chosen, so
+  // the only declarations left are the ones only a human can make.
+  const [importUnit, setImportUnit] = useState<ImportUnit>('mm');
+  const [importPart, setImportPart] = useState('');
+  const [importNonSolid, setImportNonSolid] = useState(false);
+  const [importDepth, setImportDepth] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
   const currentPart = kind === 'part' && subjectId && subjectId !== SCENE
     ? parts.find((p) => p.id === subjectId) ?? null
     : null;
@@ -726,6 +787,21 @@ export function CadPanel(): React.ReactElement {
   const version: VersionProduct | null = record?.type === 'version' ? record : null;
   const run: RunProduct | null = record?.type === 'run' ? record : null;
   const versionId = version?.id ?? null;
+  // What the viewport shows: a version's stored mesh, or an unregistered file's
+  // tessellation. ONE scene builder serves both — a preview that looked
+  // different from the version it becomes would be its own kind of lie.
+  const fileExt = fileSubject.slice(fileSubject.lastIndexOf('.')).toLowerCase();
+  const meshSource = versionId
+    ? { key: `v:${versionId}`, url: withProject(`/api/cad/stl?v=${encodeURIComponent(versionId)}`), kind: 'version' as const, unitsMm: true }
+    : kind === 'unregistered' && fileSubject
+      ? {
+        key: `f:${fileSubject}`,
+        url: `/api/cad/file?project=${encodeURIComponent(sessionCwd())}&path=${encodeURIComponent(fileSubject)}`,
+        kind: 'file' as const,
+        // An STL has no unit statement; STEP/3MF declare one and the worker folds it.
+        unitsMm: fileExt !== '.stl',
+      }
+      : null;
   const versionIdRef = useRef<string | null>(null);
   useEffect(() => { versionIdRef.current = versionId; }, [versionId]);
   /** Runs of this part whose geometry named the selected version. */
@@ -762,6 +838,11 @@ export function CadPanel(): React.ReactElement {
       // A pinned workspace belongs to the old session's tree; follow the new one.
       setWorkspaceCwd('');
       setWorkspaces([]);
+      // The 未登记 list and any selected file belong to the old session's
+      // workspace; a path from there is not addressable in the new one.
+      setUnregistered([]);
+      setFileSubject('');
+      setFileMeta(null);
       setScopeTick((t) => t + 1);
     }
     fetch(withProject('/api/cad/products'))
@@ -783,9 +864,42 @@ export function CadPanel(): React.ReactElement {
           if (cur === SCENE) return (d.scene ?? []).length ? SCENE : (list[0]?.id ?? '');
           return list.some((p) => p.id === cur) ? cur : (list[0]?.id ?? '');
         });
+        // A human import returns a versionId before this poll; select the part
+        // that owns it, and PIN it (the import is a deliberate act, not "follow
+        // whatever arrives next"). Cleared only when the owner is actually seen.
+        const pending = pendingFocusRef.current;
+        if (pending) {
+          const owner = list.find((p) => p.versions.some((v) => v.id === pending));
+          if (owner) {
+            pendingFocusRef.current = null;
+            setKind('part');
+            setSubjectId(owner.id);
+            setFollowLatest(false);
+            setRecordId(pending);
+          }
+        }
       })
       .catch((e) => setError(String(e.message)));
   };
+
+  // The 未登记 list is fetched on demand (entering the kind, or 刷新): the scan
+  // hashes files, so it is deliberately not on the 3 s poll.
+  const refreshUnregistered = () => {
+    const cwd = sessionCwd();
+    setUnregError(null);
+    fetch(`/api/cad/unregistered?project=${encodeURIComponent(cwd)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { files?: UnregisteredFileRow[]; project?: string }) => {
+        // A slow reply for the project you just left must not repaint this one.
+        if (d.project !== undefined && cwd && d.project !== cwd) return;
+        setUnregistered(d.files ?? []);
+      })
+      .catch((e) => setUnregError(String(e?.message ?? e)));
+  };
+  useEffect(() => {
+    if (kind === 'unregistered') refreshUnregistered();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, sessionDir]);
 
   // Record selection, in one place:
   //   * entering a part  → its newest REVISION (the version you are iterating);
@@ -873,8 +987,9 @@ export function CadPanel(): React.ReactElement {
   // Run products render through their own view instead.
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount || !versionId) return;
+    if (!mount || !meshSource) return;
     setSpec(null);
+    if (meshSource.kind === 'version') setFileMeta(null);
 
     // A missing WebGL context must degrade to a message, not take the whole
     // panel down: sandboxed/remote environments hit this routinely (read-only
@@ -904,8 +1019,18 @@ export function CadPanel(): React.ReactElement {
     let cleanupResize: (() => void) | undefined;
     (async () => {
       try {
-        const res = await fetch(withProject(`/api/cad/stl?v=${encodeURIComponent(versionId)}`));
+        const res = await fetch(meshSource.url);
         if (!res.ok) throw new Error(`STL fetch failed: HTTP ${res.status}`);
+        if (meshSource.kind === 'file') {
+          // The route states the facts a file has no version to carry.
+          setFileMeta({
+            format: res.headers.get('x-cad-format') ?? '',
+            unitsMm: res.headers.get('x-cad-units') === 'mm',
+            solid: res.headers.get('x-cad-solid') === '1',
+            shells: Number(res.headers.get('x-cad-shells') ?? '0') || 0,
+            warnings: decodeURIComponent(res.headers.get('x-cad-warnings') ?? '').split(' | ').filter(Boolean),
+          });
+        }
         const buf = await res.arrayBuffer();
         const geometry = new STLLoader().parse(buf);
         geometry.computeBoundingSphere();
@@ -1051,7 +1176,9 @@ export function CadPanel(): React.ReactElement {
       renderer.forceContextLoss();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
     };
-  }, [versionId]);
+    // Keyed on the SOURCE, not the version: an unregistered file renders through
+    // the same builder, and switching version→file must rebuild the scene.
+  }, [meshSource?.key]);
 
   // --- screenshot + annotation → context tray ---
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -1491,10 +1618,28 @@ export function CadPanel(): React.ReactElement {
    */
   const shotPrompt = (label: string): string => {
     const head: string[] = [];
-    if (currentPart?.name) head.push(`零件「${currentPart.name}」`);
-    if (version?.id) head.push(`版本 ${version.id}`);
+    // A file's caption must not read like a version's: the image is the ONLY
+    // handle the conversation has on it (there is no versionId to cite), so the
+    // path and the "not evidence" status travel with the picture.
+    const asFile = !version && kind === 'unregistered' && fileSubject ? fileSubject : null;
+    if (asFile) {
+      head.push(`未登记文件 ${asFile}`);
+      head.push('不是版本 · 未入证据');
+    } else {
+      if (currentPart?.name) head.push(`零件「${currentPart.name}」`);
+      if (version?.id) head.push(`版本 ${version.id}`);
+    }
     head.push(label);
     const facts: string[] = [];
+    if (asFile) {
+      if (fileMeta) {
+        facts.push(`格式 ${fileMeta.format || asFile.split('.').pop()}`);
+        facts.push(fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件数字显示）');
+        facts.push(fileMeta.solid ? '封闭实体' : `非封闭（${fileMeta.shells} 个壳）`);
+      }
+      if (annotations.length) facts.push(`${annotations.length} 处标注框`);
+      return `CAD 视口截图 — ${head.join(' · ')}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
+    }
     if (spec) facts.push(`包围盒 ${spec.size.map((n) => round3(n)).join(' × ')} mm`);
     // 剖视状态改变画面含义（模型看起来缺一半），模型必须知道截的是什么：
     // 轴向 + 位置。没开剖视就不提，避免每张图都背一句废话。
@@ -1524,7 +1669,7 @@ export function CadPanel(): React.ReactElement {
     setTray((t) => [...t, {
       id,
       thumb: thumb.toDataURL('image/png'),
-      label: `${recordId ?? '—'} · ${label}${annotations.length ? ` · ${annotations.length}个标注` : ''}`,
+      label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')} · ${label}${annotations.length ? ` · ${annotations.length}个标注` : ''}`,
       status: '发送中',
       time,
       note: noteOverride ?? '',
@@ -1872,8 +2017,10 @@ export function CadPanel(): React.ReactElement {
   // a verdict stated in words (a version has none of its own; only the runs that
   // named it do), the revision's index inside the part's history, and where the
   // geometry came from.
-  const verdict: RunStatus | null = run
-    ? run.status
+  // A run shows the judgement it actually made; a run that judged nothing (risk map,
+  // fluid trend) shows 未判定 rather than borrowing its `status` as if it were one.
+  const verdict: RunJudgement | null = run
+    ? (run.judgement ?? null)
     : version ? versionVerdict(runsOnVersion) : null;
   const revIndex = version && currentPart
     ? currentPart.versions.findIndex((v) => v.id === version.id) : -1;
@@ -2059,7 +2206,124 @@ export function CadPanel(): React.ReactElement {
     React.createElement('span', { style: S.hint }, '下载当前版本的几何'),
   );
 
+  /**
+   * Register the selected workspace file as a version through the SAME door the
+   * `import_part` tool uses (`/api/cad/import`, "manual-initiation path ②"), then
+   * let the poll select it. The panel never writes a version itself.
+   */
+  const importFileAsVersion = async () => {
+    const target = fileSubject.trim();
+    if (!target) { setImportMsg('先选一个文件'); return; }
+    setImportBusy(true);
+    setImportMsg(null);
+    try {
+      const req = buildImportStlRequest({
+        project: sessionCwd(),
+        file: target,
+        unit: importUnit,
+        part: importPart.trim() || undefined,
+        allowNonSolid: importNonSolid,
+        depthMm: Number(importDepth) > 0 ? Number(importDepth) : undefined,
+      });
+      const res = await fetch(req.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(req.body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(data?.error ?? `HTTP ${res.status}`));
+      pendingFocusRef.current = typeof data?.versionId === 'string' ? data.versionId : null;
+      setImportMsg(`已登记为版本 ${data?.versionId ?? ''} — 面板会切到它`);
+      refresh();
+      refreshUnregistered();
+    } catch (e) {
+      setImportMsg(`导入失败：${String((e as Error)?.message ?? e)}`);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  /** The 未登记 sheet: file facts, then the declarations only a human can make. */
+  const unregisteredBody = (): React.ReactNode => {
+    const row = unregistered.find((f) => f.path === fileSubject) ?? null;
+    const kids: React.ReactNode[] = [
+      React.createElement('div', { style: { ...S.caption, color: '#9c6f0a' } }, '未登记 · 不是版本 · 不入证据'),
+      React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 } },
+        '工作区里没有版本的几何文件，与 delivery_audit 是同一份扫描。可以在这里看、可以登记为版本；' +
+        '测量 / 壁厚 / 装配 / 热力图不适用于它们（那些需要一个版本作为主语）。'),
+      React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
+        React.createElement('button', { type: 'button', onClick: refreshUnregistered, style: S.smallBtn }, '↻ 刷新'),
+        React.createElement('button', { type: 'button', onClick: () => setFileOpen(true), style: S.smallBtn }, '📂 按路径导入…'),
+        React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } }, `${unregistered.length} 个文件`)),
+    ];
+    if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: '#c0392b' } }, `扫描失败：${unregError}`));
+    if (!fileSubject) {
+      kids.push(React.createElement('div', { style: S.hint }, unregistered.length
+        ? '从上面的「未登记文件」列表选一个；不在工作区里的文件用「按路径导入」。'
+        : '没有未登记的几何文件 — 每个 STL/STEP/3MF/DXF 要么有版本，要么被声明为豁免。'));
+      return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
+    }
+    kids.push(React.createElement('div', {
+      style: { fontFamily: 'ui-monospace, monospace', fontSize: 11, wordBreak: 'break-all' },
+    }, fileSubject));
+    if (row) {
+      kids.push(React.createElement('div', {
+        style: { fontSize: 11, color: row.severity === 'blocked' ? '#c0392b' : '#9c6f0a' },
+      }, `${row.severity === 'blocked' ? '⚠ 比最新版本还新' : '早于最新版本'} · ${row.format.toUpperCase()} · ` +
+         `${fmtBytes(row.bytes)} · ${fmtTime(row.modified)}`));
+    }
+    if (fileMeta) {
+      kids.push(React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+        `${fileMeta.solid ? '封闭实体' : `非封闭（${fileMeta.shells} 个壳）`} · ` +
+        `${fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件里的数字显示）'}`));
+      for (const w of fileMeta.warnings.slice(0, 3)) {
+        kids.push(React.createElement('div', { key: w, style: { fontSize: 11, color: '#9c6f0a' } }, w));
+      }
+    }
+    if (row && !row.previewable) {
+      kids.push(React.createElement('div', { style: S.hint },
+        'DXF 是二维轮廓，预览需要先有厚度 — 用下面的「导入为版本」并填深度。'));
+    }
+    kids.push(React.createElement('div', {
+      style: { display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #e6e9ec', paddingTop: 6 },
+    },
+      React.createElement('div', { style: { fontSize: 11, fontWeight: 600 } }, '登记为版本（写入会话目录）'),
+      React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
+        React.createElement('input', {
+          value: importPart, placeholder: `零件名（默认 ${partNameFromPath(fileSubject)}）`,
+          'aria-label': '零件名', onChange: (e: any) => setImportPart(e.target.value),
+          style: { ...fieldStyle, flex: '1 1 110px' },
+        }),
+        React.createElement('select', {
+          value: importUnit, 'aria-label': '单位',
+          onChange: (e: any) => setImportUnit(e.target.value as ImportUnit),
+          style: { ...fieldStyle, flex: '0 0 86px' },
+        }, ...IMPORT_UNITS.map((u) => React.createElement('option', { key: u.id, value: u.id }, u.label))),
+        row?.format === 'dxf' && React.createElement('input', {
+          value: importDepth, placeholder: '深度 mm', 'aria-label': 'DXF 深度',
+          onChange: (e: any) => setImportDepth(e.target.value),
+          style: { ...fieldStyle, flex: '0 0 76px' },
+        }),
+      ),
+      React.createElement('label', { style: { fontSize: 11, color: '#5b6673' } },
+        React.createElement('input', {
+          type: 'checkbox', checked: importNonSolid,
+          onChange: (e: any) => setImportNonSolid(Boolean(e.target.checked)),
+        }),
+        ' 非封闭也存（该版本会被几何工具拒绝）'),
+      React.createElement('button', {
+        type: 'button', disabled: importBusy, onClick: () => void importFileAsVersion(),
+        style: { ...S.smallBtn, alignSelf: 'flex-start' },
+      }, importBusy ? '导入中…' : '导入为版本'),
+      importMsg && React.createElement('div', {
+        style: { fontSize: 11, color: importMsg.startsWith('导入失败') ? '#c0392b' : '#1e8449' },
+      }, importMsg),
+    ));
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
+  };
+
   const sectionBody = (id: string): React.ReactNode => {
+    if (kind === 'unregistered') return unregisteredBody();
     if (id === 'tray') return trayBody();
     if (id === 'help') return helpBody();
     if (id === 'overview') {
@@ -2075,6 +2339,15 @@ export function CadPanel(): React.ReactElement {
           version.solid === false && React.createElement('span', { style: { color: '#c0392b' } },
             ' · 非实体（几何工具会拒绝这个版本）')),
         run && sourceVersionChips(run),
+        // A brand-new project has no parts at all — this is the one place a
+        // human can start from THEIR file without an agent turn. Kept in the
+        // body (not the bar): the bar is about which product you are browsing.
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => { setKind('unregistered'); setRecordId(null); refreshUnregistered(); },
+          title: '未登记文件：工作区里没有版本的几何 — 在这里预览、标注，或登记为版本',
+          style: { ...S.smallBtn, alignSelf: 'flex-start' },
+        }, '📂 未登记文件：预览 / 导入'),
         React.createElement('button', {
           type: 'button', onClick: () => setTab('help'), style: { ...S.smallBtn, alignSelf: 'flex-start' },
         }, '这些按钮怎么用？'),
@@ -2279,6 +2552,37 @@ export function CadPanel(): React.ReactElement {
       ),
     ),
 
+    // ── 本地 STL：看（不登记）或登记（成版本）──
+    // Writes deliberately target the SESSION cwd (`sessionDir`), never the
+    // pinned browse corpus: "look at one project, import into another" would
+    // make the version appear in a corpus the agent cannot see.
+    fileOpen && React.createElement(LocalFileDialog, {
+      open: true,
+      onClose: () => setFileOpen(false),
+      project: sessionDir || sessionCwd(),
+      background: bg.hex,
+      onImported: (versionId: string) => {
+        pendingFocusRef.current = versionId;
+        setFileOpen(false);
+        // An import lands in the SESSION corpus. If the panel is pinned to a
+        // different corpus, following the session is the only way the new
+        // version can appear — and the human just asked for exactly that.
+        if (workspaceCwd) {
+          setWorkspaceCwd('');
+          setProjectOverride(null);
+          prevIdsRef.current = new Set();
+          subjectRef.current = '';
+          setParts([]);
+          setScene([]);
+          setSubjectId('');
+          setRecordId(null);
+        }
+        // The 3 s poll is too slow for an act the human just committed: refresh
+        // now and let the pending id select it when the list lands.
+        refresh();
+      },
+    }),
+
     // ── the browse tree, ONE line, THREE columns (DESIGN §20): 种类 → 条目 → 版本 ──
     // 种类: 零件 / 组件 / 整体及仿真 / 装配契约. 条目: the concrete part or run.
     // 版本 exists only for 零件 and DEFAULTS to the newest — picking an older
@@ -2324,18 +2628,23 @@ export function CadPanel(): React.ReactElement {
         {
           value: kind,
           onChange: (e: any) => {
-            setKind(e.target.value as BrowseKind);
+            const next = e.target.value as BrowseKind;
+            setKind(next);
             setSubjectId('');
             setRecordId(null);
             setFollowLatest(true);
+            // A file path belongs to the 未登记 list; leaving the kind drops it
+            // rather than letting a stale path drive the viewport from elsewhere.
+            if (next !== 'unregistered') { setFileSubject(''); setFileMeta(null); }
           },
           'aria-label': '种类',
-          style: { ...S.select, flex: 'none', width: 108 },
+          style: { ...S.select, flex: 'none', width: 118 },
         },
         React.createElement('option', { value: 'part' }, `零件 · ${parts.length}`),
         React.createElement('option', { value: 'assembly' }, `组件 · ${assemblyRuns.length}`),
         React.createElement('option', { value: 'sim' }, `仿真 · ${simRuns.length}`),
         React.createElement('option', { value: 'contract' }, `装配契约 · ${contractRuns.length}`),
+        React.createElement('option', { value: 'unregistered' }, `未登记 · ${unregistered.length}`),
       ),
       kind === 'part' ? React.createElement(
         'select',
@@ -2364,6 +2673,20 @@ export function CadPanel(): React.ReactElement {
         parts.length === 0 && React.createElement('option', { value: '' }, projectLabel ? `暂无零件${projectLabel}` : '暂无零件'),
         parts.map((p) => React.createElement('option', { key: p.id, value: p.id },
           `${p.name} · ${p.versions.length}版`)),
+      ) : kind === 'unregistered' ? React.createElement(
+        'select',
+        {
+          key: 'browse-unregistered',
+          value: fileSubject,
+          onChange: (e: any) => { setFileSubject(e.target.value); setFileMeta(null); },
+          title: '工作区里没有版本的几何文件（与 delivery_audit 同一份扫描）\n预览不入证据；要留下它就「导入为版本」',
+          'aria-label': '未登记文件',
+          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
+        },
+        unregistered.length === 0 &&
+          React.createElement('option', { value: '' }, unregError ? '扫描失败' : '暂无未登记文件'),
+        unregistered.map((f) => React.createElement('option', { key: f.path, value: f.path },
+          `${f.severity === 'blocked' ? '⚠ ' : ''}${f.path} · ${f.format.toUpperCase()}`)),
       ) : React.createElement(
         'select',
         {
@@ -2417,6 +2740,16 @@ export function CadPanel(): React.ReactElement {
           ...(followLatest ? { border: '1px solid #27ae60', color: '#1e8449', background: '#eafaf1' } : {}),
         },
       }, followLatest ? '●' : '○'),
+      // A file is NOT a product, but it is browsable: 📂 jumps to the 未登记
+      // category, where the list, the preview and the import form live. The
+      // dialog is now import-by-path only (DESIGN §30.18: preview is not a modal).
+      React.createElement('button', {
+        type: 'button',
+        title: '未登记文件：工作区里没有版本的几何 — 预览、标注、导入为版本',
+        'aria-label': '未登记文件',
+        onClick: () => { setKind('unregistered'); setRecordId(null); refreshUnregistered(); },
+        style: { ...S.smallBtn, padding: '2px 6px' },
+      }, '📂'),
     ),
 
     // ── the viewport: filled by what the product *is* ──
@@ -2440,7 +2773,7 @@ export function CadPanel(): React.ReactElement {
             style: { ...S.smallBtn, marginLeft: 'auto', padding: '1px 8px' },
           }, '回到最新'),
         ),
-      version && React.createElement('div', {
+      meshSource && React.createElement('div', {
         ref: mountRef,
         // Picking listens HERE, not on an overlay that swallows the pointer:
         // with the old overlay, OrbitControls never saw the pointerdown, so
@@ -2458,7 +2791,7 @@ export function CadPanel(): React.ReactElement {
           cursor: annotateMode || measureMode || thickMode ? 'crosshair' : 'default',
         },
       }),
-      version && glError && React.createElement('div', {
+      meshSource && glError && React.createElement('div', {
         style: {
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, textAlign: 'center',
@@ -2471,7 +2804,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('br'),
         React.createElement('span', { style: { fontFamily: 'ui-monospace, monospace' } }, glError)),
       ),
-      version && !glError && React.createElement(ViewportOverlay, {
+      meshSource && !glError && React.createElement(ViewportOverlay, {
         getScene: () => versionSceneRef.current,
         ink: overlayInk(bg),
         chrome: bgPicker,
@@ -2516,8 +2849,8 @@ export function CadPanel(): React.ReactElement {
           onScreenshot: (canvas: HTMLCanvasElement, label: string) => openShotDraft(canvas, label),
         }),
       run && !run.hasGeometry && reportOnlyCard(run),
-      // committed annotation boxes stay visible (version viewport only)
-      version && annotations.map((r, i) => React.createElement('div', {
+      // committed annotation boxes stay visible (any viewport with a mesh)
+      meshSource && annotations.map((r, i) => React.createElement('div', {
         key: i,
         style: {
           position: 'absolute',
@@ -2531,13 +2864,32 @@ export function CadPanel(): React.ReactElement {
       // 标注 only: a layer that captures the pointer (so the box drag does not
       // orbit the camera). In the picking modes the layer is transparent to
       // pointer events instead.
-      version && annotateMode && React.createElement('div', {
+      meshSource && annotateMode && React.createElement('div', {
         ref: overlayRef,
         onPointerDown: overlayPointer('down'),
         onPointerMove: overlayPointer('move'),
         onPointerUp: overlayPointer('up'),
         style: { position: 'absolute', inset: 0, touchAction: 'none', zIndex: 5, cursor: 'crosshair' },
       }),
+    // An unregistered file gets the two tools that need no version — look at it
+    // and point at a problem. 测量 / 壁厚 / 剖切 / 热力图 need a stored mesh whose
+    // facts a version owns; offering them here would produce numbers nothing
+    // could cite (DESIGN §30.18: preview is not evidence).
+    !version && meshSource && React.createElement(
+      'div',
+      { style: S.viewTools },
+      React.createElement('button', {
+        type: 'button',
+        title: '📸截图并发送到会话：把未登记文件的视图（含标注框）发进上下文，说明"就是这个文件"',
+        onClick: () => void onScreenshot(),
+        style: { ...viewToolStyle(false), overflow: 'hidden' },
+      }, `📸截图${tray.length ? ` ${tray.length}` : ''}`),
+      React.createElement('button', {
+        type: 'button', title: annotateMode ? '□标注（进行中，再点一次退出）' : '□标注：在视口里拖框框出问题区域',
+        onClick: () => setAnnotateMode((m) => !m),
+        style: viewToolStyle(annotateMode, '#e74c3c'),
+      }, '▭标注'),
+    ),
     // ── markup tools, in the viewport (top-left): these only make sense on a
     // single part version ──
     version && React.createElement(

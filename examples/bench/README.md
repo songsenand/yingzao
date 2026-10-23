@@ -36,12 +36,12 @@
 | 项 | 基准值（2026-10-05 冻结） |
 |---|---|
 | git commit | **首次包含 `examples/bench/` 的那次提交**——`git log --diff-filter=A --format=%H -- examples/bench` 即可取到。（它的前一次是 `76b6661f`，只有插件侧、没有题库。）之所以不硬编码 hash：提交的 hash 无法写进它自己。 |
-| `SKILL.md` sha256 | `d6f49801f2dacb2ef718bf6447fb8b8de4a8ba54feaff77f0db87dbef0e65875`（**375 行**，2026-10-12 加 `measure_angle` 之后；前一版是 `a560a40d…`，374 行） |
+| `SKILL.md` sha256 | `857f3de622426634dbe96793a3184ddc14dbc80fad6d707407cd6383b3a15c5e`（**261 行**，2026-10-15/16 skill 拆分批次之后：`cad-toolbox` 拆成 toolbox/modeling-measure/manufacturing/assembly/simulation 五本，另加 `simulate_lbm`；前一版是 `d6f49801…`，375 行） |
 | `01-mortise-bench/TASK.md` | `3c2a285a61c27b4f9131c3d47cd120e56811b1408be56619a424dff90f94ad89` |
 | `01b-diagnosis/TASK.md` | `b4ed3957032b9a2e4d3ca8ce05b53bf6beff055dd89cd2efeeced348ad4e3509` |
 | `02-steam-engine/TASK.md` | `e3768a0dff1aa916e7122fb6af8e4b1a40fb2b80ccfc6a9f7bc662bf3f2bcd48` |
-| `03-microscope/TASK.md`（A 段 · **GUI 档**） | `93f602114329f2be53e0244f366e1f4f04e784f2ecea2e4f0888846d7792ccdb` |
-| `03-microscope/TASK.headless.md`（A 段 · **headless 档**） | `c93d8db2054fb35310a9655ab1db8faa89c5789bdc35507a3d38a3f79e7a8d66` |
+| `03-microscope/TASK.md`（A 段 · **GUI 档**） | `aff902c1f75151b9cc930da687f3c726278977d65c820d9c5b32f50a3f234600`（2026-10-18 定稿：开放版权参考图原样使用 + 反光镜改外购件单一 M3 接口） |
+| `03-microscope/TASK.headless.md`（A 段 · **headless 档**） | `48b1eebf7ec8667f74902526dd2bbf184bfca6ae68d510d149d56943b06c8d66` |
 | `03-microscope/TASK-2.md`（B 段 · 两档共用） | `0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20` |
 | `06-measure/TASK.md`（2026-10-12 新增） | `c1fc3823520d29c875cdd995a06831f51a3323e479d70e801ffc7af486a61a8f` |
 | `06-measure/part.stl` | `30cbcc128339da4ad430e2ffce1aa664b07f687686897ddd0c28f586aba4e120` |
@@ -57,6 +57,12 @@
 > worker 侧同步新增四个 op 并接入 `shapely`），`SKILL.md` 的路由表与流程段随之改写。
 > 因此**这一批之前的所有分数都不可比**，重跑基线前请先确认 §7 的 `00-smoke` 全绿。
 > 背景与取舍见 [`docs/DECISION-LOG.md`](../../docs/DECISION-LOG.md) 2026-10-12 条。
+>
+> **2026-10-15/16 skill 拆分批次**：`cad-toolbox` 拆成五本手册（toolbox / modeling-measure /
+> manufacturing / assembly / simulation），新增 `simulate_lbm`，导入支持 STEP/DXF。
+> `SKILL.md` 基准随之重录（见上表）；**拆分之前的所有分数同样不可比**。
+> `03` 题面 2026-10-18 定稿（开放版权参考图原样使用、反光镜改外购件单一 M3 接口、
+> 不做台下聚光镜），GUI 卷与 headless 卷已同步，两卷仍只差参考图送达方式两行。
 
 ```bash
 # 开跑前核对（考卷在考生 cwd 里，Agent 对它有写权限，所以每轮都要核）

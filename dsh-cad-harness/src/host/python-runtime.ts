@@ -29,7 +29,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { projectsHome } from './project.ts';
 import {
   PIP_INDEXES,
@@ -78,6 +78,11 @@ export interface PythonRuntimeStatus {
    * field exists to prevent.
    */
   missingPackages: string[];
+  /**
+   * Packages the USER installed into the overlay — their wiring, not ours.
+   * Recorded and reported, never gated (see the overlay section at the bottom).
+   */
+  overlay: PythonOverlay;
 }
 
 export interface ProvisionOptions {
@@ -359,6 +364,7 @@ export async function pythonRuntimeStatus(): Promise<PythonRuntimeStatus> {
     // from the lock plan rather than only from the recorded install.
     skipped: state?.skipped ?? lockPlanForTarget(target).skipped,
     missingPackages: [],
+    overlay: await readPythonOverlay(),
   };
   if (mode === 'off' || !target) return base;
   if (state?.interpreter && state?.venvPython && existsSync(state.interpreter) && existsSync(state.venvPython)) {
@@ -593,6 +599,14 @@ const LOCKED_IMPORTS: { pkg: string; module: string }[] = [
   { pkg: 'rtree', module: 'rtree' },
   { pkg: 'rapier3d', module: 'rapier3d' },
   { pkg: 'shapely', module: 'shapely' },
+  // Import formats are capability claims too. Without these the runtime reports
+  // `ready` while `import_part` fails at use time with a worker error — the same
+  // unfalsifiable readiness the rtree/shapely incident exposed. cascadio is
+  // excluded on musl by the lock plan, so "absent by design" still differs from
+  // "broken" (the skip list is applied below).
+  { pkg: 'cascadio', module: 'cascadio' },
+  { pkg: 'ezdxf', module: 'ezdxf' },
+  { pkg: 'lxml', module: 'lxml' },
 ];
 
 /**
@@ -731,6 +745,15 @@ async function installDependencies(
       [
         '-m', 'pip', 'install',
         '--require-hashes',
+        // --no-deps because the lock IS the closure: gen-python-lock.mjs lists
+        // every package the worker actually imports, and xlb's DECLARED list is
+        // deliberately not honored (matplotlib/pyvista/vtk/numpy-stl/pydantic/
+        // ruff — ~726 MB for an unused visualization import the wrapper stubs).
+        // Without this flag pip would demand hashes for those declared-but-
+        // excluded packages and refuse to install. The cost of the trade: a
+        // genuinely needed transitive dep must be added to the lock by hand —
+        // which LOCKED_IMPORTS (readiness probe) and the acceptances catch.
+        '--no-deps',
         '--only-binary=:all:',
         '--cache-dir', pipCache,
         '--disable-pip-version-check',
@@ -941,6 +964,275 @@ export async function repairPythonRuntime(options: ProvisionOptions = {}): Promi
   await rm(join(root, 'venv'), { recursive: true, force: true });
   inflight = null;
   return await ensurePythonRuntime({ ...options, force: true });
+}
+
+// ---------------------------------------------------------------------------
+// user overlay: the packages the USER installs — their wiring, not ours
+// ---------------------------------------------------------------------------
+//
+// WHY A SEPARATE DIRECTORY. Provisioning owns `venv/` and DELETES it whenever the
+// lock changes (`venvIsCurrent` -> `rm -rf venv`), so a package pip-installed
+// into the venv disappears on the next runtime update — silently. The overlay
+// lives BESIDE `venv/` and provision/repair never touch it, so the user's own
+// packages survive exactly like the interpreter and the archive cache do.
+//
+// WHY NOT PYTHONPATH. Both the worker and one-off scripts start with `-I`, which
+// ignores PYTHONPATH and the user site directory ON PURPOSE (python-worker.ts):
+// that isolation is what makes "what actually ran" answerable. The overlay is
+// therefore attached EXPLICITLY — `site.addsitedir` in the launch bootstrap
+// (`pythonLaunchArgs`) — so the visible set stays enumerable and recordable.
+//
+// TWO DIRECTORIES, TWO POLICIES.
+//
+//   user-site/            ADDITIVE. Appended (addsitedir), so a package the lock
+//                         also provides keeps the LOCKED version. Adding a library
+//                         must not silently fork numpy.
+//   user-site-override/   EXPLICIT OVERRIDE. Only `python_runtime action=install
+//                         override=true reason="…"` writes here, and the bootstrap
+//                         puts it at the FRONT of sys.path, so its copy really
+//                         replaces the locked one — not merely reported.
+//
+// The default is therefore "not allowed" (an additive copy that happens to be
+// locked is shadowed and says so); the forced update needs a DECLARATION. That
+// declaration is not ceremony: a replaced numpy is part of what a number came
+// out of, so it is recorded in the overlay's installed.json, shown by status, and
+// carried into every run's provenance.
+
+export interface PythonOverlayPackage {
+  name: string;
+  version: string;
+  /** Installed into the override directory: this copy REPLACES the locked one. */
+  override?: boolean;
+}
+
+export interface PythonOverlay {
+  /** The additive directory (appended). */
+  dir: string;
+  /** The explicit-override directory (front of sys.path). */
+  overrideDir: string;
+  /** The EFFECTIVE set: additive packages plus the overriding copy where both exist. */
+  packages: PythonOverlayPackage[];
+  /** Packages installed with an explicit override. */
+  overrides: PythonOverlayPackage[];
+  /** sha256 over the sorted `name==version` list (an override is marked `!`); '' when empty. */
+  digest: string;
+  bytes: number;
+}
+
+/** `$DSH_HOME/cad/runtime/user-site`; `DSH_CAD_USER_SITE` overrides (tests/ops). */
+export function pythonOverlayDir(): string {
+  const override = envValue('DSH_CAD_USER_SITE');
+  return override ? resolve(override) : join(pythonRuntimeRoot(), 'user-site');
+}
+
+/**
+ * `…/user-site-override` beside the additive dir; `DSH_CAD_OVERRIDE_SITE` overrides.
+ * Derived from the overlay path so a test that redirects the overlay cannot
+ * accidentally write overrides into the developer's real runtime.
+ */
+export function pythonOverrideDir(): string {
+  const explicit = envValue('DSH_CAD_OVERRIDE_SITE');
+  if (explicit) return resolve(explicit);
+  const base = pythonOverlayDir();
+  return join(dirname(base), `${basename(base)}-override`);
+}
+
+/** Read one site dir's own `.dist-info` records — the packages ARE the record. */
+async function readSiteDir(dir: string, override: boolean): Promise<PythonOverlayPackage[]> {
+  let entries: string[] = [];
+  try { entries = await readdir(dir); } catch { entries = []; }
+  const packages: PythonOverlayPackage[] = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('.dist-info')) continue;
+    try {
+      const metadata = await readFile(join(dir, entry, 'METADATA'), 'utf8');
+      const name = /^Name:\s*(.+)$/m.exec(metadata)?.[1]?.trim();
+      const version = /^Version:\s*(.+)$/m.exec(metadata)?.[1]?.trim();
+      if (name && version) packages.push(override ? { name, version, override: true } : { name, version });
+    } catch { /* a half-written dist-info is not a status failure */ }
+  }
+  return packages;
+}
+
+/**
+ * Read both site dirs. The effective set is the additive one plus the override
+ * copy where both carry the same name — the override is what actually imports.
+ */
+export async function readPythonOverlay(): Promise<PythonOverlay> {
+  const dir = pythonOverlayDir();
+  const overrideDir = pythonOverrideDir();
+  const additive = await readSiteDir(dir, false);
+  const overrides = (await readSiteDir(overrideDir, true)).sort((a, b) => a.name.localeCompare(b.name));
+  const effective = new Map<string, PythonOverlayPackage>();
+  for (const pkg of additive) effective.set(pkg.name.toLowerCase(), pkg);
+  for (const pkg of overrides) effective.set(pkg.name.toLowerCase(), pkg);
+  const packages = [...effective.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const digest = packages.length === 0
+    ? ''
+    : createHash('sha256')
+      .update(packages.map((p) => `${p.name}==${p.version}${p.override ? '!' : ''}`).join('\n'))
+      .digest('hex');
+  return {
+    dir,
+    overrideDir,
+    packages,
+    overrides,
+    digest,
+    bytes: (await directorySize(dir)) + (await directorySize(overrideDir)),
+  };
+}
+
+/** Package names the lock provides for this target (parsed from the generated text). */
+function lockedPackageNames(target: string | null): Set<string> {
+  if (!target) return new Set();
+  const names = new Set<string>();
+  for (const line of lockPlanForTarget(target).text.split('\n')) {
+    const match = /^([A-Za-z0-9._-]+)==/.exec(line);
+    if (match) names.add(match[1]!.toLowerCase().replace(/_/g, '-'));
+  }
+  return names;
+}
+
+export interface OverlayInstallResult {
+  /** The directory written: the additive one, or the override one. */
+  dir: string;
+  /** Every package in the effective overlay after the install. */
+  packages: PythonOverlayPackage[];
+  /** Additive packages the locked venv ALSO provides — the LOCKED one wins. */
+  shadowed: PythonOverlayPackage[];
+  /** Packages installed with an explicit override (they replace the locked copy). */
+  overrides: PythonOverlayPackage[];
+  output: string;
+}
+
+/**
+ * Install packages into the user overlay — the user's wiring.
+ *
+ * Default (additive): the copy lands in `user-site/` and a package the lock also
+ * provides stays SHADOWED — the locked version keeps precedence.
+ *
+ * `override: true` is the explicit declaration: the copy lands in
+ * `user-site-override/`, which the launch bootstrap puts at the front of
+ * sys.path, so it really replaces the locked package. That needs a `reason` —
+ * not ceremony: a replaced dependency is part of what a run's numbers came from.
+ *
+ * No `--require-hashes` here ON PURPOSE: the lock's hashes exist so that what WE
+ * ship is verifiable; the user's own packages are theirs. `--target` keeps them
+ * out of `venv/`, which is what makes them survive a runtime update.
+ */
+export async function installIntoPythonOverlay(
+  packages: readonly string[],
+  options: {
+    onProgress?: (message: string) => void;
+    timeoutMs?: number;
+    /** Explicitly replace a locked package (requires `reason`). */
+    override?: boolean;
+    /** Why the override is needed; recorded next to the packages. */
+    reason?: string;
+  } = {},
+): Promise<OverlayInstallResult> {
+  const wanted = packages.map((p) => p.trim()).filter(Boolean);
+  if (wanted.length === 0) throw new Error('no packages named (e.g. packages: ["six==1.17.0"])');
+  if (options.override && !options.reason?.trim()) {
+    throw new Error(
+      'override=true REPLACES a package the lock pins, so it needs a declared reason (recorded with the install and carried into run provenance). ' +
+      'State why it cannot be done with the locked version — and confirm it with the human — then retry with reason: "…". ' +
+      'Without override the package is only ADDED: the locked version keeps precedence.',
+    );
+  }
+  const runtime = await ensurePythonRuntime({ onProgress: options.onProgress });
+  const dir = options.override ? pythonOverrideDir() : pythonOverlayDir();
+  await mkdir(dir, { recursive: true });
+  const index = envValue('DSH_CAD_PYTHON_INDEX_URL') ?? PIP_INDEXES[0];
+  options.onProgress?.(`installing into the user overlay ${dir} from ${new URL(index).host}`);
+  const result = await runProcess(
+    runtime.venvPython,
+    [
+      '-m', 'pip', 'install',
+      '--target', dir,
+      '--upgrade',
+      '--disable-pip-version-check',
+      '--no-input',
+      '--index-url', index,
+      ...wanted,
+    ],
+    {
+      timeoutMs: options.timeoutMs ?? 15 * 60 * 1000,
+      onLine: (line) => {
+        if (/^(Collecting|Downloading|Installing|Successfully|ERROR)/.test(line)) options.onProgress?.(line.slice(0, 200));
+      },
+    },
+  );
+  if (result.code !== 0) {
+    const reason = result.timedOut
+      ? 'timed out'
+      : (result.stderr.trim().split('\n').slice(-3).join(' | ') || `exit ${result.code}`);
+    throw new Error(`pip could not install ${wanted.join(', ')} into the overlay — ${reason}`);
+  }
+  const overlay = await readPythonOverlay();
+  const locked = lockedPackageNames(runtime.target);
+  const isOverride = options.override === true;
+  // Record when/why next to the packages themselves (the dist-info is the what).
+  const recordPath = join(dir, 'installed.json');
+  let record: {
+    packages: { name: string; version: string; at: string; requested: string[]; override?: boolean; reason?: string }[];
+  } = { packages: [] };
+  try { record = JSON.parse(await readFile(recordPath, 'utf8')); } catch { /* first install */ }
+  const at = new Date().toISOString();
+  const installedHere = await readSiteDir(dir, isOverride);
+  for (const pkg of installedHere) {
+    const existing = record.packages.find((p) => p.name === pkg.name);
+    const entry = {
+      name: pkg.name,
+      version: pkg.version,
+      at,
+      requested: [...new Set([...(existing?.requested ?? []), ...wanted])],
+      ...(isOverride ? { override: true, reason: options.reason?.trim() } : {}),
+    };
+    if (existing) Object.assign(existing, entry);
+    else record.packages.push(entry);
+  }
+  await writeFile(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  // Shadowing is about the ADDITIVE dir only: an override deliberately wins, so
+  // reporting it as "shadowed" would be the opposite of what happens.
+  const shadowed = isOverride
+    ? []
+    : installedHere.filter((p) => locked.has(p.name.toLowerCase().replace(/_/g, '-')));
+  return {
+    dir,
+    packages: overlay.packages,
+    shadowed,
+    overrides: overlay.overrides,
+    output: result.stdout.trim(),
+  };
+}
+
+/**
+ * argv for BOTH spawn sites (the resident worker and one-off scripts).
+ *
+ * `-I` stays: the interpreter's view must be exactly the venv we built plus the
+ * overlay we can enumerate. The overlay is attached by this bootstrap rather
+ * than by PYTHONPATH, which `-I` ignores. `site.addsitedir` on a missing
+ * directory is a no-op, so an absent overlay costs nothing.
+ */
+export function pythonLaunchArgs(scriptPath: string, args: readonly string[] = []): string[] {
+  const overlay = pythonOverlayDir();
+  const overrideDir = pythonOverrideDir();
+  const bootstrap = [
+    'import os, runpy, site, sys',
+    `overlay = ${JSON.stringify(overlay)}`,
+    `override = ${JSON.stringify(overrideDir)}`,
+    'if overlay:',
+    '    site.addsitedir(overlay)          # additive: appended, the locked set wins',
+    'if override and os.path.isdir(override):',
+    '    site.addsitedir(override)',
+    '    sys.path.remove(override)',
+    '    sys.path.insert(0, override)      # explicit override: really replaces the locked copy',
+    'script = sys.argv[1]',
+    'sys.argv = sys.argv[1:]',
+    "runpy.run_path(script, run_name='__main__')",
+  ].join('\n');
+  return ['-I', '-c', bootstrap, scriptPath, ...args];
 }
 
 export { PYTHON_BUILD, REQUIREMENTS_LOCK_SHA256, PYTHON_LOCK_PROTOCOL };

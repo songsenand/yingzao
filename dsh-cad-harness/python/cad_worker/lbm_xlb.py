@@ -27,9 +27,16 @@ The worker imports this module lazily by explicit path (python -I), mirroring
 _load_mpm_numba. CAD_LBM_ENGINE gates the op: "off" refuses loudly; unset or
 "xlb" runs the engine (there is no fallback engine — unavailability surfaces as
 a loud ok:false, never as a silent empty result).
+
+A fourth shim lives here that is NOT an upstream defect: xlb's `__init__`
+eagerly imports its visualization module, which would drag matplotlib + pyvista
++ VTK (~726 MB) into the runtime for code we never call. `_stub_unused_viz_module`
+makes that one import a no-op; the measurement and the escape hatch are in its
+docstring.
 """
 
-import os
+import sys
+import types
 
 _XLB = None
 _SHIMS_APPLIED = False
@@ -68,13 +75,41 @@ def _apply_compat_shims(xlb):
     _SHIMS_APPLIED = True
 
 
+def _stub_unused_viz_module():
+    """Make xlb's eager `import xlb.utils` a no-op.
+
+    `xlb/__init__.py` line 34 does `import xlb.utils`, and that module is pure
+    VISUALIZATION (matplotlib + pyvista + VTK: save_image, save_fields_vtk,
+    save_BCs_vtk, voxelize_stl, save_usd_* …). Nothing inside xlb imports it
+    except that one line — `grep -rn 'xlb.utils' xlb/` outside `utils/` returns
+    only `__init__.py` — and nothing we call touches it.
+
+    Honoring xlb's declared dependency list to satisfy an unused import cost
+    ~726 MB of runtime (measured 2026-10-22: vtk 591 MB, matplotlib 35, ruff 25,
+    pillow 21, pyvista 14, + their trees). The engine itself needs warp + jax,
+    which stay. Verified by blocking matplotlib/pyvista/vtk/numpy_stl/pydantic/
+    ruff and every one of their dependencies, then running the 200-step channel:
+    stable=True, mirrorError=2.8e-06, and not one blocked module was imported.
+
+    A pre-registered submodule does NOT get the parent attribute set by the
+    import system, so `xlb.utils` is attached explicitly — otherwise
+    `xlb.utils` is simply absent (measured: AttributeError on the first probe).
+
+    If a future path wants VTK field export, add the dependency back on purpose;
+    do not discover this stub as a mysterious AttributeError.
+    """
+    if "xlb.utils" not in sys.modules:
+        sys.modules["xlb.utils"] = types.ModuleType("xlb.utils")
+
+
 def load():
     """Import xlb, apply shims, init the JAX/D3Q19 backend. Cached."""
     global _XLB
     if _XLB is not None:
         return _XLB
-    os.environ.setdefault("MPLCONFIGDIR", "/tmp/cad-mpl")
+    _stub_unused_viz_module()
     import xlb
+    xlb.utils = sys.modules["xlb.utils"]
     from xlb.compute_backend import ComputeBackend
     from xlb.precision_policy import PrecisionPolicy
     from xlb.velocity_set import D3Q19

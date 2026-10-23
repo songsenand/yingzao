@@ -1,0 +1,133 @@
+{
+  "level": "06-measure",
+  "variant": "default",
+  "model": "zai-coding-cn/glm-5.3-flash",
+  "tier": "headless（不命名预设）",
+  "sessionId": "session-c1804e17-cd5f-4c28-ae87-a89ee380e13b",
+  "skillLoaded": true,
+  "computed": {
+    "P": 0,
+    "S": 1,
+    "C": null
+  },
+  "measured": {
+    "cost": {
+      "toolCalls": 31,
+      "toolCallsChild": 0,
+      "toolCallsTotal": 31,
+      "toolCallBudget": 40,
+      "wallClockMin": 6.5,
+      "wallClockBudgetMin": 25,
+      "images": null,
+      "imagesBudget": 10,
+      "tokens": {
+        "inputTokens": 35063,
+        "outputTokens": 16203,
+        "totalTokens": 529410,
+        "cacheReadTokens": 478144
+      },
+      "stages": [
+        {
+          "task": "subjects/06-measure/TASK.md",
+          "exitCode": 0,
+          "turns": 1,
+          "tools": 31
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "auto": 13,
+    "total": 13
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "ok": true,
+      "detail": "扫过 父会话 31 次，零触达"
+    },
+    {
+      "id": "g-measure-json",
+      "ok": true,
+      "detail": "measure.json 存在且含 part / partB / toolsUsed"
+    },
+    {
+      "id": "g-tools-not-bypassed",
+      "ok": true,
+      "detail": "用过：list_features, measure_thickness, measure_section, measure_angle, measure_part, import_part, render_part"
+    },
+    {
+      "id": "g-no-invented-numbers",
+      "ok": false,
+      "detail": "1 个数字在任何工具返回里都找不到：$.crossChecks.volumeDeltaMm3=564.578"
+    },
+    {
+      "id": "g-delta-correct",
+      "ok": false,
+      "detail": "报 -2 vs 真值 1.000（圆筒壁厚（boss 内径 Ø16 → Ø14））"
+    },
+    {
+      "id": "g-negative-delta-fires",
+      "ok": true,
+      "detail": "改动量 1.000mm > 容差 0.05mm ⇒ 照抄 part 的数会判掉"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-cylinder-count",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "part.cylinders.length=4 vs 真值 4（±0）"
+    },
+    {
+      "id": "c-tube-wall",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "part.tubeWallThicknessMm=3 vs 真值 3（±0.05）"
+    },
+    {
+      "id": "c-hole-centre-distance",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "part.holeCentreDistanceMm=50 vs 真值 50（±0.02）"
+    },
+    {
+      "id": "c-slope-angle",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "part.slopeAngleDeg=30.001 vs 真值 30（±0.5）"
+    },
+    {
+      "id": "c-diagonal-extent",
+      "weight": 2,
+      "inSkill": true,
+      "ok": true,
+      "detail": "沿 [1,1,0] 长度 91.924 vs 真值 91.924（±0.02）"
+    },
+    {
+      "id": "c-section-hole-distance",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "part.section.holeCentreDistanceMm=50 vs 真值 50（±0.02）"
+    },
+    {
+      "id": "c-section-area",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "part.section.materialAreaMm2=3796.124 vs 真值 3796.124（±1）"
+    }
+  ],
+  "probes": [],
+  "humanColumns": [
+    "E",
+    "H",
+    "R"
+  ],
+  "coverageGaps": []
+}

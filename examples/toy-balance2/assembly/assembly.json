@@ -1,0 +1,593 @@
+{
+ "schemaVersion": 1,
+ "name": "toy-pan-balance 玩具托盘天平",
+ "units": "mm",
+ "root": {
+  "id": "machine",
+  "kind": "assembly",
+  "children": [
+   {
+    "id": "base",
+    "kind": "part",
+    "part": "底座立柱",
+    "version": "v001"
+   },
+   {
+    "id": "beam",
+    "kind": "part",
+    "part": "横梁",
+    "version": "v003",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      101
+     ]
+    }
+   },
+   {
+    "id": "pointer",
+    "kind": "part",
+    "part": "指针",
+    "version": "v022",
+    "transform": {
+     "translate": [
+      0,
+      12,
+      107
+     ]
+    }
+   },
+   {
+    "id": "slider",
+    "kind": "part",
+    "part": "零位滑块",
+    "version": "v021",
+    "transform": {
+     "translate": [
+      0,
+      -22,
+      111
+     ]
+    }
+   },
+   {
+    "id": "stirrupL",
+    "kind": "part",
+    "part": "吊架",
+    "version": "v029",
+    "transform": {
+     "translate": [
+      58,
+      0,
+      107
+     ]
+    }
+   },
+   {
+    "id": "stirrupR",
+    "kind": "part",
+    "part": "吊架",
+    "version": "v029",
+    "transform": {
+     "translate": [
+      -58,
+      0,
+      107
+     ]
+    }
+   },
+   {
+    "id": "panL",
+    "kind": "part",
+    "part": "托盘",
+    "version": "v007",
+    "transform": {
+     "translate": [
+      58,
+      0,
+      74
+     ]
+    }
+   },
+   {
+    "id": "panR",
+    "kind": "part",
+    "part": "托盘",
+    "version": "v007",
+    "transform": {
+     "translate": [
+      -58,
+      0,
+      74
+     ]
+    }
+   },
+   {
+    "id": "w16",
+    "kind": "part",
+    "part": "砝码16",
+    "version": "v008",
+    "transform": {
+     "translate": [
+      58,
+      0,
+      76.5
+     ]
+    }
+   },
+   {
+    "id": "w8",
+    "kind": "part",
+    "part": "砝码8",
+    "version": "v009",
+    "transform": {
+     "translate": [
+      -55,
+      24,
+      20
+     ]
+    }
+   },
+   {
+    "id": "w4",
+    "kind": "part",
+    "part": "砝码4",
+    "version": "v010",
+    "transform": {
+     "translate": [
+      -55,
+      -24,
+      20
+     ]
+    }
+   },
+   {
+    "id": "w2",
+    "kind": "part",
+    "part": "砝码2",
+    "version": "v011",
+    "transform": {
+     "translate": [
+      -20,
+      30,
+      20
+     ]
+    }
+   },
+   {
+    "id": "w1",
+    "kind": "part",
+    "part": "砝码1",
+    "version": "v012",
+    "transform": {
+     "translate": [
+      20,
+      30,
+      20
+     ]
+    }
+   },
+   {
+    "id": "foot1",
+    "kind": "part",
+    "part": "M3x16螺钉",
+    "version": "v013",
+    "transform": {
+     "rotate": [
+      180,
+      0,
+      0
+     ],
+     "translate": [
+      -55,
+      -28,
+      2
+     ]
+    }
+   },
+   {
+    "id": "foot2",
+    "kind": "part",
+    "part": "M3x16螺钉",
+    "version": "v013",
+    "transform": {
+     "rotate": [
+      180,
+      0,
+      0
+     ],
+     "translate": [
+      55,
+      -28,
+      2
+     ]
+    }
+   },
+   {
+    "id": "foot3",
+    "kind": "part",
+    "part": "M3x16螺钉",
+    "version": "v013",
+    "transform": {
+     "rotate": [
+      180,
+      0,
+      0
+     ],
+     "translate": [
+      0,
+      32,
+      2
+     ]
+    }
+   },
+   {
+    "id": "nut1",
+    "kind": "part",
+    "part": "M3螺母",
+    "version": "v023",
+    "transform": {
+     "translate": [
+      -55,
+      -28,
+      8
+     ]
+    }
+   },
+   {
+    "id": "nut2",
+    "kind": "part",
+    "part": "M3螺母",
+    "version": "v023",
+    "transform": {
+     "translate": [
+      55,
+      -28,
+      8
+     ]
+    }
+   },
+   {
+    "id": "nut3",
+    "kind": "part",
+    "part": "M3螺母",
+    "version": "v023",
+    "transform": {
+     "translate": [
+      0,
+      32,
+      8
+     ]
+    }
+   },
+   {
+    "id": "axleR",
+    "kind": "part",
+    "part": "M3x16螺钉",
+    "version": "v013",
+    "transform": {
+     "rotate": [
+      90,
+      0,
+      0
+     ],
+     "translate": [
+      58,
+      -6,
+      107
+     ]
+    }
+   },
+   {
+    "id": "axleL",
+    "kind": "part",
+    "part": "M3x16螺钉",
+    "version": "v013",
+    "transform": {
+     "rotate": [
+      90,
+      0,
+      0
+     ],
+     "translate": [
+      -58,
+      -6,
+      107
+     ]
+    }
+   },
+   {
+    "id": "axlenutR",
+    "kind": "part",
+    "part": "M3螺母",
+    "version": "v023",
+    "transform": {
+     "rotate": [
+      -90,
+      0,
+      0
+     ],
+     "translate": [
+      58,
+      6,
+      107
+     ]
+    }
+   },
+   {
+    "id": "axlenutL",
+    "kind": "part",
+    "part": "M3螺母",
+    "version": "v023",
+    "transform": {
+     "rotate": [
+      -90,
+      0,
+      0
+     ],
+     "translate": [
+      -58,
+      6,
+      107
+     ]
+    }
+   },
+   {
+    "id": "pscrew",
+    "kind": "part",
+    "part": "M3x12螺钉",
+    "version": "v014",
+    "transform": {
+     "rotate": [
+      -90,
+      0,
+      0
+     ],
+     "translate": [
+      0,
+      15,
+      107
+     ]
+    }
+   },
+   {
+    "id": "sscrew",
+    "kind": "part",
+    "part": "M3x8螺钉",
+    "version": "v024",
+    "transform": {
+     "translate": [
+      0,
+      -19,
+      100
+     ]
+    }
+   }
+  ],
+  "interfaces": [
+   {
+    "id": "I1",
+    "type": "转动副",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "base.V轴",
+    "b": "beam.刀口"
+   },
+   {
+    "id": "I2",
+    "type": "转动副",
+    "check": "motion-clearance",
+    "severity": "hard",
+    "a": "base.V轴",
+    "b": "beam.刀口",
+    "params": {
+     "runId": "r013"
+    }
+   },
+   {
+    "id": "I3",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.左叉孔",
+    "b": "stirrupL.吊眼"
+   },
+   {
+    "id": "I4",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.右叉孔",
+    "b": "stirrupR.吊眼"
+   },
+   {
+    "id": "I5",
+    "type": "distance",
+    "check": "distance",
+    "severity": "hard",
+    "a": "stirrupL.座面",
+    "b": "panL.底面",
+    "params": {
+     "distanceMm": 0
+    }
+   },
+   {
+    "id": "I6",
+    "type": "distance",
+    "check": "distance",
+    "severity": "hard",
+    "a": "stirrupR.座面",
+    "b": "panR.底面",
+    "params": {
+     "distanceMm": 0
+    }
+   },
+   {
+    "id": "I7",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.指孔",
+    "b": "pointer.螺孔"
+   },
+   {
+    "id": "I8",
+    "type": "distance",
+    "check": "distance",
+    "severity": "hard",
+    "a": "beam.指贴面",
+    "b": "pointer.贴面",
+    "params": {
+     "distanceMm": 0
+    }
+   },
+   {
+    "id": "I9",
+    "type": "滑动副",
+    "check": "distance",
+    "severity": "hard",
+    "a": "beam.调零面",
+    "b": "slider.槽顶面",
+    "params": {
+     "distanceMm": 0
+    }
+   },
+   {
+    "id": "I10",
+    "type": "distance",
+    "check": "distance",
+    "severity": "hard",
+    "a": "panL.内底面",
+    "b": "w16.底面",
+    "params": {
+     "distanceMm": 0
+    }
+   },
+   {
+    "id": "I11",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "base.脚1轴",
+    "b": "foot1.轴"
+   },
+   {
+    "id": "I12",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "base.脚2轴",
+    "b": "foot2.轴"
+   },
+   {
+    "id": "I13",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "base.脚3轴",
+    "b": "foot3.轴"
+   },
+   {
+    "id": "I14",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.左叉孔",
+    "b": "axleL.轴"
+   },
+   {
+    "id": "I15",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.右叉孔",
+    "b": "axleR.轴"
+   },
+   {
+    "id": "I16",
+    "type": "clearance",
+    "check": "distance",
+    "severity": "intent",
+    "a": "base.台面",
+    "b": "panL.底面",
+    "params": {
+     "distanceMm": 54,
+     "toleranceMm": 5
+    }
+   },
+   {
+    "id": "I17",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "beam.指孔",
+    "b": "pscrew.轴"
+   },
+   {
+    "id": "I18",
+    "type": "滑动副",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "slider.锁紧轴",
+    "b": "sscrew.轴"
+   },
+   {
+    "id": "I19",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "stirrupL.吊眼",
+    "b": "axleL.轴"
+   },
+   {
+    "id": "I20",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "stirrupR.吊眼",
+    "b": "axleR.轴"
+   },
+   {
+    "id": "I21",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "foot1.轴",
+    "b": "nut1.轴"
+   },
+   {
+    "id": "I22",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "foot2.轴",
+    "b": "nut2.轴"
+   },
+   {
+    "id": "I23",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "foot3.轴",
+    "b": "nut3.轴"
+   },
+   {
+    "id": "I24",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "axleL.轴",
+    "b": "axlenutL.轴"
+   },
+   {
+    "id": "I25",
+    "type": "coaxial",
+    "check": "coaxial",
+    "severity": "hard",
+    "a": "axleR.轴",
+    "b": "axlenutR.轴"
+   }
+  ]
+ }
+}

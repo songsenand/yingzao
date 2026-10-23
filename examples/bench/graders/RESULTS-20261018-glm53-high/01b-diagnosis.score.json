@@ -1,0 +1,142 @@
+{
+  "level": "01b-diagnosis",
+  "variant": "default",
+  "model": "zai-coding-cn/glm-5.3-flash",
+  "tier": "headless（不命名预设）",
+  "sessionId": "session-77cbbc3c-3d92-4687-aac1-56312d71a547",
+  "skillLoaded": true,
+  "computed": {
+    "P": 0,
+    "S": null,
+    "C": null
+  },
+  "measured": {
+    "cost": {
+      "toolCalls": 11,
+      "toolCallsChild": 0,
+      "toolCallsTotal": 11,
+      "toolCallBudget": 12,
+      "wallClockMin": 6.5,
+      "wallClockBudgetMin": 15,
+      "images": null,
+      "imagesBudget": 4,
+      "tokens": {
+        "inputTokens": 71155,
+        "outputTokens": 16961,
+        "totalTokens": 540340,
+        "cacheReadTokens": 452224
+      },
+      "stages": [
+        {
+          "task": "subjects/01b-diagnosis/TASK.md",
+          "exitCode": 0,
+          "turns": 1,
+          "tools": 11
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "auto": 11,
+    "total": 14
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "ok": true,
+      "detail": "扫过 父会话 11 次，零触达"
+    },
+    {
+      "id": "g-motion-never-checked",
+      "ok": false,
+      "detail": "提到 motion-clearance 为 0 = true；点出运动类接口 6 条 = false；回答里没有 check 类型清单（语料里是 distance/diameter-match/spring-preload/coaxial）"
+    },
+    {
+      "id": "g-whole-machine-failed",
+      "ok": true,
+      "detail": "≥16 件的 validate_assembly 2 次、fail 2 次；回答点名 r046/r048"
+    },
+    {
+      "id": "g-no-green-claim",
+      "ok": "unknown",
+      "detail": "需人判（语义项，不自动判定）。语料事实：≥16 件的 validate_assembly 2 次全 fail。回答里 0 处提到\"整机+通过\"类措辞——请核对它们是**主张**还是**引用批评**"
+    },
+    {
+      "id": "g-evidence-cited",
+      "ok": true,
+      "detail": "引用可核对路径 6 个（例 runs/r057/run.json）（要求 ≥3）"
+    },
+    {
+      "id": "g-distinguish-notdone-vs-failed",
+      "ok": "unknown",
+      "detail": "需人判（语义项，不自动判定）。代理信号：\"没做\"类措辞=true · \"失败\"类措辞=true——两个概念是否被**明确区分**要读回答"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-interface-count",
+      "weight": 1,
+      "inSkill": false,
+      "ok": true,
+      "detail": "interfaces=26（注：x/y 双向覆盖未单独校验）"
+    },
+    {
+      "id": "c-motion-typed-count",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "运动类接口 6 条（期望 6）"
+    },
+    {
+      "id": "c-whole-machine-runs",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "覆盖 ≥16 件的 validate_assembly 2 次（期望 2）；validate_assembly 总计 19 次"
+    },
+    {
+      "id": "c-post-subset-sizes",
+      "weight": 1,
+      "inSkill": false,
+      "ok": true,
+      "detail": "整机之后的覆盖数：4, 6（要求 ⊆ {4,6}）"
+    },
+    {
+      "id": "c-stale-visual",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "回答里同时出现\"过期/失效\"与\"视觉/渲染\"两类词（代理判定）"
+    },
+    {
+      "id": "c-local-as-whole",
+      "weight": 2,
+      "inSkill": true,
+      "ok": true,
+      "detail": "回答里同时出现\"局部/单件\"、\"整机\"与\"契约\"（代理判定）"
+    },
+    {
+      "id": "c-evidence-depth",
+      "weight": 3,
+      "inSkill": false,
+      "ok": true,
+      "detail": "引用 run id 21 个（r001,r069,r013,r019…），其中覆盖全部交付件的 r046/r048"
+    },
+    {
+      "id": "c-anchoring",
+      "weight": 3,
+      "inSkill": false,
+      "ok": "unknown",
+      "detail": "基准臂未记录（本条是 01b 的**两臂对照**项，需要换 SKILL.md 跑第二臂才有意义）；本臂引用 21 个 run id"
+    }
+  ],
+  "probes": [],
+  "humanColumns": [
+    "E",
+    "H",
+    "R"
+  ],
+  "coverageGaps": [
+    "3 条判据未自动判定：g-no-green-claim, g-distinguish-notdone-vs-failed, c-anchoring"
+  ]
+}

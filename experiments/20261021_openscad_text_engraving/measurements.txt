@@ -1,0 +1,109 @@
+== build ==
+
+
+
+Geometries in cache: 5
+Geometry cache size in bytes: 715200
+CGAL Polyhedrons in cache: 5
+CGAL cache size in bytes: 3633000
+Total rendering time: 0:00:00.046
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      -1
+   Vertices:     4844
+   Facets:       9680
+
+
+
+Geometries in cache: 4
+Geometry cache size in bytes: 1216856
+CGAL Polyhedrons in cache: 1
+CGAL cache size in bytes: 3385250
+Total rendering time: 0:00:00.063
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      0
+   Vertices:    13541
+   Facets:      27078
+
+
+
+Geometries in cache: 53
+Geometry cache size in bytes: 3573808
+CGAL Polyhedrons in cache: 13
+CGAL cache size in bytes: 18601000
+Total rendering time: 0:00:00.061
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      -1
+   Vertices:    11344
+   Facets:      22680
+
+== renders ==
+
+
+
+Geometries in cache: 5
+Geometry cache size in bytes: 715200
+CGAL Polyhedrons in cache: 5
+CGAL cache size in bytes: 3633000
+Total rendering time: 0:00:00.156
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      -1
+   Vertices:     4844
+   Facets:       9680
+
+
+
+Geometries in cache: 53
+Geometry cache size in bytes: 3573808
+CGAL Polyhedrons in cache: 13
+CGAL cache size in bytes: 18601000
+Total rendering time: 0:00:00.205
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      -1
+   Vertices:    11344
+   Facets:      22680
+
+
+
+Geometries in cache: 4
+Geometry cache size in bytes: 1216856
+CGAL Polyhedrons in cache: 1
+CGAL cache size in bytes: 3385250
+Total rendering time: 0:00:00.180
+   Top level object is a 3D object (manifold):
+   Status:     NoError
+   Genus:      0
+   Vertices:    13541
+   Facets:      27078
+
+== stl checks ==
+file       : plate.stl
+triangles  : 9680
+volume     : 21280.000 mm^3
+bbox       : x[-80.00,80.00] y[-14.00,14.00] z[-2.50,3.30]
+radius +Z  : min 8.7258  max 81.2158
+edges != 2 : 0  (WATERTIGHT)
+
+file       : sphere.stl
+triangles  : 27078
+volume     : 904149.337 mm^3
+bbox       : x[-59.99,59.99] y[-59.99,59.99] z[-59.99,59.99]
+radius +Z  : min 1.1780  max 59.9884
+edges != 2 : 0  (WATERTIGHT)
+
+file       : cylinder.stl
+triangles  : 22680
+volume     : 52901.921 mm^3
+bbox       : x[-48.00,48.00] y[-18.00,18.71] z[-13.00,13.00]
+radius +Z  : min 12.0000  max 48.0000
+edges != 2 : 0  (WATERTIGHT)
+
+== engraved depth ==
+plate engraved floor z = 1.700 (expected 1.700), max z = 3.300
+cylinder engraved  r_min=17.199 r_max=18.000 (R=18, D=0.8)
+cylinder embossed  r_min=17.998 r_max=18.766 (R=18, D=0.8)
+sphere engraved floor z = 59.000 (expected 59.000)

@@ -1,0 +1,162 @@
+{
+  "level": "01-mortise-bench",
+  "variant": "default",
+  "model": "zai-coding-cn/glm-5.3-flash",
+  "tier": "headless（不命名预设）",
+  "sessionId": "session-7889e680-753c-429a-a1a4-3de3f80ae834",
+  "skillLoaded": true,
+  "computed": {
+    "P": 0,
+    "S": 0.5,
+    "C": null
+  },
+  "measured": {
+    "cost": {
+      "toolCalls": 47,
+      "toolCallsChild": 0,
+      "toolCallsTotal": 47,
+      "toolCallBudget": 60,
+      "wallClockMin": 28,
+      "wallClockBudgetMin": 45,
+      "images": null,
+      "imagesBudget": 40,
+      "tokens": {
+        "inputTokens": 116682,
+        "outputTokens": 80744,
+        "totalTokens": 2987186,
+        "cacheReadTokens": 2789760
+      },
+      "stages": [
+        {
+          "task": "subjects/01-mortise-bench/TASK.md",
+          "exitCode": 0,
+          "turns": 1,
+          "tools": 47
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "auto": 18,
+    "total": 18
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "ok": true,
+      "detail": "扫过 父会话 47 次，零触达"
+    },
+    {
+      "id": "g-negative-control-fires",
+      "ok": true,
+      "detail": "r002: hardViolations=4 · fail"
+    },
+    {
+      "id": "g-negative-reverted",
+      "ok": true,
+      "detail": "r003 已回到 hardViolations=0 · pass"
+    },
+    {
+      "id": "g-hard-zero",
+      "ok": true,
+      "detail": "最终态 r005: hardViolations=0, overallStatus=pass"
+    },
+    {
+      "id": "g-undeclared-found",
+      "ok": false,
+      "detail": "全部 4 次检查的 undeclared 都是空的"
+    },
+    {
+      "id": "g-one-version-per-repeated-part",
+      "ok": true,
+      "detail": "7 个件各一个版本"
+    },
+    {
+      "id": "g-coaxial-not-two-points",
+      "ok": true,
+      "detail": "coaxial 检查 8 条（用两点代替同轴会表现为 0 条）"
+    },
+    {
+      "id": "g-datums-declared",
+      "ok": true,
+      "detail": "3 个件各 ≥1 个 datum（扫过 6 个版本的 datums.json）"
+    },
+    {
+      "id": "g-no-metal-fasteners",
+      "ok": true,
+      "detail": "无金属紧固件条目"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-grain-axis-correct",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "seatGrainAxis=\"x\"（expect: === 'x'）"
+    },
+    {
+      "id": "c-across-grain-looser",
+      "weight": 4,
+      "inSkill": false,
+      "ok": true,
+      "detail": "横纹 0.6mm vs 顺纹 0.2mm（expect: 横纹 ≥ 2×顺纹 且 ≥0.3）"
+    },
+    {
+      "id": "c-gaps-in-range",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "顺纹 0.2mm ∈[0.05,0.20] = true；横纹 0.6mm ∈[0.30,1.00] = true"
+    },
+    {
+      "id": "c-shoulder-seats",
+      "weight": 3,
+      "inSkill": false,
+      "ok": false,
+      "detail": "肩面接口 0 条，非 pass 0 条"
+    },
+    {
+      "id": "c-blind-tenon-shorter",
+      "weight": 3,
+      "inSkill": false,
+      "ok": true,
+      "detail": "榫头 28 < 孔深 30，余量 2mm ∈ [1.5, 3.0]"
+    },
+    {
+      "id": "c-protrusion",
+      "weight": 2,
+      "inSkill": false,
+      "ok": false,
+      "detail": "零 measure_distance 调用——出榫 5mm 从未被验证（契约里也没有对应条目）"
+    },
+    {
+      "id": "c-interface-count",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "interfaces=40（注：x/y 双向覆盖未单独校验）"
+    },
+    {
+      "id": "c-measured-vs-datum",
+      "weight": 2,
+      "inSkill": true,
+      "ok": false,
+      "detail": "零 measure_distance 调用——只有契约一条路径，无从比对"
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-version-recall",
+      "ask": "第 2 版腿的榫头厚度是多少？",
+      "ok": true,
+      "detail": "期望 30（腿的第 2 版 = v004（p002 的 v002→v004→v005→v006 里的第 2 个），透榫截面 30×30 ⇒ 榫头厚度 30mm。**30.5 是阴性对照那一版（v005）**，答成 30.5 说明记错了版本。取值读自 cad-data/versions/*/model.scad 的 TEN。）；答案命中 30。原答：**15 mm**。 具体说（凳腿这个零件的版本链是 v002 → v004 → v005 → v006）： - **v002**（凳腿的第 1 版，也是全局第 2 版）：透榫截面…"
+    }
+  ],
+  "humanColumns": [
+    "E",
+    "H",
+    "R"
+  ],
+  "coverageGaps": []
+}

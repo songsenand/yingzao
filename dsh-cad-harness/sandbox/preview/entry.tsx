@@ -27,6 +27,21 @@ if (bgParam) {
 document.documentElement.style.setProperty('--dock-w', `${w}px`);
 document.documentElement.style.setProperty('--stage-h', `${h}px`);
 
+// ?project=/abs/dir — stand a session cwd in front of the panel. Project-scoped
+// affordances (the local-STL import target, the empty-state wording) read the
+// session list; without this the sandbox has no session and they render their
+// "未识别" guard, which is correct but hides the normal state.
+const projectParam = q.get('project');
+if (projectParam) {
+  const sessions = {
+    list: { getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1', cwd: projectParam } } }) },
+    binding: (id: string) => (id === 'session-1' ? { sessionId: id } : undefined),
+    retainInfo: () => ({ getSnapshot: () => ({ retainedBy: { mainView: 1 } }) }),
+  };
+  setProjectServices({ sessions });
+  setClientServices({ sessions });
+}
+
 // ?subject=<partId>|__scene__ — drive the 零件 select after mount (React listens
 // to the native `change`, so a value set + dispatch is enough). No production
 // hook is needed for this: the sandbox drives the real DOM.
@@ -259,6 +274,40 @@ if (wheelParam) {
 }
 if (resetParam) setTimeout(() => clickByText('复原'), 2600);
 
+// ?localstl=<versionId> — open 本地 STL and feed it a REAL STL from the mock
+// corpus through the file input, so the preview's geometry path (and not just
+// its empty state) can be reviewed. The canvas freeze runs at ~2.9 s, after the
+// file has parsed.
+const localStlParam = q.get('localstl');
+if (localStlParam) {
+  setTimeout(() => {
+    // 📂 now jumps to the 未登记 category; the dialog is one step further in
+    // ("按路径导入…") and opens on its import tab, so 预览 must be clicked.
+    clickByText('📂');
+    setTimeout(() => {
+      clickByText('📂 按路径导入…');
+      setTimeout(() => {
+        clickByText('预览');
+        void (async () => {
+          try {
+            const res = await fetch(`/api/cad/stl?v=${encodeURIComponent(localStlParam)}`);
+            if (!res.ok) throw new Error(`STL HTTP ${res.status}`);
+            const buf = await res.arrayBuffer();
+            const input = document.querySelector('#root input[type=file]') as HTMLInputElement | null;
+            if (!input) throw new Error('file input not found — did the dialog open?');
+            const dt = new DataTransfer();
+            dt.items.add(new File([buf], `${localStlParam}.stl`, { type: 'model/stl' }));
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (e) {
+            reportError('localstl', e);
+          }
+        })();
+      }, 400);
+    }, 700);
+  }, 1500);
+}
+
 
 if (freeze) {
   const done = new WeakSet<HTMLCanvasElement>();
@@ -316,6 +365,58 @@ if (q.get('fakerenderer') === '1' || q.get('assert') === 'insert') {
   }, 1500);
 }
 
+// ?assert=local-import — drive the human import for REAL (open the dialog, type
+// a path, submit) against the mock POST, then assert what left the browser:
+// the session project in the query, the path/unit/part in the body, render:false,
+// and the dialog closing on success. The unit test covers the request builder;
+// this covers the glue.
+if (q.get('assert') === 'local-import') {
+  const setInput = (el: HTMLInputElement, value: string) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const report = async () => {
+    const list = await (await fetch('/api/cad/__imports')).json();
+    const last = list[list.length - 1] ?? {};
+    const body = last.body ?? {};
+    const dialogOpen = !!document.querySelector('#root [role="dialog"]');
+    const checks: [boolean, string][] = [
+      [list.length === 1, `exactly one POST reached the door (${list.length})`],
+      [last.project === q.get('project'), `project = ${last.project}`],
+      [body.file === 'out/pan-45.stl', `file = ${body.file}`],
+      [body.unit === 'mm', `unit = ${body.unit}`],
+      [body.part === '托盘', `part = ${body.part}`],
+      [body.render === false, `render = ${body.render}`],
+      [!dialogOpen, 'the dialog closed on success'],
+    ];
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    pre.textContent = 'local import (mock POST)\n'
+      + checks.map(([ok, t]) => `${ok ? 'PASS' : 'FAIL'}  ${t}`).join('\n');
+    document.getElementById('stage')!.appendChild(pre);
+  };
+  setTimeout(() => {
+    // 📂 → 未登记 category; the by-path door is inside the sheet, and the dialog
+    // already opens on its import tab.
+    clickByText('📂');
+    setTimeout(() => {
+      clickByText('📂 按路径导入…');
+      setTimeout(() => {
+        const inputs = Array.from(document.querySelectorAll('#root input')) as HTMLInputElement[];
+        const path = inputs.find((i) => (i.placeholder ?? '').includes('out/pan-45'));
+        const part = inputs.find((i) => (i.placeholder ?? '').includes('默认取文件名'));
+        if (path) setInput(path, 'out/pan-45.stl');
+        if (part) setInput(part, '托盘');
+        setTimeout(() => {
+          clickByText('导入并登记');
+          setTimeout(() => void report(), 900);
+        }, 200);
+      }, 400);
+    }, 700);
+  }, 1500);
+}
+
 // ?assert=layout — the stability requirement, checked instead of eyeballed:
 // toggling any control, opening a disclosure or taking a screenshot must not
 // change ANY region's box. Only the viewport is flexible, so any change in it is
@@ -325,7 +426,11 @@ if (q.get('assert') === 'layout') {
   const snap = () => Array.from(panel()?.children ?? [])
     // Absolutely-positioned children (the error toast) are overlays: they take no
     // space, so they cannot move anything and are not part of the layout budget.
-    .filter((c) => getComputedStyle(c).position !== 'absolute')
+    // Overlays (absolute OR fixed) take no layout space, so they cannot move
+    // anything and are not part of the vertical budget. `fixed` was missed:
+    // the screenshot compose dialog is fixed-positioned, so opening 截图 made
+    // the child count change and the assertion cried wolf.
+    .filter((c) => !['absolute', 'fixed'].includes(getComputedStyle(c).position))
     .map((c) => {
     const r = c.getBoundingClientRect();
     const t = (c.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 12);
@@ -388,6 +493,12 @@ if (q.get('assert') === 'layout') {
       out.push(`${d || cd ? 'FAIL' : 'PASS'}  after ${label.padEnd(4)}  ${[d, cd].filter(Boolean).join(' | ') || 'every region + chip identical'}`);
       show();   // incremental: a capture mid-run still shows the verdicts so far
     }
+
+    // The 截图 step opens the compose dialog. It takes no layout space (the
+    // snapshot excludes fixed overlays), but its full-screen backdrop would
+    // swallow the splitter drag and the mode clicks below — close it first.
+    clickByText('取消');
+    await new Promise((r) => setTimeout(r, 140));
 
     // Reported bug: dragging (to orbit) in 壁厚 mode used to paint and commit an
     // annotation box. 标注 must still do exactly that — so this is a pair.
@@ -469,7 +580,11 @@ if (q.get('assert') === 'layout') {
   setTimeout(() => void run(), 1780);
 }
 
-if (q.get('debug') !== '0') {
+// The probe CLEARS the stage, and it fires at 2.6 s — inside the layout
+// assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
+// the screenshot showed the probe instead of the verdicts. An assert owns the
+// stage; the probe steps aside for it.
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

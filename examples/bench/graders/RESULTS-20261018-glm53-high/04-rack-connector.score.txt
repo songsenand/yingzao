@@ -1,0 +1,39 @@
+
+=== 04-rack-connector · zai-coding-cn/glm-5.3-flash ===
+run root : /home/songsenand/bench-runs/04-rack-connector-glm53-high
+session  : session-9539bf4b-62e1-47c3-a793-baa804c809b8
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 80 次，零触达
+  PASS  g-connector-json                   connector.json 存在且字段齐全
+  PASS  g-new-part-version                 新零件 v003，自解析尺寸 9.8 × 9.8 × 20.5mm
+  FAIL  g-assembly-run                     4 次装配运行（r001:pass, r002:fail, r003:pass, r004:pass） — 1 次 fail
+  PASS  g-measure-and-model                测量工具：list_features, measure_section, measure_part；出形状：generate_part, import_part
+  PASS  g-negative-copy-fires              照抄导轨（136×27×12）或同族接头（9.8×9.8×20.502）都会落在接受带外 ⇒ 对照有效
+
+-- 数值判据 --
+  PASS  c-cross-section                    w=3 配合截面：交付件三个尺寸（排序）9.8 / 9.8 / 20.5mm，接受带 9.4–9.9（取中间两个）
+  FAIL  c-length                           w=2 长度（最长边）20.5mm，接受带 10–18
+  PASS  c-through-holes                    w=3 1 个合格通孔（要求 ≥1，Ø3–3.6）；孔径都能在工具返回里找到
+  PASS  c-printable-single-body            w=2 可打印性 ok；check_connectivity 未调用
+  PASS  c-assembly-no-interference         w=3 4 对：mainRail↔stackConnectorBottom:ok, mainRail↔stackConnectorBottom:ok, mainRail↔rackJoiner:ok, stackConnectorBottom↔rackJoiner:ok
+  FAIL  c-not-a-copy                       w=2 交付件尺寸与导入件 v002 相同（复制品）
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+
+-- 成本（实测）--
+  工具调用 80/60   墙钟 39.6min/40   图片 ?/12
+  token    {"inputTokens":171293,"outputTokens":83090,"totalTokens":4948079,"cacheReadTokens":4693696}
+  段 TASK.md  exit=0 turns=1 tools=80
+
+-- 六列 --
+  P 通过   0  ← 1 条硬门不过，按 gatePolicy 归零
+  S 生效度 0.929
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 12/12 条；其余为 UNKNOWN，**未实现的不算通过**。
+  → 写分请填 graders/04-rack-connector/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/04-rack-connector.score.json

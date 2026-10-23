@@ -72,15 +72,39 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   process.env.DSH_HOME = home;
   const { ensurePart, attachVersion } = await import('../src/host/parts.ts');
   const { saveVersion } = await import('../src/host/version.ts');
-  const { compileStlOnly } = await import('../src/host/compile.ts');
   const { beginRun } = await import('../src/host/runs.ts');
+
+  // A binary STL cube, written here so this acceptance does not need the Python
+  // runtime (compileStlOnly does; section 2 must stay runnable on a bare checkout).
+  const cubeStl = (size) => {
+    const h = size / 2;
+    const v = [[-h,-h,-h],[h,-h,-h],[h,h,-h],[-h,h,-h],[-h,-h,h],[h,-h,h],[h,h,h],[-h,h,h]];
+    const faces = [
+      [0,2,1],[0,3,2],[4,5,6],[4,6,7],[0,1,5],[0,5,4],
+      [1,2,6],[1,6,5],[2,3,7],[2,7,6],[3,0,4],[3,4,7],
+    ];
+    const buf = Buffer.alloc(84 + 12 * 50);
+    buf.write('dsh audit cube fixture', 0);
+    buf.writeUInt32LE(12, 80);
+    let o = 84;
+    for (const [i, j, k] of faces) {
+      const a = v[i], b = v[j], c = v[k];
+      const u = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
+      const w = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+      let n = [u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]];
+      const len = Math.hypot(...n) || 1;
+      n = n.map((x) => x / len);
+      for (const p of [n, a, b, c]) for (const x of p) { buf.writeFloatLE(x, o); o += 4; }
+      o += 2;
+    }
+    return buf;
+  };
 
   const project = projectStores(workspace);
   const partA = await ensurePart(project.partStore, '支架', 'agent');
-  const cube = await compileStlOnly('cube([10,10,10], center=true);\\ndatum("角点", [5,5,5]);');
   const v1 = await saveVersion(project.store, {
-    scadCode: 'cube([10,10,10], center=true);', stl: cube.stl, userIntent: 'clean v1',
-    datumSet: cube.datumSet, partId: partA.id,
+    scadCode: 'cube([10,10,10], center=true);', stl: cubeStl(10), userIntent: 'clean v1',
+    datums: [{ name: '角点', point: [5, 5, 5] }], partId: partA.id,
   });
   await attachVersion(project.partStore, partA.id, v1);
 
@@ -91,7 +115,7 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   await run.commit({ status: 'pass', summary: 'stable', hasGeometry: false, sourceVersionIds: [v1] });
 
   // A contract with a motion interface, so no "contract without motion" flag.
-  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { mkdirSync, writeFileSync, utimesSync, rmSync } = await import('node:fs');
   mkdirSync(join(workspace, 'assembly'), { recursive: true });
   writeFileSync(join(workspace, 'assembly', 'assembly.json'), JSON.stringify({
     schemaVersion: 1, name: 'clean', unit: 'mm', up: 'z',
@@ -111,6 +135,60 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
     `${clean.verdict}: ${clean.findings.map((f) => f.code).join(', ') || '(no findings)'}`);
   check(!clean.parts.newestNeverValidated.includes('支架'),
     'the clean part is not flagged as unvalidated');
+
+  // ── 3. a finished part written straight to disk is BLOCKED ─────────────────
+  //
+  // This is the 2026-10-21 case: the deliverable exists as an STL, the panel
+  // and every tool need a versionId, and nobody registered it. The audit has
+  // to name it — silence here is exactly how a human ends up unable to see
+  // what the model produced.
+  const manifestPath = join(workspace, 'assembly', 'assembly.json');
+  mkdirSync(join(workspace, 'out'), { recursive: true });
+  const stray = join(workspace, 'out', 'disk-45.stl');
+  writeFileSync(stray, cubeStl(7));
+  const future = new Date(Date.now() + 60_000);
+  utimesSync(stray, future, future);
+
+  const withStray = await auditDelivery(projectStores(workspace), { manifestPath });
+  check(withStray.verdict === 'excluded',
+    'a mesh NEWER than the newest version, with no version, blocks delivery',
+    `${withStray.verdict}: ${withStray.findings.map((f) => `${f.severity}/${f.code}`).join(', ')}`);
+  check(withStray.findings.some((f) => f.code === 'unregistered-geometry' && f.severity === 'blocked'),
+    'and the finding names the unregistered geometry');
+  check(withStray.unregistered.files.some((f) => f.path === 'out/disk-45.stl' && f.severity === 'blocked'),
+    'the file appears with its workspace-relative path',
+    JSON.stringify(withStray.unregistered.files));
+
+  // The scan is a declared scope, not an unbounded sweep: [] turns it off for a
+  // caller that has already accounted for its outputs another way.
+  const disabled = await auditDelivery(projectStores(workspace), { manifestPath, scanPaths: [] });
+  check(disabled.unregistered.files.length === 0 && disabled.verdict === 'not-excluded',
+    'scanPaths: [] disables the scan (an explicit opt-out, not a silent one)',
+    `${disabled.verdict}: ${disabled.findings.map((f) => f.code).join(', ')}`);
+
+  // A declared exception is the sanctioned way to keep a file outside the
+  // corpus (bought/reference geometry): it must clear the block and echo why.
+  const exempted = await auditDelivery(projectStores(workspace), {
+    manifestPath,
+    exempt: [{ path: 'out/disk-45.stl', reason: 'vendor reference geometry' }],
+  });
+  check(!exempted.findings.some((f) => f.code === 'unregistered-geometry'),
+    'a declared exemption clears the block (it is a decision, not a silent pass)',
+    exempted.findings.map((f) => f.code).join(', '));
+  check(exempted.unregistered.exempt.length === 1 &&
+    exempted.unregistered.exempt[0].path === 'out/disk-45.stl' &&
+    exempted.unregistered.exempt[0].reason === 'vendor reference geometry',
+  'the exemption and its reason are echoed', JSON.stringify(exempted.unregistered.exempt));
+
+  // A file OLDER than the newest version predates this design: warn, do not block.
+  const old = new Date('2000-01-01T00:00:00Z');
+  utimesSync(stray, old, old);
+  const withOld = await auditDelivery(projectStores(workspace), { manifestPath });
+  check(withOld.verdict === 'difficult' && withOld.unregistered.files[0]?.severity === 'warn',
+    'an unregistered file that predates the newest version warns, and does not block',
+    `${withOld.verdict}: ${JSON.stringify(withOld.unregistered.files)}`);
+
+  rmSync(stray);
 }
 
 console.log(`\n${failures === 0 ? 'OK' : `${failures} FAILURE(S)`}`);

@@ -3535,6 +3535,344 @@ run 落盘）、`src/client/heat.ts`（fused 层优先绘制）、`src/shared/ju
 应都能返回；`analyze` 的 run 会正确挂到版本上。若 `both` 仍报 lossless JSON，说明还有别的 `-0`
 来源，按报错继续收口。
 
+## 2026-10-22：交付几何默认进版本库；直接写盘是例外，且必须被机器点名
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（成为后续交付纪律与 skill 的前提）。
+
+**要解决的问题：** 一次完整设计里，两条 45 mm 成品盘由管线直接写成 STL，只有三个验证件
+（65 mm 旧盘、i/j 桥试件、i/j 浮雕牌）走了 `import_part`。结果面板里有验证件、没有成品：
+面板只读 `versions/`，所有检查工具也只吃 `versionId`，成品对人和工具都不存在。用户指出这不
+是"显示问题"，而是**打断了 LLM 与人之间的通道**——人不能完全不知道 LLM 输出了什么。
+
+**决策内容：**
+
+1. **默认路径是登记**：凡要给人看、由人判或要交付的几何，必须成为版本
+   （`generate_part` / `import_part`）。
+2. **直接写盘是例外，但例外必须声明**（路径 + 原因），静默写盘即违规。
+3. **机械检查**：`delivery_audit` 新增 `unregistered-geometry`——扫描工作区（默认跳过语料、
+   嵌套项目、构建目录），把磁盘上有、版本库里没有的网格点名；比最新版本新的判 `blocked`，
+   更旧的判 `warn`；`exempt: [{path, reason}]` 是声明豁免通道，理由随件回显。
+4. **不做自动登记**：版本是不可变提交；自动收编会取消"提交"这个动作，并把中间帧与批量件
+   灌进语料。
+5. **`generate_part` 的 `views: []` 改为"登记但不附图"**（旧实现回落到全部四张），让
+   "预览优先"不必以图片预算为代价——面板直接加载 `model.stl`，人照样看得见。
+
+**理由：** 面板不是写入端而是只读视图，"输出到预览"在实现上只能是"登记为版本"。硬拦做不到
+（shell 总能写文件），自动收编又会破坏"版本=显式提交"；可执行的三层是**默认 + 声明 + 检测**。
+原则本身 HARNESS §3/§4 已有（人完全不碰几何→橡皮图章；真值随产物流转；零件=版本库），
+故 HARNESS 不重复立条，只补 DESIGN §30.17 与机械检查。
+
+**依据：** 用户原话"人在回路中这件事非常重要"；`delivery_audit` 对显微镜5 语料仍复现原
+10 项数字；新增验收 `accept-delivery-audit.mjs` 用真实语料 + 干净语料 + 三组夹具断言
+（新文件 blocked、声明豁免后不 blocked、旧文件仅 warn、`scanPaths: []` 可显式关闭），19/19 PASS。
+
+**影响：** skill 的交付纪律、`preflight` 的 audit 步骤、所有"直接出 STL"的示例与管线；
+在含多个示例项目的仓库根目录跑审计时，根下未登记的网格会被点名（按例外声明或收窄
+`scanPaths` 处理，而不是忽略）。
+
+## 2026-10-22：本地 STL 进面板——看（不登记）与用（登记）分成两个动作
+
+**触发条件：** 第 1 条（用户拍板 A+B）+ 第 4 条（决定面板、语料与浏览器能力之间的边界）。
+
+**要解决的问题：** 人手里有一个 STL，面板却只读语料里的版本；浏览器 `<input type=file>` 只
+给字节和文件名，拿不到真实路径；如果"预览"顺手登记，会往语料里灌一次性文件；如果只做导入，
+又逼人为了看一眼先建版本。三件事必须分开：**看形状**、**决定留下**、**文件从哪来**。
+
+**决策内容：**
+
+1. **预览 = 纯客户端**：three.js 在浏览器里解析 STL，画进临时场景；不产生版本、不参与测量/
+   装配、不进 Agent 上下文，界面标注「未登记」。文件不落盘，`delivery_audit` 也看不见它。
+2. **导入 = 复用现有门**：`POST /api/cad/import`（与 `import_part` 共用 `importPartJob`），
+   写**会话 cwd**；`render:false`（面板直接加载 `model.stl`）；单位由人显式声明；非实体默认
+   拒收，`allowNonSolid` 才带标记。
+3. **不做拖拽上传（方案 C）**：上传端点要新增大体积、格式、单位与非实体的守卫；先等真实 UX
+   需求。浏览器拿不到路径这件事，用"路径输入"诚实表达，不假装能一键。
+4. **面板钉在别的语料时**，导入成功后自动回到会话语料并选中新版本——否则新版本写进了 Agent
+   看得见、人却看不见的语料。
+
+**理由：** 与 §30.17 同一条原则的两面：**预览不是产物，登记才是**。把两者塞进一个按钮会让人
+误以为"看过了"等于"已经进项目"；分成两个动作后，面板可以不解释任何"临时文件"，语料也保持
+"版本=显式提交"。成本上预览为零（无后端、不落盘），导入复用现成实现，唯一新增的是 UI 与
+请求构造（纯函数，可测）。
+
+**依据：** 新验收 `accept-local-stl.mjs` 14/14 PASS（目标语料 URL 编码、`render:false`、
+空零件名省略、单位声明、非实体开关、无会话目录不伪造 project）。沙箱截图三张：
+`local-stl-model.png`（真实 STL 在对话框里渲染，320 面/60×40×44）、`local-stl-import2.png`
+（写入目标为会话目录）、`local-stl-layout3.png`（加按钮后 7 个步骤 + 壁厚拖拽全部 PASS）。
+顺带修了布局断言的两个假阴性：`fixed` 浮层此前被算进垂直预算（打开「截图」就报 child count
+6→7），且截图浮层的全屏背板挡住了后续拖拽/按键检查——现在浮层按 `fixed` 排除、截图步骤后
+先关闭再继续。`tsc --noEmit` 无新增错误；两个 bundle 构建通过。
+
+**影响：** 面板 UI（新增本地 STL 对话框、工具条入口、空态入口）、`POST /api/cad/import` 的
+人用路径、README 使用流程与边界、沙箱 entry 的 `project` / `localstl` 查询参数与布局断言。
+LLM 侧不变：它仍走 `import_part`；人预览过的文件若不登记，Agent 永远看不到它。
+
+## 2026-10-22：3MF 导入用 lxml + trimesh 读取器，不手写 core spec
+
+**触发条件：** 第 1 条（用户拍板"按照你的建议继续"）+ 第 4 条（决定导入格式面与运行时依赖面）。
+
+**要解决的问题：** 我们自己的 3MF 导出**导不回来**——`SUPPORTED_EXTENSIONS` 没有 `.3mf`，
+worker 的 else 分支只认 STL。补 3MF 有两条路：给锁加一个 XML 依赖、用 trimesh 现成的读取器，
+或手写 core spec 解析器。用户明确不愿重复造轮子，要求先把依赖成本量出来。
+
+**决策内容：**
+
+1. **加 `lxml==6.1.3` 进锁**，3MF 交给 trimesh 的读取器（`trimesh.load(file_type='3mf')`）。
+   lxml 是 trimesh 的 `easy` extra 依赖，本锁不装 extra，所以此前 `trimesh.load(*.3mf)` 直接
+   `ModuleNotFoundError: No module named 'lxml'`（2026-10-22 实测）。
+2. **策略层仍是我们自己的**（这是不手写也不能省的）：
+   - 单位折算：trimesh 把 `model@unit` 存进 metadata 但**不缩放**（`unit="inch"` 实测仍是
+     10 单位包围盒）→ worker 用 `_THREEMF_UNIT_TO_MM` 折进 `native_to_mm`，只折一次；
+   - 多体政策：3MF 是对象的容器，`shells > 1` **拒收**（消息给体数与出路）；STL/STEP 保持
+     "警告但存"；
+   - 错误消息：缺 lxml、不是 3MF（ZIP 里没有 `3D/3dmodel.model`）、未知单位，都指名说清。
+3. **`LOCKED_IMPORTS` 补 cascadio / ezdxf / lxml**：导入格式也是能力声明，缺了就不能再报
+   `ready`（与 rtree/shapely 那次静默失败的教训同源）。
+
+**理由：** 决定性事实不是"能不能自己写"，而是**依赖的代价是否可控**——实测 lxml 6.1.3 的
+cp313 轮子覆盖我们全部 7 个目标（manylinux2014 + manylinux_2_28 + musllinux x86_64/aarch64 +
+macOS x86_64/arm64 + win amd64/arm64），**不需要任何 exclude、不需要编译器**，轮子 4–5.6MB、
+安装后 13MB（运行时 1.7GB 量级，占比 <1%）。而 trimesh 的读取器已经处理了最容易写错的部分：
+build-item 4×3 变换（+20mm 实测落 15..25）、`<components>` 嵌套、多实例烘焙、`iterparse`
+流式解析，且解析选项安全（`resolve_entities=False / no_network=True / load_dtd=False /
+huge_tree=False`）。手写 200–250 行换来的只有"不添依赖"，却要永久拥有变换约定、组件递归与
+生产者怪癖——正是本项目最怕的"看起来对、量起来错"。**用户接受"预览不再纯客户端、文件必须在
+服务器上"的代价**，也让预览与导入可以共用同一次 tessellation，不再有两套几何。
+
+**依据：**
+
+- PyPI 元数据：lxml 6.1.3 共 18 个 cp313 轮子，7/7 目标有轮子（含 musl）；`gen-python-lock`
+  重生成后 `--check` 通过，锁里 `lxml==6.1.3: 18 wheels`，无 exclude。
+- 运行时开销：wheel 5.2MB（manylinux x86_64）、安装后 13MB（实测临时 target 目录）；
+  老用户升级：锁 sha 变化 → 重建 venv，但 wheel 缓存在运行时根目录内（逐轮子校验哈希），
+  实际新增下载只有 lxml。
+- 行为实测（夹具见 `scripts/fixtures/cad-import/`）：10mm 立方体 → 1000 mm³；
+  `unit="inch"` → 254mm / 16387064 mm³；build 平移 +20 → bbox 15..25；`<components>` 同样；
+  两个 build item → 24 三角形 / 2 体 → 拒收。
+- 验收：`scripts/accept-import-3mf.mjs` 8/8 PASS；`accept-import.mjs`（37 项，含把 3MF 负样本
+  换成 OBJ 边界）ALL PASS；`accept-import-cad.mjs`（STEP/DXF）ALL PASS；
+  `gen-python-lock --check` / `audit-tool-contracts --check` / `tsc`（仅 4 个既有错误）通过。
+- **一条操作教训**：`accept-import-3mf.mjs` 最初在 `DSH_CAD_PYTHON_ROOT` 指向真实运行时且
+  状态判定为 not-ready 时走了 `repairPythonRuntime`，重建中途被超时打断，把开发者真实的 venv
+  掏空（只剩 pip）。现已在该脚本里加闸：**覆盖了运行时根就拒绝 repair**（unset 后才provision
+  一次性临时 HOME），并用新锁把真实运行时补回 `ready`。
+
+**影响：** `python-lock.ts`（新 sha，老用户下次启动会一次性重建 venv）、worker
+`op_import_mesh`（`.3mf` 分支 + 错误消息）、`import.ts`（扩展名/单位/多体政策）、
+`import_part` 描述、DESIGN §28、README 与 cad-modeling-measure skill 的格式面；
+P1「未登记」分类的预览可直接复用这次 tessellation（STL 直传 / STEP cascadio / 3MF trimesh）。
+
+## 2026-10-22：未登记几何成为面板的第五个浏览类目（预览不再是弹窗）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（决定面板的信息架构与后续预览/导入工作的前提）。
+
+**要解决的问题：** 上一版把「看」和「登记」都塞进一个弹窗（`📂 本地 STL`）。用户指出
+**预览不该是弹窗**：未登记的几何应当像版本一样在**同一个浏览轴**上被看到——"在零件、组件、
+仿真这个下拉列表里面增加一个，专门放未登记的图"。同时接受代价：预览不再是纯客户端，
+文件必须在服务器上（与导入一致），这样预览与导入可以共用同一次 tessellation。
+
+**决策内容：**
+
+1. **新增第五个种类「未登记」**（`BrowseKind = part | assembly | sim | contract | unregistered`），
+   `📂` 按钮直达。列表、视口、详情都走既有骨架：未登记文件用**主视口同一个场景构建器**渲染，
+   详情里是文件事实 + 导入表单，**没有新的 viewer 实现**。
+2. **列表与审计共用一份扫描**：抽出 `src/host/unregistered.ts::scanUnregistered`，
+   `delivery_audit` 与新的 `GET /api/cad/unregistered` 都调它。人和机器看到的必须是同一份
+   清单——否则"机器报警、人看不见"会以另一种形式回来。认领仍是**精确哈希**。
+3. **预览不是版本，且政策在此挂起**：`GET /api/cad/file?path=` 用与导入相同的读取链路
+   （STL 直读 / STEP cascadio / 3MF trimesh）在服务器上 tessellate。`importGeometry` 新增
+   `preview:true`：**只有预览**才跳过"必须是封闭实体"与"3MF 只许一个对象"两条存储政策——
+   一盘多件的 3MF、有洞的网格正是人要看了才能决定的东西；`solid/shells/单位` 仍如实回报，
+   界面写「未登记 · 不是版本 · 不入证据」，因此**测量/壁厚/剖切/热力图不提供**（那些需要
+   一个版本作主语），只留截图与标注。
+4. **路径守卫用 realpath**：只允许会话工作区内的真实文件（符号链接指向外面也拒）。
+   DXF 不可预览（二维轮廓需要 depthMm），详情直接说明并给导入入口。
+5. **弹窗降级为「按路径导入」**：默认开在导入页；浏览器端预览只是"文件不在服务器上"那条路的
+   兜底。工作区内的文件不再需要弹窗。
+
+**理由：** 「人在回路」要求未登记的产物**看得见、指得到、能一键登记**，而这三点都必须发生在
+人已经在看的地方（同一个面板、同一个视口），不是另开一个窗口。预览与导入共用 tessellation
+意味着"预览的样子"就是"登记后的样子"——两套几何是过去反复出问题的地方。把预览政策与存储
+政策显式分开（`preview:true`）则让"能看"不被迫等于"能存"。
+
+**依据：**
+
+- 新验收 `scripts/accept-unregistered.mjs` **21 项全过**：扫描=审计同一清单；同字节副本不报、
+  改过的报；嵌套 `cad-data/` 在任何深度都跳过；豁免生效且回显理由、失效豁免被点名；
+  `../` 与指向外部的符号链接都被拒；STL 预览标注"单位未声明"；**两体 3MF 可预览
+  （shells=2）而导入拒收**；STEP 预览为 mm（colored.step 7.60×7.59×16.20）；DXF 拒绝并给
+  depthMm 出路；预览后版本库字节未变。
+- 既有验收全绿：`accept-import-3mf` 8/8、`accept-import-cad` ALL PASS、`accept-import`
+  ALL PASS、`accept-delivery-audit`、`accept-preflight`、`accept-local-stl`、布局断言 11/11；
+  `audit-tool-contracts --check` OK；`tsc` 仅 4 个既有错误。
+- 沙箱端到端：`kind=unregistered` 截图（列表 + 主视口预览 + 详情表单）；`assert=local-import`
+  7/7（经类目→对话框的路径，仍证明 POST 的 project/file/unit/part/render:false）。
+- **测试逮到的两个真 bug（都已修）**：① 扫描的"跳过别的项目"判断原先带 `!isRoot`，导致
+  **工作区根的直接子目录**里的 `cad-data/` 语料被本语料审判（嵌套用例第一次跑就露出来）；
+  ② `MESH_EXTENSIONS` 没有 `.dxf`，于是可导入的 DXF 从来不出现在未登记清单里。两处修正同时
+  改到了 `delivery_audit` 的行为（它现在也会报 DXF、也会正确跳过浅层嵌套语料）。
+- 一条沙箱工具修正：布局断言的报告曾被 2.6 s 的 debug 探针清掉 `#stage` 而看不见；现在
+  `assert=layout` 时探针让位。
+
+**影响：** `panel.ts`（第五类目、`meshSource` 统一视口、未登记详情/导入表单）、
+`local-file.tsx`（默认导入页）、`local-file-request.ts`（+depthMm）、新 `src/host/unregistered.ts`、
+`import.ts`（`preview:true` + `previewGeometry`）、`tools.ts`（两条只读路由）、
+`delivery-audit.ts`（改用共享扫描）、沙箱 mock/entry/README、README §二.7、DESIGN §5.1/§30.18。
+
+## 2026-10-22：把 xlb 的「声明依赖」换成「真正 import 的闭包」，运行时 −726 MB
+
+**触发条件：** 第 1 条（用户拍板）+ 第 2 条（有测量数据的定量结论）+ 第 3 条（依赖面，高成本）。
+
+**要解决的问题：** 运行时里 `vtkmodules`(565 MB) + `warp`(360) + `pyvista`(14) + `matplotlib`(35)
+等占了 1.5 GB，用户问：这三个库是不是 xlb 的**可选**依赖，能不能删。上一版把它们当作 xlb 的
+传递闭包照单全收（DECISION-LOG 2026-10-15），从未验证过"代码到底 import 了什么"。
+
+**决策内容：**
+
+1. **锁按"真正 import 的闭包"裁剪**：`xlb` 声明 matplotlib + pyvista(→vtk) + numpy-stl +
+   pydantic + ruff，但它在代码里只有**一处**引用可视化：`xlb/__init__.py` 的 eager
+   `import xlb.utils`。该模块是纯可视化（`save_fields_vtk` / `save_BCs_vtk` / `voxelize_stl`
+   / `save_image` / `save_usd_*` …），`grep -rn 'xlb.utils' xlb/` 在 `utils/` 之外**只命中
+   `__init__.py` 这一行**，我们也不调用它。
+2. **用 stub 让那句 import 变成 no-op**：`lbm_xlb._stub_unused_viz_module()` 预注册
+   `sys.modules['xlb.utils']`，并在 `import xlb` 之后补上父包属性——**预注册的子模块不会
+   自动获得 `xlb.utils` 属性**（第一版探针就死在 `AttributeError`，已实测并写进注释）。
+3. **pip 改用 `--no-deps` 安装**：锁就是闭包（`gen-python-lock.mjs` 列的是 worker 真正
+   import 的集合），不再让 pip 按包自带的 `Requires-Dist` 去要那些被我们有意排除的包——
+   否则 `--require-hashes` 会因为缺 hash 直接拒装。
+4. **删掉 34 个包**（726 MB 安装体积 / 178 MB 冷装下载，linux-x64-gnu 实测）：
+   vtk 139.7 MB(wheel)、ruff 10.4、matplotlib 9.9、pillow 6.9、pyvista 2.7、pydantic-core 2.2、
+   kiwisolver 1.5、pygments 1.3 + 其余传递树（requests/urllib3/idna/certifi/platformdirs/
+   attrs/pooch/scooby/pyvista-validation/cyclopts/rich/rich-rst/markdown-it-py/mdurl/
+   docstring_parser/typing-inspection/annotated-types/pydantic/numpy-stl/python-utils/
+   packaging/six/python-dateutil/cycler/contourpy）。
+5. **保留**：`warp-lang` + `jax/jaxlib` 是 xlb 的**计算后端**（各被 38 个源文件 import，
+   实测导入即触发 Warp DeprecationWarning 与 JAX 后端初始化）——不是可选依赖，删不得。
+
+**理由：** 依赖的存在理由应当是"代码 import 它"，而不是"某个包的元数据声明它"。这次差异
+特别大（声明面 1.5 GB vs 真实面 0.7 GB），而且差额全在一个我们从不调用的可视化模块上。
+用 stub 换 726 MB 是值得的；但 stub 必须**可发现、可解释、有逃生口**——注释里写明"将来要
+做 VTK 导出就按需加回依赖，不要把 stub 当神秘 AttributeError 去 debug"。
+
+**依据（测量，非推断）：**
+
+- **屏蔽实验**：把 matplotlib/pyvista/vtk/numpy_stl/pydantic/ruff 及其**全部依赖**用
+  meta_path 钩子挡住，跑 200 步通道：`import xlb` 成功，`stable=True`，`mirrorError=2.8e-06`，
+  **被挡模块一个都没进入 `sys.modules`**。对照组不挡时同一调用同样通过。
+- **闭包计算**：按 `importlib.metadata` 的 `Requires-Dist`（剔除 extra 标记）从真实根
+  （numpy/scipy/trimesh/lxml/manifold3d/networkx/scikit-fem/rtree/shapely/cascadio/ezdxf/
+  rapier3d/numba/llvmlite/xlb/warp/jax/jaxlib/ml_dtypes/opt_einsum，xlb 的依赖用实测的
+  `warp+jax+numpy+trimesh` 覆盖）算得 KEEP 23 包；`fonttools`/`pyparsing`/`typing_extensions`
+  仍保留——它们是 **ezdxf** 的依赖，不是 matplotlib 的（易误删，已核对）。
+- **体积**：venv 2.1 GB → **1.4 GB**（`du`，−726 MB）；runtime root 2.8 GB → 2.15 GB；
+  linux-x64-gnu 冷装下载 581 MB → **403 MB**（PyPI wheel 实测求和）。
+- **功能未回退**：`accept-lbm-channel.mjs` **ALL PASS 14/14**（含确定性逐位一致、Poiseuille
+  发展带 0.753、镜像对称 0.00%、ZouHe shim 探测器、`CAD_LBM_ENGINE=off` 响亮拒绝、
+  `simulate_lbm` 端到端）；`accept-import` ALL PASS、`accept-import-3mf` 8/8、
+  `accept-import-cad` ALL PASS、`accept-unregistered` 21/21 全在裁剪后的运行时上通过。
+- **重装成本**：锁变 → venv 重建，实测 20.5 s（wheel 全在 runtime 内缓存，pip 逐个复验 hash）。
+
+**影响：** `scripts/gen-python-lock.mjs`（删 34 条 + 闭包说明）、`src/host/python-runtime.ts`
+（`--no-deps`）、`python/cad_worker/lbm_xlb.py`（第四个 shim + 模块 docstring）、
+`src/host/python-lock.ts`（重生成）、DESIGN §26.3/§29。**逃生口**：VTK 场导出等新需求出现时，
+把对应包加回锁并删掉 stub——验收会先红。
+
+## 2026-10-22：用户 overlay —— 装包是用户的权利，不是例外（worker 也可见 + 进 run provenance）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响 python-runtime / worker 启动 / run 记录三处）。
+
+**要解决的问题：** 用户指出："我们提供的场地，用户自己想拉几根电线是用户的权利，装几个
+python 包也是理所当然的权利"——而我上一版把依赖裁剪讲成了"限制"。核对代码后确认：
+**问题不是限制多，而是根本没有门**——全仓只有供给时那一处 pip；worker 与一次性脚本都用
+`-I` 启动（`-I` 明确忽略 PYTHONPATH 与 user site），所以 `pip install --user` 装的包 worker
+**永远看不见**；装进 venv 的包又会在锁变化时随 `rm -rf venv` **静默消失**。
+
+**决策内容（用户在两处选项中拍板）：**
+
+1. **overlay 目录**：`$DSH_HOME/cad/runtime/user-site/`（`DSH_CAD_USER_SITE` 可覆盖）。
+   它是 `venv/` 的**兄弟**，供给/修复只删 `venv/`，所以用户装的东西活得过运行时升级。
+2. **可见范围 = worker 工具也可见**（用户选择，而非只给 run_python）：worker 与一次性脚本
+   统一走新的 `pythonLaunchArgs()`——`-I` 保留（不放松隔离），overlay 由 bootstrap 里的
+   `site.addsitedir()` 显式挂载。因此**每次 `commit()` 把 overlay 的包与 digest 写进 run 的
+   `pythonOverlay`**（空列表也写）：工具的数字一旦来自用户装的库，run 自己会说。
+3. **谁可以装 = LLM 可以直接装**（用户选择）：它是用户的代理；装了会被记录并在 status 列出。
+   **记录而不是门禁**，与本项目"不禁止、但必须声明"的立场一致。
+4. **加装 ≠ 覆盖**：`addsitedir` 是追加，锁里已有的包仍以**锁定版本**为准；安装结果显式报告
+   `shadowed`，避免"加个库"悄悄分叉 numpy。
+5. **门**：`python_runtime action=install packages=[...]`（pip `--target`，不带
+   `--require-hashes`——锁的哈希是为"我们分发的东西可验证"，用户自己的包是用户自己的）。
+
+**理由：** 裁剪默认装载（上一节）是"我们分发什么"的问题；用户装什么是"他的机器怎么用"的
+问题，两者不能混为一谈。但权利要落地就需要三件东西：**门**（有地方装）、**持久**（升级冲不掉）、
+**可见**（worker 能用、run 能说）。只做前两件会让工具的数字失去可追溯性；只做第三件等于
+继续没有门。三件一起做，才既尊重权利又保住"同一个版本 + 同一个工具"的可回答性。
+
+**依据（全部实测）：**
+
+- `accept-python-overlay.mjs` **15/15**：control（空 overlay 下 `import six` 失败）→ install →
+  同一段代码可导入；overlay 是 `venv/` 的兄弟（路径断言）；`installed.json` 记录；
+  **worker 可见性用副作用证明**——overlay 里放一个 `.pth`，worker 进程启动时执行它并写下
+  文件，Node 侧读到该文件才通过（进程边界无法从 Node 窥视，所以不读自己的源码来"证明"）；
+  `networkx==3.7` 装进 overlay 后报告 `shadowed` 且 `import networkx` 仍是锁定版 3.7；
+  `beginRun/commit` 落盘的 run 带 `pythonOverlay.packages` 与 digest；
+  `pythonRuntimeStatus().overlay` 列出两者。
+- **无回退**：`accept-import` ALL PASS、`accept-import-3mf` 8/8、`accept-import-cad` ALL PASS、
+  `accept-unregistered` 21/21、`accept-lbm-channel` ALL PASS 14/14——全部在
+  `python -I -c <bootstrap> runpy.run_path(...)` 这条新启动路径上通过（worker 与一次性脚本
+  共用），说明 runpy + JSON-lines + `__file__` 解析（worker 用它定位 `lbm_xlb.py` 等）都没坏。
+
+**影响：** `src/host/python-runtime.ts`（overlay 目录/读取/digest/install/`pythonLaunchArgs`）、
+`src/host/python-worker.ts`（两个 spawn 点统一走 launch args）、`src/host/python-tools.ts`
+（action=install、status 列 overlay、两个工具描述）、`src/host/runs.ts` +
+`src/shared/types.ts`（`pythonOverlay` provenance）、新验收、README §二.8、DESIGN §26.3b、
+cad-toolbox skill（告知 LLM 可以装）。**逃生口**：overlay 可整目录删除；锁仍是默认装载的
+唯一事实来源。
+
+## 2026-10-22：覆盖锁定依赖需要显式声明（默认不允许，声明后真替换）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（改动 overlay 语义、run 记录与交付判据）。
+
+**要解决的问题：** 上一版 overlay 的语义是"加装 ≠ 覆盖"：锁里已有的包即使装进 overlay 也仍以
+锁定版本为准（`addsitedir` 追加）。用户指出这还不够——有些时候就是要换掉某个锁定依赖
+（新版本才有的 API、上游 bug 修复），**但默认不该允许**，必须**显式声明**后才**真正替换**。
+
+**决策内容：**
+
+1. **两个目录、两条政策**：
+   - `user-site/`（加装）继续**追加**到最后：锁里已有的包仍以锁定版本为准，安装结果报告
+     `shadowed`。默认路径，不需要理由。
+   - `user-site-override/`（覆盖）**插到 `sys.path` 最前**：`action=install` 带
+     `override: true` 时写入，新版本**真的替换**锁定版。
+2. **覆盖必须带 `reason`**：没有理由直接拒绝，错误消息写明规则（"REPLACES a package the lock
+   pins, so it needs a declared reason … confirm it with the human"）。理由进 `installed.json`、
+   status 的 `overrides` 行、以及每个 run 的 `pythonOverlay.overrides`；`delivery_audit` 对
+   用过覆盖的 run 出一条 info 点名（"including EXPLICIT OVERRIDES of locked packages …"）。
+3. **LLM 可以直接做覆盖**（与上一节"可以直接装"一致），但必须带理由并在交付时说明——
+   仍然是**记录而不是门禁**。
+
+**理由：** "加装"改变的是**可用的能力**，"覆盖"改变的是**锁本身的含义**：后者让"同一个版本 +
+同一个工具"不再天然可复现，所以默认关闭是必要的；但关闭不等于禁止——把它做成一次**可声明的
+动作**（带理由、进记录、进 provenance），既保留权利，又让每个受影响的数字都能被指认。用户
+的措辞是"在允许 llm 和用户显式声明后强制更新依赖"：动作本身被允许，前提是**说出来**。
+
+**依据（实测）：**
+
+- `accept-python-overlay.mjs` **22/22**（原 15 项 + 7 项覆盖链路）：
+  - `pyparsing` 是锁定的 3.3.3；加装 3.1.2 后 `import pyparsing` 仍是 **3.3.3**（default 不覆盖）；
+  - `override: true` 不带 reason → **拒绝**，消息含 "declared reason"；
+  - 带 reason 覆盖 → `import pyparsing` 变成 **3.1.2**（真替换，不是只报告）；
+  - status 区分两个目录；`pythonLaunchArgs` 含 override 目录（前置插入）；
+  - 提交的 run 里 `pythonOverlay.overrides = ['pyparsing==3.1.2']`，digest 随覆盖变化；
+  - 既有的加装/worker 可见性/不随 venv 重建消失等 15 项不受影响。
+- 全量回归：`accept-import` ALL PASS、`accept-import-3mf` 8/8、`accept-import-cad` ALL PASS、
+  `accept-unregistered` 21/21、`accept-lbm-channel` 14/14、`accept-delivery-audit` /
+  `accept-preflight` OK、contracts 27/27、`tsc` 仅 4 个既有错误。
+
+**影响：** `python-runtime.ts`（override 目录/读取/digest 标记 `!`/install 签名/launch args 前置
+插入）、`python-tools.ts`（`override`/`reason` 参数、status 两行、输出 schema）、`runs.ts` +
+`types.ts`（`pythonOverlay.overrides`）、`delivery-audit.ts`（覆盖点名）、验收、README §二.8、
+DESIGN §26.3b、cad-toolbox skill。**逃生口**：删掉 `user-site-override/` 即恢复"只用锁"。
+
 ## 2026-10-23：验收必须经过真实边界；`preflight` 的「未覆盖」与「尝试失败」分开
 
 **触发条件：** 4（影响全部工具与交付判定）+ 2（审计实测：四个工具的输出契约在运行时边界上不符，而全套 accept 全绿）。

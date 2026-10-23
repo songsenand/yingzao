@@ -22,7 +22,6 @@ export interface EchoResponse {
 
 export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid' | 'printability' | 'stress' | 'analyze';
 export type RunStatus = 'pass' | 'check' | 'fail';
-
 export interface RunProduct {
   type: 'run';
   id: string;
@@ -63,6 +62,14 @@ export interface RunProduct {
   supersededBy?: string;
   /** Ids of older runs this commit marked superseded. */
   supersedes?: string[];
+  /**
+   * The Python environment BEYOND the locked venv at commit time: the user
+   * overlay's packages plus a digest over them. `packages: []` means "the locked
+   * set only" and is written explicitly, so an absent field can only mean "an
+   * older run" — never "unknown". A run whose numbers came from a library the
+   * user installed says so here (the worker can import it: that was the call).
+   */
+  pythonOverlay?: { packages: string[]; overrides?: string[]; digest: string };
 }
 
 export interface VersionProduct {

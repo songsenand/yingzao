@@ -1,0 +1,49 @@
+
+=== 02-steam-engine · zai-coding-cn/glm-5.3-flash ===
+run root : /home/songsenand/bench-runs/02-steam-engine-glm53-high
+session  : session-4769cc38-a926-4c7d-b67a-db8ea69f9c86
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 124 次，零触达
+  PASS  g-motion-clean                     r021: status=pass · 干涉=0 · 关节违反=0
+  PASS  g-negative-rod-fires               r005 报出干涉
+  PASS  g-negative-printability-fires      12 次检查，verdict=check；其中"verdict∈{check,unprintable} 且 thinSamples>0"的 1 次（例：thinSamples=42, minWallMm=0.799）
+  PASS  g-motion-clearance-contract        check=motion-clearance 6 条；引用 runId 6 个，其中指向 pass 的运动仿真 6 个
+  PASS  g-import-not-generate              v001 为 imported（/home/songsenand/bench-runs/02-steam-engine-glm53-high/assets/608.stl）
+  PASS  g-import-dimensions-sane           expect: ≈[22,22,7] ±0.5 —— v001: 22×22×7mm ✓
+  FAIL  g-merge-shells-one                 最后一次合并 shells=9（历次：5, 13, 1, 9）；expect: shells === 1
+  PASS  g-no-false-coupling                fluidStructureCoupling="none"，理由 183 字
+  PASS  g-hard-zero                        最终态 r024: hardViolations=0, overallStatus=pass
+
+-- 数值判据 --
+  PASS  c-stroke                           w=3 运动仿真实测最大行程 40mm（expect: 40）；motion.json 声明 40
+  PASS  c-joint-drift                      w=2 r021: maxJointDriftMm=0.0001（rubric expect ≤ 0.5）
+  FAIL  c-fluid-arrival                    w=2 r018: outletArrivalRatio=0.1269（>0.6）· penetrationCount=0（==0）
+  PASS  c-topple-answered                  w=3 toppleAt5deg=no · toppleAt10deg=no
+  PASS  c-counterweight                    w=2 counterweightNeeded=no · 临界倾角=56.7° · 配重=0g
+  PASS  c-crosshead-hold                   w=3 crossheadHold=holds
+  PASS  c-coaxial-used                     w=2 契约里 check=coaxial 的接口 7 条
+  PASS  c-interface-count                  w=2 interfaces=24（注：x/y 双向覆盖未单独校验）
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+   ??   p-version-recall                   本轮没问这条探针（runner 未跑探针轮，或用了 --no-probes）
+
+-- 成本（实测）--
+  工具调用 124/120   墙钟 123.2min/120   图片 ?/70
+  token    {"inputTokens":585860,"outputTokens":185843,"totalTokens":17741879,"cacheReadTokens":16447232}
+  段 TASK.md  exit=0 turns=2 tools=124
+
+-- 六列 --
+  P 通过   0  ← 1 条硬门不过，按 gatePolicy 归零
+  S 生效度 0.929
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 18/19 条；其余为 UNKNOWN，**未实现的不算通过**。
+
+  ⚠ 覆盖缺口（读分时必须一起看）：
+    · 1 条判据未自动判定：p-version-recall
+  → 写分请填 graders/02-steam-engine/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/02-steam-engine.score.json

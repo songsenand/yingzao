@@ -1,0 +1,126 @@
+{
+  "level": "04-rack-connector",
+  "variant": "default",
+  "model": "zai-coding-cn/glm-5.3-flash",
+  "tier": "headless（不命名预设）",
+  "sessionId": "session-9539bf4b-62e1-47c3-a793-baa804c809b8",
+  "skillLoaded": true,
+  "computed": {
+    "P": 0,
+    "S": 0.929,
+    "C": null
+  },
+  "measured": {
+    "cost": {
+      "toolCalls": 80,
+      "toolCallsChild": 0,
+      "toolCallsTotal": 80,
+      "toolCallBudget": 60,
+      "wallClockMin": 39.6,
+      "wallClockBudgetMin": 40,
+      "images": null,
+      "imagesBudget": 12,
+      "tokens": {
+        "inputTokens": 171293,
+        "outputTokens": 83090,
+        "totalTokens": 4948079,
+        "cacheReadTokens": 4693696
+      },
+      "stages": [
+        {
+          "task": "subjects/04-rack-connector/TASK.md",
+          "exitCode": 0,
+          "turns": 1,
+          "tools": 80
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "auto": 12,
+    "total": 12
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "ok": true,
+      "detail": "扫过 父会话 80 次，零触达"
+    },
+    {
+      "id": "g-connector-json",
+      "ok": true,
+      "detail": "connector.json 存在且字段齐全"
+    },
+    {
+      "id": "g-new-part-version",
+      "ok": true,
+      "detail": "新零件 v003，自解析尺寸 9.8 × 9.8 × 20.5mm"
+    },
+    {
+      "id": "g-assembly-run",
+      "ok": false,
+      "detail": "4 次装配运行（r001:pass, r002:fail, r003:pass, r004:pass） — 1 次 fail"
+    },
+    {
+      "id": "g-measure-and-model",
+      "ok": true,
+      "detail": "测量工具：list_features, measure_section, measure_part；出形状：generate_part, import_part"
+    },
+    {
+      "id": "g-negative-copy-fires",
+      "ok": true,
+      "detail": "照抄导轨（136×27×12）或同族接头（9.8×9.8×20.502）都会落在接受带外 ⇒ 对照有效"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-cross-section",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "配合截面：交付件三个尺寸（排序）9.8 / 9.8 / 20.5mm，接受带 9.4–9.9（取中间两个）"
+    },
+    {
+      "id": "c-length",
+      "weight": 2,
+      "inSkill": false,
+      "ok": false,
+      "detail": "长度（最长边）20.5mm，接受带 10–18"
+    },
+    {
+      "id": "c-through-holes",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "1 个合格通孔（要求 ≥1，Ø3–3.6）；孔径都能在工具返回里找到"
+    },
+    {
+      "id": "c-printable-single-body",
+      "weight": 2,
+      "inSkill": true,
+      "ok": true,
+      "detail": "可打印性 ok；check_connectivity 未调用"
+    },
+    {
+      "id": "c-assembly-no-interference",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "4 对：mainRail↔stackConnectorBottom:ok, mainRail↔stackConnectorBottom:ok, mainRail↔rackJoiner:ok, stackConnectorBottom↔rackJoiner:ok"
+    },
+    {
+      "id": "c-not-a-copy",
+      "weight": 2,
+      "inSkill": false,
+      "ok": false,
+      "detail": "交付件尺寸与导入件 v002 相同（复制品）"
+    }
+  ],
+  "probes": [],
+  "humanColumns": [
+    "E",
+    "H",
+    "R"
+  ],
+  "coverageGaps": []
+}

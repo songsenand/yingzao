@@ -45,6 +45,10 @@ const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': MIME['.json'] } });
 const notFound = (what) => new Response(`no ${what}`, { status: 404 });
 
+// Captured POST /api/cad/import bodies, so `?assert=local-import` can prove the
+// panel sent what it says it sent (session project, path, unit, render:false).
+const importRequests = [];
+
 async function readMaybe(path) {
   try { return await readFile(path); } catch { return null; }
 }
@@ -91,6 +95,41 @@ async function api(req, url) {
     return new Response(stl, { headers: { 'content-type': MIME['.stl'] } });
   }
 
+  // --- 未登记: the panel's file category -----------------------------------
+  // Mock of the host's shared scan + preview route. The geometry served is a
+  // real version's model.stl (the category renders through the same scene
+  // builder), while the list is fixed so a screenshot is reproducible.
+  if (p === '/api/cad/unregistered') {
+    const now = new Date().toISOString();
+    const files = [
+      { path: 'out/disk-45.stl', bytes: 684, modified: now, severity: 'blocked', format: 'stl', importable: true, previewable: true },
+      { path: 'incoming/plate.3mf', bytes: 1162, modified: now, severity: 'blocked', format: '3mf', importable: true, previewable: true },
+      { path: 'incoming/profile.dxf', bytes: 15516, modified: now, severity: 'warn', format: 'dxf', importable: true, previewable: false },
+    ];
+    return json({
+      scanned: files.length, files, exempt: [], missingExempt: [], truncated: false,
+      project: url.searchParams.get('project') ?? '',
+    });
+  }
+  if (p === '/api/cad/file') {
+    const wanted = url.searchParams.get('path') ?? '';
+    const vm = JSON.parse((await readMaybe(join(DATA, 'manifest.json')))?.toString('utf8') ?? '{"versions":[]}');
+    const first = (vm.versions ?? [])[0]?.id;
+    const stl = first ? await readMaybe(join(DATA, 'versions', first, 'model.stl')) : null;
+    if (!stl) return notFound('file');
+    const ext = (wanted.split('.').pop() ?? '').toLowerCase();
+    return new Response(stl, {
+      headers: {
+        'content-type': MIME['.stl'],
+        'x-cad-format': ext || 'stl',
+        'x-cad-units': ext === 'stl' ? 'file' : 'mm',
+        'x-cad-solid': '1',
+        'x-cad-shells': '1',
+        'x-cad-warnings': '',
+      },
+    });
+  }
+
   // --- run-addressed artifacts ---------------------------------------------
   // The name guard must be the ROUTE's guard, not a private one: a local
   // ASCII-only regex rejected every CJK part name (齿轮轴.stl …) and made the
@@ -134,6 +173,24 @@ async function api(req, url) {
     return runBinary(['frames', entry.file], 'application/octet-stream', 'frame');
   }
 
+  // Human-initiated import: capture what the dialog sent and answer like the
+  // host's importPartResult. `?assert=local-import` reads /__imports afterwards.
+  if (p === '/api/cad/import' && req.method === 'POST') {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    let body = {};
+    try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { /* record {} */ }
+    importRequests.push({ project: url.searchParams.get('project'), body });
+    return json({
+      versionId: 'v999', part: body.part ?? 'sandbox-part', format: 'stl',
+      solid: true, watertight: true, repaired: [], triangles: 12, shells: 1, genus: 0,
+      volumeMm3: 1000, sizeMm: [10, 10, 10], unit: body.unit ?? 'mm', scaleApplied: 1,
+      sha256: 'sandbox', sourcePath: body.file ?? '', datums: [], warnings: [],
+      durationMs: 1, views: [],
+    });
+  }
+  if (p === '/api/cad/__imports') return json(importRequests);
+
   // Parameter-override preview: emit one of the stored host renders as a stand-in.
   if (p === '/api/cad/preview' && req.method === 'POST') {
     const png = await readMaybe(join(DATA, 'versions', v ?? 'v003', 'render_iso.png'))
@@ -155,6 +212,10 @@ const server = createServer(async (req, res) => {
     } else if (url.pathname.startsWith('/api/cad/')) {
       out = await api(req, url);
     } else if (url.pathname === '/' || url.pathname === '/index.html') {
+      // A fresh page load starts a fresh capture window: the assert counts POSTs
+      // "this run sent", and a long-lived mock server would otherwise carry the
+      // previous screenshot's request into it (observed: "2 reached the door").
+      importRequests.length = 0;
       out = new Response(await readFile(join(HERE, 'index.html')), { headers: { 'content-type': MIME['.html'] } });
     } else {
       const file = join(HERE, url.pathname.replace(/^\/+/, ''));

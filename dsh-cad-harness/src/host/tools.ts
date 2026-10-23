@@ -31,6 +31,7 @@ import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport 
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
+import { selectAttachedViews } from './render-attachments.ts';
 import { asJudgement } from '../shared/judgement.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { withDeadline } from './deadline.ts';
@@ -772,7 +773,8 @@ export function registerCadTools(
         description:
           'Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. ' +
           'Default: all four — right for a new shape or a shape change you need to SEE. ' +
-          'For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"] and keep the budget for the pictures that matter.',
+          'For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. ' +
+          'Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded.',
         items: { type: 'string' },
       },
     },
@@ -839,13 +841,11 @@ export function registerCadTools(
 
       // View selection: every attached image spends the session's image budget,
       // and a numeric iteration does not need four pictures of an unchanged
-      // silhouette. Unrecognised names never silently attach nothing.
-      const wantedViews = (Array.isArray(a.views) && a.views.length)
-        ? (result.renders ?? []).map((r) => r.view).filter((v) => (a.views as string[]).includes(v))
-        : null;
-      const attachedRenders = wantedViews?.length
-        ? (result.renders ?? []).filter((r) => wantedViews.includes(r.view))
-        : (result.renders ?? []);
+      // silhouette. An explicit [] means "register the version, spend no image
+      // budget" — the panel still loads model.stl, so the human still sees it.
+      const selection = selectAttachedViews(result.renders, a.views);
+      if (selection.warning) result.warnings.push(selection.warning);
+      const attachedRenders = selection.attached;
 
       // Persist renders as durable model-visible attachments.
       const refs: { view: string; ref: unknown }[] = [];
@@ -1141,9 +1141,14 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'import_part',
     description:
-      'Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation; file units are honored ' +
-      'and the result lands in mm) or DXF (closed 2D profiles extruded by depthMm, or 3D mesh entities) as a new ' +
-      'version of a part, so it can be measured, assembled and simulated like any generated part. ' +
+      'Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation) or 3MF (trimesh; a 3MF ' +
+      'must contain ONE object — a plate of objects is refused, not stored as a multi-body part) or DXF (closed 2D ' +
+      'profiles extruded by depthMm, or 3D mesh entities) as a new version of a part, so it can be measured, ' +
+      'assembled and simulated like any generated part. STEP and 3MF carry their own units, honored and folded to ' +
+      'mm; STL and DXF take the declared `unit`. ' +
+      'This is the DEFAULT landing path for geometry produced outside generate_part: a file written ' +
+      'straight to disk is invisible to the panel and to every tool, so anything the human must see ' +
+      'or a check must address has to become a version. ' +
       'Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. ' +
       'IGES is not readable — re-export STEP or STL instead.',
     parameters: {
@@ -1799,23 +1804,20 @@ export function registerCadTools(
       // two-valued, and `difficult` is deliberately never emitted here — the margin lives
       // in `pairs[].minDistance` vs `clearanceThresholdMm`, both of which travel with it.
       const nonWatertight = report.parts.filter((p) => !p.watertight).map((p) => p.name);
-      const interference = report.pairs.filter((p) => p.status === 'interference');
-      const tooTight = report.pairs.filter((p) => p.status === 'too_tight');
-      const judgement = nonWatertight.length > 0 || interference.length > 0 || tooTight.length > 0
-        ? 'excluded'
-        : 'not-excluded';
+      const judgement = nonWatertight.length > 0 || clash > 0 || tight > 0 ? 'excluded' : 'not-excluded';
+      const judgedBy = {
+        parts: report.parts.length,
+        pairs: report.pairs.length,
+        nonWatertight,
+        interference: clash,
+        tooTight: tight,
+        clearanceThresholdMm: report.thresholdMm,
+        interferenceEpsilonMm3: report.interferenceEpsilonMm3,
+      };
       return {
         overallStatus: report.overallStatus,
         judgement,
-        judgedBy: {
-          parts: report.parts.length,
-          pairs: report.pairs.length,
-          nonWatertight,
-          interference: interference.length,
-          tooTight: tooTight.length,
-          clearanceThresholdMm: report.thresholdMm,
-          interferenceEpsilonMm3: report.interferenceEpsilonMm3,
-        },
+        judgedBy,
         parts: report.parts.map((p) => ({ name: p.name, watertight: p.watertight, volume: p.volume })),
         pairs: report.pairs,
       };
@@ -4187,7 +4189,6 @@ export function registerCadTools(
                 },
                 notApplicable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules this process does not govern, with the reason. Never silently dropped: calling an SLS part overhang "needs support" is wrong, not conservative.' },
                 unevaluable: { type: 'array', required: true, items: { type: 'string' }, description: 'Rules a tool cannot decide from the mesh (cost, tolerance capability) or that were never declared. A missing number is not "no constraint".' },
-          timings: { type: 'object', required: true, additionalProperties: true, description: 'Per-step wall time in ms. A step that blew its budget is reported in notRun/unevaluable WITH the reason — the tool never sits waiting without saying so.' },
               },
             },
           },
@@ -4682,7 +4683,9 @@ export function registerCadTools(
       'Audit the corpus before delivering: failing runs that are still the newest of their kind, ' +
       'parts whose newest version no run ever checked, runs citing superseded geometry (stale evidence), ' +
       'contract gaps (e.g. no motion-clearance interface while the assembly has several parts), ' +
-      'contract nodes pointing at replaced versions, and repeated runs that add no information. ' +
+      'contract nodes pointing at replaced versions, repeated runs that add no information, and mesh files ' +
+      'on disk that NO version accounts for (a part written straight to a file never reaches the panel or any ' +
+      'tool — a human cannot see it). ' +
       'Run this BEFORE any delivery claim; a blocked verdict means the corpus itself contradicts the claim.',
     parameters: {
       manifestPath: {
@@ -4697,6 +4700,22 @@ export function registerCadTools(
           properties: {
             kind: { type: 'string', required: true, description: 'strength | motion | assembly | manufacturability | appearance | review' },
             statement: { type: 'string', required: true, description: 'The claim in words, e.g. "the beam carries 80 g without yielding".' },
+          },
+        },
+      },
+      scanPaths: {
+        type: 'array',
+        description: 'Workspace-relative roots scanned for mesh files no version accounts for. Default ["."] (whole workspace, skipping the corpus, nested projects and common build dirs); pass [] to disable. A found file NEWER than the newest version is blocked — register it with import_part or declare it exempt.',
+        items: { type: 'string' },
+      },
+      exempt: {
+        type: 'array',
+        description: 'Declared exceptions for files intentionally left as files (e.g. bought/reference geometry): {path, reason}. Reported as info, never blocked, and the reason is echoed. Use it instead of narrowing scanPaths when the file is a legitimate non-version.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            path: { type: 'string', required: true, description: 'Workspace-relative file or directory.' },
+            reason: { type: 'string', required: true, description: 'Why this file is not a version (e.g. "reference STL from the vendor").' },
           },
         },
       },
@@ -4724,6 +4743,7 @@ export function registerCadTools(
           parts: { type: 'object', required: true, additionalProperties: true },
           runs: { type: 'object', required: true, additionalProperties: true },
           contract: { type: 'object', required: true, additionalProperties: true },
+          unregistered: { type: 'object', required: true, additionalProperties: true, description: 'Mesh files on disk that no version accounts for: {scanned, files[], exempt[], missingExempt[], truncated}.' },
         },
       },
       render: (_args: unknown, value: any) => [{
@@ -4738,11 +4758,18 @@ export function registerCadTools(
     },
     timeoutMs: 60_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as { manifestPath?: string };
+      const a = args as {
+        manifestPath?: string;
+        claims?: import('./delivery-audit.ts').DeliveryClaim[];
+        scanPaths?: string[];
+        exempt?: { path: string; reason: string }[];
+      };
       const project = await allStores(exec);
       const report = await auditDelivery(project, {
         manifestPath: a.manifestPath,
-        claims: (args as { claims?: import('./delivery-audit.ts').DeliveryClaim[] }).claims,
+        claims: a.claims,
+        scanPaths: a.scanPaths,
+        exempt: a.exempt,
       });
       const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
       const warn = report.findings.filter((f) => f.severity === 'warn').length;
@@ -4754,7 +4781,8 @@ export function registerCadTools(
         judgement: asJudgement(report.verdict),
         summary: `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
           `${blocked} blocked · ${warn} warn · ${info} info · ` +
-          `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}`,
+          `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}` +
+          (report.unregistered.files.length ? ` · unregistered files ${report.unregistered.files.length}` : ''),
       };
     },
   }));
@@ -4793,6 +4821,22 @@ export function registerCadTools(
         },
       },
       profileIds: { type: 'array', items: { type: 'string' }, description: 'Declared process profiles to screen against (same meaning as in check_printability).' },
+      scanPaths: {
+        type: 'array',
+        description: 'Workspace-relative roots for the unregistered-geometry scan (same meaning as in delivery_audit). Default ["."]; [] disables it.',
+        items: { type: 'string' },
+      },
+      exempt: {
+        type: 'array',
+        description: 'Declared exceptions for files intentionally left as files: {path, reason} (same meaning as in delivery_audit).',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            path: { type: 'string', required: true },
+            reason: { type: 'string', required: true },
+          },
+        },
+      },
     },
     output: {
       schema: {
@@ -4847,7 +4891,12 @@ export function registerCadTools(
       },
     },
     async execute(args: unknown, exec: unknown) {
-      const a = args as { claims?: { kind: string; statement: string }[]; profileIds?: string[] };
+      const a = args as {
+        claims?: { kind: string; statement: string }[];
+        profileIds?: string[];
+        scanPaths?: string[];
+        exempt?: { path: string; reason: string }[];
+      };
       const project = await allStores(exec);
       const parts = await listParts(project.partStore);
       const versions = await listVersions(project.store);
@@ -4887,19 +4936,9 @@ export function registerCadTools(
           step: `printability:${part.name}@${vid}`,
           ran: true,
           judgement: asJudgement(screen.verdict),
-          detail: `verdict ${screen.verdict} · ${screen.findings.length} finding(s)`,
-        });
-      }
-
-      // The profile declarations are a real contract. This cut screens with the
-      // built-in fallback only; say so instead of letting a caller read the
-      // fallback verdict as "judged against my process".
-      if (a.profileIds?.length) {
-        steps.push({
-          step: 'printability-profile',
-          ran: false,
-          judgement: 'difficult',
-          detail: `declared profileIds (${a.profileIds.join(', ')}) are not applied by this cut — run check_printability per part for the declared-process verdict`,
+          detail: `verdict ${screen.verdict} · ${screen.findings.length} finding(s)` +
+            // Name the premise: a builtin-default verdict is not a declared-process verdict.
+            (screen.profileSource === 'builtin-default' ? ' · judged against the BUILTIN fallback (no profile declared)' : ''),
         });
       }
 
@@ -4971,7 +5010,11 @@ export function registerCadTools(
         }
       }
 
-      const rAudit = await withDeadline(auditDelivery(project, { claims: a.claims as never }), 30_000, 'audit');
+      const rAudit = await withDeadline(
+        auditDelivery(project, { claims: a.claims as never, scanPaths: a.scanPaths, exempt: a.exempt }),
+        30_000,
+        'audit',
+      );
       timings.audit = rAudit.ms;
       if (!rAudit.ok) throw new Error(rAudit.reason);
       const audit = rAudit.value;
@@ -5610,6 +5653,73 @@ export function registerCadTools(
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
+      },
+    });
+
+    // --- unregistered geometry: the panel's 未登记 category -------------------
+    // The SAME scan `delivery_audit` blocks on, so the human sees the machine's
+    // list (one implementation, two readers). Read-only: the bytes come from
+    // /api/cad/file below, and nothing here can create a version.
+    void connection.fetch.register({
+      path: '/api/cad/unregistered',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const { readManifest } = await import('./version.ts');
+        const { scanUnregistered } = await import('./unregistered.ts');
+        const manifest = await readManifest(project.store);
+        const scan = await scanUnregistered({
+          project,
+          workspace: project.cwd,
+          scanPaths: ['.'],
+          versions: manifest.versions,
+        });
+        // `project` rides the payload so a panel that switched projects can
+        // discard a stale reply (same rule as /api/cad/products).
+        return new Response(JSON.stringify({ ...scan, project: project.cwd }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    // A workspace file's geometry, tessellated for PREVIEW: the same readers as
+    // import (STL as-is, STEP/3MF through the worker), nothing stored. The
+    // storage policies (closed solid, one object) are suspended here on purpose —
+    // a human deciding whether to import needs to SEE the broken plate.
+    void connection.fetch.register({
+      path: '/api/cad/file',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const wanted = new URL(request.url).searchParams.get('path') ?? '';
+        const { previewGeometry } = await import('./import.ts');
+        try {
+          const preview = await previewGeometry({ file: wanted, cwd: project.cwd });
+          return new Response(preview.stl as unknown as BodyInit, {
+            status: 200,
+            headers: {
+              'content-type': 'model/stl',
+              'x-cad-format': preview.format,
+              // 'file' = an STL's numbers are whatever its author used; the panel
+              // must not print "mm" over a unit nobody declared.
+              'x-cad-units': preview.unitsMm ? 'mm' : 'file',
+              'x-cad-solid': preview.solid ? '1' : '0',
+              'x-cad-shells': String(preview.shells),
+              'x-cad-size': preview.boundingBoxMm.size.map((v) => v.toFixed(3)).join(','),
+              'x-cad-warnings': encodeURIComponent(preview.warnings.join(' | ')),
+              'cache-control': 'no-store',
+            },
+          });
+        } catch (error) {
+          const message = String((error as Error)?.message ?? error);
+          return new Response(JSON.stringify({ error: message }), {
+            status: 400,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
       },
     });
 

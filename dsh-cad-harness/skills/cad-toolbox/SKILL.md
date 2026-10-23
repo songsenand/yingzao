@@ -15,7 +15,7 @@ group, not the tool — and the group tells you what the output is allowed to me
 | **检测** | 该往哪看？ | `analyze`（**实验性，不可作交付依据**） · `scan_attention` · 各工具的 `attention` 场 | 坐标 + \|u\| + 几路一致 + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据槽 | 产**证据**，不自己判交付 |
 
-**Markdown 纪律（这是本文件最重要的四条）：**
+**Markdown 纪律（这是本文件最重要的六条）：**
 
 1. **先结账，再交付**：任何"可以交了"之前，`check_printability`（每个零件）与
    `check_assembly`（每份契约）都要跑过；最后跑 `delivery_audit`，**并把你要主张的
@@ -30,6 +30,12 @@ group, not the tool — and the group tells you what the output is allowed to me
    反过来，工具沉默是检测的失败，但"检测到嫌疑"也不构成交付失败。
 5. **仿真需要工况**：没有声明载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。
    仿真的读数一律是**方向性**的——可做相对比较，不能当安全系数。
+6. **交付几何默认登记**：要给人看、由人判或要交付的几何，一律走 `generate_part` / `import_part`
+   成为版本。面板只读 `versions/`、不扫磁盘；直接写个 STL 既不进面板，也不进任何工具（它们全
+   要 `versionId`）——人就没法看见你产出了什么。批量/实验产物可以只落盘，但必须在回复里**声明
+   路径与原因**；`delivery_audit` 的 `unregistered-geometry` 会点名未登记的网格，豁免用
+   `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或
+   `generate_part({views: []})`，面板照样加载几何，人照样看得见。
 
 **报错怎么读（别把工具 bug 当自己的输入错）：**
 
@@ -210,6 +216,19 @@ near-touching pairs were never declared).
   the same pinned environment and is the escape hatch for checks the CAD tools do
   not cover. `check_assembly`, `delivery_audit`, `create_part`, `set_datums`,
   `render_part`, `recall_reference_image` do not need it.
+
+- **Installing a package is allowed — do it when the task needs it.** This is the
+  user's own machine; `python_runtime action=install packages=["x==1.2"]` puts a
+  library in the USER OVERLAY, which the worker tools and `run_python` both see,
+  survives runtime updates, and is recorded in `status` and in every run's
+  `pythonOverlay` provenance. Two things to know before you reach for it:
+  **the default is add-only** (a package the lock already provides keeps the
+  LOCKED version — the install reports it as `shadowed`); to actually REPLACE a
+  locked dependency pass `override: true` **and a `reason`** — that is the
+  explicit declaration, it is recorded in status and in every run's
+  `pythonOverlay.overrides`, and you should agree it with the human and mention it
+  when you deliver (a replaced dependency is part of what the number means).
+  Prefer a tool that already answers the question; install when nothing does.
 
 - **Runs have a lifecycle.** A run records a `subject` (the manifest it audited,
   the part set it posed); committing a newer run about the same subject marks the

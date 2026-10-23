@@ -20,6 +20,7 @@
 
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readPythonOverlay } from './python-runtime.ts';
 import type { RunKind, RunProduct, RunStatus } from '../shared/types.ts';
 
 export type { RunKind, RunStatus } from '../shared/types.ts';
@@ -232,6 +233,8 @@ export async function beginRun(
           superseded.push(older.id);
         }
       }
+      // Read once per commit: the overlay is small (a readdir + METADATA reads).
+      const overlay = await readPythonOverlay();
       const entry: RunEntry = {
         id,
         kind: init.kind,
@@ -245,6 +248,15 @@ export async function beginRun(
         ...(final.subject ? { subject: final.subject } : {}),
         ...(superseded.length ? { supersedes: superseded } : {}),
         ...(Object.keys(placements).length ? { placements } : {}),
+        // The user overlay is part of the environment a number came out of, and
+        // the worker CAN import from it (that was the user's call). Recording it
+        // is what keeps "the same version, the same tool" answerable — an empty
+        // list is written too, so absence means "an older run", never "unknown".
+        pythonOverlay: {
+          packages: overlay.packages.map((p) => `${p.name}==${p.version}${p.override ? ' (overrides locked)' : ''}`),
+          overrides: overlay.overrides.map((p) => `${p.name}==${p.version}`),
+          digest: overlay.digest,
+        },
       };
       await ensureDir();
       await writeFile(join(dir, 'run.json'), JSON.stringify(entry, null, 2));

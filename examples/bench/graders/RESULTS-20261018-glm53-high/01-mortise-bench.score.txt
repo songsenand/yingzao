@@ -1,0 +1,45 @@
+
+=== 01-mortise-bench · zai-coding-cn/glm-5.3-flash ===
+run root : /tmp/bench-01-mortise-bench-default-glm53-high
+session  : session-7889e680-753c-429a-a1a4-3de3f80ae834
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 47 次，零触达
+  PASS  g-negative-control-fires           r002: hardViolations=4 · fail
+  PASS  g-negative-reverted                r003 已回到 hardViolations=0 · pass
+  PASS  g-hard-zero                        最终态 r005: hardViolations=0, overallStatus=pass
+  FAIL  g-undeclared-found                 全部 4 次检查的 undeclared 都是空的
+  PASS  g-one-version-per-repeated-part    7 个件各一个版本
+  PASS  g-coaxial-not-two-points           coaxial 检查 8 条（用两点代替同轴会表现为 0 条）
+  PASS  g-datums-declared                  3 个件各 ≥1 个 datum（扫过 6 个版本的 datums.json）
+  PASS  g-no-metal-fasteners               无金属紧固件条目
+
+-- 数值判据 --
+  PASS  c-grain-axis-correct               w=2 seatGrainAxis="x"（expect: === 'x'）
+  PASS  c-across-grain-looser              w=4 横纹 0.6mm vs 顺纹 0.2mm（expect: 横纹 ≥ 2×顺纹 且 ≥0.3）
+  PASS  c-gaps-in-range                    w=2 顺纹 0.2mm ∈[0.05,0.20] = true；横纹 0.6mm ∈[0.30,1.00] = true
+  FAIL  c-shoulder-seats                   w=3 肩面接口 0 条，非 pass 0 条
+  PASS  c-blind-tenon-shorter              w=3 榫头 28 < 孔深 30，余量 2mm ∈ [1.5, 3.0]
+  FAIL  c-protrusion                       w=2 零 measure_distance 调用——出榫 5mm 从未被验证（契约里也没有对应条目）
+  PASS  c-interface-count                  w=2 interfaces=40（注：x/y 双向覆盖未单独校验）
+  FAIL  c-measured-vs-datum                w=2 零 measure_distance 调用——只有契约一条路径，无从比对
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+  PASS  p-version-recall                   期望 30（腿的第 2 版 = v004（p002 的 v002→v004→v005→v006 里的第 2 个），透榫截面 30×30 ⇒ 榫头厚度 30mm。**30.5 是阴性对照那一版（v005）**，答成 30.5 说明记错了版本。取值读自 cad-data/versions/*/model.scad 的 TEN。）；答案命中 30。原答：**15 mm**。 具体说（凳腿这个零件的版本链是 v002 → v004 → v005 → v006）： - **v002**（凳腿的第 1 版，也是全局第 2 版）：透榫截面…
+
+-- 成本（实测）--
+  工具调用 47/60   墙钟 28min/45   图片 ?/40
+  token    {"inputTokens":116682,"outputTokens":80744,"totalTokens":2987186,"cacheReadTokens":2789760}
+  段 TASK.md  exit=0 turns=1 tools=47
+
+-- 六列 --
+  P 通过   0  ← 1 条硬门不过，按 gatePolicy 归零
+  S 生效度 0.5
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 18/18 条；其余为 UNKNOWN，**未实现的不算通过**。
+  → 写分请填 graders/01-mortise-bench/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/01-mortise-bench.score.json

@@ -1,7 +1,8 @@
 # CAD import acceptance fixtures
 
-Deterministic samples for `scripts/accept-import-cad.mjs`. Measured baselines
-lived in `experiments/20261015_cad_import_probe.md` (2026-10-15).
+Deterministic samples for `scripts/accept-import-cad.mjs` (STEP/DXF) and
+`scripts/accept-import-3mf.mjs` (3MF). Measured baselines lived in
+`experiments/20261015_cad_import_probe.md` (2026-10-15).
 
 | file | origin | provenance |
 |---|---|---|
@@ -12,6 +13,12 @@ lived in `experiments/20261015_cad_import_probe.md` (2026-10-15).
 | `profile-inch.dxf` | same geometry, `$INSUNITS=1` (inch) | same |
 | `profile-bin.dxf` | binary DXF round-trip of `profile-mm.dxf` | same |
 | `polyface-box.dxf` | POLYFACE mesh, 20 mm cube (12 quad faces) | same |
+| `cube-10mm.3mf` | 10 mm cube, `unit="millimeter"`, one object, one build item | written by hand (ZIP + `3D/3dmodel.model`), 2026-10-22 |
+| `cube-1inch.3mf` | same geometry, `unit="inch"` | same |
+| `cube-moved-20mm.3mf` | same geometry, build-item transform `+20 0 0` | same |
+| `cube-components.3mf` | object 3 → `<component objectid="2" transform="+20 0 0">` | same |
+| `plate-two.3mf` | two build items (the "print plate" case) — must be REFUSED | same |
+| `not-a-3mf.3mf` | a ZIP with no `3D/3dmodel.model` — the actionable-error case | same |
 
 Expected values (worker `import_mesh`, Manifold verdicts):
 
@@ -22,3 +29,12 @@ Expected values (worker `import_mesh`, Manifold verdicts):
   `$INSUNITS` scales the profile to its real size; `depthMm` is millimetres in the
   stored frame and does NOT scale with the file's units
 - `polyface-box.dxf` → solid, volume **8000.0 mm³**, genus 0
+- `cube-10mm.3mf` → solid, 1 shell, volume **1000.0 mm³**, bbox 10×10×10, format `3mf`
+- `cube-1inch.3mf` → the file's own unit is folded to mm: bbox **254×254×254**, volume
+  **16 387 064 mm³** (= 1000 × 25.4³). trimesh stores `unit` as metadata and does NOT
+  scale; the ×25.4 is the worker's.
+- `cube-moved-20mm.3mf` / `cube-components.3mf` → x **15..25** (build-item and component
+  transforms are applied by trimesh's reader)
+- `plate-two.3mf` → **refused**: "the 3MF contains 2 separate bodies" (a 3MF is a container
+  of objects; this harness's unit is one connected part)
+- `not-a-3mf.3mf` → refused with "is a zip but not a 3MF: it has no 3D/3dmodel.model part"

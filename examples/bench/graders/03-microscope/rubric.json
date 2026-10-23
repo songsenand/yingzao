@@ -396,7 +396,7 @@
         "subjects/03-microscope/TASK-2.md"
       ],
       "sha256": [
-        "93f602114329f2be53e0244f366e1f4f04e784f2ecea2e4f0888846d7792ccdb",
+        "aff902c1f75151b9cc930da687f3c726278977d65c820d9c5b32f50a3f234600",
         "0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20"
       ],
       "referenceImage": "attachment：操作者把 graders/03-microscope/参考图.png 作为对话附件随 A 段发出；考生目录保持不放图",
@@ -413,7 +413,7 @@
         "subjects/03-microscope/TASK-2.md"
       ],
       "sha256": [
-        "c93d8db2054fb35310a9655ab1db8faa89c5789bdc35507a3d38a3f79e7a8d66",
+        "48b1eebf7ec8667f74902526dd2bbf184bfca6ae68d510d149d56943b06c8d66",
         "0a6207570d2b4b232133fff66236d272e162d06476356baebdb09d14c2c14e20"
       ],
       "referenceImage": "copied-into-run-root：runner 把同一个 参考图.png 复制进 run root，题面写“工作目录下的 参考图.png”",

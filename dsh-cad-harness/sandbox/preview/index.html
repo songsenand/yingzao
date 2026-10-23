@@ -40,7 +40,13 @@
   </div>
   <script src="./dist/bundle.js"></script>
   <!-- Holds the load event open so headless `--screenshot` captures the render
-       after the panel's async manifest/STL fetches settle. -->
-  <img src="/slow.png?ms=3600" alt="" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none" />
+       after the panel's async manifest/STL fetches settle. `?slow=<ms>` lets a
+       longer assertion run (e.g. `assert=layout&slow=7000`) finish before the
+       capture; the default stays 3600 ms. -->
+  <img id="slow" alt="" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none" />
+  <script>
+    document.getElementById('slow').src =
+      '/slow.png?ms=' + (new URLSearchParams(location.search).get('slow') || '3600');
+  </script>
 </body>
 </html>

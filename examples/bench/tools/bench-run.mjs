@@ -131,9 +131,10 @@ function run(cmd, args, opts = {}) {
     const child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'], ...opts });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
-    child.stdin.end(opts.stdin);
+    // stdio: 'inherit' 时流是 null（04/05 的 prep 走这条路）——不能假设流存在。
+    child.stdout?.on('data', (d) => { stdout += d; });
+    child.stderr?.on('data', (d) => { stderr += d; });
+    child.stdin?.end(opts.stdin);
     child.once('close', (code) => res({ code, stdout, stderr, ms: Date.now() - t0 }));
     child.once('error', (e) => res({ code: -1, stdout, stderr: String(e), ms: Date.now() - t0 }));
   });

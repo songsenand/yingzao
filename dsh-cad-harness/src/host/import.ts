@@ -37,6 +37,7 @@ import { readFile, rm, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, join, resolve } from 'node:path';
 import { parseBinaryStl, type ParsedMesh } from './mesh.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
+import { PREVIEWABLE_EXTENSIONS, resolveWorkspaceFile } from './unregistered.ts';
 import type { DatumSet, DatumPoint, DatumAxis, DatumPlane, DatumCylinder } from './compile.ts';
 
 // ---------- units ----------
@@ -52,8 +53,9 @@ export function unitToMm(unit: Unit): number {
 // ---------- format policy ----------
 
 /** Formats this build can actually read. STEP via cascadio/OpenCASCADE (worker),
- *  DXF via ezdxf (worker): profiles extruded by depthMm, or 3D mesh entities. */
-export const SUPPORTED_EXTENSIONS = ['.stl', '.step', '.stp', '.dxf'] as const;
+ *  3MF via trimesh+lxml (worker), DXF via ezdxf (worker): profiles extruded by
+ *  depthMm, or 3D mesh entities. */
+export const SUPPORTED_EXTENSIONS = ['.stl', '.step', '.stp', '.3mf', '.dxf'] as const;
 
 /** Formats no shipped reader can parse. IGES: cascadio fails silently on it
  *  (probed 2026-10-15), and no other reader is bundled. */
@@ -86,8 +88,8 @@ function checkFormat(file: string): void {
   if (ext === '' || (SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) return;
   throw new Error(
     `cannot import "${ext}" files. Supported today: ${SUPPORTED_EXTENSIONS.join(', ')} ` +
-    `(STEP through OpenCASCADE; DXF 2D profiles need depthMm to become a solid). ` +
-    `3MF/OBJ/OFF import needs no new kernel and is a planned increment; ` +
+    `(STEP through OpenCASCADE; 3MF through trimesh; DXF 2D profiles need depthMm to become a solid). ` +
+    `OBJ/OFF import needs no new kernel and is a planned increment; ` +
     `${BREP_EXTENSIONS.join('/')} have no reader yet (see import_part notes).`,
   );
 }
@@ -178,6 +180,14 @@ export interface ImportRequest {
    *  no 3D mesh entities; ignored otherwise. */
   depthMm?: number;
   allowNonSolid?: boolean;
+  /**
+   * PREVIEW, not a version: return the mesh even when a storage policy would
+   * refuse it. A broken mesh and a plate of objects are exactly what a human
+   * needs to SEE before deciding to import, and neither becomes evidence here —
+   * so the refusal rules that protect the corpus (closed solid, one object)
+   * are suspended. The returned `solid`/`shells` still tell the truth.
+   */
+  preview?: boolean;
 }
 
 /** Payload of the worker's `import_mesh` op (see python/cad_worker/worker.py). */
@@ -263,14 +273,15 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
   const unit: Unit = req.unit ?? 'mm';
   if (!(unit in UNIT_TO_MM)) throw new Error(`unknown unit "${String(req.unit)}" (mm|cm|m|inch)`);
   const ext = extname(resolvedPath).toLowerCase();
-  // A STEP file carries its own units: OpenCASCADE normalizes them and the worker
-  // folds the metres→mm step into appliedScale. A caller-declared unit would
+  // STEP and 3MF carry their own units: OpenCASCADE normalizes STEP and the
+  // worker folds the metres→mm step into appliedScale; a 3MF declares `unit` in
+  // its model XML and the worker folds that too. A caller-declared unit would
   // double-apply, so it is refused rather than silently ignored.
-  if ((ext === '.step' || ext === '.stp') && unit !== 'mm') {
+  if ((ext === '.step' || ext === '.stp' || ext === '.3mf') && unit !== 'mm') {
+    const format = ext === '.3mf' ? '3MF' : 'STEP';
     throw new Error(
-      `"${basename(resolvedPath)}": STEP carries its own units — OpenCASCADE normalizes them and the import lands ` +
-      `in mm without a unit argument. Drop unit (use scale if the size still needs correcting) or export STL ` +
-      `and declare the unit there.`,
+      `"${basename(resolvedPath)}": ${format} carries its own units — the import lands in mm without a unit ` +
+      `argument. Drop unit (use scale if the size still needs correcting) or export STL and declare the unit there.`,
     );
   }
   if (req.depthMm !== undefined && (!Number.isFinite(req.depthMm) || req.depthMm <= 0)) {
@@ -316,7 +327,7 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
     const reason = solved.inverted
       ? `its faces are wound inside-out (signed volume ${volume} mm³)`
       : (solved.reason ?? 'Manifold rejected it');
-    if (!req.allowNonSolid) {
+    if (!req.allowNonSolid && !req.preview) {
       throw new Error(
         `${basename(resolvedPath)} is not a closed solid: ${reason}. ` +
         `Nothing was imported — measure_part, validate_assembly and the simulate_* tools would each report ` +
@@ -325,7 +336,9 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
         `allowNonSolid:true to store it as a reference-only version that the geometric tools will refuse.`,
       );
     }
-    warnings.push(`NOT A SOLID (${reason}) — stored because allowNonSolid was set; the geometric tools will refuse this version.`);
+    warnings.push(req.preview
+      ? `NOT A SOLID (${reason}) — preview only; importing it as a version would need allowNonSolid.`
+      : `NOT A SOLID (${reason}) — stored because allowNonSolid was set; the geometric tools will refuse this version.`);
   }
 
   // Report what welding changed, in words a human can check.
@@ -340,6 +353,20 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
   if (solved.degenerate > 0) repaired.push(`${solved.degenerate} degenerate triangles discarded during parse`);
 
   if (solved.shells > 1) {
+    // A 3MF is a CONTAINER of objects (a print plate is the normal case), so
+    // "several bodies" there is not an authoring artifact to warn about — it is
+    // a different thing than the caller asked for. The harness's rule is one
+    // part = one connected solid, so refuse instead of storing a plate as a part.
+    // STL/STEP keep the warning: a multi-shell mesh there is often one part whose
+    // authoring left the shells disjoint, and refusing would break those files.
+    if (ext === '.3mf' && !req.preview) {
+      throw new Error(
+        `${basename(resolvedPath)}: the 3MF contains ${solved.shells} separate bodies. ` +
+        `This harness imports one connected part at a time — a 3MF is a container of objects (a print plate, ` +
+        `an assembly), not a part. Export a single object from your slicer and import that; if you really need ` +
+        `several bodies in one file, export STL instead (STL multi-body is stored with a warning).`,
+      );
+    }
     warnings.push(
       `the file contains ${solved.shells} separate bodies (edge-disjoint). That is legal for a solid, but if you ` +
       `expected one part, the imported geometry is not what you think it is.`,
@@ -370,6 +397,53 @@ export async function importGeometry(req: ImportRequest): Promise<ImportedGeomet
     sha256,
     bytes: bytes.length,
     warnings,
+  };
+}
+
+/** What the panel's 未登记 preview needs: a mesh plus the facts to label it. */
+export interface PreviewGeometry {
+  /** Welded STL bytes for the viewport; nothing is stored. */
+  stl: Uint8Array;
+  format: string;
+  /** True when the numbers are known to be mm (STEP/3MF normalize in the worker);
+   *  an STL's numbers are whatever its author used — the panel says so. */
+  unitsMm: boolean;
+  solid: boolean;
+  shells: number;
+  triangles: number;
+  boundingBoxMm: { min: [number, number, number]; max: [number, number, number]; size: [number, number, number] };
+  warnings: string[];
+}
+
+/**
+ * Tessellate a workspace file for PREVIEW — same reader as import, no version,
+ * no storage policy. A plate of objects or a mesh with holes is exactly what a
+ * human needs to see before deciding, so the refusals that protect the corpus
+ * are suspended here (`preview: true`) and the facts (`solid`, `shells`) still
+ * come back. Nothing is written to the store.
+ */
+export async function previewGeometry(req: { file: string; cwd: string }): Promise<PreviewGeometry> {
+  const resolvedPath = await resolveWorkspaceFile(req.file, req.cwd);
+  const ext = extname(resolvedPath).toLowerCase();
+  if (!PREVIEWABLE_EXTENSIONS.has(ext)) {
+    throw new Error(
+      ext === '.dxf'
+        ? `"${basename(resolvedPath)}" is a DXF: a 2D profile is not a body, so there is nothing to show — import it with depthMm to make a solid.`
+        : `cannot preview "${ext}" files. Previewable today: STL, STEP/STP, 3MF.`,
+    );
+  }
+  const solved = await importGeometry({ file: resolvedPath, cwd: req.cwd, unit: 'mm', preview: true });
+  return {
+    stl: solved.stl,
+    format: solved.format,
+    // STEP and 3MF declare their own unit and the worker folded it to mm; an STL
+    // has no unit statement at all, so its numbers are "the file's own".
+    unitsMm: ext !== '.stl',
+    solid: solved.solid,
+    shells: solved.shells,
+    triangles: solved.triangles,
+    boundingBoxMm: solved.boundingBoxMm,
+    warnings: solved.warnings,
   };
 }
 

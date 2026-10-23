@@ -142,7 +142,9 @@ await writeFile(join(PROJ, 'flange-ascii.stl'), toAsciiStl(parseBinaryStl(flange
 
 // A B-rep file: only the extension matters, we never parse it.
 await writeFile(join(PROJ, 'bearing.step'), Buffer.from('ISO-10303-21;\nHEADER;\nENDSEC;\n', 'utf8'));
-await writeFile(join(PROJ, 'widget.3mf'), Buffer.from('PK\u0003\u0004not really', 'binary'));
+// OBJ is still the "planned increment" case; 3MF became importable 2026-10-22
+// (accept-import-3mf.mjs owns that format's acceptance).
+await writeFile(join(PROJ, 'widget.obj'), Buffer.from('v 0 0 0\n', 'utf8'));
 
 const shaOf = async (p) => createHash('sha256').update(new Uint8Array(await readFile(p))).digest('hex');
 
@@ -371,9 +373,10 @@ const stlOf = async (id) => new Uint8Array(await readFile(join(corpus.root, 'ver
   check('9a IGES gets its boundary and a way forward (STEP imports since 2026-10-15)',
     !!msg && /IGES/.test(msg) && /STEP|STL/.test(msg), (msg ?? '(no error)').slice(0, 90));
 
-  let msg3mf = null;
-  try { await importTool.execute({ file: 'widget.3mf', part: '零件' }, exec); } catch (e) { msg3mf = String(e?.message ?? e); }
-  check('9b an unreadable format names what IS supported', !!msg3mf && /\.stl/.test(msg3mf), (msg3mf ?? '(no error)').slice(0, 70));
+  let msgObj = null;
+  try { await importTool.execute({ file: 'widget.obj', part: '零件' }, exec); } catch (e) { msgObj = String(e?.message ?? e); }
+  check('9b an unreadable format names what IS supported',
+    !!msgObj && /\.stl/.test(msgObj) && /OBJ/.test(msgObj), (msgObj ?? '(no error)').slice(0, 90));
 }
 
 // ---------- 10. catalog ----------

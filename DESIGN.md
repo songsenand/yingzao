@@ -175,6 +175,7 @@ dsh-cad-harness/
       fluid-render.ts    # 零依赖 PNG 点云渲染器（node:zlib 手写）
       measure.ts         # 测量引擎：表面吸附、最近点对、球探针解析分支
       inspect.ts         # measure_part / render_part 的版本级实现
+      unregistered.ts    # 未登记几何扫描（delivery_audit 与面板未登记类目共用）+ 工作区路径守卫（§30.18）
       mesh.ts            # STL 解析、水密判定、体积、包围盒
       usage.ts           # llm/stream 计量 → data/usage/usage.jsonl
       runs.ts            # 运行库：data/runs/rNNN 的写入/索引/寻址（产物浏览的基础，v2.13）
@@ -182,6 +183,8 @@ dsh-cad-harness/
       index.ts           # 右栏 Tab 注册 + 自动打开（sidebarRight / sidebarRightTabs / slots）
       panel.ts           # 单一面板：产物选择器 + 方形视口（按产物种类渲染）+ 参数/导出/报告折叠区
       playback.ts        # 运行回放视图：MotionPlaybackView / FluidPlaybackView / StaticPartsView
+      local-file.tsx     # 按路径导入对话框（默认开在导入页）；浏览器端预览只是那条路的兜底（§30.18）
+      local-file-request.ts # 导入请求的纯函数（目标语料/单位/零件名/DXF 深度，可脱离 DOM 测试）
   lib/
     index.js             # Host 产物（宿主加载）
     client.js            # Client 产物（宿主经 /plugins 路由提供）
@@ -190,7 +193,9 @@ dsh-cad-harness/
   data/                  # versions/ + assembly|physics|motion|fluid|usage|bench 各域产物（不进 files 发布列表）
 ```
 
-实作与原文的差异要点：**没有独立 LLM 模块**（评审走会话原生 + 附件，§6.3）；**没有 MPM 后处理模块**（v2.4 取消，§6.7）；**没有 config.ts**（参数是工具入参，见 §7.3）；**Client 只有 3 个文件**（无 per-panel 拆分、无 viewer/render/physics/mpm 客户端实现——那些都在 Host）。
+实作与原文的差异要点：**没有独立 LLM 模块**（评审走会话原生 + 附件，§6.3）；**没有 MPM 后处理模块**（v2.4 取消，§6.7）；**没有 config.ts**（参数是工具入参，见 §7.3）；**Client 没有 per-panel 的模式分支**（呈现由产物类型决定；面板之外拆出的是可测试的小模块——
+browse / fit / heat / lighting / overlay / project / section / local-file，不是另一套 viewer 实现）；
+物理/渲染/MPM 的实现仍在 Host。
 
 ### 5.2 package.json（当前实作）
 
@@ -2413,7 +2418,9 @@ microscope5 的 69 次运行实测，抓到三个**互相独立**的原因：
 一次读三个 store + 装配清单，输出 verdict（blocked/attention/ok）与 findings：
 最新同类运行是否红牌、最新版本是否有人验证、过期证据统计、从未被引用的版本、
 契约是否缺 motion-clearance、manifest 节点是否指向旧版本、几何是否比契约检查
-更新、重复运行组。验收 `scripts/accept-delivery-audit.mjs` **直接用 microscope5
+更新、重复运行组，以及**磁盘上有、版本库里没有的网格**（`unregistered-geometry`：
+比最新版本新的判 blocked，更旧的判 warn，豁免用 `exempt: [{path, reason}]` 声明并回显）。
+验收 `scripts/accept-delivery-audit.mjs` **直接用 microscope5
 真实语料**断言（复现上面每一个数字），并用一个"干净语料"防误报。
 
 ### 23.3 纪律（skill 5–7 条）
@@ -2830,9 +2837,50 @@ pnpm 11 默认拦下依赖构建脚本：postinstall 下载器会让 `dsh plugin
 python-lock.ts（生成物）          解释器归档名 + sha256（七平台）、依赖 wheel hash、索引表
   → 下载/校验 → 解包（纯 JS tar.gz）  $DSH_HOME/cad/runtime/cache、python/<版本>
   → python -m venv                   $DSH_HOME/cad/runtime/venv
-  → pip install --require-hashes     $DSH_HOME/cad/runtime/requirements.lock（按目标裁剪）
+  → pip install --require-hashes --no-deps
+                                     $DSH_HOME/cad/runtime/requirements.lock（按目标裁剪）
   → 状态                              $DSH_HOME/cad/runtime/state.json
 ```
+
+- **锁就是闭包（`--no-deps`，2026-10-22）**：`gen-python-lock.mjs` 列的包 = worker 真正
+  import 的闭包，pip 不再按包自带的 `Requires-Dist` 去解析。这样做的直接原因是 xlb 声明了
+  matplotlib + pyvista(→vtk) + numpy-stl + pydantic + ruff，而它唯一引用可视化模块的地方是
+  `xlb/__init__.py` 那句 eager `import xlb.utils`（我们 stub 掉，见 §29）；照单全收等于为
+  一句没用的 import 付 **726 MB**（vtk 591 / matplotlib 35 / ruff 25 / pillow 21 / pyvista 14
+  + 传递树）。代价：真需要的传递依赖必须手工进锁——由 `LOCKED_IMPORTS` 就绪探针与各验收兜底。
+
+### 26.3b 用户 overlay：用户自己的包（2026-10-22，用户拍板）
+
+**立场**：场地是我们提供的，用户想拉几根线是他的权利——装 Python 包同理。**裁剪默认装载
+不等于限制用户**；缺的是"门"，不是"许可"。因此：
+
+- **目录**：`$DSH_HOME/cad/runtime/user-site/`（`DSH_CAD_USER_SITE` 可覆盖）。它是 `venv/`
+  的**兄弟**而不是子目录——`repair`/锁升级只 `rm -rf venv`，所以用户装的东西**不会被冲掉**
+  （验收直接断言这条路径关系，见 `accept-python-overlay.mjs`）。
+- **可见性不靠放松 `-I`**：worker 与一次性脚本都用 `pythonLaunchArgs()` 启动——`-I` 保留
+  （`-I` 会忽略 PYTHONPATH 与 user site，那正是"这次跑的到底是什么"的保证），overlay 由
+  bootstrap 里的 `site.addsitedir()` **显式**挂载。**worker 工具也能 import 它**（用户选择），
+  所以每次 `commit()` 把 overlay 的包列表与 digest 写进 run 的 `pythonOverlay`
+  （空列表也写——"没有"是一个事实，不是未知）。
+- **门**：`python_runtime action=install packages=[...]` → pip `--target <overlay>`（**不带**
+  `--require-hashes`：锁的哈希是为"我们分发的东西可验证"，用户自己的包是用户自己的）。
+  记录写进 `<overlay>/installed.json`（名字/版本/时间/谁要的），status 与工具输出都会列出。
+- **两个目录、两条政策（用户拍板 2026-10-22 二次）**：
+  - `user-site/` **加装**：追加到最后，锁里已有的包仍以**锁定版本**为准；安装结果显式报告
+    `shadowed`。这样"加一个库"不会悄悄分叉 numpy。
+  - `user-site-override/` **显式覆盖**：只有 `action=install override=true reason="…"` 会写到这里，
+    bootstrap 把它**插到 `sys.path` 最前**，所以新版本**真的替换**锁定版（不是只报告）。
+  - **默认不允许覆盖**；覆盖必须**声明**（`reason`），因为被替换的依赖是"这个数字从哪来"的
+    一部分——它会写进该目录的 `installed.json`、status 的 `overrides` 行、以及每个 run 的
+    `pythonOverlay.overrides`；`delivery_audit` 会为这类 run 出一条 info 点名。
+- **LLM 可以直接装**（用户拍板）：它是用户的代理，装了会被记录并在 status 里列出——**记录
+  而不是门禁**，与本项目"不禁止、但必须声明"的一贯立场一致。覆盖同样可以直接做，但**必须
+  带 reason**，并在交付时说明"这个结果依赖被替换的依赖"。
+- 验收：`accept-python-overlay.mjs` **22/22**，其中 worker 可见性是**实证**的——overlay 里放
+  一个 `.pth`，worker 进程启动时执行它并写下文件，Node 侧读到该文件才判定通过（进程边界无法
+  从 Node 里窥视，所以用副作用证明，而不是读自己的源码）；覆盖链路用 `pyparsing` 实测：
+  加装 3.1.2 后仍是锁定的 3.3.3，`override:true` 后才真变成 3.1.2，且 run 里出现
+  `pythonOverlay.overrides`。
 
 - **wheel 缓存在 runtime root 内**（`cache/pip`，`--cache-dir` 显式指定；v2.33 起取代
   `--no-cache-dir`）：重装/升级只重下锁里变化的包，缓存在 runtime root 内随其生死，
@@ -3107,11 +3155,12 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
 - 文档：`skills/cad-manufacturing/SKILL.md` 写清档案契约、四种规则与**如何撰写档案**
   （出处的信任阶梯、草稿是有名字的假设、用即验证、阶梯试件标定、每个反例都要解释）。
 
-## 28. CAD 导入扩到 STEP/DXF：trimesh + cascadio + ezdxf（v2.32，2026-10-15）
+## 28. CAD 导入：STL / STEP / 3MF / DXF（trimesh + cascadio + ezdxf + lxml）
 
-> 用户拍板（对比 cadaclysm / ezdxf / trimesh 组合后指示"实现到我们的插件中去"）。
-> 决策与依赖论证：`docs/DECISION-LOG.md` 2026-10-15；探针：
-> `experiments/20261015_cad_import_probe.md`。本节只记**当前有效的设计**。
+> 用户拍板（2026-10-15 对比 cadaclysm / ezdxf / trimesh 后指示"实现到我们的插件中去"；
+> 2026-10-22 追加 3MF：lxml 进锁、trimesh 的 3MF 读取器接管）。决策与依赖论证：
+> `docs/DECISION-LOG.md` 2026-10-15 与 2026-10-22；探针：`experiments/20261015_cad_import_probe.md`。
+> 本节只记**当前有效的设计**。
 
 ### 28.1 格式矩阵（当前有效）
 
@@ -3119,8 +3168,14 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
 |---|---|---|---|
 | `.stl`（二进制/ASCII） | 原路不变：worker `_parse_stl_raw` → weld | 调用方声明（mm/cm/m/inch ×scale） | `accept-import.mjs` |
 | `.step/.stp` | `cascadio.step_to_glb`（OpenCASCADE）→ trimesh 载 GLB → 三角形汤 | **文件自带**；GLB 中间格式声明米 → worker ×1000 落 mm；`unit` 参数仅接受 mm/缺省（违反拒收），`scale` 照常叠加 | `accept-import-cad.mjs` 1–3 |
+| `.3mf` | trimesh 的 3MF 读取器（lxml；ZIP + `3D/3dmodel.model`）→ `to_geometry()` 烘焙 build/component 变换 → 三角形汤 | **文件自带**（`model@unit`：micron/mm/cm/inch/foot/meter）→ worker 折进 `native_to_mm`；`unit` 参数仅接受 mm/缺省（违反拒收） | `accept-import-3mf.mjs` |
 | `.dxf` | ezdxf（recover 模式）：3D 网格实体原样；否则 2D 闭环轮廓 → manifold3d `CrossSection`(EvenOdd) `extrude(depthMm)` | `$INSUNITS` 优先（{1,2,3,4,5,6,7} 有映射）；无/未知 → 按调用方单位并告警；`depthMm` 以 mm 计 | `accept-import-cad.mjs` 4–7 |
 | `.iges/.igs/.brep` | **无读取器**：cascadio 0.1.1 对 IGES 静默失败（不写输出，探针实测） | — | 边界消息 `accept-import.mjs` 9a |
+| `.obj/.off` | **无读取器**（不需要新内核，planned increment） | — | 边界消息 `accept-import.mjs` 9b |
+
+**3MF 的多体政策与 STL/STEP 不同**：3MF 是**对象的容器**（一盘多件是常态），所以
+`importGeometry` 在 `shells > 1` 时**拒收**（消息给出体数与"导出单个对象"的出路）；STL/STEP
+保持"警告但仍存"——那里的多壳常是作者留下的不连通壳，拒收会误伤真实文件。
 
 三条新链路全部汇入既有尾流：**weld（1e-5 量化）→ scale 一次 → Manifold 判定 → 写
 `model.stl`**。版本库与下游 11 个工具零改动——这是"导入=一个版本"原则（§7.3）的延续。
@@ -3135,17 +3190,27 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
   `$INSUNITS=1`（英寸）文件读出 ×25.4 换算系数。
 - **cascadio 对读不了的文件不抛异常**（IGES：stderr 一行 OCCT 错误、无输出文件）→
   worker 以"输出不存在"判失败，TS 层保留 IGES 边界消息。
+- **3MF（2026-10-22 实测，夹具在 `scripts/fixtures/cad-import/`）**：10mm 立方体
+  → 1000 mm³ / 10×10×10；`unit="inch"` → 254mm / 16387064 mm³（×25.4 **由我们折**，
+  trimesh 只把 unit 存进 metadata、不缩放）；build-item 平移 +20 → bbox 15..25；
+  `<components>` 引用同样 +20；两个 build item → 24 三角形 / **2 体** → 拒收。
+  trimesh 的解析选项是安全的：`resolve_entities=False / no_network=True /
+  load_dtd=False / huge_tree=False`（`trimesh/exchange/common.py`）。
 
 ### 28.3 代码落点
 
-- `python/cad_worker/worker.py`：`_load_step_soup` / `_load_dxf_soup` /
-  `_DXF_INSUNITS_TO_MM`；`op_import_mesh` 按扩展名分派；`op_versions` 增
-  cascadio/ezdxf。`EZDXF_CONFIG_DIR` 指向 scratch（容器无 `~/.cache` 消音）。
-- `src/host/import.ts`：`SUPPORTED_EXTENSIONS = [.stl, .step, .stp, .dxf]`；
-  STEP 的 unit 拒收逻辑；`depthMm` 通道；worker warnings 并入。
+- `python/cad_worker/worker.py`：`_load_step_soup` / `_load_3mf_soup` /
+  `_load_dxf_soup` / `_DXF_INSUNITS_TO_MM` / `_THREEMF_UNIT_TO_MM`；
+  `op_import_mesh` 按扩展名分派；`op_versions` 增 cascadio/ezdxf/lxml。
+  `EZDXF_CONFIG_DIR` 指向 scratch（容器无 `~/.cache` 消音）。
+- `src/host/import.ts`：`SUPPORTED_EXTENSIONS = [.stl, .step, .stp, .3mf, .dxf]`；
+  STEP/3MF 的 unit 拒收逻辑；3MF 多体拒收；`depthMm` 通道；worker warnings 并入。
 - `src/host/tools.ts`：`import_part` 增 `depthMm` 参数；描述与 output.format 枚举。
 - 锁：`cascadio==0.1.1`（**钉版**——上游会删 PyPI 旧版；exclude musl）+
-  `ezdxf==1.4.4`（传递依赖全部已在锁内）。
+  `ezdxf==1.4.4`（传递依赖全部已在锁内）+ `lxml==6.1.3`（trimesh 的 XML 读取器；
+  7/7 目标都有 cp313 轮子，含 musllinux，因此**没有** exclude）。
+- `LOCKED_IMPORTS`（`src/host/python-runtime.ts`）把 cascadio/ezdxf/lxml 纳入就绪
+  探针：导入格式也是能力声明，缺了就不能再报 `ready`。
 - 验收样本：`scripts/fixtures/cad-import/`（来源与基线见其 README）。
 
 
@@ -3159,10 +3224,21 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
 
 **引擎车道**（对齐 numba 采纳模式）：
 - 依赖：`xlb==0.3.1`（Apache-2.0，纯 py）+ `warp-lang==1.12.1`（**钉版**——1.18 移除
-  `warp.utils.ScopedTimer` 炸 import）+ `jax/jaxlib==0.11.2` + 完整传递闭包共 43 包进
-  hash 锁；musl×2 与 darwin-x64 按 wheel 实际覆盖 cad-exclude（jaxlib/warp 无
-  musl/darwin-x64 wheel）。闭包解析用锁约束下 `pip install --dry-run --report`，
-  首装曾暴露 `opt_einsum`/`attrs` 漏钉——闭包比对必须跑（`closure.txt` ↔ lock）。
+  `warp.utils.ScopedTimer` 炸 import）+ `jax/jaxlib==0.11.2`；musl×2 与 darwin-x64 按 wheel
+  实际覆盖 cad-exclude（jaxlib/warp 无 musl/darwin-x64 wheel）。闭包解析用锁约束下
+  `pip install --dry-run --report`，首装曾暴露 `opt_einsum`/`attrs` 漏钉——闭包比对必须跑。
+- **依赖面按"真正 import 的闭包"裁剪（2026-10-22，用户要求）**：xlb 声明
+  matplotlib + pyvista(→vtk) + numpy-stl + pydantic + ruff，但它的代码只在
+  `xlb/__init__.py` 里 eager `import xlb.utils` 一次，而那是个纯可视化模块
+  （`save_fields_vtk`/`save_BCs_vtk`/`voxelize_stl`/`save_image`…），xlb 内部**没有第二处**
+  引用。`lbm_xlb._stub_unused_viz_module()` 把这句 import 变成 no-op（预注册
+  `sys.modules['xlb.utils']` 并补上父包属性——预注册的子模块不会自动获得属性，实测过），
+  锁里因此**不再有那 34 个包**，pip 以 `--no-deps` 安装（§26.3）。测量：屏蔽
+  matplotlib/pyvista/vtk/numpy-stl/pydantic/ruff 及其全部依赖后跑 200 步通道，稳定
+  （mirrorError 2.8e-06）且**一个都没被导入**；venv 从 2.1 GB 降到 1.4 GB（−726 MB）。
+  warp 与 jax 是引擎的计算后端（各被 38 个文件 import），必须保留。
+  **逃生口**：将来若真要做 VTK 场导出，就把依赖按需加回锁，而不是把这个 stub 当成
+  神秘的 AttributeError 去 debug。
 - worker：`python/cad_worker/lbm_xlb.py`（引擎模块，显式路径加载对齐 `_load_mpm_numba`）
   + `worker.lbm_channel` op；门控 `CAD_LBM_ENGINE`（`off` 响亮拒绝；无回退引擎，
   不可用即响亮 ok:false）。
@@ -3328,6 +3404,44 @@ OpenSCAD 硬画，最后报 `skill "cad-toolbox" is unknown`）。规矩：
 同心"）。不需要人回去拖鼠标建模，但需要**约束保持下的精确编辑 + 可追溯**。
 PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 
+**30.17 交付几何默认进版本库；不进必须声明（2026-10-21）**：**默认路径是登记**——凡要给人看、
+由人判或要交付的几何，必须成为版本（`generate_part` / `import_part`）。面板是只读视图，读的是
+`versions/`，不扫磁盘；所以"管线直接写个 STL"既不进面板，也不进任何工具——它们全都要
+`versionId`。**直接写盘是例外，但例外必须说出来**（路径 + 原因）。机械检查在
+`delivery_audit`：`unregistered-geometry` 扫工作区（默认跳过语料、嵌套项目、构建目录），比最新
+版本新的判 `blocked`，更旧的判 `warn`；`exempt: [{path, reason}]` 是声明的豁免通道，理由随件
+回显。**不做自动登记**：版本是不可变提交（§30.4），自动收编会取消"提交"这个动作，还会把中间帧
+与批量件灌进语料。原则本身已在 HARNESS §3/§4（人的通道、真值随产物流转、零件=版本库），本条只
+补默认路径与可验收的检查。
+
+**30.18 未登记几何：看与登记分开，且「未登记」是一个浏览类目（2026-10-22）**：
+面板的种类下拉里第五项 **未登记**（`📂` 按钮直达）列出工作区里**没有版本**的几何文件
+（STL/STEP/3MF/DXF），语义与版本严格分开：
+
+- **同一份扫描**：列表来自 `src/host/unregistered.ts` 的 `scanUnregistered`，与
+  `delivery_audit` 的 `unregistered-geometry` 是**同一个实现**——人和机器看到的必须是同一份
+  清单，否则"机器报警、人看不见"会以另一种形式回来。认领按**精确哈希**（`model.stl`、
+  导入源 sha、面板导出缓存），同字节副本不报、改过的文件要重新导入；嵌套 `cad-data/` 的
+  另一个项目**在任何深度**都跳过（2026-10-22 修：原先 `!isRoot` 让直接子目录漏过）。
+  文件哈希按 (mtime,size) 缓存、版本哈希按 manifest 签名缓存，所以面板可按需调用。
+- **预览不是版本**：`GET /api/cad/file?path=` 用**与导入相同的读取链路**（STL 直读、
+  STEP cascadio、3MF trimesh）在服务器上 tessellate 成 STL，交给主视口那**同一个场景构建器**
+  渲染——预览与它将变成的版本长得不一样，本身就是一种谎。存储政策在这里**故意挂起**
+  （`importGeometry({preview:true})`）：一盘多件的 3MF、有洞的网格正是人要**看**了才能决定的
+  东西；`solid/shells/单位` 仍如实回报，界面写「未登记 · 不是版本 · 不入证据」。因此
+  测量/壁厚/剖切/热力图**不提供**（那些需要一个版本作主语），只留截图与标注。
+  路径经 `realpath` 限制在会话工作区内（符号链接指向外面也拒），DXF 不可预览（二维轮廓
+  需要 depthMm）。
+- **登记**：详情里的表单走已有的 `POST /api/cad/import`（与 `import_part` 共用
+  `importPartJob`），写进**会话 cwd**，`render:false`（面板直接加载 `model.stl`），单位由人
+  显式声明（STL 无单位；STEP/3MF 自带、传 unit 会被拒），DXF 填 `depthMm`，非实体默认拒收、
+  勾 `allowNonSolid` 才带标记；成功后切到零件类并钉住新版本。不在工作区的文件用
+  「📂 按路径导入…」对话框（它现在默认开在导入页，浏览器端预览只是那条路的兜底）。
+- 判据：`accept-unregistered.mjs`（扫描=审计同一清单、哈希认领、豁免、realpath 守卫、
+  3MF 多体可预览而导入拒收、DXF 拒绝、preview 不写语料）；`accept-import-3mf.mjs`；
+  沙箱 `kind=unregistered` 截图 + `assert=local-import`（7/7，经类目→对话框）+ 布局断言
+  11/11（打开「截图」浮层不改变任何区域的盒，浮层按 `fixed` 排除）。
+
 ---
 
 ## 31. 装配表示、运行时分工与引擎默认策略（承 HARNESS §8/§11/§12，2026-10-16 迁入）
@@ -3404,8 +3518,9 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 
 **31.5 B-rep / STEP 边界**（2026-10-16 校订）
 - 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy。
-- **导入**：STL（2026-10-01）、STEP/DXF（2026-10-15，`cascadio` + `ezdxf` 进锁，worker 内嵌
-  转换）已交付；**IGES 与 `.brep` 是可行动边界**（cascadio 0.1.1 对 IGES 静默失败已实测）。
+- **导入**：STL（2026-10-01）、STEP/DXF（2026-10-15，`cascadio` + `ezdxf` 进锁）、3MF
+  （2026-10-22，`lxml` 进锁，trimesh 的 3MF 读取器）已交付；**IGES 与 `.brep` 是可行动边界**
+  （cascadio 0.1.1 对 IGES 静默失败已实测），OBJ/OFF 是 planned increment。
 - **仍未做的**：STEP 导出、从 B-rep 抽取精确孔/轴 datum（网格细分只给网格级的）。评估顺序
   仍是 FreeCAD headless → cadquery-ocp → Replicad（~55MB wasm，留在 Node 栈）；引入与否仍未
   决定。

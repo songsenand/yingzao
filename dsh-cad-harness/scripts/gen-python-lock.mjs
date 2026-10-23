@@ -53,6 +53,17 @@ const PACKAGES = [
   { name: 'numpy', version: '2.5.3' },
   { name: 'scipy', version: '1.18.1' },
   { name: 'trimesh', version: '5.1.1' },
+  // lxml: trimesh's XML readers — 3MF in particular — need it, and it sits in
+  // trimesh's `easy` extra, which this lock does not install. Without it
+  // `trimesh.load(*.3mf)` raises ModuleNotFoundError (probed 2026-10-22), so our
+  // own 3MF export could not be re-imported. 3MF is the print-handoff format and
+  // the core mesh spec is bounded; the alternative was a hand-written parser
+  // (DECISION-LOG 2026-10-22: dependency chosen instead of reinventing).
+  // cp313 wheels exist for ALL seven targets — manylinux2014 (glibc 2.17) and
+  // manylinux_2_28, musllinux x86_64/aarch64, macOS x86_64/arm64, win
+  // amd64/arm64 — so unlike cascadio there is no exclude directive. No compiler,
+  // wheel 4–5.6 MB, 13 MB installed (measured 2026-10-22).
+  { name: 'lxml', version: '6.1.3' },
   { name: 'manifold3d', version: '3.5.4' },
   { name: 'networkx', version: '3.7' },
   // Added 2026-10-08 because the repository's own FEM cross-validation script
@@ -97,7 +108,7 @@ const PACKAGES = [
   },
   // ezdxf: DXF reader (entities, path flattening, $INSUNITS units). MIT,
   // pure-python wheel. Its transitive deps (pyparsing, fonttools,
-  // typing_extensions, numpy) are all already pinned above, so it adds no new
+  // typing_extensions, numpy) are all pinned in this list, so it adds no new
   // platform surface.
   { name: 'ezdxf', version: '1.4.4' },
   {
@@ -147,6 +158,8 @@ const PACKAGES = [
   // absorbed by the worker wrapper (lbm_xlb.py): ZouHe prescribed_values shim
   // (mirrors upstream main verbatim, drop on next release), overlap-checker
   // replacement (numpy 2.5 list+=ndarray semantic change), warp pin below.
+  // Installed with `--no-deps`: this lock lists xlb's REAL runtime closure
+  // (warp + jax), not its declared list — see the closure note below.
   {
     name: 'xlb',
     version: '0.3.1',
@@ -190,60 +203,28 @@ const PACKAGES = [
       reason: 'no cp313 musl wheel — jax dependency',
     },
   },
-  // --- XLB transitive closure (pip resolve 2026-10-15 under lock constraints;
-  // --require-hashes needs every transitive dep pinned and hashed) ---
-  {
-    name: 'matplotlib',
-    version: '3.11.2',
-    exclude: {
-      targets: ['linux-arm64-musl'],
-      reason: 'no cp313 musllinux aarch64 wheel — pyvista dependency',
-    },
-  },
-  { name: 'contourpy', version: '1.4.0' },
-  { name: 'cycler', version: '0.12.1' },
-  { name: 'fonttools', version: '4.66.1' },
-  { name: 'kiwisolver', version: '1.5.1' },
-  { name: 'pillow', version: '12.3.0' },
-  { name: 'pyparsing', version: '3.3.3' },
-  { name: 'python-dateutil', version: '2.9.0.post0' },
-  { name: 'six', version: '1.17.0' },
-  {
-    name: 'vtk',
-    version: '9.7.1',
-    exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl'],
-      reason: 'no cp313 musl wheel — pyvista dependency',
-    },
-  },
-  { name: 'pyvista', version: '0.49.1' },
-  { name: 'pooch', version: '1.9.0' },
-  { name: 'scooby', version: '0.12.0' },
-  { name: 'pyvista-validation', version: '0.2.2' },
-  { name: 'requests', version: '2.34.2' },
-  { name: 'urllib3', version: '2.8.0' },
-  { name: 'idna', version: '3.20' },
-  { name: 'charset-normalizer', version: '3.5.2' },
-  { name: 'certifi', version: '2026.7.22' },
-  { name: 'platformdirs', version: '4.13.0' },
-  { name: 'numpy-stl', version: '4.0.1' },
-  { name: 'python-utils', version: '4.1.2' },
-  { name: 'pydantic', version: '2.14.1' },
-  { name: 'pydantic_core', version: '2.50.1' },
-  { name: 'annotated-types', version: '0.8.0' },
-  { name: 'attrs', version: '26.1.0' },
+  // --- dependency closure: CURATED, not xlb's declared list ------------------
+  //
+  // pip installs this lock with `--no-deps` (python-runtime.ts), so the lock IS
+  // the closure and this list owns it. xlb DECLARES matplotlib + pyvista
+  // (→ vtk) + numpy-stl + pydantic + ruff, but its code imports none of them on
+  // our path: the only reference is `xlb/__init__.py`'s eager `import xlb.utils`,
+  // a pure visualization module (save_fields_vtk / save_BCs_vtk / voxelize_stl /
+  // save_image / save_usd_* …) that nothing else inside xlb imports.
+  // `lbm_xlb._stub_unused_viz_module` makes that one import a no-op, so the
+  // packages are simply not installed. Measured 2026-10-22: a 200-step channel
+  // with matplotlib/pyvista/vtk/numpy-stl/pydantic/ruff and every one of their
+  // dependencies BLOCKED runs stable (mirrorError 2.8e-06) and imports none of
+  // them; dropping them removes 726 MB of installed runtime (vtk 591,
+  // matplotlib 35, ruff 25, pillow 21, pyvista 14 …).
+  //
+  // What remains is the REAL closure: warp + jax are xlb's compute backends
+  // (imported by 38 files each), jax pulls jaxlib/ml_dtypes/opt_einsum, and
+  // ezdxf pulls pyparsing/fonttools/typing_extensions.
   { name: 'opt_einsum', version: '3.4.0' },
   { name: 'typing_extensions', version: '4.16.0' },
-  { name: 'typing-inspection', version: '0.4.4' },
-  { name: 'ruff', version: '0.17.0' },
-  { name: 'cyclopts', version: '5.2.0' },
-  { name: 'docstring_parser', version: '0.18.0' },
-  { name: 'rich', version: '15.0.0' },
-  { name: 'rich-rst', version: '2.2.0' },
-  { name: 'markdown-it-py', version: '4.2.0' },
-  { name: 'mdurl', version: '0.1.2' },
-  { name: 'Pygments', version: '2.21.0' },
-  { name: 'packaging', version: '26.3' },
+  { name: 'pyparsing', version: '3.3.3' },
+  { name: 'fonttools', version: '4.66.1' },
 ];
 
 function argOf(flag, fallback) {

@@ -10,10 +10,16 @@
 // Pure over the three stores plus an optional manifest, so the tool wrapper and
 // any acceptance script share one implementation.
 
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
 import { listParts } from './parts.ts';
 import { listRuns, type RunEntry } from './runs.ts';
 import { listVersions, type VersionManifestEntry } from './version.ts';
+// The unregistered-geometry scan lives in its own module because the panel's
+// 未登记 category consumes the SAME list: two implementations would drift and
+// the human would see a different list than the machine flags.
+import { SCAN_BUDGET, scanUnregistered, type UnregisteredFile, type UnregisteredScan } from './unregistered.ts';
 import type { ProjectStores } from './project.ts';
 
 export type AuditSeverity = 'blocked' | 'warn' | 'info';
@@ -68,6 +74,8 @@ export interface DeliveryAudit {
     /** True when the newest version is POSTERIOR to the newest contract check. */
     geometryNewerThanCheck: boolean;
   };
+  /** Mesh files under the scan roots that no version accounts for. */
+  unregistered: UnregisteredScan;
 }
 
 const newestOf = <T extends { timestamp: string }>(list: T[]): T | undefined =>
@@ -76,7 +84,15 @@ const newestOf = <T extends { timestamp: string }>(list: T[]): T | undefined =>
 /** The audit itself: reads the stores, never writes. */
 export async function auditDelivery(
   project: ProjectStores,
-  opts: { manifestPath?: string; workspace?: string; claims?: DeliveryClaim[] } = {},
+  opts: {
+    manifestPath?: string;
+    workspace?: string;
+    claims?: DeliveryClaim[];
+    /** Workspace-relative roots for the unregistered-geometry scan. Default ['.']; [] disables it. */
+    scanPaths?: string[];
+    /** Files intentionally left as files (reference geometry), with a reason. */
+    exempt?: { path: string; reason: string }[];
+  } = {},
 ): Promise<DeliveryAudit> {
   const [versions, parts, runs] = await Promise.all([
     listVersions(project.store), listParts(project.partStore), listRuns(project.runStore),
@@ -173,6 +189,17 @@ export async function auditDelivery(
     );
   } catch { /* no readable manifest: the other findings still stand */ }
 
+  // ── geometry on disk that no version accounts for ─────────────────────────
+  //
+  // A deliverable that never became a version is invisible to the panel AND to
+  // every tool (they all take a versionId). The corpus cannot vouch for it, so
+  // this is blocked unless the caller DECLARES the file exempt.
+  const workspace = resolve(opts.workspace ?? project.cwd);
+  const scanPaths = opts.scanPaths ?? ['.'];
+  const scan: UnregisteredScan = scanPaths.length > 0
+    ? await scanUnregistered({ project, workspace, scanPaths, exempt: opts.exempt ?? [], versions: versionList })
+    : { scanned: 0, files: [], exempt: [], missingExempt: [], truncated: false };
+
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
 
@@ -260,10 +287,50 @@ export async function auditDelivery(
       `${contract.staleNodes.length} manifest node(s) point at a replaced version: ` +
       contract.staleNodes.map((n) => `${n.name} ${n.version}→${n.newest}`).join(', '));
   }
+  const nameList = (list: UnregisteredFile[]): string =>
+    `${list.slice(0, 5).map((f) => f.path).join(', ')}${list.length > 5 ? ` … (+${list.length - 5})` : ''}`;
+  const blockedFiles = scan.files.filter((f) => f.severity === 'blocked');
+  const oldFiles = scan.files.filter((f) => f.severity === 'warn');
+  if (blockedFiles.length > 0) {
+    push('blocked', 'unregistered-geometry',
+      `${blockedFiles.length} mesh file(s) on disk have no version and are NEWER than the newest version: ${nameList(blockedFiles)} — ` +
+      'register them (import_part) so the panel can show them, or declare them exempt with a reason');
+  }
+  if (oldFiles.length > 0) {
+    push('warn', 'unregistered-geometry',
+      `${oldFiles.length} unregistered mesh file(s) predate the newest version: ${nameList(oldFiles)} — ` +
+      'if one is part of the delivery, import it or declare it exempt');
+  }
+  if (scan.exempt.length > 0) {
+    push('info', 'unregistered-exempt',
+      `${scan.exempt.length} file(s) declared exempt: ${scan.exempt.slice(0, 5).map((e) => `${e.path} (${e.reason})`).join(', ')}`);
+  }
+  if (scan.missingExempt.length > 0) {
+    push('warn', 'exemption-missing',
+      `${scan.missingExempt.length} exemption(s) name a path that does not exist: ${scan.missingExempt.map((e) => e.path).join(', ')}`);
+  }
+  if (scan.truncated) {
+    push('info', 'scan-truncated',
+      `the unregistered-geometry scan stopped after ${SCAN_BUDGET.maxVisitedEntries} entries / ${SCAN_BUDGET.maxMeshFiles} mesh files — narrow \`scanPaths\` to be sure it saw everything`);
+  }
   if (duplicateGroups.length > 0) {
     const wasted = duplicateGroups.reduce((a, g) => a + g.count - 1, 0);
     push('info', 'duplicate-runs',
       `${duplicateGroups.length} group(s) repeat the same kind+geometry+outcome — ${wasted} run(s) spent without new information`);
+  }
+  // The user's own packages are part of what a number came out of. This is INFO,
+  // not a fault: installing is the user's right (DECISION-LOG 2026-10-22). But a
+  // corpus that never says "this run used an overlay" would make "the same
+  // version, the same tool" unanswerable — so the machine names it.
+  const withOverlay = runs.filter((r) => (r.pythonOverlay?.packages?.length ?? 0) > 0);
+  if (withOverlay.length > 0) {
+    const packages = [...new Set(withOverlay.flatMap((r) => r.pythonOverlay?.packages ?? []))];
+    const forced = [...new Set(withOverlay.flatMap((r) => r.pythonOverlay?.overrides ?? []))];
+    push('info', 'overlay-backed-runs',
+      `${withOverlay.length} run(s) were computed with packages from the user overlay: ${packages.slice(0, 6).join(', ')}` +
+      `${packages.length > 6 ? ` … (+${packages.length - 6})` : ''}` +
+      `${forced.length ? ` — including EXPLICIT OVERRIDES of locked packages (${forced.slice(0, 4).join(', ')}), which replace what the lock pins` : ''}` +
+      ' — reproducible only where the same overlay is installed');
   }
 
   // The canonical three (src/shared/judgement.ts). The severity words stay as they are —
@@ -290,5 +357,6 @@ export async function auditDelivery(
     parts: { total: parts.length, newestNeverValidated },
     runs: { total: runs.length, stale: staleRuns, failing, duplicateGroups, latestByKind },
     contract,
+    unregistered: scan,
   };
 }

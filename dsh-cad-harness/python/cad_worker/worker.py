@@ -6083,12 +6083,14 @@ def op_import_mesh(params: dict) -> dict:
     Mirrors the domain half of `importGeometry` in src/host/import.ts. Formats:
     .stl (binary/ASCII, unit declared by the caller), .step/.stp (cascadio → GLB;
     the GLB declares METERS — probed 2026-10-15 — so the soup is scaled ×1000 and
-    `appliedScale` reports the total), .dxf (ezdxf; $INSUNITS honoured, closed 2D
+    `appliedScale` reports the total), .3mf (trimesh+lxml; the file's own `unit`
+    is folded through `native_to_mm` — trimesh stores it as metadata and does NOT
+    scale, probed 2026-10-22), .dxf (ezdxf; $INSUNITS honoured, closed 2D
     profiles extruded by depthMm through manifold3d, 3D mesh entities welded like
     STL). What stays in TS: path resolution, extension checks, hashing, unit/scale
-    validation, datums and version storage. The welded, scaled mesh is WRITTEN to
-    `out` — that file is what the version store holds — and its facts come back
-    with it.
+    validation, the 3MF multi-body refusal, datums and version storage. The
+    welded, scaled mesh is WRITTEN to `out` — that file is what the version store
+    holds — and its facts come back with it.
     """
     import numpy as np
     from manifold3d import Error, Manifold, Mesh
@@ -6100,6 +6102,8 @@ def op_import_mesh(params: dict) -> dict:
 
     if ext in (".step", ".stp"):
         vertices, fmt, native_to_mm, warnings = _load_step_soup(path, params)
+    elif ext == ".3mf":
+        vertices, fmt, native_to_mm, warnings = _load_3mf_soup(path, params)
     elif ext == ".dxf":
         vertices, fmt, native_to_mm, warnings = _load_dxf_soup(path, params)
     else:
@@ -6108,7 +6112,7 @@ def op_import_mesh(params: dict) -> dict:
         if fmt == "unknown":
             raise ValueError(
                 f'not an STL I can read ({len(data)} bytes; neither binary — 84+n*50 — nor an ASCII "solid/facet" file). '
-                "If this is STEP/3MF/OBJ, see the import notes."
+                "If this is OBJ/OFF or another mesh format, see the import notes."
             )
         vertices = _parse_stl_raw(path).reshape(-1, 3) if fmt == "binary" else _parse_ascii_vertices(data)
         native_to_mm = 1.0
@@ -6163,7 +6167,7 @@ def op_import_mesh(params: dict) -> dict:
             else f"{bad_edges} edge(s) are not shared by exactly two triangles — the surface has holes or T-junctions"
         )
     return {
-        "format": fmt if fmt.startswith(("step", "dxf")) else ("stl-binary" if fmt == "binary" else "stl-ascii"),
+        "format": fmt if fmt.startswith(("step", "dxf", "3mf")) else ("stl-binary" if fmt == "binary" else "stl-ascii"),
         "solid": bool(ok and not inverted),
         "inverted": inverted,
         "signedVolumeMm3": _round_js(volume),
@@ -6250,6 +6254,85 @@ def _load_step_soup(path: str, params: dict) -> tuple:
             os.remove(glb)
         except OSError:
             pass
+
+
+_THREEMF_UNIT_TO_MM = {
+    "micron": 0.001,
+    "millimeter": 1.0,
+    "centimeter": 10.0,
+    "inch": 25.4,
+    "foot": 304.8,
+    "meter": 1000.0,
+}
+
+
+def _load_3mf_soup(path: str, params: dict) -> tuple:
+    """3MF → trimesh (lxml) → triangle soup, with the file's own unit folded in.
+
+    trimesh's reader already handles the parts that are easy to get wrong:
+    build-item 4×3 transforms, `<components>` nesting and multi-instance baking
+    (probed 2026-10-22: a +20 mm build transform lands at bounds 15..25; a
+    component reference does the same; two items bake to volume 2000, body_count
+    2). What it does NOT do is scale: `unit` is stored as metadata and the
+    vertices stay raw (a `unit="inch"` file still reports 10-unit bounds), so the
+    conversion is ours — applied exactly once through `native_to_mm`.
+
+    Multi-body policy lives in the TS layer (`importGeometry`): a 3MF is a
+    container of objects, so "N separate bodies" is refused there rather than
+    silently stored as one multi-body part.
+    """
+    import numpy as np
+    import trimesh
+
+    try:
+        scene = trimesh.load(path, file_type="3mf")
+    except ImportError as e:  # lxml missing — name the fix, not a stack trace
+        raise ValueError(
+            "the 3MF reader needs lxml, which this runtime cannot import — "
+            f"run python_runtime action=repair and retry ({e})"
+        )
+    except StopIteration:
+        # trimesh looks up the model part by name and raises a bare StopIteration
+        # when it is absent — a zip that is not a 3MF. Say what is wrong.
+        raise ValueError(
+            f"{os.path.basename(path)} is a zip but not a 3MF: it has no 3D/3dmodel.model part. "
+            "Re-export it as 3MF from your slicer, or use STL/STEP."
+        )
+    except Exception as e:
+        # type(e).__name__ matters: some parser errors stringify to "".
+        raise ValueError(f"3MF parse failed ({type(e).__name__}): {e}")
+
+    units = str(getattr(scene, "metadata", {}).get("units") or "millimeter").lower()
+    factor = _THREEMF_UNIT_TO_MM.get(units)
+    if factor is None:
+        raise ValueError(
+            f"3MF declares an unknown unit {units!r}; the spec allows "
+            "micron / millimeter / centimeter / inch / foot / meter"
+        )
+
+    # to_geometry() is the current API; dump(concatenate=True) is deprecated in
+    # trimesh 5.1. Both bake every build item and component transform.
+    if hasattr(scene, "to_geometry"):
+        mesh = scene.to_geometry()
+    elif hasattr(scene, "dump"):
+        mesh = scene.dump(concatenate=True)
+    else:
+        mesh = scene
+    verts = np.asarray(getattr(mesh, "vertices", []), dtype=np.float64)
+    faces = np.asarray(getattr(mesh, "faces", []), dtype=np.int64)
+    if len(faces) == 0:
+        raise ValueError(
+            "the 3MF contains no triangles — empty build, or it references model parts the reader "
+            "could not load (the production extension's external parts must live in the same archive)"
+        )
+    # Soup stays in the FILE's units; the op applies native_to_mm exactly once,
+    # before welding (the weld grid is 1e-5 mm, so metre-scale values would
+    # quantize 1000× coarser).
+    soup = verts[faces].reshape(-1, 3)
+    return soup, "3mf", factor, [
+        f"3MF declares its own unit ({units}); appliedScale folds ×{factor:g} to mm. "
+        "Use scale for size corrections — the unit argument does not apply."
+    ]
 
 
 def _load_dxf_soup(path: str, params: dict) -> tuple:

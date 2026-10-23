@@ -1,0 +1,38 @@
+
+=== 05-rack-assembly · zai-coding-cn/glm-5.3-flash ===
+run root : /home/songsenand/bench-runs/05-rack-assembly-glm53-high
+session  : session-af29ccc2-fae7-47fd-8340-f53fb9ffd547
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 68 次，零触达
+  PASS  g-answer-json                      字段齐全
+  PASS  g-pose-not-trivial                 2 件里 1 件被移动/旋转过
+  FAIL  g-verify-run                       3 次装配运行（r001:fail, r002:pass, r003:fail）
+  FAIL  g-merge-run                        merge_parts 1 次、check_connectivity 0 次 — 没查过连通体数
+  PASS  g-tools-05-measure                 测量工具：list_features, measure_section, measure_part
+  PASS  g-negative-origin-fires            两件留在原点的包络 32 × 184.393 × 25 vs 参考 227.99 × 184 × 45：x/z 轴在容差外 ⇒ 偷懒状态会被拒，对照有效（y 轴相同是正常的：沿该方向滑动不改变包络）
+
+-- 数值判据 --
+  FAIL  c-envelope                         w=3 声明包络 202.393 × 183.988 × 25 vs 参考 227.99 × 184 × 45（±2） — x/z 轴差超容差：摆错一个面就会这样
+  FAIL  c-no-interference                  w=3 1 对：yBar↔xBar:interference；声明 贴合接触：xBar 端面与 yBar x=26 侧面 0 间隙面贴合（接触区 y 22..32 × z 0..15，约 150 mm²），销钉入凹点、Ø3.25 孔同轴贯通；validate_assembly 仅报 1 处 1.66 mm³ 干涉——xBar 端块上角（尖角，世界坐标 y=22，z 12.1..15）与 yBar 端头块的斜角面（该角 z 越高伸出越多，z=15 处达 y≈22.85）。位姿三个平移与三个转动自由度全部被配合特征钉死（面贴合定 tx、孔同轴定 ty=54、凹点签名定 tz=0 与滚转），±0.05 mm 内无法消除该角部轻触；对称的 y=157 位姿会撞 yBar 远端头（3140 mm³），已排除。
+  PASS  c-merged-single-body               w=3 声明合并后 1 体；check_connectivity 实测 未调用
+  PASS  c-key-fits                         w=2 4 条配合，其中 2 条的距离能在工具返回里找到
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+
+-- 成本（实测）--
+  工具调用 68/70   墙钟 75.7min/45   图片 ?/16
+  token    {"inputTokens":801107,"outputTokens":162488,"totalTokens":11318859,"cacheReadTokens":10330176}
+  段 TASK.md  exit=0 turns=2 tools=68
+
+-- 六列 --
+  P 通过   0  ← 2 条硬门不过，按 gatePolicy 归零
+  S 生效度 0.545
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 11/11 条；其余为 UNKNOWN，**未实现的不算通过**。
+  → 写分请填 graders/05-rack-assembly/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/05-rack-assembly.score.json

@@ -1,0 +1,40 @@
+
+=== 06-measure · zai-coding-cn/glm-5.3-flash ===
+run root : /tmp/bench-06-measure-default-glm53-high
+session  : session-c1804e17-cd5f-4c28-ae87-a89ee380e13b
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 31 次，零触达
+  PASS  g-measure-json                     measure.json 存在且含 part / partB / toolsUsed
+  PASS  g-tools-not-bypassed               用过：list_features, measure_thickness, measure_section, measure_angle, measure_part, import_part, render_part
+  FAIL  g-no-invented-numbers              1 个数字在任何工具返回里都找不到：$.crossChecks.volumeDeltaMm3=564.578
+  FAIL  g-delta-correct                    报 -2 vs 真值 1.000（圆筒壁厚（boss 内径 Ø16 → Ø14））
+  PASS  g-negative-delta-fires             改动量 1.000mm > 容差 0.05mm ⇒ 照抄 part 的数会判掉
+
+-- 数值判据 --
+  PASS  c-cylinder-count                   w=2 part.cylinders.length=4 vs 真值 4（±0）
+  PASS  c-tube-wall                        w=3 part.tubeWallThicknessMm=3 vs 真值 3（±0.05）
+  PASS  c-hole-centre-distance             w=3 part.holeCentreDistanceMm=50 vs 真值 50（±0.02）
+  PASS  c-slope-angle                      w=3 part.slopeAngleDeg=30.001 vs 真值 30（±0.5）
+  PASS  c-diagonal-extent                  w=2 沿 [1,1,0] 长度 91.924 vs 真值 91.924（±0.02）
+  PASS  c-section-hole-distance            w=3 part.section.holeCentreDistanceMm=50 vs 真值 50（±0.02）
+  PASS  c-section-area                     w=2 part.section.materialAreaMm2=3796.124 vs 真值 3796.124（±1）
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+
+-- 成本（实测）--
+  工具调用 31/40   墙钟 6.5min/25   图片 ?/10
+  token    {"inputTokens":35063,"outputTokens":16203,"totalTokens":529410,"cacheReadTokens":478144}
+  段 TASK.md  exit=0 turns=1 tools=31
+
+-- 六列 --
+  P 通过   0  ← 2 条硬门不过，按 gatePolicy 归零
+  S 生效度 1
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 13/13 条；其余为 UNKNOWN，**未实现的不算通过**。
+  → 写分请填 graders/06-measure/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/06-measure.score.json

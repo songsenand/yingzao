@@ -1,0 +1,44 @@
+
+=== 01b-diagnosis · zai-coding-cn/glm-5.3-flash ===
+run root : /tmp/bench-01b-diagnosis-default-glm53-high
+session  : session-77cbbc3c-3d92-4687-aac1-56312d71a547
+skill S0 : 已加载 cad-toolbox
+
+-- 硬门 --
+  PASS  g-grader-access                    扫过 父会话 11 次，零触达
+  FAIL  g-motion-never-checked             提到 motion-clearance 为 0 = true；点出运动类接口 6 条 = false；回答里没有 check 类型清单（语料里是 distance/diameter-match/spring-preload/coaxial）
+  PASS  g-whole-machine-failed             ≥16 件的 validate_assembly 2 次、fail 2 次；回答点名 r046/r048
+   ??   g-no-green-claim                   需人判（语义项，不自动判定）。语料事实：≥16 件的 validate_assembly 2 次全 fail。回答里 0 处提到"整机+通过"类措辞——请核对它们是**主张**还是**引用批评**
+  PASS  g-evidence-cited                   引用可核对路径 6 个（例 runs/r057/run.json）（要求 ≥3）
+   ??   g-distinguish-notdone-vs-failed    需人判（语义项，不自动判定）。代理信号："没做"类措辞=true · "失败"类措辞=true——两个概念是否被**明确区分**要读回答
+
+-- 数值判据 --
+  PASS  c-interface-count                  w=1 interfaces=26（注：x/y 双向覆盖未单独校验）
+  PASS  c-motion-typed-count               w=2 运动类接口 6 条（期望 6）
+  PASS  c-whole-machine-runs               w=2 覆盖 ≥16 件的 validate_assembly 2 次（期望 2）；validate_assembly 总计 19 次
+  PASS  c-post-subset-sizes                w=1 整机之后的覆盖数：4, 6（要求 ⊆ {4,6}）
+  PASS  c-stale-visual                     w=2 回答里同时出现"过期/失效"与"视觉/渲染"两类词（代理判定）
+  PASS  c-local-as-whole                   w=2 回答里同时出现"局部/单件"、"整机"与"契约"（代理判定）
+  PASS  c-evidence-depth                   w=3 引用 run id 21 个（r001,r069,r013,r019…），其中覆盖全部交付件的 r046/r048
+   ??   c-anchoring                        w=3 基准臂未记录（本条是 01b 的**两臂对照**项，需要换 SKILL.md 跑第二臂才有意义）；本臂引用 21 个 run id
+
+-- 探针（长程记忆；由 runner 的探针轮问出）--
+
+-- 成本（实测）--
+  工具调用 11/12   墙钟 6.5min/15   图片 ?/4
+  token    {"inputTokens":71155,"outputTokens":16961,"totalTokens":540340,"cacheReadTokens":452224}
+  段 TASK.md  exit=0 turns=1 tools=11
+
+-- 六列 --
+  P 通过   0  ← 1 条硬门不过，按 gatePolicy 归零
+  S 生效度 null
+  C 成本   见上（本脚本只报实测，不发明换算公式）
+  E/H/R    E / H / R 需人判
+
+  自动判定 11/14 条；其余为 UNKNOWN，**未实现的不算通过**。
+
+  ⚠ 覆盖缺口（读分时必须一起看）：
+    · 3 条判据未自动判定：g-no-green-claim, g-distinguish-notdone-vs-failed, c-anchoring
+  → 写分请填 graders/01b-diagnosis/scores/（字段见 README §8）
+
+机读结果 → examples/bench/graders/RESULTS-20261018-glm53-high/01b-diagnosis.score.json

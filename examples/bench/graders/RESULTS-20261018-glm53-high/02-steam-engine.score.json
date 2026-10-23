@@ -1,0 +1,169 @@
+{
+  "level": "02-steam-engine",
+  "variant": "default",
+  "model": "zai-coding-cn/glm-5.3-flash",
+  "tier": "headless（不命名预设）",
+  "sessionId": "session-4769cc38-a926-4c7d-b67a-db8ea69f9c86",
+  "skillLoaded": true,
+  "computed": {
+    "P": 0,
+    "S": 0.929,
+    "C": null
+  },
+  "measured": {
+    "cost": {
+      "toolCalls": 124,
+      "toolCallsChild": 0,
+      "toolCallsTotal": 124,
+      "toolCallBudget": 120,
+      "wallClockMin": 123.2,
+      "wallClockBudgetMin": 120,
+      "images": null,
+      "imagesBudget": 70,
+      "tokens": {
+        "inputTokens": 585860,
+        "outputTokens": 185843,
+        "totalTokens": 17741879,
+        "cacheReadTokens": 16447232
+      },
+      "stages": [
+        {
+          "task": "subjects/02-steam-engine/TASK.md",
+          "exitCode": 0,
+          "turns": 2,
+          "tools": 124
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "auto": 18,
+    "total": 19
+  },
+  "gates": [
+    {
+      "id": "g-grader-access",
+      "ok": true,
+      "detail": "扫过 父会话 124 次，零触达"
+    },
+    {
+      "id": "g-motion-clean",
+      "ok": true,
+      "detail": "r021: status=pass · 干涉=0 · 关节违反=0"
+    },
+    {
+      "id": "g-negative-rod-fires",
+      "ok": true,
+      "detail": "r005 报出干涉"
+    },
+    {
+      "id": "g-negative-printability-fires",
+      "ok": true,
+      "detail": "12 次检查，verdict=check；其中\"verdict∈{check,unprintable} 且 thinSamples>0\"的 1 次（例：thinSamples=42, minWallMm=0.799）"
+    },
+    {
+      "id": "g-motion-clearance-contract",
+      "ok": true,
+      "detail": "check=motion-clearance 6 条；引用 runId 6 个，其中指向 pass 的运动仿真 6 个"
+    },
+    {
+      "id": "g-import-not-generate",
+      "ok": true,
+      "detail": "v001 为 imported（/home/songsenand/bench-runs/02-steam-engine-glm53-high/assets/608.stl）"
+    },
+    {
+      "id": "g-import-dimensions-sane",
+      "ok": true,
+      "detail": "expect: ≈[22,22,7] ±0.5 —— v001: 22×22×7mm ✓"
+    },
+    {
+      "id": "g-merge-shells-one",
+      "ok": false,
+      "detail": "最后一次合并 shells=9（历次：5, 13, 1, 9）；expect: shells === 1"
+    },
+    {
+      "id": "g-no-false-coupling",
+      "ok": true,
+      "detail": "fluidStructureCoupling=\"none\"，理由 183 字"
+    },
+    {
+      "id": "g-hard-zero",
+      "ok": true,
+      "detail": "最终态 r024: hardViolations=0, overallStatus=pass"
+    }
+  ],
+  "checks": [
+    {
+      "id": "c-stroke",
+      "weight": 3,
+      "inSkill": false,
+      "ok": true,
+      "detail": "运动仿真实测最大行程 40mm（expect: 40）；motion.json 声明 40"
+    },
+    {
+      "id": "c-joint-drift",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "r021: maxJointDriftMm=0.0001（rubric expect ≤ 0.5）"
+    },
+    {
+      "id": "c-fluid-arrival",
+      "weight": 2,
+      "inSkill": false,
+      "ok": false,
+      "detail": "r018: outletArrivalRatio=0.1269（>0.6）· penetrationCount=0（==0）"
+    },
+    {
+      "id": "c-topple-answered",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "toppleAt5deg=no · toppleAt10deg=no"
+    },
+    {
+      "id": "c-counterweight",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "counterweightNeeded=no · 临界倾角=56.7° · 配重=0g"
+    },
+    {
+      "id": "c-crosshead-hold",
+      "weight": 3,
+      "inSkill": true,
+      "ok": true,
+      "detail": "crossheadHold=holds"
+    },
+    {
+      "id": "c-coaxial-used",
+      "weight": 2,
+      "inSkill": true,
+      "ok": true,
+      "detail": "契约里 check=coaxial 的接口 7 条"
+    },
+    {
+      "id": "c-interface-count",
+      "weight": 2,
+      "inSkill": false,
+      "ok": true,
+      "detail": "interfaces=24（注：x/y 双向覆盖未单独校验）"
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-version-recall",
+      "ask": "第 2 版活塞的外径是多少？",
+      "ok": "unknown",
+      "detail": "本轮没问这条探针（runner 未跑探针轮，或用了 --no-probes）"
+    }
+  ],
+  "humanColumns": [
+    "E",
+    "H",
+    "R"
+  ],
+  "coverageGaps": [
+    "1 条判据未自动判定：p-version-recall"
+  ]
+}

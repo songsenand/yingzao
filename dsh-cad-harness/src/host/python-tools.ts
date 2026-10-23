@@ -16,6 +16,7 @@ import { basename, isAbsolute, resolve } from 'node:path';
 import { projectStoresFor } from './project.ts';
 import {
   ensurePythonRuntime,
+  installIntoPythonOverlay,
   pythonRuntimeStatus,
   recordRuntimeFailure,
   repairPythonRuntime,
@@ -39,7 +40,13 @@ interface RunPythonArgs {
 }
 
 interface RuntimeToolArgs {
-  action?: 'status' | 'provision' | 'repair';
+  action?: 'status' | 'provision' | 'repair' | 'install';
+  /** action=install: package specs, e.g. ["six==1.17.0", "svgpathtools"]. */
+  packages?: string[];
+  /** action=install: explicitly REPLACE a locked package (requires `reason`). */
+  override?: boolean;
+  /** action=install + override: why the locked version cannot be used (recorded). */
+  reason?: string;
 }
 
 interface RunPythonValue {
@@ -91,6 +98,16 @@ function statusFields(status: PythonRuntimeStatus) {
     occupied: humanBytes(status.occupiedBytes),
     skipped: status.skipped.map((entry) => `${entry.name}==${entry.version} (${entry.reason})`),
     missingPackages: status.missingPackages,
+    // The user's own packages: always present as a field (an empty list is a
+    // fact, not an omission), so a run can record "the overlay was empty".
+    overlay: {
+      dir: status.overlay.dir,
+      overrideDir: status.overlay.overrideDir,
+      packages: status.overlay.packages.map((p) => `${p.name}==${p.version}`),
+      overrides: status.overlay.overrides.map((p) => `${p.name}==${p.version}`),
+      digest: status.overlay.digest,
+      bytes: status.overlay.bytes,
+    },
   };
 }
 
@@ -148,6 +165,23 @@ function renderRuntimeStatus(status: PythonRuntimeStatus): string {
   if (status.venvPython) lines.push(`venv python: ${status.venvPython}`);
   if (status.installedAt) lines.push(`installed: ${status.installedAt}`);
   lines.push(`disk: ${humanBytes(status.occupiedBytes)}`);
+  // The user's own packages: reported like everything else, never hidden and
+  // never treated as a fault. Empty is the normal state.
+  const add = status.overlay.packages.filter((p) => !p.override);
+  const forced = status.overlay.overrides;
+  lines.push(add.length === 0
+    ? `user overlay: empty (${status.overlay.dir}) — python_runtime action=install adds packages here`
+    : `user overlay: ${add.length} added package(s) in ${status.overlay.dir} — ` +
+      `${add.map((p) => `${p.name}==${p.version}`).join(', ')} ` +
+      `(digest ${status.overlay.digest.slice(0, 12)}); the locked venv wins on duplicates`);
+  if (forced.length > 0) {
+    // Explicit overrides are a fact with consequences: say it, don't bury it.
+    lines.push(
+      `overrides (explicit, replacing locked packages): ${forced.map((p) => `${p.name}==${p.version}`).join(', ')} ` +
+      `in ${status.overlay.overrideDir} — runs record them in pythonOverlay.overrides; ` +
+      'if a tool now fails on import, this is the first thing to suspect',
+    );
+  }
   const skip = skipSummary(status);
   if (skip) lines.push(skip);
   if (status.phase) lines.push(`phase: ${status.phase}`);
@@ -176,6 +210,8 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
       'Run Python in the plugin\'s own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host\'s system interpreter. ' +
       'Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). ' +
       'Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. ' +
+      'It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user\'s own machine, not an exception — ' +
+      'the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. ' +
       'The process runs with your user\'s full filesystem access (no sandbox), in the project directory, and is killed at the timeout. ' +
       'On failure the complete Python traceback comes back. ' +
       'The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.',
@@ -288,15 +324,33 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
   register(defineTool({
     name: 'python_runtime',
     description:
-      'Status and repair for the plugin\'s bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). ' +
-      'action "status" (default) reports where it is, whether it is usable, its size and the last error; ' +
-      '"provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment. ' +
-      'Use it when run_python reports a runtime problem, or to warm the runtime before a long batch of Python work.',
+      'Status, repair and EXTENSION for the plugin\'s bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). ' +
+      'action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; ' +
+      '"provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; ' +
+      '"install" adds packages to the user overlay — the runtime is the user\'s machine, so installing is a normal act, not a favour: ' +
+      'the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). ' +
+      'DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). ' +
+      'EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; ' +
+      'agree it with the human first and expect runs to carry it in pythonOverlay.overrides. ' +
+      'Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.',
     parameters: {
       action: {
         type: 'string',
-        description: 'status (default) | provision | repair',
-        enum: ['status', 'provision', 'repair'],
+        description: 'status (default) | provision | repair | install',
+        enum: ['status', 'provision', 'repair', 'install'],
+      },
+      packages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'action=install only: package specs for pip, e.g. ["six==1.17.0", "svgpathtools"]. They go into the user overlay (not the locked venv), so a runtime update cannot erase them.',
+      },
+      override: {
+        type: 'boolean',
+        description: 'action=install only: explicitly REPLACE a package the lock pins. Default false = the copy is additive and the locked version keeps precedence. Requires reason.',
+      },
+      reason: {
+        type: 'string',
+        description: 'action=install + override: why the locked version cannot be used. Recorded with the install and carried into run provenance — this is the declaration, not ceremony.',
       },
     },
     output: {
@@ -328,6 +382,31 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
             items: { type: 'string' },
             description: 'Locked packages the venv cannot actually import. NON-EMPTY MEANS THE RUNTIME IS BROKEN even though its marker matches — tools needing those packages degrade; action=repair rebuilds.',
           },
+          overlay: {
+            type: 'object',
+            required: true,
+            additionalProperties: false,
+            properties: {
+              dir: { type: 'string', required: true, description: 'The additive dir (appended; locked wins on duplicates).' },
+              overrideDir: { type: 'string', required: true, description: 'The explicit-override dir (front of sys.path).' },
+              packages: { type: 'array', items: { type: 'string' }, required: true, description: 'name==version in the user overlay; empty means none.' },
+              overrides: { type: 'array', items: { type: 'string' }, required: true, description: 'name==version installed with an explicit override — these REPLACE the locked copies.' },
+              digest: { type: 'string', required: true, description: 'sha256 over the sorted package list (an override is marked !); \'\' when empty. Recorded in run provenance.' },
+              bytes: { type: 'integer', required: true },
+            },
+          },
+          installed: {
+            type: 'array', items: { type: 'string' },
+            description: 'action=install: every package in the overlay after the install.',
+          },
+          overrides: {
+            type: 'array', items: { type: 'string' },
+            description: 'action=install: packages installed with an explicit override (they replace the locked copies).',
+          },
+          shadowed: {
+            type: 'array', items: { type: 'string' },
+            description: 'action=install: overlay packages the locked venv also provides — the LOCKED version wins (adding is not overriding).',
+          },
           provisionLog: { type: 'array', items: { type: 'string' } },
           summary: { type: 'string', required: true, description: 'Human-readable rendering of the same facts.' },
         },
@@ -346,6 +425,48 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
       if (action === 'status') {
         const status = await pythonRuntimeStatus();
         return { action, ...statusFields(status), summary: renderRuntimeStatus(status) };
+      }
+
+      if (action === 'install') {
+        const wanted = ((args ?? {}) as RuntimeToolArgs).packages ?? [];
+        try {
+          const parsed = (args ?? {}) as RuntimeToolArgs;
+          const result = await installIntoPythonOverlay(wanted, {
+            onProgress,
+            override: parsed.override === true,
+            reason: parsed.reason,
+          });
+          const status = await pythonRuntimeStatus();
+          const summary = [
+            `installed into the user overlay ${result.dir}`,
+            `overlay now: ${result.packages.map((p) => `${p.name}==${p.version}`).join(', ') || '(empty)'}`,
+            ...(result.overrides.length
+              ? [`OVERRIDE active: ${result.overrides.map((p) => `${p.name}==${p.version}`).join(', ')} REPLACE the locked copies (front of sys.path); recorded in run provenance`]
+              : []),
+            ...(result.shadowed.length
+              ? [`note: the lock also provides ${result.shadowed.map((p) => p.name).join(', ')} — the LOCKED version wins (add override:true + reason to replace it)`]
+              : []),
+            `visible to the worker and to run_python; recorded in run provenance (digest ${status.overlay.digest.slice(0, 12) || '—'})`,
+          ].join('\n');
+          return {
+            action,
+            ...statusFields(status),
+            installed: result.packages.map((p) => `${p.name}==${p.version}`),
+            overrides: result.overrides.map((p) => `${p.name}==${p.version}`),
+            shadowed: result.shadowed.map((p) => `${p.name}==${p.version}`),
+            provisionLog: progress.slice(-10),
+            summary,
+          };
+        } catch (error) {
+          const message = String((error as Error)?.message ?? error);
+          const status = await pythonRuntimeStatus();
+          return {
+            action,
+            ...statusFields(status),
+            provisionLog: progress.slice(-10),
+            summary: `install into the user overlay FAILED: ${message}`,
+          };
+        }
       }
 
       try {

@@ -22,7 +22,10 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { PYTHON_LOCK_PROTOCOL } from './python-lock.ts';
-import { ensurePythonRuntime, pythonRuntimeRoot, pythonRuntimeStatus, runProcess, type PythonRuntimePaths } from './python-runtime.ts';
+import {
+  ensurePythonRuntime, pythonLaunchArgs, pythonRuntimeRoot, pythonRuntimeStatus, runProcess,
+  type PythonRuntimePaths,
+} from './python-runtime.ts';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
@@ -154,7 +157,9 @@ export async function runPython(request: RunPythonRequest, onProgress?: (message
   const started = Date.now();
   const result = await runProcess(
     runtime.venvPython,
-    ['-I', scriptPath, ...(request.args ?? [])],
+    // -I + the user overlay attached explicitly (see pythonLaunchArgs): the
+    // interpreter's view stays exactly the venv we built plus what we can record.
+    pythonLaunchArgs(scriptPath, request.args ?? []),
     { cwd, env: childEnv(request.env), timeoutMs },
   );
 
@@ -402,7 +407,7 @@ export async function ensurePythonWorker(options: PythonWorkerOptions = {}): Pro
     );
   }
   const runtime = await ensurePythonRuntime({ onProgress: options.onLog });
-  const child = spawn(runtime.venvPython, ['-I', resolveWorkerScript()], {
+  const child = spawn(runtime.venvPython, pythonLaunchArgs(resolveWorkerScript()), {
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   });

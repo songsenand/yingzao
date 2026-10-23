@@ -77,18 +77,20 @@ returns: `partId`, `name`, `created`
 
 ## `delivery_audit`
 
-Audit the corpus before delivering: failing runs that are still the newest of their kind, parts whose newest version no run ever checked, runs citing superseded geometry (stale evidence), contract gaps (e.g. no motion-clearance interface while the assembly has several parts), contract nodes pointing at replaced versions, and repeated runs that add no information. Run this BEFORE any delivery claim; a blocked verdict means the corpus itself contradicts the claim.
+Audit the corpus before delivering: failing runs that are still the newest of their kind, parts whose newest version no run ever checked, runs citing superseded geometry (stale evidence), contract gaps (e.g. no motion-clearance interface while the assembly has several parts), contract nodes pointing at replaced versions, repeated runs that add no information, and mesh files on disk that NO version accounts for (a part written straight to a file never reaches the panel or any tool — a human cannot see it). Run this BEFORE any delivery claim; a blocked verdict means the corpus itself contradicts the claim.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `manifestPath` | string | — | Assembly manifest to audit against. Defaults to assembly/assembly.json in the session workspace. |
 | `claims` | array | — | Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength \| motion \| assembly \| manufacturability \| appearance \| review. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent. |
+| `scanPaths` | array | — | Workspace-relative roots scanned for mesh files no version accounts for. Default ["."] (whole workspace, skipping the corpus, nested projects and common build dirs); pass [] to disable. A found file NEWER than the newest version is blocked — register it with import_part or declare it exempt. |
+| `exempt` | array | — | Declared exceptions for files intentionally left as files (e.g. bought/reference geometry): {path, reason}. Reported as info, never blocked, and the reason is echoed. Use it instead of narrowing scanPaths when the file is a legitimate non-version. |
 
 ```js
 delivery_audit({ manifestPath: "…" })
 ```
 
-returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`
+returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `unregistered`
 
 
 ## `generate_part`
@@ -101,7 +103,7 @@ Compile OpenSCAD into a new part version; renders top/front/side/iso (all four a
 | `userIntent` | string | **required** | One-line summary of what the part should look like, used in the version history. |
 | `parentVersion` | string | — | Version id this iteration derives from, e.g. "v003". Must belong to the same part. |
 | `part` | string | — | Which part this version belongs to — the name the user would call it, e.g. "调焦轴". ALWAYS pass this when iterating: it is what groups versions into one part in the panel. Omit only for a brand-new part with no parentVersion (a name is then derived from userIntent), or to inherit the parentVersion's part. |
-| `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"] and keep the budget for the pictures that matter. |
+| `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded. |
 
 ```js
 generate_part({ scadCode: "…", userIntent: "…" })
@@ -112,7 +114,7 @@ returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `s
 
 ## `import_part`
 
-Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation; file units are honored and the result lands in mm) or DXF (closed 2D profiles extruded by depthMm, or 3D mesh entities) as a new version of a part, so it can be measured, assembled and simulated like any generated part. Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. IGES is not readable — re-export STEP or STL instead.
+Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation) or 3MF (trimesh; a 3MF must contain ONE object — a plate of objects is refused, not stored as a multi-body part) or DXF (closed 2D profiles extruded by depthMm, or 3D mesh entities) as a new version of a part, so it can be measured, assembled and simulated like any generated part. STEP and 3MF carry their own units, honored and folded to mm; STL and DXF take the declared `unit`. This is the DEFAULT landing path for geometry produced outside generate_part: a file written straight to disk is invisible to the panel and to every tool, so anything the human must see or a check must address has to become a version. Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. IGES is not readable — re-export STEP or STL instead.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -292,6 +294,8 @@ Run the mandatory delivery sequence in one call: printability for every part (ne
 |---|---|---|---|
 | `claims` | array | — | Delivery claims to back with evidence: {kind, statement}. kind = strength \| motion \| assembly \| manufacturability \| appearance \| review. |
 | `profileIds` | array | — | Declared process profiles to screen against (same meaning as in check_printability). |
+| `scanPaths` | array | — | Workspace-relative roots for the unregistered-geometry scan (same meaning as in delivery_audit). Default ["."]; [] disables it. |
+| `exempt` | array | — | Declared exceptions for files intentionally left as files: {path, reason} (same meaning as in delivery_audit). |
 
 ```js
 preflight({ claims: [] })
@@ -302,17 +306,20 @@ returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summ
 
 ## `python_runtime`
 
-Status and repair for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size and the last error; "provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment. Use it when run_python reports a runtime problem, or to warm the runtime before a long batch of Python work.
+Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; "provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; "install" adds packages to the user overlay — the runtime is the user's machine, so installing is a normal act, not a favour: the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; agree it with the human first and expect runs to carry it in pythonOverlay.overrides. Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `action` | string (status \| provision \| repair) | — | status (default) \| provision \| repair |
+| `action` | string (status \| provision \| repair \| install) | — | status (default) \| provision \| repair \| install |
+| `packages` | array | — | action=install only: package specs for pip, e.g. ["six==1.17.0", "svgpathtools"]. They go into the user overlay (not the locked venv), so a runtime update cannot erase them. |
+| `override` | boolean | — | action=install only: explicitly REPLACE a package the lock pins. Default false = the copy is additive and the locked version keeps precedence. Requires reason. |
+| `reason` | string | — | action=install + override: why the locked version cannot be used. Recorded with the install and carried into run provenance — this is the declaration, not ceremony. |
 
 ```js
 python_runtime({ action: "status" })
 ```
 
-returns: `action`, `state`, `root`, `target`, `pythonVersion`, `mode`, `source`, `interpreter`, `venvPython`, `installedAt`, `phase`, `error`, `occupiedBytes`, `occupied`, `skipped`, `missingPackages`, `provisionLog`, `summary`
+returns: `action`, `state`, `root`, `target`, `pythonVersion`, `mode`, `source`, `interpreter`, `venvPython`, `installedAt`, `phase`, `error`, `occupiedBytes`, `occupied`, `skipped`, `missingPackages`, `overlay`, `installed`, `overrides`, `shadowed`, `provisionLog`, `summary`
 
 
 ## `recall_reference_image`
@@ -354,7 +361,7 @@ returns: `versionId`, `label`, `file`
 
 ## `run_python`
 
-Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.
+Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user's own machine, not an exception — the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.
 
 | parameter | type | default | meaning |
 |---|---|---|---|

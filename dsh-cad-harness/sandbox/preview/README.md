@@ -39,7 +39,8 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | param | meaning |
 |---|---|
 | `w` / `h` | dock width / viewport height (defaults 380×900) |
-| `subject` | drive the 零件 select: a part id (`p010`) or `__scene__` for the cross-part bucket |
+| `kind` | drive the 种类 select: `part` / `assembly` / `sim` / `contract` / `unregistered` |
+| `subject` | drive the second select: a part id (`p010`), `__scene__` for the cross-part bucket, or — in the `unregistered` kind — a file path (`out/disk-45.stl`) |
 | `record` | drive the 记录 select to a version or run id (`v021`, `r003`) — picks it for real, so the panel pins (跟随 → 已钉住) exactly as a click would |
 | `open` | click something after mount — a tab (`参数`, `用法`), a toolbar chip (`剖切`, `壁厚`, `测量`, `截图`) or `⤢`/`⤡`. **Comma-separated for a sequence**: `open=参数,⤢` selects the tab then expands it into the overlay |
 | `wheel` | wheel-delta to push through OrbitControls (e.g. `-1400` zooms in) — lets a screenshot prove the scale bar re-ranges |
@@ -49,7 +50,11 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `fakerenderer=1` | stand a 2D canvas in as `mount.__renderer`, so the **capture plumbing** (📸截图 → tray → badge → hint) can be reviewed without WebGL. It draws an obvious placeholder — **those pixels are not 3D** and must never be presented as a model render |
 | `bg` | pre-seed the viewport ground preset (`paper` / `warm` / `graphite` / `midnight`) into the same localStorage key the panel reads, so a capture can show any of them without clicking |
 | `overlay=1` | mount **only** the real `ViewportOverlay` against a synthetic camera (a no-WebGL sandbox cannot build a scene), then measure the merged corner plate and assert every axis letter stays inside it (`overlay-corners.png`) |
-| `assert=layout` | run the layout-stability assertion: click 测量 → 壁厚 → 剖切 → 参数 → 截图 and compare **every** region's and every chip's `w/h/y` against the baseline, printing PASS/FAIL into the screenshot. Absolute-positioned overlays are excluded (they take no space) |
+| `assert=layout` | run the layout-stability assertion: click 测量 → 壁厚 → 剖切 → 参数 → 截图 and compare **every** region's and every chip's `w/h/y` against the baseline, printing PASS/FAIL into the screenshot. Absolute- AND fixed-positioned overlays are excluded (they take no space) |
+| `project` | stand a session cwd in front of the panel (`session.list` + binding + retention), so project-scoped UI (the local-STL import target) renders its normal state instead of the "未识别" guard |
+| `localstl` | go 未登记 → 📂 按路径导入… → 预览, then feed a real STL from the mock corpus (`?localstl=v021`) through the file input, so the preview's geometry path — not just its empty state — is what gets captured |
+| `assert=local-import` | go 未登记 → 📂 按路径导入… → fill path/part → submit against the mock POST; asserts the request (project, path, unit, part, `render:false`) and that the dialog closed. Note `slow=8000`: the report lands after ~3.7 s |
+| `assert=layout` | as before; the debug probe now steps aside for it (both clear `#stage`, and the probe used to wipe the report mid-run) |
 
 `CAD_SANDBOX_DATA=<dir>` makes the server read a **throwaway copy** of the store
 (copy `manifest.json`, `parts/manifest.json`, `runs/manifest.json`, add whatever
@@ -104,6 +109,8 @@ hand-written fixtures, and the legacy "latest run" routes are deliberately
 | `band-scene.png` | ⚙ 跨零件场景 → `⚠️ 待复核 · r005 · 流体仿真 … 内联 SCAD` |
 | `band-empty.png` | a 0-version part (`CAD_SANDBOX_DATA` copy): the band states "该零件还没有记录" and shows **no verdict slot** |
 | `band-open-run-560.png` | run report expanded at 560px: details scroll, viewport still 355×353 (never shrinks below square) |
+| `local-stl-model.png` | 本地 STL preview with a **real corpus STL** (`?localstl=v021`): mesh + face count + bbox, labelled 未登记 — preview only, no version is created |
+| `local-stl-import2.png` | the import tab: the write target names the SESSION corpus (`?project=…`), unit defaults to mm |
 | `probe-base-380x{560,900,1200}.png` | the *old* square layout with the per-child probe: stage 355 tall at every height, details 411 / 711px |
 
 ## Sections: strip + overlay (`tabs-*.png`)
