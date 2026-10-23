@@ -32,6 +32,16 @@ check(/^```js\n[a-z_]+\(\{/m.test(sheet), 'and every section carries a runnable 
 
 const lint = run('audit-arg-errors.mjs');
 check(lint.status === 0, 'every argument error names the offending field', (lint.stdout ?? '').trim().split('\n').pop());
+// A lint that scans NOTHING passes vacuously (it did: after the argError() refactor it
+// matched `throw new Error(` only, and reported "checked 0"). Requiring a non-zero count
+// is what makes the green meaningful.
+const checkedCount = Number(/checked (\d+) negative argument guard/.exec(lint.stdout ?? '')?.[1] ?? 0);
+check(checkedCount > 0, 'the argument-error lint actually looked at something', `${checkedCount} guard(s)`);
+
+// The output contract: every tool's VALUE must satisfy the schema it declares. This is the
+// gap that let four tools ship broken (2026-10-23 audit, FIX-A1/A3).
+const out = run('accept-tool-output.mjs');
+check(out.status === 0, "every tool's value satisfies its declared output schema", (out.stdout ?? '').trim().split('\n').pop());
 
 // The argument-error shape itself: it must always say what is ACCEPTED, and show a call
 // when one is given. (The migration of the remaining throw sites is tracked separately.)

@@ -39,8 +39,10 @@
     "schemas/"
   ],
   "scripts": {
-    "build": "node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch"
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "accept": "node scripts/accept-tool-contracts.mjs && node scripts/accept-tool-output.mjs"
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",

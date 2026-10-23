@@ -74,17 +74,25 @@ check(
 );
 const requirementLines = REQUIREMENTS_LOCK.split('\n').filter((line) => line && !line.startsWith('#') && !line.startsWith(' '));
 const pinned = requirementLines.filter((line) => /^[a-z0-9_.-]+==[0-9]/.test(line));
-// The pinned set is asserted BY NAME, not by count. A count cannot tell a forgotten pin
-// from a new dependency, and it goes stale the moment one is added — which it did:
-// `shapely` arrived with the polygonisation work and this line still said "eight".
+// The pinned set is asserted BY NAME, and the list must match EXACTLY (2026-10-23 audit,
+// FIX-A5). A count cannot tell a forgotten pin from a new dependency — it went stale once
+// when `shapely` arrived — and a subset check cannot see an ADDED dependency either. The
+// list below is therefore the whole lock, in alphabetical order: adding a package to the
+// lock without adding its name here is a deliberate act, and the check says so by name.
 const EXPECTED_PINNED = [
-  'numpy', 'scipy', 'trimesh', 'manifold3d', 'networkx', 'scikit-fem', 'rtree', 'rapier3d', 'shapely',
+  'cascadio', 'ezdxf', 'fonttools', 'jax', 'jaxlib', 'llvmlite', 'lxml', 'manifold3d',
+  'ml_dtypes', 'networkx', 'numba', 'numpy', 'opt_einsum', 'pyparsing', 'rapier3d',
+  'rtree', 'scikit-fem', 'scipy', 'shapely', 'trimesh', 'typing_extensions', 'warp-lang', 'xlb',
 ];
-const pinnedNames = pinned.map((line) => line.split('==')[0]);
+const pinnedNames = pinned.map((line) => line.split('==')[0]).sort();
+const missingPins = EXPECTED_PINNED.filter((name) => !pinnedNames.includes(name));
+const unexpectedPins = pinnedNames.filter((name) => !EXPECTED_PINNED.includes(name));
 check(
-  pinnedNames.length === EXPECTED_PINNED.length && EXPECTED_PINNED.every((name) => pinnedNames.includes(name)),
-  `every expected dependency is pinned with == (${EXPECTED_PINNED.length})`,
-  `pinned: ${pinnedNames.join(', ')}`,
+  missingPins.length === 0 && unexpectedPins.length === 0,
+  `the lock pins exactly the ${EXPECTED_PINNED.length} expected dependencies`,
+  missingPins.length || unexpectedPins.length
+    ? `missing: ${missingPins.join(', ') || '—'} · unexpected: ${unexpectedPins.join(', ') || '—'}`
+    : pinnedNames.join(', '),
 );
 check(
   REQUIREMENTS_LOCK.includes('# cad-exclude: darwin-x64 |') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
@@ -96,15 +104,27 @@ check(
   lockForTarget('darwin-x64').includes('numpy==2.5.3') && lockForTarget('darwin-x64').includes('--hash=sha256:'),
   'dropping one block keeps the rest of the lock intact',
 );
-// The skip must be CONFIRMED, not silent: the platform decision (physics stays
-// on the TS engine there) has to reach the model, not just the pip log.
+// The skip must be CONFIRMED, not silent: every platform decision has to reach the model,
+// not just the pip log. darwin-x64 has no wheel for the whole compute stack (rapier → physics
+// stays TS; numba/xlb/warp/jax → MPM falls back to numpy and LBM is unavailable), so the
+// expectation is the NAMED SET, not "exactly one" (that was true in 2026-10-08, before the
+// LBM and numba lanes landed). Each entry must also carry a reason.
+const EXPECTED_DARWIN_SKIPS = ['jax', 'jaxlib', 'llvmlite', 'numba', 'rapier3d', 'warp-lang', 'xlb'];
 const darwinPlan = lockPlanForTarget('darwin-x64');
+const darwinSkips = darwinPlan.skipped.map((entry) => entry.name).sort();
 check(
-  darwinPlan.skipped.length === 1 &&
-    darwinPlan.skipped[0].name === 'rapier3d' &&
-    /TS .*rapier3d-compat|TS rapier3d-compat/.test(darwinPlan.skipped[0].reason),
-  'the darwin-x64 plan reports rapier3d as skipped, with the TS-canonical reason',
+  darwinSkips.join(',') === EXPECTED_DARWIN_SKIPS.join(','),
+  'the darwin-x64 plan skips exactly the packages without a wheel there',
+  darwinSkips.join(', ') || '(none)',
+);
+check(
+  darwinPlan.skipped.every((entry) => typeof entry.reason === 'string' && entry.reason.trim().length > 0),
+  'every skipped package carries a reason (it must look designed, not broken)',
   darwinPlan.skipped.map((entry) => `${entry.name}: ${entry.reason}`).join(' | '),
+);
+check(
+  /TS .*rapier3d-compat|TS rapier3d-compat/.test(darwinPlan.skipped.find((entry) => entry.name === 'rapier3d')?.reason ?? ''),
+  'the rapier3d skip names the TS canonical (that is the decision it implements)',
 );
 check(lockPlanForTarget('linux-x64-gnu').skipped.length === 0, 'a supported target skips nothing');
 check(

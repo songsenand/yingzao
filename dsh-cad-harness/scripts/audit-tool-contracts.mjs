@@ -84,9 +84,10 @@ function exampleCall(t) {
   return `${t.name}({ ${args} })`;
 }
 
-if (process.argv.includes('--write')) {
+/** The sheet's full text — ONE builder, used by both --write and --check. */
+function sheetText() {
   const lines = ['# Tool contracts (generated — do not edit by hand)', '', '> `node scripts/audit-tool-contracts.mjs --write`', ''];
-  for (const t of tools.sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const t of tools.slice().sort((a, b) => a.name.localeCompare(b.name))) {
     lines.push(`## \`${t.name}\``, '', String(t.description ?? '').trim(), '', '| parameter | type | default | meaning |', '|---|---|---|---|');
     const ps2 = t.parameters?.properties ? t.parameters : { properties: t.parameters ?? {}, required: [] };
     const req2 = new Set(ps2.required ?? []);
@@ -98,14 +99,16 @@ if (process.argv.includes('--write')) {
     }
     if (t.output?.schema?.properties) {
       lines.push('', '```js', exampleCall(t), '```', '');
-    if (t.output?.schema?.properties) {
       lines.push('returns: ' + Object.keys(t.output.schema.properties).map((k) => `\`${k}\``).join(', '), '');
-    }
     }
     lines.push('');
   }
+  return lines.join('\n');
+}
+
+if (process.argv.includes('--write')) {
   await mkdir(join(ROOT, 'docs'), { recursive: true });
-  await writeFile(join(ROOT, 'docs', 'TOOL-CONTRACTS.md'), lines.join('\n'));
+  await writeFile(join(ROOT, 'docs', 'TOOL-CONTRACTS.md'), sheetText());
   console.log('\nwrote docs/TOOL-CONTRACTS.md');
 }
 
@@ -114,9 +117,22 @@ if (process.argv.includes('--check')) {
   let current = '';
   try { current = await readFile(path, 'utf8'); } catch { current = ''; }
   if (!current) { console.log('\nFAIL  docs/TOOL-CONTRACTS.md is missing — run with --write'); process.exit(1); }
-  const missing = tools.filter((t) => !current.includes('## `' + t.name + '`'));
-  console.log(missing.length === 0
-    ? `\nOK  the contract sheet documents all ${tools.length} tools`
-    : `\nFAIL  contract sheet misses: ${missing.map((t) => t.name).join(', ')}`);
-  process.exit(missing.length === 0 ? 0 : 1);
+  // Compare the WHOLE text, not just the headings (2026-10-23 audit, FIX-A6). The old
+  // check only asked "does every tool have a `## \`name\`` heading", so a sheet could
+  // describe yesterday's parameters and return list and still pass — which is exactly what
+  // happened: the preflight row was missing `coverage` and `timings` after they were added.
+  const generated = sheetText();
+  if (generated === current) {
+    console.log(`\nOK  the contract sheet matches the live schemas (${tools.length} tools)`);
+    process.exit(0);
+  }
+  const g = generated.split('\n');
+  const c = current.split('\n');
+  let i = 0;
+  while (i < g.length && i < c.length && g[i] === c[i]) i++;
+  console.log(`\nFAIL  the contract sheet is STALE at line ${i + 1}`);
+  console.log(`  sheet:     ${String(c[i] ?? '(end of file)').slice(0, 120)}`);
+  console.log(`  generated: ${String(g[i] ?? '(end of file)').slice(0, 120)}`);
+  console.log('  fix: node scripts/audit-tool-contracts.mjs --write');
+  process.exit(1);
 }

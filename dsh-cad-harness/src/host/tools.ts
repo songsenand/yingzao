@@ -35,6 +35,7 @@ import { asJudgement } from '../shared/judgement.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
+import { withOutputContract } from './tool-contract.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { randomUUID } from 'node:crypto';
@@ -413,10 +414,19 @@ export function registerCadTools(
   scope?: { toolScope?: string; presets?: readonly string[] },
 ): readonly string[] {
   const registered: string[] = [];
-  const registerTool = (definition: { name: string }) => {
+  /**
+   * Register one tool, and self-check its OUTPUT against the schema it declares.
+   *
+   * WHY: the harness validates a tool's value at the runtime boundary
+   * (`ToolRuntime.createSuccessResult`), but every `scripts/accept-*.mjs` calls
+   * `def.execute()` directly — below that boundary. Four tools shipped with a schema that
+   * disagreed with their own body while every acceptance stayed green (2026-10-23 audit,
+   * FIX-A1). The guard lives in `tool-contract.ts` so it can be tested on its own.
+   */
+  const registerTool = (definition: { name: string; execute?: unknown; output?: { schema?: unknown } }) => {
     registered.push(definition.name);
     registeredCadTools.push(definition.name);
-    return ctx.tools.register(definition as never);
+    return ctx.tools.register(withOutputContract(definition) as never);
   };
 
   // Stores are resolved PER CALL, never captured here: the plugin is applied
@@ -1783,8 +1793,29 @@ export function registerCadTools(
       });
 
       assemblyRefsForFinalize = { refs, views: pngs.length, runId: run.id, thresholdMm: report.thresholdMm };
+      // The canonical judgement (src/shared/judgement.ts). L0 geometry has no noise band:
+      // a witness either contradicts the declared clearance (interference, or a measured
+      // gap below `clearanceThreshold`) or nothing was found. So the honest mapping is
+      // two-valued, and `difficult` is deliberately never emitted here — the margin lives
+      // in `pairs[].minDistance` vs `clearanceThresholdMm`, both of which travel with it.
+      const nonWatertight = report.parts.filter((p) => !p.watertight).map((p) => p.name);
+      const interference = report.pairs.filter((p) => p.status === 'interference');
+      const tooTight = report.pairs.filter((p) => p.status === 'too_tight');
+      const judgement = nonWatertight.length > 0 || interference.length > 0 || tooTight.length > 0
+        ? 'excluded'
+        : 'not-excluded';
       return {
         overallStatus: report.overallStatus,
+        judgement,
+        judgedBy: {
+          parts: report.parts.length,
+          pairs: report.pairs.length,
+          nonWatertight,
+          interference: interference.length,
+          tooTight: tooTight.length,
+          clearanceThresholdMm: report.thresholdMm,
+          interferenceEpsilonMm3: report.interferenceEpsilonMm3,
+        },
         parts: report.parts.map((p) => ({ name: p.name, watertight: p.watertight, volume: p.volume })),
         pairs: report.pairs,
       };
@@ -3580,6 +3611,443 @@ export function registerCadTools(
   //  3. 射线引擎整个不可用时（venv 缺 rtree），每根射线的异常都被吞掉，工具对
   //     任何零件都给"干净"结论。现在 wallMeasured=false 会显式报出来，且
   //     **未测到壁厚时永不返回 ok**。
+  /**
+   * The profile-aware manufacturing screen, as ONE job (DESIGN §25.7).
+   *
+   * WHY a job and not just a tool body: `preflight` must run the SAME screening as
+   * `check_printability` — same profiles, same witnesses, same run record. The first cut
+   * called the low-level engine directly, which does not even accept a profile: a caller
+   * who declared `profileIds` got a verdict about the uncalibrated fallback, and the
+   * printability run it created was missing, so the green could not back a claim
+   * (2026-10-23 audit, FIX-B8). Extracting the body is what makes "same job" true.
+   */
+  async function screenVersionJob(
+    a: {
+      versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
+      profileIds?: string[]; profilesJson?: string; mode?: string;
+    },
+    project: ProjectStores,
+  ) {
+    const store = project.store;
+    const runStore = project.runStore;
+    const resolved = await resolveProcessProfiles(a);
+    if (resolved.errors.length > 0) {
+      throw new Error(`invalid process profile:\n  - ${resolved.errors.join('\n  - ')}`);
+    }
+    // The shape the output schema declares. `excluded` carries witnesses; the other
+    // value is `not-excluded` — never "ok", because "no counter-example found" is not
+    // a statement that the part can be made.
+    type ProfileEvaluation = {
+      profileId: string;
+      profileHash: string;
+      verdict: 'excluded' | 'not-excluded';
+      witnesses: { rule: string; measured: number; required: number; unit: string; locationMm?: number[] }[];
+      notApplicable: string[];
+      unevaluable: string[];
+    };
+    // Sealed cavities are needed only if some profile governs escape passages.
+    // Fetched once, not per profile: the mesh does not change between profiles.
+    const needsEscape = resolved.profiles.some((profile) =>
+      profile.rules.escapePassageMinMm?.applies === true &&
+      profile.rules.escapePassageMinMm.decidable === 'geometry');
+    let voids: { volumeMm3: number; center: number[] }[] = [];
+    if (needsEscape) {
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (existsSync(modelPath)) {
+        const cKey = versionCacheKey(store.root, a.versionId);
+        let conn = connectivityCache.get(cKey);
+        if (!conn) {
+          conn = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
+          connectivityCache.set(cKey, conn);
+        }
+        voids = conn.voids ?? [];
+      }
+    }
+    // CNC TOOL REACH. Circular bores are EXACT witnesses: a cutter of radius r cannot
+    // enter a bore narrower than 2r, and a bore deeper than N diameters cannot be
+    // drilled without the drill wandering. Non-circular slots and pockets need a voxel
+    // reachability sweep, so they are DISCLOSED as not covered (see the finding below)
+    // rather than quietly passed.
+    const needsToolReach = resolved.profiles.some((profile) =>
+      (profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry') ||
+      (profile.rules.holeAspectMax?.applies === true && profile.rules.holeAspectMax.decidable === 'geometry'));
+    // Draft is per-profile (each profile declares its own draftMinDeg), so unlike the
+    // voids and bores above it is fetched INSIDE the loop.
+    type DraftSolve = {
+      coneEmpty: boolean;
+      candidatesChecked: number;
+      bestMarginDeg: number;
+      bestWorstDraftDeg: number;
+      feasiblePct: number;
+      bestDirectionMm: number[];
+      constrainingFaces: { atMm: number[]; draftAtBestDeg: number; deficitDeg: number; areaMm2: number; feasiblePctIfRelaxed: number }[];
+    };
+    // S2-b escape passages come from the same inventory: a HOLE in a face is an
+    // opening, i.e. a passage. Round + through is EXACT (a detected circle's
+    // diameter); anything else is reported as UNDETERMINED rather than passed —
+    // see the loop. (A decorative blind depression must never exclude a part that
+    // has a perfectly good drain hole elsewhere.)
+    const escapeDeclared = resolved.profiles.some((profile) =>
+      profile.rules.escapePassageMinMm?.applies === true && profile.rules.escapePassageMinMm.decidable === 'geometry');
+    type HoleInfo = {
+      // `diameterMm` is absent for a NON-CIRCULAR opening on purpose (list_features refuses to
+      // invent a diameter for a shape a circle cannot describe). The escape rule used to filter
+      // such holes out, which meant they were silently absent from the report rather than
+      // reported as undetermined — measured 2026-10-13 on microscope4 v031: 32 of 53 openings
+      // are non-circular, and none of them reached the rule. Now they stay, with `axisMm` and
+      // `areaMm2` as what the passage bottleneck needs to be anchored.
+      diameterMm?: number; through: boolean; depthMm?: number; kind?: string;
+      centerMm: number[]; axisMm: number[]; areaMm2?: number; residualMm?: number;
+    };
+    let holes: HoleInfo[] = [];
+    let bores: { diameterMm: number; lengthMm: number; centerMm: number[] }[] = [];
+    const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+    if (needsToolReach || escapeDeclared) {
+      if (existsSync(modelPath)) {
+        const lfKey = versionCacheKey(store.root, a.versionId);
+        const feats = (featureCache.get(lfKey) ?? await (await ensurePythonWorker()).request<{
+          cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
+          faces?: { normalMm?: number[]; holes?: {
+            kind?: string; diameterMm?: number; through?: boolean; depthMm?: number;
+            centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number;
+          }[] }[];
+        }>('list_features', { path: modelPath }).then((r) => {
+          featureCache.set(lfKey, r);
+          return r;
+        })) as {
+          cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
+          faces?: { normalMm?: number[]; holes?: { kind?: string; diameterMm?: number; through?: boolean; depthMm?: number; centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number }[] }[];
+        };
+        bores = (feats.cylinders ?? [])
+          .filter((c) => c.kind === 'bore' && typeof c.diameterMm === 'number' && typeof c.lengthMm === 'number')
+          .map((c) => ({ diameterMm: c.diameterMm!, lengthMm: c.lengthMm!, centerMm: c.centerMm ?? [] }));
+        holes = (feats.faces ?? []).flatMap((f) => {
+          const axis = Array.isArray(f.normalMm) ? f.normalMm : null;
+          if (!axis) return [];
+          // A hole with neither a centre nor a face normal cannot be anchored later, so that is
+          // the only kind dropped here. Circularity is NOT a filter any more (see HoleInfo).
+          return (f.holes ?? [])
+            .filter((h) => Array.isArray(h.centerMm))
+            .map((h) => ({
+              diameterMm: h.diameterMm, through: h.through === true, depthMm: h.depthMm,
+              kind: h.kind, centerMm: h.centerMm ?? [], axisMm: axis,
+              areaMm2: h.areaMm2, residualMm: h.circularityResidualMm,
+            }));
+        });
+      }
+    }
+    const marginalNotes: string[] = [];
+    const undeterminedNotes: string[] = [];
+    const evaluations: ProfileEvaluation[] = [];
+    let base: Awaited<ReturnType<typeof checkPrintability>> | null = null;
+    for (const profile of resolved.profiles) {
+      // The profile's OWN numbers drive the same measurement — that is the point:
+      // the threshold stops being a literal and becomes a declared claim.
+      const rules = evaluableRules(profile);
+      const wall = rules.find((r) => r.rule === 'wallMinMm');
+      const overhang = rules.find((r) => r.rule === 'overhangDeg');
+      // `withSampleField` is what makes the heatmap POSSIBLE: the tool persists a run
+      // carrying the per-sample values, and the panel draws those. Without it the
+      // panel's /api/cad/attention finds no field and the 🔥 button does nothing —
+      // which is exactly how the first version shipped (the option existed, the
+      // caller never asked for it).
+      const screen = await checkPrintability(store, {
+        versionId: a.versionId,
+        wallMinMm: wall?.value ?? a.wallMinMm,
+        overhangDeg: overhang?.value ?? a.overhangDeg,
+        samples: a.samples,
+        withSampleField: true,
+      });
+      base = base ?? screen;
+      const { notApplicable, unevaluable } = disclosureLists(profile);
+      const witnesses: ProfileEvaluation['witnesses'] = [];
+      // Only a HARD constraint excludes. A too-steep overhang needs supports; it does
+      // not make the part impossible, so it stays a finding, not a witness.
+      if (wall && screen.wallMeasured && screen.minWallMm !== undefined && screen.minWallMm < wall.value) {
+        witnesses.push({
+          rule: 'wallMinMm',
+          measured: screen.minWallMm,
+          required: wall.value,
+          unit: 'mm',
+          ...(screen.minWallAtMm ? { locationMm: screen.minWallAtMm } : {}),
+        });
+      }
+      // A sealed cavity is the one escape-passage witness a mesh can PROVE: there is
+      // no passage at all, so its size is 0. A passage that merely looks narrow from
+      // outside cannot be proved — the tunnel interior is not measured — so that case
+      // is disclosed as not-checked rather than passed (see the finding below).
+      const escape = profile.rules.escapePassageMinMm;
+      if (escape?.applies === true && escape.decidable === 'geometry' && typeof escape.value === 'number') {
+        for (const void_ of voids) {
+          witnesses.push({
+            rule: 'escapePassageMinMm',
+            measured: 0,
+            required: escape.value,
+            unit: 'mm',
+            locationMm: void_.center,
+          });
+        }
+      }
+      const escapeRule = profile.rules.escapePassageMinMm;
+      if (escapeRule?.applies === true && escapeRule.decidable === 'geometry' && typeof escapeRule.value === 'number') {
+        for (const hole of holes) {
+          const where = JSON.stringify(hole.centerMm);
+          if (hole.kind !== undefined && hole.kind !== 'round') {
+            if (!hole.through) {
+              undeterminedNotes.push(
+                `排粉/排液通道 @ ${where} 是非圆截面盲特征（kind=${hole.kind}）：` +
+                '盲特征是否积粉/积树脂无法仅由几何证明 —— 该处**未判定**，不是通过。',
+              );
+              continue;
+            }
+            // Non-circular + through: the width is now MEASURABLE — the bottleneck of the one
+            // passage this opening names, as the smallest maximum-inscribed-circle over
+            // transverse sections (worker op `passage_bottleneck`, anchored at this opening).
+            // Anchoring is not optional: on the same plane a wide passage masks a narrow one
+            // (measured: two parallel through holes Ø6 and Ø1, a global sweep reads 2.996 while
+            // the tightest passage is 0.500).
+            const passage = await (await ensurePythonWorker()).request<{
+              reachable?: boolean; throughAlongAxis?: boolean; bottleneckRadiusMm?: number | null;
+              tightestAtMm?: number[]; sectionsAccepted?: number; cuts?: number;
+              coveredMm?: number[]; micToleranceMm?: number; stepMm?: number;
+              endConditions?: Record<string, string>; refused?: string;
+            }>('passage_bottleneck', {
+              path: modelPath,
+              fromMm: hole.centerMm,
+              fromAxis: hole.axisMm,
+              fromSizeMm: Math.sqrt(Math.max(hole.areaMm2 ?? 1, 1e-6)),
+              budget: 200,
+            });
+            const radiusMm = passage.bottleneckRadiusMm;
+            if (passage.reachable === true && passage.throughAlongAxis === true
+              && typeof radiusMm === 'number') {
+              // Same rule as the round branch: the uncertainty is the measurement's own
+              // resolution, never an invented tolerance.
+              const noise = Math.max(passage.micToleranceMm ?? 0, 0.01);
+              const requiredRadius = escapeRule.value / 2;
+              if (radiusMm < requiredRadius - noise) {
+                witnesses.push({
+                  rule: 'escapePassageMinMm',
+                  measured: +(2 * radiusMm).toFixed(3),
+                  required: escapeRule.value,
+                  unit: 'mm',
+                  locationMm: passage.tightestAtMm ?? hole.centerMm,
+                });
+              } else if (radiusMm <= requiredRadius + noise) {
+                marginalNotes.push(
+                  `排粉/排液通道余量过小（记为困难，不是通过）：非圆截面 @ ${where}，` +
+                  `量得瓶颈 Ø${(2 * radiusMm).toFixed(3)}，要求 Ø${escapeRule.value}，` +
+                  `余量 ${(2 * radiusMm - escapeRule.value).toFixed(3)}mm（≤ ${noise}mm）。`,
+                );
+              }
+              continue;
+            }
+            undeterminedNotes.push(
+              `排粉/排液通道 @ ${where} 是非圆截面通道（kind=${hole.kind}）：` +
+              `量宽未成功（${passage.refused ? passage.refused.slice(0, 120) : '走查未覆盖整条通路'}）` +
+              `${typeof passage.sectionsAccepted === 'number' ? `；已取得 ${passage.sectionsAccepted} 个截面` : ''} ` +
+              '—— 该处**未判定**，不是通过。',
+            );
+            continue;
+          }
+          if (!hole.through) {
+            // A BLIND feature. Whether it traps powder/resin is not a geometric
+            // fact we can prove: a shallow dish drains, a deep well traps, and the
+            // depth criterion (can the constriction be enumerated?) says we cannot
+            // claim either. So it is UNDETERMINED — never a pass, and crucially
+            // never an exclusion, or a cosmetic dimple would condemn a part whose
+            // real drain hole is fine.
+            undeterminedNotes.push(
+              `排粉/排液通道 @ ${where} 是盲特征（Ø${hole.diameterMm}，深 ${hole.depthMm ?? '未知'}）：` +
+              '盲特征是否积粉/积树脂无法仅由几何证明（只有可穷举的短颈才可判）—— 该处**未判定**，不是通过。',
+            );
+            continue;
+          }
+          // Round + through: EXACT. The uncertainty is the circle-fit residual, not
+          // an invented tolerance — same rule as the voxel pitch elsewhere.
+          if (typeof hole.diameterMm !== 'number') {
+            // Cannot happen for a round hole (list_features sets the diameter only when the loop
+            // fits a circle), but a missing diameter must never become a silent pass.
+            undeterminedNotes.push(
+              `排粉/排液通道 @ ${where} 没有直径（kind=${hole.kind ?? 'unknown'}）：**未判定**，不是通过。`,
+            );
+            continue;
+          }
+          const noise = Math.max(hole.residualMm ?? 0, 0.01);
+          const radiusMm = hole.diameterMm / 2;
+          const requiredRadius = escapeRule.value / 2;
+          if (radiusMm < requiredRadius - noise) {
+            witnesses.push({
+              rule: 'escapePassageMinMm',
+              measured: +hole.diameterMm.toFixed(3),
+              required: escapeRule.value,
+              unit: 'mm',
+              locationMm: hole.centerMm,
+            });
+          } else if (radiusMm <= requiredRadius + noise) {
+            marginalNotes.push(
+              `排粉/排液通道余量过小（记为困难，不是通过）：Ø${hole.diameterMm} @ ${where}，` +
+              `要求 Ø${escapeRule.value}，余量 ${(hole.diameterMm - escapeRule.value).toFixed(3)}mm ` +
+              `（≤ ${noise}mm = 圆度拟合残差）。`,
+            );
+          }
+        }
+      }
+      const draftRule = profile.rules.draftMinDeg;
+      if (draftRule?.applies === true && draftRule.decidable === 'geometry' && typeof draftRule.value === 'number') {
+        const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+        if (existsSync(modelPath)) {
+          const solved = await (await ensurePythonWorker()).request<{ draft?: DraftSolve }>('check_printability', {
+            path: modelPath, samples: a.samples, draftMinDeg: draftRule.value,
+          });
+          const dr = solved.draft;
+          if (dr) {
+            if (dr.coneEmpty) {
+              // EXACT: no draw direction satisfies every face. The measured value is
+              // the best achievable worst-face draft, so the witness says how far off
+              // it is, and the location is a face that cannot make it.
+              witnesses.push({
+                rule: 'draftMinDeg',
+                measured: dr.bestWorstDraftDeg,
+                required: draftRule.value,
+                unit: 'deg',
+                ...(dr.constrainingFaces?.[0]?.atMm ? { locationMm: dr.constrainingFaces[0].atMm } : {}),
+              });
+            } else if (typeof dr.bestMarginDeg === 'number' && dr.bestMarginDeg <= 0.5) {
+              // NOT a pass. Zero/near-zero margin is recorded as difficult
+              // (DECISION-LOG 2026-10-11): the 0.5 deg band is the normal-bucketing
+              // resolution, not an invented shop constant.
+              marginalNotes.push(
+                `拔模余量过小（记为困难，不是通过）：最佳抽芯方向下的最差面拔模 ${dr.bestWorstDraftDeg}°，` +
+                `要求 ${draftRule.value}°，余量 ${dr.bestMarginDeg}°（≤ 0.5° = 法线分桶分辨率）。` +
+                (dr.constrainingFaces?.length
+                  ? `收紧它的面在 ${JSON.stringify(dr.constrainingFaces[0].atMm)}（该面拔模 ${dr.constrainingFaces[0].draftAtBestDeg}°，` +
+                    `单独放宽后可行域可到 ${dr.constrainingFaces[0].feasiblePctIfRelaxed}%）。`
+                  : ''),
+              );
+            }
+          }
+        }
+      }
+      const toolRadius = profile.rules.toolRadiusMm;
+      if (toolRadius?.applies === true && toolRadius.decidable === 'geometry' && typeof toolRadius.value === 'number') {
+        for (const bore of bores) {
+          const radiusMm = bore.diameterMm / 2;
+          if (radiusMm < toolRadius.value) {
+            witnesses.push({
+              rule: 'toolRadiusMm',
+              measured: +radiusMm.toFixed(3),
+              required: toolRadius.value,
+              unit: 'mm',
+              locationMm: bore.centerMm,
+            });
+          }
+        }
+      }
+      const holeAspect = profile.rules.holeAspectMax;
+      if (holeAspect?.applies === true && holeAspect.decidable === 'geometry' && typeof holeAspect.value === 'number') {
+        for (const bore of bores) {
+          if (bore.diameterMm <= 0) continue;
+          const aspect = bore.lengthMm / bore.diameterMm;
+          if (aspect > holeAspect.value) {
+            witnesses.push({
+              rule: 'holeAspectMax',
+              measured: +aspect.toFixed(2),
+              required: holeAspect.value,
+              unit: 'ratio',
+              locationMm: bore.centerMm,
+            });
+          }
+        }
+      }
+      evaluations.push({
+        profileId: profile.id,
+        profileHash: profileHash(profile),
+        verdict: witnesses.length > 0 ? 'excluded' : 'not-excluded',
+        witnesses,
+        notApplicable: notApplicable.map((r) => `${r.rule}: ${r.reason}`),
+        unevaluable: unevaluable.map((r) => `${r.rule} (${r.decidable}): ${r.reason}`),
+      });
+    }
+    const findings = [...(base?.findings ?? []), ...marginalNotes, ...undeterminedNotes];
+    // Disclose the coverage gap ONLY where the tool-radius rule is declared. A profile
+    // that merely caps hole aspect (FDM does — a deep narrow hole is a printing
+    // problem too) is not making a claim about cutters, and a coverage note there
+    // would be noise in `findings`, which must stay about the geometry.
+    const toolReachDeclared = resolved.profiles.some((profile) =>
+      profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry');
+    if (toolReachDeclared) {
+      findings.push(
+        `刀具可达性：只检查了 ${bores.length} 个**圆孔**（直径与深度是精确值）。` +
+        '非圆形的槽/窄凹腔需要体素可达性扫描，**本次未覆盖**——它们若窄于刀具直径，本报告不会发现；' +
+        '所以这里的"未排除"不等于"能加工"。',
+      );
+    }
+    if (needsEscape && voids.length === 0) {
+      findings.push(
+        '排粉/排液通道：未发现**封闭内腔**（无负体积壳）。注意这只否决了"完全封死"这一种情况——' +
+        '**通道内部的截面没有被测量**，所以"有通道但中途变细"无法在此被证明，也不构成通过。',
+      );
+    }
+    let verdict = base!.verdict;
+    if (resolved.source === 'builtin-default') {
+      const p = resolved.profiles[0]!;
+      findings.push(
+        `未声明工艺档案 —— 按内建默认档 "${p.id}"（hash ${profileHash(p)}）评估。` +
+        '该档每一个数都是 assumed（从未按任何机器标定），**它是让继承来的默认值可见，不是推荐**。' +
+        '要按真实工艺判断，请声明 profileIds 或 profilesJson。',
+      );
+      // "not-excluded" would claim the part passed a process the caller never named.
+      // The geometry may be fine; the DECLARATION is missing, so the honest verdict is
+      // `difficult`. Declaring a profile is what turns this into a pass.
+      // (This guard used to test for the literal 'ok'; when the values were renamed it
+      // silently stopped firing — caught by accept-p3.)
+      if (verdict === 'not-excluded') verdict = 'difficult';
+    }
+    const result = { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
+
+    // The attention field is also a PRODUCT, not just a reply: the panel draws it as a
+    // heatmap, and a picture needs the per-sample values that would be noise in the
+    // model's context. They travel in the run; the reply carries the digest only.
+    const { field, ...forModel } = result as typeof result & { field?: AttentionFieldSamples };
+    if (field) {
+      const run = await beginRun(runStore, {
+        kind: 'printability',
+        title: `制造筛查 · ${a.versionId} · ${verdict}`,
+      });
+      await run.json('report.json', forModel);
+      await run.json('attention.json', {
+        id: forModel.attention.id,
+        versionId: a.versionId,
+        normalization: field.normalization,
+        samples: field.samples,
+      });
+      await run.commit({
+        status: verdict === 'not-excluded' ? 'pass' : verdict === 'excluded' ? 'fail' : 'check',
+        summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
+        title: `制造筛查 · ${a.versionId}`,
+        sourceVersionIds: [a.versionId],
+        subject: `printability:${a.versionId}`,
+      });
+    }
+    // DESIGN §25.7: the two channels are separated STRUCTURALLY in the REPLY. The run
+    // keeps both halves — trimming the record would make the panel lose the field
+    // whenever the model happened to ask for judge.
+    const mode = a.mode ?? 'judge';
+    const reply: Record<string, unknown> = { ...forModel };
+    if (mode === 'scan') {
+      delete reply.verdict;
+      delete reply.profiles;
+      delete reply.profileSource;
+    }
+    if (mode === 'judge') {
+      delete reply.attention;
+    }
+    // The output schema now allows per-layer region extras (triangles/samples/…),
+    // so its inferred type carries an index signature the typed layers lack.
+  return { reply, report: forModel, field, verdict, profileSource: forModel.profileSource, findings: forModel.findings };
+  }
+
   registerTool(defineTool({
     name: 'check_printability',
     description:
@@ -3729,427 +4197,8 @@ export function registerCadTools(
     },
     timeoutMs: 180_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as {
-        versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
-        profileIds?: string[]; profilesJson?: string;
-      };
-      const { store, runStore } = await allStores(exec);
-      const resolved = await resolveProcessProfiles(a);
-      if (resolved.errors.length > 0) {
-        throw new Error(`invalid process profile:\n  - ${resolved.errors.join('\n  - ')}`);
-      }
-      // The shape the output schema declares. `excluded` carries witnesses; the other
-      // value is `not-excluded` — never "ok", because "no counter-example found" is not
-      // a statement that the part can be made.
-      type ProfileEvaluation = {
-        profileId: string;
-        profileHash: string;
-        verdict: 'excluded' | 'not-excluded';
-        witnesses: { rule: string; measured: number; required: number; unit: string; locationMm?: number[] }[];
-        notApplicable: string[];
-        unevaluable: string[];
-      };
-      // Sealed cavities are needed only if some profile governs escape passages.
-      // Fetched once, not per profile: the mesh does not change between profiles.
-      const needsEscape = resolved.profiles.some((profile) =>
-        profile.rules.escapePassageMinMm?.applies === true &&
-        profile.rules.escapePassageMinMm.decidable === 'geometry');
-      let voids: { volumeMm3: number; center: number[] }[] = [];
-      if (needsEscape) {
-        const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-        if (existsSync(modelPath)) {
-          const cKey = versionCacheKey(store.root, a.versionId);
-          let conn = connectivityCache.get(cKey);
-          if (!conn) {
-            conn = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
-            connectivityCache.set(cKey, conn);
-          }
-          voids = conn.voids ?? [];
-        }
-      }
-      // CNC TOOL REACH. Circular bores are EXACT witnesses: a cutter of radius r cannot
-      // enter a bore narrower than 2r, and a bore deeper than N diameters cannot be
-      // drilled without the drill wandering. Non-circular slots and pockets need a voxel
-      // reachability sweep, so they are DISCLOSED as not covered (see the finding below)
-      // rather than quietly passed.
-      const needsToolReach = resolved.profiles.some((profile) =>
-        (profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry') ||
-        (profile.rules.holeAspectMax?.applies === true && profile.rules.holeAspectMax.decidable === 'geometry'));
-      // Draft is per-profile (each profile declares its own draftMinDeg), so unlike the
-      // voids and bores above it is fetched INSIDE the loop.
-      type DraftSolve = {
-        coneEmpty: boolean;
-        candidatesChecked: number;
-        bestMarginDeg: number;
-        bestWorstDraftDeg: number;
-        feasiblePct: number;
-        bestDirectionMm: number[];
-        constrainingFaces: { atMm: number[]; draftAtBestDeg: number; deficitDeg: number; areaMm2: number; feasiblePctIfRelaxed: number }[];
-      };
-      // S2-b escape passages come from the same inventory: a HOLE in a face is an
-      // opening, i.e. a passage. Round + through is EXACT (a detected circle's
-      // diameter); anything else is reported as UNDETERMINED rather than passed —
-      // see the loop. (A decorative blind depression must never exclude a part that
-      // has a perfectly good drain hole elsewhere.)
-      const escapeDeclared = resolved.profiles.some((profile) =>
-        profile.rules.escapePassageMinMm?.applies === true && profile.rules.escapePassageMinMm.decidable === 'geometry');
-      type HoleInfo = {
-        // `diameterMm` is absent for a NON-CIRCULAR opening on purpose (list_features refuses to
-        // invent a diameter for a shape a circle cannot describe). The escape rule used to filter
-        // such holes out, which meant they were silently absent from the report rather than
-        // reported as undetermined — measured 2026-10-13 on microscope4 v031: 32 of 53 openings
-        // are non-circular, and none of them reached the rule. Now they stay, with `axisMm` and
-        // `areaMm2` as what the passage bottleneck needs to be anchored.
-        diameterMm?: number; through: boolean; depthMm?: number; kind?: string;
-        centerMm: number[]; axisMm: number[]; areaMm2?: number; residualMm?: number;
-      };
-      let holes: HoleInfo[] = [];
-      let bores: { diameterMm: number; lengthMm: number; centerMm: number[] }[] = [];
-      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (needsToolReach || escapeDeclared) {
-        if (existsSync(modelPath)) {
-          const lfKey = versionCacheKey(store.root, a.versionId);
-          const feats = (featureCache.get(lfKey) ?? await (await ensurePythonWorker()).request<{
-            cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
-            faces?: { normalMm?: number[]; holes?: {
-              kind?: string; diameterMm?: number; through?: boolean; depthMm?: number;
-              centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number;
-            }[] }[];
-          }>('list_features', { path: modelPath }).then((r) => {
-            featureCache.set(lfKey, r);
-            return r;
-          })) as {
-            cylinders?: { kind?: string; diameterMm?: number; lengthMm?: number; centerMm?: number[] }[];
-            faces?: { normalMm?: number[]; holes?: { kind?: string; diameterMm?: number; through?: boolean; depthMm?: number; centerMm?: number[]; areaMm2?: number; circularityResidualMm?: number }[] }[];
-          };
-          bores = (feats.cylinders ?? [])
-            .filter((c) => c.kind === 'bore' && typeof c.diameterMm === 'number' && typeof c.lengthMm === 'number')
-            .map((c) => ({ diameterMm: c.diameterMm!, lengthMm: c.lengthMm!, centerMm: c.centerMm ?? [] }));
-          holes = (feats.faces ?? []).flatMap((f) => {
-            const axis = Array.isArray(f.normalMm) ? f.normalMm : null;
-            if (!axis) return [];
-            // A hole with neither a centre nor a face normal cannot be anchored later, so that is
-            // the only kind dropped here. Circularity is NOT a filter any more (see HoleInfo).
-            return (f.holes ?? [])
-              .filter((h) => Array.isArray(h.centerMm))
-              .map((h) => ({
-                diameterMm: h.diameterMm, through: h.through === true, depthMm: h.depthMm,
-                kind: h.kind, centerMm: h.centerMm ?? [], axisMm: axis,
-                areaMm2: h.areaMm2, residualMm: h.circularityResidualMm,
-              }));
-          });
-        }
-      }
-      const marginalNotes: string[] = [];
-      const undeterminedNotes: string[] = [];
-      const evaluations: ProfileEvaluation[] = [];
-      let base: Awaited<ReturnType<typeof checkPrintability>> | null = null;
-      for (const profile of resolved.profiles) {
-        // The profile's OWN numbers drive the same measurement — that is the point:
-        // the threshold stops being a literal and becomes a declared claim.
-        const rules = evaluableRules(profile);
-        const wall = rules.find((r) => r.rule === 'wallMinMm');
-        const overhang = rules.find((r) => r.rule === 'overhangDeg');
-        // `withSampleField` is what makes the heatmap POSSIBLE: the tool persists a run
-        // carrying the per-sample values, and the panel draws those. Without it the
-        // panel's /api/cad/attention finds no field and the 🔥 button does nothing —
-        // which is exactly how the first version shipped (the option existed, the
-        // caller never asked for it).
-        const screen = await checkPrintability(store, {
-          versionId: a.versionId,
-          wallMinMm: wall?.value ?? a.wallMinMm,
-          overhangDeg: overhang?.value ?? a.overhangDeg,
-          samples: a.samples,
-          withSampleField: true,
-        });
-        base = base ?? screen;
-        const { notApplicable, unevaluable } = disclosureLists(profile);
-        const witnesses: ProfileEvaluation['witnesses'] = [];
-        // Only a HARD constraint excludes. A too-steep overhang needs supports; it does
-        // not make the part impossible, so it stays a finding, not a witness.
-        if (wall && screen.wallMeasured && screen.minWallMm !== undefined && screen.minWallMm < wall.value) {
-          witnesses.push({
-            rule: 'wallMinMm',
-            measured: screen.minWallMm,
-            required: wall.value,
-            unit: 'mm',
-            ...(screen.minWallAtMm ? { locationMm: screen.minWallAtMm } : {}),
-          });
-        }
-        // A sealed cavity is the one escape-passage witness a mesh can PROVE: there is
-        // no passage at all, so its size is 0. A passage that merely looks narrow from
-        // outside cannot be proved — the tunnel interior is not measured — so that case
-        // is disclosed as not-checked rather than passed (see the finding below).
-        const escape = profile.rules.escapePassageMinMm;
-        if (escape?.applies === true && escape.decidable === 'geometry' && typeof escape.value === 'number') {
-          for (const void_ of voids) {
-            witnesses.push({
-              rule: 'escapePassageMinMm',
-              measured: 0,
-              required: escape.value,
-              unit: 'mm',
-              locationMm: void_.center,
-            });
-          }
-        }
-        const escapeRule = profile.rules.escapePassageMinMm;
-        if (escapeRule?.applies === true && escapeRule.decidable === 'geometry' && typeof escapeRule.value === 'number') {
-          for (const hole of holes) {
-            const where = JSON.stringify(hole.centerMm);
-            if (hole.kind !== undefined && hole.kind !== 'round') {
-              if (!hole.through) {
-                undeterminedNotes.push(
-                  `排粉/排液通道 @ ${where} 是非圆截面盲特征（kind=${hole.kind}）：` +
-                  '盲特征是否积粉/积树脂无法仅由几何证明 —— 该处**未判定**，不是通过。',
-                );
-                continue;
-              }
-              // Non-circular + through: the width is now MEASURABLE — the bottleneck of the one
-              // passage this opening names, as the smallest maximum-inscribed-circle over
-              // transverse sections (worker op `passage_bottleneck`, anchored at this opening).
-              // Anchoring is not optional: on the same plane a wide passage masks a narrow one
-              // (measured: two parallel through holes Ø6 and Ø1, a global sweep reads 2.996 while
-              // the tightest passage is 0.500).
-              const passage = await (await ensurePythonWorker()).request<{
-                reachable?: boolean; throughAlongAxis?: boolean; bottleneckRadiusMm?: number | null;
-                tightestAtMm?: number[]; sectionsAccepted?: number; cuts?: number;
-                coveredMm?: number[]; micToleranceMm?: number; stepMm?: number;
-                endConditions?: Record<string, string>; refused?: string;
-              }>('passage_bottleneck', {
-                path: modelPath,
-                fromMm: hole.centerMm,
-                fromAxis: hole.axisMm,
-                fromSizeMm: Math.sqrt(Math.max(hole.areaMm2 ?? 1, 1e-6)),
-                budget: 200,
-              });
-              const radiusMm = passage.bottleneckRadiusMm;
-              if (passage.reachable === true && passage.throughAlongAxis === true
-                && typeof radiusMm === 'number') {
-                // Same rule as the round branch: the uncertainty is the measurement's own
-                // resolution, never an invented tolerance.
-                const noise = Math.max(passage.micToleranceMm ?? 0, 0.01);
-                const requiredRadius = escapeRule.value / 2;
-                if (radiusMm < requiredRadius - noise) {
-                  witnesses.push({
-                    rule: 'escapePassageMinMm',
-                    measured: +(2 * radiusMm).toFixed(3),
-                    required: escapeRule.value,
-                    unit: 'mm',
-                    locationMm: passage.tightestAtMm ?? hole.centerMm,
-                  });
-                } else if (radiusMm <= requiredRadius + noise) {
-                  marginalNotes.push(
-                    `排粉/排液通道余量过小（记为困难，不是通过）：非圆截面 @ ${where}，` +
-                    `量得瓶颈 Ø${(2 * radiusMm).toFixed(3)}，要求 Ø${escapeRule.value}，` +
-                    `余量 ${(2 * radiusMm - escapeRule.value).toFixed(3)}mm（≤ ${noise}mm）。`,
-                  );
-                }
-                continue;
-              }
-              undeterminedNotes.push(
-                `排粉/排液通道 @ ${where} 是非圆截面通道（kind=${hole.kind}）：` +
-                `量宽未成功（${passage.refused ? passage.refused.slice(0, 120) : '走查未覆盖整条通路'}）` +
-                `${typeof passage.sectionsAccepted === 'number' ? `；已取得 ${passage.sectionsAccepted} 个截面` : ''} ` +
-                '—— 该处**未判定**，不是通过。',
-              );
-              continue;
-            }
-            if (!hole.through) {
-              // A BLIND feature. Whether it traps powder/resin is not a geometric
-              // fact we can prove: a shallow dish drains, a deep well traps, and the
-              // depth criterion (can the constriction be enumerated?) says we cannot
-              // claim either. So it is UNDETERMINED — never a pass, and crucially
-              // never an exclusion, or a cosmetic dimple would condemn a part whose
-              // real drain hole is fine.
-              undeterminedNotes.push(
-                `排粉/排液通道 @ ${where} 是盲特征（Ø${hole.diameterMm}，深 ${hole.depthMm ?? '未知'}）：` +
-                '盲特征是否积粉/积树脂无法仅由几何证明（只有可穷举的短颈才可判）—— 该处**未判定**，不是通过。',
-              );
-              continue;
-            }
-            // Round + through: EXACT. The uncertainty is the circle-fit residual, not
-            // an invented tolerance — same rule as the voxel pitch elsewhere.
-            if (typeof hole.diameterMm !== 'number') {
-              // Cannot happen for a round hole (list_features sets the diameter only when the loop
-              // fits a circle), but a missing diameter must never become a silent pass.
-              undeterminedNotes.push(
-                `排粉/排液通道 @ ${where} 没有直径（kind=${hole.kind ?? 'unknown'}）：**未判定**，不是通过。`,
-              );
-              continue;
-            }
-            const noise = Math.max(hole.residualMm ?? 0, 0.01);
-            const radiusMm = hole.diameterMm / 2;
-            const requiredRadius = escapeRule.value / 2;
-            if (radiusMm < requiredRadius - noise) {
-              witnesses.push({
-                rule: 'escapePassageMinMm',
-                measured: +hole.diameterMm.toFixed(3),
-                required: escapeRule.value,
-                unit: 'mm',
-                locationMm: hole.centerMm,
-              });
-            } else if (radiusMm <= requiredRadius + noise) {
-              marginalNotes.push(
-                `排粉/排液通道余量过小（记为困难，不是通过）：Ø${hole.diameterMm} @ ${where}，` +
-                `要求 Ø${escapeRule.value}，余量 ${(hole.diameterMm - escapeRule.value).toFixed(3)}mm ` +
-                `（≤ ${noise}mm = 圆度拟合残差）。`,
-              );
-            }
-          }
-        }
-        const draftRule = profile.rules.draftMinDeg;
-        if (draftRule?.applies === true && draftRule.decidable === 'geometry' && typeof draftRule.value === 'number') {
-          const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-          if (existsSync(modelPath)) {
-            const solved = await (await ensurePythonWorker()).request<{ draft?: DraftSolve }>('check_printability', {
-              path: modelPath, samples: a.samples, draftMinDeg: draftRule.value,
-            });
-            const dr = solved.draft;
-            if (dr) {
-              if (dr.coneEmpty) {
-                // EXACT: no draw direction satisfies every face. The measured value is
-                // the best achievable worst-face draft, so the witness says how far off
-                // it is, and the location is a face that cannot make it.
-                witnesses.push({
-                  rule: 'draftMinDeg',
-                  measured: dr.bestWorstDraftDeg,
-                  required: draftRule.value,
-                  unit: 'deg',
-                  ...(dr.constrainingFaces?.[0]?.atMm ? { locationMm: dr.constrainingFaces[0].atMm } : {}),
-                });
-              } else if (typeof dr.bestMarginDeg === 'number' && dr.bestMarginDeg <= 0.5) {
-                // NOT a pass. Zero/near-zero margin is recorded as difficult
-                // (DECISION-LOG 2026-10-11): the 0.5 deg band is the normal-bucketing
-                // resolution, not an invented shop constant.
-                marginalNotes.push(
-                  `拔模余量过小（记为困难，不是通过）：最佳抽芯方向下的最差面拔模 ${dr.bestWorstDraftDeg}°，` +
-                  `要求 ${draftRule.value}°，余量 ${dr.bestMarginDeg}°（≤ 0.5° = 法线分桶分辨率）。` +
-                  (dr.constrainingFaces?.length
-                    ? `收紧它的面在 ${JSON.stringify(dr.constrainingFaces[0].atMm)}（该面拔模 ${dr.constrainingFaces[0].draftAtBestDeg}°，` +
-                      `单独放宽后可行域可到 ${dr.constrainingFaces[0].feasiblePctIfRelaxed}%）。`
-                    : ''),
-                );
-              }
-            }
-          }
-        }
-        const toolRadius = profile.rules.toolRadiusMm;
-        if (toolRadius?.applies === true && toolRadius.decidable === 'geometry' && typeof toolRadius.value === 'number') {
-          for (const bore of bores) {
-            const radiusMm = bore.diameterMm / 2;
-            if (radiusMm < toolRadius.value) {
-              witnesses.push({
-                rule: 'toolRadiusMm',
-                measured: +radiusMm.toFixed(3),
-                required: toolRadius.value,
-                unit: 'mm',
-                locationMm: bore.centerMm,
-              });
-            }
-          }
-        }
-        const holeAspect = profile.rules.holeAspectMax;
-        if (holeAspect?.applies === true && holeAspect.decidable === 'geometry' && typeof holeAspect.value === 'number') {
-          for (const bore of bores) {
-            if (bore.diameterMm <= 0) continue;
-            const aspect = bore.lengthMm / bore.diameterMm;
-            if (aspect > holeAspect.value) {
-              witnesses.push({
-                rule: 'holeAspectMax',
-                measured: +aspect.toFixed(2),
-                required: holeAspect.value,
-                unit: 'ratio',
-                locationMm: bore.centerMm,
-              });
-            }
-          }
-        }
-        evaluations.push({
-          profileId: profile.id,
-          profileHash: profileHash(profile),
-          verdict: witnesses.length > 0 ? 'excluded' : 'not-excluded',
-          witnesses,
-          notApplicable: notApplicable.map((r) => `${r.rule}: ${r.reason}`),
-          unevaluable: unevaluable.map((r) => `${r.rule} (${r.decidable}): ${r.reason}`),
-        });
-      }
-      const findings = [...(base?.findings ?? []), ...marginalNotes, ...undeterminedNotes];
-      // Disclose the coverage gap ONLY where the tool-radius rule is declared. A profile
-      // that merely caps hole aspect (FDM does — a deep narrow hole is a printing
-      // problem too) is not making a claim about cutters, and a coverage note there
-      // would be noise in `findings`, which must stay about the geometry.
-      const toolReachDeclared = resolved.profiles.some((profile) =>
-        profile.rules.toolRadiusMm?.applies === true && profile.rules.toolRadiusMm.decidable === 'geometry');
-      if (toolReachDeclared) {
-        findings.push(
-          `刀具可达性：只检查了 ${bores.length} 个**圆孔**（直径与深度是精确值）。` +
-          '非圆形的槽/窄凹腔需要体素可达性扫描，**本次未覆盖**——它们若窄于刀具直径，本报告不会发现；' +
-          '所以这里的"未排除"不等于"能加工"。',
-        );
-      }
-      if (needsEscape && voids.length === 0) {
-        findings.push(
-          '排粉/排液通道：未发现**封闭内腔**（无负体积壳）。注意这只否决了"完全封死"这一种情况——' +
-          '**通道内部的截面没有被测量**，所以"有通道但中途变细"无法在此被证明，也不构成通过。',
-        );
-      }
-      let verdict = base!.verdict;
-      if (resolved.source === 'builtin-default') {
-        const p = resolved.profiles[0]!;
-        findings.push(
-          `未声明工艺档案 —— 按内建默认档 "${p.id}"（hash ${profileHash(p)}）评估。` +
-          '该档每一个数都是 assumed（从未按任何机器标定），**它是让继承来的默认值可见，不是推荐**。' +
-          '要按真实工艺判断，请声明 profileIds 或 profilesJson。',
-        );
-        // "not-excluded" would claim the part passed a process the caller never named.
-        // The geometry may be fine; the DECLARATION is missing, so the honest verdict is
-        // `difficult`. Declaring a profile is what turns this into a pass.
-        // (This guard used to test for the literal 'ok'; when the values were renamed it
-        // silently stopped firing — caught by accept-p3.)
-        if (verdict === 'not-excluded') verdict = 'difficult';
-      }
-      const result = { ...base!, verdict, findings, profileSource: resolved.source, profiles: evaluations };
-
-      // The attention field is also a PRODUCT, not just a reply: the panel draws it as a
-      // heatmap, and a picture needs the per-sample values that would be noise in the
-      // model's context. They travel in the run; the reply carries the digest only.
-      const { field, ...forModel } = result as typeof result & { field?: AttentionFieldSamples };
-      if (field) {
-        const run = await beginRun(runStore, {
-          kind: 'printability',
-          title: `制造筛查 · ${a.versionId} · ${verdict}`,
-        });
-        await run.json('report.json', forModel);
-        await run.json('attention.json', {
-          id: forModel.attention.id,
-          versionId: a.versionId,
-          normalization: field.normalization,
-          samples: field.samples,
-        });
-        await run.commit({
-          status: verdict === 'not-excluded' ? 'pass' : verdict === 'excluded' ? 'fail' : 'check',
-          summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
-          title: `制造筛查 · ${a.versionId}`,
-          sourceVersionIds: [a.versionId],
-          subject: `printability:${a.versionId}`,
-        });
-      }
-      // DESIGN §25.7: the two channels are separated STRUCTURALLY in the REPLY. The run
-      // keeps both halves — trimming the record would make the panel lose the field
-      // whenever the model happened to ask for judge.
-      const mode = (args as { mode?: string }).mode ?? 'judge';
-      const reply: Record<string, unknown> = { ...forModel };
-      if (mode === 'scan') {
-        delete reply.verdict;
-        delete reply.profiles;
-        delete reply.profileSource;
-      }
-      if (mode === 'judge') {
-        delete reply.attention;
-      }
-      // The output schema now allows per-layer region extras (triangles/samples/…),
-      // so its inferred type carries an index signature the typed layers lack.
-      return reply as never;
+      const job = await screenVersionJob(args as never, await allStores(exec));
+      return job.reply as never;
     },
   }));
 
@@ -4724,11 +4773,13 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'preflight',
     description:
-      'Run the mandatory delivery sequence in one call: printability for every part (newest version) ' +
-      'and the corpus audit with your `claims`; steps this first cut does not orchestrate (assembly ' +
-      'contracts, mesh health, simulation evidence, render freshness) come back as ran:false WITH a ' +
-      'reason, never as a silent pass. `judgement` is the WORST step. Read `unevaluable` before claiming ' +
-      'anything: not-excluded means "no counter-example", never "ok" and never "safe".',
+      'Run the mandatory delivery sequence in one call: printability for every part (newest version, ' +
+      'against the `profileIds` you declare), mesh health, support cost, the assembly contract and the ' +
+      'corpus audit with your `claims`. `judgement` is the worst step that RAN; a step that was attempted ' +
+      'and failed forces `difficult`, and it never averages away. Steps this cut does not orchestrate at ' +
+      'all (simulation evidence, the assembly render) are listed in `coverage.notCovered` with a reason — ' +
+      'they are named, not silently green, and they do not enter the judgement. Read `unevaluable` before ' +
+      'claiming anything: not-excluded means "no counter-example", never "ok" and never "safe".',
     parameters: {
       claims: {
         type: 'array',
@@ -4752,7 +4803,12 @@ export function registerCadTools(
           ran: { type: 'array', required: true, items: { type: 'string' } },
           notRun: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
           unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          coverage: {
+            type: 'object', required: true, additionalProperties: true,
+            description: '{ran, notRun, notCovered}. `notCovered` = steps this cut does not orchestrate (with a reason); they do NOT enter `judgement`. A step in `notRun` was attempted and failed, and it forces `difficult`.',
+          },
           summary: { type: 'string', required: true },
+          timings: { type: 'object', required: true, additionalProperties: true, description: 'Per-step wall time in ms. A step that blew its budget is reported in notRun/unevaluable WITH the reason — the tool never sits waiting without saying so.' },
         },
       },
       render: (_a, v) => {
@@ -4762,6 +4818,7 @@ export function registerCadTools(
           ran: string[];
           notRun: { step: string; why: string }[];
           unevaluable: string[];
+          coverage?: { ran: string[]; notRun: string[]; notCovered: { step: string; why: string }[] };
           summary: string;
         };
         // A one-line summary is not an error report: "excluded" must name the step
@@ -4775,8 +4832,16 @@ export function registerCadTools(
           if (flagged.length > 12) lines.push(`  … ${flagged.length - 12} more`);
         }
         if (out.unevaluable?.length) {
-          lines.push('unevaluable:');
+          lines.push('unevaluable (attempted, no usable number):');
           for (const u of out.unevaluable) lines.push(`  - ${u}`);
+        }
+        // Not-covered steps are printed too: the judgement no longer stands for them, so
+        // the text has to carry them or they become the silent pass this tool exists to
+        // prevent.
+        const notCovered = out.coverage?.notCovered ?? [];
+        if (notCovered.length) {
+          lines.push('not covered by this cut (NOT in the judgement):');
+          for (const g of notCovered) lines.push(`  - ${g.step}: ${g.why}`);
         }
         return [{ type: 'text', text: lines.join('\n') }] as never;
       },
@@ -4802,7 +4867,16 @@ export function registerCadTools(
           steps.push({ step: `printability:${part.name}`, ran: false, judgement: 'difficult', detail: 'no version for this part' });
           continue;
         }
-        const r = await withDeadline(checkPrintability(project.store, { versionId: vid, withSampleField: true }), 45_000, `printability ${part.name}`);
+        // The SAME job check_printability runs (`screenVersionJob`), including the declared
+        // profiles and the run record it writes. Screening with the low-level engine while
+        // the caller named a process produced a verdict about a process nobody asked for —
+        // and wrote no printability run, so preflight's own green could not back a claim
+        // (2026-10-23 audit, FIX-B8).
+        const r = await withDeadline(
+          screenVersionJob({ versionId: vid, ...(a.profileIds?.length ? { profileIds: a.profileIds } : {}) }, project),
+          45_000,
+          `printability ${part.name}`,
+        );
         timings[`printability:${part.name}`] = r.ms;
         if (!r.ok) {
           steps.push({ step: `printability:${part.name}@${vid}`, ran: false, judgement: 'difficult', detail: r.reason });
@@ -4862,29 +4936,39 @@ export function registerCadTools(
 
       // support: mass-based, so a bowl is not "1 m² of overhang"; a real hanging plate is.
       // It is a process COST (supports / reorient), never an exclusion.
-      try {
-        const rSup = await withDeadline(
-          worker.request<{ regions?: { massG: number; atMm: number[] }[]; totals?: { massG?: number } }>('support_map', {
-            path: join(project.store.root, 'versions', newest.get(parts[0]?.id ?? '') ?? '', 'model.stl'),
-            dxMm: 1.0,
-          }),
-          45_000,
-          'support',
-        );
-        timings.support = rSup.ms;
-        if (!rSup.ok) throw new Error(rSup.reason);
-        const sup = rSup.value;
-        const regions = sup.regions ?? [];
-        steps.push({
-          step: 'support',
-          ran: true,
-          judgement: regions.length > 0 ? 'difficult' : 'not-excluded',
-          detail: regions.length > 0
-            ? `${regions.length} 处悬空质量超阈（最大 ${Math.max(...regions.map((r) => r.massG)).toFixed(2)} g）——需支撑或改朝向，不是失败`
-            : `无超阈悬空区（总计 ${sup.totals?.massG ?? 0} g）`,
-        });
-      } catch (e) {
-        steps.push({ step: 'support', ran: false, judgement: 'difficult', detail: `support_map failed: ${String((e as Error)?.message ?? e)}` });
+      //
+      // PER PART: the first cut measured only `parts[0]` and still reported ONE corpus-wide
+      // step, so a hanging plate on part B came back clean (2026-10-23 audit, FIX-B8).
+      for (const part of parts) {
+        const vid = newest.get(part.id);
+        if (!vid) {
+          steps.push({ step: `support:${part.name}`, ran: false, judgement: 'difficult', detail: 'no version for this part' });
+          continue;
+        }
+        try {
+          const rSup = await withDeadline(
+            worker.request<{ regions?: { massG: number; atMm: number[] }[]; totals?: { massG?: number } }>('support_map', {
+              path: join(project.store.root, 'versions', vid, 'model.stl'),
+              dxMm: 1.0,
+            }),
+            45_000,
+            `support ${part.name}`,
+          );
+          timings[`support:${part.name}`] = rSup.ms;
+          if (!rSup.ok) throw new Error(rSup.reason);
+          const sup = rSup.value;
+          const regions = sup.regions ?? [];
+          steps.push({
+            step: `support:${part.name}@${vid}`,
+            ran: true,
+            judgement: regions.length > 0 ? 'difficult' : 'not-excluded',
+            detail: regions.length > 0
+              ? `${regions.length} 处悬空质量超阈（最大 ${Math.max(...regions.map((r) => r.massG)).toFixed(2)} g）——需支撑或改朝向，不是失败`
+              : `无超阈悬空区（总计 ${sup.totals?.massG ?? 0} g）`,
+          });
+        } catch (e) {
+          steps.push({ step: `support:${part.name}@${vid}`, ran: false, judgement: 'difficult', detail: `support_map failed: ${String((e as Error)?.message ?? e)}` });
+        }
       }
 
       const rAudit = await withDeadline(auditDelivery(project, { claims: a.claims as never }), 30_000, 'audit');
@@ -4928,22 +5012,24 @@ export function registerCadTools(
         });
       }
 
-      // Declared gaps — the honest part. Each is a step this cut does not run.
-      for (const [step, why] of [
-        ['simulation-evidence', 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)'],
-        ['render', 'the assembly render is a HUMAN look: preflight can check freshness, not content'],
-      ] as const) {
-        steps.push({ step, ran: false, judgement: 'difficult', detail: why });
-      }
+      // Declared gaps — the honest part, and a DIFFERENT category from a failed step: this
+      // cut does not orchestrate them at all, so they must not turn `judgement` into a
+      // permanent `difficult` (that is a constant, not a signal). They are named in
+      // `coverage.notCovered` and repeated in every reply.
+      const notCovered = [
+        { step: 'simulation-evidence', why: 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)' },
+        { step: 'render', why: 'the assembly render is a HUMAN look: preflight can check freshness, not content' },
+      ];
 
-      const summary = preflightSummary(steps);
+      const summary = preflightSummary(steps, notCovered);
       // The schema's object type has an index signature; PreflightStep is a typed
       // record. The values are identical — the cast is the boundary, not a dodge.
       return {
         ...summary,
         steps,
         timings,  // a blown budget must be visible, not felt as a pause
-        summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} not run · judgment ${summary.judgement} — read unevaluable before claiming anything`,
+        summary: `${summary.ran.length} step(s) ran · ${summary.notRun.length} attempted-and-failed · ` +
+          `${notCovered.length} not covered · judgment ${summary.judgement} — read unevaluable before claiming anything`,
       } as never;
     },
   }));
@@ -4991,7 +5077,12 @@ export function registerCadTools(
       },
     },
     async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string; cellMm?: number; wallMinMm?: number; wallMaxMm?: number };
+      const a = args as {
+        versionId: string; cellMm?: number; wallMinMm?: number; wallMaxMm?: number;
+        // Declared in `parameters` above; the cast used to omit them, so `tsc` flagged the
+        // three reads below as errors on a type that the runtime does populate.
+        dxMm?: number; minMassG?: number; bridgeMaxMm?: number;
+      };
       const project = await allStores(exec);
       const wallMin = a.wallMinMm ?? 1.2;
       const wallMax = a.wallMaxMm ?? 4.0;
@@ -5178,6 +5269,15 @@ export function registerCadTools(
         additionalProperties: false,
         properties: {
           overallStatus: { type: 'string', required: true },
+          // The canonical judgement (src/shared/judgement.ts). Declared HERE because the
+          // body returns it HERE — 0849989 put these two lines on validate_assembly by
+          // mistake, which made both tools violate their own output contract (the runtime
+          // rejects the value before the model ever sees it).
+          judgement: { type: 'string', required: true, description: 'The canonical judgement: excluded | difficult | not-excluded. Read THIS, not overallStatus.' },
+          judgedBy: {
+            type: 'object', required: true, additionalProperties: true,
+            description: 'The counts the judgement was derived from. A skipped interface is "unevaluable" and must never read as a pass.',
+          },
           manifestPath: { type: 'string' },
           adjacencyThresholdMm: { type: 'number' },
           summary: {

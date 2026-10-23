@@ -36,7 +36,7 @@ Validate the assembly manifest (BOM + interface contracts): distance, diameter-m
 check_assembly({ manifestPath: "…" })
 ```
 
-returns: `overallStatus`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
+returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
 ## `check_printability`
@@ -286,7 +286,7 @@ returns: `versionId`, `part`, `triangles`, `volumeMm3`, `sizeMm`, `shells`, `sou
 
 ## `preflight`
 
-Run the mandatory delivery sequence in one call: printability for every part (newest version) and the corpus audit with your `claims`; steps this first cut does not orchestrate (assembly contracts, mesh health, simulation evidence, render freshness) come back as ran:false WITH a reason, never as a silent pass. `judgement` is the WORST step. Read `unevaluable` before claiming anything: not-excluded means "no counter-example", never "ok" and never "safe".
+Run the mandatory delivery sequence in one call: printability for every part (newest version, against the `profileIds` you declare), mesh health, support cost, the assembly contract and the corpus audit with your `claims`. `judgement` is the worst step that RAN; a step that was attempted and failed forces `difficult`, and it never averages away. Steps this cut does not orchestrate at all (simulation evidence, the assembly render) are listed in `coverage.notCovered` with a reason — they are named, not silently green, and they do not enter the judgement. Read `unevaluable` before claiming anything: not-excluded means "no counter-example", never "ok" and never "safe".
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -297,7 +297,7 @@ Run the mandatory delivery sequence in one call: printability for every part (ne
 preflight({ claims: [] })
 ```
 
-returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `summary`
+returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summary`, `timings`
 
 
 ## `python_runtime`

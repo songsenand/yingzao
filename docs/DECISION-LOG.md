@@ -3534,3 +3534,56 @@ run 落盘）、`src/client/heat.ts`（fused 层优先绘制）、`src/shared/ju
 **影响：** 重启 DSH web 进程后，`check_printability` 三种 mode 与 `simulate_stress` 三种 mode
 应都能返回；`analyze` 的 run 会正确挂到版本上。若 `both` 仍报 lossless JSON，说明还有别的 `-0`
 来源，按报错继续收口。
+
+## 2026-10-23：验收必须经过真实边界；`preflight` 的「未覆盖」与「尝试失败」分开
+
+**触发条件：** 4（影响全部工具与交付判定）+ 2（审计实测：四个工具的输出契约在运行时边界上不符，而全套 accept 全绿）。
+
+**要解决的问题：** 一次文档↔代码一致性审计（`docs/AUDIT-2026-10-23.md`）实测发现：
+`validate_assembly` 的 schema 要求两个它从不返回的键、`check_assembly` 返回两个未声明的键、
+`preflight` 返回未声明的 `timings`、`check_printability` 在 `profiles[]` 条目上要求一个不存在
+的 `timings` —— 四个工具在真实调用路径上会被运行时直接拒绝（`ToolOutputError`），
+而**每一个** `accept-*.mjs` 都是绿的。原因是它们都直接调 `def.execute()`，
+绕过了 `ToolRuntime.createSuccessResult` 那一道校验。
+
+同一轮审计还发现第二处同源问题：`preflight` 把「本 cut 根本不编排的步骤」写成
+`ran:false, judgement:'difficult'`，于是 `judgement` 恒为 `difficult` —— 一个常量，
+不是信号（DESIGN §25.7 自己警告过「每个真实语料都变 difficult，信号就死了」）；
+而 `ran:false` 又同时被用来表示「尝试过但失败了」，两种事实被压进一个字段。
+
+**决策内容：**
+
+1. **输出契约在注册层自检**（`src/host/tool-contract.ts` 的 `withOutputContract`）：
+   `registerTool` 一律包一层，用**与运行时同一份**编译后 schema 校验返回值，不符即抛出
+   带工具名与 JSON 路径的错误。验收脚本、直接调用者、生产路径因此看到同一个不变量。
+2. **参数报错的 lint 加阳性对照**：扫描器改为状态机解析 `argError` 四参，并先用一个
+   内置夹具证明「它能看见"缺字段名"和"accepts 为空"两种坏形状」；`checked` 为 0 视为失败。
+3. **`preflight` 区分两类「没跑」**：
+   - **尝试后失败**（超预算、缺输入）→ 留在 `steps` 里 `ran:false`，**强制 `difficult`**；
+   - **本 cut 不编排**（simulation-evidence、assembly render）→ 进 `coverage.notCovered`
+     （带原因），**不参与 `judgement`**，但每次回复都打印出来。
+   `judgement` = 跑过的步骤里的最劣值；一个步骤都没跑 = `difficult`（空报告不是通过）。
+4. **`preflight` 的 printability 步改调 `screenVersionJob`**（从 `check_printability` 抽出的
+   同一份实现）：声明的 profile 真的生效，并且这次筛查**会写一条 printability run**，
+   于是 preflight 的绿可以给 `manufacturability` 主张背书。
+
+**理由：** 「验收」与「运行」必须是同一条路径，否则测的是另一套代码。第 1 条把这条做成
+结构性事实而不是纪律；第 2 条修的是同一节课的另一半——一个能靠"什么都没扫到"通过的检查
+不是检查；第 3 条让三值词汇重新有信息量；第 4 条消除第二份实现（§11.7/§11.8）。
+
+**依据（实测）：**
+
+- 用真实 `validateJsonSchemaValue` × 真实编译 schema 复核，四处违规逐字见 AUDIT A1；
+- `tsc --noEmit` 修复前后：4 → 0（此前 2026-10-22 的条目把 4 个错误记为"既有错误"接受）；
+- `scripts/accept-tool-output.mjs`：守卫四条断言 + 27 个工具全部带守卫标记 + `create_part` 真调用；
+- `audit-arg-errors.mjs`：旧版 `checked 0`；新版 `checked 9 / offenders 0`，阳性对照 4 站点 2 报错；
+- `accept-tool-contracts` 全 PASS；`accept-tool-groups` / `accept-tool-scope` OK；
+- **未测**：`check_assembly` / `preflight` 的真实调用（`--tools` 档）需要可写 Python 运行时，
+  本次沙箱对 `~/.dsh` 只读（`EROFS`）。
+
+**影响：** `src/host/tools.ts`（registerTool、三处 schema、preflight 主体、抽出
+`screenVersionJob`）、新增 `src/host/tool-contract.ts`、`src/host/preflight.ts`
+（`preflightSummary` 签名与语义）、`package.json`（typecheck/accept 脚本与构建前置）、
+`scripts/{accept-tool-output,accept-tool-contracts,audit-arg-errors,accept-python}.mjs`、
+`docs/TOOL-CONTRACTS.md`（重新生成）、DESIGN §25.7。回滚 = revert 本提交；
+`coverage` 是新增字段，旧调用方不受影响。

@@ -2745,9 +2745,26 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 
 | 入口 | 回答 | 产出 | 会阻止吗 |
 |---|---|---|---|
-| `preflight` | 能不能交 | 逐步骤三值 + `unevaluable` + 未编排步骤的**原因**（worst-of-steps） | 可以（blocked） |
+| `preflight` | 能不能交 | 逐步骤三值 + `unevaluable` + `coverage.notCovered`（本 cut 不编排的步骤及原因）；`judgement` = 跑过的步骤的最劣值 | 可以（excluded） |
 | `analyze` | 该往哪看 | `\|u\|` 风险图（壁厚/再入角/悬垂）+ 峰表 + `attention.json` 的 `fused` 层 | 永不 |
 | `simulate_*` | 这种工况下会怎样 | 方向性读数 + 可靠性 + 证据（写 run，供 claim 检查） | 永不（由 `preflight` 判定） |
+
+**「没跑」有两种，必须分开（2026-10-23，审计判例）。** 把两者压进一个 `ran:false` 会让
+`judgement` 变成常量：
+
+| 事实 | 落点 | 对 `judgement` |
+|---|---|---|
+| **尝试后失败**（超预算、缺输入、引擎报错） | `steps` 里 `ran:false` + 原因 | **强制 `difficult`**，永不被平均掉 |
+| **本 cut 不编排**（simulation evidence、assembly render） | `coverage.notCovered` + 原因 | **不参与**；但每次回复都打印 |
+
+一个步骤都没跑 = `difficult`（空报告不是通过）。之所以不让"未编排"也压成 `difficult`：
+那样每份真实语料都恒为 `difficult`，三值词汇失去信息量——本文件上一段自己警告过这件事。
+未编排的步骤仍然**每次都说出来**（`coverage` + 渲染文本两处），所以不是"静默放过"。
+
+**工具输出契约在注册层自检（2026-10-23）。** `src/host/tool-contract.ts` 的
+`withOutputContract()` 让 `registerTool` 对每个返回值跑一遍**与运行时同一份**编译后 schema。
+判据：**验收必须经过真实边界**——`accept-*.mjs` 直接调 `def.execute()`，若不在这里补，
+测的就不是模型实际收到的东西（四个工具因此带着坏契约发布，见 `docs/AUDIT-2026-10-23.md` A1）。
 
 `analyze` **写 run（`kind:'analyze'`）并落 `attention.json`**，其 `samples.fused` 就是面板
 `pickHeatLayer` 优先绘制的那一层——**同一次计算，两个读者**（LLM 读 `report.json` 的峰表，
