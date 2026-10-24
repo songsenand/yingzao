@@ -265,6 +265,15 @@ const wheel = (deltaY: number) => {
   return true;
 };
 
+// ?recent=v066,p005 — seed the MRU list before mount, so "reopen where you left
+// off" can be captured (each shot runs in a fresh profile).
+{
+  const seeded = q.get('recent');
+  if (seeded) {
+    try { localStorage.setItem('cad.recent', JSON.stringify(seeded.split(',').map((x) => x.trim()).filter(Boolean))); } catch { /* private */ }
+  }
+}
+
 const openParam = q.get('open');
 const recordParam = q.get('record');
 const wheelParam = q.get('wheel');
@@ -290,10 +299,13 @@ if (openParam) {
 // ?nav=1 — open the product navigator (the breadcrumb), without guessing its text:
 // its label changes with whatever happens to be selected.
 if (q.get('nav') === '1') {
+  // With a navpick, wait for it to land first: the 最近 section only proves
+  // itself when something has actually been visited.
+  const at = q.get('navpick') ? 2700 : 1900;
   setTimeout(() => {
     const btn = document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
     btn?.click();
-  }, 1900);
+  }, at);
 }
 // ?navpick=<id> — open the navigator and click one product row (deterministic;
 // the breadcrumb's own label changes with the selection).
@@ -637,6 +649,23 @@ if (q.get('assert') === 'layout') {
   setTimeout(() => void run(), settle);
 }
 
+// ?assert=recent&expect=<text> — the panel must reopen on the last visited
+// address, not on whatever the corpus happens to order first.
+if (q.get('assert') === 'recent') {
+  const expect = q.get('expect') ?? '';
+  setTimeout(() => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    const crumb = document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '';
+    const ok = expect ? crumb.includes(expect) : crumb.length > 0;
+    pre.textContent = `recent restore (dock ${w}×${h})\n`
+      + `${ok ? 'PASS' : 'FAIL'}  breadcrumb ${ok ? 'contains' : 'does NOT contain'} "${expect}"\n`
+      + `      breadcrumb: ${crumb.replace(/\s+/g, ' ').trim()}`;
+  }, 2600);
+}
+
 // ?assert=evidence — the evidence table must be scannable, not N identical rows.
 // Fifteen motion runs about one mechanism share their first line; what tells them
 // apart is the second line (which revisions were posed, what was found, when).
@@ -693,7 +722,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

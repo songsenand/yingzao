@@ -28,6 +28,7 @@ import type {
 } from '../shared/types';
 import { judgementOf, versionVerdict } from './verdict';
 import { refreshProducts, subscribeProducts } from './products-store';
+import { loadRecent, pushRecent } from './recent';
 // The kind labels are ONE source (`shared/labels.ts`): the host authors titles
 // from them, the panel renders rows from them. A second copy here is how the
 // two drift.
@@ -636,6 +637,9 @@ export function CadPanel(): React.ReactElement {
   // to answer before you could see anything.
   const [navOpen, setNavOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
+  // Most-recently-viewed addresses (localStorage): the navigator's first section
+  // and what the panel restores on reopen.
+  const [recent, setRecent] = useState<string[]>(() => loadRecent());
   // The evidence table's filter: the old 类别 list, demoted to a column filter.
   type EvidenceFilter = 'all' | 'sim' | 'check' | 'assembly' | 'contract';
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('all');
@@ -2611,10 +2615,51 @@ export function CadPanel(): React.ReactElement {
     return !q || text.toLowerCase().includes(q);
   };
   const navClose = () => { setNavOpen(false); setNavQuery(''); };
-  const navPickPart = (id: string) => { setKind('part'); setSubjectId(id); setRecordId(null); setFollowLatest(true); navClose(); };
-  const navPickVersion = (partId: string, vid: string) => { setKind('part'); setSubjectId(partId); setFollowLatest(false); setRecordId(vid); navClose(); };
-  const navPickRun = (r: RunProduct) => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); navClose(); };
-  const navPickFile = (path: string) => { setKind('unregistered'); setRecordId(null); setFileSubject(path); setFileMeta(null); navClose(); refreshUnregistered(); };
+  const navPickPart = (id: string) => { setRecent(pushRecent(id)); setKind('part'); setSubjectId(id); setRecordId(null); setFollowLatest(true); navClose(); };
+  const navPickVersion = (partId: string, vid: string) => { setRecent(pushRecent(vid)); setKind('part'); setSubjectId(partId); setFollowLatest(false); setRecordId(vid); navClose(); };
+  const navPickRun = (r: RunProduct) => { setRecent(pushRecent(r.id)); setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); navClose(); };
+  const navPickFile = (path: string) => { setRecent(pushRecent(`f:${path}`)); setKind('unregistered'); setRecordId(null); setFileSubject(path); setFileMeta(null); navClose(); refreshUnregistered(); };
+
+  /**
+   * Resolve a stored address against the CURRENT tree. An address that no longer
+   * resolves (a version somebody deleted, a file that moved) is simply absent
+   * from 最近 — the list is a convenience, never a claim.
+   */
+  const resolveAddress = (id: string): { title: string; meta: string; apply: () => void } | null => {
+    if (/^v\d{3,}$/.test(id)) {
+      for (const p of parts) {
+        const v = p.versions.find((x) => x.id === id);
+        if (v) return { title: recordLabel(v, v.id === latestVersionId), meta: p.name, apply: () => navPickVersion(p.id, id) };
+      }
+      return null;
+    }
+    if (/^r\d{3,}$/.test(id)) {
+      const r = [...simRuns, ...checkRuns, ...assemblyRuns, ...contractRuns].find((x) => x.id === id);
+      return r ? { title: `${r.id} · ${runTitle(r)}`, meta: r.summary, apply: () => navPickRun(r) } : null;
+    }
+    if (/^p\d{3,}$/.test(id)) {
+      const p = parts.find((x) => x.id === id);
+      return p ? { title: p.name, meta: `${p.versions.length} 版`, apply: () => navPickPart(id) } : null;
+    }
+    if (id.startsWith('f:')) {
+      const path = id.slice(2);
+      const f = unregistered.find((x) => x.path === path);
+      return f ? { title: path, meta: f.format.toUpperCase(), apply: () => navPickFile(path) } : null;
+    }
+    return null;
+  };
+
+  // Reopen where you left off: the most recent address wins over the corpus's
+  // arbitrary first part — but only before the user has chosen anything (a
+  // deliberate pick later in the session must not be overridden).
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || parts.length === 0) return;
+    restoredRef.current = true;
+    const id = loadRecent()[0];
+    if (!id) return;
+    resolveAddress(id)?.apply();
+  }, [parts.length]);
 
   const navRow = (key: string, title: string, meta: string | null, onClick: () => void, active = false) =>
     React.createElement('button', {
@@ -2683,6 +2728,16 @@ export function CadPanel(): React.ReactElement {
         ...runRows(simRuns), ...runRows(checkRuns), ...runRows(assemblyRuns), ...runRows(contractRuns),
       ])]
       : [
+        // 最近 first: after an interruption this is what you actually want, and it
+        // is the one section that needs no knowledge of the corpus at all.
+        navSection('最近', (() => {
+          const rows: React.ReactNode[] = [];
+          for (const id of recent) {
+            const hit = resolveAddress(id);
+            if (hit) rows.push(navRow(`recent:${id}`, hit.title, hit.meta, hit.apply));
+          }
+          return rows;
+        })()),
         navSection(
           currentPart
             ? `版本 · ${currentPart.name}` + (versionsAll.length > versionRows.length
