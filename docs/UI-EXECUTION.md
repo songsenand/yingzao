@@ -64,6 +64,58 @@ T2.3 已经覆盖）；② `/api/cad/run/attention` 与 `/api/cad/assembly/check
 ### T2 导航（7–8 天）
 
 **状态（2026-10-24）**：T2.1 ✅（面包屑替换三个下拉）、T2.3 ✅（客户端搜索覆盖零件/版本/
+运行/文件）、T2.2 ◐（浮层已有搜索 + 分区 + Esc + 「最近」；**「邻域」与键盘 ↑↓ 未做**）。
+T2.4 ✅（零件页「证据」表：结果 · 名称 · 版本 · 摘要 · 时间 · 旧版/被取代徽标 + 分组筛选；
+沙箱 `assert=evidence` 断言「15 条运动 = 15 个不同第二行」）。
+T2.5 ✅（机器 = 装配清单对象：导航顶层 1 条「机器」，机器页 概览/证据/清单/用法；
+节点 16、证据 59，单件证据仍在零件页）。
+T2.6 ◐（最近 ✅：浮层「最近」区 + 重开恢复到上次地址；**收藏未做**）。
+
+**收尾修正（用户 2026-10-24 提问后决定）**：
+- **「验证」并入「证据」**：两者语义不同（本版 15 条 / 全零件 45 条），但呈现几乎一样、
+  点开同一个运行视图。现在是一张表 + 「本版」筛选，页签从 5 个回到 4 个。
+  验收：`assert=evidence` 断言筛选真的过滤（chip 15 = 行 15）、「验证」页签已不存在、
+  「全部」能还原 45 行。
+- **删除「跟随最新」开关**：那颗 ●/○ 实际编码的是"你是怎么进来的"（选零件→跟随，选版本→钉住），
+  不是用户偏好。现在只有一条规则：显式选择保留，其余落到最新；**新版本到达不移动视口**，
+  由旧版本横幅请求注意（沿用 2026-10-23「注意力只能被请求」）。验收：该控件已不存在。
+
+顺带修掉、并记在案的五处真问题：① 显式选择跨类目运行被「落到最新」覆盖（点 r059 落到 r069）；
+② `printability/stress/analyze` 没有平面入口（现归入「检查」）；③ 面包屑在 320 换行
+（flex 基准 auto 时换行先于收缩）；④ 装配清单节点名有 `part`/`name` 两种写法，只认一种
+（microscope5 整份机器"看起来不存在"）；⑤ 沙箱缺少 `/api/cad/assembly/manifest` 路由。
+
+| ID | 做什么 | 怎么做 | 验收 | 依赖 |
+|---|---|---|---|---|
+| **T0.1** | 运行标题用人能读的名字 | `tools.ts` 的 `provenanceLabel(ids)` 改为按 `RunProduct.parts` 拼：`机构运动 · 弯臂 + 调焦滑座 + 齿轮轴`；版本号移到 summary/tooltip。motion/physics/assembly 三处 | microscope5 的 `r013` 标题含三个零件名；`accept-*` 全绿 | — |
+| **T0.2** | `buildProducts` 从 O(运行×版本) 降到 O(运行+版本) | 把 `byId` / `newestVersionPerPart` 提到 run 循环外（`latest.ts` 加一个接受预建表的入口，或 `products.ts` 内联） | 新增 `scripts/bench-products.mjs`：合成 2 000 版/2 000 运行 < 50 ms（现 ~363 ms） | — |
+| **T0.3** | 负载去重 + 轮询合一 | 服务端运行只发一份 + `runParts: Record<runId, partId[]>`；客户端按它分组。`index.ts` 与 `panel.ts` 的 3 s 轮询合成一个可见性感知的订阅 | microscope5 响应 < 80 KB（现 211 KB）；列出条数 = 存储条数；后台标签页不轮询 | T0.2 |
+| **T0.4** | 写路径加锁 | `version.ts` / `runs.ts` / `parts.ts`：唯一 tmp 名（pid+rand）+ `O_EXCL` 锁文件 + **写前重读合并**（不用写前那份快照） | 新 `accept-manifest-lock.mjs`：并发 20 次写入不丢行（现会丢） | — |
+
+> T0 全部不改接口语义，除 T0.3 的响应形状（客户端同步改）。**先做这一批再谈别的**，
+> 否则后面的搜索/悬停/虚影都会建在 200 KB 的轮询上。
+
+### T1 读端口（3–5 天）
+
+**状态（2026-10-24）：T1.1 ✅ / T1.2 ✅ / T1.3 ✅（`0cb979b`）。**
+`src/host/store.ts` 按语料根键控，`snapshot()` 用三份 manifest 的 mtime+size 失效缓存，
+`changes(since)` 给出进程内单调序号，`resolve()` 认 `vNNN / rNNN / pNNN / u:<rel>` 并回答
+`isCurrent`。products 路由与 UI 沙箱都改为经过它，条件请求实测 **304 / 0 字节**。
+**未按原计划做的两处**：① `query(filter)` 目前只返回整棵树（facets 留给客户端搜索，
+T2.3 已经覆盖）；② `/api/cad/run/attention` 与 `/api/cad/assembly/check` 没有搬进端口——
+它们读的不是这三份 manifest（前者按 run 目录取文件，后者读装配清单），搬进来只是增加间接层。
+
+| ID | 做什么 | 怎么做 | 验收 | 依赖 |
+|---|---|---|---|---|
+| **T1.1** | `CadStore` 只读三件套 | 新 `src/host/store.ts`：按 cwd 键控的单例；`resolve(address)`（vNNN/rNNN/pNNN/u:path → 对象 + `isCurrent`）、`query(filter)`、`changes(sinceSeq)`；内部持有 manifest 的内存快照 + mtime 失效 | 新 `accept-store.mjs`：地址解析、`isCurrent` 判定、seq 单调 | T0 |
+| **T1.2** | 路由切端口 + 条件请求 | `/api/cad/products?since=` → 未变返回 304；`/api/cad/run/attention`、`/assembly/check` 走 `view()` | `curl` 两次：第二次 304；面板无感 | T1.1 |
+| **T1.3** | 沙箱改为消费端口 | `sandbox/preview/server.mjs` 改 import `query()`，不再直接 `buildProducts()`；路由形状由端口决定 | 沙箱截图与宿主逐像素一致（同一 URL） | T1.1 |
+
+> 端口是**只读**的。写路径（`command.*`）要等 T0.4 的锁跑稳之后再做，避免一次改太多。
+
+### T2 导航（7–8 天）
+
+**状态（2026-10-24）**：T2.1 ✅（面包屑替换三个下拉）、T2.3 ✅（客户端搜索覆盖零件/版本/
 运行/文件）、T2.2 ◐（浮层已有搜索 + 分区 + Esc；**尚无「最近」与「邻域」两块**）。
 T2.4 ✅（零件页「证据」表：结果 · 名称 · 版本 · 摘要 · 时间 · 旧版/被取代徽标 + 分组筛选；
 沙箱 `assert=evidence` 断言「15 条运动 = 15 个不同第二行」）。
