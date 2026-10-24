@@ -696,10 +696,10 @@ if (q.get('assert') === 'review') {
   });
   void (async () => {
     const lines: string[] = [`review queue (dock ${w}×${h})`];
-    const hasBadge = await waitFor(() => Boolean(document.querySelector('[data-review-badge]')));
+    const hasBadge = await waitFor(() => Boolean(document.querySelector('[data-review-strip]')));
     const before = crumb();
-    lines.push(`${hasBadge ? 'PASS' : 'FAIL'}  the status band carries a 待阅 badge`);
-    (document.querySelector('[data-review-badge]') as HTMLElement | null)?.click();
+    lines.push(`${hasBadge ? 'PASS' : 'FAIL'}  the line under the viewport carries the 待阅 strip`);
+    (document.querySelector('[data-review-strip]') as HTMLElement | null)?.click();
     const opened = await waitFor(() => rowsNow() > 0);
     const rows = rowsNow();
     const mid = crumb();

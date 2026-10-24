@@ -3643,15 +3643,46 @@ export function CadPanel(): React.ReactElement {
           style: { flex: '1 1 auto', minWidth: 40, height: 18 },
         }),
       ),
-      React.createElement('span', {
-        style: {
-          fontSize: 11, flex: '1 1 auto', lineHeight: '17px', height: 17, minWidth: 0,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          color: annotateMode ? '#b8860b' : measureMode ? '#c0392b' : thickMode ? '#00838f'
-            : (hint ? '#27ae60' : '#8a94a0'),
+      // THE QUEUE OWNS THIS LINE when something is waiting. It sits directly
+      // under the viewport — the second thing the eye lands on after the model —
+      // because a pending review that hides at the end of the status band is a
+      // review nobody reads. An ACTIVE tool keeps its instruction instead: the
+      // user is mid-gesture and swapping the line under them would be worse.
+      review.items.some((i) => i.status === 'unread') && !annotateMode && !measureMode && !thickMode
+        ? React.createElement('button', {
+          type: 'button',
+          'data-review-strip': '',
+          onClick: () => { setReviewOpen(true); void refreshReviewQueue(); },
+          title: '打开待阅列表 —— 打开不会切换视口，点「看」才跳过去',
+          style: {
+            display: 'flex', alignItems: 'center', gap: 5, flex: '1 1 auto', minWidth: 0,
+            height: 17, boxSizing: 'border-box', padding: '0 5px', cursor: 'pointer', textAlign: 'left',
+            border: '1px solid #bcd6f5', borderRadius: 4, background: '#eef5ff', overflow: 'hidden',
+          },
         },
-        title: feedbackText,
-      }, feedbackText),
+          React.createElement('span', {
+            style: {
+              flex: 'none', fontSize: 10, fontWeight: 700, color: '#fff', background: '#2f6fdb',
+              borderRadius: 3, padding: '0 4px', lineHeight: '13px',
+            },
+          }, `待阅 ${review.items.filter((i) => i.status === 'unread').length}`),
+          React.createElement('span', {
+            style: {
+              flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontSize: 11, fontWeight: 600, color: '#1f4f8f',
+            },
+          }, review.items.find((i) => i.status === 'unread')?.title ?? ''),
+          React.createElement('span', { style: { flex: 'none', fontSize: 11, color: '#2f6fdb' } }, '打开 ›'),
+        )
+        : React.createElement('span', {
+          style: {
+            fontSize: 11, flex: '1 1 auto', lineHeight: '17px', height: 17, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            color: annotateMode ? '#b8860b' : measureMode ? '#c0392b' : thickMode ? '#00838f'
+              : (hint ? '#27ae60' : '#8a94a0'),
+          },
+          title: feedbackText,
+        }, feedbackText),
     ),
 
     // ── sections: one fixed strip, one fixed body, one optional overlay ──
@@ -3750,21 +3781,19 @@ export function CadPanel(): React.ReactElement {
       record && provenance && React.createElement('span', {
         style: { flex: 'none', color: '#8a94a0' },
       }, provenance),
-      (review.unread > 0 || review.items.length > 0) && React.createElement('button', {
+      // Unread items live in the line under the viewport (the focus); this is
+      // only the way back to items already handled — a footnote, which is where
+      // settled things belong.
+      review.unread === 0 && review.items.length > 0 && React.createElement('button', {
         type: 'button',
         'data-review-badge': '',
         onClick: () => { setReviewOpen(true); void refreshReviewQueue(); },
-        title: review.unread
-          ? `${review.unread} 条待阅：Agent 想让你看的东西（打开列表不会切视口）`
-          : '待阅列表',
+        title: `${review.items.length} 条已处理的待阅记录`,
         style: {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
-          fontSize: 11, lineHeight: '16px',
-          color: review.unread ? '#a4531c' : '#8a94a0',
-          fontWeight: review.unread ? 600 : 400,
-          textDecoration: 'underline dotted',
+          fontSize: 11, lineHeight: '16px', color: '#8a94a0', textDecoration: 'underline dotted',
         },
-      }, `待阅 ${review.unread || review.items.length}`),
+      }, `待阅记录 ${review.items.length}`),
       tray.length > 0 && React.createElement('button', {
         type: 'button',
         onClick: () => setSheet('tray'),

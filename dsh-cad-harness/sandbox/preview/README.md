@@ -59,7 +59,7 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `assert=ghost` | assert the comparison control names the compared version and toggles the corner inset (the server logs each STL id once, so `stl v030` + `stl v066` proves both meshes were fetched) |
 | — | `shot.mjs` now probes the URL before launching Firefox and deletes the old capture: a dead server used to leave the PREVIOUS image on disk while still printing a path (observed twice — a silently stale image is worse than none) |
 | `queue` | `1` = serve a demo review queue (two items: a 待看 and a 回退提议) — the panel's badge/overlay need SOMETHING to show, and a real corpus must not carry fake queue items |
-| `assert=review` | assert the queue contract: the badge opens a list, **opening it does not move the viewport**, and choosing 看 closes the list and lands on the item's target |
+| `assert=review` | assert the queue contract: the strip under the viewport opens a list, **opening it does not move the viewport**, and choosing 看 closes the list and lands on the item's target |
 | `assert=deeplink` | with `expect=<text>`: assert `?t=<address>` landed on that object, and that an old version opened in the history state (banner present) |
 | `assert=history` | assert the gate: 5 recent versions, expanding reveals the rest (5 → 11), collapsing returns to 5 |
 | `assert=machine` | with `expect=<name>`: assert the navigator has a 机器 row, the breadcrumb names it, and its tabs carry the evidence and node counts |
