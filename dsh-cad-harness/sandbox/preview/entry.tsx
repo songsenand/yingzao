@@ -677,6 +677,30 @@ if (q.get('assert') === 'recent') {
   }, 2600);
 }
 
+// ?assert=ghost — the comparison control must name the version it overlays and
+// actually toggle. (Whether the two meshes DIFFER is a property of the corpus:
+// the server logs each STL id it served, so `stl v030` + `stl v066` is the
+// evidence that both were fetched.)
+if (q.get('assert') === 'ghost') {
+  setTimeout(() => {
+    const btn = document.querySelector('[data-ghost-toggle]') as HTMLElement | null;
+    const before = (btn?.textContent ?? '').trim();
+    btn?.click();
+    setTimeout(() => {
+      const after = (document.querySelector('[data-ghost-toggle]')?.textContent ?? '').trim();
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = [
+        `ghost compare (dock ${w}×${h})`,
+        `${/虚影 v\d{3,}/.test(before) ? 'PASS' : 'FAIL'}  the control names the overlaid version: ${before || '(none)'}`,
+        `${/虚影 v\d{3,}/.test(after) && after !== before ? 'PASS' : 'FAIL'}  clicking it toggles the overlay: ${after || '(none)'}`,
+      ].join('\n');
+    }, 420);
+  }, 2500);
+}
+
 // ?assert=history — the version gate: five recent revisions are one click away,
 // the rest behind ONE deliberate step, and nothing is unreachable.
 if (q.get('assert') === 'history') {
@@ -836,7 +860,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

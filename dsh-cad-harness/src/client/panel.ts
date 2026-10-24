@@ -834,6 +834,19 @@ export function CadPanel(): React.ReactElement {
       : null;
   const versionIdRef = useRef<string | null>(null);
   useEffect(() => { versionIdRef.current = versionId; }, [versionId]);
+
+  // Ghost comparison (T3.2): which version to overlay as a silhouette.
+  //   * viewing an OLD version  → overlay the LATEST (what it became);
+  //   * viewing the latest      → overlay the PARENT (what changed in this one).
+  // The candidate is null when there is only one version, and for files/runs.
+  const [ghostOn, setGhostOn] = useState(true);
+  const ghostRef = useRef<THREE.Mesh | null>(null);
+  const ghostVersionId = (() => {
+    if (!version || !currentPart) return null;
+    if (latestVersionId && version.id !== latestVersionId) return latestVersionId;
+    const idx = currentPart.versions.findIndex((v) => v.id === version.id);
+    return idx >= 0 ? (currentPart.versions[idx + 1]?.id ?? null) : null;
+  })();
   /** Runs of this part whose geometry named the selected version. */
   const runsOnVersion = version
     ? (currentPart?.runs ?? []).filter((r) => r.sourceVersionIds.includes(version.id))
@@ -1217,6 +1230,43 @@ export function CadPanel(): React.ReactElement {
     // Keyed on the SOURCE, not the version: an unregistered file renders through
     // the same builder, and switching version→file must rebuild the scene.
   }, [meshSource?.key]);
+
+  // The ghost loads into the CURRENT scene rather than rebuilding it: toggling a
+  // comparison must not cost a WebGL context, nor refit the camera under the
+  // user's hands. Orange so it never reads as "the part" (which is blue).
+  useEffect(() => {
+    const scene = bgSceneRef.current;
+    if (!scene) return;
+    const id = ghostOn ? ghostVersionId : null;
+    if (!id || id === versionId) return;
+    let dead = false;
+    const material = new THREE.MeshStandardMaterial({
+      color: '#e07a3f', metalness: 0, roughness: 1,
+      transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+    mesh.name = 'ghost';
+    mesh.renderOrder = 2;
+    void (async () => {
+      try {
+        const res = await fetch(withProject(`/api/cad/stl?v=${encodeURIComponent(id)}`));
+        if (!res.ok) return;
+        const geometry = new STLLoader().parse(await res.arrayBuffer());
+        if (dead) { geometry.dispose(); return; }
+        mesh.geometry.dispose();
+        mesh.geometry = geometry;
+        scene.add(mesh);
+        ghostRef.current = mesh;
+      } catch { /* a ghost that cannot load is simply absent — never an error */ }
+    })();
+    return () => {
+      dead = true;
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      material.dispose();
+      if (ghostRef.current === mesh) ghostRef.current = null;
+    };
+  }, [ghostOn, ghostVersionId, versionId, meshSource?.key]);
 
   // --- screenshot + annotation → context tray ---
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -1721,7 +1771,11 @@ export function CadPanel(): React.ReactElement {
     setTray((t) => [...t, {
       id,
       thumb: thumb.toDataURL('image/png'),
-      label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')} · ${label}${annotations.length ? ` · ${annotations.length}个标注` : ''}`,
+      // A capture taken from a history version says so: the image will be read
+      // later, out of context, and "which revision is this?" must survive the trip.
+      label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')}`
+        + `${version && latestVersionId && version.id !== latestVersionId ? '（旧版）' : ''}`
+        + ` · ${label}${annotations.length ? ` · ${annotations.length}个标注` : ''}`,
       status: '发送中',
       time,
       note: noteOverride ?? '',
@@ -2335,7 +2389,10 @@ export function CadPanel(): React.ReactElement {
           onClick: () => void runFluid(),
           disabled: fluidBusy,
           style: { ...S.smallBtn, border: '1px solid #2c81ba', background: '#e8f4fa', opacity: fluidBusy ? 0.55 : 1 },
-        }, fluidBusy ? '仿真中…（可能数分钟）' : `以 ${version.id} 为管件跑流体仿真`),
+        }, fluidBusy ? '仿真中…（可能数分钟）'
+          : version.id !== latestVersionId
+            ? `在旧版 ${version.id} 上跑流体（结果会标注基于旧版）`
+            : `以 ${version.id} 为管件跑流体仿真`),
         React.createElement('span', { style: S.hint }, '跑完会作为新运行出现在证据里'),
       ),
     );
@@ -2588,6 +2645,33 @@ export function CadPanel(): React.ReactElement {
   // is how a first attempt landed on the 零件/记录 selectors).
   // Deliberately NOT a sixth chip in `S.viewTools` either: that column already
   // covers the model's top-left, and more chips would cover more of it.
+  // The comparison toggle sits under 背景: same corner, same pill. It names the
+  // version it overlays, because "虚影" alone does not say WHAT you are seeing.
+  // The stale banner sits at the very top of the viewport; the tool column must
+  // start below it, or the first two chips (截图 / 标注) are covered by it.
+  const staleBanner = Boolean(version && latestVersionId && version.id !== latestVersionId);
+  const toolStripStyle = staleBanner ? { ...S.viewTools, top: 32 } : S.viewTools;
+
+  const ghostToggle = version && ghostVersionId && !glError
+    ? React.createElement('button', {
+      type: 'button',
+      'data-ghost-toggle': '',
+      'aria-label': '虚影对比',
+      title: ghostOn
+        ? `虚影：正在把 ${ghostVersionId} 的半透明轮廓叠在当前版本上（点击关闭）`
+        : `叠加 ${ghostVersionId} 的轮廓，对比两版差在哪里`,
+      onClick: () => setGhostOn((v) => !v),
+      style: {
+        position: 'absolute', right: 8, top: 66, zIndex: 8, cursor: 'pointer',
+        borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
+        border: ghostOn ? '1px solid #e07a3f' : '1px solid #d5d9dd',
+        background: 'rgba(255,255,255,0.86)',
+        color: ghostOn ? '#a4531c' : '#26303a',
+        ...(ghostOn ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
+      },
+    }, `${ghostOn ? '◫' : '▢'} 虚影 ${ghostVersionId}`)
+    : null;
+
   const bgPicker = version && !glError
     ? React.createElement(
       'div',
@@ -3089,6 +3173,7 @@ export function CadPanel(): React.ReactElement {
       // Stale-version banner (DESIGN §20): the user demanded it be obvious.
       kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
         React.createElement('div', {
+          title: '讨论请以此为准，或点「回到最新」',
           style: {
             position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
             display: 'flex', alignItems: 'center', gap: 8,
@@ -3096,7 +3181,9 @@ export function CadPanel(): React.ReactElement {
             padding: '4px 10px', fontSize: 12, fontWeight: 600,
           },
         },
-          `⚠ 正在查看旧版本 ${version.id}（最新为 ${latestVersionId}）— 讨论请以此为准或切回最新`,
+          // One line: a two-line banner covered the tool chips, and "回到最新" is
+          // the actionable half anyway. The full sentence lives in the tooltip.
+          `⚠ 旧版本 ${version.id} · 最新 ${latestVersionId}`,
           React.createElement('button', {
             type: 'button',
             onClick: () => { setRecordId(latestVersionId); },
@@ -3137,7 +3224,7 @@ export function CadPanel(): React.ReactElement {
       meshSource && !glError && React.createElement(ViewportOverlay, {
         getScene: () => versionSceneRef.current,
         ink: overlayInk(bg),
-        chrome: bgPicker,
+        chrome: React.createElement(React.Fragment, null, ghostToggle, bgPicker),
         // 复原 = back to the initial framing AND a clean slate for the markup:
         // annotations, measurements, the thickness probe AND the section all
         // belong to the view you were inspecting, so they go with it.
@@ -3207,7 +3294,7 @@ export function CadPanel(): React.ReactElement {
     // could cite (DESIGN §30.18: preview is not evidence).
     !version && meshSource && React.createElement(
       'div',
-      { style: S.viewTools },
+      { style: toolStripStyle },
       React.createElement('button', {
         type: 'button',
         title: '📸截图并发送到会话：把未登记文件的视图（含标注框）发进上下文，说明"就是这个文件"',
@@ -3224,7 +3311,7 @@ export function CadPanel(): React.ReactElement {
     // single part version ──
     version && React.createElement(
       'div',
-      { style: S.viewTools },
+      { style: toolStripStyle },
       React.createElement('button', {
         type: 'button',
         title: '📸截图并发送到会话：视口（含测量线、标注框）直接进上下文，排队不打断当前回合',

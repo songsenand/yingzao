@@ -48,6 +48,10 @@ const notFound = (what) => new Response(`no ${what}`, { status: 404 });
 // Captured POST /api/cad/import bodies, so `?assert=local-import` can prove the
 // panel sent what it says it sent (session project, path, unit, render:false).
 const importRequests = [];
+// STL ids served in this process, each logged ONCE: a ghost comparison is
+// invisible in a screenshot when the two versions differ only inside, so the
+// request log is how we prove the second mesh was actually fetched.
+const stlSeen = new Set();
 
 async function readMaybe(path) {
   try { return await readFile(path); } catch { return null; }
@@ -65,6 +69,10 @@ function parseParams(scad) {
 
 async function api(req, url) {
   const p = url.pathname;
+  if (p === '/api/cad/stl') {
+    const id = url.searchParams.get('v');
+    if (id && !stlSeen.has(id)) { stlSeen.add(id); console.log('[sandbox] stl', id); }
+  }
   const v = url.searchParams.get('v');
 
   // --- products: the same tree the host builds, from the same stores --------
