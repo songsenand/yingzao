@@ -1258,7 +1258,7 @@ export function CadPanel(): React.ReactElement {
           if (inset && insetOnRef.current) {
             const w = mount.clientWidth || 1;
             const h = mount.clientHeight || 420;
-            const s = Math.max(56, Math.min(Math.round(h * 0.46), Math.round(w * 0.62)));
+            const s = Math.max(64, Math.min(Math.round(h * 0.54), Math.round(w * 0.62)));
             const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
             inset.camera.position.copy(inset.center).addScaledVector(dir, inset.distance);
             inset.camera.up.copy(camera.up);
@@ -2858,7 +2858,7 @@ export function CadPanel(): React.ReactElement {
     resolveAddress(id)?.apply();
   }, [parts.length]);
 
-  const navRow = (key: string, title: string, meta: string | null, onClick: () => void, active = false) =>
+  const navRow = (key: string, title: string, meta: string | null, onClick: () => void, active = false, muted = false) =>
     React.createElement('button', {
       key, type: 'button', onClick,
       // The sandbox (and any future deep link) addresses a row by its product id.
@@ -2866,7 +2866,10 @@ export function CadPanel(): React.ReactElement {
       style: {
         display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
         padding: '4px 6px', border: 'none', borderRadius: 5, cursor: 'pointer',
-        background: active ? '#eaf3fc' : 'transparent', color: '#26303a', fontSize: 12,
+        background: active ? '#eaf3fc' : 'transparent',
+        // Muted = "this is history": still one click away, but it must not look
+        // like the default surface. The cost is visual weight, not a wall.
+        color: muted ? '#6b7684' : '#26303a', fontSize: 12,
       },
     },
       React.createElement('span', {
@@ -2902,8 +2905,8 @@ export function CadPanel(): React.ReactElement {
       : [];
     // The same label the old dropdown used: it carries 导入 / 合并 / 非实体 and
     // the 最新 marker — exactly what you scan a history for.
-    const vRow = (v: VersionProduct) => navRow(`v:${v.id}`, recordLabel(v, v.id === latestVersionId), null,
-      () => navPickVersion(currentPart!.id, v.id), recordId === v.id);
+    const vRow = (v: VersionProduct, muted = false) => navRow(`v:${v.id}`, recordLabel(v, v.id === latestVersionId), null,
+      () => navPickVersion(currentPart!.id, v.id), recordId === v.id, muted);
 
     // THE GATE (T3.1): five recent revisions are one click away; the rest are
     // folded behind one deliberate step. Not hidden — a history you cannot reach
@@ -2917,16 +2920,23 @@ export function CadPanel(): React.ReactElement {
     const older = versionsAll.slice(5).filter((v) => !head.includes(v));
     const versionsExpanded = expandedVersionsFor === currentPart?.id;
     const versionRows = q
-      ? versionsAll.slice(0, 40).map(vRow)
+      ? versionsAll.slice(0, 40).map((v) => vRow(v))
       : [
-        ...head.map(vRow),
+        ...head.map((v) => vRow(v)),
         ...(versionsExpanded && older.length
           ? [
             React.createElement('div', {
               key: 'older-divider',
               style: { fontSize: 10, color: '#8a94a0', padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
-            }, `更早 ${older.length} 版`),
-            ...older.map(vRow),
+            }, `更早 ${older.length} 版 · 只读参考`),
+            ...older.map((v) => vRow(v, true)),
+            // A nudge, not a wall: history is here when you need it, but the
+            // cheap path is to ask the agent — it can read old revisions and
+            // explain the difference without you hunting through them.
+            React.createElement('div', {
+              key: 'older-nudge',
+              style: { fontSize: 10, color: '#8a94a0', padding: '4px 6px', lineHeight: '14px' },
+            }, '历史版本只用于对比。要让 Agent 查旧版 / 解释两版差在哪里，通常更快。'),
           ]
           : []),
       ];
@@ -3249,20 +3259,26 @@ export function CadPanel(): React.ReactElement {
       compareActive && ghostVersionId && React.createElement('div', {
         'data-compare-inset': '',
         style: {
-          position: 'absolute', right: 6, bottom: 6, height: '46%', aspectRatio: '1 / 1',
+          position: 'absolute', right: 6, bottom: 6, height: '54%', aspectRatio: '1 / 1',
           border: '1px solid #c9ced4', borderRadius: 8, pointerEvents: 'none', zIndex: 5,
           boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         },
       },
+        // The legend says WHICH ROLE each colour has, not just which id: the whole
+        // point of this inset is "am I looking at the design or at its past?".
         React.createElement('div', {
           style: {
-            position: 'absolute', left: 5, top: 3, fontSize: 10, lineHeight: '13px',
-            color: '#3d4a57', textShadow: '0 0 3px #fff', fontWeight: 600,
+            position: 'absolute', left: 4, top: 3, fontSize: 10, lineHeight: '12px',
+            color: '#3d4a57', background: 'rgba(255,255,255,0.84)', borderRadius: 4,
+            padding: '1px 4px', fontWeight: 600,
           },
         },
-          React.createElement('span', { style: { color: '#2563eb' } }, `● ${version?.id ?? ''}`),
-          React.createElement('span', { style: { color: '#8a94a0', fontWeight: 400 } }, ' / '),
-          React.createElement('span', { style: { color: '#e2651c' } }, `● ${ghostVersionId}`),
+          React.createElement('div', null,
+            React.createElement('span', { style: { color: '#2563eb' } }, '● 蓝 '),
+            React.createElement('span', null, `${staleBanner ? '历史' : '当前'} ${version?.id ?? ''}`)),
+          React.createElement('div', null,
+            React.createElement('span', { style: { color: '#e2651c' } }, '● 橙 '),
+            React.createElement('span', null, `${staleBanner ? '当前' : '历史'} ${ghostVersionId}`)),
         ),
       ),
       meshSource && React.createElement('div', {
