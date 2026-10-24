@@ -677,6 +677,47 @@ if (q.get('assert') === 'recent') {
   }, 2600);
 }
 
+// ?assert=review — the queue must be a QUEUE: opening it does not move the
+// viewport, choosing 看 does. Both halves are checked.
+if (q.get('assert') === 'review') {
+  const crumb = () => (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const rowsNow = () => document.querySelectorAll('[data-review-row]').length;
+  // Wait for a condition instead of sleeping: mount timing depends on how fast
+  // the corpus + queue fetch resolve, and a fixed 600 ms made this read an empty
+  // page and then "pass" the close-check trivially.
+  const waitFor = (fn: () => boolean, ms = 6000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`review queue (dock ${w}×${h})`];
+    const hasBadge = await waitFor(() => Boolean(document.querySelector('[data-review-badge]')));
+    const before = crumb();
+    lines.push(`${hasBadge ? 'PASS' : 'FAIL'}  the status band carries a 待阅 badge`);
+    (document.querySelector('[data-review-badge]') as HTMLElement | null)?.click();
+    const opened = await waitFor(() => rowsNow() > 0);
+    const rows = rowsNow();
+    const mid = crumb();
+    lines.push(`${opened ? 'PASS' : 'FAIL'}  the badge opens a list with items (${rows})`);
+    lines.push(`${mid === before ? 'PASS' : 'FAIL'}  opening the list did NOT move the viewport`);
+    (document.querySelector('[data-review-open="q001"]') as HTMLElement | null)?.click();
+    const closed = await waitFor(() => rowsNow() === 0);
+    const after = crumb();
+    lines.push(`${closed ? 'PASS' : 'FAIL'}  choosing 看 closes the list`);
+    lines.push(`${/r059/.test(after) && after !== before ? 'PASS' : 'FAIL'}  and lands on the item target: ${after}`);
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  })();
+}
+
 // ?assert=deeplink&expect=<text> — a link must land on its object, and an old
 // version must land in the HISTORY state (banner), not silently as if current.
 if (q.get('assert') === 'deeplink') {
@@ -883,7 +924,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost' && q.get('assert') !== 'deeplink') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost' && q.get('assert') !== 'deeplink' && q.get('assert') !== 'review') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

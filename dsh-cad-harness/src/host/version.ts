@@ -13,6 +13,7 @@
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock, writeJsonAtomic } from './file-lock.ts';
+import { newestVersionPerPart } from './latest.ts';
 
 /**
  * Where a version's geometry came from.
@@ -46,6 +47,16 @@ export type VersionSource =
      */
     kind: 'merged';
     from: { name: string; versionId: string | null }[];
+    at: string;
+  }
+  | {
+    /**
+     * A ROLLBACK, approved by a human: this version's geometry is a copy of
+     * `fromVersionId`'s. Recorded so the corpus can tell "reverted on purpose"
+     * from "generated again and happened to look the same".
+     */
+    kind: 'revert';
+    fromVersionId: string;
     at: string;
   };
 
@@ -320,6 +331,44 @@ export async function readVersionDatumPoints(
   } catch {
     return {};
   }
+}
+
+/**
+ * Roll back by ADDING a version.
+ *
+ * History is never rewritten: the approved rollback becomes a new version whose
+ * `parentVersion` is the part's current head and whose geometry is a byte copy of
+ * the target. That way the rollback itself is a fact in the history (visible,
+ * diffable, and reversible), not a hole where a version used to be.
+ */
+export async function revertVersion(
+  store: VersionStore,
+  fromVersionId: string,
+  options: { reason?: string } = {},
+): Promise<string> {
+  const manifest = await readManifest(store);
+  const entry = manifest.versions.find((v) => v.id === fromVersionId);
+  if (!entry) throw new Error(`unknown version "${fromVersionId}"`);
+  const dir = join(versionsDir(store), fromVersionId);
+  const stl = await readFile(join(dir, 'model.stl')).catch(() => null);
+  if (!stl) {
+    throw new Error(`version "${fromVersionId}" has no model.stl — a rollback copies geometry, so there is nothing to copy`);
+  }
+  const scadCode = await readFile(join(dir, 'model.scad'), 'utf8').catch(() => null);
+  const datumSet = await readVersionDatums(store, fromVersionId);
+  // The head is the newest version of the SAME part — the rollback's parent, so
+  // the chain reads "head → rolled back to an older shape".
+  const head = entry.partId ? newestVersionPerPart(manifest.versions).get(entry.partId) ?? null : null;
+  return saveVersion(store, {
+    scadCode: scadCode ?? undefined,
+    stl,
+    datumSet: datumSet.points.length + datumSet.axes.length + datumSet.planes.length + datumSet.cylinders.length > 0
+      ? datumSet : undefined,
+    userIntent: `回退到 ${fromVersionId}` + (options.reason ? `：${options.reason}` : ''),
+    parentVersion: head,
+    partId: entry.partId,
+    source: { kind: 'revert', fromVersionId, at: new Date().toISOString() },
+  });
 }
 
 /** List version ids newest-first. */

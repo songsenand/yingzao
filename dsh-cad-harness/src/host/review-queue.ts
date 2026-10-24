@@ -41,6 +41,8 @@ export interface ReviewItem {
   target: string | null;
   createdAt: string;
   status: ReviewStatus;
+  /** Set when an approved rollback produced a version: the id that resolved it. */
+  resolvedBy?: string;
 }
 
 export interface QueueState {
@@ -167,6 +169,7 @@ export async function setReviewStatus(
   root: string,
   id: string,
   status: ReviewStatus,
+  resolvedBy?: string,
 ): Promise<ReviewItem | null> {
   const file = queuePath(root);
   return withFileLock(file, async () => {
@@ -174,6 +177,7 @@ export async function setReviewStatus(
     const item = state.items.find((i) => i.id === id) ?? null;
     if (!item) return null;
     item.status = status;
+    if (resolvedBy) item.resolvedBy = resolvedBy;
     await writeJsonAtomic(file, state);
     return item;
   });

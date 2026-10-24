@@ -10,7 +10,8 @@ import {
 } from './parts.ts';
 import { buildProductsWire } from './products.ts';
 import { storeFor } from './store.ts';
-import { enqueueReviews } from './review-queue.ts';
+import { revertVersion as revertVersionHelper } from './version.ts';
+import { enqueueReviews, readQueue, setReviewStatus } from './review-queue.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
@@ -6019,6 +6020,75 @@ export function registerCadTools(
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
+      },
+    });
+
+    // --- the review queue: badge, decisions, and the ONE write it can cause --
+    //
+    // Reading the queue is cheap and idempotent; changing an item's status is the
+    // human saying "seen it" / "no"; approving a rollback is the only action that
+    // touches the corpus, and it does so by ADDING a version (never rewriting).
+    void connection.fetch.register({
+      path: '/api/cad/review/queue',
+      methods: ['GET'],
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const state = await readQueue(project.root);
+        return new Response(JSON.stringify({
+          items: state.items,
+          unread: state.items.filter((i) => i.status === 'unread').length,
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+    void connection.fetch.register({
+      path: '/api/cad/review/status',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const body = await request.json() as { id?: string; status?: string };
+        const status = body?.status;
+        if (!body?.id || (status !== 'unread' && status !== 'read' && status !== 'dismissed')) {
+          return new Response(JSON.stringify({ error: 'id and status (unread|read|dismissed) are required' }),
+            { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        const project = requestStores(request);
+        const item = await setReviewStatus(project.root, body.id, status);
+        return item
+          ? new Response(JSON.stringify({ item }), { status: 200, headers: { 'content-type': 'application/json' } })
+          : new Response(JSON.stringify({ error: `unknown queue item "${body.id}"` }),
+            { status: 404, headers: { 'content-type': 'application/json' } });
+      },
+    });
+    void connection.fetch.register({
+      path: '/api/cad/review/approve',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const body = await request.json() as { id?: string };
+        if (!body?.id) {
+          return new Response(JSON.stringify({ error: 'id is required' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        const project = requestStores(request);
+        const state = await readQueue(project.root);
+        const item = state.items.find((i) => i.id === body.id) ?? null;
+        if (!item) {
+          return new Response(JSON.stringify({ error: `unknown queue item "${body.id}"` }), { status: 404, headers: { 'content-type': 'application/json' } });
+        }
+        if (item.kind !== 'revert') {
+          return new Response(JSON.stringify({ error: 'this item is not a rollback proposal' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        const target = String(item.target ?? '');
+        if (!/^v\d{3,}$/.test(target)) {
+          return new Response(JSON.stringify({ error: 'the proposal has no version target' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        try {
+          // Immutable: the rollback is a NEW version whose parent is the head.
+          const versionId = await revertVersionHelper(project.store, target, { reason: item.title });
+          await setReviewStatus(project.root, item.id, 'read', versionId);
+          return new Response(JSON.stringify({ versionId, from: target }), { status: 200, headers: { 'content-type': 'application/json' } });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 409, headers: { 'content-type': 'application/json' } });
+        }
       },
     });
 

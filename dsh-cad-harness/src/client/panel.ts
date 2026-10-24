@@ -29,6 +29,7 @@ import type {
 import { judgementOf, versionVerdict } from './verdict';
 import { refreshProducts, subscribeProducts } from './products-store';
 import { loadRecent, pushRecent } from './recent';
+import { approveReviewItem, refreshReviewQueue, setReviewItemStatus, subscribeReviewQueue, type ReviewItem } from './review-store';
 import { parseMachine, type Machine } from './assembly';
 // The kind labels are ONE source (`shared/labels.ts`): the host authors titles
 // from them, the panel renders rows from them. A second copy here is how the
@@ -640,6 +641,12 @@ export function CadPanel(): React.ReactElement {
   // Which part's version list is expanded past the recent window. Keyed by part
   // id, so switching parts collapses it without an effect to reset it.
   const [expandedVersionsFor, setExpandedVersionsFor] = useState<string | null>(null);
+
+  // The review queue (T4.2): the badge and the overlay read ONE snapshot, so they
+  // cannot disagree about how many things are waiting.
+  const [review, setReview] = useState<{ items: ReviewItem[]; unread: number; error: string | null }>({ items: [], unread: 0, error: null });
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => subscribeReviewQueue(setReview), []);
   // Most-recently-viewed addresses (localStorage): the navigator's first section
   // and what the panel restores on reopen.
   const [recent, setRecent] = useState<string[]>(() => loadRecent());
@@ -3053,6 +3060,125 @@ export function CadPanel(): React.ReactElement {
     );
   };
 
+  /**
+   * The review queue, consumed at the human's pace.
+   *
+   * Opening this overlay NEVER changes the viewport: that is the whole contract
+   * (attention is requested, not taken). Choosing 看 does — one click, one object.
+   * A rollback proposal carries its own action, because approving it writes a new
+   * version and that must not be a side effect of "look at it".
+   */
+  const reviewOverlay = () => {
+    const pending = review.items.filter((i) => i.status === 'unread');
+    const settled = review.items.filter((i) => i.status !== 'unread');
+    const card = { background: '#fff', borderRadius: 10, border: '1px solid #d5d9dd', padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 3 };
+    const tinyBtn = { ...S.smallBtn, padding: '1px 7px', fontSize: 11 };
+
+    const row = (item: ReviewItem) => React.createElement('div', {
+      key: item.id,
+      'data-review-row': item.id,
+      style: { ...card, opacity: item.status === 'unread' ? 1 : 0.6 },
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+        React.createElement('span', {
+          style: {
+            flex: 'none', fontSize: 10, lineHeight: '15px', padding: '0 5px', borderRadius: 3, fontWeight: 600,
+            color: item.kind === 'revert' ? '#a4531c' : '#2f6fdb',
+            background: item.kind === 'revert' ? '#fdeee2' : '#eaf3fc',
+          },
+        }, item.kind === 'revert' ? '回退提议' : '待看'),
+        React.createElement('span', {
+          style: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: '#26303a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        }, item.title),
+        React.createElement('span', { style: { flex: 'none', fontSize: 10, color: '#8a94a0' } }, fmtTime(item.createdAt)),
+      ),
+      item.body && React.createElement('div', {
+        style: { fontSize: 11, color: '#5b6673', lineHeight: '15px', whiteSpace: 'pre-wrap' },
+      }, item.body),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } },
+        item.target && React.createElement('span', {
+          style: { fontFamily: 'ui-monospace, monospace', fontSize: 10, color: '#8a94a0' },
+        }, item.target),
+        item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: '#1e8449' } }, `已回退为 ${item.resolvedBy}`),
+        React.createElement('span', { style: { marginLeft: 'auto' } }),
+        item.target && item.kind === 'revert' && React.createElement('button', {
+          type: 'button',
+          title: `批准回退：以 ${item.target} 的几何新建一个版本（父版本=当前 head，历史不改写）`,
+          onClick: async () => {
+            try {
+              const res = await approveReviewItem(item.id);
+              const pid = item.target ? partOfVersion.get(item.target) ?? null : null;
+              if (res.versionId && pid) { setKind('part'); setSubjectId(pid); setRecordId(res.versionId); }
+              setReviewOpen(false);
+            } catch (e: any) {
+              setError(`回退失败：${String(e?.message ?? e)}`);
+            }
+          },
+          style: { ...tinyBtn, border: '1px solid #a4531c', color: '#a4531c', background: '#fdeee2' },
+        }, '批准回退'),
+        item.target && React.createElement('button', {
+          type: 'button',
+          'data-review-open': item.id,
+          title: `在面板里打开 ${item.target}`,
+          onClick: () => {
+            const hit = item.target ? resolveAddress(item.target) : null;
+            hit?.apply();
+            void setReviewItemStatus(item.id, 'read');
+            setReviewOpen(false);
+          },
+          style: { ...tinyBtn, border: '1px solid #2c81ba', background: '#e8f4fa' },
+        }, '看'),
+        React.createElement('button', {
+          type: 'button', onClick: () => void setReviewItemStatus(item.id, item.status === 'unread' ? 'read' : 'unread'),
+          style: tinyBtn,
+        }, item.status === 'unread' ? '已阅' : '标为未读'),
+        React.createElement('button', {
+          type: 'button', onClick: () => void setReviewItemStatus(item.id, 'dismissed'),
+          style: tinyBtn,
+        }, '忽略'),
+      ),
+    );
+
+    return React.createElement('div', {
+      style: {
+        position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(20,24,30,0.35)',
+        display: 'flex', padding: 8, boxSizing: 'border-box',
+      },
+      onClick: (e: any) => { if (e.target === e.currentTarget) setReviewOpen(false); },
+    },
+      React.createElement('div', {
+        style: {
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#f7f9fb',
+          borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
+        },
+      },
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: '1px solid #e6ebef', background: '#fff' },
+        },
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: '#26303a' } }, '待阅'),
+          React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } },
+            `${pending.length} 条未读${settled.length ? ` · ${settled.length} 条已处理` : ''}`),
+          review.error && React.createElement('span', { style: { fontSize: 10, color: '#c0392b' } }, review.error),
+          React.createElement('button', {
+            type: 'button', onClick: () => setReviewOpen(false), title: '关闭（Esc）',
+            style: { ...S.smallBtn, marginLeft: 'auto' },
+          }, '✕'),
+        ),
+        React.createElement('div', {
+          style: { overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 },
+        },
+          review.items.length === 0
+            ? React.createElement('div', { style: { color: '#8a94a0', fontSize: 12, padding: 8 } },
+              '还没有待阅项。Agent 想让你看什么时会往这里放，不会自己切换视口。')
+            : [...pending, ...settled].map(row),
+        ),
+        React.createElement('div', {
+          style: { borderTop: '1px solid #e6ebef', padding: '5px 9px', fontSize: 10, color: '#8a94a0', background: '#fff' },
+        }, '打开这个列表不会改变视口；点「看」才会跳过去。'),
+      ),
+    );
+  };
+
   /** Where you are, in one line: the breadcrumb IS the answer, not a chooser. */
   const crumb = (() => {
     if (kind === 'machine') return machine ? machine.name : '整机';
@@ -3251,6 +3377,7 @@ export function CadPanel(): React.ReactElement {
     ),
 
     navOpen && navOverlay(),
+    reviewOpen && reviewOverlay(),
 
     // ── the viewport: filled by what the product *is* ──
     React.createElement(
@@ -3623,6 +3750,21 @@ export function CadPanel(): React.ReactElement {
       record && provenance && React.createElement('span', {
         style: { flex: 'none', color: '#8a94a0' },
       }, provenance),
+      (review.unread > 0 || review.items.length > 0) && React.createElement('button', {
+        type: 'button',
+        'data-review-badge': '',
+        onClick: () => { setReviewOpen(true); void refreshReviewQueue(); },
+        title: review.unread
+          ? `${review.unread} 条待阅：Agent 想让你看的东西（打开列表不会切视口）`
+          : '待阅列表',
+        style: {
+          flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+          fontSize: 11, lineHeight: '16px',
+          color: review.unread ? '#a4531c' : '#8a94a0',
+          fontWeight: review.unread ? 600 : 400,
+          textDecoration: 'underline dotted',
+        },
+      }, `待阅 ${review.unread || review.items.length}`),
       tray.length > 0 && React.createElement('button', {
         type: 'button',
         onClick: () => setSheet('tray'),

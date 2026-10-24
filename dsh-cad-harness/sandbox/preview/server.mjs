@@ -48,10 +48,37 @@ const notFound = (what) => new Response(`no ${what}`, { status: 404 });
 // Captured POST /api/cad/import bodies, so `?assert=local-import` can prove the
 // panel sent what it says it sent (session project, path, unit, render:false).
 const importRequests = [];
+// A demo review queue for screenshots: the panel's badge/overlay must be visible
+// in the sandbox, and a real corpus should not carry fake queue items.
+let demoQueue = null;
+const DEMO_QUEUE = () => ({
+  items: [
+    {
+      id: 'q001', kind: 'view', status: 'unread', target: 'r059',
+      title: '这次机构运动不可交付：干涉 9 次、行程 25.1mm',
+      body: '弯臂 + 调焦滑座 + 齿轮轴，干涉集中在行程中段。',
+      createdAt: '2026-10-24T10:00:00.000Z',
+    },
+    {
+      id: 'q002', kind: 'revert', status: 'unread', target: 'v030',
+      title: '建议回退到 v030：导轨孔把侧壁收得太薄',
+      body: '对比副视口里蓝色是 v030、橙色是 v066。',
+      createdAt: '2026-10-24T09:40:00.000Z',
+    },
+  ],
+  unread: 2,
+});
 // STL ids served in this process, each logged ONCE: a ghost comparison is
 // invisible in a screenshot when the two versions differ only inside, so the
 // request log is how we prove the second mesh was actually fetched.
 const stlSeen = new Set();
+
+const readBody = (req) => new Promise((resolve, reject) => {
+  const chunks = [];
+  req.on('data', (c) => chunks.push(c));
+  req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+  req.on('error', reject);
+});
 
 async function readMaybe(path) {
   try { return await readFile(path); } catch { return null; }
@@ -92,6 +119,32 @@ async function api(req, url) {
       return new Response(null, { status: 304, headers: { etag } });
     }
     return json({ ...wire, seq }, 200, { etag });
+  }
+
+  // --- the review queue (panel badge + overlay) -----------------------------
+  if (p === '/api/cad/review/queue') {
+    if (demoQueue) return json(demoQueue);
+    const raw = await readMaybe(join(DATA, 'panel', 'queue.json'));
+    if (!raw) return json({ items: [], unread: 0 });
+    const state = JSON.parse(raw.toString('utf8'));
+    const items = Array.isArray(state.items) ? state.items : [];
+    return json({ items, unread: items.filter((i) => i.status === 'unread').length });
+  }
+  if (p === '/api/cad/review/status' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)) || '{}');
+    if (demoQueue) {
+      const item = demoQueue.items.find((i) => i.id === body.id);
+      if (!item) return json({ error: 'unknown item' }, 404);
+      item.status = body.status;
+      demoQueue.unread = demoQueue.items.filter((i) => i.status === 'unread').length;
+      return json({ item });
+    }
+    return json({ error: 'the sandbox has no queue file to write' }, 501);
+  }
+  if (p === '/api/cad/review/approve' && req.method === 'POST') {
+    // Deliberately not faked: approving writes a real version, and the sandbox
+    // has no corpus writer. A fake version id here would be a lie the panel acts on.
+    return json({ error: 'the sandbox does not write versions (run the real host)' }, 501);
   }
 
   // --- the assembly manifest (the machine object) ---------------------------
@@ -238,6 +291,7 @@ const server = createServer(async (req, res) => {
       // "this run sent", and a long-lived mock server would otherwise carry the
       // previous screenshot's request into it (observed: "2 reached the door").
       importRequests.length = 0;
+      demoQueue = url.searchParams.get('queue') === '1' ? DEMO_QUEUE() : null;
       out = new Response(await readFile(join(HERE, 'index.html')), { headers: { 'content-type': MIME['.html'] } });
     } else {
       const file = join(HERE, url.pathname.replace(/^\/+/, ''));
