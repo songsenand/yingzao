@@ -7,7 +7,8 @@
 
 import React from 'react';
 import { CadPanel, setClientServices } from './panel';
-import { refreshProjectScope, setProjectServices, withProject } from './project';
+import { refreshProjectScope, setProjectServices } from './project';
+import { subscribeProducts } from './products-store';
 
 /** Required services (cordis fiber inject). */
 export const inject = ['connection', 'slots', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation'];
@@ -72,36 +73,30 @@ export function apply(ctx: any) {
       tryOpen();
     };
 
-    const pollActivity = async () => {
-      try {
-        // Activity is per project: the panel is about to open on THIS session's
-        // corpus, so an old project's timestamps must not open it here — and a
-        // project with no parts at all is perfectly normal.
-        // A project switch re-baselines: what was "new" in the previous
-        // project says nothing about this one.
-        const { switched } = refreshProjectScope();
-        if (switched) lastSeen = null;
-        // The whole tree, not just versions: a finished validation run is CAD
-        // activity too, and it is exactly what the human wants to look at next.
-        const res = await fetch(withProject('/api/cad/products'));
-        if (!res.ok) return;
-        const data = await res.json() as {
-          parts?: { versions?: { timestamp?: string }[]; runs?: { timestamp?: string }[] }[];
-          scene?: { timestamp?: string }[];
-        };
-        const newest = (data.parts ?? []).reduce((m, p) => {
-          const own = [...(p.versions ?? []), ...(p.runs ?? [])]
-            .reduce((n, r) => Math.max(n, Date.parse(r.timestamp ?? '') || 0), 0);
-          return Math.max(m, own);
-        }, (data.scene ?? []).reduce((m, r) => Math.max(m, Date.parse(r.timestamp ?? '') || 0), 0));
-        if (lastSeen === null) { lastSeen = newest; return; } // baseline: no popup
-        if (newest > lastSeen) { lastSeen = newest; openTab('CAD activity'); }
-      } catch { /* route absent or offline: stay quiet */ }
-    };
+    // Activity is per project: the panel is about to open on THIS session's
+    // corpus, so an old project's timestamps must not open it here — and a
+    // project with no parts at all is perfectly normal. A project switch
+    // re-baselines: what was "new" in the previous project says nothing here.
+    //
+    // The tree comes from the SHARED poller (`products-store`) — the panel
+    // subscribes to the same request, so watching for activity costs no second
+    // fetch and stops while the tab is hidden.
+    const off = subscribeProducts(({ data }) => {
+      if (disposed || !data) return;
+      const { switched } = refreshProjectScope();
+      if (switched) lastSeen = null;
+      // The whole tree, not just versions: a finished validation run is CAD
+      // activity too, and it is exactly what the human wants to look at next.
+      const newest = (data.parts ?? []).reduce((m, p) => {
+        const own = [...(p.versions ?? []), ...(p.runs ?? [])]
+          .reduce((n, r) => Math.max(n, Date.parse(r.timestamp ?? '') || 0), 0);
+        return Math.max(m, own);
+      }, (data.scene ?? []).reduce((m, r) => Math.max(m, Date.parse(r.timestamp ?? '') || 0), 0));
+      if (lastSeen === null) { lastSeen = newest; return; } // baseline: no popup
+      if (newest > lastSeen) { lastSeen = newest; openTab('CAD activity'); }
+    });
 
-    void pollActivity();
-    const timer = setInterval(() => { if (!disposed) void pollActivity(); }, 3000);
-    return () => { disposed = true; clearInterval(timer); };
+    return () => { disposed = true; off(); };
   }, 'cad-harness: open tab on CAD activity');
 
   // 4. Explicit one-click activation control. Declaring a tab type does NOT put

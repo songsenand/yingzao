@@ -3,6 +3,16 @@
 // Kept as a pure function so the host route and the UI sandbox build the exact
 // same payload from the same stores — the sandbox must not be able to drift from
 // what the host actually serves.
+//
+// TWO SHAPES, on purpose:
+//   * `buildProductsWire` — what goes over the network. Every run appears ONCE
+//     (`runs`) and each part carries `runIds`, so a multi-part run is not copied
+//     into every part it used. Measured on microscope5: 69 stored runs were
+//     serialised 438 times (211 KB); with the wire they are serialised once.
+//   * `buildProducts` — the inflated tree (`part.runs` full objects), which the
+//     tools, the panel's existing reads and every accept script already speak.
+//     It is `inflateProducts(buildProductsWire(...))`, so the grouping rule still
+//     lives in exactly one place.
 
 import type { PartProduct, ProductsResponse, RunProduct, VersionProduct } from '../shared/types.ts';
 import type { PartEntry } from './parts.ts';
@@ -11,6 +21,7 @@ import type { VersionManifestEntry } from './version.ts';
 import { basename } from 'node:path';
 import { mergedInputVersionIds, supersededIn, versionCurrency } from './latest.ts';
 import { runSubject } from '../shared/labels.ts';
+import { inflateProducts, type PartWire, type ProductsWire } from '../shared/products-wire.ts';
 
 /** Versions without a part id are surfaced here rather than dropped. */
 export const UNFILED_PART_ID = 'p000';
@@ -18,11 +29,12 @@ export const UNFILED_PART_ID = 'p000';
 const newestFirst = <T extends { timestamp: string }>(list: T[]): T[] =>
   list.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
 
-export function buildProducts(
+/** The compact tree: every run once, each part carrying the ids it owns. */
+export function buildProductsWire(
   versions: VersionManifestEntry[],
   parts: PartEntry[],
   runs: RunEntry[],
-): ProductsResponse {
+): ProductsWire {
   // Build the currency tables ONCE: the question "is this version still current?"
   // is asked for every run and every merged version. Per-call maps made this
   // O(runs × versions) — 2.9 s for a 5 000-run corpus on a 3 s poll.
@@ -66,46 +78,50 @@ export function buildProducts(
   /** Versions a run cites that a part has since replaced (DESIGN §22). */
   const staleSourceVersions = (r: RunEntry): string[] => supersededIn(currency, r.sourceVersionIds);
 
-  const runsOfPart = new Map<string, RunProduct[]>();
-  const sceneRuns: RunProduct[] = [];
+  const runIdsOfPart = new Map<string, string[]>();
+  const sceneRunIds: string[] = [];
+  const runProducts: RunProduct[] = [];
   for (const r of runs) {
     const owners = ownersOfRun(r);
     const stale = staleSourceVersions(r);
     // Title as a human reads it: the parts it is about, not the version ids it
     // cited. Only fills `displayTitle`; the committed `title` is never rewritten.
     const subject = runSubject(r.kind, r.parts, r.sourceVersionIds);
-    const product: RunProduct = {
+    runProducts.push({
       type: 'run', ...r,
       ...(subject ? { displayTitle: subject } : {}),
       ...(stale.length ? { staleVersionIds: stale } : {}),
-    };
+    });
     if (owners.length !== 1) {
       // Zero owners (inline SCAD) or a multi-part scene: it belongs to no single
       // part, so it gets the cross-part bucket — and also shows under each part
-      // it actually used.
-      sceneRuns.push(product);
-      if (owners.length > 1) {
-        for (const pid of owners) {
-          const list = runsOfPart.get(pid) ?? [];
-          list.push(product);
-          runsOfPart.set(pid, list);
-        }
+      // it actually used (by id; the run itself is serialised once).
+      sceneRunIds.push(r.id);
+      for (const pid of owners) {
+        const list = runIdsOfPart.get(pid) ?? [];
+        list.push(r.id);
+        runIdsOfPart.set(pid, list);
       }
       continue;
     }
     const pid = owners[0]!;
-    const list = runsOfPart.get(pid) ?? [];
-    list.push(product);
-    runsOfPart.set(pid, list);
+    const list = runIdsOfPart.get(pid) ?? [];
+    list.push(r.id);
+    runIdsOfPart.set(pid, list);
   }
 
-  const entries: PartProduct[] = parts.map((p) => ({
+  const newestIdOrder = (ids: string[]): string[] => {
+    const at = new Map(runProducts.map((r) => [r.id, r.timestamp]));
+    return ids.slice().sort((a, b) => ((at.get(a) ?? '') < (at.get(b) ?? '') ? 1 : -1));
+  };
+
+  const entries: PartWire[] = parts.map((p) => ({
     id: p.id,
     name: p.name,
     nameSource: p.nameSource,
     lastActiveAt: p.lastActiveAt,
     versions: newestFirst(versionsOfPart.get(p.id) ?? []),
-    runs: newestFirst(runsOfPart.get(p.id) ?? []),
+    runIds: newestIdOrder(runIdsOfPart.get(p.id) ?? []),
   }));
 
   // Versions whose partId has no part entry (legacy corpus, older callers).
@@ -118,10 +134,19 @@ export function buildProducts(
       nameSource: 'intent',
       lastActiveAt: newestFirst(list)[0]?.timestamp ?? '',
       versions: newestFirst(list),
-      runs: newestFirst(runsOfPart.get(pid) ?? []),
+      runIds: newestIdOrder(runIdsOfPart.get(pid) ?? []),
     });
   }
 
   entries.sort((a, b) => (a.lastActiveAt < b.lastActiveAt ? 1 : a.lastActiveAt > b.lastActiveAt ? -1 : 0));
-  return { parts: entries, scene: newestFirst(sceneRuns) };
+  return { parts: entries, runs: newestFirst(runProducts), sceneRunIds: newestIdOrder(sceneRunIds) };
+}
+
+/** The inflated tree (`part.runs` are full objects) — the shape older callers read. */
+export function buildProducts(
+  versions: VersionManifestEntry[],
+  parts: PartEntry[],
+  runs: RunEntry[],
+): ProductsResponse {
+  return inflateProducts(buildProductsWire(versions, parts, runs));
 }

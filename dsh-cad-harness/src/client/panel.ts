@@ -27,6 +27,7 @@ import type {
   PartProduct, PartRecord, ProductsResponse, RunJudgement, RunKind, RunProduct, RunStatus, VersionProduct, WorkspaceEntry,
 } from '../shared/types';
 import { judgementOf, versionVerdict } from './verdict';
+import { refreshProducts, subscribeProducts } from './products-store';
 // The kind labels are ONE source (`shared/labels.ts`): the host authors titles
 // from them, the panel renders rows from them. A second copy here is how the
 // two drift.
@@ -803,78 +804,49 @@ export function CadPanel(): React.ReactElement {
     ? (currentPart?.runs ?? []).filter((r) => r.sourceVersionIds.includes(version.id))
     : [];
 
-  // Poll the tree. The record follows the newest entry of the current subject
-  // unless the user pinned one (followRef), so a fresh version or run takes over
-  // the viewport on its own; the subject only moves when it disappears.
+  // The tree arrives from ONE shared poller (`products-store`): the header's
+  // "open on CAD activity" watcher subscribes to the same request, so a tick now
+  // costs one fetch and one build for the whole client half — it used to be two.
   //
-  // Each poll re-reads the project from the session list: this tab is shared by
-  // every session, so a session switch must swap the corpus, not merge it. A
-  // reply whose project is no longer the current one is dropped — a slow request
-  // for the project you just left must never repaint the one you moved to.
-  const refresh = () => {
-    // Re-read the project every poll: this tab is shared by every session, so a
-    // session switch must swap the corpus, not merge it.
-    const { switched } = refreshProjectScope();
-    setSessionDir((cur) => {
-      const now = sessionCwd();
-      return cur === now ? cur : now;
+  // Applying an update is the panel's own business and stays here: a slow reply
+  // for the project you just left must never repaint the one you moved to, and the
+  // subject/record rules must never run for another project's tree.
+  const applyProducts = (d: ProductsResponse) => {
+    // A session with no cwd falls back to the server's own project (the host
+    // echoes it), so this check only applies once we know which project we asked for.
+    const wanted = currentProject();
+    if (wanted && d.project !== undefined && d.project !== wanted) return;
+    const list = d.parts ?? [];
+    setParts(list);
+    setScene(d.scene ?? []);
+    // A transient failure (a host restart, say) must not leave a permanent red
+    // row that also shifts the whole layout down.
+    setError(null);
+    setSubjectId((cur) => {
+      if (cur === SCENE) return (d.scene ?? []).length ? SCENE : (list[0]?.id ?? '');
+      return list.some((p) => p.id === cur) ? cur : (list[0]?.id ?? '');
     });
-    if (switched) {
-      // Nothing from the previous project survives the switch.
-      prevIdsRef.current = new Set();
-      subjectRef.current = '';
-      setParts([]);
-      setScene([]);
-      setSubjectId('');
-      setRecordId(null);
-      setRunReport(null);
-      setError(null);
-      // A pinned workspace belongs to the old session's tree; follow the new one.
-      setWorkspaceCwd('');
-      setWorkspaces([]);
-      // The 未登记 list and any selected file belong to the old session's
-      // workspace; a path from there is not addressable in the new one.
-      setUnregistered([]);
-      setFileSubject('');
-      setFileMeta(null);
-      setScopeTick((t) => t + 1);
+    // A human import returns a versionId before this poll; select the part
+    // that owns it, and PIN it (the import is a deliberate act, not "follow
+    // whatever arrives next"). Cleared only when the owner is actually seen.
+    const pending = pendingFocusRef.current;
+    if (pending) {
+      const owner = list.find((p) => p.versions.some((v) => v.id === pending));
+      if (owner) {
+        pendingFocusRef.current = null;
+        setKind('part');
+        setSubjectId(owner.id);
+        setFollowLatest(false);
+        setRecordId(pending);
+      }
     }
-    fetch(withProject('/api/cad/products'))
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: ProductsResponse) => {
-        // A slow reply for the project you just left must never repaint the one
-        // you moved to. A session with no cwd falls back to the server's own
-        // project (the host echoes it), so the check only applies once we know
-        // which project we asked for.
-        const wanted = currentProject();
-        if (wanted && d.project !== undefined && d.project !== wanted) return;
-        const list = d.parts ?? [];
-        setParts(list);
-        setScene(d.scene ?? []);
-        // A transient failure (a host restart, say) must not leave a permanent
-        // red row that also shifts the whole layout down.
-        setError(null);
-        setSubjectId((cur) => {
-          if (cur === SCENE) return (d.scene ?? []).length ? SCENE : (list[0]?.id ?? '');
-          return list.some((p) => p.id === cur) ? cur : (list[0]?.id ?? '');
-        });
-        // A human import returns a versionId before this poll; select the part
-        // that owns it, and PIN it (the import is a deliberate act, not "follow
-        // whatever arrives next"). Cleared only when the owner is actually seen.
-        const pending = pendingFocusRef.current;
-        if (pending) {
-          const owner = list.find((p) => p.versions.some((v) => v.id === pending));
-          if (owner) {
-            pendingFocusRef.current = null;
-            setKind('part');
-            setSubjectId(owner.id);
-            setFollowLatest(false);
-            setRecordId(pending);
-          }
-        }
-      })
-      .catch((e) => setError(String(e.message)));
   };
+  // The subscription is created once; this ref always points at the latest closure.
+  const applyProductsRef = useRef(applyProducts);
+  applyProductsRef.current = applyProducts;
+
+  /** Force a fresh tree now (after a write the human just made). */
+  const refresh = () => { void refreshProducts(); };
 
   // The 未登记 list is fetched on demand (entering the kind, or 刷新): the scan
   // hashes files, so it is deliberately not on the 3 s poll.
@@ -949,16 +921,46 @@ export function CadPanel(): React.ReactElement {
     if (bgSceneRef.current) bgSceneRef.current.background = new THREE.Color(bg.hex);
   }, [bg.hex, versionId]);
 
-  // Poll the manifest/reports so new versions appear as the agent iterates.
+  // Subscribe to the shared tree (one poller, one payload, hidden tabs idle) and
+  // keep the session/corpus guards that only the panel knows about.
   useEffect(() => {
-    refresh();
+    const off = subscribeProducts(({ data, error }) => {
+      // Re-read the project every tick: this tab is shared by every session, so a
+      // session switch must swap the corpus, not merge it.
+      const { switched } = refreshProjectScope();
+      setSessionDir((cur) => {
+        const now = sessionCwd();
+        return cur === now ? cur : now;
+      });
+      if (switched) {
+        // Nothing from the previous project survives the switch.
+        prevIdsRef.current = new Set();
+        subjectRef.current = '';
+        setParts([]);
+        setScene([]);
+        setSubjectId('');
+        setRecordId(null);
+        setRunReport(null);
+        setError(null);
+        // A pinned workspace belongs to the old session's tree; follow the new one.
+        setWorkspaceCwd('');
+        setWorkspaces([]);
+        // The 未登记 list and any selected file belong to the old session's
+        // workspace; a path from there is not addressable in the new one.
+        setUnregistered([]);
+        setFileSubject('');
+        setFileMeta(null);
+        setScopeTick((t) => t + 1);
+      }
+      if (error) { setError(error); return; }
+      if (data) applyProductsRef.current(data);
+    });
     // The tool-scope decision is profile-wide and static, so it is fetched once.
     fetch('/api/cad/scope')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d) setCadScope({ toolScope: d.toolScope, presets: d.presets ?? [] }); })
       .catch(() => { /* an older host without the route: stay silent */ });
-    const t = setInterval(refresh, 3000);
-    return () => clearInterval(t);
+    return off;
   }, []);
 
   // Discover the corpora under this SESSION's workspace root (read-only).

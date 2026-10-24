@@ -71,11 +71,13 @@ async function api(req, url) {
   // The host's builder is imported (not re-implemented) so the sandbox cannot
   // drift from what the real route serves.
   if (p === '/api/cad/products') {
-    const { buildProducts } = await import('../../src/host/products.ts');
+    // The WIRE shape (runs once + runIds per part), exactly like the host route:
+    // the panel inflates it with the same shared function.
+    const { buildProductsWire } = await import('../../src/host/products.ts');
     const { listParts, openPartStore } = await import('../../src/host/parts.ts');
     const { listRuns, openRunStore } = await import('../../src/host/runs.ts');
     const vm = JSON.parse((await readMaybe(join(DATA, 'manifest.json')))?.toString('utf8') ?? '{"versions":[]}');
-    const payload = buildProducts(
+    const payload = buildProductsWire(
       vm.versions ?? [],
       await listParts(openPartStore(DATA)),
       await listRuns(openRunStore(DATA)),

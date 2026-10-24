@@ -8,7 +8,7 @@ import {
   attachVersion, createUniquePart, derivePartName, ensurePart, findPartById, findPartByName,
   listParts, type PartEntry,
 } from './parts.ts';
-import { buildProducts } from './products.ts';
+import { buildProductsWire } from './products.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
@@ -5858,7 +5858,9 @@ export function registerCadTools(
         ]);
         // `project` rides the payload so a panel that switched projects can
         // discard the reply of the one it just left.
-        const payload = { ...buildProducts(vm.versions, parts, runs), project: cwd };
+        // Wire shape: every run once + `runIds` per part (T0.3). The panel
+        // inflates with `coerceProducts`, so the tree it reads is unchanged.
+        const payload = { ...buildProductsWire(vm.versions, parts, runs), project: cwd };
         return new Response(JSON.stringify(payload), {
           status: 200,
           headers: { 'content-type': 'application/json' },
