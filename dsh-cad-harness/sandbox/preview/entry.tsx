@@ -715,6 +715,8 @@ if (q.get('assert') === 'machine') {
 // apart is the second line (which revisions were posed, what was found, when).
 if (q.get('assert') === 'evidence') {
   const runEvidence = async () => {
+    const pages = () => Array.from(document.querySelectorAll('#root button'))
+      .filter((b) => /^(证据|验证)\s*\d*$/.test((b.textContent ?? '').trim())).length;
     const out: string[] = [];
     const pre = document.createElement('pre');
     pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
@@ -723,7 +725,7 @@ if (q.get('assert') === 'evidence') {
     const show = () => { pre.textContent = `evidence table (dock ${w}×${h})\n${out.join('\n')}`; };
 
     clickByText('证据');
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, 350));
 
     const rows = Array.from(document.querySelectorAll('[data-evidence-row]')) as HTMLElement[];
     out.push(`${rows.length ? 'PASS' : 'FAIL'}  rows exist: ${rows.length}`);
@@ -757,9 +759,32 @@ if (q.get('assert') === 'evidence') {
       else seen.set(key, p.id);
     }
     out.push(`INFO  rows: ${parsed.length}, exact duplicate rows: ${twins.length ? twins.join(', ') : 'none'}`);
+
+    // 本版 is a FILTER now, not a second tab: its chip count must equal what the
+    // list shows after clicking it. This is the check that the merge is not
+    // cosmetic (two tabs that render the same rows).
+    const chipN = (id: string) => {
+      const chip = document.querySelector(`[data-evidence-chip="${id}"]`) as HTMLElement | null;
+      return chip ? Number((chip.textContent ?? '').match(/\d+/)?.[0] ?? -1) : -1;
+    };
+    const allChip = chipN('all');
+    const curChip = chipN('current');
+    (document.querySelector('[data-evidence-chip="current"]') as HTMLElement | null)?.click();
+    await new Promise((r) => setTimeout(r, 260));
+    const curRows = document.querySelectorAll('[data-evidence-row]').length;
+    out.push(`${curChip > 0 && curRows === curChip ? 'PASS' : 'FAIL'}  本版 filter shows its own count: chip ${curChip}, rows ${curRows}`);
+    out.push(`${pages() === 1 ? 'PASS' : 'FAIL'}  验证 is gone (one evidence view, not two)`);
+    // The toggle encoded how you had navigated, not a preference: no control, one
+    // rule (an arriving version asks for attention instead of moving the view).
+    const followBtn = document.querySelector('[aria-label="跟随最新"], [aria-label="已钉住"]');
+    out.push(`${followBtn ? 'FAIL' : 'PASS'}  跟随最新 control is gone (no mode pretending to be a preference)`);
+    (document.querySelector('[data-evidence-chip="all"]') as HTMLElement | null)?.click();
+    await new Promise((r) => setTimeout(r, 260));
+    const backRows = document.querySelectorAll('[data-evidence-row]').length;
+    out.push(`${backRows === allChip ? 'PASS' : 'FAIL'}  全部 restores all rows: ${backRows} / ${allChip}`);
     show();
   };
-  setTimeout(() => void runEvidence(), 2900);
+  setTimeout(() => void runEvidence(), 2100);
 }
 
 // The probe CLEARS the stage, and it fires at 2.6 s — inside the layout

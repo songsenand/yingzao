@@ -569,7 +569,6 @@ export function CadPanel(): React.ReactElement {
   const [subjectId, setSubjectId] = useState<string>('');
   /** Selected record inside that subject (version or run id). */
   const [recordId, setRecordId] = useState<string | null>(null);
-  const [followLatest, setFollowLatest] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /**
    * Which corpus the panel is looking at. '' = follow the session (the default);
@@ -642,7 +641,7 @@ export function CadPanel(): React.ReactElement {
   // and what the panel restores on reopen.
   const [recent, setRecent] = useState<string[]>(() => loadRecent());
   // The evidence table's filter: the old 类别 list, demoted to a column filter.
-  type EvidenceFilter = 'all' | 'sim' | 'check' | 'assembly' | 'contract';
+  type EvidenceFilter = 'all' | 'current' | 'sim' | 'check' | 'assembly' | 'contract';
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('all');
   /** Bounding box / triangle count of the loaded version, for the 概览 tab. */
   const [spec, setSpec] = useState<{ size: [number, number, number]; triangles: number } | null>(null);
@@ -685,8 +684,6 @@ export function CadPanel(): React.ReactElement {
   const versionResetRef = useRef<(() => void) | null>(null);
   const clickStartRef = useRef<{ x: number; y: number } | null>(null);
   const mountRef = useRef<HTMLDivElement>(null);
-  const followRef = useRef(true);
-  useEffect(() => { followRef.current = followLatest; }, [followLatest]);
   const recordRef = useRef<string | null>(null);
   const measureRef = useRef<{ a: [number, number, number]; b?: [number, number, number]; dist?: number } | null>(null);
   useEffect(() => { recordRef.current = recordId; }, [recordId]);
@@ -871,7 +868,6 @@ export function CadPanel(): React.ReactElement {
         pendingFocusRef.current = null;
         setKind('part');
         setSubjectId(owner.id);
-        setFollowLatest(false);
         setRecordId(pending);
       }
     }
@@ -931,28 +927,17 @@ export function CadPanel(): React.ReactElement {
   const idsKey = `${kind}|${activeList.map((r) => r.id).join('|')}`;
   useEffect(() => {
     const ids = activeList.map((r) => r.id);
-    const prev = prevIdsRef.current;
-    const subjectChanged = subjectRef.current !== subjectId;
-    const kindChanged = kindRef.current !== kind;
-    const first = prev.size === 0;
+    const land = latestVersionId ?? ids[0] ?? null;
     prevIdsRef.current = new Set(ids);
     subjectRef.current = subjectId;
     kindRef.current = kind;
-    const land = latestVersionId ?? ids[0] ?? null;
-
-    if (subjectChanged || first || kindChanged) {
-      // An EXPLICIT pick can change the category and the record in the same click
-      // (the navigator does exactly that: one row sets kind + record). Landing on
-      // `ids[0]` unconditionally threw that choice away and jumped to the newest
-      // run of the new category.
-      setRecordId((cur) => (cur && ids.includes(cur) ? cur : land));
-      return;
-    }
-    const arrivals = activeList.filter((r) => !prev.has(r.id));
-    if (followRef.current && arrivals.length > 0) {
-      setRecordId(arrivals.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))[0]!.id);
-      return;
-    }
+    // ONE rule: an explicit selection survives, anything else lands on the head.
+    //
+    // A newly arrived version or run does NOT move the viewport. That used to be
+    // the 跟随最新 toggle, but the toggle only encoded HOW you had navigated here
+    // (picking a part switched it on, picking a version switched it off) — it was
+    // a mode pretending to be a preference. The stale banner asks for attention
+    // instead: "v067 已有更新" — and the user decides when to look.
     setRecordId((cur) => (cur && ids.includes(cur) ? cur : land));
   }, [idsKey]);
 
@@ -2068,7 +2053,7 @@ export function CadPanel(): React.ReactElement {
         return React.createElement('button', {
           key: vid,
           type: 'button',
-          onClick: () => { setFollowLatest(false); setSubjectId(owner?.id ?? SCENE); setRecordId(vid); },
+          onClick: () => { setSubjectId(owner?.id ?? SCENE); setRecordId(vid); },
           title: owner ? `打开零件「${owner.name}」的 ${vid}` : `打开 ${vid}`,
           style: S.smallBtn,
         }, `${owner?.name ?? '未归类'} · ${vid}`);
@@ -2161,7 +2146,6 @@ export function CadPanel(): React.ReactElement {
       // The part's whole evidence, not only the runs that named THIS revision:
       // that narrower list stays in 验证.
       { id: 'evidence', label: `证据${currentPart?.runs.length ? ` ${currentPart.runs.length}` : ''}` },
-      { id: 'runs', label: `验证${runsOnVersion.length ? ` ${runsOnVersion.length}` : ''}` },
       { id: 'export', label: '导出' },
       { id: 'help', label: '用法' },
     ]
@@ -2240,36 +2224,6 @@ export function CadPanel(): React.ReactElement {
       '截图默认已直接发进会话（排队，不打断运行中的回合）；这里的 ↻发 用于重发，📋图 用于手动粘贴'),
   );
 
-  const runsBody = () => React.createElement(
-    'div',
-    { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-    runsOnVersion.length === 0
-      ? React.createElement('div', { style: S.hint },
-        '没有以这个版本为来源的运行。该零件的其他验证在「记录」下拉里；也可以用下面的按钮直接跑一次流体。')
-      : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-        ...runsOnVersion.map((r) => React.createElement('button', {
-          key: r.id,
-          type: 'button',
-          onClick: () => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); },
-          style: { ...S.smallBtn, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' },
-        },
-        statusGlyph(r.status),
-        React.createElement('span', null, `${r.id} ${runTitle(r)}`),
-        React.createElement('span', { style: { color: '#8a94a0', marginLeft: 'auto' } }, r.summary),
-        ))),
-    React.createElement(
-      'div',
-      { style: { borderTop: '1px solid #eef1f3', paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
-      React.createElement('button', {
-        type: 'button',
-        onClick: () => void runFluid(),
-        disabled: fluidBusy,
-        style: { ...S.smallBtn, border: '1px solid #2c81ba', background: '#e8f4fa', opacity: fluidBusy ? 0.55 : 1 },
-      }, fluidBusy ? '仿真中…（可能数分钟）' : '以本版本为管件跑流体仿真'),
-      React.createElement('span', { style: S.hint }, '跑完会作为新运行出现在产物列表里'),
-    ),
-  );
-
   /**
    * The part's evidence — a table you can tell apart WITHOUT opening a row.
    *
@@ -2288,6 +2242,12 @@ export function CadPanel(): React.ReactElement {
       { id: 'assembly', label: '组件', test: (r) => browseKindOf(r) === 'assembly' },
       { id: 'contract', label: '契约', test: (r) => browseKindOf(r) === 'contract' },
     ];
+    // 本版 is the scope the old 验证 tab had, now a FILTER instead of a second tab:
+    // one list, two views ("this revision was tested by" vs "this part was").
+    const vid = scope === 'part' ? version?.id ?? null : null;
+    if (vid) {
+      groups.splice(1, 0, { id: 'current', label: '本版', test: (r) => r.sourceVersionIds.includes(vid) });
+    }
     const active = groups.find((g) => g.id === evidenceFilter) ?? groups[0]!;
     const list = all.filter(active.test);
 
@@ -2312,7 +2272,7 @@ export function CadPanel(): React.ReactElement {
         + (r.summary ? `\n${r.summary}` : '')
         + (r.staleVersionIds?.length ? `\n⚠ 基于旧版本 ${r.staleVersionIds.join(', ')}` : '')
         + (r.supersededBy ? `\n已被 ${r.supersededBy} 取代` : ''),
-      onClick: () => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); },
+      onClick: () => { setKind(browseKindOf(r)); setRecordId(r.id); },
       style: {
         display: 'flex', flexDirection: 'column', gap: 2, width: '100%', textAlign: 'left',
         padding: '5px 6px', border: 'none', borderBottom: '1px solid #f0f2f4',
@@ -2351,6 +2311,7 @@ export function CadPanel(): React.ReactElement {
         ...groups.map((g) => React.createElement('button', {
           key: g.id,
           type: 'button',
+          'data-evidence-chip': g.id,
           onClick: () => setEvidenceFilter(g.id),
           style: {
             fontSize: 11, padding: '1px 6px', borderRadius: 10, cursor: 'pointer',
@@ -2361,8 +2322,19 @@ export function CadPanel(): React.ReactElement {
         }, `${g.label} ${all.filter(g.test).length}`)),
       ),
       list.length === 0
-        ? React.createElement('div', { style: S.hint }, '这个零件还没有证据 — 让 Agent 对它跑一次检查，或换一个筛选。')
+        ? React.createElement('div', { style: S.hint }, '没有符合条件的证据 — 换一个筛选，或让 Agent 对它跑一次检查。')
         : React.createElement('div', null, ...list.map(row)),
+      scope === 'part' && version && React.createElement(
+        'div',
+        { style: { borderTop: '1px solid #eef1f3', paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => void runFluid(),
+          disabled: fluidBusy,
+          style: { ...S.smallBtn, border: '1px solid #2c81ba', background: '#e8f4fa', opacity: fluidBusy ? 0.55 : 1 },
+        }, fluidBusy ? '仿真中…（可能数分钟）' : `以 ${version.id} 为管件跑流体仿真`),
+        React.createElement('span', { style: S.hint }, '跑完会作为新运行出现在证据里'),
+      ),
     );
   };
 
@@ -2582,7 +2554,7 @@ export function CadPanel(): React.ReactElement {
       );
     }
     if (id === 'evidence' && version) return evidenceBody('part');
-    if (id === 'runs' && version) return runsBody();
+    if (id === 'runs') return evidenceBody('part'); // legacy deep state → the merged view
     if (id === 'export' && version) return exportRow();
     if (id === 'report' && run) {
       const body = runReportBody(run);
@@ -2698,10 +2670,10 @@ export function CadPanel(): React.ReactElement {
     return !q || text.toLowerCase().includes(q);
   };
   const navClose = () => { setNavOpen(false); setNavQuery(''); };
-  const navPickPart = (id: string) => { setRecent(pushRecent(id)); setKind('part'); setSubjectId(id); setRecordId(null); setFollowLatest(true); navClose(); };
-  const navPickVersion = (partId: string, vid: string) => { setRecent(pushRecent(vid)); setKind('part'); setSubjectId(partId); setFollowLatest(false); setRecordId(vid); navClose(); };
-  const navPickRun = (r: RunProduct) => { setRecent(pushRecent(r.id)); setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); navClose(); };
-  const navPickMachine = () => { setKind('machine'); setRecordId(null); setFollowLatest(false); navClose(); };
+  const navPickPart = (id: string) => { setRecent(pushRecent(id)); setKind('part'); setSubjectId(id); setRecordId(null); navClose(); };
+  const navPickVersion = (partId: string, vid: string) => { setRecent(pushRecent(vid)); setKind('part'); setSubjectId(partId); setRecordId(vid); navClose(); };
+  const navPickRun = (r: RunProduct) => { setRecent(pushRecent(r.id)); setKind(browseKindOf(r)); setRecordId(r.id); navClose(); };
+  const navPickMachine = () => { setKind('machine'); setRecordId(null); navClose(); };
 
   const navPickFile = (path: string) => { setRecent(pushRecent(`f:${path}`)); setKind('unregistered'); setRecordId(null); setFileSubject(path); setFileMeta(null); navClose(); refreshUnregistered(); };
 
@@ -3034,7 +3006,6 @@ export function CadPanel(): React.ReactElement {
             setScene([]);
             setSubjectId('');
             setRecordId(null);
-            setFollowLatest(true);
             setError(null);
           },
           title: '工作目录：面板看哪份 CAD 语料（只读浏览）\nAgent 的工具始终写入会话所在目录，切换不会改变写入位置',
@@ -3069,19 +3040,6 @@ export function CadPanel(): React.ReactElement {
         React.createElement('span', { style: { color: '#8a94a0', flex: 'none' } }, '▾'),
       ),
       kind === 'part' && record && statusGlyph(record.status),
-      kind === 'part' && React.createElement('button', {
-        type: 'button',
-        onClick: () => setFollowLatest((f) => !f),
-        title: followLatest
-          ? '跟随最新：进入零件默认看最新版本，此后一有新版本就自动切过去。点击钉住当前版本。'
-          : '已钉住当前版本（点击恢复跟随新版本）',
-        'aria-label': followLatest ? '跟随最新' : '已钉住',
-        style: {
-          ...S.smallBtn,
-          padding: '2px 6px',
-          ...(followLatest ? { border: '1px solid #27ae60', color: '#1e8449', background: '#eafaf1' } : {}),
-        },
-      }, followLatest ? '●' : '○'),
       React.createElement('button', {
         type: 'button',
         title: '未登记文件：工作区里没有版本的几何 — 预览、标注、导入为版本',
@@ -3110,7 +3068,7 @@ export function CadPanel(): React.ReactElement {
           `⚠ 正在查看旧版本 ${version.id}（最新为 ${latestVersionId}）— 讨论请以此为准或切回最新`,
           React.createElement('button', {
             type: 'button',
-            onClick: () => { setFollowLatest(true); setRecordId(latestVersionId); },
+            onClick: () => { setRecordId(latestVersionId); },
             style: { ...S.smallBtn, marginLeft: 'auto', padding: '1px 8px' },
           }, '回到最新'),
         ),
