@@ -2858,6 +2858,29 @@ export function CadPanel(): React.ReactElement {
     resolveAddress(id)?.apply();
   }, [parts.length]);
 
+  /**
+   * Deep link (T3.3): `?t=v029` (also r041 / p005 / machine / u:<path>), optional
+   * `?compare=latest`. Read-only by design — the panel does NOT write the address
+   * bar: it lives inside the host's page, and rewriting the host's URL from a
+   * plugin would be a hostile takeover of state the host owns. A link handed to
+   * you (by the agent, a note, a chat message) opens the right thing; that is the
+   * half that matters for review.
+   */
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const target = (params.get('t') ?? '').trim();
+    if (!target) { deepLinkedRef.current = true; return; }
+    // Wait for the tree: an address that cannot resolve yet is not an error.
+    if (parts.length === 0) return;
+    const hit = resolveAddress(target);
+    if (!hit) return;   // try again when the corpus (or a file list) arrives
+    deepLinkedRef.current = true;
+    hit.apply();
+    if (params.get('compare') === 'latest') setCompareOn(true);
+  }, [parts, unregistered]);
+
   const navRow = (key: string, title: string, meta: string | null, onClick: () => void, active = false, muted = false) =>
     React.createElement('button', {
       key, type: 'button', onClick,

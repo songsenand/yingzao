@@ -677,6 +677,29 @@ if (q.get('assert') === 'recent') {
   }, 2600);
 }
 
+// ?assert=deeplink&expect=<text> — a link must land on its object, and an old
+// version must land in the HISTORY state (banner), not silently as if current.
+if (q.get('assert') === 'deeplink') {
+  setTimeout(() => {
+    const expect = q.get('expect') ?? '';
+    const crumb = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '')
+      .replace(/\s+/g, ' ').trim();
+    const banner = document.body.textContent?.includes('旧版本') ?? false;
+    const lines = [
+      `deep link (?t=${q.get('t') ?? ''}) (dock ${w}×${h})`,
+      `${expect && crumb.includes(expect) ? 'PASS' : 'FAIL'}  breadcrumb contains "${expect}": ${crumb}`,
+    ];
+    if (q.get('t') && /^v\d{3,}$/.test(q.get('t') ?? '')) {
+      lines.push(`${banner ? 'PASS' : 'FAIL'}  an old version opens in the history state (banner present)`);
+    }
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  }, 2600);
+}
+
 // ?assert=ghost — the comparison control must name the version it overlays and
 // actually toggle. (Whether the two meshes DIFFER is a property of the corpus:
 // the server logs each STL id it served, so `stl v030` + `stl v066` is the
@@ -860,7 +883,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost' && q.get('assert') !== 'deeplink') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];
