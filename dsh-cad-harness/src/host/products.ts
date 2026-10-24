@@ -10,6 +10,7 @@ import type { RunEntry } from './runs.ts';
 import type { VersionManifestEntry } from './version.ts';
 import { basename } from 'node:path';
 import { mergedInputVersionIds, supersededVersionIds } from './latest.ts';
+import { runSubject } from '../shared/labels.ts';
 
 /** Versions without a part id are surfaced here rather than dropped. */
 export const UNFILED_PART_ID = 'p000';
@@ -66,8 +67,12 @@ export function buildProducts(
   for (const r of runs) {
     const owners = ownersOfRun(r);
     const stale = staleSourceVersions(r);
+    // Title as a human reads it: the parts it is about, not the version ids it
+    // cited. Only fills `displayTitle`; the committed `title` is never rewritten.
+    const subject = runSubject(r.kind, r.parts, r.sourceVersionIds);
     const product: RunProduct = {
       type: 'run', ...r,
+      ...(subject ? { displayTitle: subject } : {}),
       ...(stale.length ? { staleVersionIds: stale } : {}),
     };
     if (owners.length !== 1) {

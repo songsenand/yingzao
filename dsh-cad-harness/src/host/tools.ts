@@ -33,6 +33,7 @@ import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
 import { asJudgement } from '../shared/judgement.ts';
+import { runSubject } from '../shared/labels.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
@@ -670,7 +671,8 @@ export function registerCadTools(
     // them per run (and where the keyframe renderer can import them).
     const run = await beginRun(runStore, {
       kind: 'motion',
-      title: `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
+      title: runSubject('motion', geometries.map((g) => g.name), sourceVersionIds)
+        ?? `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
     });
     for (const g of geometries) {
       await run.part(g.name, g.stl);
@@ -712,7 +714,8 @@ export function registerCadTools(
     const motionStatus: 'pass' | 'check' | 'fail' =
       interferenceBlocking ? 'fail' : report.overallStatus === 'pass' ? 'pass' : 'check';
     await run.commit({
-      title: `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
+      title: runSubject('motion', geometries.map((g) => g.name), sourceVersionIds)
+        ?? `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
       sourceVersionIds,
       status: motionStatus,
       // Interference is a witness (the solid overlaps in a real pose) -> excluded.
@@ -1802,7 +1805,8 @@ export function registerCadTools(
       // was computed on travels with it.
       const run = await beginRun(runStore, {
         kind: 'assembly',
-        title: `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
+        title: runSubject('assembly', geometries.map((g) => g.name), sourceVersionIds)
+          ?? `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
       });
       for (const g of geometries) {
         await run.part(g.name, g.stl, { translate: g.translate, rotate: g.rotate });
@@ -1851,7 +1855,8 @@ export function registerCadTools(
         interferenceEpsilonMm3: report.interferenceEpsilonMm3,
       };
       await run.commit({
-        title: `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
+        title: runSubject('assembly', geometries.map((g) => g.name), sourceVersionIds)
+          ?? `装配间隙 · ${provenanceLabel(sourceVersionIds)}`,
         sourceVersionIds,
         status: report.overallStatus === 'pass' ? 'pass' : 'fail',
         // Same value the tool returns; the run carries it so the panel can answer
@@ -1943,7 +1948,8 @@ export function registerCadTools(
 
       const run = await beginRun(runStore, {
         kind: 'physics',
-        title: `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
+        title: runSubject('physics', geometries.map((g) => g.name), sourceVersionIds)
+          ?? `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
       });
       for (const g of geometries) {
         await run.part(g.name, g.stl);
@@ -1997,7 +2003,8 @@ export function registerCadTools(
       const fellNames = Object.entries(svg.fellOver).filter(([, v]) => v === true).map(([n]) => n);
       const overall: RunStatus = sank || fellNames.length > 0 || svg.jointViolations.length > 0 ? 'check' : 'pass';
       await run.commit({
-        title: `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
+        title: runSubject('physics', geometries.map((g) => g.name), sourceVersionIds)
+          ?? `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
         sourceVersionIds,
         status: overall,
         summary: `稳态穿透 ${svg.settledPenetrationMm.toFixed(2)}mm` +

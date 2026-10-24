@@ -40,8 +40,18 @@ export interface RunProduct {
   kind: RunKind;
   /** ISO timestamp of the commit. */
   timestamp: string;
-  /** Human one-liner: what the run was about. */
+  /**
+   * The title the tool committed. Older corpora carry `kind · v014+v025+v022`
+   * (version ids only), which a human cannot scan — see `displayTitle`.
+   */
   title: string;
+  /**
+   * A title derived from the run's PARTS (`src/shared/labels.ts`), for every run
+   * whose stored title is the unreadable legacy form. Absent when the run has no
+   * user-named parts (fluid's synthetic `wall`, a manifest check) — then `title`
+   * is the only name it has.
+   */
+  displayTitle?: string;
   status: RunStatus;
   /** The canonical judgement, present only when this run JUDGED something. */
   judgement?: RunJudgement;

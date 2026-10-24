@@ -27,19 +27,15 @@ import type {
   PartProduct, PartRecord, ProductsResponse, RunJudgement, RunKind, RunProduct, RunStatus, VersionProduct, WorkspaceEntry,
 } from '../shared/types';
 import { judgementOf, versionVerdict } from './verdict';
+// The kind labels are ONE source (`shared/labels.ts`): the host authors titles
+// from them, the panel renders rows from them. A second copy here is how the
+// two drift.
+import { RUN_KIND_LABEL } from '../shared/labels';
 
 const ANN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
-const RUN_KIND_LABEL: Record<RunKind, string> = {
-  assembly: '装配间隙',
-  'assembly-check': '清单检查',
-  physics: '刚体物理',
-  motion: '机构运动',
-  fluid: '流体仿真',
-  printability: '制造筛查',
-  stress: '应力分析',
-  analyze: '风险图',
-};
+/** The name a run is shown under: derived from its parts when the stored title is legacy. */
+const runTitle = (r: RunProduct): string => r.displayTitle ?? r.title;
 
 /** Status glyph for a run/product verdict. */
 const statusGlyph = (status: string): React.ReactNode => {
@@ -215,7 +211,12 @@ const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
   // Evidence expires with the version it cites (DESIGN §22): a run that still
   // says "pass" over geometry a part has since replaced must say so in the row.
   const stale = r.staleVersionIds?.length ? `⚠ 基于旧版本 ${r.staleVersionIds.join(', ')} · ` : '';
-  return `${r.id} · ${RUN_KIND_LABEL[r.kind]} · ${replaced}${stale}${fmtTime(r.timestamp)} — ${r.summary || r.title}`.slice(0, 96);
+  // The name comes from the PARTS (`displayTitle`), not the version ids: fifteen
+  // motion runs about the same mechanism are indistinguishable by `v014+v025+v026`.
+  // Time leaves the row: the list is already newest-first and the tooltip keeps it,
+  // while the width goes to the two things that tell runs apart — what it is, and
+  // what it found.
+  return `${r.id} · ${replaced}${stale}${runTitle(r)} — ${r.summary}`.slice(0, 96);
 };
 
 /** A version element for legacy callers that still build this shape. */
@@ -1896,7 +1897,7 @@ export function CadPanel(): React.ReactElement {
       },
     },
     React.createElement('div', { style: { fontSize: 30 } }, '📋'),
-    React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, r.title),
+    React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, runTitle(r)),
     React.createElement('div', { style: { fontSize: 12, color: '#4b5563' } }, r.summary),
     React.createElement('div', { style: { fontSize: 11, color: '#8a94a0' } },
       '这次运行没有几何体 — 清单检查只读接口与 datum'),
@@ -2044,7 +2045,7 @@ export function CadPanel(): React.ReactElement {
     ? [record.id, run ? RUN_KIND_LABEL[run.kind] : '版本', revText, fmtTime(record.timestamp)]
       .filter(Boolean).join(' · ')
     : (parts.length === 0 ? '还没有零件 — 让 Agent 生成一个' : '该零件还没有记录');  // The description is the elidable tail: identity and revision come first.
-  const statusDetail = record ? (run ? run.summary || run.title : version?.title ?? '') : '';
+  const statusDetail = record ? (run ? run.summary || runTitle(run) : version?.title ?? '') : '';
   const statusTooltip = record
     ? [
       statusIdentity, statusDetail,
@@ -2187,7 +2188,7 @@ export function CadPanel(): React.ReactElement {
           style: { ...S.smallBtn, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' },
         },
         statusGlyph(r.status),
-        React.createElement('span', null, `${r.id} ${RUN_KIND_LABEL[r.kind]}`),
+        React.createElement('span', null, `${r.id} ${runTitle(r)}`),
         React.createElement('span', { style: { color: '#8a94a0', marginLeft: 'auto' } }, r.summary),
         ))),
     React.createElement(
@@ -2338,7 +2339,7 @@ export function CadPanel(): React.ReactElement {
         'div',
         { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
         React.createElement('div', { style: S.caption, title: version?.title ?? run?.title },
-          version ? version.title : run ? `${run.title} · ${fmtTime(run.timestamp)}` : ''),
+          version ? version.title : run ? `${runTitle(run)} · ${fmtTime(run.timestamp)}` : ''),
         spec && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
           `尺寸 ${spec.size.map((v) => v.toFixed(1)).join(' × ')} mm · ${spec.triangles} 面`),
         version?.source === 'imported' && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
@@ -2729,7 +2730,7 @@ export function CadPanel(): React.ReactElement {
           value: recordId ?? '',
           onChange: (e: any) => { setFollowLatest(false); setRecordId(e.target.value); },
           title: record
-            ? `记录「${record.id}」· ${record.type === 'version' ? '版本' : '验证运行'}\n${record.title}`
+            ? `记录「${record.id}」· ${record.type === 'version' ? '版本' : '验证运行'}\n${record.type === 'run' ? runTitle(record) : record.title}`
             : '该零件还没有版本',
           'aria-label': '版本',
           style: { ...S.select, flex: '1 1 0', minWidth: 0 },
