@@ -40,7 +40,8 @@ import { RUN_KIND_LABEL } from '../shared/labels';
 const ANN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
 /** The name a run is shown under: derived from its parts when the stored title is legacy. */
-const runTitle = (r: RunProduct): string => r.displayTitle ?? r.title;
+const runTitle = (r: RunProduct): string =>
+  (r.displayTitle ?? r.title ?? '').replace(/\s*·\s*undefined\b/g, '').trim() || r.id;
 
 /** Status glyph for a run/product verdict. */
 const statusGlyph = (status: string): React.ReactNode => {
@@ -2108,6 +2109,16 @@ export function CadPanel(): React.ReactElement {
           style: { padding: '3px 6px', borderBottom: '1px solid #e5e7eb', fontSize: 11,
                    fontWeight: opts.strong ? 600 : 400, color: opts.color ?? '#374151' },
         }, text);
+      if (rows.length === 0) {
+        // Old manifests declared no interfaces at all. An empty table read as
+        // "the panel is broken"; say what the run actually found instead.
+        const undeclared = (rep.undeclared ?? []) as unknown[];
+        return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+          line(`清单「${rep.manifestName ?? '—'}」没有声明任何接口`),
+          line(`这次检查只看相邻关系：${undeclared.length} 对相邻零件被报为「未声明」（未声明的邻接不算通过）。`, T.warn),
+          line('给装配清单补上 interfaces 之后重跑，报告才会逐条列出接口 × 要求 × 实测 × 判定。', T.muted),
+        );
+      }
       return React.createElement('div', { style: { overflowX: 'auto' } },
         line(`清单「${rep.manifestName ?? '—'}」· ${rep.results?.length ?? rows.length} 个接口 · ` +
              `通过 ${(rep.results ?? []).filter((x: any) => x.verdict === 'pass').length}`),
@@ -2353,9 +2364,11 @@ export function CadPanel(): React.ReactElement {
     const groups: { id: EvidenceFilter; label: string; test: (r: RunProduct) => boolean }[] = [
       { id: 'all', label: '全部', test: () => true },
       { id: 'sim', label: '仿真', test: (r) => browseKindOf(r) === 'sim' },
-      { id: 'check', label: '检查', test: (r) => browseKindOf(r) === 'check' },
+      // NOT "检查": the runs are titled "装配清单检查 …", so a chip called 检查
+      // made people look for the contract report there and find zero.
+      { id: 'check', label: '零件', test: (r) => browseKindOf(r) === 'check' },
       { id: 'assembly', label: '组件', test: (r) => browseKindOf(r) === 'assembly' },
-      { id: 'contract', label: '契约', test: (r) => browseKindOf(r) === 'contract' },
+      { id: 'contract', label: '装配清单', test: (r) => browseKindOf(r) === 'contract' },
     ];
     // 本版 is the scope the old 验证 tab had, now a FILTER instead of a second tab:
     // one list, two views ("this revision was tested by" vs "this part was").
@@ -2831,6 +2844,11 @@ export function CadPanel(): React.ReactElement {
    * from 最近 — the list is a convenience, never a claim.
    */
   const resolveAddress = (id: string): { title: string; meta: string; apply: () => void } | null => {
+    // The machine is an address too (`?t=machine`): it was documented as one and
+    // the navigator row already carried the id.
+    if (id === 'machine' && machine) {
+      return { title: machine.name, meta: `${machine.nodes.length} 节点`, apply: () => navPickMachine() };
+    }
     if (/^v\d{3,}$/.test(id)) {
       for (const p of parts) {
         const v = p.versions.find((x) => x.id === id);
