@@ -27,6 +27,12 @@
 
 ### T0 语义修复与读路径（0.5–1 天，零接口变更）
 
+**状态（2026-10-24）：T0.1–T0.4 全部完成。** 提交 `b2d7732`（运行标题用零件名）、
+`830cdc8`（O(运行×版本) → O(运行+版本)）、`8fed362`（payload 去重 + 轮询合一）、
+`fb1aa1b`（三份 manifest 加锁）。新增验收：`accept-run-title` / `bench-products` /
+`accept-products-wire` / `accept-products-store` / `accept-manifest-lock`，均已挂进 `npm run accept`。
+**遗留**：隐藏标签页停止轮询只在浏览器里成立，沙箱与 Node 都无真实 `document`，待真机 GUI 确认。
+
 | ID | 做什么 | 怎么做 | 验收 | 依赖 |
 |---|---|---|---|---|
 | **T0.1** | 运行标题用人能读的名字 | `tools.ts` 的 `provenanceLabel(ids)` 改为按 `RunProduct.parts` 拼：`机构运动 · 弯臂 + 调焦滑座 + 齿轮轴`；版本号移到 summary/tooltip。motion/physics/assembly 三处 | microscope5 的 `r013` 标题含三个零件名；`accept-*` 全绿 | — |
