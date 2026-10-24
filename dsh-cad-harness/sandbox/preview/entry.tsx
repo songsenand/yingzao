@@ -630,14 +630,70 @@ if (q.get('assert') === 'layout') {
       show();
     }
   };
-  setTimeout(() => void run(), 1780);
+  // A subject/navpick selection lands at ~1.85 s; snapshotting at 1.78 s caught a
+  // transient row (the version had not been chosen yet, so the status glyph and
+  // the pin were not mounted). Start after the selection settles.
+  const settle = q.get('subject') || q.get('navpick') ? 2600 : 1780;
+  setTimeout(() => void run(), settle);
+}
+
+// ?assert=evidence — the evidence table must be scannable, not N identical rows.
+// Fifteen motion runs about one mechanism share their first line; what tells them
+// apart is the second line (which revisions were posed, what was found, when).
+if (q.get('assert') === 'evidence') {
+  const runEvidence = async () => {
+    const out: string[] = [];
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    const show = () => { pre.textContent = `evidence table (dock ${w}×${h})\n${out.join('\n')}`; };
+
+    clickByText('证据');
+    await new Promise((r) => setTimeout(r, 450));
+
+    const rows = Array.from(document.querySelectorAll('[data-evidence-row]')) as HTMLElement[];
+    out.push(`${rows.length ? 'PASS' : 'FAIL'}  rows exist: ${rows.length}`);
+    const parsed = rows.map((el) => ({
+      id: el.getAttribute('data-evidence-id') ?? '',
+      title: (el.querySelector('[data-evidence-title]')?.textContent ?? '').trim(),
+      meta: (el.querySelector('[data-evidence-meta]')?.textContent ?? '').trim(),
+    }));
+    const badId = parsed.filter((p) => !/^r\d{3,}$/.test(p.id));
+    out.push(`${badId.length ? 'FAIL' : 'PASS'}  every row carries its run id`);
+    const noMeta = parsed.filter((p) => !/\bv\d{3,}\b/.test(p.meta));
+    out.push(`${noMeta.length ? 'FAIL' : 'PASS'}  every second line names a version (${parsed.length - noMeta.length}/${parsed.length})`);
+
+    // The failure this table exists to remove: several runs about the SAME thing
+    // whose visible lines are identical, so the difference can only be found by
+    // opening them one by one. For microscope5's motion runs the second line must
+    // therefore be different on every row (15 rows, 15 distinct "which revisions
+    // were posed + what it found + when").
+    const motion = parsed.filter((p) => p.title.includes('机构运动'));
+    if (motion.length > 1) {
+      const distinct = new Set(motion.map((p) => p.meta)).size;
+      out.push(`${distinct === motion.length ? 'PASS' : 'FAIL'}  ${motion.length} 机构运动 rows have ${distinct} distinct second lines`);
+    }
+    // Two rows that agree on BOTH lines are the same run repeated. The id still
+    // tells them apart, but it is a data fact, not a UI defect — report it.
+    const seen = new Map<string, string>();
+    const twins: string[] = [];
+    for (const p of parsed) {
+      const key = `${p.title} || ${p.meta}`;
+      if (seen.has(key)) twins.push(`${seen.get(key)}=${p.id}`);
+      else seen.set(key, p.id);
+    }
+    out.push(`INFO  rows: ${parsed.length}, exact duplicate rows: ${twins.length ? twins.join(', ') : 'none'}`);
+    show();
+  };
+  setTimeout(() => void runEvidence(), 2900);
 }
 
 // The probe CLEARS the stage, and it fires at 2.6 s — inside the layout
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

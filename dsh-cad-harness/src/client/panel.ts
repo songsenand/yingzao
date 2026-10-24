@@ -636,6 +636,9 @@ export function CadPanel(): React.ReactElement {
   // to answer before you could see anything.
   const [navOpen, setNavOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
+  // The evidence table's filter: the old 类别 list, demoted to a column filter.
+  type EvidenceFilter = 'all' | 'sim' | 'check' | 'assembly' | 'contract';
+  const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('all');
   /** Bounding box / triangle count of the loaded version, for the 概览 tab. */
   const [spec, setSpec] = useState<{ size: [number, number, number]; triangles: number } | null>(null);
   /** Section-body height: null = auto (give the body everything above square). */
@@ -2115,6 +2118,9 @@ export function CadPanel(): React.ReactElement {
   const tabs: { id: string; label: string }[] = version
     ? [
       { id: 'overview', label: '概览' },
+      // The part's whole evidence, not only the runs that named THIS revision:
+      // that narrower list stays in 验证.
+      { id: 'evidence', label: `证据${currentPart?.runs.length ? ` ${currentPart.runs.length}` : ''}` },
       { id: 'runs', label: `验证${runsOnVersion.length ? ` ${runsOnVersion.length}` : ''}` },
       { id: 'export', label: '导出' },
       { id: 'help', label: '用法' },
@@ -2223,6 +2229,102 @@ export function CadPanel(): React.ReactElement {
       React.createElement('span', { style: S.hint }, '跑完会作为新运行出现在产物列表里'),
     ),
   );
+
+  /**
+   * The part's evidence — a table you can tell apart WITHOUT opening a row.
+   *
+   * This is the surface the original complaint asked for: microscope5 has fifteen
+   * motion runs about one mechanism, all titled `机构运动 · v014+v025+v026`. Each
+   * row now carries the result, what it was about, WHICH revisions were posed, and
+   * whether the evidence still stands; the old 类别 list is demoted to the filter
+   * chips above.
+   */
+  const evidenceBody = () => {
+    const all = currentPart?.runs ?? [];
+    const groups: { id: EvidenceFilter; label: string; test: (r: RunProduct) => boolean }[] = [
+      { id: 'all', label: '全部', test: () => true },
+      { id: 'sim', label: '仿真', test: (r) => browseKindOf(r) === 'sim' },
+      { id: 'check', label: '检查', test: (r) => browseKindOf(r) === 'check' },
+      { id: 'assembly', label: '组件', test: (r) => browseKindOf(r) === 'assembly' },
+      { id: 'contract', label: '契约', test: (r) => browseKindOf(r) === 'contract' },
+    ];
+    const active = groups.find((g) => g.id === evidenceFilter) ?? groups[0]!;
+    const list = all.filter(active.test);
+
+    const badge = (text: string, color: string) =>
+      React.createElement('span', {
+        style: {
+          flex: 'none', fontSize: 10, lineHeight: '14px', padding: '0 4px', borderRadius: 3,
+          color, border: `1px solid ${color}55`, background: `${color}11`,
+        },
+      }, text);
+
+    const row = (r: RunProduct) => React.createElement('button', {
+      key: r.id,
+      type: 'button',
+      // The sandbox's ?assert=evidence reads these; a DOM assertion is the only
+      // way to check "rows are distinguishable" without eyeballing a screenshot.
+      'data-evidence-row': '',
+      'data-evidence-id': r.id,
+      // The two visible lines are the scannable part; the tooltip is the full
+      // manifest of the row (ids, versions, summary) for when it is not enough.
+      title: `${r.id} · ${runTitle(r)}\n${r.sourceVersionIds.join(' · ')}`
+        + (r.summary ? `\n${r.summary}` : '')
+        + (r.staleVersionIds?.length ? `\n⚠ 基于旧版本 ${r.staleVersionIds.join(', ')}` : '')
+        + (r.supersededBy ? `\n已被 ${r.supersededBy} 取代` : ''),
+      onClick: () => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); },
+      style: {
+        display: 'flex', flexDirection: 'column', gap: 2, width: '100%', textAlign: 'left',
+        padding: '5px 6px', border: 'none', borderBottom: '1px solid #f0f2f4',
+        background: r.id === recordId ? '#eaf3fc' : 'transparent', cursor: 'pointer',
+      },
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 } },
+        statusGlyph(r.status),
+        React.createElement('span', { style: { flex: 'none', fontSize: 11, fontWeight: 600, color: '#5b6673' } }, r.id),
+        React.createElement('span', {
+          // Named for the sandbox assertion: `innerText` on a <button> does not
+          // reliably separate its block children, so the two lines are read by
+          // attribute instead of by guessing at text layout.
+          'data-evidence-title': '',
+          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#26303a' },
+        }, runTitle(r)),
+        r.staleVersionIds?.length ? badge('旧版', '#b8860b') : null,
+        r.supersededBy ? badge('已被取代', '#8a94a0') : null,
+      ),
+      // Second line = the DISCRIMINATORS: which revisions were posed, then what
+      // the run found. Fifteen same-named runs differ exactly here.
+      React.createElement('div', {
+        'data-evidence-meta': '',
+        style: { fontSize: 10, color: '#8a94a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+      }, [
+        r.sourceVersionIds.join(' · '),
+        r.summary,
+        // Time last: the list is already newest-first, but two runs of the same
+        // revisions need one more discriminator before they read as duplicates.
+        fmtTime(r.timestamp),
+      ].filter(Boolean).join(' — ')),
+    );
+
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+      React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
+        ...groups.map((g) => React.createElement('button', {
+          key: g.id,
+          type: 'button',
+          onClick: () => setEvidenceFilter(g.id),
+          style: {
+            fontSize: 11, padding: '1px 6px', borderRadius: 10, cursor: 'pointer',
+            border: `1px solid ${evidenceFilter === g.id ? '#4a7dbd' : '#d5d9dd'}`,
+            background: evidenceFilter === g.id ? '#eaf3fc' : '#fff',
+            color: evidenceFilter === g.id ? '#2f6fdb' : '#5b6673',
+          },
+        }, `${g.label} ${all.filter(g.test).length}`)),
+      ),
+      list.length === 0
+        ? React.createElement('div', { style: S.hint }, '这个零件还没有证据 — 让 Agent 对它跑一次检查，或换一个筛选。')
+        : React.createElement('div', null, ...list.map(row)),
+    );
+  };
 
   const exportRow = () => React.createElement(
     'div',
@@ -2392,6 +2494,7 @@ export function CadPanel(): React.ReactElement {
             : '该零件还没有记录 — 让 Agent 迭代它，或跑一次验证。'),
       );
     }
+    if (id === 'evidence' && version) return evidenceBody();
     if (id === 'runs' && version) return runsBody();
     if (id === 'export' && version) return exportRow();
     if (id === 'report' && run) {
@@ -2801,7 +2904,10 @@ export function CadPanel(): React.ReactElement {
         title: '选择要看的东西：搜索 / 零件 / 运行 / 未登记（Esc 关闭）',
         'aria-label': '打开产物导航',
         style: {
-          flex: '1 1 auto', minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 6,
+          // `1 1 0`, not `1 1 auto`: in a WRAPPING flex row the wrap decision uses
+          // the flex base size, so an auto basis (the breadcrumb's text width) makes
+          // the row wrap at 320 instead of letting the text ellipsize.
+          flex: '1 1 0', minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 6,
           padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6, background: '#fff',
           cursor: 'pointer', fontSize: 12, color: '#26303a', textAlign: 'left',
         },
