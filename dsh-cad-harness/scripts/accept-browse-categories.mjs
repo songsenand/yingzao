@@ -38,6 +38,8 @@ const parts = [
     shared,                                                    // owned by p1, p2 AND the scene
     run('sim-2', 'motion', '2026-10-04T04:00:00.000Z'),        // single-owner motion
     run('v-y', 'physics', '2026-10-04T01:00:00.000Z'),         // single-owner physics
+    run('chk-2', 'printability', '2026-10-04T00:30:00.000Z'),  // per-part evidence (检查)
+    run('an-1', 'analyze', '2026-10-04T00:20:00.000Z'),        // a risk map of one part
   ]),
   part('p2', '轴承座', [shared]),
 ];
@@ -70,14 +72,20 @@ check(cats.contract.map((r) => r.id).join(',') === 'chk-1',
   '装配契约 holds manifest CHECK reports only', cats.contract.map((r) => r.id).join(','));
 check(cats.assembly.every((r) => r.hasGeometry),
   'every 组件 entry carries geometry (its viewport can actually draw)', 'ok');
-check(cats.sim.length + cats.assembly.length + cats.contract.length === cats.all.length,
-  'the three categories partition the pool (no run is hidden or doubled)',
-  `${cats.sim.length}+${cats.assembly.length}+${cats.contract.length} vs ${cats.all.length}`);
+check(cats.check.map((r) => r.id).sort().join(',') === 'an-1,chk-2',
+  '检查 holds per-part evidence (printability / stress / analyze) — it had NO home before',
+  cats.check.map((r) => r.id).join(','));
+check(cats.check.every((r) => r.kind === 'printability' || r.kind === 'stress' || r.kind === 'analyze'),
+  '检查 never swallows a mechanism or a contract report', 'ok');
+check(cats.sim.length + cats.assembly.length + cats.contract.length + cats.check.length === cats.all.length,
+  'the four categories partition the pool (no run is hidden or doubled)',
+  `${cats.sim.length}+${cats.assembly.length}+${cats.contract.length}+${cats.check.length} vs ${cats.all.length}`);
 
 // ── 3. empty corpora stay empty (no crash, no phantom entry) ─────────────────
 {
   const empty = browseCategories([], []);
-  check(empty.all.length === 0 && empty.sim.length === 0 && empty.assembly.length === 0 && empty.contract.length === 0,
+  check(empty.all.length === 0 && empty.sim.length === 0 && empty.assembly.length === 0
+    && empty.contract.length === 0 && empty.check.length === 0,
     'an empty corpus yields four empty lists');
 }
 

@@ -632,6 +632,10 @@ export function CadPanel(): React.ReactElement {
   /** Inline section (the strip's selection) and the one expanded into the sheet. */
   const [tab, setTab] = useState<string>('overview');
   const [sheet, setSheet] = useState<string | null>(null);
+  // The navigator overlay: one searchable list instead of a 类别 dropdown you had
+  // to answer before you could see anything.
+  const [navOpen, setNavOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState('');
   /** Bounding box / triangle count of the loaded version, for the 概览 tab. */
   const [spec, setSpec] = useState<{ size: [number, number, number]; triangles: number } | null>(null);
   /** Section-body height: null = auto (give the body everything above square). */
@@ -730,7 +734,7 @@ export function CadPanel(): React.ReactElement {
    * categories flatten their runs into one list and hide the version column
    * (runs have no versions).
    */
-  type BrowseKind = 'part' | 'assembly' | 'sim' | 'contract' | 'unregistered';
+  type BrowseKind = 'part' | 'assembly' | 'sim' | 'check' | 'contract' | 'unregistered';
   const [kind, setKind] = useState<BrowseKind>('part');
   /**
    * 未登记: workspace mesh files no version accounts for. It is a KIND of the
@@ -758,7 +762,7 @@ export function CadPanel(): React.ReactElement {
   // Flat run pool across every part + the scene bucket, newest first.
   // Category lists live in ./browse so the de-duplication and the category
   // boundaries are testable without a DOM (accept-browse-categories.mjs).
-  const { sim: simRuns, assembly: assemblyRuns, contract: contractRuns } = browseCategories(parts, scene);
+  const { sim: simRuns, assembly: assemblyRuns, contract: contractRuns, check: checkRuns } = browseCategories(parts, scene);
 
   /**
    * The subject's history: its revisions plus the runs that touched it. While
@@ -774,8 +778,15 @@ export function CadPanel(): React.ReactElement {
   );
   const flatCategoryRuns: PartRecord[] | null = kind === 'sim' ? simRuns
     : kind === 'assembly' ? assemblyRuns
+    : kind === 'check' ? checkRuns
     : kind === 'contract' ? contractRuns
     : null;
+  /** Which browse group a run belongs to — used when a run is picked anywhere. */
+  const browseKindOf = (r: RunProduct): BrowseKind =>
+    r.kind === 'assembly' ? 'assembly'
+      : r.kind === 'assembly-check' ? 'contract'
+        : r.kind === 'motion' || r.kind === 'physics' || r.kind === 'fluid' ? 'sim'
+          : 'check';
   const record: PartRecord | null = flatCategoryRuns
     ? (flatCategoryRuns.find((r) => r.id === recordId) ?? null)
     : (records.find((r) => r.id === recordId) ?? null);
@@ -893,7 +904,14 @@ export function CadPanel(): React.ReactElement {
     kindRef.current = kind;
     const land = latestVersionId ?? ids[0] ?? null;
 
-    if (subjectChanged || first || kindChanged) { setRecordId(land); return; }
+    if (subjectChanged || first || kindChanged) {
+      // An EXPLICIT pick can change the category and the record in the same click
+      // (the navigator does exactly that: one row sets kind + record). Landing on
+      // `ids[0]` unconditionally threw that choice away and jumped to the newest
+      // run of the new category.
+      setRecordId((cur) => (cur && ids.includes(cur) ? cur : land));
+      return;
+    }
     const arrivals = activeList.filter((r) => !prev.has(r.id));
     if (followRef.current && arrivals.length > 0) {
       setRecordId(arrivals.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))[0]!.id);
@@ -2186,7 +2204,7 @@ export function CadPanel(): React.ReactElement {
         ...runsOnVersion.map((r) => React.createElement('button', {
           key: r.id,
           type: 'button',
-          onClick: () => { setFollowLatest(false); setRecordId(r.id); },
+          onClick: () => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); },
           style: { ...S.smallBtn, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' },
         },
         statusGlyph(r.status),
@@ -2479,6 +2497,145 @@ export function CadPanel(): React.ReactElement {
     return `\n（项目：${name}）`;
   })();
 
+  // ── the navigator: one overlay, every entry point ──────────────────────────
+  // The old row made 类别 a PRECONDITION: you declared what KIND of thing you were
+  // looking for before you could see anything, and the same object appeared under
+  // a different bucket depending on who made it. Here those buckets are SECTIONS
+  // of one searchable list, and the breadcrumb above is where you landed — not
+  // something you had to choose first.
+  const navFilter = (text: string): boolean => {
+    const q = navQuery.trim().toLowerCase();
+    return !q || text.toLowerCase().includes(q);
+  };
+  const navClose = () => { setNavOpen(false); setNavQuery(''); };
+  const navPickPart = (id: string) => { setKind('part'); setSubjectId(id); setRecordId(null); setFollowLatest(true); navClose(); };
+  const navPickVersion = (partId: string, vid: string) => { setKind('part'); setSubjectId(partId); setFollowLatest(false); setRecordId(vid); navClose(); };
+  const navPickRun = (r: RunProduct) => { setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); navClose(); };
+  const navPickFile = (path: string) => { setKind('unregistered'); setRecordId(null); setFileSubject(path); setFileMeta(null); navClose(); refreshUnregistered(); };
+
+  const navRow = (key: string, title: string, meta: string | null, onClick: () => void, active = false) =>
+    React.createElement('button', {
+      key, type: 'button', onClick,
+      // The sandbox (and any future deep link) addresses a row by its product id.
+      'data-nav-id': key.slice(2),
+      style: {
+        display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
+        padding: '4px 6px', border: 'none', borderRadius: 5, cursor: 'pointer',
+        background: active ? '#eaf3fc' : 'transparent', color: '#26303a', fontSize: 12,
+      },
+    },
+      React.createElement('span', {
+        style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+      }, title),
+      // The meta column must not eat the name: a long summary used to truncate
+      // `机构运动 · 弯臂 + 调焦滑座 + 齿轮轴` before the parts were readable.
+      meta && React.createElement('span', {
+        style: {
+          flex: 'none', maxWidth: '42%', color: '#8a94a0', fontSize: 11,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        },
+      }, meta),
+    );
+
+  const navSection = (label: string, rows: React.ReactNode[]) =>
+    rows.length === 0 ? null : React.createElement('div', { key: label, style: { marginBottom: 6 } },
+      React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', padding: '2px 6px' } }, label),
+      ...rows);
+
+  const navOverlay = () => {
+    const q = navQuery.trim();
+    const partRows = parts
+      .filter((p) => navFilter(p.name) || p.versions.some((v) => navFilter(v.id)))
+      // `∗` keeps the honesty marker the old row carried: a name derived from
+      // userIntent is not a name the agent declared.
+      .map((p) => navRow(`p:${p.id}`, `${p.name}${p.nameSource === 'intent' ? ' ∗' : ''}`,
+        `${p.versions.length} 版`, () => navPickPart(p.id), kind === 'part' && subjectId === p.id));
+    // A 50-version part must not push every other section off the screen: the list
+    // is capped and says so, with search as the way to reach older revisions.
+    const versionsAll = currentPart
+      ? currentPart.versions.filter((v) => navFilter(v.id) || navFilter(v.title ?? ''))
+      : [];
+    const versionCap = q ? 40 : 8;
+    const versionRows = versionsAll.slice(0, versionCap)
+      // The same label the old dropdown used: it carries 导入 / 合并 / 非实体
+      // and the 最新 marker, which are exactly what you scan a history for.
+      .map((v) => navRow(`v:${v.id}`, recordLabel(v, v.id === latestVersionId), null,
+        () => navPickVersion(currentPart!.id, v.id), recordId === v.id));
+    const runRows = (list: RunProduct[]) => list
+      .filter((r) => navFilter(runTitle(r)) || navFilter(r.id) || navFilter(r.summary))
+      .slice(0, q ? 40 : 8)
+      .map((r) => navRow(`r:${r.id}`, `${r.id} · ${runTitle(r)}`, r.summary,
+        () => navPickRun(r), recordId === r.id));
+    const fileRows = unregistered
+      .filter((f) => navFilter(f.path))
+      .slice(0, q ? 40 : 8)
+      .map((f) => navRow(`f:${f.path}`, f.path, f.format.toUpperCase(),
+        () => navPickFile(f.path), fileSubject === f.path));
+
+    // A query searches EVERYTHING; without one the sections are the map (and each
+    // long section is capped, with search as the way to reach the rest).
+    const body = q
+      ? [navSection(`结果 · “${q}”`, [
+        ...versionRows, ...partRows, ...fileRows,
+        ...runRows(simRuns), ...runRows(checkRuns), ...runRows(assemblyRuns), ...runRows(contractRuns),
+      ])]
+      : [
+        navSection(
+          currentPart
+            ? `版本 · ${currentPart.name}` + (versionsAll.length > versionRows.length
+              ? `（最近 ${versionRows.length} / 共 ${versionsAll.length}，用搜索找更早的）` : '')
+            : '版本',
+          versionRows,
+        ),
+        navSection(`零件 · ${parts.length}`, partRows),
+        navSection(`仿真 · ${simRuns.length}`, runRows(simRuns)),
+        navSection(`检查 · ${checkRuns.length}`, runRows(checkRuns)),
+        navSection(`组件 · ${assemblyRuns.length}`, runRows(assemblyRuns)),
+        navSection(`契约 · ${contractRuns.length}`, runRows(contractRuns)),
+        navSection(`未登记 · ${unregistered.length}`, fileRows),
+      ];
+
+    return React.createElement('div', {
+      style: {
+        position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(20,24,30,0.35)',
+        display: 'flex', padding: 8, boxSizing: 'border-box',
+      },
+      onClick: (e: any) => { if (e.target === e.currentTarget) navClose(); },
+    },
+      React.createElement('div', {
+        style: {
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#fff',
+          borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
+        },
+      },
+        React.createElement('div', {
+          style: { display: 'flex', gap: 6, alignItems: 'center', padding: 8, borderBottom: '1px solid #eef1f3' },
+        },
+          React.createElement('input', {
+            autoFocus: true, value: navQuery,
+            placeholder: '搜索零件 / 版本 / 运行 / 文件…',
+            'aria-label': '搜索产物',
+            onChange: (e: any) => setNavQuery(e.target.value),
+            onKeyDown: (e: any) => { if (e.key === 'Escape') navClose(); },
+            style: { flex: 1, minWidth: 0, height: 28, fontSize: 12, padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6 },
+          }),
+          React.createElement('button', { type: 'button', onClick: navClose, title: '关闭（Esc）', style: S.smallBtn }, '✕'),
+        ),
+        React.createElement('div', {
+          style: { overflow: 'auto', padding: '4px 6px 8px', flex: 1, minHeight: 0 },
+        }, ...body),
+      ),
+    );
+  };
+
+  /** Where you are, in one line: the breadcrumb IS the answer, not a chooser. */
+  const crumb = (() => {
+    if (kind === 'part') return currentPart ? `${currentPart.name}${version ? ` · ${version.id}` : ''}` : '选择零件';
+    if (kind === 'unregistered') return fileSubject || '未登记文件';
+    if (run) return `${run.id} · ${runTitle(run)}`;
+    return kind === 'sim' ? '仿真运行' : kind === 'check' ? '检查结果' : kind === 'assembly' ? '组件' : '装配契约';
+  })();
+
   return React.createElement(
     'div',
     { style: S.panel, ref: panelRef },
@@ -2600,16 +2757,14 @@ export function CadPanel(): React.ReactElement {
       },
     }),
 
-    // ── the browse tree, ONE line, THREE columns (DESIGN §20): 种类 → 条目 → 版本 ──
-    // 种类: 零件 / 组件 / 整体及仿真 / 装配契约. 条目: the concrete part or run.
-    // 版本 exists only for 零件 and DEFAULTS to the newest — picking an older
-    // one raises the stale-version banner over the viewport.
+    // ── one row: WHERE YOU ARE, and the one way in ────────────────────────────
+    // 类别 is gone from this row. Its buckets still exist, as SECTIONS inside the
+    // navigator this breadcrumb opens: nothing has to be declared before you can
+    // see anything, and the row now spends its width on the answer ("吊架 · v029")
+    // instead of on four controls.
     React.createElement(
       'div',
       { style: S.bar },
-      // 工作目录: which corpus the panel LOOKS AT. Writes are untouched — the
-      // agent always writes the session's own corpus, so this is browse-only
-      // and says so in the tooltip. Invisible when there is nowhere else to go.
       (workspaces.length > 1 || workspaceCwd) && React.createElement(
         'select',
         {
@@ -2631,7 +2786,7 @@ export function CadPanel(): React.ReactElement {
           },
           title: '工作目录：面板看哪份 CAD 语料（只读浏览）\nAgent 的工具始终写入会话所在目录，切换不会改变写入位置',
           'aria-label': '工作目录',
-          style: { ...S.select, flex: 'none', maxWidth: 172 },
+          style: { ...S.select, flex: 'none', maxWidth: 110 },
         },
         React.createElement('option', { value: '' },
           `跟随会话 · ${sessionDir ? (sessionDir.replace(/\/+$/, '').split('/').pop() || '') : ''}`.trim()),
@@ -2640,108 +2795,22 @@ export function CadPanel(): React.ReactElement {
           .map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
             `${w.rel === '.' ? '根语料' : w.rel} · ${w.parts}零件/${w.versions}版`)),
       ),
-      React.createElement(
-        'select',
-        {
-          value: kind,
-          onChange: (e: any) => {
-            const next = e.target.value as BrowseKind;
-            setKind(next);
-            setSubjectId('');
-            setRecordId(null);
-            setFollowLatest(true);
-            // A file path belongs to the 未登记 list; leaving the kind drops it
-            // rather than letting a stale path drive the viewport from elsewhere.
-            if (next !== 'unregistered') { setFileSubject(''); setFileMeta(null); }
-          },
-          'aria-label': '种类',
-          style: { ...S.select, flex: 'none', width: 118 },
+      React.createElement('button', {
+        type: 'button',
+        onClick: () => { setNavQuery(''); setNavOpen(true); },
+        title: '选择要看的东西：搜索 / 零件 / 运行 / 未登记（Esc 关闭）',
+        'aria-label': '打开产物导航',
+        style: {
+          flex: '1 1 auto', minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 6,
+          padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6, background: '#fff',
+          cursor: 'pointer', fontSize: 12, color: '#26303a', textAlign: 'left',
         },
-        React.createElement('option', { value: 'part' }, `零件 · ${parts.length}`),
-        React.createElement('option', { value: 'assembly' }, `组件 · ${assemblyRuns.length}`),
-        React.createElement('option', { value: 'sim' }, `仿真 · ${simRuns.length}`),
-        React.createElement('option', { value: 'contract' }, `装配契约 · ${contractRuns.length}`),
-        React.createElement('option', { value: 'unregistered' }, `未登记 · ${unregistered.length}`),
-      ),
-      kind === 'part' ? React.createElement(
-        'select',
-        {
-          // Distinct key per branch: React otherwise reconciles the flat-item
-          // select into the part select in place, and the native dropdown can
-          // show the previous category's options merged with the new ones
-          // (the "装配契约 + 零件" flicker, DESIGN §20.4).
-          key: 'browse-subject',
-          value: subjectId,
-          onChange: (e: any) => {
-            const next = e.target.value;
-            // Switching the subject is not "pinning a record": the follow
-            // preference is the user's, and the effect above lands on the
-            // newest revision of whatever they switched to.
-            prevIdsRef.current = new Set();
-            setSubjectId(next);
-          },
-          title: currentPart
-            ? `零件「${currentPart.name}」· ${currentPart.versions.length} 个版本` +
-              (currentPart.nameSource === 'intent' ? '\n（名字由 userIntent 推导，Agent 未显式声明）' : '\n（名字由 Agent 声明）')
-            : '选择一个零件',
-          'aria-label': '零件',
-          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
-        },
-        parts.length === 0 && React.createElement('option', { value: '' }, projectLabel ? `暂无零件${projectLabel}` : '暂无零件'),
-        parts.map((p) => React.createElement('option', { key: p.id, value: p.id },
-          `${p.name} · ${p.versions.length}版`)),
-      ) : kind === 'unregistered' ? React.createElement(
-        'select',
-        {
-          key: 'browse-unregistered',
-          value: fileSubject,
-          onChange: (e: any) => { setFileSubject(e.target.value); setFileMeta(null); },
-          title: '工作区里没有版本的几何文件（与 delivery_audit 同一份扫描）\n预览不入证据；要留下它就「导入为版本」',
-          'aria-label': '未登记文件',
-          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
-        },
-        unregistered.length === 0 &&
-          React.createElement('option', { value: '' }, unregError ? '扫描失败' : '暂无未登记文件'),
-        unregistered.map((f) => React.createElement('option', { key: f.path, value: f.path },
-          `${f.severity === 'blocked' ? '⚠ ' : ''}${f.path} · ${f.format.toUpperCase()}`)),
-      ) : React.createElement(
-        'select',
-        {
-          key: `browse-flat-${kind}`,
-          value: recordId ?? '',
-          onChange: (e: any) => { setRecordId(e.target.value); },
-          'aria-label': kind === 'contract' ? '契约检查' : kind === 'sim' ? '仿真运行' : '组件运行',
-          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
-        },
-        (kind === 'sim' ? simRuns : kind === 'contract' ? contractRuns : assemblyRuns).length === 0 &&
-          React.createElement('option', { value: '' }, '暂无记录'),
-        (kind === 'sim' ? simRuns : kind === 'contract' ? contractRuns : assemblyRuns).map((r) =>
-          React.createElement('option', { key: r.id, value: r.id },
-            `${r.kind === 'motion' ? '运动' : r.kind === 'physics' ? '物理' : r.kind === 'fluid' ? '流体' : r.kind === 'assembly' ? '装配验证' : '契约检查'}` +
-            `${r.owner ? r.owner + ' · ' : ''}${recordLabel(r)}`,
-          )),
-      ),
-      // Names derived from the intent are marked, not silently passed off as declared.
-      kind === 'part' && currentPart?.nameSource === 'intent' && React.createElement('span', {
-        style: { fontSize: 11, color: '#b8860b', flex: 'none', cursor: 'help' },
-        title: '零件名由 userIntent 推导（Agent 未显式声明）',
-      }, '∗'),
-      kind === 'part' && React.createElement(
-        'select',
-        {
-          value: recordId ?? '',
-          onChange: (e: any) => { setFollowLatest(false); setRecordId(e.target.value); },
-          title: record
-            ? `记录「${record.id}」· ${record.type === 'version' ? '版本' : '验证运行'}\n${record.type === 'run' ? runTitle(record) : record.title}`
-            : '该零件还没有版本',
-          'aria-label': '版本',
-          style: { ...S.select, flex: '1 1 0', minWidth: 0 },
-        },
-        // 零件的记录列 = 版本 ONLY (DESIGN §20): runs live in 仿真 / 组件.
-        records.filter((r) => r.type === 'version').length === 0 &&
-          React.createElement('option', { value: '' }, '暂无版本'),
-        records.filter((r) => r.type === 'version').map((r) => React.createElement('option', { key: r.id, value: r.id },
-          recordLabel(r, r.type === 'version' && r.id === latestVersionId))),
+      },
+        React.createElement('span', { style: { color: '#8a94a0', flex: 'none', fontSize: 11 } }, '🔍'),
+        React.createElement('span', {
+          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 },
+        }, crumb),
+        React.createElement('span', { style: { color: '#8a94a0', flex: 'none' } }, '▾'),
       ),
       kind === 'part' && record && statusGlyph(record.status),
       kind === 'part' && React.createElement('button', {
@@ -2757,9 +2826,6 @@ export function CadPanel(): React.ReactElement {
           ...(followLatest ? { border: '1px solid #27ae60', color: '#1e8449', background: '#eafaf1' } : {}),
         },
       }, followLatest ? '●' : '○'),
-      // A file is NOT a product, but it is browsable: 📂 jumps to the 未登记
-      // category, where the list, the preview and the import form live. The
-      // dialog is now import-by-path only (DESIGN §30.18: preview is not a modal).
       React.createElement('button', {
         type: 'button',
         title: '未登记文件：工作区里没有版本的几何 — 预览、标注、导入为版本',
@@ -2768,6 +2834,8 @@ export function CadPanel(): React.ReactElement {
         style: { ...S.smallBtn, padding: '2px 6px' },
       }, '📂'),
     ),
+
+    navOpen && navOverlay(),
 
     // ── the viewport: filled by what the product *is* ──
     React.createElement(

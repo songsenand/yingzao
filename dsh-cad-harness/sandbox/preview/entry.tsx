@@ -57,13 +57,33 @@ function selectByIndex(index: number, value: string) {
 // The browse bar is now THREE selects for 零件 (DESIGN §20): [0] 种类,
 // [1] 条目, [2] 版本 — but only TWO for the run categories (条目 IS the record).
 // The record select is therefore the LAST one present.
-const selectKind = (value: string) => selectByIndex(0, value);
-const selectSubject = (value: string) => selectByIndex(1, value);
-const selectRecord = (value: string) => {
-  const selects = document.querySelectorAll('#root select');
-  const index = selects.length >= 3 ? 2 : 1;
-  return selectByIndex(index, value);
+/**
+ * Pick a product through the NAVIGATOR (the breadcrumb overlay), which replaced
+ * the 类别/条目/记录 selects. `navId` is the product id the row carries
+ * (`p005` / `v066` / `r013` / a file path).
+ */
+const navPick = (navId: string) => {
+  const open = document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
+  open?.click();
+  setTimeout(() => {
+    const row = document.querySelector(`[data-nav-id="${navId}"]`) as HTMLElement | null;
+    row?.click();
+  }, 450);
 };
+
+const selectKind = (value: string) => {
+  const selects = document.querySelectorAll('#root select');
+  // The 工作目录 select is the only one left when it renders; the browse selects
+  // are gone. `part` is the default, and 未登记 has a one-click button.
+  if (selects.length >= 1 && (selects[0] as HTMLElement).getAttribute('aria-label') === '种类') {
+    return selectByIndex(0, value);
+  }
+  if (value === 'unregistered') {
+    (document.querySelector('[aria-label="未登记文件"]') as HTMLElement | null)?.click();
+  }
+};
+const selectSubject = (value: string) => navPick(value);
+const selectRecord = (value: string) => navPick(value);
 
 // Surface page errors into the capture: with React unmounting the tree on a
 // render throw, the screenshot would otherwise just be an empty dock.
@@ -266,6 +286,39 @@ if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);
 if (openParam) {
   const seq = openParam.split(',').map((x) => x.trim()).filter(Boolean);
   seq.forEach((text, i) => setTimeout(() => clickByText(text), 1900 + i * 350));
+}
+// ?nav=1 — open the product navigator (the breadcrumb), without guessing its text:
+// its label changes with whatever happens to be selected.
+if (q.get('nav') === '1') {
+  setTimeout(() => {
+    const btn = document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
+    btn?.click();
+  }, 1900);
+}
+// ?navpick=<id> — open the navigator and click one product row (deterministic;
+// the breadcrumb's own label changes with the selection).
+const navpick = q.get('navpick');
+if (navpick) {
+  setTimeout(() => {
+    const open = document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
+    open?.click();
+    setTimeout(() => {
+      const row = document.querySelector(`[data-nav-id="${navpick}"]`) as HTMLElement | null;
+      row?.click();
+    }, 450);
+  }, 1700);
+}
+// ?navq=… — type into the navigator's search box (native setter + input event, so
+// React's controlled input sees the change).
+const navq = q.get('navq');
+if (navq) {
+  setTimeout(() => {
+    const input = document.querySelector('[aria-label="搜索产物"]') as HTMLInputElement | null;
+    if (!input) return;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, navq);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, 2300);
 }
 if (wheelParam) {
   setTimeout(() => {

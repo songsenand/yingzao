@@ -31,6 +31,13 @@ export interface BrowseCategories {
   assembly: BrowseRun[];
   /** 装配契约: manifest check reports. */
   contract: BrowseRun[];
+  /**
+   * 检查: per-part evidence that is not a mechanism (`printability` / `stress` /
+   * `analyze`). These runs had NO flat home before — they were reachable only
+   * from a version's 验证 tab, whose click set a record id the part category
+   * could not resolve.
+   */
+  check: BrowseRun[];
 }
 
 const newestFirst = (runs: BrowseRun[]): BrowseRun[] =>
@@ -56,5 +63,6 @@ export function browseCategories(
     sim: all.filter((r) => r.kind === 'motion' || r.kind === 'physics' || r.kind === 'fluid'),
     assembly: all.filter((r) => r.kind === 'assembly'),
     contract: all.filter((r) => r.kind === 'assembly-check'),
+    check: all.filter((r) => r.kind === 'printability' || r.kind === 'stress' || r.kind === 'analyze'),
   };
 }

@@ -40,8 +40,11 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 |---|---|
 | `w` / `h` | dock width / viewport height (defaults 380×900) |
 | `kind` | drive the 种类 select: `part` / `assembly` / `sim` / `contract` / `unregistered` |
-| `subject` | drive the second select: a part id (`p010`), `__scene__` for the cross-part bucket, or — in the `unregistered` kind — a file path (`out/disk-45.stl`) |
+| `subject` | pick a part (or, in the `unregistered` kind, a file path) through the navigator |
 | `record` | drive the 记录 select to a version or run id (`v021`, `r003`) — picks it for real, so the panel pins (跟随 → 已钉住) exactly as a click would |
+| `nav` | `1` = open the product navigator (the breadcrumb overlay) — the 类别/条目/记录 selects no longer exist |
+| `navpick` | open the navigator and click one row by product id (`p005`, `v066`, `r013`, a file path). This is how `subject`/`record` now select |
+| `navq` | type into the navigator's search box (native setter + input event), e.g. `navq=滑座` |
 | `open` | click something after mount — a tab (`参数`, `用法`), a toolbar chip (`剖切`, `壁厚`, `测量`, `截图`) or `⤢`/`⤡`. **Comma-separated for a sequence**: `open=参数,⤢` selects the tab then expands it into the overlay |
 | `wheel` | wheel-delta to push through OrbitControls (e.g. `-1400` zooms in) — lets a screenshot prove the scale bar re-ranges |
 | `reset` | click `复原` after the wheel, to prove the camera returns to its initial framing |
