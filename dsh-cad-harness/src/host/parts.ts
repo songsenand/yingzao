@@ -16,8 +16,9 @@
 //     { schemaVersion: 1,
 //       parts: [{ id, name, nameSource, createdAt, lastActiveAt, versionIds }] }
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { withFileLock, writeJsonAtomic } from './file-lock.ts';
 
 export interface PartEntry {
   id: string;
@@ -86,12 +87,13 @@ async function nextPartId(store: PartStore): Promise<string> {
   return `p${String(max + 1).padStart(3, '0')}`;
 }
 
+/** Write the index through a unique temp + rename (the lock is the caller's). */
 async function writeManifest(store: PartStore, manifest: PartManifest): Promise<void> {
-  await mkdir(store.root, { recursive: true });
-  const tmp = join(store.root, `${MANIFEST}.tmp`);
-  await writeFile(tmp, JSON.stringify(manifest, null, 2));
-  await rename(tmp, join(store.root, MANIFEST));
+  await writeJsonAtomic(join(store.root, MANIFEST), manifest);
 }
+
+/** The manifest path, so every mutator locks the same file. */
+const manifestPath = (store: PartStore): string => join(store.root, MANIFEST);
 
 /**
  * Fallback name when nothing was declared: the intent's leading label, or the
@@ -105,8 +107,11 @@ export function derivePartName(intent: string): string {
 }
 
 /**
- * Create a part. A name collision gets a numeric suffix instead of merging:
- * two different buckets must not silently become one part.
+ * Create a part under a name that is still free (suffix " 2", " 3", …).
+ *
+ * Find + create happen under ONE lock: the old code checked the name and then
+ * created in a separate step, so two writers could both see "free" and create
+ * the same name twice.
  */
 export async function createUniquePart(
   store: PartStore,
@@ -114,12 +119,14 @@ export async function createUniquePart(
   nameSource: PartEntry['nameSource'] = 'agent',
 ): Promise<PartEntry> {
   const base = name.trim().replace(/\s+/g, ' ');
-  let candidate = base;
-  for (let n = 2; await findPartByName(store, candidate); n++) {
-    candidate = `${base} ${n}`;
-    if (n > 50) throw new Error(`cannot find a free part name for "${base}"`);
-  }
-  return createPart(store, candidate, nameSource);
+  return withFileLock(manifestPath(store), async () => {
+    let candidate = base;
+    for (let n = 2; await findPartByName(store, candidate); n++) {
+      candidate = `${base} ${n}`;
+      if (n > 50) throw new Error(`cannot find a free part name for "${base}"`);
+    }
+    return createPartLocked(store, candidate, nameSource);
+  });
 }
 
 /** Create a part whose name is not taken yet (the caller decides the name). */
@@ -127,6 +134,15 @@ export async function createPart(
   store: PartStore,
   name: string,
   nameSource: PartEntry['nameSource'] = 'agent',
+): Promise<PartEntry> {
+  return withFileLock(manifestPath(store), () => createPartLocked(store, name, nameSource));
+}
+
+/** The create itself; the caller holds the lock. */
+async function createPartLocked(
+  store: PartStore,
+  name: string,
+  nameSource: PartEntry['nameSource'],
 ): Promise<PartEntry> {
   const manifest = await readPartManifest(store);
   const clean = name.trim().replace(/\s+/g, ' ');
@@ -155,23 +171,29 @@ export async function ensurePart(
 
 /** Record that a version belongs to a part, and touch its activity time. */
 export async function attachVersion(store: PartStore, partId: string, versionId: string): Promise<void> {
-  const manifest = await readPartManifest(store);
-  const part = manifest.parts.find((p) => p.id === partId);
-  if (!part) throw new Error(`no such part: ${partId}`);
-  if (!part.versionIds.includes(versionId)) part.versionIds.push(versionId);
-  part.lastActiveAt = new Date().toISOString();
-  await writeManifest(store, manifest);
+  // Read-modify-write under the lock: two versions attached concurrently (a merge
+  // writes several) used to drop one of them.
+  await withFileLock(manifestPath(store), async () => {
+    const manifest = await readPartManifest(store);
+    const part = manifest.parts.find((p) => p.id === partId);
+    if (!part) throw new Error(`no such part: ${partId}`);
+    if (!part.versionIds.includes(versionId)) part.versionIds.push(versionId);
+    part.lastActiveAt = new Date().toISOString();
+    await writeManifest(store, manifest);
+  });
 }
 
 /** Rename a part (kept for migrations and future UI); name collisions are rejected. */
 export async function renamePart(store: PartStore, partId: string, name: string): Promise<void> {
-  const manifest = await readPartManifest(store);
-  const key = normalizeName(name);
-  if (manifest.parts.some((p) => p.id !== partId && normalizeName(p.name) === key)) {
-    throw new Error(`part name already taken: ${name}`);
-  }
-  const part = manifest.parts.find((p) => p.id === partId);
-  if (!part) throw new Error(`no such part: ${partId}`);
-  part.name = name.trim().replace(/\s+/g, ' ');
-  await writeManifest(store, manifest);
+  await withFileLock(manifestPath(store), async () => {
+    const manifest = await readPartManifest(store);
+    const key = normalizeName(name);
+    if (manifest.parts.some((p) => p.id !== partId && normalizeName(p.name) === key)) {
+      throw new Error(`part name already taken: ${name}`);
+    }
+    const part = manifest.parts.find((p) => p.id === partId);
+    if (!part) throw new Error(`no such part: ${partId}`);
+    part.name = name.trim().replace(/\s+/g, ' ');
+    await writeManifest(store, manifest);
+  });
 }

@@ -18,9 +18,10 @@
 //     parts/<name>.stl          geometry the run was computed on
 //     frames/<file>             keyframe PNGs (motion/physics) or fluid .bin/.png
 
-import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readPythonOverlay } from './python-runtime.ts';
+import { readCounter, withFileLock, writeCounter, writeJsonAtomic } from './file-lock.ts';
 import type { RunJudgement, RunKind, RunProduct, RunStatus } from '../shared/types.ts';
 
 export type { RunKind, RunStatus } from '../shared/types.ts';
@@ -149,20 +150,30 @@ export function runFilePath(store: RunStore, id: string, rel: string): string | 
 
 async function nextRunId(store: RunStore): Promise<string> {
   await mkdir(store.root, { recursive: true });
-  let max = 0;
-  try {
-    for (const name of await readdir(store.root)) {
-      const m = /^r(\d{3,})$/.exec(name);
+  // A persisted counter, bumped under the manifest lock. Without it two writers
+  // (two sessions on one project, or two tool calls in a turn) are handed the
+  // same id and write into the same directory. The counter is healed from the
+  // directories AND the manifest, so losing it costs a scan, not correctness —
+  // and the run directory is still created lazily, so an id that never produced
+  // a file leaves nothing behind.
+  return withFileLock(join(store.root, MANIFEST), async () => {
+    let max = await readCounter(join(store.root, 'next-id'));
+    try {
+      for (const name of await readdir(store.root)) {
+        const m = /^r(\d{3,})$/.exec(name);
+        if (m) max = Math.max(max, parseInt(m[1]!, 10));
+      }
+    } catch { /* fresh store */ }
+    for (const r of (await readRunManifest(store)).runs) {
+      const m = /^r(\d{3,})$/.exec(r.id);
       if (m) max = Math.max(max, parseInt(m[1]!, 10));
     }
-  } catch { /* fresh store */ }
-  // The index can outlive a deleted directory; trust whichever is further along.
-  for (const r of (await readRunManifest(store)).runs) {
-    const m = /^r(\d{3,})$/.exec(r.id);
-    if (m) max = Math.max(max, parseInt(m[1]!, 10));
-  }
-  return `r${String(max + 1).padStart(3, '0')}`;
+    const n = max + 1;
+    await writeCounter(join(store.root, 'next-id'), n);
+    return `r${String(n).padStart(3, '0')}`;
+  });
 }
+
 
 /** Path segments that must never name a file inside a run directory. */
 const UNSAFE_NAME = /[/\\:*?"<>|\u0000-\u001f]/;
@@ -292,61 +303,63 @@ export async function beginRun(
       return safe;
     },
     async commit(final) {
-      const manifest = await readRunManifest(store);
-      // Lifecycle: a run that names its SUBJECT (the manifest it audited, the
-      // part set it posed) replaces the previous run of the same kind about the
-      // same subject. The older runs stay readable and keep their reports; only
-      // a `supersededBy` pointer is added, so a corpus with 36 runs can still
-      // answer "which one is the current check" without guessing from titles.
-      const superseded: string[] = [];
-      if (final.subject) {
-        for (const older of manifest.runs) {
-          if (older.id === id || older.kind !== init.kind) continue;
-          if (older.subject !== final.subject || older.supersededBy) continue;
-          older.supersededBy = id;
-          superseded.push(older.id);
-        }
-      }
-      // Read once per commit: the overlay is small (a readdir + METADATA reads).
+      // Read the index, decide the supersede chain and append the entry under ONE
+      // lock: the chain depends on what is already there, so a read outside the
+      // lock can mark an already-superseded run current (or drop a concurrent
+      // run's row from the index).
       const overlay = await readPythonOverlay();
-      const entry: RunEntry = {
-        id,
-        kind: init.kind,
-        timestamp: init.timestamp ?? new Date().toISOString(),
-        title: final.title ?? init.title,
-        status: final.status,
-        // Absent stays absent: "this run did not judge anything" is information the panel
-        // needs, and defaulting it to 'not-excluded' would manufacture a clean bill.
-        ...(final.judgement ? { judgement: final.judgement } : {}),
-        summary: final.summary,
-        sourceVersionIds: [...new Set(final.sourceVersionIds ?? [])].filter(Boolean).sort(),
-        hasGeometry: parts.length > 0,
-        parts: parts.slice().sort(),
-        ...(final.subject ? { subject: final.subject } : {}),
-        ...(superseded.length ? { supersedes: superseded } : {}),
-        ...(Object.keys(placements).length ? { placements } : {}),
-        // The user overlay is part of the environment a number came out of, and
-        // the worker CAN import from it (that was the user's call). Recording it
-        // is what keeps "the same version, the same tool" answerable — an empty
-        // list is written too, so absence means "an older run", never "unknown".
-        pythonOverlay: {
-          packages: overlay.packages.map((p) => `${p.name}==${p.version}${p.override ? ' (overrides locked)' : ''}`),
-          overrides: overlay.overrides.map((p) => `${p.name}==${p.version}`),
-          digest: overlay.digest,
-        },
-      };
       await ensureDir();
-      await writeFile(join(dir, 'run.json'), JSON.stringify(entry, null, 2));
-      for (const olderId of superseded) {
-        const older = manifest.runs.find((r) => r.id === olderId);
-        if (older) await writeFile(join(store.root, olderId, 'run.json'), JSON.stringify(older, null, 2)).catch(() => {});
-      }
-      manifest.runs = manifest.runs.filter((r) => r.id !== id).concat(entry);
-      await mkdir(store.root, { recursive: true });
-      const tmp = join(store.root, `${MANIFEST}.tmp`);
-      await writeFile(tmp, JSON.stringify(manifest, null, 2));
-      await rename(tmp, join(store.root, MANIFEST));
-      return entry;
+      return withFileLock(join(store.root, MANIFEST), async () => {
+        const manifest = await readRunManifest(store);
+        // Lifecycle: a run that names its SUBJECT (the manifest it audited, the
+        // part set it posed) replaces the previous run of the same kind about the
+        // same subject. The older runs stay readable and keep their reports; only
+        // a `supersededBy` pointer is added, so a corpus with 36 runs can still
+        // answer "which one is the current check" without guessing from titles.
+        const superseded: string[] = [];
+        if (final.subject) {
+          for (const older of manifest.runs) {
+            if (older.id === id || older.kind !== init.kind) continue;
+            if (older.subject !== final.subject || older.supersededBy) continue;
+            older.supersededBy = id;
+            superseded.push(older.id);
+          }
+        }
+        const entry: RunEntry = {
+          id,
+          kind: init.kind,
+          timestamp: init.timestamp ?? new Date().toISOString(),
+          title: final.title ?? init.title,
+          status: final.status,
+          // Absent stays absent: "this run did not judge anything" is information the panel
+          // needs, and defaulting it to 'not-excluded' would manufacture a clean bill.
+          ...(final.judgement ? { judgement: final.judgement } : {}),
+          summary: final.summary,
+          sourceVersionIds: [...new Set(final.sourceVersionIds ?? [])].filter(Boolean).sort(),
+          hasGeometry: parts.length > 0,
+          parts: parts.slice().sort(),
+          ...(final.subject ? { subject: final.subject } : {}),
+          ...(superseded.length ? { supersedes: superseded } : {}),
+          ...(Object.keys(placements).length ? { placements } : {}),
+          // The user overlay is part of the environment a number came out of, and
+          // the worker CAN import from it (that was the user's call). Recording it
+          // is what keeps "the same version, the same tool" answerable — an empty
+          // list is written too, so absence means "an older run", never "unknown".
+          pythonOverlay: {
+            packages: overlay.packages.map((p) => `${p.name}==${p.version}${p.override ? ' (overrides locked)' : ''}`),
+            overrides: overlay.overrides.map((p) => `${p.name}==${p.version}`),
+            digest: overlay.digest,
+          },
+        };
+        await writeFile(join(dir, 'run.json'), JSON.stringify(entry, null, 2));
+        for (const olderId of superseded) {
+          const older = manifest.runs.find((r) => r.id === olderId);
+          if (older) await writeFile(join(store.root, olderId, 'run.json'), JSON.stringify(older, null, 2)).catch(() => {});
+        }
+        manifest.runs = manifest.runs.filter((r) => r.id !== id).concat(entry);
+        await writeJsonAtomic(join(store.root, MANIFEST), manifest);
+        return entry;
+      });
     },
   };
   return writer;

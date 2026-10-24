@@ -12,6 +12,7 @@
 
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { withFileLock, writeJsonAtomic } from './file-lock.ts';
 
 /**
  * Where a version's geometry came from.
@@ -229,64 +230,66 @@ export interface SaveVersionInput {
 
 /** Persist one generation round; returns the created version id. */
 export async function saveVersion(store: VersionStore, input: SaveVersionInput): Promise<string> {
-  const id = await nextVersionId(store);
-  // Read the index BEFORE this version's directory exists. The loader heals itself from
-  // the directories, so creating the directory first made it "recover" the version that
-  // was about to be appended — and the index ended up with that id twice
-  // (caught by accept-version-index).
-  const manifest = await readManifest(store);
-  const dir = join(versionsDir(store), id);
-  await mkdir(dir, { recursive: true });
-  if (input.scadCode !== undefined) await writeFile(join(dir, 'model.scad'), input.scadCode, 'utf8');
-  if (input.stl) await writeFile(join(dir, 'model.stl'), input.stl);
-  const datumSet = mergeDatumSet(input.datums, input.datumSet);
-  if (datumSet) {
-    await writeFile(join(dir, 'datums.json'), JSON.stringify(datumSet, null, 2));
-  }
-  // The provenance record sits next to datums.json, so a human (or a script
-  // with no knowledge of the manifest schema) can answer "where did this come
-  // from" from the version directory alone.
-  if (input.source && input.source.kind === 'imported') {
-    await writeFile(join(dir, 'import.json'), JSON.stringify({
-      ...input.source,
-      versionId: id,
+  // The id, the version directory and the index row are ONE critical section.
+  //   * allocate the id outside the lock -> two writers get the same id and write
+  //     into the same directory;
+  //   * read the index AFTER the directory exists -> the loader "heals" the
+  //     half-written version from the directory and the append duplicates it.
+  // Holding the lock across the artifact writes costs a few ms and removes both.
+  return withFileLock(join(store.root, 'manifest.json'), async () => {
+    // Read the index BEFORE this version's directory exists.
+    const manifest = await readManifest(store);
+    const id = await nextVersionId(store);
+    const dir = join(versionsDir(store), id);
+    await mkdir(dir, { recursive: true });
+    if (input.scadCode !== undefined) await writeFile(join(dir, 'model.scad'), input.scadCode, 'utf8');
+    if (input.stl) await writeFile(join(dir, 'model.stl'), input.stl);
+    const datumSet = mergeDatumSet(input.datums, input.datumSet);
+    if (datumSet) {
+      await writeFile(join(dir, 'datums.json'), JSON.stringify(datumSet, null, 2));
+    }
+    // The provenance record sits next to datums.json, so a human (or a script
+    // with no knowledge of the manifest schema) can answer "where did this come
+    // from" from the version directory alone.
+    if (input.source && input.source.kind === 'imported') {
+      await writeFile(join(dir, 'import.json'), JSON.stringify({
+        ...input.source,
+        versionId: id,
+        userIntent: input.userIntent,
+        parentVersion: input.parentVersion ?? null,
+        solid: input.solid ?? true,
+      }, null, 2));
+    }
+    // Derived geometry gets the same treatment under its own name: a merged body
+    // has no source code to re-read, so the list of what it was made of is the
+    // only thing that can tell a later reader whether it is still current.
+    if (input.source && input.source.kind === 'merged') {
+      await writeFile(join(dir, 'source.json'), JSON.stringify({
+        ...input.source,
+        versionId: id,
+        userIntent: input.userIntent,
+        solid: input.solid ?? true,
+      }, null, 2));
+    }
+    for (const r of input.renders ?? []) {
+      await writeFile(join(dir, `render_${r.view}.png`), r.png);
+    }
+    manifest.versions.push({
+      id,
+      timestamp: new Date().toISOString(),
       userIntent: input.userIntent,
       parentVersion: input.parentVersion ?? null,
-      solid: input.solid ?? true,
-    }, null, 2));
-  }
-  // Derived geometry gets the same treatment under its own name: a merged body
-  // has no source code to re-read, so the list of what it was made of is the
-  // only thing that can tell a later reader whether it is still current.
-  if (input.source && input.source.kind === 'merged') {
-    await writeFile(join(dir, 'source.json'), JSON.stringify({
-      ...input.source,
-      versionId: id,
-      userIntent: input.userIntent,
-      solid: input.solid ?? true,
-    }, null, 2));
-  }
-  for (const r of input.renders ?? []) {
-    await writeFile(join(dir, `render_${r.view}.png`), r.png);
-  }
-  manifest.versions.push({
-    id,
-    timestamp: new Date().toISOString(),
-    userIntent: input.userIntent,
-    parentVersion: input.parentVersion ?? null,
-    ...(input.partId ? { partId: input.partId } : {}),
-    status: 'draft',
-    ...(input.source ? { source: input.source } : {}),
-    ...(input.solid === false ? { solid: false } : {}),
+      ...(input.partId ? { partId: input.partId } : {}),
+      status: 'draft',
+      ...(input.source ? { source: input.source } : {}),
+      ...(input.solid === false ? { solid: false } : {}),
+    });
+    // Unique temp name + rename: a torn write here used to lose the WHOLE history
+    // (`readManifest` treated invalid JSON as an empty index, and the next save
+    // rewrote it with a single row — 2026-10-23 audit, FIX-C3).
+    await writeJsonAtomic(join(store.root, 'manifest.json'), manifest);
+    return id;
   });
-  // tmp + rename, like `runs.ts` and `parts.ts`. A torn write here used to lose the
-  // WHOLE history: `readManifest` treated invalid JSON as an empty index, and the next
-  // save rewrote it with a single row (2026-10-23 audit, FIX-C3).
-  await mkdir(store.root, { recursive: true });
-  const tmp = join(store.root, 'manifest.json.tmp');
-  await writeFile(tmp, JSON.stringify(manifest, null, 2));
-  await rename(tmp, join(store.root, 'manifest.json'));
-  return id;
 }
 
 /** One version's manifest entry, or null. */
