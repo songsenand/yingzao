@@ -86,6 +86,17 @@ async function api(req, url) {
     return json({ ...wire, seq }, 200, { etag });
   }
 
+  // --- the assembly manifest (the machine object) ---------------------------
+  // Served from beside the corpus, like the host does: `<workspace>/assembly/
+  // assembly.json` (the sandbox's DATA is `<workspace>/cad-data`).
+  if (p === '/api/cad/assembly/manifest') {
+    for (const candidate of [join(DATA, '..', 'assembly', 'assembly.json'), join(DATA, 'assembly', 'assembly.json')]) {
+      const raw = await readMaybe(candidate);
+      if (raw) return new Response(raw, { headers: { 'content-type': MIME['.json'] } });
+    }
+    return notFound('assembly manifest');
+  }
+
   if (p === '/api/cad/params') {
     const scad = await readMaybe(join(DATA, 'versions', v ?? '', 'model.scad'));
     if (!scad) return notFound('version');

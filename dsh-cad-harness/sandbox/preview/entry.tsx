@@ -293,8 +293,10 @@ if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);
 // `open` accepts a comma-separated sequence: `open=参数,⤢` clicks the tab, then
 // expands it into the overlay.
 if (openParam) {
+  // After a navpick the page only exists once that pick lands (~2.15 s).
+  const openAt = q.get('navpick') ? 2700 : 1900;
   const seq = openParam.split(',').map((x) => x.trim()).filter(Boolean);
-  seq.forEach((text, i) => setTimeout(() => clickByText(text), 1900 + i * 350));
+  seq.forEach((text, i) => setTimeout(() => clickByText(text), openAt + i * 350));
 }
 // ?nav=1 — open the product navigator (the breadcrumb), without guessing its text:
 // its label changes with whatever happens to be selected.
@@ -666,6 +668,48 @@ if (q.get('assert') === 'recent') {
   }, 2600);
 }
 
+// ?assert=machine — the assembly manifest must surface as ONE object: a 机器 row
+// in the navigator, a machine page whose tabs carry the node and evidence counts.
+if (q.get('assert') === 'machine') {
+  const expect = q.get('expect') ?? '';
+  let rowSeen = false;
+  // Three beats: open, then click (the overlay must have rendered), then read
+  // (the machine page must have rendered). Doing two in one tick reads the DOM
+  // before React commits — the first version of this assertion "passed" against
+  // the PREVIOUS page's breadcrumb.
+  setTimeout(() => {
+    (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+  }, 1600);
+  setTimeout(() => {
+    const row = document.querySelector('[data-nav-id="machine"]') as HTMLElement | null;
+    rowSeen = Boolean(row);
+    row?.click();
+  }, 2200);
+  setTimeout(() => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    const crumb = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const tabTexts = Array.from(document.querySelectorAll('#root button'))
+      .map((b) => (b.textContent ?? '').trim())
+      .filter((t) => t.length > 0 && t.length < 12 && /(概览|证据|清单|用法)/.test(t));
+    const evidenceTab = tabTexts.find((t) => t.startsWith('证据')) ?? '';
+    const nodesTab = tabTexts.find((t) => t.startsWith('清单')) ?? '';
+    const evN = Number((evidenceTab.match(/\d+/) ?? ['0'])[0]);
+    const nodeN = Number((nodesTab.match(/\d+/) ?? ['0'])[0]);
+    const lines = [
+      `machine object (dock ${w}×${h})`,
+      `${rowSeen ? 'PASS' : 'FAIL'}  navigator has a 机器 row`,
+      `${expect && crumb.includes(expect) ? 'PASS' : 'FAIL'}  breadcrumb names the machine${expect ? ` ("${expect}")` : ''}: ${crumb}`,
+      `${evN > 0 ? 'PASS' : 'FAIL'}  machine evidence tab carries a count: ${evidenceTab || '(none)'}`,
+      `${nodeN > 0 ? 'PASS' : 'FAIL'}  machine node tab carries a count: ${nodesTab || '(none)'}`,
+      `INFO  tab texts: ${tabTexts.join(' | ')}`,
+    ];
+    pre.textContent = lines.join('\n');
+  }, 3000);
+}
+
 // ?assert=evidence — the evidence table must be scannable, not N identical rows.
 // Fifteen motion runs about one mechanism share their first line; what tells them
 // apart is the second line (which revisions were posed, what was found, when).
@@ -722,7 +766,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

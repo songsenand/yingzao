@@ -43,7 +43,7 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `subject` | pick a part (or, in the `unregistered` kind, a file path) through the navigator |
 | `record` | drive the 记录 select to a version or run id (`v021`, `r003`) — picks it for real, so the panel pins (跟随 → 已钉住) exactly as a click would |
 | `nav` | `1` = open the product navigator (the breadcrumb overlay) — the 类别/条目/记录 selects no longer exist |
-| `navpick` | open the navigator and click one row by product id (`p005`, `v066`, `r013`, a file path). This is how `subject`/`record` now select |
+| `navpick` | open the navigator and click one row by product id (`p005`, `v066`, `r013`, `machine`, a file path). This is how `subject`/`record` now select |
 | `navq` | type into the navigator's search box (native setter + input event), e.g. `navq=滑座` |
 | `open` | click something after mount — a tab (`参数`, `用法`), a toolbar chip (`剖切`, `壁厚`, `测量`, `截图`) or `⤢`/`⤡`. **Comma-separated for a sequence**: `open=参数,⤢` selects the tab then expands it into the overlay |
 | `wheel` | wheel-delta to push through OrbitControls (e.g. `-1400` zooms in) — lets a screenshot prove the scale bar re-ranges |
@@ -55,6 +55,7 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `overlay=1` | mount **only** the real `ViewportOverlay` against a synthetic camera (a no-WebGL sandbox cannot build a scene), then measure the merged corner plate and assert every axis letter stays inside it (`overlay-corners.png`) |
 | `recent` | pre-seed the MRU list (`recent=p005,v066`), so "reopen where you left off" can be captured in a fresh profile |
 | `assert=recent` | with `expect=<text>`: assert the breadcrumb reopened on that address (no param = assert it opened somewhere) |
+| `assert=machine` | with `expect=<name>`: assert the navigator has a 机器 row, the breadcrumb names it, and its tabs carry the evidence and node counts |
 | `assert=evidence` | click 证据 and assert the evidence table is scannable: every row carries its run id, names a version, and the same-mechanism rows (机构运动) have distinct second lines; exact-duplicate runs are reported, not failed |
 | `assert=layout` | run the layout-stability assertion: click 测量 → 壁厚 → 剖切 → 参数 → 截图 and compare **every** region's and every chip's `w/h/y` against the baseline, printing PASS/FAIL into the screenshot. Absolute- AND fixed-positioned overlays are excluded (they take no space) |
 | `project` | stand a session cwd in front of the panel (`session.list` + binding + retention), so project-scoped UI (the local-STL import target) renders its normal state instead of the "未识别" guard |
@@ -73,6 +74,7 @@ Mirrors the host routes the panel actually uses:
 
 | route | source |
 |---|---|
+| `GET /api/cad/assembly/manifest` | the assembly manifest from `DATA/../assembly/assembly.json` (beside the corpus, like the host) — this is what makes the 机器 object appear |
 | `GET /api/cad/products` | **the host's read port** (`src/host/store.ts`): snapshot cache, change sequence, `ETag`, and `304` on `If-None-Match` / `?since=` — same code path as the real route |
 | `GET /api/cad/params?v=` / `GET /api/cad/stl?v=` | `data/versions/<v>/` |
 | `GET /api/cad/run?id=` | the run manifest entry |

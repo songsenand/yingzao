@@ -29,6 +29,7 @@ import type {
 import { judgementOf, versionVerdict } from './verdict';
 import { refreshProducts, subscribeProducts } from './products-store';
 import { loadRecent, pushRecent } from './recent';
+import { parseMachine, type Machine } from './assembly';
 // The kind labels are ONE source (`shared/labels.ts`): the host authors titles
 // from them, the panel renders rows from them. A second copy here is how the
 // two drift.
@@ -741,7 +742,7 @@ export function CadPanel(): React.ReactElement {
    * categories flatten their runs into one list and hide the version column
    * (runs have no versions).
    */
-  type BrowseKind = 'part' | 'assembly' | 'sim' | 'check' | 'contract' | 'unregistered';
+  type BrowseKind = 'part' | 'machine' | 'assembly' | 'sim' | 'check' | 'contract' | 'unregistered';
   const [kind, setKind] = useState<BrowseKind>('part');
   /**
    * 未登记: workspace mesh files no version accounts for. It is a KIND of the
@@ -751,6 +752,8 @@ export function CadPanel(): React.ReactElement {
    */
   const [unregistered, setUnregistered] = useState<UnregisteredFileRow[]>([]);
   const [unregError, setUnregError] = useState<string | null>(null);
+  // The machine the assembly manifest describes (null: no manifest).
+  const [machine, setMachine] = useState<Machine | null>(null);
   const [fileSubject, setFileSubject] = useState<string>('');
   const [fileMeta, setFileMeta] = useState<FileMeta | null>(null);
   // The 未登记 import form (inline, not a modal): the file is already chosen, so
@@ -769,7 +772,20 @@ export function CadPanel(): React.ReactElement {
   // Flat run pool across every part + the scene bucket, newest first.
   // Category lists live in ./browse so the de-duplication and the category
   // boundaries are testable without a DOM (accept-browse-categories.mjs).
-  const { sim: simRuns, assembly: assemblyRuns, contract: contractRuns, check: checkRuns } = browseCategories(parts, scene);
+  const { sim: simRuns, assembly: assemblyRuns, contract: contractRuns, check: checkRuns, all: allRuns } = browseCategories(parts, scene);
+
+  // Which part each revision belongs to, and which parts a run's revisions span.
+  // A run is MACHINE-level when it cites two or more parts: that is the machine's
+  // evidence. One part means the evidence belongs under that part, not at the top.
+  const partOfVersion = new Map<string, string>();
+  const partByName = new Map<string, string>();
+  for (const p of parts) {
+    partByName.set(p.name, p.id);
+    for (const v of p.versions) partOfVersion.set(v.id, p.id);
+  }
+  const ownersOfRun = (r: RunProduct): Set<string> =>
+    new Set(r.sourceVersionIds.map((v) => partOfVersion.get(v)).filter((x): x is string => Boolean(x)));
+  const machineRuns = allRuns.filter((r) => ownersOfRun(r).size >= 2);
 
   /**
    * The subject's history: its revisions plus the runs that touched it. While
@@ -783,7 +799,8 @@ export function CadPanel(): React.ReactElement {
       ? currentPart.versions.slice().sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
       : (subjectId === SCENE ? scene : [])
   );
-  const flatCategoryRuns: PartRecord[] | null = kind === 'sim' ? simRuns
+  const flatCategoryRuns: PartRecord[] | null = kind === 'machine' ? machineRuns
+    : kind === 'sim' ? simRuns
     : kind === 'assembly' ? assemblyRuns
     : kind === 'check' ? checkRuns
     : kind === 'contract' ? contractRuns
@@ -865,6 +882,18 @@ export function CadPanel(): React.ReactElement {
 
   /** Force a fresh tree now (after a write the human just made). */
   const refresh = () => { void refreshProducts(); };
+
+  // The machine comes from the assembly manifest — the project's own statement of
+  // what it is building. Read once per project; a missing manifest is a normal
+  // state (a project may not have an assembly yet), not an error.
+  useEffect(() => {
+    let dead = false;
+    fetch(withProject('/api/cad/assembly/manifest'))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!dead) setMachine(parseMachine(d)); })
+      .catch(() => { if (!dead) setMachine(null); });
+    return () => { dead = true; };
+  }, [sessionDir, workspaceCwd, scopeTick]);
 
   // The 未登记 list is fetched on demand (entering the kind, or 刷新): the scan
   // hashes files, so it is deliberately not on the 3 s poll.
@@ -2119,7 +2148,14 @@ export function CadPanel(): React.ReactElement {
   // selected section in a fixed box; "⤢" lifts that same section into an overlay
   // sheet that can use the whole panel height. Which of the two renders the
   // content is exclusive, so the section's inputs are never mounted twice.
-  const tabs: { id: string; label: string }[] = version
+  const tabs: { id: string; label: string }[] = kind === 'machine'
+    ? [
+      { id: 'overview', label: '概览' },
+      { id: 'evidence', label: `证据${machineRuns.length ? ` ${machineRuns.length}` : ''}` },
+      { id: 'nodes', label: `清单${machine ? ` ${machine.nodes.length}` : ''}` },
+      { id: 'help', label: '用法' },
+    ]
+    : version
     ? [
       { id: 'overview', label: '概览' },
       // The part's whole evidence, not only the runs that named THIS revision:
@@ -2243,8 +2279,8 @@ export function CadPanel(): React.ReactElement {
    * whether the evidence still stands; the old 类别 list is demoted to the filter
    * chips above.
    */
-  const evidenceBody = () => {
-    const all = currentPart?.runs ?? [];
+  const evidenceBody = (scope: 'part' | 'machine') => {
+    const all = scope === 'machine' ? machineRuns : (currentPart?.runs ?? []);
     const groups: { id: EvidenceFilter; label: string; test: (r: RunProduct) => boolean }[] = [
       { id: 'all', label: '全部', test: () => true },
       { id: 'sim', label: '仿真', test: (r) => browseKindOf(r) === 'sim' },
@@ -2329,6 +2365,48 @@ export function CadPanel(): React.ReactElement {
         : React.createElement('div', null, ...list.map(row)),
     );
   };
+
+  /** What the machine physically is, and where its evidence went. */
+  const machineOverview = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#26303a' } }, machine?.name ?? '整机'),
+    React.createElement('div', { style: S.hint },
+      `清单 ${machine?.nodes.length ?? 0} 个节点 · ${machine?.distinctParts ?? 0} 种零件 · 机器级证据 ${machineRuns.length} 条`),
+    React.createElement('div', { style: S.hint },
+      '整机的检查（装配间隙 / 清单检查 / 机构运动 / 刚体物理）都在「证据」里；单个零件的检查在零件页。'),
+    React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      React.createElement('button', {
+        type: 'button', onClick: () => setTab('evidence'), style: S.smallBtn,
+      }, `看机器的 ${machineRuns.length} 条证据`),
+      React.createElement('button', {
+        type: 'button', onClick: () => setTab('nodes'), style: S.smallBtn,
+      }, `看清单 ${machine?.nodes.length ?? 0} 个节点`),
+    ),
+  );
+
+  /** The manifest's nodes: which part@version is installed where. */
+  const machineNodes = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+    ...(machine?.nodes ?? []).map((n) => {
+      const partId = partByName.get(n.part) ?? null;
+      const known = Boolean(partId && n.version);
+      return React.createElement('button', {
+        key: n.id,
+        type: 'button',
+        disabled: !known,
+        title: known ? `打开 ${n.part} ${n.version}` : '这个节点引用的零件/版本不在语料里',
+        onClick: () => { if (partId && n.version) navPickVersion(partId, n.version); },
+        style: {
+          display: 'flex', gap: 6, width: '100%', textAlign: 'left', padding: '3px 6px',
+          border: 'none', borderBottom: '1px solid #f0f2f4', background: 'transparent',
+          cursor: known ? 'pointer' : 'default', fontSize: 12, color: known ? '#26303a' : '#8a94a0',
+        },
+      },
+        React.createElement('span', {
+          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        }, n.part),
+        React.createElement('span', { style: { flex: 'none', color: '#8a94a0', fontSize: 11 } }, n.version ?? '未钉版本'),
+      );
+    }),
+  );
 
   const exportRow = () => React.createElement(
     'div',
@@ -2458,6 +2536,11 @@ export function CadPanel(): React.ReactElement {
 
   const sectionBody = (id: string): React.ReactNode => {
     if (kind === 'unregistered') return unregisteredBody();
+    // The machine's own page: these must be answered BEFORE the generic overview,
+    // which would otherwise render the selected run's card as "the machine".
+    if (kind === 'machine' && id === 'overview') return machineOverview();
+    if (kind === 'machine' && id === 'evidence') return evidenceBody('machine');
+    if (kind === 'machine' && id === 'nodes') return machineNodes();
     if (id === 'tray') return trayBody();
     if (id === 'help') return helpBody();
     if (id === 'overview') {
@@ -2498,7 +2581,7 @@ export function CadPanel(): React.ReactElement {
             : '该零件还没有记录 — 让 Agent 迭代它，或跑一次验证。'),
       );
     }
-    if (id === 'evidence' && version) return evidenceBody();
+    if (id === 'evidence' && version) return evidenceBody('part');
     if (id === 'runs' && version) return runsBody();
     if (id === 'export' && version) return exportRow();
     if (id === 'report' && run) {
@@ -2618,6 +2701,8 @@ export function CadPanel(): React.ReactElement {
   const navPickPart = (id: string) => { setRecent(pushRecent(id)); setKind('part'); setSubjectId(id); setRecordId(null); setFollowLatest(true); navClose(); };
   const navPickVersion = (partId: string, vid: string) => { setRecent(pushRecent(vid)); setKind('part'); setSubjectId(partId); setFollowLatest(false); setRecordId(vid); navClose(); };
   const navPickRun = (r: RunProduct) => { setRecent(pushRecent(r.id)); setKind(browseKindOf(r)); setFollowLatest(false); setRecordId(r.id); navClose(); };
+  const navPickMachine = () => { setKind('machine'); setRecordId(null); setFollowLatest(false); navClose(); };
+
   const navPickFile = (path: string) => { setRecent(pushRecent(`f:${path}`)); setKind('unregistered'); setRecordId(null); setFileSubject(path); setFileMeta(null); navClose(); refreshUnregistered(); };
 
   /**
@@ -2665,7 +2750,7 @@ export function CadPanel(): React.ReactElement {
     React.createElement('button', {
       key, type: 'button', onClick,
       // The sandbox (and any future deep link) addresses a row by its product id.
-      'data-nav-id': key.slice(2),
+      'data-nav-id': key.includes(':') ? key.slice(key.indexOf(':') + 1) : key,
       style: {
         display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
         padding: '4px 6px', border: 'none', borderRadius: 5, cursor: 'pointer',
@@ -2745,11 +2830,20 @@ export function CadPanel(): React.ReactElement {
             : '版本',
           versionRows,
         ),
+        // The machine is an OBJECT, not four run categories: its evidence lives
+        // on its own page. Without a manifest there is nothing to group under, so
+        // the flat sections stay as the fallback.
+        machine
+          ? navSection(`机器 · 1`, [navRow('machine', machine.name,
+            `${machine.nodes.length} 节点 · ${machineRuns.length} 条证据`, navPickMachine, kind === 'machine')])
+          : null,
         navSection(`零件 · ${parts.length}`, partRows),
-        navSection(`仿真 · ${simRuns.length}`, runRows(simRuns)),
-        navSection(`检查 · ${checkRuns.length}`, runRows(checkRuns)),
-        navSection(`组件 · ${assemblyRuns.length}`, runRows(assemblyRuns)),
-        navSection(`契约 · ${contractRuns.length}`, runRows(contractRuns)),
+        ...(machine ? [] : [
+          navSection(`仿真 · ${simRuns.length}`, runRows(simRuns)),
+          navSection(`检查 · ${checkRuns.length}`, runRows(checkRuns)),
+          navSection(`组件 · ${assemblyRuns.length}`, runRows(assemblyRuns)),
+          navSection(`契约 · ${contractRuns.length}`, runRows(contractRuns)),
+        ]),
         navSection(`未登记 · ${unregistered.length}`, fileRows),
       ];
 
@@ -2788,6 +2882,7 @@ export function CadPanel(): React.ReactElement {
 
   /** Where you are, in one line: the breadcrumb IS the answer, not a chooser. */
   const crumb = (() => {
+    if (kind === 'machine') return machine ? machine.name : '整机';
     if (kind === 'part') return currentPart ? `${currentPart.name}${version ? ` · ${version.id}` : ''}` : '选择零件';
     if (kind === 'unregistered') return fileSubject || '未登记文件';
     if (run) return `${run.id} · ${runTitle(run)}`;
