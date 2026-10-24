@@ -9,6 +9,7 @@ import {
   listParts, type PartEntry,
 } from './parts.ts';
 import { buildProductsWire } from './products.ts';
+import { storeFor } from './store.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
@@ -5851,19 +5852,28 @@ export function registerCadTools(
       methods: ['GET'],
       requestBody: 'buffered',
       fetch: async (request: Request) => {
-        const { store, partStore, runStore, cwd } = requestStores(request);
-        const { readManifest } = await import('./version.ts');
-        const [vm, parts, runs] = await Promise.all([
-          readManifest(store), listParts(partStore), listRuns(runStore),
-        ]);
+        // ONE read port (src/host/store.ts): it owns the snapshot cache, the
+        // change sequence and the address grammar. This route no longer reads
+        // three manifests itself.
+        const project = requestStores(request);
+        const cadStore = storeFor(project);
+        const url = new URL(request.url);
+        const since = Number(url.searchParams.get('since') ?? NaN);
+        const { wire, seq, stamp } = await cadStore.snapshot();
+        // The ETag is the manifests' content stamp, so a reconnecting client can
+        // revalidate even after the host restarted (the seq resets with it).
+        const etag = `W/"${stamp.replace(/[^\w.:-]/g, '_')}"`;
+        const inm = request.headers.get('if-none-match');
+        if ((inm && inm === etag) || (Number.isFinite(since) && since === seq)) {
+          return new Response(null, { status: 304, headers: { etag, 'cache-control': 'no-cache' } });
+        }
         // `project` rides the payload so a panel that switched projects can
-        // discard the reply of the one it just left.
-        // Wire shape: every run once + `runIds` per part (T0.3). The panel
-        // inflates with `coerceProducts`, so the tree it reads is unchanged.
-        const payload = { ...buildProductsWire(vm.versions, parts, runs), project: cwd };
+        // discard the reply of the one it just left. Wire shape: every run once
+        // + `runIds` per part; the panel inflates with `coerceProducts`.
+        const payload = { ...wire, project: project.cwd, seq };
         return new Response(JSON.stringify(payload), {
           status: 200,
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', etag, 'cache-control': 'no-cache' },
         });
       },
     });

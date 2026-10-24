@@ -41,8 +41,8 @@ const TINY_PNG = Buffer.from(
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 
-const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { 'content-type': MIME['.json'] } });
+const json = (obj, status = 200, headers = {}) =>
+  new Response(JSON.stringify(obj), { status, headers: { 'content-type': MIME['.json'], ...headers } });
 const notFound = (what) => new Response(`no ${what}`, { status: 404 });
 
 // Captured POST /api/cad/import bodies, so `?assert=local-import` can prove the
@@ -71,18 +71,19 @@ async function api(req, url) {
   // The host's builder is imported (not re-implemented) so the sandbox cannot
   // drift from what the real route serves.
   if (p === '/api/cad/products') {
-    // The WIRE shape (runs once + runIds per part), exactly like the host route:
-    // the panel inflates it with the same shared function.
-    const { buildProductsWire } = await import('../../src/host/products.ts');
-    const { listParts, openPartStore } = await import('../../src/host/parts.ts');
-    const { listRuns, openRunStore } = await import('../../src/host/runs.ts');
-    const vm = JSON.parse((await readMaybe(join(DATA, 'manifest.json')))?.toString('utf8') ?? '{"versions":[]}');
-    const payload = buildProductsWire(
-      vm.versions ?? [],
-      await listParts(openPartStore(DATA)),
-      await listRuns(openRunStore(DATA)),
-    );
-    return json(payload);
+    // Through the READ PORT (src/host/store.ts), exactly like the host route:
+    // the sandbox must exercise the same snapshot cache, sequence and ETag, or a
+    // 304 bug would only ever show up against a real host.
+    const { storeAt } = await import('../../src/host/store.ts');
+    const store = storeAt(DATA);
+    const { wire, seq, stamp } = await store.snapshot();
+    const etag = `W/"${stamp.replace(/[^\w.:-]/g, '_')}"`;
+    const since = Number(url.searchParams.get('since') ?? NaN);
+    const inm = req.headers['if-none-match'];
+    if ((inm && inm === etag) || (Number.isFinite(since) && since === seq)) {
+      return new Response(null, { status: 304, headers: { etag } });
+    }
+    return json({ ...wire, seq }, 200, { etag });
   }
 
   if (p === '/api/cad/params') {

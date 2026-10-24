@@ -15,7 +15,7 @@
 
 import type { ProductsResponse } from '../shared/types.ts';
 import { coerceProducts } from '../shared/products-wire.ts';
-import { withProject } from './project.ts';
+import { currentProject, withProject } from './project.ts';
 
 export interface ProductsSnapshot {
   /** The last good tree, or null before the first success. */
@@ -32,6 +32,12 @@ type Listener = (snapshot: ProductsSnapshot) => void;
 const POLL_MS = 3000;
 
 let snapshot: ProductsSnapshot = { data: null, error: null, at: 0 };
+// Conditional-request state: the corpus this tree came from, the read port's
+// sequence and the ETag. A 304 means "nothing changed" — the client keeps what it
+// has and emits nothing, so a quiet corpus costs zero builds and ~0 bytes.
+let lastProject: string | null = null;
+let lastSeq = 0;
+let lastEtag: string | null = null;
 let listeners = new Set<Listener>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let inflight: Promise<void> | null = null;
@@ -70,10 +76,19 @@ function onVisibility(): void {
 export function tick(): Promise<void> {
   if (inflight) return inflight;
   if (!visible()) return Promise.resolve();
-  inflight = fetch(withProject('/api/cad/products'))
+  const project = currentProject();
+  const sameProject = lastProject === project;
+  const url = withProject(`/api/cad/products${sameProject && lastSeq > 0 ? `?since=${lastSeq}` : ''}`);
+  const headers: Record<string, string> =
+    sameProject && lastEtag ? { 'if-none-match': lastEtag } : {};
+  inflight = fetch(url, { headers })
     .then(async (r) => {
+      if (r.status === 304) return; // unchanged: keep the tree, tell nobody
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const payload: unknown = await r.json();
+      const payload = await r.json() as { seq?: number } & Record<string, unknown>;
+      lastProject = project;
+      lastSeq = typeof payload.seq === 'number' ? payload.seq : 0;
+      lastEtag = r.headers.get('etag');
       snapshot = { data: coerceProducts(payload), error: null, at: Date.now() };
       emit();
     })
