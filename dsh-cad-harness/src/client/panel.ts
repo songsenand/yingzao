@@ -14,6 +14,7 @@ import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overla
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
+import { T } from './tokens';
 import { attentionQuery, buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
 import {
   axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
@@ -43,7 +44,7 @@ const runTitle = (r: RunProduct): string => r.displayTitle ?? r.title;
 
 /** Status glyph for a run/product verdict. */
 const statusGlyph = (status: string): React.ReactNode => {
-  const color = status === 'pass' ? '#27ae60' : status === 'fail' ? '#c0392b' : status === 'check' ? '#b8860b' : '#8a94a0';
+  const color = status === 'pass' ? T.ok : status === 'fail' ? T.danger : status === 'check' ? T.warn : T.muted;
   const glyph = status === 'pass' ? '✅' : status === 'fail' ? '❌' : status === 'check' ? '⚠️' : '·';
   return React.createElement('span', { style: { color } }, glyph);
 };
@@ -53,7 +54,7 @@ const statusGlyph = (status: string): React.ReactNode => {
  * the word (不排除可行) is the claim, and a ✅ would silently drop its two negations.
  */
 const judgementGlyph = (j: RunJudgement | null): React.ReactNode => {
-  const color = j === 'excluded' ? '#c0392b' : j === 'difficult' ? '#b8860b' : j === 'not-excluded' ? '#2f7d5d' : '#8a94a0';
+  const color = j === 'excluded' ? T.danger : j === 'difficult' ? T.warn : j === 'not-excluded' ? '#2f7d5d' : T.muted;
   const glyph = j === 'excluded' ? '✕' : j === 'difficult' ? '!' : j === 'not-excluded' ? '◦' : '·';
   return React.createElement('span', { style: { color, fontWeight: 700 } }, glyph);
 };
@@ -70,8 +71,8 @@ const VERDICT_WORD: Record<string, string> = {
   'hard-violation': '硬冲突', 'intent-flag': '意图标记', skipped: '跳过',
 };
 const verdictColor = (v: string | null): string =>
-  v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? '#c0392b' : v === 'difficult' ? '#9c6f0a'
-    : v === 'pass' ? '#1e8449' : v === 'fail' ? '#c0392b' : v === 'check' ? '#9c6f0a' : '#8a94a0';
+  v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? T.danger : v === 'difficult' ? '#9c6f0a'
+    : v === 'pass' ? '#1e8449' : v === 'fail' ? T.danger : v === 'check' ? '#9c6f0a' : T.muted;
 
 /**
  * One row of the 未登记 list. The host's scan (shared with delivery_audit) says
@@ -415,7 +416,7 @@ const fmtBytes = (n: number): string =>
 /** Compact input used by the 未登记 import form (the dialog owns its own styles). */
 const fieldStyle: React.CSSProperties = {
   fontSize: 11, padding: '2px 4px', border: '1px solid #d5d9dd', borderRadius: 4,
-  minWidth: 0, boxSizing: 'border-box', background: '#fff',
+  minWidth: 0, boxSizing: 'border-box', background: T.white,
 };
 
 const S: Record<string, React.CSSProperties> = {
@@ -466,10 +467,10 @@ const S: Record<string, React.CSSProperties> = {
   row: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none', minWidth: 0 },
   select: {
     flex: '1 1 120px', minWidth: 0, height: 26, fontSize: 12, padding: '0 6px',
-    border: '1px solid #d5d9dd', borderRadius: 6, background: '#fff', color: '#26303a',
+    border: '1px solid #d5d9dd', borderRadius: 6, background: T.white, color: T.ink,
   },
   caption: {
-    fontSize: 11, lineHeight: 1.45, color: '#5b6673', flex: 'none',
+    fontSize: 11, lineHeight: 1.45, color: T.soft, flex: 'none',
     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
   // The section body gives its height ALL back before the viewport loses a
@@ -510,7 +511,7 @@ const S: Record<string, React.CSSProperties> = {
   sheet: {
     position: 'absolute', left: 8, right: 8, zIndex: 25,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-    background: '#fff', border: '1px solid #d7dbe0', borderRadius: 10,
+    background: T.white, border: '1px solid #d7dbe0', borderRadius: 10,
     boxShadow: '0 10px 30px rgba(20,30,40,0.20)', padding: 10,
   },
   sheetHead: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none', marginBottom: 6 },
@@ -520,25 +521,25 @@ const S: Record<string, React.CSSProperties> = {
     flex: 'none', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
     minHeight: 22, padding: '3px 8px', marginTop: 2, borderRadius: 6,
     borderTop: '1px solid #eef1f3', background: '#fafbfc',
-    fontSize: 11, lineHeight: '16px', color: '#5b6673',
+    fontSize: 11, lineHeight: '16px', color: T.soft,
   },
   statusText: {
     flex: '1 1 auto', minWidth: 0, overflow: 'hidden',
     textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
-  hint: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 },
+  hint: { fontSize: 11, color: T.muted, lineHeight: 1.5 },
   smallBtn: {
     cursor: 'pointer', borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
-    border: '1px solid #d5d9dd', background: '#fff', color: '#26303a', flex: 'none', whiteSpace: 'nowrap',
+    border: '1px solid #d5d9dd', background: T.white, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
   },
 };
 
 /** Section tab in the strip. Same border width in both states (see iconBtnStyle). */
 const tabBtnStyle = (active: boolean): React.CSSProperties => ({
   cursor: 'pointer', borderRadius: 6, padding: '2px 7px', fontSize: 11.5, lineHeight: '18px',
-  border: `1px solid ${active ? '#4a7dbd' : '#e3e7ea'}`,
+  border: `1px solid ${active ? '#4a7dbd' : T.edge}`,
   background: active ? '#eaf2fb' : '#f7f9fb',
-  color: active ? '#1f4e79' : '#5b6673',
+  color: active ? '#1f4e79' : T.soft,
   whiteSpace: 'nowrap', flex: 'none',
 });
 
@@ -556,8 +557,8 @@ const iconBtnStyle = (active: boolean, color = '#4a7dbd'): React.CSSProperties =
   // Border WIDTH is constant on purpose: 1px ↔ 1.5px would resize the button by a
   // pixel every time a mode toggled, and the toolbar row's geometry must not
   // depend on state (same reason the labels no longer swap to ✕…).
-  border: `1.5px solid ${active ? color : '#d5d9dd'}`,
-  background: active ? '#fdecea' : '#fff', color: '#26303a', flex: 'none', whiteSpace: 'nowrap',
+  border: `1.5px solid ${active ? color : T.line}`,
+  background: active ? '#fdecea' : T.white, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
 });
 
 export function CadPanel(): React.ReactElement {
@@ -1740,10 +1741,10 @@ export function CadPanel(): React.ReactElement {
     // bake the measurement dimension lines + labels (CSS px → backing px)
     const segs: { a: [number, number, number]; b: [number, number, number]; color: string; label: string }[] = [];
     if (measure?.b) {
-      segs.push({ a: measure.a, b: measure.b, color: '#ff3040', label: `${(measure.dist ?? 0).toFixed(2)}mm` });
+      segs.push({ a: measure.a, b: measure.b, color: T.measure, label: `${(measure.dist ?? 0).toFixed(2)}mm` });
     }
     if (thick) {
-      segs.push({ a: thick.a, b: thick.b, color: '#00838f', label: `壁厚 ${thick.dist.toFixed(2)}mm` });
+      segs.push({ a: thick.a, b: thick.b, color: T.thick, label: `壁厚 ${thick.dist.toFixed(2)}mm` });
     }
     for (const seg of segs) {
       const pa = projectToScreen(seg.a);
@@ -2054,7 +2055,7 @@ export function CadPanel(): React.ReactElement {
     React.createElement('div', { style: { fontSize: 30 } }, '📋'),
     React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, runTitle(r)),
     React.createElement('div', { style: { fontSize: 12, color: '#4b5563' } }, r.summary),
-    React.createElement('div', { style: { fontSize: 11, color: '#8a94a0' } },
+    React.createElement('div', { style: { fontSize: 11, color: T.muted } },
       '这次运行没有几何体 — 清单检查只读接口与 datum'),
   );
 
@@ -2071,8 +2072,8 @@ export function CadPanel(): React.ReactElement {
       return React.createElement('div', null,
         line(`稳态穿透 ${rep.metrics?.settledPenetrationMm ?? '—'}mm · 最大 ${rep.metrics?.maxPenetrationMm ?? '—'}mm`),
         line(`时长 ${rep.durationSec ?? '—'}s · 关键帧 ${(rep.keyframes ?? []).length}`),
-        ...fell.map(([name, over]) => line(`${name}: ${over ? '倒下' : '保持直立'}`, over ? '#b8860b' : '#27ae60')),
-        ...(rep.metrics?.jointViolations ?? []).map((v: string, i: number) => line(v, '#c0392b')),
+        ...fell.map(([name, over]) => line(`${name}: ${over ? '倒下' : '保持直立'}`, over ? T.warn : T.ok)),
+        ...(rep.metrics?.jointViolations ?? []).map((v: string, i: number) => line(v, T.danger)),
       );
     }
     if (r.kind === 'motion') {
@@ -2082,7 +2083,7 @@ export function CadPanel(): React.ReactElement {
         ...followers.map(([name, f]) => line(
           `${name}: 行程 ${f.travelMm?.toFixed?.(2) ?? '—'}mm` + (f.periodSec ? ` · 周期 ${f.periodSec.toFixed(2)}s` : ''))),
         ...((rep.metrics?.interferenceEvents ?? []) as { timeSec: number; label: string }[])
-          .slice(0, 6).map((e, i) => line(`t=${e.timeSec}s ${e.label}`, '#c0392b')),
+          .slice(0, 6).map((e, i) => line(`t=${e.timeSec}s ${e.label}`, T.danger)),
       );
     }
     if (r.kind === 'fluid') {
@@ -2099,7 +2100,7 @@ export function CadPanel(): React.ReactElement {
         expected?: { quantity?: string; min?: number; max?: number };
         measured?: number; verdict?: string; detail?: string;
       }[];
-      const color = (v?: string) => v === 'pass' ? '#27ae60' : v === 'intent-flag' ? '#b8860b' : '#c0392b';
+      const color = (v?: string) => v === 'pass' ? T.ok : v === 'intent-flag' ? T.warn : T.danger;
       const req = (e?: { quantity?: string; min?: number; max?: number }) =>
         e ? `${e.quantity ?? ''} ${e.min ?? '≤'}–${e.max ?? ''}`.trim() : '—';
       const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
@@ -2127,13 +2128,13 @@ export function CadPanel(): React.ReactElement {
     if (r.kind === 'assembly') {
       return React.createElement('div', null,
         ...((rep.parts ?? []) as { name: string; watertight: boolean; volume: number }[]).map((p, i) =>
-          line(`${p.name}: ${p.watertight ? '水密' : '非水密'} · ${p.volume?.toFixed?.(0) ?? '—'}mm³`, p.watertight ? '#374151' : '#c0392b')),
+          line(`${p.name}: ${p.watertight ? '水密' : '非水密'} · ${p.volume?.toFixed?.(0) ?? '—'}mm³`, p.watertight ? '#374151' : T.danger)),
         ...((rep.pairs ?? []) as { partA: string; partB: string; intersectionVolume: number; minDistance: number; status: string }[])
           .map((p, i) => line(
             `${p.partA} ↔ ${p.partB}: ` + (p.status === 'interference'
               ? `干涉体积 ${p.intersectionVolume.toFixed(1)}mm³`
               : `间隙 ${p.minDistance.toFixed(2)}mm (${p.status === 'too_tight' ? '过紧' : '正常'})`),
-            p.status === 'interference' ? '#c0392b' : p.status === 'too_tight' ? '#b8860b' : '#27ae60')),
+            p.status === 'interference' ? T.danger : p.status === 'too_tight' ? T.warn : T.ok)),
       );
     }
     // assembly-check
@@ -2142,13 +2143,13 @@ export function CadPanel(): React.ReactElement {
       line(`${s.interfaces ?? 0} 接口 · 通过 ${s.pass ?? 0} · 硬冲突 ${s.hardViolations ?? 0} · 意图偏差 ${s.intentFlags ?? 0} · 未声明 ${s.undeclared ?? 0}`),
       ...((rep.results ?? []) as { interfaceId: string; verdict: string; measured: number; type: string }[]).map((x, i) =>
         line(`${x.interfaceId} (${x.type}) — ${x.verdict} · 实测 ${x.measured}`,
-          x.verdict === 'pass' ? '#27ae60' : x.verdict === 'hard-violation' ? '#c0392b' : '#b8860b')),
+          x.verdict === 'pass' ? T.ok : x.verdict === 'hard-violation' ? T.danger : T.warn)),
       ...((rep.undeclared ?? []) as { partA: string; partB: string; minDistance: number; intersectionVolume: number }[]).map((u, i) =>
         line(`未声明邻接: ${u.partA} ↔ ${u.partB} · ` + (u.intersectionVolume > 0
           ? `干涉 ${u.intersectionVolume.toFixed(1)}mm³`
-          : `间隙 ${u.minDistance.toFixed(2)}mm`), '#b8860b')),
+          : `间隙 ${u.minDistance.toFixed(2)}mm`), T.warn)),
       ...((rep.partWarnings ?? []) as { partId: string; messages: string[] }[]).map((w, i) =>
-        line(`${w.partId}: ${w.messages.join('; ')}`, '#b8860b')),
+        line(`${w.partId}: ${w.messages.join('; ')}`, T.warn)),
     );
   };
 
@@ -2158,9 +2159,9 @@ export function CadPanel(): React.ReactElement {
   const sourceVersionChips = (r: RunProduct) => React.createElement(
     'div',
     { style: { ...S.row, flexWrap: 'wrap', paddingBottom: 4 } },
-    React.createElement('span', { style: { fontSize: 11, color: '#8a94a0', flex: 'none' } }, '来源:'),
+    React.createElement('span', { style: { fontSize: 11, color: T.muted, flex: 'none' } }, '来源:'),
     r.sourceVersionIds.length === 0
-      ? React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } },
+      ? React.createElement('span', { style: { fontSize: 11, color: T.muted } },
         '内联 SCAD 场景 — 这次运行不基于任何已存版本')
       : r.sourceVersionIds.map((vid) => {
         const owner = ownerPartOf(vid);
@@ -2225,11 +2226,11 @@ export function CadPanel(): React.ReactElement {
         key: 'measure',
         text: measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : '第一点…',
         world: measure.b ? mid(measure.a, measure.b) : measure.a,
-        color: '#c0392b',
+        color: T.danger,
       }]
       : []),
     ...(thick
-      ? [{ key: 'thick', text: `壁厚 ${thick.dist.toFixed(2)} mm`, world: mid(thick.a, thick.b), color: '#00838f' }]
+      ? [{ key: 'thick', text: `壁厚 ${thick.dist.toFixed(2)} mm`, world: mid(thick.a, thick.b), color: T.thick }]
       : []),
   ];
 
@@ -2286,9 +2287,9 @@ export function CadPanel(): React.ReactElement {
       ['⤢ 放大', '把下面这一节抬到浮层，可用整栏高度阅读；浮层不占版式，所以放大/收回都不会让模型跳动。Esc 或 ✕ 收回。'],
     ] as [string, string][]).map(([k, v]) => React.createElement('div', { key: k, style: { display: 'flex', gap: 6 } },
       React.createElement('span', { style: { flex: 'none', width: 58, fontWeight: 600, color: '#3b4450' } }, k),
-      React.createElement('span', { style: { color: '#5b6673' } }, v),
+      React.createElement('span', { style: { color: T.soft } }, v),
     )),
-    React.createElement('div', { style: { color: '#8a94a0', borderTop: '1px solid #eef1f3', paddingTop: 5 } },
+    React.createElement('div', { style: { color: T.muted, borderTop: '1px solid #eef1f3', paddingTop: 5 } },
       '测量 / 壁厚 / 标注只对零件版本可用；回放产物（物理 / 机构 / 流体）在各回放视图内自带截图按钮。'),
   );
 
@@ -2309,7 +2310,7 @@ export function CadPanel(): React.ReactElement {
           React.createElement('div', {
             style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
           }, item.label),
-          React.createElement('div', { style: { color: '#8a94a0', fontSize: 10 } }, item.time, ' · ', item.status),
+          React.createElement('div', { style: { color: T.muted, fontSize: 10 } }, item.time, ' · ', item.status),
           React.createElement('input', {
             type: 'text',
             placeholder: '备注（重发时随图给模型）',
@@ -2334,7 +2335,7 @@ export function CadPanel(): React.ReactElement {
           type: 'button', onClick: () => setTray((t) => t.filter((x) => x.id !== item.id)), style: S.smallBtn,
         }, '✕'),
       ))),
-    React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 } },
+    React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
       '截图默认已直接发进会话（排队，不打断运行中的回合）；这里的 ↻发 用于重发，📋图 用于手动粘贴'),
   );
 
@@ -2390,27 +2391,27 @@ export function CadPanel(): React.ReactElement {
       style: {
         display: 'flex', flexDirection: 'column', gap: 2, width: '100%', textAlign: 'left',
         padding: '5px 6px', border: 'none', borderBottom: '1px solid #f0f2f4',
-        background: r.id === recordId ? '#eaf3fc' : 'transparent', cursor: 'pointer',
+        background: r.id === recordId ? T.accentSoft : 'transparent', cursor: 'pointer',
       },
     },
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 } },
         statusGlyph(r.status),
-        React.createElement('span', { style: { flex: 'none', fontSize: 11, fontWeight: 600, color: '#5b6673' } }, r.id),
+        React.createElement('span', { style: { flex: 'none', fontSize: 11, fontWeight: 600, color: T.soft } }, r.id),
         React.createElement('span', {
           // Named for the sandbox assertion: `innerText` on a <button> does not
           // reliably separate its block children, so the two lines are read by
           // attribute instead of by guessing at text layout.
           'data-evidence-title': '',
-          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#26303a' },
+          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: T.ink },
         }, runTitle(r)),
-        r.staleVersionIds?.length ? badge('旧版', '#b8860b') : null,
-        r.supersededBy ? badge('已被取代', '#8a94a0') : null,
+        r.staleVersionIds?.length ? badge('旧版', T.warn) : null,
+        r.supersededBy ? badge('已被取代', T.muted) : null,
       ),
       // Second line = the DISCRIMINATORS: which revisions were posed, then what
       // the run found. Fifteen same-named runs differ exactly here.
       React.createElement('div', {
         'data-evidence-meta': '',
-        style: { fontSize: 10, color: '#8a94a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        style: { fontSize: 10, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
       }, [
         r.sourceVersionIds.join(' · '),
         r.summary,
@@ -2429,9 +2430,9 @@ export function CadPanel(): React.ReactElement {
           onClick: () => setEvidenceFilter(g.id),
           style: {
             fontSize: 11, padding: '1px 6px', borderRadius: 10, cursor: 'pointer',
-            border: `1px solid ${evidenceFilter === g.id ? '#4a7dbd' : '#d5d9dd'}`,
-            background: evidenceFilter === g.id ? '#eaf3fc' : '#fff',
-            color: evidenceFilter === g.id ? '#2f6fdb' : '#5b6673',
+            border: `1px solid ${evidenceFilter === g.id ? '#4a7dbd' : T.line}`,
+            background: evidenceFilter === g.id ? T.accentSoft : T.white,
+            color: evidenceFilter === g.id ? T.accent : T.soft,
           },
         }, `${g.label} ${all.filter(g.test).length}`)),
       ),
@@ -2457,7 +2458,7 @@ export function CadPanel(): React.ReactElement {
 
   /** What the machine physically is, and where its evidence went. */
   const machineOverview = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#26303a' } }, machine?.name ?? '整机'),
+    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, machine?.name ?? '整机'),
     React.createElement('div', { style: S.hint },
       `清单 ${machine?.nodes.length ?? 0} 个节点 · ${machine?.distinctParts ?? 0} 种零件 · 机器级证据 ${machineRuns.length} 条`),
     React.createElement('div', { style: S.hint },
@@ -2486,13 +2487,13 @@ export function CadPanel(): React.ReactElement {
         style: {
           display: 'flex', gap: 6, width: '100%', textAlign: 'left', padding: '3px 6px',
           border: 'none', borderBottom: '1px solid #f0f2f4', background: 'transparent',
-          cursor: known ? 'pointer' : 'default', fontSize: 12, color: known ? '#26303a' : '#8a94a0',
+          cursor: known ? 'pointer' : 'default', fontSize: 12, color: known ? T.ink : T.muted,
         },
       },
         React.createElement('span', {
           style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
         }, n.part),
-        React.createElement('span', { style: { flex: 'none', color: '#8a94a0', fontSize: 11 } }, n.version ?? '未钉版本'),
+        React.createElement('span', { style: { flex: 'none', color: T.muted, fontSize: 11 } }, n.version ?? '未钉版本'),
       );
     }),
   );
@@ -2549,15 +2550,15 @@ export function CadPanel(): React.ReactElement {
     const row = unregistered.find((f) => f.path === fileSubject) ?? null;
     const kids: React.ReactNode[] = [
       React.createElement('div', { style: { ...S.caption, color: '#9c6f0a' } }, '未登记 · 不是版本 · 不入证据'),
-      React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 } },
+      React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
         '工作区里没有版本的几何文件，与 delivery_audit 是同一份扫描。可以在这里看、可以登记为版本；' +
         '测量 / 壁厚 / 装配 / 热力图不适用于它们（那些需要一个版本作为主语）。'),
       React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
         React.createElement('button', { type: 'button', onClick: refreshUnregistered, style: S.smallBtn }, '↻ 刷新'),
         React.createElement('button', { type: 'button', onClick: () => setFileOpen(true), style: S.smallBtn }, '📂 按路径导入…'),
-        React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } }, `${unregistered.length} 个文件`)),
+        React.createElement('span', { style: { fontSize: 11, color: T.muted } }, `${unregistered.length} 个文件`)),
     ];
-    if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: '#c0392b' } }, `扫描失败：${unregError}`));
+    if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: T.danger } }, `扫描失败：${unregError}`));
     if (!fileSubject) {
       kids.push(React.createElement('div', { style: S.hint }, unregistered.length
         ? '从上面的「未登记文件」列表选一个；不在工作区里的文件用「按路径导入」。'
@@ -2569,12 +2570,12 @@ export function CadPanel(): React.ReactElement {
     }, fileSubject));
     if (row) {
       kids.push(React.createElement('div', {
-        style: { fontSize: 11, color: row.severity === 'blocked' ? '#c0392b' : '#9c6f0a' },
+        style: { fontSize: 11, color: row.severity === 'blocked' ? T.danger : '#9c6f0a' },
       }, `${row.severity === 'blocked' ? '⚠ 比最新版本还新' : '早于最新版本'} · ${row.format.toUpperCase()} · ` +
          `${fmtBytes(row.bytes)} · ${fmtTime(row.modified)}`));
     }
     if (fileMeta) {
-      kids.push(React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+      kids.push(React.createElement('div', { style: { fontSize: 11, color: T.soft } },
         `${fileMeta.solid ? '封闭实体' : `非封闭（${fileMeta.shells} 个壳）`} · ` +
         `${fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件里的数字显示）'}`));
       for (const w of fileMeta.warnings.slice(0, 3)) {
@@ -2606,7 +2607,7 @@ export function CadPanel(): React.ReactElement {
           style: { ...fieldStyle, flex: '0 0 76px' },
         }),
       ),
-      React.createElement('label', { style: { fontSize: 11, color: '#5b6673' } },
+      React.createElement('label', { style: { fontSize: 11, color: T.soft } },
         React.createElement('input', {
           type: 'checkbox', checked: importNonSolid,
           onChange: (e: any) => setImportNonSolid(Boolean(e.target.checked)),
@@ -2617,7 +2618,7 @@ export function CadPanel(): React.ReactElement {
         style: { ...S.smallBtn, alignSelf: 'flex-start' },
       }, importBusy ? '导入中…' : '导入为版本'),
       importMsg && React.createElement('div', {
-        style: { fontSize: 11, color: importMsg.startsWith('导入失败') ? '#c0392b' : '#1e8449' },
+        style: { fontSize: 11, color: importMsg.startsWith('导入失败') ? T.danger : '#1e8449' },
       }, importMsg),
     ));
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
@@ -2638,17 +2639,17 @@ export function CadPanel(): React.ReactElement {
         { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
         React.createElement('div', { style: S.caption, title: version?.title ?? run?.title },
           version ? version.title : run ? `${runTitle(run)} · ${fmtTime(run.timestamp)}` : ''),
-        spec && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+        spec && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           `尺寸 ${spec.size.map((v) => v.toFixed(1)).join(' × ')} mm · ${spec.triangles} 面`),
-        version?.source === 'imported' && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+        version?.source === 'imported' && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           `导入自 ${version.origin ?? '外部文件'}`,
-          version.solid === false && React.createElement('span', { style: { color: '#c0392b' } },
+          version.solid === false && React.createElement('span', { style: { color: T.danger } },
             ' · 非实体（几何工具会拒绝这个版本）')),
         // A merged body expires with its inputs, and that is worth a line: it looks like a
         // normal version until you know which revisions it was built from (FIX-C5).
-        version?.source === 'merged' && React.createElement('div', { style: { fontSize: 11, color: '#5b6673' } },
+        version?.source === 'merged' && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           (version.staleMergedInputs?.length ?? 0) > 0
-            ? React.createElement('span', { style: { color: '#c0392b' } },
+            ? React.createElement('span', { style: { color: T.danger } },
               `合并件已过期：输入 ${version.staleMergedInputs!.join(', ')} 已被同一零件的新版本取代 —— 需要重新合并`)
             : '合并件：由多个零件的版本合成（输入仍是最新）'),
         run && sourceVersionChips(run),
@@ -2679,7 +2680,7 @@ export function CadPanel(): React.ReactElement {
         ? React.createElement('div', {
             style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
                      borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600,
-                     color: '#8a5a00', marginBottom: 4 },
+                     color: T.warnInk, marginBottom: 4 },
           }, `⚠ 此结果基于旧版本 ${run.staleVersionIds.join(', ')} — 零件已更新，需重跑后才能作为当前版本的证据`)
         : null;
       return React.createElement('div', null, notice, body);
@@ -2726,7 +2727,7 @@ export function CadPanel(): React.ReactElement {
         borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
         border: compareActive ? '1px solid #e07a3f' : '1px solid #d5d9dd',
         background: 'rgba(255,255,255,0.86)',
-        color: compareActive ? '#a4531c' : '#26303a',
+        color: compareActive ? T.dangerInk : T.ink,
         ...(compareActive ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
       },
     }, `${compareActive ? '◫' : '▢'} 对比 ${ghostVersionId}`)
@@ -2752,7 +2753,7 @@ export function CadPanel(): React.ReactElement {
           cursor: 'pointer', borderRadius: 6, padding: '2px 7px',
           fontSize: 11, lineHeight: '16px',
           border: bgPickerOpen ? '1px solid #3498db' : '1px solid #d5d9dd',
-          background: 'rgba(255,255,255,0.86)', color: '#26303a',
+          background: 'rgba(255,255,255,0.86)', color: T.ink,
           ...(bgPickerOpen ? { boxShadow: '0 0 0 2px rgba(52,152,219,0.25)' } : {}),
         },
       }, '🎨 背景'),
@@ -2776,7 +2777,7 @@ export function CadPanel(): React.ReactElement {
             padding: '2px 5px', cursor: 'pointer', fontSize: 11, lineHeight: '16px',
             borderRadius: 5, background: 'transparent', textAlign: 'left',
             border: option.id === bg.id ? '1px solid #3498db' : '1px solid transparent',
-            color: '#26303a',
+            color: T.ink,
           },
         },
           React.createElement('span', {
@@ -2896,10 +2897,10 @@ export function CadPanel(): React.ReactElement {
       style: {
         display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
         padding: '4px 6px', border: 'none', borderRadius: 5, cursor: 'pointer',
-        background: active ? '#eaf3fc' : 'transparent',
+        background: active ? T.accentSoft : 'transparent',
         // Muted = "this is history": still one click away, but it must not look
         // like the default surface. The cost is visual weight, not a wall.
-        color: muted ? '#6b7684' : '#26303a', fontSize: 12,
+        color: muted ? '#6b7684' : T.ink, fontSize: 12,
       },
     },
       React.createElement('span', {
@@ -2909,7 +2910,7 @@ export function CadPanel(): React.ReactElement {
       // `机构运动 · 弯臂 + 调焦滑座 + 齿轮轴` before the parts were readable.
       meta && React.createElement('span', {
         style: {
-          flex: 'none', maxWidth: '42%', color: '#8a94a0', fontSize: 11,
+          flex: 'none', maxWidth: '42%', color: T.muted, fontSize: 11,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         },
       }, meta),
@@ -2917,7 +2918,7 @@ export function CadPanel(): React.ReactElement {
 
   const navSection = (label: string, rows: React.ReactNode[]) =>
     rows.length === 0 ? null : React.createElement('div', { key: label, style: { marginBottom: 6 } },
-      React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', padding: '2px 6px' } }, label),
+      React.createElement('div', { style: { fontSize: 11, color: T.muted, padding: '2px 6px' } }, label),
       ...rows);
 
   const navOverlay = () => {
@@ -2957,7 +2958,7 @@ export function CadPanel(): React.ReactElement {
           ? [
             React.createElement('div', {
               key: 'older-divider',
-              style: { fontSize: 10, color: '#8a94a0', padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
+              style: { fontSize: 10, color: T.muted, padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
             }, `更早 ${older.length} 版 · 只读参考`),
             ...older.map((v) => vRow(v, true)),
             // A nudge, not a wall: history is here when you need it, but the
@@ -2965,7 +2966,7 @@ export function CadPanel(): React.ReactElement {
             // explain the difference without you hunting through them.
             React.createElement('div', {
               key: 'older-nudge',
-              style: { fontSize: 10, color: '#8a94a0', padding: '4px 6px', lineHeight: '14px' },
+              style: { fontSize: 10, color: T.muted, padding: '4px 6px', lineHeight: '14px' },
             }, '历史版本只用于对比。要让 Agent 查旧版 / 解释两版差在哪里，通常更快。'),
           ]
           : []),
@@ -3036,7 +3037,7 @@ export function CadPanel(): React.ReactElement {
     },
       React.createElement('div', {
         style: {
-          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#fff',
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: T.white,
           borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
         },
       },
@@ -3071,7 +3072,7 @@ export function CadPanel(): React.ReactElement {
   const reviewOverlay = () => {
     const pending = review.items.filter((i) => i.status === 'unread');
     const settled = review.items.filter((i) => i.status !== 'unread');
-    const card = { background: '#fff', borderRadius: 10, border: '1px solid #d5d9dd', padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 3 };
+    const card = { background: T.white, borderRadius: 10, border: '1px solid #d5d9dd', padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 3 };
     const tinyBtn = { ...S.smallBtn, padding: '1px 7px', fontSize: 11 };
 
     const row = (item: ReviewItem) => React.createElement('div', {
@@ -3083,21 +3084,21 @@ export function CadPanel(): React.ReactElement {
         React.createElement('span', {
           style: {
             flex: 'none', fontSize: 10, lineHeight: '15px', padding: '0 5px', borderRadius: 3, fontWeight: 600,
-            color: item.kind === 'revert' ? '#a4531c' : '#2f6fdb',
-            background: item.kind === 'revert' ? '#fdeee2' : '#eaf3fc',
+            color: item.kind === 'revert' ? T.dangerInk : T.accent,
+            background: item.kind === 'revert' ? '#fdeee2' : T.accentSoft,
           },
         }, item.kind === 'revert' ? '回退提议' : '待看'),
         React.createElement('span', {
-          style: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: '#26303a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+          style: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
         }, item.title),
-        React.createElement('span', { style: { flex: 'none', fontSize: 10, color: '#8a94a0' } }, fmtTime(item.createdAt)),
+        React.createElement('span', { style: { flex: 'none', fontSize: 10, color: T.muted } }, fmtTime(item.createdAt)),
       ),
       item.body && React.createElement('div', {
-        style: { fontSize: 11, color: '#5b6673', lineHeight: '15px', whiteSpace: 'pre-wrap' },
+        style: { fontSize: 11, color: T.soft, lineHeight: '15px', whiteSpace: 'pre-wrap' },
       }, item.body),
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } },
         item.target && React.createElement('span', {
-          style: { fontFamily: 'ui-monospace, monospace', fontSize: 10, color: '#8a94a0' },
+          style: { fontFamily: 'ui-monospace, monospace', fontSize: 10, color: T.muted },
         }, item.target),
         item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: '#1e8449' } }, `已回退为 ${item.resolvedBy}`),
         React.createElement('span', { style: { marginLeft: 'auto' } }),
@@ -3114,7 +3115,7 @@ export function CadPanel(): React.ReactElement {
               setError(`回退失败：${String(e?.message ?? e)}`);
             }
           },
-          style: { ...tinyBtn, border: '1px solid #a4531c', color: '#a4531c', background: '#fdeee2' },
+          style: { ...tinyBtn, border: '1px solid #a4531c', color: T.dangerInk, background: '#fdeee2' },
         }, '批准回退'),
         item.target && React.createElement('button', {
           type: 'button',
@@ -3153,12 +3154,12 @@ export function CadPanel(): React.ReactElement {
         },
       },
         React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: '1px solid #e6ebef', background: '#fff' },
+          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: '1px solid #e6ebef', background: T.white },
         },
-          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: '#26303a' } }, '待阅'),
-          React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } },
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: T.ink } }, '待阅'),
+          React.createElement('span', { style: { fontSize: 11, color: T.muted } },
             `${pending.length} 条未读${settled.length ? ` · ${settled.length} 条已处理` : ''}`),
-          review.error && React.createElement('span', { style: { fontSize: 10, color: '#c0392b' } }, review.error),
+          review.error && React.createElement('span', { style: { fontSize: 10, color: T.danger } }, review.error),
           React.createElement('button', {
             type: 'button', onClick: () => setReviewOpen(false), title: '关闭（Esc）',
             style: { ...S.smallBtn, marginLeft: 'auto' },
@@ -3168,12 +3169,12 @@ export function CadPanel(): React.ReactElement {
           style: { overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 },
         },
           review.items.length === 0
-            ? React.createElement('div', { style: { color: '#8a94a0', fontSize: 12, padding: 8 } },
+            ? React.createElement('div', { style: { color: T.muted, fontSize: 12, padding: 8 } },
               '还没有待阅项。Agent 想让你看什么时会往这里放，不会自己切换视口。')
             : [...pending, ...settled].map(row),
         ),
         React.createElement('div', {
-          style: { borderTop: '1px solid #e6ebef', padding: '5px 9px', fontSize: 10, color: '#8a94a0', background: '#fff' },
+          style: { borderTop: '1px solid #e6ebef', padding: '5px 9px', fontSize: 10, color: T.muted, background: T.white },
         }, '打开这个列表不会改变视口；点「看」才会跳过去。'),
       ),
     );
@@ -3222,7 +3223,7 @@ export function CadPanel(): React.ReactElement {
       },
       React.createElement(
         'div',
-        { style: { background: '#fff', borderRadius: 10, padding: 12, width: 340, maxWidth: '92vw', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' } },
+        { style: { background: T.white, borderRadius: 10, padding: 12, width: 340, maxWidth: '92vw', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' } },
         React.createElement('div', { style: { fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#3b4450' } },
           `📸 截图 · ${shotDraft.label} — 加一句你想让它做什么`),
         React.createElement('img', {
@@ -3236,13 +3237,13 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', {
           title: '自动说明（随图必发，不可编辑）',
           style: {
-            fontSize: 10, color: '#8a94a0', background: '#f4f6f8', borderRadius: 4,
+            fontSize: 10, color: T.muted, background: '#f4f6f8', borderRadius: 4,
             padding: '4px 6px', marginBottom: 6, whiteSpace: 'pre-wrap', userSelect: 'text',
           },
         }, shotDraft.auto),
         shotDraft.stale && React.createElement('div', {
           style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
-                   borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: '#8a5a00' },
+                   borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: T.warnInk },
         }, `⚠ 此截图来自旧版本 ${shotDraft.stale.version}（最新为 ${shotDraft.stale.latest}）— 发送时会再次确认`),
         React.createElement('textarea', {
           value: shotDraft.text,
@@ -3261,7 +3262,7 @@ export function CadPanel(): React.ReactElement {
           React.createElement('button', {
             type: 'button', onClick: () => void sendShotDraft(),
             title: '图片 + 你写的文字一起发进会话（排队，不打断运行中的回合）',
-            style: { ...S.smallBtn, background: '#2f6fdb', color: '#fff', border: '1px solid #2f6fdb', fontWeight: 600 },
+            style: { ...S.smallBtn, background: T.accent, color: T.white, border: '1px solid #2f6fdb', fontWeight: 600 },
           }, '✓ 发送到会话'),
           React.createElement('button', {
             type: 'button', onClick: () => void parkShotDraft(),
@@ -3273,7 +3274,7 @@ export function CadPanel(): React.ReactElement {
             title: '丢弃这张截图', style: { ...S.smallBtn, marginLeft: 'auto' },
           }, '取消'),
         ),
-        React.createElement('div', { style: { fontSize: 10, color: '#8a94a0', marginTop: 6 } },
+        React.createElement('div', { style: { fontSize: 10, color: T.muted, marginTop: 6 } },
           'Ctrl+Enter 发送 · 文字随图片一起给模型，不用再补一条消息'),
       ),
     ),
@@ -3356,15 +3357,15 @@ export function CadPanel(): React.ReactElement {
           // the flex base size, so an auto basis (the breadcrumb's text width) makes
           // the row wrap at 320 instead of letting the text ellipsize.
           flex: '1 1 0', minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 6,
-          padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6, background: '#fff',
-          cursor: 'pointer', fontSize: 12, color: '#26303a', textAlign: 'left',
+          padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6, background: T.white,
+          cursor: 'pointer', fontSize: 12, color: T.ink, textAlign: 'left',
         },
       },
-        React.createElement('span', { style: { color: '#8a94a0', flex: 'none', fontSize: 11 } }, '🔍'),
+        React.createElement('span', { style: { color: T.muted, flex: 'none', fontSize: 11 } }, '🔍'),
         React.createElement('span', {
           style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 },
         }, crumb),
-        React.createElement('span', { style: { color: '#8a94a0', flex: 'none' } }, '▾'),
+        React.createElement('span', { style: { color: T.muted, flex: 'none' } }, '▾'),
       ),
       kind === 'part' && record && statusGlyph(record.status),
       React.createElement('button', {
@@ -3390,7 +3391,7 @@ export function CadPanel(): React.ReactElement {
           style: {
             position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(184, 134, 11, 0.92)', color: '#fff',
+            background: 'rgba(184, 134, 11, 0.92)', color: T.white,
             padding: '4px 10px', fontSize: 12, fontWeight: 600,
           },
         },
@@ -3457,7 +3458,7 @@ export function CadPanel(): React.ReactElement {
       },
       React.createElement('div', { style: { fontSize: 26 } }, '🚫'),
       React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, '此环境无法创建 WebGL 上下文'),
-      React.createElement('div', { style: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 } },
+      React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
         '几何预览不可用；版本、运行与报告仍可浏览。',
         React.createElement('br'),
         React.createElement('span', { style: { fontFamily: 'ui-monospace, monospace' } }, glError)),
@@ -3572,7 +3573,7 @@ export function CadPanel(): React.ReactElement {
           setMeasureMode((v) => !v); setAnnotateMode(false); setThickMode(false);
           if (measureMode) clearMeasure();
         },
-        style: viewToolStyle(measureMode, '#ff3040'),
+        style: viewToolStyle(measureMode, T.measure),
       }, '📏测量'),
       React.createElement('button', {
         type: 'button',
@@ -3581,18 +3582,18 @@ export function CadPanel(): React.ReactElement {
           setThickMode((v) => !v); setAnnotateMode(false); setMeasureMode(false);
           if (thickMode) clearThick();
         },
-        style: viewToolStyle(thickMode, '#00838f'),
+        style: viewToolStyle(thickMode, T.thick),
       }, '▤壁厚'),
       React.createElement('button', {
         type: 'button', title: section ? '◐剖切（已开启，再点一次关闭）' : '◐剖切：切掉近侧半边看内部（下面可换 x/y/z 轴）',
         onClick: () => setSection((v) => !v),
-        style: viewToolStyle(section, '#8e44ad'),
+        style: viewToolStyle(section, T.clip),
       }, '◐剖切'),
       React.createElement('button', {
         type: 'button',
         title: '热力图：把检查工具测到的逐点数值画在零件表面上（颜色含义见图例；没有场数据时提示先跑 check_printability）',
         onClick: () => { void toggleHeat(); },
-        style: viewToolStyle(Boolean(heat), '#c0392b'),
+        style: viewToolStyle(Boolean(heat), T.danger),
       }, '🔥热力图'),
     ),
   ),            // closes the panel's createElement (children resume below)
@@ -3604,14 +3605,14 @@ export function CadPanel(): React.ReactElement {
       'div',
       { style: S.feedback },
       measure && React.createElement('span', {
-        style: { fontSize: 12, fontWeight: 700, color: '#c0392b', flex: 'none', lineHeight: '18px' },
+        style: { fontSize: 12, fontWeight: 700, color: T.danger, flex: 'none', lineHeight: '18px' },
       }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : '已选 1 点…'),
       measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, '清除测量'),
       heat && React.createElement('span', {
-        style: { fontSize: 11, color: '#c0392b', flex: '1 1 auto', lineHeight: '16px' },
+        style: { fontSize: 11, color: T.danger, flex: '1 1 auto', lineHeight: '16px' },
       }, heat.legend),
       thick && React.createElement('span', {
-        style: { fontSize: 12, fontWeight: 700, color: '#00838f', flex: 'none', lineHeight: '18px' },
+        style: { fontSize: 12, fontWeight: 700, color: T.thick, flex: 'none', lineHeight: '18px' },
       }, `壁厚 ${thick.dist.toFixed(2)} mm（沿视线）`),
       thick && React.createElement('button', { type: 'button', onClick: clearThick, style: S.smallBtn }, '清除壁厚'),
       annotations.length > 0 && React.createElement('button', {
@@ -3625,7 +3626,7 @@ export function CadPanel(): React.ReactElement {
         {
           style: { display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 170px', minWidth: 80, height: 20 },
         },
-        React.createElement('span', { style: { fontSize: 11, color: '#8e44ad', flex: 'none' } }, '剖切'),
+        React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } }, '剖切'),
         React.createElement('select', {
           value: sectionAxis,
           onChange: (e: any) => setSectionAxis(e.target.value),
@@ -3633,7 +3634,7 @@ export function CadPanel(): React.ReactElement {
           title: '沿哪个轴切开：z 横向切、x/y 纵向切（看中心孔这类内部结构用 x/y）',
           style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: '1px solid #d5d9dd', borderRadius: 4 },
         }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a))),
-        React.createElement('span', { style: { fontSize: 11, color: '#8e44ad', flex: 'none' } },
+        React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } },
           `${(clipRef.current.pos * 100).toFixed(0)}%`),
         React.createElement('input', {
           type: 'range', min: 0, max: 1, step: 0.01, value: sectionPos,
@@ -3662,7 +3663,7 @@ export function CadPanel(): React.ReactElement {
         },
           React.createElement('span', {
             style: {
-              flex: 'none', fontSize: 10, fontWeight: 700, color: '#fff', background: '#2f6fdb',
+              flex: 'none', fontSize: 10, fontWeight: 700, color: T.white, background: T.accent,
               borderRadius: 3, padding: '0 4px', lineHeight: '13px',
             },
           }, `待阅 ${review.items.filter((i) => i.status === 'unread').length}`),
@@ -3672,14 +3673,14 @@ export function CadPanel(): React.ReactElement {
               fontSize: 11, fontWeight: 600, color: '#1f4f8f',
             },
           }, review.items.find((i) => i.status === 'unread')?.title ?? ''),
-          React.createElement('span', { style: { flex: 'none', fontSize: 11, color: '#2f6fdb' } }, '打开 ›'),
+          React.createElement('span', { style: { flex: 'none', fontSize: 11, color: T.accent } }, '打开 ›'),
         )
         : React.createElement('span', {
           style: {
             fontSize: 11, flex: '1 1 auto', lineHeight: '17px', height: 17, minWidth: 0,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            color: annotateMode ? '#b8860b' : measureMode ? '#c0392b' : thickMode ? '#00838f'
-              : (hint ? '#27ae60' : '#8a94a0'),
+            color: annotateMode ? T.warn : measureMode ? T.danger : thickMode ? T.thick
+              : (hint ? T.ok : T.muted),
           },
           title: feedbackText,
         }, feedbackText),
@@ -3759,7 +3760,7 @@ export function CadPanel(): React.ReactElement {
         'div',
         { style: S.sheetHead },
         React.createElement('span', { style: { fontSize: 12, fontWeight: 600, color: '#3b4450' } }, tabLabel(sheet)),
-        run && React.createElement('span', { style: { fontSize: 11, color: '#8a94a0' } }, run.id),
+        run && React.createElement('span', { style: { fontSize: 11, color: T.muted } }, run.id),
         React.createElement('button', {
           type: 'button', onClick: () => setSheet(null),
           title: '收回（Esc）', style: { ...S.smallBtn, marginLeft: 'auto' },
@@ -3779,7 +3780,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('span', { style: S.statusText },
         statusDetail ? `${statusIdentity} — ${statusDetail}` : statusIdentity),
       record && provenance && React.createElement('span', {
-        style: { flex: 'none', color: '#8a94a0' },
+        style: { flex: 'none', color: T.muted },
       }, provenance),
       // Unread items live in the line under the viewport (the focus); this is
       // only the way back to items already handled — a footnote, which is where
@@ -3791,7 +3792,7 @@ export function CadPanel(): React.ReactElement {
         title: `${review.items.length} 条已处理的待阅记录`,
         style: {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
-          fontSize: 11, lineHeight: '16px', color: '#8a94a0', textDecoration: 'underline dotted',
+          fontSize: 11, lineHeight: '16px', color: T.muted, textDecoration: 'underline dotted',
         },
       }, `待阅记录 ${review.items.length}`),
       tray.length > 0 && React.createElement('button', {

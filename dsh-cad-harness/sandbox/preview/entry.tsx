@@ -493,6 +493,32 @@ if (q.get('assert') === 'local-import') {
   }, 1500);
 }
 
+// Every assert renders its verdict into a <pre> under #stage. Forward that text
+// to the sandbox server so a runner can read PASS/FAIL instead of a human reading
+// a screenshot: one observer, and every current and future assert is covered.
+if (q.get('assert')) {
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  let last = '';
+  const flush = () => {
+    const pre = document.querySelector('#stage pre');
+    const text = (pre?.textContent ?? '').trim();
+    if (!text || text === last) return;
+    last = text;
+    const lines = text.split('\n');
+    const ok = !lines.some((l) => l.trimStart().startsWith('FAIL'));
+    void fetch('/api/cad/assert-result', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: q.get('assert'), ok, text }),
+    }).catch(() => { /* the runner falls back to the screenshot */ });
+  };
+  new MutationObserver(() => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(flush, 100);
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  setTimeout(flush, 4600);
+}
+
 // ?assert=layout — the stability requirement, checked instead of eyeballed:
 // toggling any control, opening a disclosure or taking a screenshot must not
 // change ANY region's box. Only the viewport is flexible, so any change in it is

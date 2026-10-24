@@ -51,6 +51,9 @@ const importRequests = [];
 // A demo review queue for screenshots: the panel's badge/overlay must be visible
 // in the sandbox, and a real corpus should not carry fake queue items.
 let demoQueue = null;
+// The last assert verdict the page reported (entry.tsx forwards it). The runner
+// reads this instead of reading pixels; `?clear=1` resets between scenarios.
+let lastAssert = null;
 const DEMO_QUEUE = () => ({
   items: [
     {
@@ -119,6 +122,17 @@ async function api(req, url) {
       return new Response(null, { status: 304, headers: { etag } });
     }
     return json({ ...wire, seq }, 200, { etag });
+  }
+
+  // --- assert results (machine-readable, for accept-ui.mjs) ------------------
+  if (p === '/api/cad/assert-result') {
+    if (req.method === 'POST') {
+      const raw = JSON.parse((await readBody(req)) || '{}');
+      lastAssert = { ...raw, at: new Date().toISOString() };
+      return json({ ok: true });
+    }
+    if (url.searchParams.get('clear') === '1') { lastAssert = null; return json({ ok: true, cleared: true }); }
+    return json(lastAssert ?? { ok: null, text: '', name: null });
   }
 
   // --- the review queue (panel badge + overlay) -----------------------------
