@@ -637,6 +637,9 @@ export function CadPanel(): React.ReactElement {
   // to answer before you could see anything.
   const [navOpen, setNavOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
+  // Which part's version list is expanded past the recent window. Keyed by part
+  // id, so switching parts collapses it without an effect to reset it.
+  const [expandedVersionsFor, setExpandedVersionsFor] = useState<string | null>(null);
   // Most-recently-viewed addresses (localStorage): the navigator's first section
   // and what the panel restores on reopen.
   const [recent, setRecent] = useState<string[]>(() => loadRecent());
@@ -2760,12 +2763,40 @@ export function CadPanel(): React.ReactElement {
     const versionsAll = currentPart
       ? currentPart.versions.filter((v) => navFilter(v.id) || navFilter(v.title ?? ''))
       : [];
-    const versionCap = q ? 40 : 8;
-    const versionRows = versionsAll.slice(0, versionCap)
-      // The same label the old dropdown used: it carries 导入 / 合并 / 非实体
-      // and the 最新 marker, which are exactly what you scan a history for.
-      .map((v) => navRow(`v:${v.id}`, recordLabel(v, v.id === latestVersionId), null,
-        () => navPickVersion(currentPart!.id, v.id), recordId === v.id));
+    // The same label the old dropdown used: it carries 导入 / 合并 / 非实体 and
+    // the 最新 marker — exactly what you scan a history for.
+    const vRow = (v: VersionProduct) => navRow(`v:${v.id}`, recordLabel(v, v.id === latestVersionId), null,
+      () => navPickVersion(currentPart!.id, v.id), recordId === v.id);
+
+    // THE GATE (T3.1): five recent revisions are one click away; the rest are
+    // folded behind one deliberate step. Not hidden — a history you cannot reach
+    // is not a history — but no longer the default surface.
+    const recentVersions = versionsAll.slice(0, 5);
+    const selected = versionsAll.find((v) => v.id === recordId) ?? null;
+    // Your own selection stays visible even when it is older than the window,
+    // otherwise expanding/collapsing could hide the version you are looking at.
+    const head = selected && !recentVersions.includes(selected)
+      ? [...recentVersions, selected] : recentVersions;
+    const older = versionsAll.slice(5).filter((v) => !head.includes(v));
+    const versionsExpanded = expandedVersionsFor === currentPart?.id;
+    const versionRows = q
+      ? versionsAll.slice(0, 40).map(vRow)
+      : [
+        ...head.map(vRow),
+        ...(versionsExpanded && older.length
+          ? [
+            React.createElement('div', {
+              key: 'older-divider',
+              style: { fontSize: 10, color: '#8a94a0', padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
+            }, `更早 ${older.length} 版`),
+            ...older.map(vRow),
+          ]
+          : []),
+      ];
+    const versionToggle = !q && older.length
+      ? navRow('versions-toggle', versionsExpanded ? '收起历史' : `全部 ${versionsAll.length} 版 ›`, null,
+        () => setExpandedVersionsFor(versionsExpanded ? null : currentPart?.id ?? null))
+      : null;
     const runRows = (list: RunProduct[]) => list
       .filter((r) => navFilter(runTitle(r)) || navFilter(r.id) || navFilter(r.summary))
       .slice(0, q ? 40 : 8)
@@ -2797,10 +2828,10 @@ export function CadPanel(): React.ReactElement {
         })()),
         navSection(
           currentPart
-            ? `版本 · ${currentPart.name}` + (versionsAll.length > versionRows.length
-              ? `（最近 ${versionRows.length} / 共 ${versionsAll.length}，用搜索找更早的）` : '')
+            ? `版本 · ${currentPart.name}`
+              + (!q && older.length && !versionsExpanded ? `（最近 ${head.length} / 共 ${versionsAll.length}）` : '')
             : '版本',
-          versionRows,
+          [...versionRows, versionToggle],
         ),
         // The machine is an OBJECT, not four run categories: its evidence lives
         // on its own page. Without a manifest there is nothing to group under, so

@@ -309,6 +309,15 @@ if (q.get('nav') === '1') {
     btn?.click();
   }, at);
 }
+// ?navexpand=1 — open the navigator and expand the history gate (visual only).
+if (q.get('navexpand') === '1') {
+  setTimeout(() => {
+    (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+  }, 1500);
+  setTimeout(() => {
+    (document.querySelector('[data-nav-id="versions-toggle"]') as HTMLElement | null)?.click();
+  }, 2100);
+}
 // ?navpick=<id> — open the navigator and click one product row (deterministic;
 // the breadcrumb's own label changes with the selection).
 const navpick = q.get('navpick');
@@ -668,6 +677,42 @@ if (q.get('assert') === 'recent') {
   }, 2600);
 }
 
+// ?assert=history — the version gate: five recent revisions are one click away,
+// the rest behind ONE deliberate step, and nothing is unreachable.
+if (q.get('assert') === 'history') {
+  const vRows = () => Array.from(document.querySelectorAll('[data-nav-id]'))
+    .filter((el) => /^v\d{3,}$/.test(el.getAttribute('data-nav-id') ?? '')).length;
+  const toggle = () => document.querySelector('[data-nav-id="versions-toggle"]') as HTMLElement | null;
+  let closed = 0;
+  let opened = 0;
+  setTimeout(() => {
+    (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+  }, 1600);
+  setTimeout(() => {
+    closed = vRows();
+    toggle()?.click();
+  }, 2100);
+  setTimeout(() => {
+    opened = vRows();
+    const label = (toggle()?.textContent ?? '').trim();
+    toggle()?.click();
+    setTimeout(() => {
+      const back = vRows();
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = [
+        `history gate (dock ${w}×${h})`,
+        `${closed === 5 ? 'PASS' : 'FAIL'}  recent window is 5 versions (saw ${closed})`,
+        `${opened > closed ? 'PASS' : 'FAIL'}  expanding reveals older ones (${closed} -> ${opened})`,
+        `${back === closed ? 'PASS' : 'FAIL'}  collapsing returns to the window (${opened} -> ${back})`,
+        `INFO  toggle label while expanded: ${label || '(none)'}`,
+      ].join('\n');
+    }, 300);
+  }, 2600);
+}
+
 // ?assert=machine — the assembly manifest must surface as ONE object: a 机器 row
 // in the navigator, a machine page whose tabs carry the node and evidence counts.
 if (q.get('assert') === 'machine') {
@@ -791,7 +836,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

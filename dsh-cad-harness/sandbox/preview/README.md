@@ -55,6 +55,8 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `overlay=1` | mount **only** the real `ViewportOverlay` against a synthetic camera (a no-WebGL sandbox cannot build a scene), then measure the merged corner plate and assert every axis letter stays inside it (`overlay-corners.png`) |
 | `recent` | pre-seed the MRU list (`recent=p005,v066`), so "reopen where you left off" can be captured in a fresh profile |
 | `assert=recent` | with `expect=<text>`: assert the breadcrumb reopened on that address (no param = assert it opened somewhere) |
+| `navexpand` | `1` = open the navigator and expand the version history (visual) |
+| `assert=history` | assert the gate: 5 recent versions, expanding reveals the rest (5 → 11), collapsing returns to 5 |
 | `assert=machine` | with `expect=<name>`: assert the navigator has a 机器 row, the breadcrumb names it, and its tabs carry the evidence and node counts |
 | `assert=evidence` | click 证据 and assert the evidence table is scannable: every row carries its run id, names a version, and the same-mechanism rows (机构运动) have distinct second lines; exact-duplicate runs are reported, not failed |
 | `assert=layout` | run the layout-stability assertion: click 测量 → 壁厚 → 剖切 → 参数 → 截图 and compare **every** region's and every chip's `w/h/y` against the baseline, printing PASS/FAIL into the screenshot. Absolute- AND fixed-positioned overlays are excluded (they take no space) |
