@@ -9,7 +9,7 @@ import type { PartEntry } from './parts.ts';
 import type { RunEntry } from './runs.ts';
 import type { VersionManifestEntry } from './version.ts';
 import { basename } from 'node:path';
-import { mergedInputVersionIds, supersededVersionIds } from './latest.ts';
+import { mergedInputVersionIds, supersededIn, versionCurrency } from './latest.ts';
 import { runSubject } from '../shared/labels.ts';
 
 /** Versions without a part id are surfaced here rather than dropped. */
@@ -23,6 +23,10 @@ export function buildProducts(
   parts: PartEntry[],
   runs: RunEntry[],
 ): ProductsResponse {
+  // Build the currency tables ONCE: the question "is this version still current?"
+  // is asked for every run and every merged version. Per-call maps made this
+  // O(runs × versions) — 2.9 s for a 5 000-run corpus on a 3 s poll.
+  const currency = versionCurrency(versions);
   const versionProducts: VersionProduct[] = versions.map((v) => {
     const imported = v.source?.kind === 'imported' ? v.source : null;
     return {
@@ -37,7 +41,7 @@ export function buildProducts(
       ...(imported ? { origin: basename(imported.file) } : {}),
       // A merged body is derived: it expires when the versions it was made of do.
       ...(v.source?.kind === 'merged'
-        ? { staleMergedInputs: supersededVersionIds(versions, mergedInputVersionIds(v)) }
+        ? { staleMergedInputs: supersededIn(currency, mergedInputVersionIds(v)) }
         : {}),
       solid: v.solid !== false,
     };
@@ -60,7 +64,7 @@ export function buildProducts(
   // It deliberately does NOT fold versions without a partId into a synthetic part: that
   // made two legacy versions supersede each other (2026-10-23 audit, FIX-C2).
   /** Versions a run cites that a part has since replaced (DESIGN §22). */
-  const staleSourceVersions = (r: RunEntry): string[] => supersededVersionIds(versions, r.sourceVersionIds);
+  const staleSourceVersions = (r: RunEntry): string[] => supersededIn(currency, r.sourceVersionIds);
 
   const runsOfPart = new Map<string, RunProduct[]>();
   const sceneRuns: RunProduct[] = [];

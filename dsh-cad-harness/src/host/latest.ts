@@ -36,17 +36,40 @@ export function newestVersionPerPart(versions: readonly VersionManifestEntry[]):
  *
  * `null`/unknown ids are NOT judged (a citation we cannot resolve is not a staleness
  * finding), and neither are versions without a partId (see the header).
+ *
+ * NOTE: this form builds both maps, so it is O(versions) PER CALL. Callers that ask
+ * the question for many runs (products.ts asks it for every run) must build the maps
+ * once with {@link versionCurrency} and use {@link supersededIn} — otherwise the
+ * build is O(runs × versions): measured 0.58 ms/call at 5 000 versions, i.e. ~2.9 s
+ * for a 5 000-run corpus, on a poll that fires every 3 s.
  */
 export function supersededVersionIds(
   versions: readonly VersionManifestEntry[],
   ids: readonly string[],
 ): string[] {
-  const byId = new Map(versions.map((v) => [v.id, v]));
-  const newest = newestVersionPerPart(versions);
+  return supersededIn(versionCurrency(versions), ids);
+}
+
+/** Prebuilt lookups for "is this version still current?", reused across many runs. */
+export interface VersionCurrency {
+  readonly byId: ReadonlyMap<string, VersionManifestEntry>;
+  readonly newest: ReadonlyMap<string, string>;
+}
+
+/** Build the maps once; pass the result to {@link supersededIn}. */
+export function versionCurrency(versions: readonly VersionManifestEntry[]): VersionCurrency {
+  return {
+    byId: new Map(versions.map((v) => [v.id, v])),
+    newest: newestVersionPerPart(versions),
+  };
+}
+
+/** {@link supersededVersionIds} against prebuilt lookups — O(ids), not O(versions). */
+export function supersededIn(currency: VersionCurrency, ids: readonly string[]): string[] {
   return ids.filter((id) => {
-    const v = byId.get(id);
+    const v = currency.byId.get(id);
     if (!v?.partId) return false;
-    return newest.get(v.partId) !== id;
+    return currency.newest.get(v.partId) !== id;
   });
 }
 
