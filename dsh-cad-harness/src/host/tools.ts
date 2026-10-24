@@ -10,6 +10,7 @@ import {
 } from './parts.ts';
 import { buildProductsWire } from './products.ts';
 import { storeFor } from './store.ts';
+import { enqueueReviews } from './review-queue.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
@@ -992,6 +993,121 @@ export function registerCadTools(
       if (existing) return { partId: existing.id, name: existing.name, created: false };
       const part = await createUniquePart(partStore, a.name, 'agent');
       return { partId: part.id, name: part.name, created: true };
+    },
+  }));
+
+  // --- request_review: ask for attention, never take it ---------------------
+  //
+  // The queue exists because the panel must not move under the human: an agent
+  // that finds something appends an item and stops. The limits are declared in
+  // src/host/review-queue.ts (3/call, 6 calls/10 min, 20 unread, same target
+  // merges). Refusals are returned as data, not thrown, because "the queue is
+  // full" is a normal answer the agent should adapt to.
+  registerTool(defineTool({
+    name: 'request_review',
+    description:
+      'Ask the human to look at something (a version, a run, a part) or to consider a rollback — queued, never a popup. '
+      + 'The panel badges the queue; the human opens it when they choose. Limits: 3 items per call, 6 calls per 10 minutes, '
+      + '20 unread; repeating the same target within 10 minutes updates that item instead of adding another.',
+    parameters: {
+      items: {
+        type: 'array',
+        required: true,
+        description: 'Up to 3 items. Each is one thing to look at, with a one-line title.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            title: { type: 'string', required: true, description: 'One line: what to look at, e.g. "间隙 0 但行程只有 4.8mm".' },
+            body: { type: 'string', description: 'Why it matters / what to check. Kept short — this is a queue entry, not a report.' },
+            target: { type: 'string', description: 'Address the panel can open: v029 / r041 / p005 / u:relative/path.stl.' },
+            kind: {
+              type: 'string',
+              enum: ['view', 'revert'],
+              description: 'view = "look at this"; revert = "consider rolling back TO this version". Approval creates a NEW version; history is never rewritten.',
+            },
+          },
+        },
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          queued: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: { id: { type: 'string', required: true }, title: { type: 'string', required: true } },
+            },
+          },
+          merged: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: { id: { type: 'string', required: true }, title: { type: 'string', required: true } },
+            },
+          },
+          dropped: { type: 'integer', required: true },
+          unread: { type: 'integer', required: true },
+          rateLimited: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              reason: { type: 'string', required: true },
+              retryAfterSec: { type: 'integer', required: true },
+              pending: { type: 'integer', required: true },
+            },
+          },
+        },
+      },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as {
+          queued: { id: string; title: string }[]; merged: { id: string; title: string }[];
+          dropped: number; unread: number;
+          rateLimited?: { reason: string; retryAfterSec: number; pending: number };
+        };
+        const parts = [
+          v.queued.length ? `已排队 ${v.queued.length} 条（${v.queued.map((q) => `${q.id} ${q.title}`).join('；')}）` : '未新增条目',
+          v.merged.length ? `${v.merged.length} 条与近 10 分钟内的同一目标合并` : '',
+          v.dropped ? `${v.dropped} 条超出单次 3 条上限、未排队` : '',
+          `队列未读 ${v.unread} 条`,
+          v.rateLimited
+            ? v.rateLimited.reason === 'queue_full'
+              ? '队列已满（20 条未读）：人先清一轮再请求'
+              : `被限流：${v.rateLimited.retryAfterSec}s 后可再请求（当前 ${v.rateLimited.pending} 条未读）`
+            : '',
+        ].filter(Boolean);
+        return [{ type: 'text', text: parts.join('；') + '。' }];
+      },
+    },
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { items?: { title?: string; body?: string; target?: string; kind?: string }[] };
+      const items = Array.isArray(a?.items) ? a.items : [];
+      if (items.length === 0) {
+        throw argError('request_review', 'items', 'is required and must not be empty',
+          'one entry per thing the human should look at', { example: 'request_review({ items: [{ title: "看这次间隙", target: "r041" }] })', received: a?.items });
+      }
+      const stores = await allStores(exec);
+      // An address that resolves to nothing is noise in a queue: reject it here,
+      // where the caller can still fix it, instead of parking a dead link.
+      for (const it of items) {
+        const target = String(it?.target ?? '').trim();
+        if (!target || !/^[vrp]\d{3,}$/.test(target)) continue;
+        if (!(await storeFor(stores).resolve(target))) {
+          // The id itself rides in `received`: `argError` appends it, and the lint
+          // requires the four leading arguments to be plain literals.
+          throw argError('request_review', 'items', 'a target does not resolve in this project',
+            'use a vNNN / rNNN / pNNN that exists here (ask list_* or use the id a tool just returned)',
+            { example: 'request_review({ items: [{ title: "看这次间隙", target: "r041" }] })', received: target });
+        }
+      }
+      return await enqueueReviews(stores.root, items.map((it) => ({
+        kind: it?.kind === 'revert' ? 'revert' as const : 'view' as const,
+        title: String(it?.title ?? ''),
+        body: String(it?.body ?? ''),
+        target: it?.target ? String(it.target).trim() : null,
+      })));
     },
   }));
 

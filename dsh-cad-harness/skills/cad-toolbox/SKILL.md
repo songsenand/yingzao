@@ -6,7 +6,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-seven tools, but **three jobs first**. Almost every task starts by picking the
+Twenty-eight tools, but **three jobs first**. Almost every task starts by picking the
 group, not the tool — and the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
@@ -101,6 +101,8 @@ against it, and read a reference only when the skill tells you to.
 | "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
 | "the user is only *talking* about a part", no geometry yet | `create_part` | `generate_part` (it would invent a shape) |
 | "before I claim this is delivered" | `delivery_audit` | re-reading your own notes |
+| "there is something the human should look at", "ask them to review", "propose a rollback" | `request_review` | moving their viewport, opening a modal, or writing a report they never open |
+| "what did v030 look like", "how did this change between revisions" | the panel's version gate + 对比副视口 (the human opens it); or `request_review({items:[{target:"v030"}]})` | re-running an old version's tool calls to "show" it |
 | "a check no CAD tool covers" (FEM, optimisation, a custom metric) | `run_python` | shelling out to the system python |
 | "the runtime is missing / broken / I want it warm" | `python_runtime` | re-running a failing tool and hoping |
 

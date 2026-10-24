@@ -362,6 +362,21 @@ render_part({ versionId: "…" })
 returns: `versionId`, `label`, `file`
 
 
+## `request_review`
+
+Ask the human to look at something (a version, a run, a part) or to consider a rollback — queued, never a popup. The panel badges the queue; the human opens it when they choose. Limits: 3 items per call, 6 calls per 10 minutes, 20 unread; repeating the same target within 10 minutes updates that item instead of adding another.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `items` | array | **required** | Up to 3 items. Each is one thing to look at, with a one-line title. |
+
+```js
+request_review({ items: [] })
+```
+
+returns: `queued`, `merged`, `dropped`, `unread`, `rateLimited`
+
+
 ## `run_python`
 
 Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user's own machine, not an exception — the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.
