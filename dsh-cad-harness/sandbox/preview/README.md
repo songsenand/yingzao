@@ -70,7 +70,7 @@ Mirrors the host routes the panel actually uses:
 
 | route | source |
 |---|---|
-| `GET /api/cad/products` | **imports the host's `buildProducts`** over `data/manifest.json` + `data/parts/manifest.json` + `data/runs/manifest.json` — the sandbox cannot drift from the real route |
+| `GET /api/cad/products` | **the host's read port** (`src/host/store.ts`): snapshot cache, change sequence, `ETag`, and `304` on `If-None-Match` / `?since=` — same code path as the real route |
 | `GET /api/cad/params?v=` / `GET /api/cad/stl?v=` | `data/versions/<v>/` |
 | `GET /api/cad/run?id=` | the run manifest entry |
 | `GET /api/cad/run/report\|trajectory\|fluid-manifest?id=` | `data/runs/<id>/` |

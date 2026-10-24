@@ -45,6 +45,14 @@
 
 ### T1 读端口（3–5 天）
 
+**状态（2026-10-24）：T1.1 ✅ / T1.2 ✅ / T1.3 ✅（`0cb979b`）。**
+`src/host/store.ts` 按语料根键控，`snapshot()` 用三份 manifest 的 mtime+size 失效缓存，
+`changes(since)` 给出进程内单调序号，`resolve()` 认 `vNNN / rNNN / pNNN / u:<rel>` 并回答
+`isCurrent`。products 路由与 UI 沙箱都改为经过它，条件请求实测 **304 / 0 字节**。
+**未按原计划做的两处**：① `query(filter)` 目前只返回整棵树（facets 留给客户端搜索，
+T2.3 已经覆盖）；② `/api/cad/run/attention` 与 `/api/cad/assembly/check` 没有搬进端口——
+它们读的不是这三份 manifest（前者按 run 目录取文件，后者读装配清单），搬进来只是增加间接层。
+
 | ID | 做什么 | 怎么做 | 验收 | 依赖 |
 |---|---|---|---|---|
 | **T1.1** | `CadStore` 只读三件套 | 新 `src/host/store.ts`：按 cwd 键控的单例；`resolve(address)`（vNNN/rNNN/pNNN/u:path → 对象 + `isCurrent`）、`query(filter)`、`changes(sinceSeq)`；内部持有 manifest 的内存快照 + mtime 失效 | 新 `accept-store.mjs`：地址解析、`isCurrent` 判定、seq 单调 | T0 |
