@@ -839,8 +839,11 @@ export function CadPanel(): React.ReactElement {
   //   * viewing an OLD version  → overlay the LATEST (what it became);
   //   * viewing the latest      → overlay the PARENT (what changed in this one).
   // The candidate is null when there is only one version, and for files/runs.
-  const [ghostOn, setGhostOn] = useState(true);
-  const ghostRef = useRef<THREE.Mesh | null>(null);
+  // `null` = follow the context (an old version opens WITH the comparison, the
+  // latest opens without it); a boolean = the user's explicit choice.
+  const [compareOn, setCompareOn] = useState<boolean | null>(null);
+  const insetRef = useRef<{ scene: THREE.Scene; camera: THREE.PerspectiveCamera; center: THREE.Vector3; distance: number } | null>(null);
+  const insetOnRef = useRef(false);
   const ghostVersionId = (() => {
     if (!version || !currentPart) return null;
     if (latestVersionId && version.id !== latestVersionId) return latestVersionId;
@@ -1068,6 +1071,9 @@ export function CadPanel(): React.ReactElement {
 
     let disposed = false;
     let cleanupResize: (() => void) | undefined;
+    // Owned by the async load below, disposed by the cleanup that follows.
+    let insetOtherGeo: THREE.BufferGeometry | null = null;
+    let insetSceneLocal: THREE.Scene | null = null;
     (async () => {
       try {
         const res = await fetch(meshSource.url);
@@ -1157,6 +1163,53 @@ export function CadPanel(): React.ReactElement {
         applyFit();
         (mesh as unknown as { __radius?: number }).__radius = radius;
 
+        // ── the comparison inset (T3.2) ──────────────────────────────────────
+        // The main viewport keeps the SOLID part the user is looking at; the
+        // difference lives in a picture-in-picture holding BOTH revisions, both
+        // translucent, in different colours. An old version that got SMALLER is
+        // invisible under an overlay — it cannot hide here, because the two are
+        // drawn side by side in the same frame instead of on top of each other.
+        const compareId = ghostVersionId && ghostVersionId !== versionId ? ghostVersionId : null;
+        if (compareId) {
+          void (async () => {
+            try {
+              const gres = await fetch(withProject(`/api/cad/stl?v=${encodeURIComponent(compareId)}`));
+              if (!gres.ok) return;
+              const other = new STLLoader().parse(await gres.arrayBuffer());
+              if (disposed) { other.dispose(); return; }
+              insetOtherGeo = other;
+              const insetScene = new THREE.Scene();
+              // A light ground and NORMAL blending: each version keeps its own
+              // translucent colour (blue / orange) and the overlap reads as the
+              // third colour — "these two coincide". Additive was tried and
+              // washed the whole body to white, hiding exactly what "same" means.
+              insetScene.background = new THREE.Color('#f2f4f7');
+              const glass = (geo: THREE.BufferGeometry, color: string) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+                color, transparent: true, opacity: 0.46, depthWrite: false,
+              }));
+              const here = glass(geometry, '#2563eb');   // blue = the version on screen
+              const there = glass(other, '#f97316');     // orange = the counterpart
+              here.renderOrder = 1;
+              there.renderOrder = 2;
+              insetScene.add(here);
+              insetScene.add(there);
+              // Frame BOTH: cropping the bigger one would hide the very thing
+              // this view exists to show.
+              const box = new THREE.Box3().setFromObject(insetScene);
+              const ic = new THREE.Vector3();
+              box.getCenter(ic);
+              const isz = new THREE.Vector3();
+              box.getSize(isz);
+              const ir = Math.max(isz.length() / 2, 1);
+              const icam = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+              insetSceneLocal = insetScene;
+              // 8% margin: an exact sphere fit makes the silhouette touch the frame,
+              // which reads as "cropped" at this size.
+              insetRef.current = { scene: insetScene, camera: icam, center: ic, distance: fitDistance(icam, ir) * 1.08 };
+            } catch { /* a comparison that cannot load is simply absent */ }
+          })();
+        }
+
         // Mouse interaction: wheel zoom, drag rotate (damped).
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.copy(center);
@@ -1198,6 +1251,25 @@ export function CadPanel(): React.ReactElement {
           // Probe dots keep a fixed pixel size: zooming must not inflate them.
           scaleScreenDots(measureDotsRef.current, camera, mount.clientHeight || 420);
           renderer.render(scene, camera);
+          // The comparison inset: same view DIRECTION as the main camera (that is
+          // the "axes stay in sync" the user asked for), its own fit distance, so
+          // both revisions are always fully in frame.
+          const inset = insetRef.current;
+          if (inset && insetOnRef.current) {
+            const w = mount.clientWidth || 1;
+            const h = mount.clientHeight || 420;
+            const s = Math.max(56, Math.min(Math.round(h * 0.46), Math.round(w * 0.62)));
+            const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+            inset.camera.position.copy(inset.center).addScaledVector(dir, inset.distance);
+            inset.camera.up.copy(camera.up);
+            inset.camera.lookAt(inset.center);
+            renderer.setScissorTest(true);
+            renderer.setScissor(w - s - 6, 6, s, s);
+            renderer.setViewport(w - s - 6, 6, s, s);
+            renderer.render(inset.scene, inset.camera);
+            renderer.setScissorTest(false);
+            renderer.setViewport(0, 0, w, h);
+          }
           raf = requestAnimationFrame(loop);
         };
         loop();
@@ -1220,6 +1292,14 @@ export function CadPanel(): React.ReactElement {
       pickMeshRef.current = null;
       tintRef.current = null;
       cleanupResize?.();
+      insetRef.current = null;
+      if (insetSceneLocal) {
+        insetSceneLocal.traverse((o) => {
+          const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+          if (Array.isArray(m)) m.forEach((x) => x.dispose()); else m?.dispose();
+        });
+      }
+      insetOtherGeo?.dispose();
       renderer.dispose();
       // dispose() frees GPU resources but NOT the context: without this, every
       // version you visit leaves a live WebGL context until GC, and the browser
@@ -1231,42 +1311,12 @@ export function CadPanel(): React.ReactElement {
     // the same builder, and switching version→file must rebuild the scene.
   }, [meshSource?.key]);
 
-  // The ghost loads into the CURRENT scene rather than rebuilding it: toggling a
-  // comparison must not cost a WebGL context, nor refit the camera under the
-  // user's hands. Orange so it never reads as "the part" (which is blue).
+  // The comparison lives in its own scene (drawn as a picture-in-picture by the
+  // main render loop). This effect only decides whether it is SHOWN — the meshes
+  // are built once, with the main scene, so toggling costs nothing.
   useEffect(() => {
-    const scene = bgSceneRef.current;
-    if (!scene) return;
-    const id = ghostOn ? ghostVersionId : null;
-    if (!id || id === versionId) return;
-    let dead = false;
-    const material = new THREE.MeshStandardMaterial({
-      color: '#e07a3f', metalness: 0, roughness: 1,
-      transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
-    mesh.name = 'ghost';
-    mesh.renderOrder = 2;
-    void (async () => {
-      try {
-        const res = await fetch(withProject(`/api/cad/stl?v=${encodeURIComponent(id)}`));
-        if (!res.ok) return;
-        const geometry = new STLLoader().parse(await res.arrayBuffer());
-        if (dead) { geometry.dispose(); return; }
-        mesh.geometry.dispose();
-        mesh.geometry = geometry;
-        scene.add(mesh);
-        ghostRef.current = mesh;
-      } catch { /* a ghost that cannot load is simply absent — never an error */ }
-    })();
-    return () => {
-      dead = true;
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      material.dispose();
-      if (ghostRef.current === mesh) ghostRef.current = null;
-    };
-  }, [ghostOn, ghostVersionId, versionId, meshSource?.key]);
+    insetOnRef.current = compareOn ?? Boolean(version && latestVersionId && version.id !== latestVersionId);
+  }, [compareOn, version, latestVersionId]);
 
   // --- screenshot + annotation → context tray ---
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -2645,31 +2695,34 @@ export function CadPanel(): React.ReactElement {
   // is how a first attempt landed on the 零件/记录 selectors).
   // Deliberately NOT a sixth chip in `S.viewTools` either: that column already
   // covers the model's top-left, and more chips would cover more of it.
-  // The comparison toggle sits under 背景: same corner, same pill. It names the
-  // version it overlays, because "虚影" alone does not say WHAT you are seeing.
   // The stale banner sits at the very top of the viewport; the tool column must
   // start below it, or the first two chips (截图 / 标注) are covered by it.
   const staleBanner = Boolean(version && latestVersionId && version.id !== latestVersionId);
   const toolStripStyle = staleBanner ? { ...S.viewTools, top: 32 } : S.viewTools;
+  // Un-touched, the comparison follows the context: an old version opens WITH it
+  // (that is why you opened an old version), the latest opens without it.
+  const compareActive = compareOn ?? staleBanner;
 
+  // The comparison toggle sits under 背景: same corner, same pill. It names the
+  // version it compares against, because "对比" alone does not say WHAT with.
   const ghostToggle = version && ghostVersionId && !glError
     ? React.createElement('button', {
       type: 'button',
-      'data-ghost-toggle': '',
-      'aria-label': '虚影对比',
-      title: ghostOn
-        ? `虚影：正在把 ${ghostVersionId} 的半透明轮廓叠在当前版本上（点击关闭）`
-        : `叠加 ${ghostVersionId} 的轮廓，对比两版差在哪里`,
-      onClick: () => setGhostOn((v) => !v),
+      'data-compare-toggle': '',
+      'aria-label': '对比视口',
+      title: compareActive
+        ? `副视口：蓝 = 当前 ${version.id}，橙 = ${ghostVersionId}（点击收起）`
+        : `在右下角副视口里同时放置 ${version.id} 与 ${ghostVersionId}，看差在哪里`,
+      onClick: () => setCompareOn(!compareActive),
       style: {
         position: 'absolute', right: 8, top: 66, zIndex: 8, cursor: 'pointer',
         borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
-        border: ghostOn ? '1px solid #e07a3f' : '1px solid #d5d9dd',
+        border: compareActive ? '1px solid #e07a3f' : '1px solid #d5d9dd',
         background: 'rgba(255,255,255,0.86)',
-        color: ghostOn ? '#a4531c' : '#26303a',
-        ...(ghostOn ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
+        color: compareActive ? '#a4531c' : '#26303a',
+        ...(compareActive ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
       },
-    }, `${ghostOn ? '◫' : '▢'} 虚影 ${ghostVersionId}`)
+    }, `${compareActive ? '◫' : '▢'} 对比 ${ghostVersionId}`)
     : null;
 
   const bgPicker = version && !glError
@@ -3190,6 +3243,28 @@ export function CadPanel(): React.ReactElement {
             style: { ...S.smallBtn, marginLeft: 'auto', padding: '1px 8px' },
           }, '回到最新'),
         ),
+      // The inset's frame and colour key are DOM: the WebGL picture is drawn by
+      // the renderer, but a border and a legend must stay crisp — and a canvas
+      // has no DOM inside it.
+      compareActive && ghostVersionId && React.createElement('div', {
+        'data-compare-inset': '',
+        style: {
+          position: 'absolute', right: 6, bottom: 6, height: '46%', aspectRatio: '1 / 1',
+          border: '1px solid #c9ced4', borderRadius: 8, pointerEvents: 'none', zIndex: 5,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        },
+      },
+        React.createElement('div', {
+          style: {
+            position: 'absolute', left: 5, top: 3, fontSize: 10, lineHeight: '13px',
+            color: '#3d4a57', textShadow: '0 0 3px #fff', fontWeight: 600,
+          },
+        },
+          React.createElement('span', { style: { color: '#2563eb' } }, `● ${version?.id ?? ''}`),
+          React.createElement('span', { style: { color: '#8a94a0', fontWeight: 400 } }, ' / '),
+          React.createElement('span', { style: { color: '#e2651c' } }, `● ${ghostVersionId}`),
+        ),
+      ),
       meshSource && React.createElement('div', {
         ref: mountRef,
         // Picking listens HERE, not on an overlay that swallows the pointer:

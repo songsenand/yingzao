@@ -683,19 +683,19 @@ if (q.get('assert') === 'recent') {
 // evidence that both were fetched.)
 if (q.get('assert') === 'ghost') {
   setTimeout(() => {
-    const btn = document.querySelector('[data-ghost-toggle]') as HTMLElement | null;
+    const btn = document.querySelector('[data-compare-toggle]') as HTMLElement | null;
     const before = (btn?.textContent ?? '').trim();
     btn?.click();
     setTimeout(() => {
-      const after = (document.querySelector('[data-ghost-toggle]')?.textContent ?? '').trim();
+      const after = (document.querySelector('[data-compare-toggle]')?.textContent ?? '').trim();
       const pre = document.createElement('pre');
       pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
       const stage = document.getElementById('stage');
       if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
       pre.textContent = [
-        `ghost compare (dock ${w}×${h})`,
-        `${/虚影 v\d{3,}/.test(before) ? 'PASS' : 'FAIL'}  the control names the overlaid version: ${before || '(none)'}`,
-        `${/虚影 v\d{3,}/.test(after) && after !== before ? 'PASS' : 'FAIL'}  clicking it toggles the overlay: ${after || '(none)'}`,
+        `compare inset (dock ${w}×${h})`,
+        `${/对比 v\d{3,}/.test(before) ? 'PASS' : 'FAIL'}  the control names the compared version: ${before || '(none)'}`,
+        `${/对比 v\d{3,}/.test(after) && after !== before ? 'PASS' : 'FAIL'}  clicking it toggles the inset: ${after || '(none)'}`,
       ].join('\n');
     }, 420);
   }, 2500);

@@ -56,7 +56,7 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `recent` | pre-seed the MRU list (`recent=p005,v066`), so "reopen where you left off" can be captured in a fresh profile |
 | `assert=recent` | with `expect=<text>`: assert the breadcrumb reopened on that address (no param = assert it opened somewhere) |
 | `navexpand` | `1` = open the navigator and expand the version history (visual) |
-| `assert=ghost` | assert the comparison control names the overlaid version and toggles it (the server logs each STL id once, so `stl v030` + `stl v066` proves both meshes were fetched) |
+| `assert=ghost` | assert the comparison control names the compared version and toggles the corner inset (the server logs each STL id once, so `stl v030` + `stl v066` proves both meshes were fetched) |
 | `assert=history` | assert the gate: 5 recent versions, expanding reveals the rest (5 → 11), collapsing returns to 5 |
 | `assert=machine` | with `expect=<name>`: assert the navigator has a 机器 row, the breadcrumb names it, and its tabs carry the evidence and node counts |
 | `assert=evidence` | click 证据 and assert the evidence table is scannable: every row carries its run id, names a version, and the same-mechanism rows (机构运动) have distinct second lines; exact-duplicate runs are reported, not failed |
