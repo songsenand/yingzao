@@ -4458,3 +4458,38 @@ appearance 条目。
 需求按"展示/可视化"评估，不按"建模"扩线；`cad-art`/`render_part`/`attach_appearance`
 的投入冻结在现有围栏内；工具目录与验收链不再为 Blender 扩面。**未决**：L1/L2/appearance
 的最终去留与迁移路径。
+
+## 2026-10-25：Blender lane 移除（D 方案）——保留 GLB 侧车，不保留 bpy
+
+**触发条件：** 第 1 条（用户拍板 D）+ 第 4 条（影响工具契约、验收链与定位）。
+
+**要解决的问题：** 用户决定用增量删除（D）清理 Blender lane，同时不遮掩历史、不丢实验/决策
+记录；并明确：GLB viewer 能力若有低成本路径则保留，成本高则不做。
+
+**决策内容：**
+
+1. 删除 bpy 艺术 lane：`skills/cad-art/`、`src/host/art-render.ts`、
+   `scripts/accept-bpy-art.mjs`、`examples/art-decor-panel/`。
+2. `render_part` 回到 OpenSCAD 单帧（pre-L2 行为）：保留 `versionId/view/rotate/zoom/imgSize/section`，
+   删除 `engine/appearance/mode/renderer/material/background/samples/exposure/rig/hero/fallback`。
+3. 保留 **GLB 外观侧车**（Blender 无关）：`attach_appearance` 继续把自包含 GLB 存为
+   `appearance.glb` + `appearance.json`，`model.stl` 仍是几何真值；不做面板 GLB viewer
+   （需 client GLTFLoader + 路由 + 版本元数据，成本/需求未到）。
+4. 保留历史：`experiments/20261024_blender_bpy_integration_cost.md`、
+   `experiments/20261025_blender_color_design/`、既有 decision log 条目不删；
+   README/DESIGN/HARNESS 写明“已移除”，不写“从未发生”。
+5. 工具数仍 29（`attach_appearance` 保留），skill 数 6 → 5；`accept` 链移除
+   `accept-bpy-art.mjs`，`accept:art` 移除。
+
+**理由：** bpy 的 1.3 GB/3-7 平台/GPL/Python 3.13 绑定与工程链错配；GLB 侧车本身不依赖
+Blender，保留它既保住“颜色/材质设计作为版本数据”的低成本入口，又不把 bpy 的成本带回主路。
+面板 GLB viewer 是可选投资，不在本次清理内。
+
+**依据：** 用户决定“统一用 D”；`node scripts/accept-skill-tools.mjs`（5 skills / 29 tools）、
+`node scripts/accept-tool-contracts.mjs`、`node scripts/accept-tool-scope.mjs`、
+`node scripts/accept-tool-output.mjs`、`npm run typecheck`；full `npm run accept` 结果见本轮。
+
+**影响：** `src/host/tools.ts`（render_part/attach_appearance 描述）、`appearance.ts` 注释、
+`package.json`、`accept-skill-tools.mjs`、`skills/cad-toolbox`/`cad-modeling-measure`/
+`cad-manufacturing`、README §二.9/§六、DESIGN §33、HARNESS §6、`docs/TOOL-CONTRACTS.md`。
+**未决**：面板 GLB viewer 是否做、何时做；若做，走 client GLTFLoader + 路由，不恢复 Blender。

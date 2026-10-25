@@ -1,5 +1,8 @@
 # 实验：Blender 颜色设计 → GLB → 渲染
 
+
+> **历史记录（2026-10-25 更新）**：bpy 艺术 lane 及其文件（`skills/cad-art/`、`examples/art-decor-panel/`、`src/host/art-render.ts`）已按 D 方案移除；下面的命令与路径是当时实验的记录，不再代表当前仓库路径。移除决策见 `docs/DECISION-LOG.md` 2026-10-25。
+
 ## 目标
 
 验证一件已经在讨论的事：**Blender 本身能做颜色设计**（多材质/按面分配），

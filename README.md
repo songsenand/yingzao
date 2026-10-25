@@ -88,25 +88,10 @@ cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
    **要强制换掉锁定的依赖**：`action=install` 加 `override: true` 与 `reason: "…"`，包会进一个
    单独目录并排在 `sys.path` 最前（真的替换，不是只报告）；理由会写进安装记录、status 与
    每次验证的 provenance。
-9. **想做雕塑 / 艺术 / 装潢**：Blender 的 bpy 是**可选的用户自装**扩展——不预装、不进锁。
-   直接说“装 bpy”，Agent 会先跑预检，再用
-   `python_runtime action=install packages:["bpy==5.2.3"]` 装进用户 overlay。
-   - **代价**：约 403MB 下载 / 1GB 磁盘；本项目目标里只有 **linux-x64 / macOS arm64 /
-     Windows x64** 有 bpy 5.2.3 wheel（Linux arm64、musl、macOS Intel 没有）。
-   - **许可**：bpy 是 **GPL-3.0**，你自装、插件不分发；不要把它当成 MIT 包。
-   - **版本**：bpy 5.2.x 要求 **Python 3.13**；装错解释器会在预检阶段被拦下。
-   - **怎么用**：对**已保存版本**，Agent 直接用 `render_part` 的 `engine="bpy"`、`mode="views"`
-     或 `"hero"`，图会作为工具结果直接进上下文，不用 `read_image`（`engine="auto"` 在
-     single/views 上缺 bpy 会回退 OpenSCAD；`hero` 必须 bpy）；对没有版本的 mesh 才走
-     `run_python` + `render_studio.py`。**渲染图不是可打印证明**；要打印仍走 `import_part`
-     + `check_printability`。
-   - **颜色设计**：Blender 的材质/按面颜色可保存成 `.blend` + GLB；用
-     `attach_appearance` 把 GLB 挂到版本，再用 `render_part({appearance:true})` 出图，
-     不再统一抹成单色。STL 仍然无色；CAD 面板还没接 GLB（仍预览 STL）。
-   - **没有 bpy 但有 Blender 4.5/5.2**：同一脚本有 CLI 入口，可用
-     `blender -b -P ... -- ...`；这是“用户自备原材料”的合法路径。
-   - 样例：[examples/art-decor-panel](examples/art-decor-panel/)；完整边界见
-     [skills/cad-art/SKILL.md](dsh-cad-harness/skills/cad-art/SKILL.md)。
+9. **外观/颜色数据（GLB 侧车）**：如果你有自包含的 GLB，可以用 `attach_appearance`
+   把它挂到版本（`appearance.glb` + `appearance.json`）；`model.stl` 仍是几何真值，
+   面板仍只预览 STL。Blender/bpy 渲染 lane 已移除（见 DECISION-LOG 2026-10-25）；
+   GLB 可在外部查看器打开，面板内 viewer 尚未实现。
 
 ## 三、配置（用户可调项）
 
@@ -153,8 +138,8 @@ cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
 - 不修复坏网格：坏几何会被**拒收**并告诉你坏在哪，而不是给你一个自信的错误数字
 - **版本审批与一键回滚尚未实现**：面板可以浏览、钉住、对比版本，但没有 approve/rollback 动作
 - 导入格式：**STL / STEP / 3MF / DXF 可用；IGES 与 OBJ/OFF 不支持**（会被明确拒绝并给出转换建议）
-- **艺术/雕塑/装潢**：bpy 是用户自装的可选扩展，平台 3/7；不是核心几何 lane；
-  渲染不等于可打印
+- **外观/颜色**：GLB 只能作为侧车保存；面板不预览 GLB；Blender/bpy lane 已移除
+  （2026-10-25）
 - 3MF 必须**只含一个对象**：切片软件导出的"一盘多件"会被拒收并说明体数，请导出单个对象
 - 本地预览只读 **STL**（浏览器端解析）；STEP/3MF 请走「导入为版本」，由服务器转换
 - 不做多用户 / 权限 / 云部署 / 移动端

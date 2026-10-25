@@ -6,8 +6,9 @@
 // STL (that would make a pretty preview the source of truth).
 //
 // So a version may carry `appearance.glb` + `appearance.json` next to `model.stl`.
-// `render_part({ appearance: true })` renders that GLB with materials preserved;
-// the default stays STL. The attachment is deliberately small and self-contained:
+// There is no bpy/Blender render path: the sidecar is stored for external viewers
+// and future panel work; the panel still previews model.stl. The attachment is
+// deliberately small and self-contained:
 // a GLB v2 with at least one material, no external buffer/image URIs, and a size
 // cap. Geometry identity is NOT claimed: the GLB is checked as a container, not
 // matched against the STL's triangles.

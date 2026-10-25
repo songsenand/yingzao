@@ -35,10 +35,10 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   part. **IGES is not readable**: the tool says so with the conversion route
   (re-export STEP or STL) instead of failing mysteriously.
 - **Color is not an import format here.** GLB/OBJ are not `import_part` inputs;
-  3MF is read as geometry, and the color/material payload is not validated. For a
-  color design, keep the `.blend` source and attach a GLB with
-  `attach_appearance`; `render_part({appearance:true})` consumes it. Do not use
-  `import_part` as a color handoff.
+  3MF is read as geometry, and the color/material payload is not validated. A GLB
+  color design can be stored as a sidecar with `attach_appearance`; it is not a
+  render path and the panel still previews STL. Do not use `import_part` as a color
+  handoff.
 - **Tessellation is a choice you own for STEP/3MF.** `tolLinear` (mm) and
   `tolAngular` (rad) trade triangles for fidelity: at 0.01 mm a small bracket was
   3074 triangles, at 0.002 mm 12254, with <0.3% volume change — so the default is

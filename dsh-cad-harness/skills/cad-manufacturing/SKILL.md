@@ -27,9 +27,9 @@ A manufacturing screen answers "does this violate a declared rule". It never ans
   time budget (e.g. ≤6h) with `measure_part`'s bbox; a part that does not fit is
   split — and the new joint goes into the assembly manifest as an interface.
 - **Color is design data, not a geometric pass.** `check_printability` does not
-  check color; a colored render is not a print-color promise. If the user asks for
-  a colored appearance, keep the `.blend`/GLB in the design lane; do not turn this
-  screen into a slicer/color workflow.
+  check color; a colored render is not a print-color promise. A GLB can be stored
+  as an appearance sidecar with `attach_appearance`, but it is not a print-color
+  workflow and the panel still previews STL.
 
 ## Process profiles: a threshold is a declared claim, not a literal
 

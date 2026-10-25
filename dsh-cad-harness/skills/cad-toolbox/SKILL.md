@@ -54,7 +54,7 @@ says **which one the question belongs to**, what its boundary is, and the discip
 that keeps a green number from being read as a finished design.
 
 **This is the router, and it is the only file that names every tool.** Depth lives in
-five per-job skills — load one when the work turns to that job:
+four per-job skills — load one when the work turns to that job:
 
 | the job | the skill | load it |
 | --- | --- | --- |
@@ -62,16 +62,12 @@ five per-job skills — load one when the work turns to that job:
 | assembly contracts, datums, fit, interference | `cad-assembly` | writing a manifest or checking fit |
 | authoring, importing, measuring geometry | `cad-modeling-measure` | drawing or measuring a part |
 | can it be made, and by which processes | `cad-manufacturing` | before delivering, or any wall/threshold question |
-| sculpture, decoration, materials, a hero render | `cad-art` | before bpy/Blender work; **optional user-installed lane, not a functional-part tool** |
 
-**Art/sculpture is an optional fifth lane, not one of the seven core jobs.** Load
-`cad-art` only when the job is *how it looks* (sculpted/organic form, decorative
-panel, materials/lighting, a presentation render). It depends on a user-installed
-`bpy` (3/7 platforms, GPL-3.0), and a render is **not** a printability certificate.
-For functional parts, fits, tolerances or printability, stay on the core tools.
-Color design is Blender materials (`.blend`) → GLB → `render_studio.py --keep-materials`;
-the render color is not a print color, and native `render_part` still reads only the
-version's STL.
+**Appearance data is not geometry truth.** `attach_appearance` stores a
+self-contained GLB as `appearance.glb` + `appearance.json` next to the version; the
+panel still previews STL and there is no Blender/bpy render lane
+(DECISION-LOG 2026-10-25). Do not use a GLB as a color carrier for printability or
+as a second geometry source.
 
 **参数与最小调用**：`docs/TOOL-CONTRACTS.md` 由 `scripts/audit-tool-contracts.mjs --write` 生成，
 列出每个工具的参数（类型 / 枚举 / 默认 / 含义）与一行可跑的调用示例——**别手改**，它与代码同源，
@@ -108,7 +104,7 @@ against it, and read a reference only when the skill tells you to.
 | "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |
-| "give this version a color/material design" | `attach_appearance` → `render_part({appearance:true})` | treating STL as a color carrier; the panel still previews STL |
+| "give this version a color/material design" | `attach_appearance` (stores a GLB sidecar; no render path yet) | treating STL as a color carrier; the panel still previews STL |
 | "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
 | "the user is only *talking* about a part", no geometry yet | `create_part` | `generate_part` (it would invent a shape) |
 | "before I claim this is delivered" | `delivery_audit` | re-reading your own notes |

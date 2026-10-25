@@ -1,5 +1,8 @@
 # 实验报告：Blender bpy 接入成本
 
+
+> **历史记录（2026-10-25 更新）**：bpy 艺术 lane 及其文件（`skills/cad-art/`、`examples/art-decor-panel/`、`src/host/art-render.ts`）已按 D 方案移除；下面的命令与路径是当时实验的记录，不再代表当前仓库路径。移除决策见 `docs/DECISION-LOG.md` 2026-10-25。
+
 > 日期：2026-10-24 ｜ 环境：Linux x64 / 16 核 / 30 GB / Arch
 > 对照：系统 Blender 5.2.3 LTS；插件运行时 CPython 3.13.16；bpy 5.2.3
 >

@@ -1295,7 +1295,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - **能力开放三层原则（防矫枉过正）**：场地思路反对"收窄能力"（包工头），不反对"标注能力"（导览）——**库给能力，runtime 给执行，skill 给地图**；试金石：删掉 skill 后 LLM 读源码仍达同等效果 = 合格导览，删掉即失能力 = 伪 API
 - **STEP 实测结论**：未实现且当前内核不可实现（EXPORT_FORMATS 仅 stl/3mf/obj/off/wrl；snapshot `--help` 输出类型无 step、无 import_step）——网格 vs B-rep 的内核类别缺口，归期 = 内核可插拔（中期，首选 Replicad TS/WASM 路线）；过渡期 3MF 够用。顺带发现 snapshot 实验特性含 `python-engine`，**已试探确认可用（2026-09-28，DECISION-LOG 2026-09-28（补记）：子对象在前 API、真 Python traceback 错误反馈、datum 经 stderr print 零成本移植、36ms 法兰盘 Genus=7 精确；风险：内省可致 segfault，需稳定性冒烟；集成 ~半天 compile.ts 分支）**
 - **装配表示立场修订**：放弃"先定规模再定表示"（5/20/50 门控），采纳**代码库类比**——大型代码库 harness 能编辑，装配同理，关键在表达；判断标准改为"新会话能否只靠局部视图+查询正确修改 50 件装配中的一个零件"；A0' 装配导航实验取代原规模探针（HARNESS.md §8）
-- **内核可插拔候选**（中期）：Replicad（TS+WASM+OCCT，Node 栈内）/ Build123d / FreeCAD headless（STEP 桥）；Blender bpy（玩具艺术面按需）；Zoo KCL 为竞品参照非依赖
+- **内核可插拔候选**（中期）：Replicad（TS+WASM+OCCT，Node 栈内）/ Build123d / FreeCAD headless（STEP 桥）；Zoo KCL 为竞品参照非依赖。Blender bpy 曾在 2026-10-25 作为艺术 lane 试验，因工作流错配移除（DECISION-LOG 2026-10-25）
 
 ### v2.7（2026-09-28）装配清单 v1 交付（BOM + 可执行 ICD，docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md）
 
@@ -3711,91 +3711,37 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 
 ---
 
-## 33. 可选艺术扩展：用户自装 bpy（L1/L2，2026-10-25）
 
-**定位**：bpy **不进锁、不预装、不随插件分发**。它是场地里的一个“艺术 bay”：用户自装，
-插件提供地图、预检、渲染基线、质检交接与一个样例。平台 3/7、GPL-3.0、Python 3.13 是
-**场地条件**，不是产品缺口；L1/L2 不承诺“所有平台、所有场景、所有结果”。
+## 33. 可选外观数据：GLB 侧车（无 Blender，2026-10-25）
 
-### 33.1 组成
+**定位**：`attach_appearance` 允许把一个自包含 GLB 作为 `appearance.glb` +
+`appearance.json` 侧车挂在版本目录；`model.stl` 仍是几何真值，测量/打印/仿真/装配
+全部继续读 STL。GLB 只作为外观数据，供外部查看或未来的面板预览；**不是**第二个几何源，
+也**不是**打印颜色/切片链路。
 
-| 件 | 位置 | 作用 |
-|---|---|---|
-| skill | `skills/cad-art/SKILL.md` | 决策树：艺术/装潢 vs 精密件；安装、QC、平台/许可边界 |
-| preflight | `skills/cad-art/preflight.py` | Python 3.13 / wheel 平台 / glibc / 磁盘 / bpy / Blender CLI 探测；`--json` 输出 `status` |
-| render_studio | `skills/cad-art/render_studio.py` | bpy 模块与 `blender -b -P` 双入口；`views`（Workbench）/ `hero`（Cycles）；单位归一、材质、灯光、metadata |
-| example | `examples/art-decor-panel/` | `panel.scad` → STL → render；演示“几何留在权威源，bpy 只做材质/镜头” |
-| **L2 native** | `src/host/art-render.ts` + `render_part` | 已保存版本走原生工具：`engine=openscad\|bpy\|auto`、`mode=single\|views\|hero`；子进程、附件、错误/回退结构化 |
-| acceptance | `scripts/accept-bpy-art.mjs` | 六 skill、预检两侧、缺失 bpy 的可执行报错、bpy 64px 冒烟、CLI 双入口、L2 原生路径与回退 |
+### 33.1 边界
 
-### 33.2 执行路径
+- 没有 Blender/bpy lane：`render_part` 只走 OpenSCAD 单帧；`cad-art` skill、
+  `render_studio.py`、`preflight.py`、`accept-bpy-art.mjs`、`art-decor-panel` 已移除。
+- 没有面板 GLB 预览：CAD 面板仍只加载 `versions/vNNN/model.stl`。GLB 可以从版本目录取用，
+  或在外部查看器打开；面板 GLB viewer 未实现（成本/需求未到）。
+- `attach_appearance` 只做容器校验：GLB v2、至少一个 mesh/material、内嵌 buffer/image、
+  ≤256 MB；不校验 GLB 与 STL 的三角形一致。
+- 不接切片器、不做 3MF 打印颜色；颜色不是 `check_printability` 的输入。
 
-**L2 原生入口（已保存版本，首选）**
+### 33.2 为什么保留
 
-- `render_part({ versionId, engine:"openscad"|"bpy"|"auto", mode:"single"|"views"|"hero", ... })`
-  解析版本 STL，起一个子进程跑 `render_studio.py`，把 PNG 作为 **image attachment** 放进
-  tool result；`finalizeContent` 一次附 1/4 张图，模型不再需要 `read_image`。
-- `engine` 默认 `openscad`（保持旧行为）；`bpy` 是材质/灯光 lane；`auto` 优先 bpy，**bpy 缺失/
-  运行时未就绪**时对 `single`/`views` 回退 OpenSCAD；渲染错误不静默回退。`hero` 与 `section` 不做静默降级：hero 需要 bpy，section
-  是 OpenSCAD single 专属。
-- 结果带 `files`、`engine`、`mode`、`fallback`、`fallbackReason`、`metadata`、`warnings`；
-  产物仍在 `<project>/render/`，与 `render_part` 原路径一致。
+GLB 侧车本身不依赖 Blender，成本低，且保留了“颜色/材质设计”作为版本数据的入口；
+它不会把 bpy 的 1.3 GB、3/7 平台、GPL-3.0、Python 3.13 绑定带回主路。未来若要做面板
+GLB viewer，只需加 client GLTFLoader + 路由 + 版本元数据，不必恢复 Blender。
 
-**L1 原路径（没有版本的 raw mesh，或正在迭代的脚本）**
-
-- `run_python` + `render_studio.py`：每次调用一个独立进程，overlay 由 `pythonLaunchArgs` 附加；
-  **不把 bpy 放进常驻 worker**（bpy 把 `Saved:`/`Timer` 写到 stdout，worker 的 stdout 是
-  JSON-lines 协议；且 `import bpy` 常驻 +300–460 MB）。此路径返回 stdout，图片需 `read_image`。
-- **bpy 缺失**：`render_studio.py` 以 exit 3 结束，消息同时给出
-  `python_runtime action=install packages:["bpy==5.2.3"]` 与 `preflight.py`；不是 traceback。
-- **bpy 就绪**：`views` 四视图（Workbench，1024 约 1.3 s / 0.7 GB）用于判读；`hero`
-  （Cycles，1024/64 约 13 s / 1.3 GB，16 核）用于展示。单位默认 mm，脚本归一到米。
-- **CLI 兜底**：同一文件可用 `blender -b --factory-startup -noaudio -P <script> -- <args>`
-  跑；这是用户自备原材料（Blender 4.5/5.2）的合法路径，项目**不**自动探测/打包 Blender。
-
-### 33.3 质检边界
-
-| 交付物 | 质检 | 不质检 |
-|---|---|---|
-| 纯渲染图 | PNG 存在、尺寸/单位/引擎/metadata 一致 | 美不美、是否符合品牌/创意 |
-| 可打印雕塑/装潢 | `import_part` → `measure_part`（水密/体数/体积）→ `check_printability`（壁厚/悬垂/工艺） | 渲染图看起来像不像能打 |
-| bpy 生成的网格 | 与任何导入件同一套真值引擎；非实体默认拒收，`allowNonSolid` 需显式并打标 | “Blender 做的所以是实体” |
-
-**渲染不是可打印证明**。bpy 的 remesh/boolean 可能给出水密网格，也可能给出漂亮的非流形；
-是否可打印由真值引擎裁决。
-
-### 33.4 平台、许可、版本（都是场地条件）
-
-- bpy 5.2.3 wheel：`linux-x64-gnu`、`darwin-arm64`、`win32-x64`（另有 win-arm64，不在本项目
-  目标内）。**Linux arm64、musl、macOS Intel 没有 5.2.x wheel**。
-- macOS Intel 可用同一脚本的 CLI 入口 + 自备 Blender 4.5 LTS；Linux arm64/musl 没有官方
-  Blender 构建，走 OpenSCAD/BOSL2 或自行构建——不承诺。
-- **GPL-3.0**：bpy 由用户安装，插件不分发；`render_studio.py` 是 Apache-2.0。不要把 bpy
-  写进 NOTICE 的“随仓库分发”表。
-- **Python 3.13 only**：bpy 5.2.x 要求 `==3.13.*`；preflight 在下载前拦截 3.14。
-
-### 33.5 L2 的边界与非目标（L3–L4 是可选投资）
-
-- **L2 只解决“已保存版本”的取图/附件/错误/回退**：扩展 `render_part`，不新增工具；不解决
-  raw mesh 的版本化（仍走 `run_python`），不做 bpy 建模模板，不做 GLB/面板。
-- **颜色设计（2026-10-25）**：Blender 材质/按面颜色保存为 `.blend` + GLB；
-  `attach_appearance` 把 GLB 作为 `appearance.glb` + `appearance.json` 侧车挂到版本，
-  `render_part({appearance:true})` 用 `--keep-materials` 渲染；`model.stl` 仍是几何真值。
-  颜色按设计/预览数据推进，**不做切片/3MF 打印颜色**；CAD 面板 GLB 预览仍属 L4。
-- L3：bpy 建模模板（bmesh/修改器/remesh/布尔）、脚本+种子入库、可打印性闭环——等真实雕塑/
-  装潢项目；它引入第二个几何来源，不是 L1/L2 的渲染扩展。
-- L4：GLB 导出 + client GLTFLoader + 面板材质预览——人要在面板里看材质时再做。
-- **不为“产品完整”补平台/CLI/模板库/GLB**；这些是可选投资，不是欠债（HARNESS §6.1/§11.17）。
-
-### 33.6 验收
+### 33.3 验收
 
 ```bash
-node scripts/accept-bpy-art.mjs
-node scripts/accept-skill-tools.mjs   # 六个 skill；工具数为 29
+node scripts/accept-skill-tools.mjs   # 五个 skill；工具数为 29
+npm run typecheck
 ```
 
-无 bpy 的机器也必须通过：预检给出 `not-installed` + 安装处方，`render_studio.py` 以
-exit 3 给出可执行报错，CLI 路径（若有 Blender）仍能出图。有 bpy 的机器额外跑 64px 四视图
-冒烟并校验 PNG/metadata；L2 另测 `render_part` 的 OpenSCAD single/views、`engine=auto`
-回退、`hero` 拒绝、`files/metadata` 与 attachment 数量。有 bpy 时再跑一次三材质 GLB 的
-`--keep-materials` 颜色冒烟，断言 `materials_preserved` 与 `source_materials`。
+`attach_appearance` 的 GLB 校验与 `appearance.json` 记录仍由 `src/host/appearance.ts` 覆盖；
+`render_part` 的 OpenSCAD 单帧路径由既有验收覆盖。Blender/bpy 的历史决策见
+`docs/DECISION-LOG.md` 2026-10-24/25 与 2026-10-25 的“Blender 错配教训”。

@@ -26,7 +26,7 @@ returns: `peaks`, `layers`, `notMapped`, `partNotes`, `support`, `bands`, `note`
 
 ## `attach_appearance`
 
-Attach a self-contained GLB color/material design to a saved version. The version keeps model.stl as geometry truth; render_part({appearance:true}) can then render the GLB with materials. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.
+Attach a self-contained GLB color/material design to a saved version as a sidecar. The version keeps model.stl as geometry truth; the GLB is stored as versions/<id>/appearance.glb + appearance.json for external viewers and future panel work. There is no Blender/bpy render path and the panel still previews STL. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -361,31 +361,22 @@ returns: `recalled`, `source`, `mediaType`, `bytes`, `attached`
 
 ## `render_part`
 
-One or more images of a saved version. Default: one OpenSCAD frame, sub-second. engine="bpy" uses the user-installed Blender lane for materials/lighting (slower); mode="views" returns four views; mode="hero" is one material shot and requires bpy. engine="auto" prefers bpy and falls back to OpenSCAD for single/views. section/rotate are OpenSCAD-only.
+One image of a saved version with explicit camera control: preset view, custom rotation, zoom, optional section cut. Sub-second, so request freely.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version to render, e.g. "v003". |
-| `engine` | string (openscad \| bpy \| auto) | — | Render backend. Default openscad (the old fast path). "bpy" needs the user-installed overlay; "auto" tries bpy, then falls back for single/views. |
-| `appearance` | boolean | — | Render the version's attached appearance.glb (materials/color) instead of model.stl. Requires engine bpy (or auto with bpy installed); attach one with attach_appearance first. |
-| `mode` | string (single \| views \| hero) | — | single (default) one frame; views four; hero one material shot (bpy only). |
-| `renderer` | string (workbench \| cycles) | — | bpy renderer. Default workbench for single/views, cycles for hero. |
-| `material` | string (plastic \| metal \| clay \| none) | — | bpy material preset. Default plastic. |
-| `background` | string (light \| dark \| transparent) | — | bpy background. Default light. |
-| `samples` | integer | — | Cycles samples (default 32; hero 1024/64 is the presentation setting). |
-| `exposure` | number | — | bpy view exposure in stops (default 0). |
-| `rig` | string (sun \| area) | — | bpy hero light rig. Default sun (scale-stable); area needs per-size tuning. |
-| `view` | string | — | Preset view: front \| side \| top \| iso. Default iso. Used by single mode. |
-| `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — OpenSCAD single only. |
+| `view` | string | — | Preset view: front \| side \| top \| iso. Default iso. |
+| `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — overrides view. |
 | `zoom` | number | — | Zoom over auto-fit: 2 = twice as close, 0.5 = further out. Default 1. |
-| `imgSize` | integer | — | Image size in px (default 512; 1024 for a hero). |
-| `section` | object | — | Optional cross-section cut. OpenSCAD single only. |
+| `imgSize` | integer | — | Image size in px (default 512). |
+| `section` | object | — | Optional cross-section cut. |
 
 ```js
 render_part({ versionId: "…" })
 ```
 
-returns: `versionId`, `label`, `file`, `files`, `engine`, `appearance`, `mode`, `fallback`, `fallbackReason`, `metadata`, `warnings`
+returns: `versionId`, `label`, `file`
 
 
 ## `request_review`

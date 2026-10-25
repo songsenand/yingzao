@@ -24,8 +24,7 @@ import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { discoverWorkspaces } from './workspaces.ts';
-import { checkPrintability, measureVersion, renderStlViews, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
-import { renderArt, ArtRenderError, type ArtRenderOptions } from './art-render.ts';
+import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
 import { resolveWorkspaceFile } from './unregistered.ts';
 import {
@@ -2732,28 +2731,16 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'render_part',
     description:
-      'One or more images of a saved version. Default: one OpenSCAD frame, sub-second. ' +
-      'engine="bpy" uses the user-installed Blender lane for materials/lighting (slower); ' +
-      'mode="views" returns four views; mode="hero" is one material shot and requires bpy. ' +
-      'engine="auto" prefers bpy and falls back to OpenSCAD for single/views. section/rotate are OpenSCAD-only.',
+      'One image of a saved version with explicit camera control: preset view, custom rotation, zoom, optional section cut. Sub-second, so request freely.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version to render, e.g. "v003".' },
-      engine: { type: 'string', enum: ['openscad', 'bpy', 'auto'], description: 'Render backend. Default openscad (the old fast path). "bpy" needs the user-installed overlay; "auto" tries bpy, then falls back for single/views.' },
-      appearance: { type: 'boolean', description: 'Render the version\'s attached appearance.glb (materials/color) instead of model.stl. Requires engine bpy (or auto with bpy installed); attach one with attach_appearance first.' },
-      mode: { type: 'string', enum: ['single', 'views', 'hero'], description: 'single (default) one frame; views four; hero one material shot (bpy only).' },
-      renderer: { type: 'string', enum: ['workbench', 'cycles'], description: 'bpy renderer. Default workbench for single/views, cycles for hero.' },
-      material: { type: 'string', enum: ['plastic', 'metal', 'clay', 'none'], description: 'bpy material preset. Default plastic.' },
-      background: { type: 'string', enum: ['light', 'dark', 'transparent'], description: 'bpy background. Default light.' },
-      samples: { type: 'integer', description: 'Cycles samples (default 32; hero 1024/64 is the presentation setting).' },
-      exposure: { type: 'number', description: 'bpy view exposure in stops (default 0).' },
-      rig: { type: 'string', enum: ['sun', 'area'], description: 'bpy hero light rig. Default sun (scale-stable); area needs per-size tuning.' },
-      view: { type: 'string', description: 'Preset view: front | side | top | iso. Default iso. Used by single mode.' },
-      rotate: { type: 'array', description: 'Custom camera rotation [rx,ry,rz] degrees — OpenSCAD single only.', items: { type: 'number' } },
+      view: { type: 'string', description: 'Preset view: front | side | top | iso. Default iso.' },
+      rotate: { type: 'array', description: 'Custom camera rotation [rx,ry,rz] degrees — overrides view.', items: { type: 'number' } },
       zoom: { type: 'number', description: 'Zoom over auto-fit: 2 = twice as close, 0.5 = further out. Default 1.' },
-      imgSize: { type: 'integer', description: 'Image size in px (default 512; 1024 for a hero).' },
+      imgSize: { type: 'integer', description: 'Image size in px (default 512).' },
       section: {
         type: 'object',
-        description: 'Optional cross-section cut. OpenSCAD single only.',
+        description: 'Optional cross-section cut.',
         additionalProperties: false,
         properties: {
           axis: { type: 'string', required: true, description: 'x | y | z' },
@@ -2764,69 +2751,27 @@ export function registerCadTools(
     output: {
       schema: {
         type: 'object', additionalProperties: false,
-        properties: {
-          versionId: { type: 'string', required: true },
-          label: { type: 'string', required: true },
-          file: { type: 'string', required: true },
-          files: { type: 'array', items: { type: 'string' }, required: true },
-          engine: { type: 'string', required: true, description: 'The backend that actually ran: openscad | bpy.' },
-          appearance: { type: 'boolean', required: true, description: 'True when the source was the attached appearance.glb, not model.stl.' },
-          mode: { type: 'string', required: true },
-          fallback: { type: 'boolean', required: true, description: 'True when engine=auto chose OpenSCAD because bpy was unavailable.' },
-          fallbackReason: { type: 'string' },
-          metadata: { type: 'object', additionalProperties: true },
-          warnings: { type: 'array', items: { type: 'string' } },
-        },
+        properties: { versionId: { type: 'string', required: true }, label: { type: 'string', required: true }, file: { type: 'string', required: true } },
       },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    timeoutMs: 180_000,
+    timeoutMs: 60_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as RenderPartRequest & ArtRenderOptions;
-      const { store, cwd } = await allStores(exec);
-      let art;
-      try {
-        art = await renderArt(store.root, cwd, a);
-      } catch (error) {
-        if (error instanceof ArtRenderError) throw new Error(error.message);
-        throw error;
-      }
-      const refs = await ctx.attachments.saveImages(
-        art.images.map((image) => ({ data: image.data, mediaType: 'image/png', name: image.name })),
-      );
-      finalizeOnce = {
-        versionId: a.versionId,
-        label: art.label,
-        file: art.files[0]!,
-        refs: art.images.map((image, index) => ({ view: image.view, ref: refs[index] })),
-      };
-      const result: {
-        versionId: string;
-        label: string;
-        file: string;
-        files: string[];
-        engine: 'openscad' | 'bpy';
-        appearance: boolean;
-        mode: string;
-        fallback: boolean;
-        metadata: Record<string, Json>;
-        warnings: string[];
-        fallbackReason?: string;
-      } = {
-        versionId: a.versionId,
-        label: art.label,
-        file: art.files[0]!,
-        files: art.files,
-        engine: art.engine,
-        appearance: art.appearance,
-        mode: art.mode,
-        fallback: art.fallback,
-        metadata: art.metadata as Record<string, Json>,
-        warnings: art.warnings,
-      };
-      // `fallbackReason` is optional; an own `undefined` property is not lossless JSON.
-      if (art.fallbackReason !== undefined) result.fallbackReason = art.fallbackReason;
-      return result;
+      const a = args as RenderPartRequest & { versionId: string };
+      const { store } = await allStores(exec);
+      const { png, label } = await renderVersionFrame(store, a, `${Date.now()}`);
+      // A bounded cache, not a growing pile in the version directory: each call used to
+      // leave `versions/vNNN/inspect_<ts>.png` behind forever, and a version is supposed to
+      // hold the artifacts of its own creation, not every look anybody took at it
+      // (2026-10-23, E4 follow-up). Same version + same camera => same path, overwritten.
+      const renderDir = join(store.root, 'render');
+      await mkdir(renderDir, { recursive: true });
+      const pngPath = join(renderDir, `${safeArtifactName(`${a.versionId}-${label}`) ?? `${a.versionId}-${label}`}.png`);
+      await writeFile(pngPath, png);
+      const [ref] = await ctx.attachments.saveImages([{ data: png, mediaType: 'image/png', name: `render-${a.versionId}` }]);
+      pendingRenderRefs.set(`${a.versionId}:${label}`, [{ view: label, ref }]);
+      finalizeOnce = { versionId: a.versionId, label, file: pngPath, refs: [{ view: label, ref }] };
+      return { versionId: a.versionId, label, file: pngPath };
     },
     finalizeContent(_exec, result) {
       const value = (result as { value?: { versionId: string; label: string } }).value;
@@ -2846,7 +2791,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'attach_appearance',
     description:
-      'Attach a self-contained GLB color/material design to a saved version. The version keeps model.stl as geometry truth; render_part({appearance:true}) can then render the GLB with materials. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.',
+      'Attach a self-contained GLB color/material design to a saved version as a sidecar. The version keeps model.stl as geometry truth; the GLB is stored as versions/<id>/appearance.glb + appearance.json for external viewers and future panel work. There is no Blender/bpy render path and the panel still previews STL. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version to attach the appearance to, e.g. "v003".' },
       file: { type: 'string', required: true, description: 'Workspace path to a self-contained .glb (GLB v2, embedded buffers/images).' },
