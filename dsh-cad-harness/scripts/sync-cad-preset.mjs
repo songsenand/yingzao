@@ -6,7 +6,8 @@
 // are registered globally by this bundle and merely stop being hidden for
 // sessions that name it (see src/host/tool-scope.ts). So its composition is the
 // standard one, plus one row of our own: a second skill-discovery provider
-// pointed at this repository's `skills/` directory.
+// pointed at this repository's `skills/` directory, and a short workflow
+// paragraph injected into the persona prefix.
 //
 // Why the extra row matters: skills are discovered per preset LAYER, so a CAD
 // skill registered here is visible to CAD sessions only. That is what lets the
@@ -27,7 +28,8 @@
 //   node scripts/sync-cad-preset.mjs          # regenerate
 //   node scripts/sync-cad-preset.mjs --check   # fail if a regeneration would change it
 //
-// `presets/cad/preset.yml` (display name/description/order) is authored by hand
+// `presets/cad/preset.yml` (display name/description/order) and
+// `presets/cad/workflow.md` (preset-level instruction) are authored by hand
 // and never touched; everything else is generated.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -95,6 +97,37 @@ body.splice(1, 0,
   `        name: ${jsonQuote(meta.name)}`,
   `        description: ${jsonQuote(meta.description)}`,
 );
+
+// A short preset-level instruction, injected into the persona prefix. It is
+// paid on every CAD session, so keep it to a few sentences. Authored in
+// presets/cad/workflow.md, not here.
+const WORKFLOW = join(ROOT, 'presets', 'cad', 'workflow.md');
+const workflow = existsSync(WORKFLOW) ? readFileSync(WORKFLOW, 'utf8').trim() : '';
+if (workflow) {
+  const personaIdx = body.findIndex((line) => line.trim() === '- id: persona');
+  if (personaIdx < 0) {
+    console.error('sync-cad-preset: standard preset has no persona row — cannot inject workflow.');
+    process.exit(1);
+  }
+  let prefixIdx = -1;
+  for (let i = personaIdx + 1; i < body.length; i++) {
+    if (/^\s+- id: /.test(body[i])) break;
+    if (/^\s+prefix:\s+/.test(body[i])) { prefixIdx = i; break; }
+  }
+  const match = prefixIdx >= 0 ? /^(\s*)prefix:\s*(.*)$/.exec(body[prefixIdx]) : null;
+  const base = match?.[2]?.trim() ?? '';
+  if (!match || !base || base === '|' || base === '>') {
+    console.error('sync-cad-preset: persona prefix is not a one-line scalar — refusing to guess.');
+    process.exit(1);
+  }
+  const indent = match[1];
+  body.splice(prefixIdx, 1,
+    `${indent}prefix: |`,
+    `${indent}  ${base}`,
+    '',
+    ...workflow.split('\n').map((line) => line ? `${indent}  ${line}` : ''),
+  );
+}
 
 // Append the CAD-only skill root as one more entry of the trailing plugins
 // list (the plugins list is the last thing in the standard patch body).
