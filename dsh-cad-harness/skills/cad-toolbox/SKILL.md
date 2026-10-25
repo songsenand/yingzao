@@ -1,6 +1,6 @@
 ---
 name: cad-toolbox
-description: "Use when a task involves 3D geometry at all — designing or changing a part, importing an STL, checking whether parts fit together, verifying a mechanism moves, testing fluid flow, or measuring a model. This is the ROUTER: the full tool map (which tool answers which question and what each one cannot answer), the conventions every CAD tool assumes, and the delivery discipline. Load it first; it points at four per-job skills for depth."
+description: "Use when a task involves 3D geometry at all — designing or changing a part, importing an STL, checking whether parts fit together, verifying a mechanism moves, testing fluid flow, or measuring a model. This is the ROUTER: the full tool map (which tool answers which question and what each one cannot answer), the conventions every CAD tool assumes, and the delivery discipline. Load it first; it points at five per-job skills for depth."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
@@ -47,14 +47,14 @@ group, not the tool — and the group tells you what the output is allowed to me
 **默认路径**：想知道**往哪看** → `analyze`（一次调用给出 |u| 风险图 + 峰表；`attention.json`
 的 `fused` 层就是面板画的那张图）；要**交付** → `preflight`（一次调用跑必跑序列，未编排的步骤
 会带原因报出来）→ 有强度/运动主张才 `simulate_*` → `delivery_audit({claims})`。任何一步报
-`difficult` / `unevaluable` 时，**回到本文件查该组的原子工具**，或加载对应的四本深度 skill。
+`difficult` / `unevaluable` 时，**回到本文件查该组的原子工具**，或加载对应的深度 skill。
 
 Seven jobs follow; the tool map below is the authority on which tool answers which. The tool descriptions say what each one *is*; this file
 says **which one the question belongs to**, what its boundary is, and the discipline
 that keeps a green number from being read as a finished design.
 
 **This is the router, and it is the only file that names every tool.** Depth lives in
-four per-job skills — load one when the work turns to that job:
+five per-job skills — load one when the work turns to that job:
 
 | the job | the skill | load it |
 | --- | --- | --- |
@@ -62,6 +62,13 @@ four per-job skills — load one when the work turns to that job:
 | assembly contracts, datums, fit, interference | `cad-assembly` | writing a manifest or checking fit |
 | authoring, importing, measuring geometry | `cad-modeling-measure` | drawing or measuring a part |
 | can it be made, and by which processes | `cad-manufacturing` | before delivering, or any wall/threshold question |
+| sculpture, decoration, materials, a hero render | `cad-art` | before bpy/Blender work; **optional user-installed lane, not a functional-part tool** |
+
+**Art/sculpture is an optional fifth lane, not one of the seven core jobs.** Load
+`cad-art` only when the job is *how it looks* (sculpted/organic form, decorative
+panel, materials/lighting, a presentation render). It depends on a user-installed
+`bpy` (3/7 platforms, GPL-3.0), and a render is **not** a printability certificate.
+For functional parts, fits, tolerances or printability, stay on the core tools.
 
 **参数与最小调用**：`docs/TOOL-CONTRACTS.md` 由 `scripts/audit-tool-contracts.mjs --write` 生成，
 列出每个工具的参数（类型 / 枚举 / 默认 / 含义）与一行可跑的调用示例——**别手改**，它与代码同源，

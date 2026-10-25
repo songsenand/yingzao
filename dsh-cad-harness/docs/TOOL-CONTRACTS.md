@@ -344,22 +344,30 @@ returns: `recalled`, `source`, `mediaType`, `bytes`, `attached`
 
 ## `render_part`
 
-One image of a saved version with explicit camera control: preset view, custom rotation, zoom, optional section cut. Sub-second, so request freely.
+One or more images of a saved version. Default: one OpenSCAD frame, sub-second. engine="bpy" uses the user-installed Blender lane for materials/lighting (slower); mode="views" returns four views; mode="hero" is one material shot and requires bpy. engine="auto" prefers bpy and falls back to OpenSCAD for single/views. section/rotate are OpenSCAD-only.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version to render, e.g. "v003". |
-| `view` | string | — | Preset view: front \| side \| top \| iso. Default iso. |
-| `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — overrides view. |
+| `engine` | string (openscad \| bpy \| auto) | — | Render backend. Default openscad (the old fast path). "bpy" needs the user-installed overlay; "auto" tries bpy, then falls back for single/views. |
+| `mode` | string (single \| views \| hero) | — | single (default) one frame; views four; hero one material shot (bpy only). |
+| `renderer` | string (workbench \| cycles) | — | bpy renderer. Default workbench for single/views, cycles for hero. |
+| `material` | string (plastic \| metal \| clay \| none) | — | bpy material preset. Default plastic. |
+| `background` | string (light \| dark \| transparent) | — | bpy background. Default light. |
+| `samples` | integer | — | Cycles samples (default 32; hero 1024/64 is the presentation setting). |
+| `exposure` | number | — | bpy view exposure in stops (default 0). |
+| `rig` | string (sun \| area) | — | bpy hero light rig. Default sun (scale-stable); area needs per-size tuning. |
+| `view` | string | — | Preset view: front \| side \| top \| iso. Default iso. Used by single mode. |
+| `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — OpenSCAD single only. |
 | `zoom` | number | — | Zoom over auto-fit: 2 = twice as close, 0.5 = further out. Default 1. |
-| `imgSize` | integer | — | Image size in px (default 512). |
-| `section` | object | — | Optional cross-section cut. |
+| `imgSize` | integer | — | Image size in px (default 512; 1024 for a hero). |
+| `section` | object | — | Optional cross-section cut. OpenSCAD single only. |
 
 ```js
 render_part({ versionId: "…" })
 ```
 
-returns: `versionId`, `label`, `file`
+returns: `versionId`, `label`, `file`, `files`, `engine`, `mode`, `fallback`, `fallbackReason`, `metadata`, `warnings`
 
 
 ## `request_review`

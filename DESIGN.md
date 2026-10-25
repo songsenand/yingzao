@@ -3697,3 +3697,89 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
   `python_runtime` 状态如实披露——**缺包必须看起来像设计，而不是像坏包**。
 - **"就绪"必须可被证伪**：除标记匹配外，venv 必须**真的 import 一遍锁定包**才算 current；
   `python_runtime` 报 `missingPackages`，非空即 `state: failed`。
+
+---
+
+## 33. 可选艺术扩展：用户自装 bpy（L1/L2，2026-10-25）
+
+**定位**：bpy **不进锁、不预装、不随插件分发**。它是场地里的一个“艺术 bay”：用户自装，
+插件提供地图、预检、渲染基线、质检交接与一个样例。平台 3/7、GPL-3.0、Python 3.13 是
+**场地条件**，不是产品缺口；L1/L2 不承诺“所有平台、所有场景、所有结果”。
+
+### 33.1 组成
+
+| 件 | 位置 | 作用 |
+|---|---|---|
+| skill | `skills/cad-art/SKILL.md` | 决策树：艺术/装潢 vs 精密件；安装、QC、平台/许可边界 |
+| preflight | `skills/cad-art/preflight.py` | Python 3.13 / wheel 平台 / glibc / 磁盘 / bpy / Blender CLI 探测；`--json` 输出 `status` |
+| render_studio | `skills/cad-art/render_studio.py` | bpy 模块与 `blender -b -P` 双入口；`views`（Workbench）/ `hero`（Cycles）；单位归一、材质、灯光、metadata |
+| example | `examples/art-decor-panel/` | `panel.scad` → STL → render；演示“几何留在权威源，bpy 只做材质/镜头” |
+| **L2 native** | `src/host/art-render.ts` + `render_part` | 已保存版本走原生工具：`engine=openscad\|bpy\|auto`、`mode=single\|views\|hero`；子进程、附件、错误/回退结构化 |
+| acceptance | `scripts/accept-bpy-art.mjs` | 六 skill、预检两侧、缺失 bpy 的可执行报错、bpy 64px 冒烟、CLI 双入口、L2 原生路径与回退 |
+
+### 33.2 执行路径
+
+**L2 原生入口（已保存版本，首选）**
+
+- `render_part({ versionId, engine:"openscad"|"bpy"|"auto", mode:"single"|"views"|"hero", ... })`
+  解析版本 STL，起一个子进程跑 `render_studio.py`，把 PNG 作为 **image attachment** 放进
+  tool result；`finalizeContent` 一次附 1/4 张图，模型不再需要 `read_image`。
+- `engine` 默认 `openscad`（保持旧行为）；`bpy` 是材质/灯光 lane；`auto` 优先 bpy，**bpy 缺失/
+  运行时未就绪**时对 `single`/`views` 回退 OpenSCAD；渲染错误不静默回退。`hero` 与 `section` 不做静默降级：hero 需要 bpy，section
+  是 OpenSCAD single 专属。
+- 结果带 `files`、`engine`、`mode`、`fallback`、`fallbackReason`、`metadata`、`warnings`；
+  产物仍在 `<project>/render/`，与 `render_part` 原路径一致。
+
+**L1 原路径（没有版本的 raw mesh，或正在迭代的脚本）**
+
+- `run_python` + `render_studio.py`：每次调用一个独立进程，overlay 由 `pythonLaunchArgs` 附加；
+  **不把 bpy 放进常驻 worker**（bpy 把 `Saved:`/`Timer` 写到 stdout，worker 的 stdout 是
+  JSON-lines 协议；且 `import bpy` 常驻 +300–460 MB）。此路径返回 stdout，图片需 `read_image`。
+- **bpy 缺失**：`render_studio.py` 以 exit 3 结束，消息同时给出
+  `python_runtime action=install packages:["bpy==5.2.3"]` 与 `preflight.py`；不是 traceback。
+- **bpy 就绪**：`views` 四视图（Workbench，1024 约 1.3 s / 0.7 GB）用于判读；`hero`
+  （Cycles，1024/64 约 13 s / 1.3 GB，16 核）用于展示。单位默认 mm，脚本归一到米。
+- **CLI 兜底**：同一文件可用 `blender -b --factory-startup -noaudio -P <script> -- <args>`
+  跑；这是用户自备原材料（Blender 4.5/5.2）的合法路径，项目**不**自动探测/打包 Blender。
+
+### 33.3 质检边界
+
+| 交付物 | 质检 | 不质检 |
+|---|---|---|
+| 纯渲染图 | PNG 存在、尺寸/单位/引擎/metadata 一致 | 美不美、是否符合品牌/创意 |
+| 可打印雕塑/装潢 | `import_part` → `measure_part`（水密/体数/体积）→ `check_printability`（壁厚/悬垂/工艺） | 渲染图看起来像不像能打 |
+| bpy 生成的网格 | 与任何导入件同一套真值引擎；非实体默认拒收，`allowNonSolid` 需显式并打标 | “Blender 做的所以是实体” |
+
+**渲染不是可打印证明**。bpy 的 remesh/boolean 可能给出水密网格，也可能给出漂亮的非流形；
+是否可打印由真值引擎裁决。
+
+### 33.4 平台、许可、版本（都是场地条件）
+
+- bpy 5.2.3 wheel：`linux-x64-gnu`、`darwin-arm64`、`win32-x64`（另有 win-arm64，不在本项目
+  目标内）。**Linux arm64、musl、macOS Intel 没有 5.2.x wheel**。
+- macOS Intel 可用同一脚本的 CLI 入口 + 自备 Blender 4.5 LTS；Linux arm64/musl 没有官方
+  Blender 构建，走 OpenSCAD/BOSL2 或自行构建——不承诺。
+- **GPL-3.0**：bpy 由用户安装，插件不分发；`render_studio.py` 是 Apache-2.0。不要把 bpy
+  写进 NOTICE 的“随仓库分发”表。
+- **Python 3.13 only**：bpy 5.2.x 要求 `==3.13.*`；preflight 在下载前拦截 3.14。
+
+### 33.5 L2 的边界与非目标（L3–L4 是可选投资）
+
+- **L2 只解决“已保存版本”的取图/附件/错误/回退**：扩展 `render_part`，不新增工具；不解决
+  raw mesh 的版本化（仍走 `run_python`），不做 bpy 建模模板，不做 GLB/面板。
+- L3：bpy 建模模板（bmesh/修改器/remesh/布尔）、脚本+种子入库、可打印性闭环——等真实雕塑/
+  装潢项目；它引入第二个几何来源，不是 L1/L2 的渲染扩展。
+- L4：GLB 导出 + client GLTFLoader + 面板材质预览——人要在面板里看材质时再做。
+- **不为“产品完整”补平台/CLI/模板库/GLB**；这些是可选投资，不是欠债（HARNESS §6.1/§11.17）。
+
+### 33.6 验收
+
+```bash
+node scripts/accept-bpy-art.mjs
+node scripts/accept-skill-tools.mjs   # 六个 skill；工具数仍为 28
+```
+
+无 bpy 的机器也必须通过：预检给出 `not-installed` + 安装处方，`render_studio.py` 以
+exit 3 给出可执行报错，CLI 路径（若有 Blender）仍能出图。有 bpy 的机器额外跑 64px 四视图
+冒烟并校验 PNG/metadata；L2 另测 `render_part` 的 OpenSCAD single/views、`engine=auto`
+回退、`hero` 拒绝、`files/metadata` 与 attachment 数量。

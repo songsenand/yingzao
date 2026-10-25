@@ -1,0 +1,10 @@
+00:00.503  render           | Saved: '.tmp-bpy-cost/stdout-check3/front.png'
+VIEW front 0.21s
+00:00.555  render           | Saved: '.tmp-bpy-cost/stdout-check3/side.png'
+VIEW side 0.05s
+00:00.607  render           | Saved: '.tmp-bpy-cost/stdout-check3/top.png'
+VIEW top 0.05s
+00:00.668  render           | Saved: '.tmp-bpy-cost/stdout-check3/iso.png'
+VIEW iso 0.06s
+BATCH_TOTAL 0.41s engine=BLENDER_WORKBENCH size=256 mode=views
+Timer 'STL Import' took 5.27 ms

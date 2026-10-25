@@ -1,0 +1,189 @@
+{
+  "measured_at": "2026-10-24T16:16:00+08:00",
+  "host": {
+    "os": "Arch Linux x64",
+    "cpu_cores": 16,
+    "ram_gb": 30,
+    "system_blender": "5.2.3 LTS (/usr/bin/blender, 116 MB binary + 252 MB /usr/share/blender)",
+    "project_runtime": "CPython 3.13.16 (python-build-standalone, $DSH_HOME/cad/runtime)"
+  },
+  "bpy": {
+    "version": "5.2.3",
+    "requires_python": "==3.13.*",
+    "license_metadata": "GPL-3.0",
+    "wheel": "bpy-5.2.3-cp313-cp313-manylinux_2_28_x86_64.whl",
+    "wheel_bytes": 402843256,
+    "wheel_mib": 384.2,
+    "download_seconds_aliyun": 30.25,
+    "download_mib_per_s": 12.7,
+    "install_seconds_incl_deps": 69.5,
+    "installed_bpy_mib": 883,
+    "isolated_venv_mib": 1009,
+    "import_seconds": [
+      0.37,
+      0.48
+    ],
+    "import_maxrss_mib": [
+      343,
+      461
+    ],
+    "runtime_deps": [
+      "cattrs",
+      "cython",
+      "numpy<3.0,>=2.2",
+      "requests",
+      "zstandard"
+    ],
+    "transitive_deps_observed": [
+      "attrs",
+      "certifi",
+      "charset_normalizer",
+      "idna",
+      "typing_extensions",
+      "urllib3"
+    ]
+  },
+  "existing_runtime_disk": {
+    "venv_mib": 1434,
+    "cache_mib": 613,
+    "interpreter_mib": 109,
+    "total_mib": 2156
+  },
+  "renders": {
+    "sample": "examples/microscope4/cad-data/runs/r024/parts/整机.stl",
+    "bpy_workbench_512_single": {
+      "wall_s": 0.76,
+      "render_s": 0.26,
+      "maxrss_mib": 672
+    },
+    "bpy_workbench_1024_single": {
+      "wall_s": 0.81,
+      "render_s": 0.31,
+      "maxrss_mib": 743
+    },
+    "bpy_workbench_1024_4views": {
+      "wall_s": [
+        1.2,
+        1.33
+      ],
+      "batch_s": [
+        0.79,
+        0.82
+      ],
+      "maxrss_mib": [
+        657,
+        684
+      ]
+    },
+    "bpy_cycles_512_32_single": {
+      "wall_s": 1.4,
+      "render_s": 0.92,
+      "maxrss_mib": 766
+    },
+    "bpy_cycles_512_32_4views": {
+      "wall_s": 4.42,
+      "batch_s": 3.89,
+      "maxrss_mib": 737
+    },
+    "bpy_cycles_1024_64_single": {
+      "wall_s": 4.77,
+      "render_s": 4.28,
+      "maxrss_mib": 1409
+    },
+    "bpy_cycles_1024_64_art": {
+      "wall_s": 13.32,
+      "batch_s": 12.82,
+      "maxrss_mib": 1286
+    },
+    "cli_workbench_1024_4views": {
+      "wall_s": 1.32,
+      "batch_s": 0.77,
+      "maxrss_mib": 858
+    },
+    "cli_cycles_512_32_4views": {
+      "wall_s": 4.35,
+      "batch_s": 3.82,
+      "maxrss_mib": 858
+    },
+    "cli_cycles_1024_64_art": {
+      "wall_s": 13.07,
+      "batch_s": 12.48,
+      "maxrss_mib": 1353
+    },
+    "cli_eevee_512_single": {
+      "wall_s": 12.41,
+      "render_s": 11.7,
+      "cpu_user_s": 71.06
+    },
+    "openscad_512_fresh_xvfb": {
+      "wall_s": 3.24,
+      "maxrss_mib": 150,
+      "note": "includes xvfb-run startup; project uses a shared Xvfb and documents ~300 ms/frame"
+    },
+    "cli_cycles_1024_64_single": {
+      "wall_s": 5.3,
+      "render_s": 4.67,
+      "maxrss_mib": 1356
+    }
+  },
+  "worker": {
+    "baseline_rss_mib": 36,
+    "after_bpy_import_rss_mib": 461,
+    "stdout_conflict": "bpy.ops.render.render writes 'Saved:'/'Timer' lines to stdout; the resident worker reserves stdout for JSON frames"
+  },
+  "platforms": {
+    "project_targets": [
+      "linux-x64-gnu",
+      "linux-arm64-gnu",
+      "linux-x64-musl",
+      "linux-arm64-musl",
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64"
+    ],
+    "bpy_5_2_3_wheels": [
+      "macosx_11_0_arm64",
+      "manylinux_2_28_x86_64",
+      "win_amd64",
+      "win_arm64"
+    ],
+    "bpy_supported_project_targets": [
+      "linux-x64-gnu",
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "blender_cli_5_2_3_official": [
+      "linux-x64",
+      "macos-arm64",
+      "windows-x64",
+      "windows-arm64"
+    ],
+    "blender_cli_4_5_official": [
+      "linux-x64",
+      "macos-arm64",
+      "macos-x64",
+      "windows-x64",
+      "windows-arm64"
+    ],
+    "glibc_floor": "bpy wheel is manylinux_2_28 (glibc >= 2.28); pbs interpreter itself targets an older glibc"
+  },
+  "engineering_estimate_person_days": {
+    "bpy_in_lock": [
+      7,
+      10
+    ],
+    "bpy_overlay_skill": [
+      0.5,
+      1
+    ],
+    "blender_cli_tool": [
+      4,
+      6
+    ],
+    "three_js_headless": [
+      5,
+      7
+    ],
+    "note": "estimate from code surface, not implemented; see report"
+  }
+}

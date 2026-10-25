@@ -48,14 +48,14 @@ const contract = new Map();
 const toolNames = new Set(contract.keys());
 check(toolNames.size === 28, 'the contract sheet lists 28 tools', String(toolNames.size));
 
-// ── the map: the five skills ───────────────────────────────────────────────
+// ── the map: the six skills ────────────────────────────────────────────────
 const skills = [];
 for (const dir of await readdir(join(ROOT, 'skills'))) {
   try {
     skills.push({ name: dir, text: await readFile(join(ROOT, 'skills', dir, 'SKILL.md'), 'utf8') });
   } catch { /* not a skill dir */ }
 }
-check(skills.length === 5, 'five skills are present', String(skills.length));
+check(skills.length === 6, 'six skills are present', String(skills.length));
 const all = skills.map((s) => s.text).join('\n');
 
 // 1) every tool-like identifier the skills name is registered
@@ -87,7 +87,8 @@ const PARAM_CLAIMS = [
   ['check_printability', 'mode'], ['check_printability', 'profileIds'],
   ['simulate_stress', 'mode'], ['import_part', 'tolLinear'], ['import_part', 'tolAngular'],
   ['generate_part', 'views'], ['delivery_audit', 'claims'], ['delivery_audit', 'exempt'],
-  ['measure_part', 'axis'], ['measure_part', 'axisVector'], ['measure_gap', 'aDatum'],
+  ['measure_part', 'axis'], ['measure_part', 'axisVector'], ['render_part', 'engine'], ['render_part', 'mode'],
+  ['render_part', 'material'], ['measure_gap', 'aDatum'],
   ['measure_gap', 'bOn'], ['simulate_motion', 'cycles'], ['analyze', 'profileIds'],
 ];
 for (const [tool, param] of PARAM_CLAIMS) {
@@ -100,7 +101,8 @@ const FIELD_CLAIMS = [
   ['simulate_physics', 'jointViolations'], ['simulate_motion', 'initialJointGaps'],
   ['simulate_motion', 'jointToleranceMm'], ['simulate_fluid', 'metrics'],
   ['simulate_lbm', 'metrics'], ['measure_gap', 'frame'], ['measure_part', 'bodies'],
-  ['measure_part', 'bodySizes'], ['measure_part', 'bodyVerdict'], ['delivery_audit', 'judgement'],
+  ['measure_part', 'bodySizes'], ['measure_part', 'bodyVerdict'], ['render_part', 'files'],
+  ['render_part', 'fallback'], ['delivery_audit', 'judgement'],
 ];
 for (const [tool, field] of FIELD_CLAIMS) {
   check(contract.get(tool)?.returns.has(field) === true, `${tool} returns \`${field}\``, tool);

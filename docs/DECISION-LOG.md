@@ -4224,3 +4224,128 @@ llm 注意力需要被引导才能发现问题，但用户注意力被引导却�
 虚影）、`src/client/index.ts`（未读数、取消自动弹）、新 `docs/UI-EXECUTION.md`（施工单）、
 `docs/UI-PLAN.md`（施工顺序以执行单为准）。**未决参数**：近期划几版（建议 5）、
 旧版上是否允许跑仿真（建议允许但需显式声明）、工具名（`request_review`）。
+
+## 2026-10-24：场地原则明确化——不承诺产品缺口，按方法分级支持
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响定位、支持边界、文档与 bpy 决策）。
+
+**要解决的问题：** 评估 bpy 接入时，讨论反复滑回“产品缺口 / 平台覆盖 / 功能完整”的判据。
+用户明确：本项目是**场地**，不是产品；我们搭厂房、提供水电路三通、对交付物质检；用户可请求
+原材料，也可自备；我们是创意孵化器、设计产业园，不交付具体产品；对某些方式（如 Blender）
+提供更高程度的支持，但不包打一切，**也不承诺没有产品缺口**。
+
+**决策内容：**
+
+1. **定位判据从“产品功能表”换成“场地可用性 + 支持程度”**：新增能力先问三通（运行时 /
+   几何与验证引擎 / 会话与产物通道）、质检、原材料、支持分级，而不是“竞品有没有 / 功能表缺不缺”。
+2. **不承诺没有产品缺口**：缺口是场地的当前条件，不是产品债；缺什么、哪条路不通，明确标出
+   并给替代路径；是否补由**真实任务与场地投资回报**裁决，不按“产品应该完整”自动补。
+3. **分级支持**：任意库可经 overlay 自装（L0）；对 Blender bpy 这类被点名的方法，提供 skill
+   地图、安装预检、渲染基线、验收、样例（L1）；工具化 / 模板库 / GLB 面板是可选投资
+   （L2–L4），不是产品欠债。**支持程度是场地的投资选择，不是产品承诺。**
+4. **质检边界**：对交付物做可证伪的质检（水密 / 壁厚 / 干涉 / 可打印性 / 数据一致性），
+   **不判断创意好坏**；艺术渲染图不自动等于可打印。
+5. **原材料边界**：提供模板 / 示例 / 基线脚本，也允许用户自备几何 / 脚本 / 库；场地不强制
+   材料来源，只要求能进场、能验收。
+6. **bpy 不预装、不进锁、不随插件分发**；用户需要时通过 `python_runtime action=install`
+   自装；平台 / 许可 / 版本边界明说（bpy 5.2.3 仅 3/7 目标有 wheel、GPL-3.0、要求 Python 3.13）。
+
+**理由：** 产品思维会把每个缺口变成“必须补齐”的产品债，导致范围蔓延与平台承诺；场地思维把
+缺口变成“当前条件”，按真实任务与投资回报决定是否补。Blender 是“某些方式”之一：值得给它
+更高的支持（地图 / 三通 / 质检 / 样例），但不值得为它承诺所有平台与所有结果。
+
+**依据：** `HARNESS.md` §6.1 / §11.17；`experiments/20261024_blender_bpy_integration_cost.md`
+（bpy 5.2.3 实测：403 MB wheel / 883 MB 安装 / 3-7 平台 / GPL-3.0 / worker stdout 冲突；
+L1 3–4 人日，L2+ 可选）。用户原话：「我们依旧是提供场地……我们是创意的孵化器，是设计的
+产业园，唯独不交付具体产品」「我并不承诺没有产品缺口」。
+
+**影响：** `HARNESS.md`（v2.3）；后续 bpy 艺术 lane 按 L1 评估，不按“产品缺口”补平台 / CLI /
+模板库；README / DESIGN / skill 的支持分级话术；本决策。**未决**：L1 是否落地、L2/L3 是否做，
+待真实任务；L1 的 3–4 人日只是估算，不构成实施承诺。
+
+## 2026-10-25：bpy 艺术 lane L1 落地——地图 / 预检 / 基线 / 样例 / 验收
+
+**触发条件：** 第 1 条（用户拍板“先按照 L1 开工”）+ 第 4 条（落在 skill、脚本、示例、验收、
+README/DESIGN 上）。
+
+**要解决的问题：** 2026-10-24 的场地原则已明确“bpy 用户自装、按方法分级支持”，但“允许装”
+不等于“被支持”：LLM 没有地图，用户会在 403 MB 下载后才失败，第一张材质图可能过曝，
+而“渲染图”可能被误当成可打印证明。L1 要把这四个洞补上，同时不把 bpy 写进锁。
+
+**决策内容（L1 范围，L2–L4 不在内）：**
+
+1. **skill** `skills/cad-art/SKILL.md`：艺术/装潢 vs 精密件的决策树；预检/安装/渲染/QC/
+   平台/许可/版本边界；明确“渲染 ≠ 可打印”。
+2. **preflight** `preflight.py`：Python 3.13、bpy wheel 平台、glibc ≥2.28、磁盘、bpy 导入、
+   Blender CLI 探测；`--json` 输出 status；`not-installed` 附精确安装处方，非 3.13 在下载前拦截。
+3. **render_studio** `render_studio.py`：bpy 模块与 `blender -b -P` 双入口；`views`
+   （Workbench，判读）与 `hero`（Cycles，展示）；mm→m 单位归一、材质、sun/area 灯光、
+   metadata；默认 sun 灯光跨尺寸曝光稳定。
+4. **执行路径**：走现有 `run_python`（每调用一进程，overlay 附加），**不把 bpy 放进常驻
+   worker**（stdout 协议 + 常驻内存）；bpy 缺失时 exit 3 并给出安装/预检建议。
+5. **样例** `examples/art-decor-panel/`：`panel.scad` → STL → render；几何留在权威源，
+   bpy 只做材质/镜头；附 watertight/genus/体积 sanity 与 hero。
+6. **验收** `scripts/accept-bpy-art.mjs`：六 skill、预检两侧、缺失 bpy 的可执行报错、
+   bpy 64px 四视图冒烟、CLI 双入口；`accept-skill-tools` 的 skill 数从 5 改为 6。
+7. **不动锁、不改 worker、不新增工具**；`README` 增加用户可见的“艺术扩展”入口，
+   `DESIGN` §33 记当前设计。
+
+**理由：** 这是“更高程度的支持”而不是“产品完整”：地图 + 预检 + 基线 + QC + 一个样例，
+足以让需要 bpy 的用户进场，又不把 1.3 GB、4/7 平台承诺和 GPL 分发带给所有人。L1 用
+`run_python` 的独立进程，避开了 worker 的 stdout 冲突；平台 3/7 与 GPL-3.0 作为场地条件
+明说，不按产品缺口补 CLI/arm64/musl。
+
+**依据：** `HARNESS.md` §6.1/§11.17；`experiments/20261024_blender_bpy_integration_cost.md`
+（403 MB/883 MB/3-7/GPL/worker stdout；L1 3–4 人日）；本轮验收：
+`node scripts/accept-bpy-art.mjs` 在无 bpy（系统 3.14 + 运行时 3.13，`unsupported-python` /
+`not-installed`）与 bpy overlay（`DSH_CAD_USER_SITE` 指向 5.2.3 site-packages，64px 四视图 +
+metadata）两侧通过；`node scripts/accept-skill-tools.mjs` 六 skill / 28 工具通过；
+`npm run typecheck` 通过；Blender CLI 5.2.3 双入口出图通过。
+
+**影响：** `skills/cad-art/`、`skills/cad-toolbox/SKILL.md`（router 指向）、
+`examples/art-decor-panel/`、`scripts/accept-bpy-art.mjs`、`scripts/accept-skill-tools.mjs`
+（5→6）、`package.json`（`accept:art` 与 accept 链）、`README.md`、`DESIGN.md` §33。
+**未决/非目标**：L2 `render_part engine=bpy`、L3 bpy 建模模板/版本化、L4 GLB/面板；
+均待真实任务与投资回报，不作为欠债。
+
+## 2026-10-25：艺术 lane L2 落地——render_part 原生后端，而非新增工具
+
+**触发条件：** 第 1 条（用户拍板“按照这个方案做 L2”）+ 第 4 条（改 render_part、工具契约、skill、
+acceptance）。
+
+**要解决的问题：** L1 的 `run_python` + `read_image` 每张图两次调用，图片不进附件通道，bpy 的
+`Saved:`/MESA 输出要靠模型从 stdout 里猜路径，错误/超时/回退都不是结构化的。真实 art 迭代
+（尤其四视图）会出现“渲染完等于没渲染”或“模型看不到图”。L2 要把这段取图/附件/错误/回退补成
+一个原生工具，同时不动锁、不动 worker、不新增工具。
+
+**决策内容：**
+
+1. **扩展 `render_part`，不新增 `render_art`**：`render_part` 已有 `versionId` → STL、`render/`
+   产物、`attachments.saveImages`、`finalizeContent`；L2 只加后端与模式，省一个工具描述
+   （约 300–600 token/请求）和一套独立命令。
+2. **参数**：`engine: openscad(default) | bpy | auto`；`mode: single(default) | views | hero`；
+   `renderer: workbench | cycles`；`material`、`background`、`samples`、`exposure`、`rig`。
+   默认仍走 OpenSCAD single，旧调用行为不变。
+3. **后端**：`src/host/art-render.ts` 解析版本 STL；bpy 分支用 `runPython`（`pythonLaunchArgs`
+   附加 overlay）起**子进程**跑 `render_studio.py`，读 metadata + PNG；不 import bpy 进 worker。
+4. **附件**：`render_part` 一次附 1/4 张 image block；`files`、`engine`、`mode`、`fallback`、
+   `fallbackReason`、`metadata`、`warnings` 结构化返回。图片仍写 `<project>/render/`。
+5. **回退/拒绝契约**：`auto` 仅对 `single`/`views` 在 bpy 缺失/运行时未就绪时回退 OpenSCAD；
+   `hero` 需要 bpy，不静默降级；`section`/`rotate` 是 OpenSCAD single 专属，bpy 下明确拒绝。
+6. **不新增工具**：工具数仍 28；`docs/TOOL-CONTRACTS.md` 由审计重新生成；`accept-skill-tools`
+   增加 `render_part.engine/mode/material` 与 `files/fallback` 的契约断言。
+
+**理由：** 这是“真实 UX 痛点”出现后的最小修复：只补取图/附件/错误/回退，不碰 L1 已证明的
+安装/预检/渲染基线；也不把 bpy 变成常驻依赖。扩展 `render_part` 比新工具便宜，且它本来就是
+“看一个版本”的入口。
+
+**依据：** 用户拍板 L2 方案；验收（本轮）：
+`node scripts/accept-bpy-art.mjs` 无 bpy 侧（OpenSCAD single/views、`auto` 回退、hero 拒绝、
+`render_part` 4 attachment）与 bpy overlay 侧（`render_part engine=bpy` 4 attachment + metadata）
+均通过；`node scripts/accept-skill-tools.mjs` 六 skill / 28 工具通过；`node scripts/accept-tool-contracts.mjs`
+28 工具契约通过；`npm run typecheck` 通过。
+
+**影响：** 新 `src/host/art-render.ts`；`src/host/tools.ts` 的 `render_part` schema/execute/
+finalize；`skills/cad-art/SKILL.md`（首选 `render_part`，raw mesh 才走 `run_python`）；
+`docs/TOOL-CONTRACTS.md`；`scripts/accept-bpy-art.mjs`、`accept-skill-tools.mjs`；README §二.9；
+DESIGN §33。**边界**：L3 建模模板、L4 GLB/面板仍不做；raw mesh 版本化仍走 `run_python`。
