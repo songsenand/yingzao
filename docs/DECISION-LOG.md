@@ -4349,3 +4349,38 @@ acceptance）。
 finalize；`skills/cad-art/SKILL.md`（首选 `render_part`，raw mesh 才走 `run_python`）；
 `docs/TOOL-CONTRACTS.md`；`scripts/accept-bpy-art.mjs`、`accept-skill-tools.mjs`；README §二.9；
 DESIGN §33。**边界**：L3 建模模板、L4 GLB/面板仍不做；raw mesh 版本化仍走 `run_python`。
+
+## 2026-10-25：颜色按设计数据推进，不进入切片链路
+
+**触发条件：** 第 1 条（用户明确“目前我们也不想做切片相关的工作”）。
+
+**要解决的问题：** 讨论从“Blender 能不能设计颜色”滑向“打印颜色/3MF/切片器”，但实际需求是
+**颜色作为设计/预览数据**：Blender 里按材质分区，渲染/预览时保留，STL 只做几何。当前
+`render_studio.py` 导入 OBJ/GLB 后会 `materials.clear()`，只剩一个 `--color` 全局颜色；
+版本库只有 `model.stl`，CAD 面板只认 STL。需要先把“颜色设计”这条线定义清楚。
+
+**决策内容：**
+
+1. **颜色是设计数据，不是打印指令**：`.blend` 是权威源，GLB 是外观载体，PNG 是评审图；
+   STL 只保留几何。**本轮不接切片器，不把 3MF/打印颜色作为目标**。
+2. `render_studio.py` 增加 `--keep-materials`：对 OBJ/GLB/GLTF 保留导入材质，不再统一
+   `materials.clear()`；STL 无材质时回退 `--material`；`--color` 在保留材质时忽略。
+   metadata 记录 `materials_preserved` 与 `source_materials`。
+3. **不改 `render_part`**：它仍读版本的 `model.stl`，没有 appearance source；颜色设计暂走
+   raw `run_python` / Blender CLI。GLB 进版本库与面板预览是后续 L4，不在本轮承诺。
+4. 文档同步：`cad-art` 增加颜色设计节；`cad-modeling-measure` 写清 GLB/OBJ 不是
+   `import_part` 输入、3MF 颜色不验证；`cad-manufacturing` 写明颜色不是几何筛；
+   `cad-toolbox` 标明 render color ≠ print color。
+
+**理由：** 用户不需要切片；把颜色留在 `.blend`/GLB 就能支持设计评审，避免为了“打印颜色”引入
+3MF/多色工艺的复杂度。GLB 是浏览器/渲染器天然能消费的载体；STL 的颜色丢失是格式边界，不是
+Blender 能力缺失。
+
+**依据：** `experiments/20261025_blender_color_design/`：三材质面板（622 / 1256 / 742 面），
+`--keep-materials` 的 metadata 为 `materials_preserved: true`、`source_materials` 三项；
+Workbench/Cycles 出图保留蓝/象牙白/金三种区域；不加标志的对照为 `material: "plastic"`、
+`materials_preserved: false`。`accept-bpy-art.mjs` 在真实 bpy overlay 下跑三材质 GLB 冒烟通过。
+
+**影响：** `render_studio.py`；`cad-art` / `cad-modeling-measure` / `cad-manufacturing` /
+`cad-toolbox`；实验报告；README §二.9；DESIGN §33.5/§33.6。**边界**：无新工具、无 schema
+变更；`render_part`/面板仍不接 GLB；切片/3MF/打印颜色明确不在本轮范围。

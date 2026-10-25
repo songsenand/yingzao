@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "script": {
+    "name": "render_studio.py",
+    "version": "1.0"
+  },
+  "mode": "hero",
+  "engine": "cycles",
+  "size": 768,
+  "samples": 32,
+  "unit": "mm",
+  "unit_scale_to_m": 0.001,
+  "unit_resolved": "mm",
+  "bbox_mm": {
+    "x": 240.0,
+    "y": 160.0,
+    "z": 14.0
+  },
+  "diagonal_mm": 288.7837,
+  "polygons": 2620,
+  "material": "preserved",
+  "materials_preserved": true,
+  "source_materials": [
+    "panel-base-ivory",
+    "panel-rim-azure",
+    "panel-lattice-gold"
+  ],
+  "background": "light",
+  "rig": "sun",
+  "files": [
+    "/home/songsenand/Project/ToyMarker/experiments/20261025_blender_color_design/render/panel-colors-hero.png"
+  ],
+  "glb": null,
+  "bpy_version": "5.2.3 LTS",
+  "elapsed_s": 4.1
+}

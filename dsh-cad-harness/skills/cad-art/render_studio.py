@@ -80,8 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--unit", choices=["mm", "m", "auto"], default="mm",
                         help="input unit (default mm, the project's unit). auto is a heuristic.")
     parser.add_argument("--material", choices=["plastic", "metal", "clay", "none"], default="plastic")
+    parser.add_argument("--keep-materials", action="store_true",
+                        help="preserve imported OBJ/GLB/GLTF materials (color design) instead of "
+                             "applying one studio material; STL has no materials, so it falls back")
     parser.add_argument("--color", type=_parse_color, default=None,
-                        help="R,G,B (0..1 or 0..255); overrides the material's base color")
+                        help="R,G,B (0..1 or 0..255); overrides the material's base color; ignored with --keep-materials")
     parser.add_argument("--background", choices=["light", "dark", "transparent"], default="light")
     parser.add_argument("--ground", dest="ground", action="store_true", default=None,
                         help="force a ground plane (default: hero only)")
@@ -224,6 +227,18 @@ def add_ground(bpy, center, min_z: float, diagonal: float, dark: bool):
     return ground
 
 
+def sync_viewport_colors(obj) -> None:
+    """Workbench's MATERIAL mode reads material.diffuse_color, not the shader."""
+    for material in obj.data.materials:
+        if material is None or not material.use_nodes:
+            continue
+        bsdf = material.node_tree.nodes.get("Principled BSDF")
+        if bsdf is None:
+            continue
+        base = bsdf.inputs["Base Color"].default_value
+        material.diffuse_color = (base[0], base[1], base[2], 1.0)
+
+
 def setup_scene(bpy, args, obj, diagonal: float, scale: float):
     from mathutils import Vector
 
@@ -242,12 +257,18 @@ def setup_scene(bpy, args, obj, diagonal: float, scale: float):
     mx = Vector((max(v.x for v in bb), max(v.y for v in bb), max(v.z for v in bb)))
     center = (mn + mx) / 2.0
 
-    material = make_material(bpy, args.material, args.color)
-    if material is not None:
-        obj.data.materials.clear()
-        obj.data.materials.append(material)
+    source_materials = [m for m in obj.data.materials if m is not None]
+    keep_materials = bool(args.keep_materials and source_materials)
+    if keep_materials:
+        if engine == "workbench":
+            sync_viewport_colors(obj)
     else:
-        obj.color = (0.6, 0.6, 0.6, 1.0)
+        material = make_material(bpy, args.material, args.color)
+        if material is not None:
+            obj.data.materials.clear()
+            obj.data.materials.append(material)
+        else:
+            obj.color = (0.6, 0.6, 0.6, 1.0)
 
     ground = args.ground if args.ground is not None else args.mode == "hero"
     if args.background == "transparent":
@@ -317,7 +338,7 @@ def setup_scene(bpy, args, obj, diagonal: float, scale: float):
     if engine == "workbench":
         shading = scene.display.shading
         shading.light = "STUDIO"
-        shading.color_type = "MATERIAL" if args.material != "none" else "OBJECT"
+        shading.color_type = "MATERIAL" if (keep_materials or args.material != "none") else "OBJECT"
         shading.show_shadows = True
         shading.show_cavity = True
         shading.cavity_type = "WORLD"
@@ -441,6 +462,10 @@ def main() -> int:
     obj = join_meshes(bpy)
     scale, diagonal = normalize_units(bpy, obj, args.unit)
     shade_object(bpy, obj, args.shade)
+    # Capture the imported materials BEFORE setup_scene may replace them; the metadata
+    # must say what the source carried, not what the fallback material ended up being.
+    source_materials = [m for m in obj.data.materials if m is not None]
+    keep_materials = bool(args.keep_materials and source_materials)
     engine, center, camera = setup_scene(bpy, args, obj, diagonal, scale)
 
     if args.mode == "views":
@@ -469,7 +494,9 @@ def main() -> int:
         "bbox_mm": {"x": round(dims_mm[0], 4), "y": round(dims_mm[1], 4), "z": round(dims_mm[2], 4)},
         "diagonal_mm": round(diagonal * 1000.0, 4),
         "polygons": len(obj.data.polygons),
-        "material": args.material,
+        "material": "preserved" if keep_materials else args.material,
+        "materials_preserved": keep_materials,
+        "source_materials": [m.name for m in source_materials],
         "background": args.background,
         "rig": args.rig if engine == "cycles" else None,
         "files": files,

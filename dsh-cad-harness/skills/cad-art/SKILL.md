@@ -1,7 +1,7 @@
 ---
 name: cad-art
-description: "Use when the job is sculpture, decorative or organic form, art direction, materials/lighting, a hero render, or an interior-decoration visual — i.e. when the part's job is how it looks, not whether it fits. This is the OPTIONAL Blender/bpy lane: user-installed, 3/7 platforms, GPL-3.0; it is not the precision-part lane and a render is not a printability certificate."
-whenToUse: "Before writing bpy/Blender code, or when the user asks for a sculpted/artistic/decorative result, a material preview, or a presentation render. Do not load it for functional parts, fits, tolerances, or printability alone."
+description: "Use when the job is sculpture, decorative or organic form, art direction, materials/lighting, color design, a hero render, or an interior-decoration visual — i.e. when the part's job is how it looks, not whether it fits. This is the OPTIONAL Blender/bpy lane: user-installed, 3/7 platforms, GPL-3.0; it is not the precision-part lane and a render is not a printability certificate."
+whenToUse: "Before writing bpy/Blender code, or when the user asks for a sculpted/artistic/decorative result, material/color design, a material preview, or a presentation render. Do not load it for functional parts, fits, tolerances, or printability alone."
 ---
 
 # Art lane: what Blender is for here, and what it is not
@@ -19,6 +19,7 @@ a preflight, a baseline studio script, a QC handoff and one example. You do not 
 | a bracket, enclosure, adapter, hole pattern, fit, tolerance, printable functional part | **OpenSCAD + the core CAD tools** | reach for bpy because it is "more powerful" |
 | a precise decorative panel with parametric slots | **OpenSCAD/BOSL2** first; bpy only for a material/render pass | model it in bpy when dimensions must be exact |
 | "make it look like the reference", materials, lighting, a presentation image | **bpy** for the render; keep the geometry source wherever it already lives | re-model the part just to get a nicer picture |
+| "design colors / different material regions" | **bpy/Blender materials** → `.blend` + GLB → `render_studio.py --keep-materials` | assume `render_part` or STL carries the color |
 | "can this be printed?" | the truth engine: `import_part` → `measure_part` / `check_printability` | treat a render as evidence |
 
 **The dividing line is the job, not the tool.** A decorative panel can stay in
@@ -97,7 +98,37 @@ render_part({ versionId: "v012", engine: "bpy", mode: "hero",
 - The images are already attachments; **no `read_image` call is needed**. If the
   result has four views, describe what you see in them, not what you expected.
 
+## 4.5 Color design: Blender materials, GLB, and what this lane carries
+
+Color design is **design data**, not a print instruction. Blender can assign material
+slots per object/face, vertex colors, UV textures and shader nodes; `.blend` is the
+authoritative source, GLB is the appearance carrier. STL is geometry only — a color
+disappears at that boundary.
+
+`render_studio.py --keep-materials` preserves materials from OBJ/GLB/GLTF instead of
+clearing them and applying one studio material:
+
+```text
+run_python({
+  script: "<skill-dir>/render_studio.py",
+  args: ["design.glb", "--out", "renders", "--mode", "hero",
+         "--engine", "cycles", "--keep-materials"],
+  cwd: "<project>"
+})
+```
+
+- `--keep-materials` is a no-op on STL (there are no materials); it falls back to
+  `--material`. `--color` is ignored when materials are preserved.
+- The metadata records `materials_preserved` and `source_materials`; read them. A
+  render with `materials_preserved: false` is a fallback, not a color design.
+- **The native `render_part` still renders the version's `model.stl`.** It has no
+  appearance source yet, so this is a raw-script capability, not a `render_part` knob.
+- No slicing or 3MF is needed for a color design review: `.blend` (source), GLB
+  (appearance), PNG (review). If the user asks for **print** color, that is a separate
+  process decision; `check_printability` does not check color.
+
 ### Raw mesh or direct script (not a saved version)
+
 
 Use `run_python` when the input is a user-provided STL/GLB that has no version, or
 when you are still iterating on a separate script. Resolve `render_studio.py`
@@ -122,9 +153,9 @@ run_python({
 - `--rig sun` (default) keeps exposure stable across a 30 mm ornament and a 1.2 m
   panel; `--rig area` gives softer highlights but its power must be tuned per size.
   `--exposure -1..-3` is the quick fix when a very flat, top-lit panel clips.
-- `--material plastic|metal|clay|none`, `--color R,G,B`, `--background
-  light|dark|transparent`, `--shade auto|smooth|flat`, `--glb out.glb` are the
-  supported knobs. Do not grow a scene DSL in the skill; if a real job needs a
+- `--material plastic|metal|clay|none`, `--color R,G,B`, `--keep-materials`,
+  `--background light|dark|transparent`, `--shade auto|smooth|flat`, `--glb out.glb`
+  are the supported knobs. Do not grow a scene DSL in the skill; if a real job needs a
   different set, write a **separate** script and keep it as the user's raw material.
 - The metadata file (`<out>/metadata.json`) records engine, size, unit, bbox,
   polygon count and output paths. Read it; do not describe the image from memory.
@@ -149,6 +180,7 @@ The site inspects **deliverables**, not taste:
 | render-only art image | PNG exists, declared engine/unit/camera, metadata matches | whether it is beautiful, on-brand, or "good art" |
 | printable sculpture / ornament | `import_part` the STL; `measure_part` (watertight, bodies, volume); `check_printability` (wall, overhang, process) | whether the render looks printable |
 | a bpy-generated mesh | same truth engine as any imported part; non-solid is rejected unless `allowNonSolid` is explicit and marked | "Blender made it, so it is a solid" |
+| color/material design | `.blend`/GLB source, `materials_preserved: true`, render shows the declared material regions | whether the color prints; `check_printability` does not check color |
 
 **A render is not a manufacturability certificate.** If the user wants to print,
 export the mesh from the authoritative source, import it as a version, and run the
@@ -161,6 +193,9 @@ a beautiful non-manifold one; the truth engine decides.
   bpy version) so the result is reproducible. L2 does not add a modeling tool; if
   the user brings a bpy script, store the script next to the version and say what
   produced the mesh.
+- A color design needs an **appearance artifact**: `.blend` (source) + GLB (carrier) +
+  PNG (review). The version store currently holds `model.stl`; native `render_part`
+  cannot see GLB yet, so do not claim the color is versioned or previewable.
 - A bpy **render** of an existing version is an artifact, not a new version. Name
   the PNGs with the version/part label; put them under the project's render area or
   a `renders/` directory, and state the path.
@@ -195,6 +230,9 @@ not need to bundle or auto-detect every Blender.
   `worker.py`.
 - **No aesthetic QC and no product promise**: the site provides utilities, a map,
   a baseline and a QC handoff; the user owns the art and its judgment.
+- **No color versioning/preview yet**: `--keep-materials` is a raw-script render path;
+  `render_part` still reads STL, and the panel still previews STL. GLB appearance in
+  the panel is L4, not a promise of this lane.
 
 ## 9. Example
 

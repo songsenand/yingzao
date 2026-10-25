@@ -12,7 +12,8 @@
 //      reports ready or gives the install recipe — never crashes
 //   5  L2: render_part's OpenSCAD single/views, auto fallback, hero rejection,
 //      old default, four attachments; with bpy: bpy views/hero + attachments
-//   6  with bpy: a 64 px four-view smoke produces four non-trivial PNGs + metadata
+//   6  with bpy: a 64 px four-view smoke produces four non-trivial PNGs + metadata,
+//      and a three-material GLB proves --keep-materials preserves color
 //   7  without bpy: render_studio.py exits 3 with the install/preflight advice
 //   8  with a Blender CLI: the same file renders through `blender -b -P` (dual entry)
 //
@@ -32,6 +33,7 @@ const ART = join(SKILLS, 'cad-art');
 const PREFLIGHT = join(ART, 'preflight.py');
 const RENDER = join(ART, 'render_studio.py');
 const EXAMPLE = resolve(ROOT, '..', 'examples', 'art-decor-panel');
+const COLOR_GLB = resolve(ROOT, '..', 'experiments', '20261025_blender_color_design', 'panel-colors.glb');
 const SYS_PY = process.platform === 'win32' ? 'python' : 'python3';
 
 let failures = 0;
@@ -118,7 +120,7 @@ const skillDirs = (await readdir(SKILLS, { withFileTypes: true }))
 check(skillDirs.length === 6, 'six skills are present', skillDirs.join(', '));
 check(skillDirs.includes('cad-art'), 'cad-art is a skill directory');
 const artSkill = await readFile(join(ART, 'SKILL.md'), 'utf8');
-for (const needle of ['render_studio.py', 'preflight.py', 'run_python', 'render_part', 'python_runtime',
+for (const needle of ['render_studio.py', 'preflight.py', 'run_python', 'render_part', 'keep-materials', 'python_runtime',
   'import_part', 'check_printability', '3/7', 'GPL-3.0']) {
   check(artSkill.includes(needle), `cad-art skill mentions ${needle}`);
 }
@@ -303,6 +305,29 @@ if (runtime && runtime.status.state === 'ready' && preflight?.status === 'ready'
   check(metadata?.ok === true && metadata?.engine === 'workbench' && metadata?.mode === 'views',
     'metadata records ok/engine/mode', JSON.stringify(metadata?.engine));
   check(Math.abs((metadata?.bbox_mm?.x ?? 0) - 20) < 1e-6, 'metadata bbox keeps mm (20 mm cube)');
+
+  console.log('--- bpy color smoke: preserved GLB materials ---');
+  if (existsSync(COLOR_GLB)) {
+    const colorOut = join(work, 'color');
+    const colorLaunch = runtime.pythonLaunchArgs(RENDER, [COLOR_GLB, '--out', colorOut,
+      '--mode', 'hero', '--engine', 'workbench', '--size', '64', '--keep-materials',
+      '--json', join(colorOut, 'metadata.json'), '--quiet']);
+    const colorResult = await run(runtime.status.venvPython, colorLaunch);
+    check(colorResult.code === 0, 'render_studio.py --keep-materials exits 0',
+      colorResult.stderr.split('\n').filter(Boolean).slice(-2).join(' '));
+    let colorMetadata = null;
+    try { colorMetadata = parseJson(await readFile(join(colorOut, 'metadata.json'), 'utf8')); } catch { /* reported below */ }
+    const colorPngs = await countPngs(colorOut);
+    check(colorMetadata?.materials_preserved === true,
+      'color metadata says materials_preserved', String(colorMetadata?.materials_preserved));
+    check(Array.isArray(colorMetadata?.source_materials) && colorMetadata.source_materials.length === 3,
+      'color metadata keeps three source materials',
+      Array.isArray(colorMetadata?.source_materials) ? colorMetadata.source_materials.join(', ') : 'none');
+    check(colorPngs.length === 1 && colorPngs[0]?.endsWith('.png'),
+      'color smoke writes one PNG', colorPngs.join(', '));
+  } else {
+    check(false, 'color design fixture exists', COLOR_GLB);
+  }
 } else {
   console.log('--- missing bpy: the actionable failure path ---');
   const out = join(work, 'missing');

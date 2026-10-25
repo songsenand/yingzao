@@ -3778,6 +3778,9 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 
 - **L2 只解决“已保存版本”的取图/附件/错误/回退**：扩展 `render_part`，不新增工具；不解决
   raw mesh 的版本化（仍走 `run_python`），不做 bpy 建模模板，不做 GLB/面板。
+- **颜色设计（2026-10-25 实验）**：Blender 材质/按面颜色保存为 `.blend` + GLB；
+  `render_studio.py --keep-materials` 保留导入材质，STL 仍只几何。颜色按设计/预览数据推进，
+  **不做切片/3MF 打印颜色**；当前仍是 raw-script 能力，版本化 GLB 与面板预览属 L4。
 - L3：bpy 建模模板（bmesh/修改器/remesh/布尔）、脚本+种子入库、可打印性闭环——等真实雕塑/
   装潢项目；它引入第二个几何来源，不是 L1/L2 的渲染扩展。
 - L4：GLB 导出 + client GLTFLoader + 面板材质预览——人要在面板里看材质时再做。
@@ -3793,4 +3796,5 @@ node scripts/accept-skill-tools.mjs   # 六个 skill；工具数仍为 28
 无 bpy 的机器也必须通过：预检给出 `not-installed` + 安装处方，`render_studio.py` 以
 exit 3 给出可执行报错，CLI 路径（若有 Blender）仍能出图。有 bpy 的机器额外跑 64px 四视图
 冒烟并校验 PNG/metadata；L2 另测 `render_part` 的 OpenSCAD single/views、`engine=auto`
-回退、`hero` 拒绝、`files/metadata` 与 attachment 数量。
+回退、`hero` 拒绝、`files/metadata` 与 attachment 数量。有 bpy 时再跑一次三材质 GLB 的
+`--keep-materials` 颜色冒烟，断言 `materials_preserved` 与 `source_materials`。

@@ -69,6 +69,9 @@ five per-job skills — load one when the work turns to that job:
 panel, materials/lighting, a presentation render). It depends on a user-installed
 `bpy` (3/7 platforms, GPL-3.0), and a render is **not** a printability certificate.
 For functional parts, fits, tolerances or printability, stay on the core tools.
+Color design is Blender materials (`.blend`) → GLB → `render_studio.py --keep-materials`;
+the render color is not a print color, and native `render_part` still reads only the
+version's STL.
 
 **参数与最小调用**：`docs/TOOL-CONTRACTS.md` 由 `scripts/audit-tool-contracts.mjs --write` 生成，
 列出每个工具的参数（类型 / 枚举 / 默认 / 含义）与一行可跑的调用示例——**别手改**，它与代码同源，
