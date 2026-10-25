@@ -19,7 +19,7 @@ a preflight, a baseline studio script, a QC handoff and one example. You do not 
 | a bracket, enclosure, adapter, hole pattern, fit, tolerance, printable functional part | **OpenSCAD + the core CAD tools** | reach for bpy because it is "more powerful" |
 | a precise decorative panel with parametric slots | **OpenSCAD/BOSL2** first; bpy only for a material/render pass | model it in bpy when dimensions must be exact |
 | "make it look like the reference", materials, lighting, a presentation image | **bpy** for the render; keep the geometry source wherever it already lives | re-model the part just to get a nicer picture |
-| "design colors / different material regions" | **bpy/Blender materials** → `.blend` + GLB → `render_studio.py --keep-materials` | assume `render_part` or STL carries the color |
+| "design colors / different material regions" | **bpy/Blender materials** → `.blend` + GLB → `attach_appearance` → `render_part({appearance:true})` (or raw `--keep-materials`) | assume STL carries the color |
 | "can this be printed?" | the truth engine: `import_part` → `measure_part` / `check_printability` | treat a render as evidence |
 
 **The dividing line is the job, not the tool.** A decorative panel can stay in
@@ -121,8 +121,14 @@ run_python({
   `--material`. `--color` is ignored when materials are preserved.
 - The metadata records `materials_preserved` and `source_materials`; read them. A
   render with `materials_preserved: false` is a fallback, not a color design.
-- **The native `render_part` still renders the version's `model.stl`.** It has no
-  appearance source yet, so this is a raw-script capability, not a `render_part` knob.
+- **A saved version can carry an appearance sidecar.** Attach the GLB with
+  `attach_appearance({versionId, file})`; it becomes `versions/<id>/appearance.glb`
+  plus `appearance.json`. Then
+  `render_part({versionId, appearance:true, engine:"bpy", mode:"views"})` renders it
+  with materials preserved. `model.stl` remains the geometry truth.
+- `engine:"auto"` with `appearance:true` still uses bpy; it does **not** fall back to
+  STL (that would silently drop the color). `engine:"openscad"` is rejected.
+- Use the raw script when the design has no version yet; use the sidecar when it does.
 - No slicing or 3MF is needed for a color design review: `.blend` (source), GLB
   (appearance), PNG (review). If the user asks for **print** color, that is a separate
   process decision; `check_printability` does not check color.
@@ -194,8 +200,9 @@ a beautiful non-manifold one; the truth engine decides.
   the user brings a bpy script, store the script next to the version and say what
   produced the mesh.
 - A color design needs an **appearance artifact**: `.blend` (source) + GLB (carrier) +
-  PNG (review). The version store currently holds `model.stl`; native `render_part`
-  cannot see GLB yet, so do not claim the color is versioned or previewable.
+  PNG (review). `attach_appearance` versions the GLB as `appearance.glb` +
+  `appearance.json`; `render_part({appearance:true})` consumes it. The CAD panel still
+  previews STL, so do not claim the panel is showing the color yet.
 - A bpy **render** of an existing version is an artifact, not a new version. Name
   the PNGs with the version/part label; put them under the project's render area or
   a `renders/` directory, and state the path.
@@ -230,9 +237,9 @@ not need to bundle or auto-detect every Blender.
   `worker.py`.
 - **No aesthetic QC and no product promise**: the site provides utilities, a map,
   a baseline and a QC handoff; the user owns the art and its judgment.
-- **No color versioning/preview yet**: `--keep-materials` is a raw-script render path;
-  `render_part` still reads STL, and the panel still previews STL. GLB appearance in
-  the panel is L4, not a promise of this lane.
+- **No GLB panel preview yet**: `attach_appearance` + `render_part({appearance:true})`
+  are versioned/renderable, but the panel still previews STL. GLB appearance in the
+  panel is L4, not a promise of this lane.
 
 ## 9. Example
 

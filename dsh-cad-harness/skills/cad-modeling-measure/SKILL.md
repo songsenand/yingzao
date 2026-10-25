@@ -36,8 +36,9 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   (re-export STEP or STL) instead of failing mysteriously.
 - **Color is not an import format here.** GLB/OBJ are not `import_part` inputs;
   3MF is read as geometry, and the color/material payload is not validated. For a
-  color design, keep the `.blend` source and render a GLB with
-  `render_studio.py --keep-materials`; do not use `import_part` as a color handoff.
+  color design, keep the `.blend` source and attach a GLB with
+  `attach_appearance`; `render_part({appearance:true})` consumes it. Do not use
+  `import_part` as a color handoff.
 - **Tessellation is a choice you own for STEP/3MF.** `tolLinear` (mm) and
   `tolAngular` (rad) trade triangles for fidelity: at 0.01 mm a small bracket was
   3074 triangles, at 0.002 mm 12254, with <0.3% volume change — so the default is

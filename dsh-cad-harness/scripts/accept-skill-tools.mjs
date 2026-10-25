@@ -46,7 +46,7 @@ const contract = new Map();
   }
 }
 const toolNames = new Set(contract.keys());
-check(toolNames.size === 28, 'the contract sheet lists 28 tools', String(toolNames.size));
+check(toolNames.size === 29, 'the contract sheet lists 29 tools', String(toolNames.size));
 
 // ── the map: the six skills ────────────────────────────────────────────────
 const skills = [];
@@ -59,7 +59,7 @@ check(skills.length === 6, 'six skills are present', String(skills.length));
 const all = skills.map((s) => s.text).join('\n');
 
 // 1) every tool-like identifier the skills name is registered
-const TOOLISH = /^(analyze|check_[a-z_]+|create_part|delivery_audit|generate_part|import_part|list_features|measure_[a-z_]+|merge_parts|preflight|python_runtime|recall_reference_image|render_part|run_python|scan_attention|set_datums|simulate_[a-z]+|validate_assembly)$/;
+const TOOLISH = /^(analyze|attach_[a-z_]+|check_[a-z_]+|create_part|delivery_audit|generate_part|import_part|list_features|measure_[a-z_]+|merge_parts|preflight|python_runtime|recall_reference_image|render_part|run_python|scan_attention|set_datums|simulate_[a-z]+|validate_assembly)$/;
 const named = new Set();
 for (const s of skills) for (const m of s.text.matchAll(/`([a-z][a-z0-9_]+)`/g)) if (TOOLISH.test(m[1])) named.add(m[1]);
 const unknown = [...named].filter((n) => !toolNames.has(n));
@@ -67,8 +67,8 @@ check(unknown.length === 0, 'every tool the skills name is registered', unknown.
 
 // 2) the stated count matches the registry
 const toolbox = skills.find((s) => s.name === 'cad-toolbox').text;
-check(/Twenty-eight tools/.test(toolbox) && toolNames.size === 28,
-  'cad-toolbox says "Twenty-eight tools" and there are 28', `${toolNames.size}`);
+check(/Twenty-nine tools/.test(toolbox) && toolNames.size === 29,
+  'cad-toolbox says "Twenty-nine tools" and there are 29', `${toolNames.size}`);
 
 // 3) every registered tool reaches at least one skill
 const unreached = [...toolNames].filter((t) => !all.includes(`\`${t}\``));
@@ -88,7 +88,7 @@ const PARAM_CLAIMS = [
   ['simulate_stress', 'mode'], ['import_part', 'tolLinear'], ['import_part', 'tolAngular'],
   ['generate_part', 'views'], ['delivery_audit', 'claims'], ['delivery_audit', 'exempt'],
   ['measure_part', 'axis'], ['measure_part', 'axisVector'], ['render_part', 'engine'], ['render_part', 'mode'],
-  ['render_part', 'material'], ['measure_gap', 'aDatum'],
+  ['render_part', 'appearance'], ['attach_appearance', 'file'], ['render_part', 'material'], ['measure_gap', 'aDatum'],
   ['measure_gap', 'bOn'], ['simulate_motion', 'cycles'], ['analyze', 'profileIds'],
 ];
 for (const [tool, param] of PARAM_CLAIMS) {
@@ -101,8 +101,8 @@ const FIELD_CLAIMS = [
   ['simulate_physics', 'jointViolations'], ['simulate_motion', 'initialJointGaps'],
   ['simulate_motion', 'jointToleranceMm'], ['simulate_fluid', 'metrics'],
   ['simulate_lbm', 'metrics'], ['measure_gap', 'frame'], ['measure_part', 'bodies'],
-  ['measure_part', 'bodySizes'], ['measure_part', 'bodyVerdict'], ['render_part', 'files'],
-  ['render_part', 'fallback'], ['delivery_audit', 'judgement'],
+  ['measure_part', 'bodySizes'], ['measure_part', 'bodyVerdict'], ['render_part', 'files'], ['render_part', 'appearance'],
+  ['attach_appearance', 'materials'], ['render_part', 'fallback'], ['delivery_audit', 'judgement'],
 ];
 for (const [tool, field] of FIELD_CLAIMS) {
   check(contract.get(tool)?.returns.has(field) === true, `${tool} returns \`${field}\``, tool);

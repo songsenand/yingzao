@@ -100,9 +100,9 @@ cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
      single/views 上缺 bpy 会回退 OpenSCAD；`hero` 必须 bpy）；对没有版本的 mesh 才走
      `run_python` + `render_studio.py`。**渲染图不是可打印证明**；要打印仍走 `import_part`
      + `check_printability`。
-   - **颜色设计**：Blender 的材质/按面颜色可保存成 `.blend` + GLB；
-     `render_studio.py --keep-materials` 会保留导入材质出图，不再统一抹成单色。STL 仍然
-     无色；当前这是 raw script 能力，`render_part` 和 CAD 面板还没接 GLB。
+   - **颜色设计**：Blender 的材质/按面颜色可保存成 `.blend` + GLB；用
+     `attach_appearance` 把 GLB 挂到版本，再用 `render_part({appearance:true})` 出图，
+     不再统一抹成单色。STL 仍然无色；CAD 面板还没接 GLB（仍预览 STL）。
    - **没有 bpy 但有 Blender 4.5/5.2**：同一脚本有 CLI 入口，可用
      `blender -b -P ... -- ...`；这是“用户自备原材料”的合法路径。
    - 样例：[examples/art-decor-panel](examples/art-decor-panel/)；完整边界见

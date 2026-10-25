@@ -4384,3 +4384,36 @@ Workbench/Cycles 出图保留蓝/象牙白/金三种区域；不加标志的对�
 **影响：** `render_studio.py`；`cad-art` / `cad-modeling-measure` / `cad-manufacturing` /
 `cad-toolbox`；实验报告；README §二.9；DESIGN §33.5/§33.6。**边界**：无新工具、无 schema
 变更；`render_part`/面板仍不接 GLB；切片/3MF/打印颜色明确不在本轮范围。
+
+## 2026-10-25：A 落地——appearance.glb 侧车 + render_part appearance
+
+**触发条件：** 第 1 条（用户“继续开始做 A”）+ 第 4 条（版本/工具契约变化）。
+
+**要解决的问题：** 颜色设计只能通过 raw `run_python` 出图，GLB 没有版本身份，
+`render_part` 仍只读 `model.stl`；需要把“颜色设计”变成版本的一部分，同时不把 GLB
+变成几何真值。
+
+**决策内容：**
+
+1. 版本目录允许 `appearance.glb` + `appearance.json` 侧车；`model.stl` 仍是几何真值，
+   测量/打印/仿真继续读 STL。
+2. 新工具 `attach_appearance({versionId, file, note?})`：只收自包含 GLB v2（至少一个
+   material、无外部 URI、≤256MB），校验后复制进版本并记录 sha256/bytes/materials/meshes。
+3. `render_part` 新增 `appearance: true`：读 `appearance.glb`，bpy + `--keep-materials`；
+   `engine=openscad` 明确拒绝，`engine=auto` 不得回退 STL（回退会静默丢色）。
+4. 默认 `appearance: false` 保持旧行为；`model.stl`/`render_part` 旧路径不变。
+5. 面板 GLB 预览不在 A 内；面板仍只预览 STL，属于 L4。
+
+**理由：** 这样颜色设计有版本身份和可执行 render 入口，又不会污染几何真值；拒绝回退是
+因为“漂亮的颜色”不能换来“几何/打印结论仍然是同一件”的错觉。工具边界小：只复制/校验/
+记录，不建模、不切片。
+
+**依据：** `accept-bpy-art.mjs` 在真实 bpy 5.2.3 overlay 下：`attach_appearance` 返回 3 个
+materials、`render_part({appearance:true, engine:bpy, mode:views, imgSize:64})` 返回 4 files /
+4 attachments、metadata `materials_preserved: true`；`engine:openscad` 明确报错；
+`engine:auto` 选择 bpy。工具数 28 → 29，合约重新生成。
+
+**影响：** 新 `src/host/appearance.ts`；`render_part` schema/execute；`attach_appearance`；
+`docs/TOOL-CONTRACTS.md`；`accept-skill-tools.mjs` 29 工具；`cad-art`/`cad-toolbox`/
+`cad-modeling-measure`；README §二.9；DESIGN §33.5。**边界**：CAD 面板 GLB 预览、3MF/切片
+仍不做；GLB 只作为外观侧车，不是几何真值。

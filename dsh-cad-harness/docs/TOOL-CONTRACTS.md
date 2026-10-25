@@ -24,6 +24,23 @@ analyze({ versionId: "…" })
 returns: `peaks`, `layers`, `notMapped`, `partNotes`, `support`, `bands`, `note`
 
 
+## `attach_appearance`
+
+Attach a self-contained GLB color/material design to a saved version. The version keeps model.stl as geometry truth; render_part({appearance:true}) can then render the GLB with materials. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved version to attach the appearance to, e.g. "v003". |
+| `file` | string | **required** | Workspace path to a self-contained .glb (GLB v2, embedded buffers/images). |
+| `note` | string | — | Optional human note recorded in appearance.json (e.g. "three-color panel"). |
+
+```js
+attach_appearance({ versionId: "…", file: "…" })
+```
+
+returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replaced`, `note`
+
+
 ## `check_assembly`
 
 Validate the assembly manifest (BOM + interface contracts): distance, diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
@@ -350,6 +367,7 @@ One or more images of a saved version. Default: one OpenSCAD frame, sub-second. 
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version to render, e.g. "v003". |
 | `engine` | string (openscad \| bpy \| auto) | — | Render backend. Default openscad (the old fast path). "bpy" needs the user-installed overlay; "auto" tries bpy, then falls back for single/views. |
+| `appearance` | boolean | — | Render the version's attached appearance.glb (materials/color) instead of model.stl. Requires engine bpy (or auto with bpy installed); attach one with attach_appearance first. |
 | `mode` | string (single \| views \| hero) | — | single (default) one frame; views four; hero one material shot (bpy only). |
 | `renderer` | string (workbench \| cycles) | — | bpy renderer. Default workbench for single/views, cycles for hero. |
 | `material` | string (plastic \| metal \| clay \| none) | — | bpy material preset. Default plastic. |
@@ -367,7 +385,7 @@ One or more images of a saved version. Default: one OpenSCAD frame, sub-second. 
 render_part({ versionId: "…" })
 ```
 
-returns: `versionId`, `label`, `file`, `files`, `engine`, `mode`, `fallback`, `fallbackReason`, `metadata`, `warnings`
+returns: `versionId`, `label`, `file`, `files`, `engine`, `appearance`, `mode`, `fallback`, `fallbackReason`, `metadata`, `warnings`
 
 
 ## `request_review`

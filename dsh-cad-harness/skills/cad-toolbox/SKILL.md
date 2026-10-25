@@ -6,7 +6,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-eight tools, but **three jobs first**. Almost every task starts by picking the
+Twenty-nine tools, but **three jobs first**. Almost every task starts by picking the
 group, not the tool — and the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
@@ -108,6 +108,7 @@ against it, and read a reference only when the skill tells you to.
 | "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |
+| "give this version a color/material design" | `attach_appearance` → `render_part({appearance:true})` | treating STL as a color carrier; the panel still previews STL |
 | "the reference image is gone from my context", "compare the build with the user's picture" | `recall_reference_image` | describing the image from memory |
 | "the user is only *talking* about a part", no geometry yet | `create_part` | `generate_part` (it would invent a shape) |
 | "before I claim this is delivered" | `delivery_audit` | re-reading your own notes |

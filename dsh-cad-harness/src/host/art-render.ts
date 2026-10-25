@@ -26,6 +26,7 @@ import { renderStlFramePng, renderVersionFrame, type RenderPartRequest, type Vie
 import { runPython } from './python-worker.ts';
 import { pythonRuntimeStatus } from './python-runtime.ts';
 import { safeArtifactName } from './runs.ts';
+import { appearancePath, readAppearance } from './appearance.ts';
 
 export type ArtEngine = 'openscad' | 'bpy' | 'auto';
 export type ArtMode = 'single' | 'views' | 'hero';
@@ -46,6 +47,8 @@ export interface ArtRenderOptions extends RenderPartRequest {
   samples?: number;
   exposure?: number;
   rig?: ArtRig;
+  /** Render versions/<id>/appearance.glb with its materials; requires bpy. */
+  appearance?: boolean;
 }
 
 export interface ArtImage {
@@ -61,6 +64,8 @@ export interface ArtRenderResult {
   /** True when engine=auto chose OpenSCAD because bpy was unavailable. */
   fallback: boolean;
   fallbackReason?: string;
+  /** True when the source was the version's attached GLB, not model.stl. */
+  appearance: boolean;
   mode: ArtMode;
   label: string;
   files: string[];
@@ -148,6 +153,13 @@ async function renderOpenScad(
 ): Promise<ArtRenderResult> {
   const started = Date.now();
   const versionId = opts.versionId;
+  if (opts.appearance) {
+    throw new ArtRenderError(
+      'appearance renders need engine "bpy"; OpenSCAD cannot read a GLB material design. ' +
+      'Use engine "bpy" or "auto" (with bpy installed).',
+      'invalid',
+    );
+  }
   const stl = join(storeRoot, 'versions', versionId, 'model.stl');
   if (!existsSync(stl)) throw new ArtRenderError(`no STL for version ${versionId} at ${stl}`, 'store-missing');
 
@@ -168,6 +180,7 @@ async function renderOpenScad(
     images.push({ data: png, view: label, name: `art-${versionId}-${fileNameLabel(label)}` });
     return {
       engine: 'openscad',
+      appearance: false,
       fallback: Boolean(fallbackReason),
       fallbackReason,
       mode,
@@ -195,6 +208,7 @@ async function renderOpenScad(
   }
   return {
     engine: 'openscad',
+    appearance: false,
     fallback: Boolean(fallbackReason),
     fallbackReason,
     mode,
@@ -221,8 +235,19 @@ async function renderBpy(
 ): Promise<ArtRenderResult> {
   const started = Date.now();
   const versionId = opts.versionId;
-  const stl = join(storeRoot, 'versions', versionId, 'model.stl');
-  if (!existsSync(stl)) throw new ArtRenderError(`no STL for version ${versionId} at ${stl}`, 'store-missing');
+  const appearance = Boolean(opts.appearance);
+  const source = appearance
+    ? appearancePath(storeRoot, versionId)
+    : join(storeRoot, 'versions', versionId, 'model.stl');
+  if (!existsSync(source)) {
+    throw new ArtRenderError(
+      appearance
+        ? `no appearance.glb for ${versionId}; attach one with attach_appearance({versionId, file}) first`
+        : `no STL for version ${versionId} at ${source}`,
+      'store-missing',
+    );
+  }
+  const appearanceRecord = appearance ? await readAppearance(storeRoot, versionId) : null;
   if (opts.section) {
     throw new ArtRenderError(
       'section cuts are OpenSCAD-only in L2. Use engine "openscad", or render the full part with bpy.',
@@ -258,7 +283,7 @@ async function renderBpy(
     const metadataPath = join(temp, 'metadata.json');
     const renderer: ArtRenderer = opts.renderer ?? (mode === 'hero' ? 'cycles' : 'workbench');
     const args = [
-      stl,
+      source,
       '--out', out,
       '--mode', mode,
       '--engine', renderer,
@@ -271,6 +296,7 @@ async function renderBpy(
       '--json', metadataPath,
       '--quiet',
     ];
+    if (appearance) args.push('--keep-materials');
     if (mode === 'single') args.push('--view', opts.view ?? 'iso');
     if (opts.zoom && opts.zoom !== 1) args.push('--zoom', String(opts.zoom));
 
@@ -323,12 +349,21 @@ async function renderBpy(
         : `bpy:${opts.view ?? 'iso'}`;
     return {
       engine: 'bpy',
+      appearance,
       fallback: false,
       mode,
       label,
       files,
       images,
-      metadata: { ...metadata, files, renderer },
+      metadata: {
+        ...metadata,
+        files,
+        renderer,
+        appearance,
+        ...(appearanceRecord
+          ? { appearance_sha256: appearanceRecord.sha256, appearance_materials: appearanceRecord.materials }
+          : {}),
+      },
       elapsedMs: Date.now() - started,
       warnings: warningsFromStderr(result.stderr),
     };
@@ -351,6 +386,25 @@ export async function renderArt(
 ): Promise<ArtRenderResult> {
   const mode = options.mode ?? 'single';
   const engine = options.engine ?? 'openscad';
+
+  // An attached appearance is a GLB; OpenSCAD has no material path for it and auto
+  // must not fall back to STL (that would silently drop the color design).
+  if (options.appearance) {
+    if (engine === 'openscad') {
+      throw new ArtRenderError(
+        'appearance renders need engine "bpy" (or "auto" with bpy installed); ' +
+        'OpenSCAD cannot read a GLB material design.',
+        'invalid',
+      );
+    }
+    if (options.rotate || options.section) {
+      throw new ArtRenderError(
+        'rotate/section are OpenSCAD-only; appearance renders support single/views/hero with bpy.',
+        'invalid',
+      );
+    }
+    return renderBpy(storeRoot, cwd, options, mode);
+  }
 
   if (mode !== 'single' && (options.rotate || options.section || (options.zoom && options.zoom !== 1))) {
     throw new ArtRenderError('rotate, section and zoom are single-mode only', 'invalid');

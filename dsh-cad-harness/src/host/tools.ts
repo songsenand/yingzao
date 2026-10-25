@@ -26,6 +26,8 @@ import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores }
 import { discoverWorkspaces } from './workspaces.ts';
 import { checkPrintability, measureVersion, renderStlViews, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { renderArt, ArtRenderError, type ArtRenderOptions } from './art-render.ts';
+import { attachAppearance, appearancePath } from './appearance.ts';
+import { resolveWorkspaceFile } from './unregistered.ts';
 import {
   builtinDefaultProfile, disclosureLists, evaluableRules, measuredResolutionMm, profileHash, validateProfile, violatesRule,
   type ProcessProfile,
@@ -2737,6 +2739,7 @@ export function registerCadTools(
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version to render, e.g. "v003".' },
       engine: { type: 'string', enum: ['openscad', 'bpy', 'auto'], description: 'Render backend. Default openscad (the old fast path). "bpy" needs the user-installed overlay; "auto" tries bpy, then falls back for single/views.' },
+      appearance: { type: 'boolean', description: 'Render the version\'s attached appearance.glb (materials/color) instead of model.stl. Requires engine bpy (or auto with bpy installed); attach one with attach_appearance first.' },
       mode: { type: 'string', enum: ['single', 'views', 'hero'], description: 'single (default) one frame; views four; hero one material shot (bpy only).' },
       renderer: { type: 'string', enum: ['workbench', 'cycles'], description: 'bpy renderer. Default workbench for single/views, cycles for hero.' },
       material: { type: 'string', enum: ['plastic', 'metal', 'clay', 'none'], description: 'bpy material preset. Default plastic.' },
@@ -2767,6 +2770,7 @@ export function registerCadTools(
           file: { type: 'string', required: true },
           files: { type: 'array', items: { type: 'string' }, required: true },
           engine: { type: 'string', required: true, description: 'The backend that actually ran: openscad | bpy.' },
+          appearance: { type: 'boolean', required: true, description: 'True when the source was the attached appearance.glb, not model.stl.' },
           mode: { type: 'string', required: true },
           fallback: { type: 'boolean', required: true, description: 'True when engine=auto chose OpenSCAD because bpy was unavailable.' },
           fallbackReason: { type: 'string' },
@@ -2802,6 +2806,7 @@ export function registerCadTools(
         file: string;
         files: string[];
         engine: 'openscad' | 'bpy';
+        appearance: boolean;
         mode: string;
         fallback: boolean;
         metadata: Record<string, Json>;
@@ -2813,6 +2818,7 @@ export function registerCadTools(
         file: art.files[0]!,
         files: art.files,
         engine: art.engine,
+        appearance: art.appearance,
         mode: art.mode,
         fallback: art.fallback,
         metadata: art.metadata as Record<string, Json>,
@@ -2833,6 +2839,80 @@ export function registerCadTools(
       }];
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
+    },
+  }));
+
+  // --- attach_appearance: give a version a color/material sidecar ---
+  registerTool(defineTool({
+    name: 'attach_appearance',
+    description:
+      'Attach a self-contained GLB color/material design to a saved version. The version keeps model.stl as geometry truth; render_part({appearance:true}) can then render the GLB with materials. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to attach the appearance to, e.g. "v003".' },
+      file: { type: 'string', required: true, description: 'Workspace path to a self-contained .glb (GLB v2, embedded buffers/images).' },
+      note: { type: 'string', description: 'Optional human note recorded in appearance.json (e.g. "three-color panel").' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          file: { type: 'string', required: true, description: 'Stored path: versions/<id>/appearance.glb.' },
+          sha256: { type: 'string', required: true },
+          bytes: { type: 'integer', required: true },
+          materials: { type: 'array', items: { type: 'string' }, required: true },
+          meshes: { type: 'integer', required: true },
+          replaced: { type: 'boolean', required: true, description: 'True when an older appearance.glb was overwritten.' },
+          note: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 30_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId?: string; file?: string; note?: string };
+      if (!a.versionId?.trim()) {
+        throw argError('attach_appearance', 'versionId', 'is required',
+          'a saved version id, e.g. "v003"', { example: 'attach_appearance({versionId:"v003", file:"panel.glb"})' });
+      }
+      if (!a.file?.trim()) {
+        throw argError('attach_appearance', 'file', 'is required',
+          'a workspace path to a self-contained .glb',
+          { example: 'attach_appearance({versionId:"v003", file:"panel.glb"})' });
+      }
+      const { store, cwd } = await allStores(exec);
+      if (!(await versionExists(store, a.versionId))) {
+        throw new Error(await versionNotFound(store, a.versionId));
+      }
+      const resolved = await resolveWorkspaceFile(a.file, cwd);
+      if (!resolved.toLowerCase().endsWith('.glb')) {
+        throw argError('attach_appearance', 'file', 'must be a .glb',
+          'a self-contained GLB v2; convert .blend/.gltf to .glb first',
+          { received: a.file, example: 'attach_appearance({versionId:"v003", file:"panel.glb"})' });
+      }
+      const { record, replaced } = await attachAppearance(store.root, a.versionId, resolved, {
+        ...(a.note ? { note: a.note } : {}),
+      });
+      const result: {
+        versionId: string;
+        file: string;
+        sha256: string;
+        bytes: number;
+        materials: string[];
+        meshes: number;
+        replaced: boolean;
+        note?: string;
+      } = {
+        versionId: record.versionId,
+        file: appearancePath(store.root, record.versionId),
+        sha256: record.sha256,
+        bytes: record.bytes,
+        materials: record.materials,
+        meshes: record.meshes,
+        replaced,
+      };
+      if (record.note) result.note = record.note;
+      return result;
     },
   }));
 

@@ -84,10 +84,10 @@ blender -b --factory-startup -noaudio \
 
 ## 边界
 
-- **只在 raw `run_python` / Blender CLI 路径生效**：`render_part` 仍只读版本的
-  `model.stl`，没有 appearance source；这次没有改 tool/schema。
-- **没有把 GLB 放进版本库**，也没有改 CAD 预览（面板仍是 `STLLoader`）。
-  颜色设计的版本化与 GLB 预览属于后续 L4。
+- 这个实验本身走的是 raw `run_python` / Blender CLI；**A 之后**已有
+  `attach_appearance` 把 GLB 挂到版本，`render_part({appearance:true})` 可渲染
+  `appearance.glb`。`model.stl` 仍是几何真值。
+- **CAD 面板仍是 `STLLoader`**，GLB 预览仍属 L4；appearance 侧车不改变面板预览。
 - **不做切片**：颜色只作为设计/渲染数据；STL 仍然是无色的几何交付。
 - `--keep-materials` 对 STL 是 no-op，会回退到 `--material`。
 - Cycles 的象牙白/金色在强日光下会偏亮；Workbench 图更适合确认材质分区，

@@ -16,6 +16,7 @@
 //      and a three-material GLB proves --keep-materials preserves color
 //   7  without bpy: render_studio.py exits 3 with the install/preflight advice
 //   8  with a Blender CLI: the same file renders through `blender -b -P` (dual entry)
+//   9  A: attach_appearance + render_part({appearance:true}) keeps GLB materials
 //
 //   node scripts/accept-bpy-art.mjs
 //   DSH_CAD_USER_SITE=/path/to/site-packages node scripts/accept-bpy-art.mjs   # test a temp bpy overlay
@@ -245,6 +246,27 @@ console.log('--- L2 native render_part backend ---');
   const versionId = await saveVersion(project.store, { stl: stlBytes, userIntent: 'L2 acceptance cube' });
   const exec = { agent: { session: { header: { cwd: l2cwd } } } };
   const renderPart = tools.get('render_part');
+
+  // A: the appearance sidecar. The GLB is copied into the workspace so the tool's
+  // workspace-containment check is exercised, not bypassed with a repo absolute path.
+  const attachAppearance = tools.get('attach_appearance');
+  await writeFile(join(l2cwd, 'panel-colors.glb'), await readFile(COLOR_GLB));
+  const attached = await attachAppearance.execute(
+    { versionId, file: 'panel-colors.glb', note: 'L2 acceptance' },
+    exec,
+  );
+  check(attached.materials.length === 3,
+    'attach_appearance records three materials', attached.materials.join(', '));
+  check(existsSync(join(project.root, 'versions', versionId, 'appearance.glb')),
+    'attach_appearance writes appearance.glb into the version');
+  let appearanceError = null;
+  try {
+    await renderPart.execute({ versionId, engine: 'openscad', appearance: true }, exec);
+  } catch (error) {
+    appearanceError = String(error.message);
+  }
+  check(/appearance renders need engine "bpy"/.test(appearanceError ?? ''),
+    'appearance rejects the OpenSCAD backend instead of dropping color', appearanceError ?? 'no error');
   const defaultValue = await renderPart.execute({ versionId }, exec);
   check(defaultValue.engine === 'openscad' && defaultValue.mode === 'single' && defaultValue.files.length === 1,
     'render_part keeps its old default: OpenSCAD single', `${defaultValue.engine}/${defaultValue.mode}`);
@@ -272,6 +294,23 @@ console.log('--- L2 native render_part backend ---');
     const autoValue = await renderPart.execute({ versionId, engine: 'auto', mode: 'single', imgSize: 64 }, exec);
     check(autoValue.engine === 'bpy' && autoValue.fallback === false,
       'L2 auto prefers bpy when it is usable', `${autoValue.engine}/${autoValue.fallback}`);
+    const appearanceValue = await renderPart.execute(
+      { versionId, engine: 'bpy', appearance: true, mode: 'views', imgSize: 64 },
+      exec,
+    );
+    const appearanceBlocks = renderPart.finalizeContent(exec, { value: appearanceValue });
+    const appearanceImages = (appearanceBlocks ?? []).filter((block) => block.type === 'image');
+    check(appearanceValue.engine === 'bpy' && appearanceValue.appearance === true
+      && appearanceValue.files.length === 4 && appearanceImages.length === 4,
+      'A: render_part appearance=true returns four files/attachments',
+      `${appearanceValue.engine}/${appearanceValue.appearance}/${appearanceValue.files.length}/${appearanceImages.length}`);
+    const appearanceAuto = await renderPart.execute(
+      { versionId, engine: 'auto', appearance: true, mode: 'single', imgSize: 64 },
+      exec,
+    );
+    check(appearanceAuto.engine === 'bpy' && appearanceAuto.appearance === true,
+      'A: auto + appearance prefers bpy and does not fall back',
+      `${appearanceAuto.engine}/${appearanceAuto.appearance}`);
     const cyclesSingle = await renderPart.execute(
       { versionId, engine: 'bpy', mode: 'single', renderer: 'cycles', imgSize: 64, samples: 4 },
       exec,
