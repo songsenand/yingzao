@@ -430,3 +430,20 @@ python $A/measure.py blender -b --factory-startup -noaudio -P $A/render_views.py
 > single/views 回退 OpenSCAD，hero 与 section 不做静默降级。验收：无 bpy 侧（OpenSCAD
 > single/views、自动回退、hero 拒绝、4 attachment）与 bpy overlay 侧（bpy views/hero、4/1
 > attachment + metadata）均通过；工具数仍 28。
+
+> **2026-10-25 真实 overlay 全链路（提交 8ef3588 之后）**：不是临时 site-packages。
+> 用 `python_runtime action=install` 的同一实现 `installIntoPythonOverlay(["bpy==5.2.3"])`
+> 把 bpy 装进 `$DSH_HOME/cad/runtime/user-site`（**996 MB**；bpy 5.2.3 LTS、Python 3.13.16；
+> overlay 的 numpy 2.5.4 被锁定的 2.5.3 shadow）。`skills/cad-art/preflight.py --json`
+> 返回 `status: ready`。
+>
+> 在真实 runtime/overlay 上执行 `render_part`：
+> `engine="bpy", mode="views", imgSize=512` → 4 个文件 / 4 个 attachment；
+> `mode="hero", samples=32` → 1 个文件 / 1 个 attachment，metadata
+> `bbox_mm = 240×160×14`、`bpy_version = 5.2.3 LTS`、Cycles **1.98 s**。
+> 工具代码、`runPython` 子进程、`render_studio.py`、PNG 都是真实路径。
+>
+> **边界（诚实标注）**：当前会话不是「造物模式」，工具表里没有 `render_part`，所以
+> attachment sink 用本地文件记录，而不是 DSH 的真实 attachment 服务；真实 tool result
+> 的 1/4 张 image block 走的是既有 `render_part` 管道（L2 只改了后端与返回字段）。
+> 若要做“在造物模式 UI 里让 Agent 自己点一次”，需要另开 CAD 预设会话；本轮未起。
