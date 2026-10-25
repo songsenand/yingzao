@@ -12,6 +12,7 @@
 //   external (port) interfaces appear in its parent's interfaces list
 // - mm / z-up everywhere
 
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
@@ -104,6 +105,16 @@ export interface AssemblyManifest {
   unit: 'mm';
   up: 'z';
   root: ManifestNode;
+  /**
+   * Content hash of the file this document was parsed from (8 hex chars).
+   *
+   * An ICD needs a revision identity: "which contract did this check audit?"
+   * used to be answerable only as "the file at that path at that time", so two
+   * edits at the same path were indistinguishable and a re-check silently
+   * replaced the old verdict. Not part of the schema — it is attached by the
+   * loader from the exact bytes it parsed.
+   */
+  manifestHash?: string;
 }
 
 /** An interface together with the path of the node that owns it. */
@@ -180,8 +191,10 @@ export async function resolveAssemblyManifestPath(
 
 export async function loadAssemblyManifest(path: string): Promise<AssemblyManifest> {
   let raw: unknown;
+  let text: string;
   try {
-    raw = JSON.parse(await readFile(path, 'utf8'));
+    text = await readFile(path, 'utf8');
+    raw = JSON.parse(text);
   } catch (e) {
     throw new Error(
       `assembly manifest is not readable JSON: ${(e as Error).message}\n` +
@@ -192,7 +205,11 @@ export async function loadAssemblyManifest(path: string): Promise<AssemblyManife
   if (issues.length > 0) {
     throw new Error(`${formatManifestIssues(issues)}\n  file: ${path}\n${manifestShapeHelp()}`);
   }
-  return raw as AssemblyManifest;
+  const manifest = raw as AssemblyManifest;
+  // Hash the bytes we actually parsed (not a re-read): "which revision" must not
+  // be a race with whoever edits the file next.
+  manifest.manifestHash = createHash('sha256').update(text).digest('hex').slice(0, 8);
+  return manifest;
 }
 
 export async function saveAssemblyManifest(path: string, manifest: AssemblyManifest): Promise<void> {

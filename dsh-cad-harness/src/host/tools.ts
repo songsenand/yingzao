@@ -5660,6 +5660,7 @@ export function registerCadTools(
       runId: run.id,
       checkedAt: report.checkedAt,
       manifestPath: path,
+      manifestHash: report.manifestHash,
       schema: 'assembly-check-pointer/v1',
     });
     return { report, manifestFile: path, origin: resolved.origin };

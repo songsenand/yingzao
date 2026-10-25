@@ -12,11 +12,11 @@
 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { compileStlOnly } from '../src/host/compile.ts';
 import { openVersionStore, saveVersion } from '../src/host/version.ts';
-import { runAssemblyCheck, saveAssemblyReport } from '../src/host/assembly-check.ts';
-import { saveAssemblyManifest } from '../src/host/manifest.ts';
+import { runAssemblyCheck } from '../src/host/assembly-check.ts';
+import { loadAssemblyManifest, saveAssemblyManifest } from '../src/host/manifest.ts';
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const store = openVersionStore(join(pluginRoot, 'data'));
@@ -141,7 +141,6 @@ await saveAssemblyManifest(badPath, manifestFor(vShaftBad));
 // ---- case 1: good manifest ----
 {
   const report = await runAssemblyCheck(store, goodPath);
-  await saveAssemblyReport(goodPath, report);
   console.log('  good report:', JSON.stringify(report.summary), 'status:', report.overallStatus);
 
   const byId = Object.fromEntries(report.results.map((r) => [r.interfaceId, r]));
@@ -159,12 +158,38 @@ await saveAssemblyManifest(badPath, manifestFor(vShaftBad));
   check('1f declared pairs not flagged', !report.undeclared.some(
     (u) => u.partA === 'bracket' || u.partB === 'bracket'), JSON.stringify(report.undeclared));
   check('1g status=check (undeclared only)', report.overallStatus === 'check', report.overallStatus);
+
+  // ---- ICD half: the requirement must ride WITH the verdict, and the contract
+  // needs an identity. A table of measurements without its tolerances is not a
+  // contract check; a verdict without a manifest hash cannot say WHICH contract
+  // it audited (both were missing until 2026-10-25).
+  check('1h report carries the manifest content hash', /^[0-9a-f]{8}$/.test(report.manifestHash ?? ''),
+    String(report.manifestHash));
+  const declById = Object.fromEntries(interfaces.map((i) => [i.id, i]));
+  const noReq = report.results.filter((r) => {
+    const d = declById[r.interfaceId];
+    if (!d) return false;
+    return !r.expected || r.expected.min !== d.tolerance.min || r.expected.max !== d.tolerance.max
+      || r.expected.nominal !== d.nominal.value || r.expected.quantity !== d.nominal.quantity;
+  });
+  check('1i every result echoes its declared requirement', noReq.length === 0,
+    `${noReq.length}/${report.results.length} without expected`);
+
+  const changedPath = join(assemblyDir, 'assembly.good.changed.json');
+  const changed = manifestFor(vShaftGood);
+  changed.root.interfaces = changed.root.interfaces.map((i) => i.id === 'if-stop' ? { ...i, note: '改过的注记' } : i);
+  await saveAssemblyManifest(changedPath, changed);
+  const h1 = (await loadAssemblyManifest(goodPath)).manifestHash;
+  const h1again = (await loadAssemblyManifest(goodPath)).manifestHash;
+  const h2 = (await loadAssemblyManifest(changedPath)).manifestHash;
+  check('1j the same bytes give the same id', h1 === h1again, `${h1} vs ${h1again}`);
+  check('1k a one-word edit changes the contract id', h1 !== h2, `${h1} vs ${h2}`);
+  await rm(changedPath, { force: true });
 }
 
 // ---- case 2: bad manifest (oversized shaft) ----
 {
   const report = await runAssemblyCheck(store, badPath);
-  await saveAssemblyReport(badPath, report);
   const byId = Object.fromEntries(report.results.map((r) => [r.interfaceId, r]));
   check('2a if-bearing hard-violation', byId['if-bearing']?.verdict === 'hard-violation',
     `verdict=${byId['if-bearing']?.verdict} measured=${byId['if-bearing']?.measured}`);

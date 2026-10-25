@@ -2102,8 +2102,22 @@ export function CadPanel(): React.ReactElement {
         measured?: number; verdict?: string; detail?: string;
       }[];
       const color = (v?: string) => v === 'pass' ? T.ok : v === 'intent-flag' ? T.warn : T.danger;
-      const req = (e?: { quantity?: string; min?: number; max?: number }) =>
-        e ? `${e.quantity ?? ''} ${e.min ?? '≤'}–${e.max ?? ''}`.trim() : '—';
+      // The requirement, not just a dash: the host now echoes tolerance (+ nominal
+      // unit) into every result, so this column finally has something to say.
+      const req = (e: { quantity?: string; nominal?: number; min?: number; max?: number } | undefined, verdict?: string) => {
+        // Two different "no requirement" cases, said differently:
+        //   skipped  → the manifest declared no tolerance (the detail says so);
+        //   otherwise → an OLD report, made before the requirement was echoed.
+        if (!e) return verdict === 'skipped' ? '未声明' : '未回传';
+        // A mechanical drawing writes ±0.05, not "-0.05–0.05"; and mm is the
+        // default unit in this whole panel, so only deg/N are worth a glyph —
+        // the 要求 column is ~60px wide and "同轴度" on a second line cost a row.
+        const symmetric = e.min !== undefined && e.max !== undefined && Math.abs(e.min + e.max) < 1e-9;
+        const range = symmetric ? `±${Math.abs(e.min as number)}` : `${e.min ?? '−∞'}–${e.max ?? '+∞'}`;
+        const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' ? 'N' : '';
+        const nominal = e.nominal !== undefined && e.nominal !== 0 ? `${e.nominal}` : e.nominal === 0 ? '0' : '';
+        return `${nominal} ${range}${unit}`.trim();
+      };
       const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
         React.createElement('td', {
           style: { padding: '3px 6px', borderBottom: '1px solid #e5e7eb', fontSize: 11,
@@ -2120,7 +2134,10 @@ export function CadPanel(): React.ReactElement {
         );
       }
       return React.createElement('div', { style: { overflowX: 'auto' } },
-        line(`清单「${rep.manifestName ?? '—'}」· ${rep.results?.length ?? rows.length} 个接口 · ` +
+        // `@hash` is the ICD's revision identity: this report audited THAT contract,
+        // not "whatever was at that path when it ran".
+        line(`清单「${rep.manifestName ?? '—'}」${(rep as any).manifestHash ? `@${(rep as any).manifestHash}` : ''}` +
+             ` · ${rep.results?.length ?? rows.length} 个接口 · ` +
              `通过 ${(rep.results ?? []).filter((x: any) => x.verdict === 'pass').length}`),
         React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 4 } },
           React.createElement('thead', null, React.createElement('tr', {},
@@ -2131,7 +2148,7 @@ export function CadPanel(): React.ReactElement {
             React.createElement('tr', { key: i },
               cell(row.interfaceId ?? '—', { strong: true }),
               cell(`${row.a ?? '?'} ↔ ${row.b ?? '?'}`),
-              cell(req(row.expected)),
+              cell(req(row.expected, row.verdict)),
               cell(String(row.measured ?? '—')),
               cell(row.verdict ?? '—', { strong: true, color: color(row.verdict) }))))),
       );

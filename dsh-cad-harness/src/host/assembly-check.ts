@@ -279,7 +279,13 @@ export interface InterfaceCheckResult {
   layer: 'L0' | 'L1' | 'L2';
   check: string;
   verdict: 'pass' | 'hard-violation' | 'intent-flag' | 'skipped';
-  expected?: { quantity: string; min?: number; max?: number };
+  /**
+   * The REQUIREMENT this result was judged against, echoed from the manifest.
+   * An ICD row without its requirement is a measurement, not a check: the panel
+   * used to render a 要求 column from a field nobody populated, so every row
+   * said "—" (r055: 0/25 had it).
+   */
+  expected?: { quantity: string; nominal?: number; min?: number; max?: number };
   measured?: number;
   detail: string;
 }
@@ -295,6 +301,8 @@ export interface AssemblyCheckReport {
   checkedAt: string;
   manifestPath: string;
   manifestName: string;
+  /** Content hash of the manifest that was audited (`manifest@<hash8>`). */
+  manifestHash?: string;
   results: InterfaceCheckResult[];
   undeclared: UndeclaredPair[];
   partWarnings: { partId: string; messages: string[] }[];
@@ -302,6 +310,20 @@ export interface AssemblyCheckReport {
   adjacencyThresholdMm: number;
   summary: { interfaces: number; pass: number; hardViolations: number; intentFlags: number; skipped: number; undeclared: number };
   overallStatus: 'pass' | 'check' | 'fail';
+}
+
+/** The requirement of one interface, in the shape the report/panel read. */
+function expectedOf(iface?: {
+  nominal?: { quantity: string; value: number };
+  tolerance?: { min: number; max: number };
+}): InterfaceCheckResult['expected'] {
+  if (!iface?.tolerance) return undefined;
+  return {
+    quantity: iface.nominal?.quantity ?? '',
+    ...(iface.nominal?.value !== undefined ? { nominal: iface.nominal.value } : {}),
+    min: iface.tolerance.min,
+    max: iface.tolerance.max,
+  };
 }
 
 /** Compare a measured value against the tolerance interval; honour severity. */
@@ -318,13 +340,16 @@ function verdictFor(iface: ManifestInterface, measured: number, detail: string):
   if (!tol) detail += ' — no tolerance declared: add tolerance {min,max}; a missing criterion is NOT a pass';
   return {
     interfaceId: iface.id,
+    // The evaluated branch builds its own object, so the requirement has to ride
+    // here too — `base.expected` never reaches a verdict that went through an
+    // operator (that was the bug the ICD acceptance caught).
+    expected: expectedOf(iface),
     ownerPath: [],
     a: iface.a, b: iface.b,
     type: iface.type, severity: iface.severity,
     layer: iface.layer ?? 'L0',
     check: iface.check ?? 'distance',
     verdict,
-    expected: iface.nominal ? { quantity: iface.nominal.quantity, min: tol?.min, max: tol?.max } : undefined,
     measured,
     detail,
   };
@@ -431,20 +456,33 @@ export async function runAssemblyCheckInTs(
 
   for (const { ownerPath, iface } of owned) {
     const owner = findNode(manifest.root, ownerPath[ownerPath.length - 1]!)!;
+    // A manifest may name an OPERATOR in `type` when `check` says the same thing
+    // (the validator tolerates that, because "coaxial" is what people write). The
+    // checker then has no fit kind to derive a layer/operator from — it used to
+    // crash on `derived.layer`. An interface we cannot evaluate is skipped WITH a
+    // reason, like every other unevaluable one.
     const derived = DEFAULT_DERIVED[iface.type];
-    const layer = iface.layer ?? derived.layer;
-    const checkName = iface.check ?? derived.check;
+    const layer = iface.layer ?? derived?.layer ?? 'L0';
+    const checkName = iface.check ?? derived?.check ?? null;
 
     const base: InterfaceCheckResult = {
       interfaceId: iface.id,
       ownerPath,
       a: iface.a, b: iface.b,
       type: iface.type, severity: iface.severity,
-      layer, check: checkName,
+      layer, check: checkName ?? '(none)',
       verdict: 'skipped',
+      expected: expectedOf(iface),
       detail: '',
     };
 
+    if (!checkName) {
+      results.push({
+        ...base,
+        detail: `interface type "${iface.type}" is not a fit kind, and no \`check\` operator names one — nothing to evaluate`,
+      });
+      continue;
+    }
     if (layer !== 'L0' && !IMPLEMENTED_CHECKS.has(checkName)) {
       results.push({ ...base, detail: `${layer} check "${checkName}" not implemented in v1 — pending` });
       continue;
@@ -607,6 +645,7 @@ export async function runAssemblyCheckInTs(
     checkedAt: new Date().toISOString(),
     manifestPath,
     manifestName: manifest.name,
+    manifestHash: manifest.manifestHash,
     results,
     undeclared,
     partWarnings,
@@ -730,11 +769,15 @@ export async function runAssemblyCheck(
       thresholds: { adjacencyThresholdMm },
     });
 
+    // The worker judges geometry, not paperwork: the requirement is attached here,
+    // from the interfaces the worker was handed (same list, same ids).
+    const reqById = new Map(interfaces.map((it) => [it.id, it]));
     return {
       checkedAt: new Date().toISOString(),
       manifestPath,
       manifestName: manifest.name,
-      results: solved.results,
+      manifestHash: manifest.manifestHash,
+      results: solved.results.map((r) => ({ ...r, expected: expectedOf(reqById.get(r.interfaceId)) })),
       undeclared: solved.undeclared,
       partWarnings,
       adjacencyThresholdMm,
@@ -762,6 +805,12 @@ export interface AssemblyCheckPointer {
   checkedAt: string;
   /** The manifest this check read, as resolved at run time. */
   manifestPath: string;
+  /**
+   * Content hash of that manifest (`manifest@<hash8>`). The path alone cannot tell
+   * two revisions apart, so a pointer without this says "some version of the file
+   * was checked" — which is exactly what an ICD must not say.
+   */
+  manifestHash?: string;
   /** What the pointer replaced: readers that expected a full report must follow `runId`. */
   schema: 'assembly-check-pointer/v1';
 }

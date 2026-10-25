@@ -338,6 +338,17 @@ validateAssembly(parts, thresholdMm = 0.75): Promise<AssemblyReport>
   `GET /api/cad/assembly/check` 顺着指针读运行并回报 `runId`；旧语料里的整份报告仍按原样返回。
 - datum 三类扩展（axis/plane/cylinder）落在 `compile.ts` 的 `DATUM_PRELUDE`，datums.json 存 `{points, axes, planes, cylinders}`（兼容旧点数组）
 - 验收：`accept-assembly.mjs` 14/14（豚鼠=显微镜第一级：正样本 3 接口精确命中、负样本硬违反 Ø-0.8、邻接发现 deliberate 未声明的 0.1mm 配合）
+- **判定必须回传要求**（2026-10-25）：`results[]` 每条都带 `expected{quantity, nominal, min, max}`，
+  由清单的 `tolerance` / `nominal` 回写。只列实测不列判据的表**不是**契约检查——此前面板渲染一个
+  没人填充的字段，25 行「要求」全是 "—"。同一算子分支（`verdictFor`）与跳过分支都要带，漏一处
+  就等于没做（`accept-icd` 1i 会抓到）。
+- **运行必须钉住清单内容哈希**（2026-10-25）：`report.manifestHash` 与指针文件都记
+  `manifest@<hash8>`（sha256 前 8 位，取**解析时所读的那份字节**，不重读）。只有路径无法区分两版
+  契约：改完清单重跑会按 `subject: manifest:<path>` 静默取代旧判定，无法回答"这条结论验的是哪一版
+  ICD"。旧的运行没有这个字段，面板显示空白而不是编造一个 id。
+- **一个(旧)崩溃路径已修**：清单允许把算子名写进 `type`（`"type":"coaxial"`，只要 `check` 明确），
+  校验器放行，但检查器按 `type` 查派生算子时会读 `undefined.layer` 崩掉。现在这种接口作为
+  `skipped` 报出原因，不再让整个检查失败。
 
 
 ### 6.5 轻量刚体物理（Host，原规划为 Client）
