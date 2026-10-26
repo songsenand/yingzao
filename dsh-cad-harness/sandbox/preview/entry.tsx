@@ -744,6 +744,67 @@ if (q.get('assert') === 'review') {
   })();
 }
 
+// ?assert=contract — the contract card must be a DOCUMENT, not a splash: a table
+// with rows, the undeclared pairs it counts (as many as it says), the manifest's
+// own holes, and its boundary. Machine-checked because "looks full" is not a check.
+if (q.get('assert') === 'contract') {
+  const waitFor = (fn: () => boolean, ms = 8000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const card = await waitFor(() => Boolean(document.querySelector('[data-contract-card]')));
+    const el = document.querySelector('[data-contract-card]');
+    const text = (el?.textContent ?? '').replace(/\s+/g, ' ');
+    const rows = document.querySelectorAll('[data-contract-row]').length;
+    const undeclaredRows = document.querySelectorAll('[data-undeclared-row]').length;
+    const said = /清单不完整：(\d+) 对/.exec(text);
+    const claimed = said ? Number(said[1]) : 0;
+    // Whether the "manifest is thin" line SHOULD be there is a property of the
+    // corpus, not of this scenario: read the manifest and compare. (Checking for
+    // its mere presence failed on a complete manifest — the right answer there is
+    // the absence of the line.)
+    const man = await fetch('/api/cad/assembly/manifest').then((r) => r.json()).catch(() => null);
+    let thin: { interfaces: number; withTol: number; nodes: number; bom: number } | null = null;
+    try {
+      let interfaces = 0; let withTol = 0;
+      const nodes: { qty?: number; material?: string }[] = [];
+      const walk = (n: any) => {
+        if (!n) return;
+        for (const it of n.interfaces ?? []) {
+          interfaces++;
+          if (it?.tolerance && typeof it.tolerance.min === 'number' && typeof it.tolerance.max === 'number') withTol++;
+        }
+        if (n.kind === 'part') nodes.push(n);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(man?.root);
+      thin = { interfaces, withTol, nodes: nodes.length, bom: nodes.filter((n) => typeof n.qty === 'number' && n.material).length };
+    } catch { thin = null; }
+    const expectThin = Boolean(thin && (thin.withTol < thin.interfaces || thin.bom < thin.nodes));
+    const saysThin = Boolean(document.querySelector('[data-contract-thin]'));
+    const lines = [
+      `contract document (dock ${w}×${h})`,
+      `${card ? 'PASS' : 'FAIL'}  the card is the contract document (not a centred splash)`,
+      `${rows > 0 ? 'PASS' : 'FAIL'}  it renders the contract table (${rows} row(s))`,
+      `${undeclaredRows === claimed ? 'PASS' : 'FAIL'}  it LISTS what it counts: says ${claimed} undeclared, renders ${undeclaredRows}`,
+      `${saysThin === expectThin ? 'PASS' : 'FAIL'}  the manifest-gap line matches the manifest` +
+        (thin ? ` (${thin.withTol}/${thin.interfaces} with tolerance, ${thin.bom}/${thin.nodes} with qty+material)` : ' (manifest unreadable)'),
+      `${text.includes('不覆盖') ? 'PASS' : 'FAIL'}  it states what the check does NOT cover`,
+    ];
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  })();
+}
+
 // ?assert=deeplink&expect=<text> — a link must land on its object, and an old
 // version must land in the HISTORY state (banner), not silently as if current.
 if (q.get('assert') === 'deeplink') {

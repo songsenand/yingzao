@@ -29,6 +29,9 @@ const SCENARIOS = [
   { name: 'deeplink', query: 'w=380&h=900&t=v030&assert=deeplink&expect=v030&debug=0' },
   { name: 'recent', query: 'w=380&h=900&recent=p005&assert=recent&expect=调焦滑座&debug=0' },
   { name: 'review', query: 'w=380&h=900&queue=1&recent=p005&assert=review&debug=0&slow=8000' },
+  // `t` is filled in after the server is up: the newest contract run of whichever
+  // corpus this is (the scenario must not hard-code an id from one example).
+  { name: 'contract', query: 'w=520&h=1200&assert=contract&debug=0', resolve: 'contract' },
 ];
 
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
@@ -65,6 +68,14 @@ try {
     process.exit(2);
   }
   console.log(`ui scenarios (corpus: ${DATA})\n`);
+  // Find the run each dynamic scenario needs, from the corpus itself.
+  let newestContract = null;
+  try {
+    const products = await fetch(`${BASE}api/cad/products`).then((r) => r.json());
+    newestContract = (products.runs ?? []).find((r) => r.kind === 'assembly-check') ?? null;
+  } catch { /* the scenario reports the missing verdict */ }
+  if (!newestContract) console.log('note: no assembly-check run in this corpus — the contract scenario needs one');
+  else for (const s of chosen) if (s.resolve === 'contract') s.query = `t=${newestContract.id}&${s.query}`;
   for (const s of chosen) {
     await fetch(`${BASE}api/cad/assert-result?clear=1`).catch(() => {});
     // Give the page a window longer than the assert needs: the capture fires at

@@ -403,6 +403,29 @@ export interface PhysicsReportView {
 // viewport (muted, 11px, one ellipsised line).
 // ---------------------------------------------------------------------------
 
+/**
+ * A requirement in drawing notation: `0 ±0.05`, `0.2 0.1–0.3`, `±0.5°`.
+ *
+ * Two different "no requirement" cases are said differently — `skipped` means the
+ * manifest declared none (the interface is unevaluable), anything else means the
+ * report predates the echo (an old report, not a pass).
+ */
+const reqText = (
+  e?: { quantity?: string; nominal?: number; min?: number; max?: number },
+  verdict?: string,
+): string => {
+  if (!e) return verdict === 'skipped' ? '未声明' : '未回传';
+  const symmetric = e.min !== undefined && e.max !== undefined && Math.abs(e.min + e.max) < 1e-9;
+  const range = symmetric ? `±${Math.abs(e.min as number)}` : `${e.min ?? '−∞'}–${e.max ?? '+∞'}`;
+  const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' ? 'N' : '';
+  const nominal = e.nominal === undefined ? '' : String(e.nominal);
+  return `${nominal} ${range}${unit}`.trim();
+};
+
+/** An undeclared pair's gap, said the way it matters (a clash beats a gap). */
+const gapText = (u: { minDistance: number; intersectionVolume: number }): string =>
+  u.intersectionVolume > 0 ? `干涉 ${u.intersectionVolume.toFixed(1)}mm³` : `${u.minDistance.toFixed(2)}mm`;
+
 const fmtTime = (ts: string): string => {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return '';
@@ -2044,21 +2067,123 @@ export function CadPanel(): React.ReactElement {
     }
   };
 
-  /** Report-only runs (assembly manifest check) have no geometry to draw. */
-  const reportOnlyCard = (r: RunProduct) => React.createElement(
-    'div',
-    {
-      style: {
-        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, textAlign: 'center',
-      },
-    },
-    React.createElement('div', { style: { fontSize: 30 } }, '📋'),
-    React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, runTitle(r)),
-    React.createElement('div', { style: { fontSize: 12, color: '#4b5563' } }, r.summary),
-    React.createElement('div', { style: { fontSize: 11, color: T.muted } },
-      '这次运行没有几何体 — 清单检查只读接口与 datum'),
-  );
+  /**
+   * A contract check has no geometry, so the viewport IS the document — and it used
+   * to be a centred splash: a title, three counts, and an apology ("no geometry —
+   * it only reads interfaces"). The counts said how many, never WHAT; the most
+   * actionable fact (13 pairs touch without being declared) was the smallest
+   * number on the card; and the manifest's own holes (no tolerances, no BOM) were
+   * invisible, so "25 通过" read as a complete contract when it was neither.
+   *
+   * Option B (user, 2026-10-27): show the CONTRACT, not a summary of it.
+   *   fixed header  identity + verdict
+   *   scrolling body: 清单本身的缺口 → 一句话结论 → 契约表(全部) → 未声明(全部) → 边界
+   */
+  const reportOnlyCard = (r: RunProduct) => {
+    const rep: any = runReport;
+    const rows = (rep?.results ?? []) as {
+      interfaceId?: string; a?: string; b?: string; type?: string; check?: string;
+      expected?: { quantity?: string; nominal?: number; min?: number; max?: number };
+      measured?: number; verdict?: string; detail?: string;
+    }[];
+    const s = rep?.summary ?? {};
+    const hard = s.hardViolations ?? 0;
+    const skipped = s.skipped ?? 0;
+    const intent = s.intentFlags ?? 0;
+    const undeclared = (rep?.undeclared ?? []) as
+      { partA: string; partB: string; minDistance: number; intersectionVolume: number }[];
+    const verdict = !rep ? { label: '读取中', color: T.muted }
+      : hard > 0 ? { label: '契约有冲突', color: T.danger }
+        : rows.length === 0 || skipped + intent > 0 ? { label: '无法判定', color: T.warn }
+          : { label: '契约成立', color: T.ok };
+    const opLabel: Record<string, string> = {
+      coaxial: '同轴', distance: '距离', 'diameter-match': '直径',
+      'motion-clearance': '运动间隙', 'spring-preload': '预紧力', 'spring-behaviour': '弹簧',
+    };
+    const opCounts = rows.reduce<Record<string, number>>((acc, x) => {
+      const k = x.check ?? '?';
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+    const ops = Object.entries(opCounts).map(([k, n]) => `${n} ${opLabel[k] ?? k}`).join(' · ');
+    const noReq = rows.filter((x) => !x.expected && x.verdict !== 'skipped').length;
+    const partName = (id: string) => machine?.nodes.find((n) => n.id === id)?.part ?? id;
+    const partCount = new Set(r.sourceVersionIds.map((v) => partOfVersion.get(v)).filter(Boolean)).size;
+    // The manifest's own completeness. Read from the CURRENT manifest (`machine`)
+    // and labelled as such: the report may be about an older revision.
+    const ifaces = machine?.contract.interfaces ?? 0;
+    const withTol = machine?.contract.withTolerance ?? 0;
+    const nodes = machine?.nodes.length ?? 0;
+    const bomFilled = (machine?.nodes ?? []).filter((n) => n.qty !== undefined && n.material).length;
+    const thin: string[] = [];
+    if (ifaces > 0 && withTol < ifaces) thin.push(`${ifaces} 条接口只有 ${withTol} 条声明了容差`);
+    if (nodes > 0 && bomFilled < nodes) thin.push(`${nodes} 个零件节点只有 ${bomFilled} 个填了数量+材料`);
+    const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
+      React.createElement('td', {
+        style: { padding: '2px 5px', borderBottom: `1px solid ${T.divider}`, fontSize: 10,
+                 fontWeight: opts.strong ? 600 : 400, color: opts.color ?? T.ink, whiteSpace: 'nowrap' },
+      }, text);
+    const row = (text: React.ReactNode, style?: React.CSSProperties) =>
+      React.createElement('div', { style: { fontSize: 11, lineHeight: 1.5, color: T.ink, ...style } }, text);
+    return React.createElement(
+      'div',
+      { 'data-contract-card': '1', style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', textAlign: 'left', background: '#fff' } },
+      // ── fixed header: who + verdict ────────────────────────────────────────
+      React.createElement('div', { style: { padding: '10px 12px 6px', borderBottom: `1px solid ${T.edge}` } },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, flex: '1 1 auto' } }, '装配清单检查'),
+          React.createElement('span', { style: {
+            flex: 'none', fontSize: 10, fontWeight: 600, color: verdict.color,
+            border: `1px solid ${verdict.color}`, borderRadius: 9, padding: '1px 7px',
+          } }, verdict.label),
+        ),
+        row(`${rep?.manifestName ?? runTitle(r)}${rep?.manifestHash ? ` @${rep.manifestHash}` : ''}`,
+          { color: T.soft, marginTop: 1 }),
+        row(`${fmtTime(r.timestamp)} · ${partCount} 个零件 · ${r.sourceVersionIds.length} 个版本 · 阈值 ${rep?.adjacencyThresholdMm ?? 0.75}mm`,
+          { color: T.muted, fontSize: 10 }),
+      ),
+      // ── scrolling body: the document ───────────────────────────────────────
+      React.createElement('div', { style: { flex: '1 1 auto', overflowY: 'auto', padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 4 } },
+        ...(thin.length ? [React.createElement('div', {
+          key: 'thin', 'data-contract-thin': '1',
+          style: { fontSize: 11, lineHeight: 1.5, color: T.warn, fontWeight: 600 },
+        }, `当前清单本身：${thin.join(' · ')}`)] : []),
+        ...(noReq ? [row(`这份报告有 ${noReq} 条结果没有回传判据——不能读作通过`, { color: T.warn, fontSize: 10 })] : []),
+        rep
+          ? row(`${rows.length} 条声明接口，${s.pass ?? 0} 条通过${hard ? `，${hard} 条硬冲突` : ''}${skipped ? `，${skipped} 条跳过` : ''}`)
+          : row('报告读取中…', { color: T.muted }),
+        ...(ops ? [row(`执行：${ops}`, { color: T.soft, fontSize: 10 })] : []),
+        ...(rows.length === 0 && rep ? [row('清单没有声明任何接口——下面只有相邻关系的发现。', { color: T.warn, fontSize: 10 })] : []),
+        rows.length ? React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 2 } },
+          React.createElement('thead', null, React.createElement('tr', {},
+            ['接口', '零件对', '要求', '实测', '判定'].map((h) =>
+              React.createElement('th', { key: h, style: { padding: '2px 5px', fontSize: 10, textAlign: 'left',
+                borderBottom: `2px solid ${T.line}`, color: T.muted, whiteSpace: 'nowrap' } }, h)))),
+          React.createElement('tbody', null, rows.map((x, i) =>
+            React.createElement('tr', { key: i, 'data-contract-row': x.interfaceId ?? String(i) },
+              cell(x.interfaceId ?? '—', { strong: true }),
+              cell(`${x.a ?? '?'} ↔ ${x.b ?? '?'}`),
+              cell(reqText(x.expected, x.verdict)),
+              cell(String(x.measured ?? '—')),
+              cell(x.verdict ?? '—', { strong: true, color: x.verdict === 'pass' ? T.ok : x.verdict === 'intent-flag' ? T.warn : T.danger }))))) : null,
+        ...(undeclared.length ? [
+          React.createElement('div', { key: 'u-h', style: { height: 1, background: T.divider, margin: '6px 0 2px' } }),
+          row(`清单不完整：${undeclared.length} 对相邻零件没有声明关系`, { color: T.warn, fontWeight: 600 }),
+          ...undeclared.map((u, i) => React.createElement('div', {
+            key: `u${i}`, 'data-undeclared-row': String(i),
+            style: { fontSize: 10, color: T.soft, paddingLeft: 6, lineHeight: 1.5 },
+          }, `${partName(u.partA)} ↔ ${partName(u.partB)}   ${gapText(u)}`)),
+        ] : []),
+        ...((rep?.partWarnings ?? []) as { partId: string; messages: string[] }[]).map((w, i) =>
+          React.createElement('div', { key: `w${i}`, style: { fontSize: 10, color: T.warn } },
+            `${w.partId}: ${w.messages.join('; ')}`)),
+        ...(rep ? [
+          React.createElement('div', { key: 'b', style: { height: 1, background: T.divider, margin: '6px 0 2px' } }),
+          row('不覆盖：零件几何干涉（装配间隙）· 数量/材料/库存（BOM）· 可打印性', { color: T.muted, fontSize: 10 }),
+        ] : []),
+      ),
+    );
+  };
 
   /** Compact per-kind report body, rendered from the run's own report.json. */
   const runReportBody = (r: RunProduct): React.ReactNode => {
@@ -2102,22 +2227,7 @@ export function CadPanel(): React.ReactElement {
         measured?: number; verdict?: string; detail?: string;
       }[];
       const color = (v?: string) => v === 'pass' ? T.ok : v === 'intent-flag' ? T.warn : T.danger;
-      // The requirement, not just a dash: the host now echoes tolerance (+ nominal
-      // unit) into every result, so this column finally has something to say.
-      const req = (e: { quantity?: string; nominal?: number; min?: number; max?: number } | undefined, verdict?: string) => {
-        // Two different "no requirement" cases, said differently:
-        //   skipped  → the manifest declared no tolerance (the detail says so);
-        //   otherwise → an OLD report, made before the requirement was echoed.
-        if (!e) return verdict === 'skipped' ? '未声明' : '未回传';
-        // A mechanical drawing writes ±0.05, not "-0.05–0.05"; and mm is the
-        // default unit in this whole panel, so only deg/N are worth a glyph —
-        // the 要求 column is ~60px wide and "同轴度" on a second line cost a row.
-        const symmetric = e.min !== undefined && e.max !== undefined && Math.abs(e.min + e.max) < 1e-9;
-        const range = symmetric ? `±${Math.abs(e.min as number)}` : `${e.min ?? '−∞'}–${e.max ?? '+∞'}`;
-        const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' ? 'N' : '';
-        const nominal = e.nominal !== undefined && e.nominal !== 0 ? `${e.nominal}` : e.nominal === 0 ? '0' : '';
-        return `${nominal} ${range}${unit}`.trim();
-      };
+      const req = reqText;
       const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
         React.createElement('td', {
           style: { padding: '3px 6px', borderBottom: '1px solid #e5e7eb', fontSize: 11,
@@ -2133,12 +2243,14 @@ export function CadPanel(): React.ReactElement {
           line('给装配清单补上 interfaces 之后重跑，报告才会逐条列出接口 × 要求 × 实测 × 判定。', T.muted),
         );
       }
-      return React.createElement('div', { style: { overflowX: 'auto' } },
+      const undeclared = (rep.undeclared ?? []) as { partA: string; partB: string; minDistance: number; intersectionVolume: number }[];
+      return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
         // `@hash` is the ICD's revision identity: this report audited THAT contract,
         // not "whatever was at that path when it ran".
         line(`清单「${rep.manifestName ?? '—'}」${(rep as any).manifestHash ? `@${(rep as any).manifestHash}` : ''}` +
              ` · ${rep.results?.length ?? rows.length} 个接口 · ` +
              `通过 ${(rep.results ?? []).filter((x: any) => x.verdict === 'pass').length}`),
+        React.createElement('div', { style: { overflowX: 'auto' } },
         React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 4 } },
           React.createElement('thead', null, React.createElement('tr', {},
             ['接口', '零件对', '要求', '实测', '判定'].map((h) =>
@@ -2151,6 +2263,16 @@ export function CadPanel(): React.ReactElement {
               cell(req(row.expected, row.verdict)),
               cell(String(row.measured ?? '—')),
               cell(row.verdict ?? '—', { strong: true, color: color(row.verdict) }))))),
+        ),
+        // Undeclared adjacency used to be listed only in a branch that could never
+        // run when the table had rows — so the panel showed the COUNT and nothing
+        // else, exactly where the action is.
+        ...(undeclared.length ? [
+          line(`清单不完整：${undeclared.length} 对相邻零件没有声明关系（阈值 ${(rep as any).adjacencyThresholdMm ?? 0.75}mm）`, T.warn),
+          ...undeclared.map((u, i) => line(`  ${u.partA} ↔ ${u.partB}   ${gapText(u)}`, T.soft)),
+        ] : []),
+        ...((rep.partWarnings ?? []) as { partId: string; messages: string[] }[]).map((w, i) =>
+          line(`${w.partId}: ${w.messages.join('; ')}`, T.warn)),
       );
     }
     if (r.kind === 'assembly') {
@@ -2165,20 +2287,6 @@ export function CadPanel(): React.ReactElement {
             p.status === 'interference' ? T.danger : p.status === 'too_tight' ? T.warn : T.ok)),
       );
     }
-    // assembly-check
-    const s = rep.summary ?? {};
-    return React.createElement('div', null,
-      line(`${s.interfaces ?? 0} 接口 · 通过 ${s.pass ?? 0} · 硬冲突 ${s.hardViolations ?? 0} · 意图偏差 ${s.intentFlags ?? 0} · 未声明 ${s.undeclared ?? 0}`),
-      ...((rep.results ?? []) as { interfaceId: string; verdict: string; measured: number; type: string }[]).map((x, i) =>
-        line(`${x.interfaceId} (${x.type}) — ${x.verdict} · 实测 ${x.measured}`,
-          x.verdict === 'pass' ? T.ok : x.verdict === 'hard-violation' ? T.danger : T.warn)),
-      ...((rep.undeclared ?? []) as { partA: string; partB: string; minDistance: number; intersectionVolume: number }[]).map((u, i) =>
-        line(`未声明邻接: ${u.partA} ↔ ${u.partB} · ` + (u.intersectionVolume > 0
-          ? `干涉 ${u.intersectionVolume.toFixed(1)}mm³`
-          : `间隙 ${u.minDistance.toFixed(2)}mm`), T.warn)),
-      ...((rep.partWarnings ?? []) as { partId: string; messages: string[] }[]).map((w, i) =>
-        line(`${w.partId}: ${w.messages.join('; ')}`, T.warn)),
-    );
   };
 
   const ownerPartOf = (versionId: string): PartProduct | null =>

@@ -16,6 +16,16 @@ export interface MachineNode {
   part: string;
   /** Version pinned by the node, when it declares one. */
   version: string | null;
+  /**
+   * BOM facts the manifest MAY carry (schema: qty / material / source / stockRef).
+   * They were dropped by the reader, so the panel could not even say whether a
+   * BOM existed — "no list" and "empty list" looked identical. Kept verbatim:
+   * absent means "not declared", which is information, not zero.
+   */
+  qty?: number;
+  material?: string;
+  source?: string;
+  stockRef?: string;
 }
 
 export interface Machine {
@@ -25,6 +35,13 @@ export interface Machine {
   nodes: MachineNode[];
   /** Distinct part names — what the navigator's "16 零件" line counts. */
   distinctParts: number;
+  /**
+   * How much of a CONTRACT this manifest actually is. A count of interfaces is not
+   * a contract: an interface with no tolerance is unevaluable, and a BOM node with
+   * no qty/material is a name. The card says so instead of letting "25 接口" imply
+   * 25 checked requirements.
+   */
+  contract: { interfaces: number; withTolerance: number };
 }
 
 /**
@@ -49,11 +66,17 @@ export function parseMachine(raw: unknown): Machine | null {
       ? n.part.trim()
       : typeof n.name === 'string' && n.name.trim() ? n.name.trim() : '';
     if (n.kind === 'part' && ref) {
-      nodes.push({
+      const node: MachineNode = {
         id: typeof n.id === 'string' && n.id ? n.id : String(nodes.length + 1),
         part: ref,
         version: typeof n.version === 'string' && n.version ? n.version : null,
-      });
+      };
+      const with0 = n as { qty?: unknown; material?: unknown; source?: unknown; stockRef?: unknown };
+      if (typeof with0.qty === 'number') node.qty = with0.qty;
+      if (typeof with0.material === 'string' && with0.material) node.material = with0.material;
+      if (typeof with0.source === 'string' && with0.source) node.source = with0.source;
+      if (typeof with0.stockRef === 'string' && with0.stockRef) node.stockRef = with0.stockRef;
+      nodes.push(node);
     }
     if (Array.isArray(n.children)) for (const child of n.children) walk(child as typeof n);
   };
@@ -62,5 +85,29 @@ export function parseMachine(raw: unknown): Machine | null {
 
   const name = [doc.name, root.name, root.id]
     .find((x): x is string => typeof x === 'string' && x.trim().length > 0) ?? '整机';
-  return { name: name.trim(), nodes, distinctParts: new Set(nodes.map((n) => n.part)).size };
+
+  // Interfaces live on the node that owns the pair they connect, so they are
+  // counted during the same walk (a nested assembly contributes its own).
+  let interfaces = 0;
+  let withTolerance = 0;
+  const walkIfaces = (n: { interfaces?: unknown; children?: unknown }): void => {
+    if (!n) return;
+    if (Array.isArray(n.interfaces)) {
+      for (const it of n.interfaces) {
+        if (!it || typeof it !== 'object') continue;
+        interfaces++;
+        const tol = (it as { tolerance?: { min?: unknown; max?: unknown } }).tolerance;
+        if (tol && typeof tol.min === 'number' && typeof tol.max === 'number') withTolerance++;
+      }
+    }
+    if (Array.isArray(n.children)) for (const c of n.children) walkIfaces(c as typeof n);
+  };
+  walkIfaces(root);
+
+  return {
+    name: name.trim(),
+    nodes,
+    distinctParts: new Set(nodes.map((n) => n.part)).size,
+    contract: { interfaces, withTolerance },
+  };
 }
