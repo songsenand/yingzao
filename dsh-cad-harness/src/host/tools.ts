@@ -591,6 +591,17 @@ export function registerCadTools(
     cycles?: number;
   }, project: ProjectStores) {
     const { runStore } = project;
+    // `cycles` is the only sampling-adjacent knob the caller controls, and 0 used
+    // to be coerced to 2 turns by the worker's `or 2` while the TS oracle kept 0.
+    // Refuse it here: "no motion" is not a motion simulation, and a silent 2-turn
+    // answer is the opposite of what the caller asked.
+    if (a.cycles !== undefined && (!Number.isFinite(a.cycles) || a.cycles <= 0)) {
+      throw argError(
+        'simulate_motion', 'cycles', 'must be a positive finite number',
+        'a number > 0; fractions are allowed (0.03 ≈ 10.8°) — 0 means "no motion", which is not a simulation',
+        { received: a.cycles, example: 'cycles: 0.03' },
+      );
+    }
     const parts: MotionPartInput[] = [];
     const stlFiles: { name: string; stlPath: string }[] = [];
     const usedVersions: (string | null)[] = [];
@@ -716,8 +727,11 @@ export function registerCadTools(
     // DESIGN §21: 干涉不是"黄牌提醒"，是交付阻塞。机构里两个零件在运动中
     // 相互重叠 = 几何上不可制造（要么留间隙要么有过盈声明），直接 fail（红）。
     const interferenceBlocking = report.metrics.interferenceCount > 0;
+    const samplingSatisfied = report.metrics.samplingSatisfied === true;
     const motionStatus: 'pass' | 'check' | 'fail' =
-      interferenceBlocking ? 'fail' : report.overallStatus === 'pass' ? 'pass' : 'check';
+      interferenceBlocking ? 'fail'
+        : !samplingSatisfied ? 'check'
+          : report.overallStatus === 'pass' ? 'pass' : 'check';
     await run.commit({
       title: runSubject('motion', geometries.map((g) => g.name), sourceVersionIds)
         ?? `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
@@ -725,13 +739,15 @@ export function registerCadTools(
       status: motionStatus,
       // Interference is a witness (the solid overlaps in a real pose) -> excluded.
       // Anchor drift / constraint violations mean the numbers are not trustworthy
-      // -> difficult, never a clean bill.
+      // -> difficult, never a clean bill. Insufficient sampling is the same kind
+      // of statement: there was no pose to test, so "0 interference" is unearned.
       judgement: interferenceBlocking ? 'excluded'
-        : (report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
+        : (!samplingSatisfied || report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
           : 'not-excluded',
       summary: (interferenceBlocking ? '❌ 不可交付 · ' : '') +
         (initialGaps.length ? `初始最大失配 ${Math.max(...initialGaps.map((g) => g.gapMm)).toFixed(2)}mm · ` : '') +
-        `干涉 ${report.metrics.interferenceCount} 次` +
+        `采样 ${report.metrics.interferenceChecks}/${24}${samplingSatisfied ? '' : '（不足，干涉未检查）'}` +
+        ` · 干涉 ${report.metrics.interferenceCount} 次` +
         (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : ''),
     });
     const blocking = interferenceBlocking
@@ -748,6 +764,13 @@ export function registerCadTools(
       followers: report.metrics.followers,
       interferenceCount: report.metrics.interferenceCount,
       interferenceEvents: report.metrics.interferenceEvents,
+      interferenceChecks: report.metrics.interferenceChecks,
+      candidatePairs: report.metrics.candidatePairs,
+      interferencePairChecks: report.metrics.interferencePairChecks,
+      samplingSatisfied: report.metrics.samplingSatisfied,
+      // The declared output schema is a number (not nullable); omit it when the
+      // scenario has no drive, instead of encoding "no crank" as a magic value.
+      ...(report.metrics.maxSampleGapDeg === null ? {} : { maxSampleGapDeg: report.metrics.maxSampleGapDeg }),
       maxJointDriftMm: report.metrics.maxJointDriftMm,
       // Measured BEFORE stepping (assertAssembledAtStart). It used to be computed and
       // thrown away, so a scenario 1.9mm from assembled passed under a 2mm tolerance with
@@ -2410,7 +2433,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_motion',
     description:
-      'Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline per sampled pose, joint anchor drift, keyframes. Gravity is off.',
+      'Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.',
     parameters: {
       parts: {
         type: 'array',
@@ -2491,6 +2514,11 @@ export function registerCadTools(
           followers: { type: 'object', required: true, additionalProperties: true },
           interferenceCount: { type: 'integer', required: true },
           interferenceEvents: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          interferenceChecks: { type: 'integer', required: true, description: 'Sampled poses actually boolean-tested. 0 means no interference check was performed.' },
+          candidatePairs: { type: 'integer', required: true },
+          interferencePairChecks: { type: 'integer', required: true, description: 'interferenceChecks × candidatePairs.' },
+          samplingSatisfied: { type: 'boolean', required: true, description: 'false when fewer than 24 poses could be sampled; the run is then check, never pass.' },
+          maxSampleGapDeg: { type: 'number', description: 'Largest crank rotation between samples (null without a drive).' },
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
           deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
@@ -2532,6 +2560,11 @@ export function registerCadTools(
           followers: Record<string, { travelMm: number; axis: string; periodSec: number | null }>;
           interferenceCount: number;
           interferenceEvents: { timeSec: number; partA: string; partB: string; volumeMm3: number; label?: string }[];
+          interferenceChecks: number;
+          candidatePairs: number;
+          interferencePairChecks: number;
+          samplingSatisfied: boolean;
+          maxSampleGapDeg?: number;
           maxJointDriftMm: number;
           jointViolations: string[];
           pivots: Record<string, number[]>;
@@ -2560,6 +2593,12 @@ export function registerCadTools(
         `Interference: ${value.interferenceCount} event(s)` +
           (events.length ? ` — ${events.join('; ')}` : '') +
           (more > 0 ? ` (+${more} more in the run report)` : ''),
+        `Sampling: ${value.interferenceChecks ?? 0}/24 poses × ${value.candidatePairs ?? 0} candidate pair(s)` +
+          ` = ${value.interferencePairChecks ?? 0} interference checks` +
+          (typeof value.maxSampleGapDeg === 'number' ? ` · max gap ${value.maxSampleGapDeg}°` : '') +
+          (value.samplingSatisfied === true
+            ? ''
+            : ' — INSUFFICIENT: too little travel to sample 24 poses; "0 interference" is NOT evidence.'),
         `Max joint drift: ${value.maxJointDriftMm}mm` +
           ((value.jointViolations ?? []).length ? ` — VIOLATIONS: ${value.jointViolations.join('; ')}` : '.') +
           (pivots.length ? ` Rotation/slide pivots (part file frame): ${pivots.map(([n, p]) => `${n}[${(p as number[]).join(',')}]`).join(' ')}` : ''),

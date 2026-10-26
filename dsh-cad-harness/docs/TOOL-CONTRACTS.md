@@ -488,7 +488,7 @@ returns: `overallStatus`, `metrics`
 
 ## `simulate_motion`
 
-Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline per sampled pose, joint anchor drift, keyframes. Gravity is off.
+Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -502,7 +502,7 @@ Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic fol
 simulate_motion({ parts: [], joints: [], drive: {} })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `blocking`, `deliverability`, `maxJointDriftMm`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`

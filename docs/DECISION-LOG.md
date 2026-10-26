@@ -4493,3 +4493,26 @@ Blender，保留它既保住“颜色/材质设计作为版本数据”的低成
 `package.json`、`accept-skill-tools.mjs`、`skills/cad-toolbox`/`cad-modeling-measure`/
 `cad-manufacturing`、README §二.9/§六、DESIGN §33、HARNESS §6、`docs/TOOL-CONTRACTS.md`。
 **未决**：面板 GLB viewer 是否做、何时做；若做，走 client GLTFLoader + 路由，不恢复 Blender。
+
+## 2026-10-26：运动仿真的干涉采样至少 24 个位姿，并必采终点
+
+**触发条件：** 第 2 条（定量分析：examples 里 0 个采样点的 run）、第 4 条（影响所有 motion run 与引用它们的 motion-clearance 接口）。
+
+**要解决的问题：** `simulate_motion` 的 `samplePerCycle = 24` 是“每整圈”的密度，不是“每次 run”的密度。天平的工作行程 0.03–0.039 圈对应 754–977 步，而 `sampleEvery = round(2π/ω/24/dt)` = 1047 步，循环条件 `(i+1) % sampleEvery == 0` 一次都不命中：
+
+- `sample_poses = []` → `trajectory.times = [0]`、`keyframes` 只有 crank0、`followersDetail` 空、回放停在 `t=0.00s`；
+- 干涉循环迭代 0 次 → `interferenceCount = 0`，`clean = True` → **pass**；
+- r070（toy-balance）与 r013（toy-balance2）正是这个形状，且被装配契约 I30–I32 / I2 当作“干涉 0 次”的证据。
+
+**决策内容：**
+
+1. 采样间隔取 `min(每整圈 24 个, floor((steps-1)/23))`，即每次 run 至少 24 个采样位姿；**最后一步无条件采样**（并去重）。
+2. 报告新增 `interferenceChecks`（采样位姿数）、`candidatePairs`、`interferencePairChecks`（位姿 × 候选对）、`samplingSatisfied`、`maxSampleGapDeg`；不足 24 个位姿时 `overallStatus = check`，绝不 pass。
+3. host 拒绝 `cycles <= 0`（Python 的 `or 2` 会把 0 静默变成 2 圈，TS 的 `?? 2` 保留 0，两端不一致）；Python 改为 `is None` 判断，与 TS 对齐。
+4. 5°/采样的上限暂缓（整圈从 24 点增到 72 点，布尔运算 3×），先以 24 点为底线。
+
+**理由：** “0 次检查”不能读成“0 次干涉”。24 与现有每圈密度一致，只有短于约一圈的 run 才加密，整圈/多圈行为不变；终点是限位/碰撞最可能发生的位置，必须进时间线。用 `check` 而不是 `pass`，是因为没有采样位姿就没有反例，缺证据不等于通过（DESIGN §25.7）。
+
+**依据：** r005/r013 为 754 步 / 0.377s、r070 为 977 步 / 0.489s、`.tmp-tb2` 的 r069 为 1047 步（刚好 1 个采样点），均 `sampleEvery = 1047`。改后直接调 worker：0.03 圈 → 24 个位姿 / 0.377s / 25 帧轨迹 / 终点 0.377s；0.078 圈 → 24 个位姿；1 圈 → 25 个位姿、15°/点；0.00001 圈 → 1 个位姿、`samplingSatisfied=false`、`check`。`node scripts/accept-motion-sampling.mjs --runtime .tmp-cad-runtime` 全过（短行程正对照找到 15 次干涉，TS/Python 的 checks/events 完全一致）；`accept-motion-parity.mjs` 全过；`npm run typecheck` 0 错误。
+
+**影响：** 所有 motion run 的 trajectory/keyframes 与 `interferenceEvents.step`（终点样本不再假设是 `sampleEvery` 的整数倍）；**新** run 采样不足时一律 check，旧 run（r070/r013）不会被追溯改写，仍以历史 pass 存在——要清掉 examples 里的假绿，需重跑这三份证据并更新 README（见“未决”）；新增 `scripts/accept-motion-sampling.mjs` 与 `accept:motion-sampling`。**未决**：是否把 5° 上限、以及 `motion-clearance` 算子对“覆盖数”的显式检查（让旧 run 也无法被引用），作为下一阶段。

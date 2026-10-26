@@ -168,7 +168,7 @@ export interface MotionScenario {
   oscillators?: MotionOscillatorInput[];
   /** Drive cycles to simulate. Default 2. */
   cycles?: number;
-  /** Interference samples per drive cycle. Default 24. */
+  /** Interference samples per drive cycle. Default 24. Internal: the tool schema does not expose it, so the floor below cannot be defeated by a caller. */
   samplePerCycle?: number;
   /** Parts whose per-sample axial position is recorded (phase analysis input). */
   recordParts?: string[];
@@ -182,6 +182,16 @@ export interface MotionReport {
     followers: Record<string, { travelMm: number; axis: 'x' | 'y' | 'z'; periodSec: number | null }>;
     interferenceCount: number;
     interferenceEvents: { step: number; timeSec: number; partA: string; partB: string; volumeMm3: number }[];
+    /** Sampled poses that were actually boolean-tested (coverage, not outcome). */
+    interferenceChecks: number;
+    /** Candidate pairs after fixed↔fixed and revolute-linked exclusions. */
+    candidatePairs: number;
+    /** interferenceChecks × candidatePairs. */
+    interferencePairChecks: number;
+    /** false when the run could not fit 24 poses — a check, never a pass. */
+    samplingSatisfied: boolean;
+    /** Largest crank rotation between samples (null without a drive). */
+    maxSampleGapDeg: number | null;
     maxJointDriftMm: number;
     jointViolations: string[];
     diverged: boolean;
@@ -362,7 +372,15 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   const cyclePeriod = omega > 0 ? (2 * Math.PI) / omega : 1;
   const totalSec = cycles * cyclePeriod;
   const steps = Math.max(1, Math.round(totalSec / dt));
-  const sampleEvery = Math.max(1, Math.round((cyclePeriod / samplePerCycle) / dt));
+  // A density per crank PERIOD is not a density per RUN: a 0.03-cycle sweep got
+  // one sample per 1047 steps against 754 total, so the interference loop ran
+  // zero times while `clean` still reported pass. Cap the interval so every run
+  // gets at least MIN_MOTION_INTERFERENCE_POSES samples; the final pose is
+  // sampled unconditionally (the end of travel is where a stop/collision lives).
+  const MIN_MOTION_INTERFERENCE_POSES = 24;
+  const sampleEveryByCycle = Math.max(1, Math.round((cyclePeriod / samplePerCycle) / dt));
+  const sampleEveryByFloor = Math.max(1, Math.floor((steps - 1) / (MIN_MOTION_INTERFERENCE_POSES - 1)));
+  const sampleEvery = Math.max(1, Math.min(sampleEveryByCycle, sampleEveryByFloor));
 
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   world.timestep = dt;
@@ -472,6 +490,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
 
   // ---- simulation loop (solver only; geometry work deferred) ----
   const sampleTimes: number[] = [];
+  const sampleSteps: number[] = [];
   const samplePoses: Record<string, PoseSample>[] = [];
   const milestonePoses = new Map<number, { label: string; poses: Record<string, PoseSample> }>();
   let diverged = false;
@@ -528,8 +547,9 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     if (warm === warmUpSteps) seedTravel(); // discard the settling transient
     trackTravel();
 
-    if ((i + 1) % sampleEvery === 0) {
+    if ((i + 1) % sampleEvery === 0 || (i + 1) === steps) {
       sampleTimes.push(t);
+      sampleSteps.push(i + 1);
       const poses: Record<string, PoseSample> = {};
       for (const part of scenario.parts) {
         const b = bodyByName.get(part.name)!;
@@ -643,7 +663,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       if (vol > 1e-3) {
         interferenceCount++;
         const timeSec = sampleTimes[k]!;
-        interferenceEvents.push({ step: (k + 1) * sampleEvery, timeSec, partA: aName, partB: bName, volumeMm3: +vol.toFixed(3) });
+        interferenceEvents.push({ step: sampleSteps[k]!, timeSec, partA: aName, partB: bName, volumeMm3: +vol.toFixed(3) });
         if (firstInterferenceSample < 0) firstInterferenceSample = k;
       }
     }
@@ -653,7 +673,11 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   // ---- followers: every part that is not fixed and not the drive body ----
   const followers: MotionReport['metrics']['followers'] = {};
   const followersDetail: Record<string, { t: number[]; vals: number[]; axis: 'x' | 'y' | 'z' }> = {};
-  const sampleDt = sampleEvery * dt;
+  // Mean spacing of the ACTUAL samples (the mandatory final pose can sit closer
+  // than sampleEvery; the uniform value would bias the period on short runs).
+  const sampleDt = sampleTimes.length > 1
+    ? (sampleTimes[sampleTimes.length - 1]! - sampleTimes[0]!) / (sampleTimes.length - 1)
+    : sampleEvery * dt;
   const recordSet = new Set(scenario.recordParts ?? []);
   for (const part of scenario.parts) {
     if (part.bodyType === 'fixed') continue;
@@ -711,7 +735,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   if (firstInterferenceSample >= 0) {
     const k = firstInterferenceSample;
     keyframes.push({
-      step: (k + 1) * sampleEvery,
+      step: sampleSteps[k]!,
       timeSec: +sampleTimes[k]!.toFixed(4),
       label: 'interference',
       poses: samplePoses[k]!,
@@ -722,7 +746,18 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     keyframes.push({ step: steps, timeSec: +sampleTimes[k]!.toFixed(4), label: 'final', poses: samplePoses[k]! });
   }
 
-  const clean = interferenceCount === 0 && !diverged && maxJointDriftMm <= JOINT_DRIFT_TOLERANCE_MM;
+  // Coverage is part of the verdict: zero sampled poses means zero interference
+  // checks, and "no counter-example" must never print as pass (DESIGN §25.7).
+  const interferenceChecks = samplePoses.length;
+  const candidatePairs = pairs.length;
+  const interferencePairChecks = interferenceChecks * candidatePairs;
+  const samplingSatisfied = interferenceChecks >= MIN_MOTION_INTERFERENCE_POSES;
+  const maxSampleGapDeg = omega > 0 ? +((360 * sampleEvery * dt) / cyclePeriod).toFixed(2) : null;
+
+  const clean = interferenceCount === 0
+    && !diverged
+    && maxJointDriftMm <= JOINT_DRIFT_TOLERANCE_MM
+    && samplingSatisfied;
 
   // Playback timeline: t=0 assembly pose + every simulation sample, per part.
   const toFlat = (poses: Record<string, PoseSample>, name: string): number[] => {
@@ -751,6 +786,11 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       followers,
       interferenceCount,
       interferenceEvents: interferenceEvents.slice(0, 20),
+      interferenceChecks,
+      candidatePairs,
+      interferencePairChecks,
+      samplingSatisfied,
+      maxSampleGapDeg,
       maxJointDriftMm: +maxJointDriftMm.toFixed(4),
       jointViolations,
       diverged,

@@ -5318,7 +5318,12 @@ def op_simulate_motion(params: dict) -> dict:
     # for a partial sweep into a whole revolution (or, below 1, into a single step) — the
     # caller asked one question and the tool answered another. The TS oracle never
     # truncated, so the two implementations also disagreed.
-    cycles = float(scenario.get("cycles") or 2)
+    #
+    # `or 2` treated an explicit 0 as "default" (2 turns) while the TS oracle kept 0;
+    # use the same `is None` rule on both sides. The host refuses cycles <= 0, so this
+    # only matters for direct engine callers — and it must not invent a motion.
+    requested_cycles = scenario.get("cycles")
+    cycles = 2.0 if requested_cycles is None else float(requested_cycles)
     sample_per_cycle = int(scenario.get("samplePerCycle") or 24)
     oscillator_inputs = scenario.get("oscillators") or []
     drive = scenario.get("drive")
@@ -5326,7 +5331,17 @@ def op_simulate_motion(params: dict) -> dict:
     cycle_period = (2 * math.pi) / omega if omega > 0 else 1.0
     total_sec = cycles * cycle_period
     steps = max(1, int(round(total_sec / dt)))
-    sample_every = max(1, int(round((cycle_period / sample_per_cycle) / dt)))
+    # Interference is an EXACT Manifold boolean per sampled pose. "24 per crank
+    # cycle" is a density per PERIOD, not per RUN: a 0.03-cycle working sweep got
+    # sample_every = 1047 steps against 754 total, so the loop below never sampled
+    # a pose — zero interference checks — while `interferenceCount = 0` and
+    # `clean = True` still reported pass. Cap the interval so every run gets at
+    # least MIN_MOTION_INTERFERENCE_POSES samples, and always include the final
+    # pose (the end of travel is where a stop/collision lives).
+    MIN_MOTION_INTERFERENCE_POSES = 24
+    sample_every_by_cycle = max(1, int(round((cycle_period / sample_per_cycle) / dt)))
+    sample_every_by_floor = max(1, (steps - 1) // (MIN_MOTION_INTERFERENCE_POSES - 1))
+    sample_every = max(1, min(sample_every_by_cycle, sample_every_by_floor))
 
     world = R.PhysicsWorld((0.0, 0.0, 0.0))
     world.integration_parameters.dt = dt
@@ -5422,6 +5437,7 @@ def op_simulate_motion(params: dict) -> dict:
             milestone_steps[step] = f"crank{int(round(angle * 180 / math.pi))}"
 
     sample_times: list = []
+    sample_steps: list = []
     sample_poses: list = []
     milestone_poses: dict = {}
     diverged = False
@@ -5473,8 +5489,9 @@ def op_simulate_motion(params: dict) -> dict:
             seed_travel()
         track_travel()
 
-        if (i + 1) % sample_every == 0:
+        if (i + 1) % sample_every == 0 or (i + 1) == steps:
             sample_times.append(t)
+            sample_steps.append(i + 1)
             poses = {}
             for part in scenario["parts"]:
                 body = world.rigid_bodies[bodies[part["name"]]]
@@ -5567,7 +5584,7 @@ def op_simulate_motion(params: dict) -> dict:
                 time_sec = sample_times[k]
                 interference_events.append(
                     {
-                        "step": (k + 1) * sample_every,
+                        "step": sample_steps[k],
                         "timeSec": time_sec,
                         "partA": a_name,
                         "partB": b_name,
@@ -5581,7 +5598,14 @@ def op_simulate_motion(params: dict) -> dict:
     # ---- followers: every part that is not fixed and not the drive body ----
     followers = {}
     followers_detail = {}
-    sample_dt = sample_every * dt
+    # Mean spacing of the ACTUAL samples. The mandatory final pose can sit closer
+    # than `sample_every`, so the uniform `sample_every * dt` would bias the period
+    # estimate on short runs.
+    sample_dt = (
+        (sample_times[-1] - sample_times[0]) / (len(sample_times) - 1)
+        if len(sample_times) > 1
+        else sample_every * dt
+    )
     record_set = set(scenario.get("recordParts") or [])
     for part in scenario["parts"]:
         name = part["name"]
@@ -5633,7 +5657,7 @@ def op_simulate_motion(params: dict) -> dict:
         k = first_interference_sample
         keyframes.append(
             {
-                "step": (k + 1) * sample_every,
+                "step": sample_steps[k],
                 "timeSec": round(sample_times[k], 4),
                 "label": "interference",
                 "poses": sample_poses[k],
@@ -5643,7 +5667,20 @@ def op_simulate_motion(params: dict) -> dict:
         k = len(sample_poses) - 1
         keyframes.append({"step": steps, "timeSec": round(sample_times[k], 4), "label": "final", "poses": sample_poses[k]})
 
-    clean = interference_count == 0 and not diverged and max_joint_drift <= 2
+    # Coverage is part of the verdict: zero sampled poses means zero interference
+    # checks, and "no counter-example" must never print as pass (DESIGN §25.7).
+    interference_checks = len(sample_poses)
+    candidate_pairs = len(pairs)
+    interference_pair_checks = interference_checks * candidate_pairs
+    sampling_satisfied = interference_checks >= MIN_MOTION_INTERFERENCE_POSES
+    max_sample_gap_deg = round(360.0 * sample_every * dt / cycle_period, 2) if omega > 0 else None
+
+    clean = (
+        interference_count == 0
+        and not diverged
+        and max_joint_drift <= 2
+        and sampling_satisfied
+    )
 
     trajectory_frames = [initial] + sample_poses
     trajectory = {
@@ -5681,6 +5718,11 @@ def op_simulate_motion(params: dict) -> dict:
             "followers": followers,
             "interferenceCount": interference_count,
             "interferenceEvents": interference_events[:20],
+            "interferenceChecks": interference_checks,
+            "candidatePairs": candidate_pairs,
+            "interferencePairChecks": interference_pair_checks,
+            "samplingSatisfied": sampling_satisfied,
+            "maxSampleGapDeg": max_sample_gap_deg,
             "maxJointDriftMm": round(max_joint_drift, 4),
             "jointViolations": joint_violations,
             "diverged": diverged,

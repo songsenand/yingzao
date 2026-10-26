@@ -282,7 +282,9 @@ near-touching pairs were never declared).
   placements disagree, not that the tool is unhappy: fix those, do not widen the tolerance.
   `cycles` accepts fractions — a balance whose range is ±14° is 0.078 of a turn, and asking
   for a whole turn answers a different question (the beam becomes a windmill and everything
-  collides).
+  collides). Fractions also get **at least 24 sampled poses** (the final pose always
+  included); check `interferenceChecks`/`samplingSatisfied` before quoting "0 interference",
+  because a run with too little travel is `check`, not pass — 0 checks ≠ 0 collisions.
 - `simulate_physics` with parts placed exactly touching starts in penetration;
   place them slightly separated and let gravity close the gap.
 - A "gap" between two probe points that are not roughly facing each other is not

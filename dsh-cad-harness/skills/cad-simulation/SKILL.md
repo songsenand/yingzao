@@ -71,6 +71,17 @@ Motion is kinematics with an exact interference timeline; physics is rigid bodie
   a revolute joint (that overlap is a bearing) — a stopper contact lives on
   exactly that pair, so verify a limit stop another way.
 
+  **Interference coverage is part of the verdict.** A short fractional sweep used
+  to get fewer than one sample (a 0.03-turn balance run: 754 steps against a
+  1047-step sampling interval), so the boolean loop ran zero times while the
+  report still said "0 interference" and pass. The engine now caps the interval
+  so every run gets at least **24 sampled poses**, always samples the **final
+  pose** (the end of travel is where a stop/collision lives), and reports
+  `interferenceChecks`, `candidatePairs`, `interferencePairChecks`,
+  `samplingSatisfied` and `maxSampleGapDeg`. If too little travel exists to fit
+  24 poses the run is `check`, never pass — read `interferenceChecks` before
+  quoting "0 interference", because 0 checks is not 0 collisions.
+
 ## `simulate_stress` — the one that reports a force, and the only one with a refusal
 
 **Two channels, and you must pick one.** `mode: 'judge'` (default) returns the delivery
