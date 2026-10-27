@@ -12,8 +12,9 @@
 // So this renders the assembly the way the simulators render a pose: one SCAD
 // scene that imports each part's exported STL at its placement, framed from
 // three fixed angles. Placement order matches every other consumer in the
-// plugin (`rotate` XYZ degrees, then `translate` — the Manifold convention used
-// by assembly.ts, assembly-check.ts and the panel's StaticPartsView).
+// plugin (`rotate` degrees in R = Rz·Ry·Rx, then `translate` — the Manifold
+// convention used by assembly.ts, assembly-check.ts and the panel's
+// StaticPartsView; see client/placement.ts for why three needs order 'ZYX').
 //
 // mm, z-up.
 

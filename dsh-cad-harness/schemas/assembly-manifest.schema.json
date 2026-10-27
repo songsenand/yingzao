@@ -24,7 +24,7 @@
       "description": "world = translate ∘ rotate(euler XYZ) ∘ pose; all in the part's local frame.",
       "properties": {
         "translate": { "$ref": "#/$defs/vec3" },
-        "rotate": { "$ref": "#/$defs/vec3", "description": "degrees, XYZ order (matching Manifold rotate)" },
+        "rotate": { "$ref": "#/$defs/vec3", "description": "degrees; R = Rz(z)·Ry(y)·Rx(x), the OpenSCAD/Manifold rotate([x,y,z]) composition (three.js order 'ZYX'; its default 'XYZ' is the reverse order)" },
         "pose": {
           "type": "object",
           "description": "Rotation about a named datum axis (assembly/meshing pose); the datum follows the part.",
