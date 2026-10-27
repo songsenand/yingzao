@@ -6,7 +6,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Twenty-nine tools, but **three jobs first**. Almost every task starts by picking the
+Thirty tools, but **three jobs first**. Almost every task starts by picking the
 group, not the tool — and the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
@@ -101,6 +101,7 @@ against it, and read a reference only when the skill tells you to.
 | **"what angle is this", "are these two faces parallel / square to each other", "how far off axis is this bore"** | `measure_angle` | eyeballing it off a render; guessing which of 30°/150° the reply meant |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
 | "can this actually be printed", "is this wall too thin", "will this need supports" | `check_printability` | looking at renders |
+| **"screen a family at once", "which of these parts is thin"** | **`check_parts`** | N single calls; it runs the same jobs and writes one run per part |
 | "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "I just want to look at it from another angle / cut it open" | `render_part` | re-running `generate_part` |

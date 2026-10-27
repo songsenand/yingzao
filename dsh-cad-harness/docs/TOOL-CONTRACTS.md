@@ -57,6 +57,26 @@ check_assembly({ manifestPath: "…" })
 returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
+## `check_parts`
+
+Screen up to 12 saved versions in ONE call: per version, the measure half (watertight / bodies / volume / bbox) and the SAME profile-aware printability job as check_printability. The printability half writes one printability run per version and returns its runId, so the rows can back a delivery claim; there is no second implementation. Use it to screen a family (which of these 7 is thin?) instead of N single calls; for one part the single tool is equivalent. `checks` defaults to both halves. The reply is deliberately compact — run the single-part tool when you need the full findings/attention for one part.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionIds` | array | **required** | Versions to screen, e.g. ["v031","v032","v033"]. Duplicates are removed; at most 12 are screened per call. |
+| `checks` | array | — | Which halves to run: "measure" and/or "printability". Default both. |
+| `profileIds` | array | — | Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability). |
+| `wallMinMm` | number | — | Wall thinner than this is reported (printability half). Default 1.2. |
+| `overhangDeg` | number | — | Down-facing faces steeper than this count as overhang (printability half). Default 45. |
+| `samples` | number | — | Approximate surface samples for the wall half. Default 600. |
+
+```js
+check_parts({ versionIds: [] })
+```
+
+returns: `parts`, `failures`, `summary`
+
+
 ## `check_printability`
 
 Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).
@@ -113,7 +133,7 @@ returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `ru
 
 ## `generate_part`
 
-Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh.
+Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -127,7 +147,7 @@ Compile OpenSCAD into a new part version; renders top/front/side/iso (all four a
 generate_part({ scadCode: "…", userIntent: "…" })
 ```
 
-returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `part`
+returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `minWallMm`, `minWallAtMm`, `part`
 
 
 ## `import_part`

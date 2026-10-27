@@ -25,7 +25,7 @@ import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
 import { discoverWorkspaces } from './workspaces.ts';
-import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
+import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
 import { resolveWorkspaceFile } from './unregistered.ts';
 import {
@@ -789,7 +789,8 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'generate_part',
     description:
-      'Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh.',
+      'Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. ' +
+      'The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.',
     parameters: {
       scadCode: {
         type: 'string',
@@ -840,6 +841,8 @@ export function registerCadTools(
           watertight: { type: 'boolean', description: 'False = open surface: fix before any downstream check.' },
           triangles: { type: 'integer' },
           shells: { type: 'integer' },
+          minWallMm: { type: 'number', description: 'First version only: thinnest sampled wall (in-process TS screen, 600 samples). Below 1.2mm the reply says to fix the representative before generating its family.' },
+          minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where that thinnest wall was found (first version only).' },
           part: { type: 'string', required: true, description: 'The part this version belongs to.' },
         },
       },
@@ -938,12 +941,43 @@ export function registerCadTools(
         );
       }
 
+      // REPRESENTATIVE-FIRST. The first version of a part is the representative a
+      // family inherits its shared feature from (a slot, a snap, a thread). Screen
+      // its walls HERE, in-process (TS path, ~60ms, no Python worker), so a
+      // family-wide defect is visible before the siblings are generated. The
+      // glucose sticks shipped v034-v037 with a 0.038mm lip because the screen
+      // only ran after the whole family existed; v034 alone would have shown it.
+      let minWallMm: number | undefined;
+      let minWallAtMm: number[] | undefined;
+      if (!a.parentVersion) {
+        try {
+          const screen = await checkPrintabilityInTs(store, {
+            versionId, wallMinMm: 1.2, overhangDeg: 45, samples: 600,
+          });
+          minWallMm = screen.minWallMm;
+          minWallAtMm = screen.minWallAtMm;
+          if (minWallMm !== undefined) {
+            const where = minWallAtMm ? ` @ [${minWallAtMm.map((n) => +n.toFixed(2)).join(', ')}]` : '';
+            result.warnings.push(
+              minWallMm < 1.2
+                ? `first-version wall screen: thinnest ${minWallMm}mm${where} < 1.2mm — ` +
+                  'fix this representative before generating parts that share the feature'
+                : `first-version wall screen: thinnest ${minWallMm}mm${where}`,
+            );
+          }
+        } catch (e) {
+          result.warnings.push(`first-version wall screen unavailable: ${String((e as Error).message ?? e)}`);
+        }
+      }
+
       return {
         versionId, success: true,
         part: part.name,
         errors: [], warnings: result.warnings,
         durationMs: result.durationMs,
         views: attachedRenders.map((r) => r.view),
+        ...(minWallMm !== undefined ? { minWallMm } : {}),
+        ...(minWallAtMm ? { minWallAtMm } : {}),
         ...(sizeMm ? { sizeMm } : {}),
         ...(bbox ? { bboxMin: bbox.min.map((v) => +v.toFixed(2)), bboxMax: bbox.max.map((v) => +v.toFixed(2)) } : {}),
         ...(parsed
@@ -4344,11 +4378,13 @@ export function registerCadTools(
     // heatmap, and a picture needs the per-sample values that would be noise in the
     // model's context. They travel in the run; the reply carries the digest only.
     const { field, ...forModel } = result as typeof result & { field?: AttentionFieldSamples };
+    let runId: string | undefined;
     if (field) {
       const run = await beginRun(runStore, {
         kind: 'printability',
         title: `制造筛查 · ${a.versionId} · ${verdict}`,
       });
+      runId = run.id;
       await run.json('report.json', forModel);
       await run.json('attention.json', {
         id: forModel.attention.id,
@@ -4384,7 +4420,7 @@ export function registerCadTools(
     }
     // The output schema now allows per-layer region extras (triangles/samples/…),
     // so its inferred type carries an index signature the typed layers lack.
-  return { reply, report: forModel, field, verdict, profileSource: forModel.profileSource, findings: forModel.findings };
+  return { reply, report: forModel, field, verdict, profileSource: forModel.profileSource, findings: forModel.findings, runId };
   }
 
   registerTool(defineTool({
@@ -4550,6 +4586,175 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const job = await screenVersionJob(args as never, await allStores(exec));
       return job.reply as never;
+    },
+  }));
+
+  // --- check_parts: screen a family in ONE call -------------------------------
+  //
+  // The glucose build made 11 measure_part + 22 check_printability calls for 7
+  // parts (three printability rounds). Every call is a model step; the per-part
+  // replies are also mostly repeated keys. This tool loops the SAME jobs the
+  // single-part tools run — `measureVersion` and `screenVersionJob` — and returns
+  // one compact table. The printability half writes one run per version (the
+  // `runId` comes back), so a batch screen is evidence, not a shortcut around it.
+  registerTool(defineTool({
+    name: 'check_parts',
+    description:
+      'Screen up to 12 saved versions in ONE call: per version, the measure half (watertight / bodies / volume / bbox) and the SAME profile-aware printability job as check_printability. ' +
+      'The printability half writes one printability run per version and returns its runId, so the rows can back a delivery claim; there is no second implementation. ' +
+      'Use it to screen a family (which of these 7 is thin?) instead of N single calls; for one part the single tool is equivalent. ' +
+      '`checks` defaults to both halves. The reply is deliberately compact — run the single-part tool when you need the full findings/attention for one part.',
+    parameters: {
+      versionIds: {
+        type: 'array', required: true, items: { type: 'string' },
+        description: 'Versions to screen, e.g. ["v031","v032","v033"]. Duplicates are removed; at most 12 are screened per call.',
+      },
+      checks: {
+        type: 'array', items: { type: 'string' },
+        description: 'Which halves to run: "measure" and/or "printability". Default both.',
+      },
+      profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability).' },
+      wallMinMm: { type: 'number', description: 'Wall thinner than this is reported (printability half). Default 1.2.' },
+      overhangDeg: { type: 'number', description: 'Down-facing faces steeper than this count as overhang (printability half). Default 45.' },
+      samples: { type: 'number', description: 'Approximate surface samples for the wall half. Default 600.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          parts: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                versionId: { type: 'string', required: true },
+                partName: { type: 'string' },
+                watertight: { type: 'boolean' },
+                bodies: { type: 'integer' },
+                volumeMm3: { type: 'number' },
+                sizeMm: { type: 'array', items: { type: 'number' } },
+                printability: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    verdict: { type: 'string', required: true },
+                    minWallMm: { type: 'number' },
+                    minWallAtMm: { type: 'array', items: { type: 'number' } },
+                    thinAreaPct: { type: 'number' },
+                    overhangAreaMm2: { type: 'number' },
+                    profiles: {
+                      type: 'array',
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        properties: {
+                          profileId: { type: 'string', required: true },
+                          verdict: { type: 'string', required: true },
+                        },
+                      },
+                    },
+                    wallMeasured: { type: 'boolean' },
+                    runId: { type: 'string', description: 'The printability run this row wrote — cite it as evidence.' },
+                  },
+                },
+              },
+            },
+          },
+          failures: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                versionId: { type: 'string', required: true },
+                error: { type: 'string', required: true },
+              },
+            },
+          },
+          summary: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              requested: { type: 'integer', required: true },
+              ok: { type: 'integer', required: true },
+              failed: { type: 'integer', required: true },
+              thinnestMm: { type: 'number' },
+            },
+          },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 180_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionIds?: string[]; checks?: string[]; profileIds?: string[];
+        wallMinMm?: number; overhangDeg?: number; samples?: number;
+      };
+      const ids = [...new Set((a.versionIds ?? []).filter((id) => typeof id === 'string' && id.trim()))].slice(0, 12);
+      if (ids.length === 0) throw new Error('versionIds must name at least one saved version');
+      const checks = new Set((a.checks?.length ? a.checks : ['measure', 'printability'])
+        .filter((c) => c === 'measure' || c === 'printability'));
+      if (checks.size === 0) throw new Error('checks must include "measure" and/or "printability"');
+      const project = await allStores(exec);
+      const cad = storeFor(project);
+      const parts: Record<string, unknown>[] = [];
+      const failures: { versionId: string; error: string }[] = [];
+      for (const versionId of ids) {
+        try {
+          const resolved = await cad.resolve(versionId);
+          const partName = resolved?.kind === 'version' ? resolved.partName ?? undefined : undefined;
+          const row: Record<string, unknown> = { versionId, ...(partName ? { partName } : {}) };
+          if (checks.has('measure')) {
+            const m = await measureVersion(project.store, versionId);
+            row.watertight = m.watertight;
+            // Body count is the connectivity op's, not the mass-properties op's:
+            // it must survive a broken mesh (the measure op refuses an open one).
+            const modelPath = join(project.store.root, 'versions', versionId, 'model.stl');
+            const cKey = versionCacheKey(project.store.root, versionId);
+            let conn = connectivityCache.get(cKey);
+            if (!conn) {
+              conn = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path: modelPath });
+              connectivityCache.set(cKey, conn);
+            }
+            row.bodies = conn.count;
+            if (m.volumeMm3 !== undefined) row.volumeMm3 = m.volumeMm3;
+            row.sizeMm = m.boundingBoxMm.size;
+          }
+          if (checks.has('printability')) {
+            const screened = await screenVersionJob({
+              versionId,
+              ...(a.profileIds?.length ? { profileIds: a.profileIds } : {}),
+              ...(a.wallMinMm !== undefined ? { wallMinMm: a.wallMinMm } : {}),
+              ...(a.overhangDeg !== undefined ? { overhangDeg: a.overhangDeg } : {}),
+              ...(a.samples !== undefined ? { samples: a.samples } : {}),
+            }, project);
+            const report = screened.report;
+            row.printability = {
+              verdict: screened.verdict,
+              ...(report.minWallMm !== undefined ? { minWallMm: report.minWallMm } : {}),
+              ...(report.minWallAtMm ? { minWallAtMm: report.minWallAtMm } : {}),
+              ...(report.thinAreaPct !== undefined ? { thinAreaPct: report.thinAreaPct } : {}),
+              ...(report.overhangAreaMm2 !== undefined ? { overhangAreaMm2: report.overhangAreaMm2 } : {}),
+              ...(report.profiles?.length
+                ? { profiles: report.profiles.map((p) => ({ profileId: p.profileId, verdict: p.verdict })) }
+                : {}),
+              wallMeasured: report.wallMeasured,
+              ...(screened.runId ? { runId: screened.runId } : {}),
+            };
+          }
+          parts.push(row);
+        } catch (e) {
+          failures.push({ versionId, error: String((e as Error).message ?? e) });
+        }
+      }
+      const thinnest = parts
+        .map((p) => (p.printability as { minWallMm?: number } | undefined)?.minWallMm)
+        .filter((v): v is number => typeof v === 'number')
+        .sort((x, y) => x - y)[0];
+      return {
+        parts, failures,
+        summary: {
+          requested: ids.length, ok: parts.length, failed: failures.length,
+          ...(thinnest !== undefined ? { thinnestMm: thinnest } : {}),
+        },
+      } as never;
     },
   }));
 
