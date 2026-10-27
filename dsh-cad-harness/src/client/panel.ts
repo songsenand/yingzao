@@ -11,6 +11,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
+import { downloadName } from '../shared/download-name';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
@@ -1891,6 +1892,15 @@ export function CadPanel(): React.ReactElement {
     thumb.getContext('2d')!.drawImage(canvas, 0, 0, thumb.width, thumb.height);
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    // A saved image must carry the part/run it shows, not just `cad-v031`:
+    // `碳原子 C_v031_截图_15_07_08.png` survives being opened later, out of
+    // context. The run title already names its parts, so it stands in for them.
+    const shotStem = (
+      version ? `${currentPart?.name ?? 'part'}_${version.id}`
+        : run ? `${run.id}_${run.title}`
+          : (fileSubject || recordId || 'view')
+    ).slice(0, 70);
+    const shotName = downloadName([shotStem, label, time], 'png', 'cad-shot');
     setTray((t) => [...t, {
       id,
       thumb: thumb.toDataURL('image/png'),
@@ -1908,7 +1918,7 @@ export function CadPanel(): React.ReactElement {
       auto,
     }]);
     // stash the blob for the copy action
-    blobById.set(id, { blob, name: `cad-${recordId ?? 'product'}-${label}.png` });
+    blobById.set(id, { blob, name: shotName });
     setError(null);
     // The tray lives at the bottom of the scrollable details area: without this
     // the capture looked like a no-op. Scroll THAT box only — `scrollIntoView`
@@ -1925,7 +1935,7 @@ export function CadPanel(): React.ReactElement {
       setHint('截图已存入托盘（未发送）— 在列表里补备注后点 ↻发，或 📋图 复制');
       return;
     }
-    const fileName = `cad-${recordId ?? 'view'}-${label}.png`;
+    const fileName = shotName;
     const sent = await sendImageToSession(blob, fileName, opts.userText ?? shotPrompt(label));
     if (sent.how === 'sent') {
       setTray((t) => t.map((x) => x.id === id ? { ...x, status: '已发送' } : x));
@@ -2696,6 +2706,7 @@ export function CadPanel(): React.ReactElement {
     { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
     ...['stl', '3mf', 'obj', 'off', 'wrl'].map((fmt) => React.createElement('button', {
       key: fmt, type: 'button', style: S.smallBtn,
+      title: version ? `下载 ${currentPart?.name ?? 'model'}_${version.id}.${fmt}` : '下载当前版本的几何',
       onClick: () => { if (version) window.location.href = withProject(`/api/cad/export?v=${version.id}&format=${fmt}`); },
     }, fmt.toUpperCase())),
     React.createElement('span', { style: S.hint }, '下载当前版本的几何'),
@@ -2882,7 +2893,7 @@ export function CadPanel(): React.ReactElement {
       return React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
         ...run.parts.map((name) => React.createElement('button', {
           key: name, type: 'button', style: S.smallBtn,
-          title: '下载这次运行使用的该零件 STL',
+          title: `下载 ${run.id}_${name}.stl`,
           onClick: () => { window.location.href = withProject(`/api/cad/run/stl?id=${run.id}&part=${encodeURIComponent(name)}`); },
         }, `${name}.stl`)));
     }

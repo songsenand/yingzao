@@ -10,6 +10,7 @@ import {
 } from './parts.ts';
 import { buildProductsWire } from './products.ts';
 import { storeFor } from './store.ts';
+import { contentDisposition, downloadName } from '../shared/download-name.ts';
 import { revertVersion as revertVersionHelper } from './version.ts';
 import { enqueueReviews, readQueue, setReviewStatus } from './review-queue.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
@@ -6278,7 +6279,13 @@ export function registerCadTools(
       const q = new URL(request.url).searchParams;
       return { id: q.get('id') ?? '', q };
     };
-    const runFileRoute = (routePath: string, file: (q: URLSearchParams) => string, missing: string, contentType: string) =>
+    const runFileRoute = (
+      routePath: string,
+      file: (q: URLSearchParams) => string,
+      missing: string,
+      contentType: string,
+      download?: (q: URLSearchParams, id: string) => string,
+    ) =>
       void connection.fetch.register({
         path: routePath,
         methods: ['GET'],
@@ -6290,7 +6297,10 @@ export function registerCadTools(
           if (!path) return new Response('bad run id', { status: 400 });
           try {
             const buf = await readFile(path);
-            return new Response(buf as unknown as BodyInit, { status: 200, headers: { 'content-type': contentType } });
+            const headers: Record<string, string> = { 'content-type': contentType };
+            // A saved artifact must say WHAT it is: `r098_B01.stl`, not `stl`.
+            if (download) headers['content-disposition'] = contentDisposition(download(q, id));
+            return new Response(buf as unknown as BodyInit, { status: 200, headers });
           } catch {
             return new Response(missing, { status: 404 });
           }
@@ -6306,22 +6316,34 @@ export function registerCadTools(
         const { id } = runQuery(request);
         const entry = await readRun(runStore, id);
         return entry
-          ? new Response(JSON.stringify(entry), { status: 200, headers: { 'content-type': 'application/json' } })
+          ? new Response(JSON.stringify(entry), {
+              status: 200,
+              headers: {
+                'content-type': 'application/json',
+                'content-disposition': contentDisposition(downloadName([id, 'run'], 'json')),
+              },
+            })
           : new Response('no such run', { status: 404 });
       },
     });
-    runFileRoute('/api/cad/run/report', () => 'report.json', 'no report for this run', 'application/json');
+    runFileRoute('/api/cad/run/report', () => 'report.json', 'no report for this run', 'application/json',
+      (_q, id) => downloadName([id, 'report'], 'json'));
     // The panel's heatmap source: per-sample values for the attention field, written by
     // check_printability. Kept OUT of the tool reply (a 700-point field is noise to the
     // model and the whole picture to a human) and served to the browser instead.
-    runFileRoute('/api/cad/run/attention', () => 'attention.json', 'no attention field for this run', 'application/json');
-    runFileRoute('/api/cad/run/trajectory', () => 'trajectory.json', 'no trajectory for this run', 'application/json');
-    runFileRoute('/api/cad/run/fluid-manifest', () => 'fluid-manifest.json', 'not a fluid run', 'application/json');
+    runFileRoute('/api/cad/run/attention', () => 'attention.json', 'no attention field for this run', 'application/json',
+      (_q, id) => downloadName([id, 'attention'], 'json'));
+    runFileRoute('/api/cad/run/trajectory', () => 'trajectory.json', 'no trajectory for this run', 'application/json',
+      (_q, id) => downloadName([id, 'trajectory'], 'json'));
+    runFileRoute('/api/cad/run/fluid-manifest', () => 'fluid-manifest.json', 'not a fluid run', 'application/json',
+      (_q, id) => downloadName([id, 'fluid-manifest'], 'json'));
     runFileRoute('/api/cad/run/stl', (q) => {
       const part = safePart(q.get('part'));
       return `parts/${part ?? 'NONE'}.stl`;
-    }, 'no such part in this run', 'model/stl');
-    runFileRoute('/api/cad/run/image', (q) => `frames/${q.get('name') ?? 'NONE'}`, 'no such frame in this run', 'image/png');
+    }, 'no such part in this run', 'model/stl',
+      (q, id) => downloadName([id, safePart(q.get('part')) ?? 'part'], 'stl'));
+    runFileRoute('/api/cad/run/image', (q) => `frames/${q.get('name') ?? 'NONE'}`, 'no such frame in this run', 'image/png',
+      (q, id) => downloadName([id, (q.get('name') ?? 'image').split('/').pop() ?? 'image'], 'png'));
     void connection.fetch.register({
       path: '/api/cad/run/frame',
       methods: ['GET'],
@@ -6373,10 +6395,20 @@ export function registerCadTools(
             if (!reportPath) return new Response('pointer names an unsafe run id', { status: 500 });
             const report = JSON.parse(await readFile(reportPath, 'utf8')) as Record<string, unknown>;
             return new Response(JSON.stringify({ ...report, runId: parsed.runId }), {
-              status: 200, headers: { 'content-type': 'application/json' },
+              status: 200,
+              headers: {
+                'content-type': 'application/json',
+                'content-disposition': contentDisposition(downloadName([parsed.runId, 'check'], 'json')),
+              },
             });
           }
-          return new Response(raw, { status: 200, headers: { 'content-type': 'application/json' } });
+          return new Response(raw, {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-disposition': contentDisposition(downloadName([basename(path).replace(/\.[^.]+$/, ''), 'check'], 'json')),
+            },
+          });
         } catch {
           return new Response('no assembly check report yet', { status: 404 });
         }
@@ -6394,7 +6426,13 @@ export function registerCadTools(
             { workspace: project.cwd, dataRoot: project.root },
           );
           const raw = await readFile(path, 'utf8');
-          return new Response(raw, { status: 200, headers: { 'content-type': 'application/json' } });
+          return new Response(raw, {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-disposition': contentDisposition(downloadName([basename(path).replace(/\.[^.]+$/, '')], 'json')),
+            },
+          });
         } catch {
           return new Response('no assembly manifest yet', { status: 404 });
         }
@@ -6429,12 +6467,17 @@ export function registerCadTools(
       methods: ['GET'],
       requestBody: 'buffered',
       fetch: async (request: Request) => {
-        const { store } = requestStores(request);
+        const project = requestStores(request);
+        const { store } = project;
         const url = new URL(request.url);
         const v = url.searchParams.get('v');
         const format = (url.searchParams.get('format') ?? 'stl').toLowerCase();
         if (!v) return new Response('missing v', { status: 400 });
         if (!EXPORT_FORMATS[format]) return new Response(`unsupported format: ${format}`, { status: 400 });
+        // The saved file must name the part, not just `model_v031`: a download is
+        // read out of context, and `v031` alone does not say "碳原子 C".
+        const resolved = await storeFor(project).resolve(v);
+        const partName = resolved?.kind === 'version' ? resolved.partName : null;
         const versionDir = join(store.root, 'versions', v);
         try {
           // STL is stored at creation; other formats convert once and cache.
@@ -6465,7 +6508,7 @@ export function registerCadTools(
             status: 200,
             headers: {
               'content-type': EXPORT_FORMATS[format]!,
-              'content-disposition': `attachment; filename="model_${v}.${format}"`,
+              'content-disposition': contentDisposition(downloadName([partName, v], format, `model_${v}`)),
             },
           });
         } catch (e: any) {
