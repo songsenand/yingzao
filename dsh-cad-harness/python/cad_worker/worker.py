@@ -5055,6 +5055,11 @@ def op_check_printability(params: dict) -> dict:
         # an argument, "[2.7,5.1,5.7]" is something a human can go and look at.
         **({"minWallAtMm": [float(_js_to_fixed(v, 2)) for v in min_wall_at]} if min_wall_at else {}),
         "wallMeasured": wall_measured,
+        # tools.ts declares surfaceAreaMm2 as REQUIRED (and the band width
+        # sqrt(area / sampled) is unreadable without it), but the value — already
+        # computed above for `severe` — was never returned, so every reply failed
+        # its own output schema.
+        "surfaceAreaMm2": float(_js_to_fixed(surface_area, 2)),
         "thinSamples": thin_samples,
         "sampled": sampled,
         "thinAreaMm2": float(_js_to_fixed(thin_area, 1)),
