@@ -141,6 +141,8 @@ const get = async (path) => {
   const buf = new Uint8Array(await res.arrayBuffer());
   return { status: res.status, buf, json: () => JSON.parse(new TextDecoder().decode(buf)) };
 };
+/** A missing/malformed body must FAIL one check, not abort the rest of the file. */
+const jsonOf = (res) => { try { return res.json(); } catch { return null; } };
 
 {
   const cwdA = join(FAKE_HOME, 'proj-a');
@@ -187,8 +189,12 @@ const get = async (path) => {
   const fresh = join(FAKE_HOME, 'never-used');
   mkdirSync(fresh, { recursive: true });
   const prodFresh = await get(`/api/cad/products?project=${encodeURIComponent(fresh)}`);
-  check(prodFresh.status === 200 && prodFresh.json().parts.length === 0 && prodFresh.json().sceneRunIds.length === 0,
-    'a brand-new project lists nothing (and is not an error)');
+  const freshWire = jsonOf(prodFresh);
+  check(prodFresh.status === 200
+      && Array.isArray(freshWire?.parts) && freshWire.parts.length === 0
+      && Array.isArray(freshWire?.sceneRunIds) && freshWire.sceneRunIds.length === 0,
+    'a brand-new project lists nothing (and is not an error)',
+    freshWire ? 'parts + sceneRunIds present' : 'response was not JSON');
 
   // The project rides the payload so a panel can drop a stale reply.
   check(prodA.project === resolve(cwdA) && prodB.project === resolve(cwdB), 'the payload echoes its project');
@@ -202,11 +208,13 @@ const get = async (path) => {
 section('tool-scope reporting (the trap that produced a skill error)');
 {
   const scope = await get('/api/cad/scope');
-  check(scope.status === 200 && scope.json().toolScope === 'preset' && scope.json().presets.includes('cad'),
+  const scopeWire = jsonOf(scope);
+  check(scope.status === 200 && scopeWire?.toolScope === 'preset'
+      && Array.isArray(scopeWire?.presets) && scopeWire.presets.includes('cad'),
     'the host reports its tool scope and the presets that open the tools',
-    JSON.stringify(scope.json()));
-  check(scope.json().names?.cad === '造物模式',
-    'the host resolves preset display names from the roster', JSON.stringify(scope.json().names));
+    JSON.stringify(scopeWire));
+  check(scopeWire?.names?.cad === '造物模式',
+    'the host resolves preset display names from the roster', JSON.stringify(scopeWire?.names));
   // The client predicate mirrors src/host/tool-scope.ts (minus delegation).
   const s = { toolScope: 'preset', presets: ['cad'] };
   check(cadToolsVisible(s, 'cad') === true, 'CAD preset session: no warning');
@@ -303,6 +311,11 @@ section('static invariants');
   check(unscoped.length === 1 && unscoped[0] === 'simulate_lbm' && scopedExecutes === registrations - 1,
     'every project-scoped tool body receives its execution context',
     `${scopedExecutes} scoped, ${unscoped.join(',') || 'none'} global, ${registrations} registrations`);
+  // The exception must be justified, not assumed: if `simulate_lbm` ever starts
+  // resolving a project, it needs `exec` like every other tool.
+  const globalBody = blocks.find((b) => /name: 'simulate_lbm'/.test(b)) ?? '';
+  check(!/requestStores\(|projectStoresFor\(|projectCwdOf\(|projectStores\(/.test(globalBody),
+    'simulate_lbm is global: its body resolves no project');
   check(!/\bstore\b\s*:\s*VersionStore\s*=/.test(tools), 'no module-level VersionStore remains');
 
   // Every route registration resolves a project (the two globals excepted).
@@ -343,7 +356,10 @@ section('static invariants');
       if (!/\/api\/cad/.test(line)) continue;
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;      // comment
       if (/withProject/.test(line)) continue;
-      if (/[?&]project=/.test(line)) continue;            // explicit, session-scoped
+      // Only the two session-scoped URLs may build `project=` by hand, and only
+      // from the session cwd — never a literal, never another route.
+      const explicitProject = /[?&]project=\$\{encodeURIComponent\((sessionCwd\(\)|cwd)\)\}/.test(line);
+      if (explicitProject && (line.includes('/api/cad/file') || line.includes('/api/cad/unregistered'))) continue;
       if ([...globalUrls].some((u) => line.includes(u))) continue;
       stray.push(`${file}: ${line.trim()}`);
     }
