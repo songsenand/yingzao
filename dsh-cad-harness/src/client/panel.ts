@@ -9,7 +9,7 @@ import {
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playback';
+import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, RunKeyframeStrip } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { downloadName } from '../shared/download-name';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
@@ -17,6 +17,8 @@ import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
 import { T } from './tokens';
+import { runFacts, type RunFact, type RunTone } from './run-facts';
+import { buildRunChart, RunChart } from './run-chart';
 import { attentionQuery, buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
 import {
   axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
@@ -2250,11 +2252,43 @@ export function CadPanel(): React.ReactElement {
     if (!rep) return React.createElement('div', { style: S.hint }, '报告读取中…');
     const line = (text: string, color?: string) =>
       React.createElement('div', { style: { fontSize: 12, padding: '1px 0', color: color ?? '#374151' } }, text);
-
+    const toneInk = (tone?: RunTone): string =>
+      tone === 'ok' ? T.ok : tone === 'bad' ? T.danger : tone === 'warn' ? T.warn : T.muted;
+    // The same facts the playback strip shows, with the one-sentence reading;
+    // the table/list below stays the place for every row.
+    const factsHeader = (run: RunProduct): React.ReactNode => {
+      const f = runFacts(run.kind, rep, run.status);
+      if (!f) return null;
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', { style: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', padding: '2px 0 4px' } },
+          React.createElement('span', {
+            style: {
+              fontSize: 10, fontWeight: 700, color: toneInk(f.tone),
+              border: `1px solid ${toneInk(f.tone)}`, borderRadius: 9, padding: '1px 7px',
+            },
+          }, f.headline),
+          ...f.facts.map((x, i) => React.createElement('span', {
+            key: i, title: x.title,
+            style: {
+              display: 'inline-flex', alignItems: 'baseline', gap: 3, fontSize: 10,
+              background: T.ground, border: `1px solid ${T.border}`, borderRadius: 8,
+              padding: '2px 6px', whiteSpace: 'nowrap', color: T.soft,
+            },
+          },
+          React.createElement('span', { style: { color: T.muted } }, x.label),
+          React.createElement('b', { style: { color: toneInk(x.tone), fontWeight: 600 } }, x.value))),
+        ),
+        React.createElement('div', { style: { fontSize: 11, color: T.soft, lineHeight: 1.45, paddingBottom: 4 } }, f.summary),
+      );
+    };
 
     if (r.kind === 'physics') {
       const fell = Object.entries((rep.metrics?.fellOver ?? {}) as Record<string, boolean>);
+      const chart = buildRunChart('physics', rep);
       return React.createElement('div', null,
+        factsHeader(r),
+        React.createElement(RunKeyframeStrip, { runId: r.id, keyframes: rep.keyframes ?? [] }),
+        chart ? React.createElement('div', { style: { margin: '2px 0 6px' } }, React.createElement(RunChart, { data: chart, height: 150 })) : null,
         line(`稳态穿透 ${rep.metrics?.settledPenetrationMm ?? '—'}mm · 最大 ${rep.metrics?.maxPenetrationMm ?? '—'}mm`),
         line(`时长 ${rep.durationSec ?? '—'}s · 关键帧 ${(rep.keyframes ?? []).length}`),
         ...fell.map(([name, over]) => line(`${name}: ${over ? '倒下' : '保持直立'}`, over ? T.warn : T.ok)),
@@ -2263,16 +2297,22 @@ export function CadPanel(): React.ReactElement {
     }
     if (r.kind === 'motion') {
       const followers = Object.entries((rep.metrics?.followers ?? {}) as Record<string, { travelMm: number; periodSec: number | null; axis: string }>);
+      const chart = buildRunChart('motion', rep);
       return React.createElement('div', null,
-        line(`干涉 ${rep.metrics?.interferenceCount ?? '—'} 次 · 时长 ${rep.durationSec ?? '—'}s`),
+        factsHeader(r),
+        React.createElement(RunKeyframeStrip, { runId: r.id, keyframes: rep.keyframes ?? [] }),
+        chart ? React.createElement('div', { style: { margin: '2px 0 6px' } }, React.createElement(RunChart, { data: chart, height: 150 })) : null,
         ...followers.map(([name, f]) => line(
           `${name}: 行程 ${f.travelMm?.toFixed?.(2) ?? '—'}mm` + (f.periodSec ? ` · 周期 ${f.periodSec.toFixed(2)}s` : ''))),
         ...((rep.metrics?.interferenceEvents ?? []) as { timeSec: number; label: string }[])
-          .slice(0, 6).map((e, i) => line(`t=${e.timeSec}s ${e.label}`, T.danger)),
+          .slice(0, 20).map((e: any, i: number) => line(
+            `t=${Number(e.timeSec).toFixed(3)}s  ${e.partA ?? '?'} ↔ ${e.partB ?? '?'}` +
+            `${Number.isFinite(e.volumeMm3) ? `  ${Number(e.volumeMm3).toFixed(2)}mm³` : ''}`, T.danger)),
       );
     }
     if (r.kind === 'fluid') {
       return React.createElement('div', null,
+        factsHeader(r),
         line(`到达率 ${rep.metrics?.outletArrivalRatio ?? '—'} · 穿透 ${rep.metrics?.penetrationCount ?? '—'}`),
         line(`粒子 ${rep.metrics?.particleCount0 ?? '—'} · 逃逸 ${rep.metrics?.escaped ?? '—'} · 活动 ${rep.metrics?.active ?? '—'}`),
         line(`状态 ${rep.overallStatus ?? '—'}`),
@@ -3696,12 +3736,14 @@ export function CadPanel(): React.ReactElement {
       run && (run.kind === 'motion' || run.kind === 'physics') && run.hasGeometry &&
         React.createElement(MotionPlaybackView, {
           key: run.id, runId: run.id,
+          report: runReport, status: run.status,
           background: bg.hex,
           onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),
       run && run.kind === 'fluid' &&
         React.createElement(FluidPlaybackView, {
           key: run.id, runId: run.id,
+          report: runReport, status: run.status,
           background: bg.hex,
           onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),

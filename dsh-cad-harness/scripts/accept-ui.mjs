@@ -32,6 +32,9 @@ const SCENARIOS = [
   // `t` is filled in after the server is up: the newest contract run of whichever
   // corpus this is (the scenario must not hard-code an id from one example).
   { name: 'contract', query: 'w=520&h=1200&assert=contract&debug=0', resolve: 'contract' },
+  // The playback's data strip + keyframe controls are the comprehension surface;
+  // the corpus decides which motion run, never a hard-coded id.
+  { name: 'playback', query: 'w=520&h=1200&assert=playback&debug=0', resolve: 'motion' },
 ];
 
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
@@ -70,12 +73,16 @@ try {
   console.log(`ui scenarios (corpus: ${DATA})\n`);
   // Find the run each dynamic scenario needs, from the corpus itself.
   let newestContract = null;
+  let newestMotion = null;
   try {
     const products = await fetch(`${BASE}api/cad/products`).then((r) => r.json());
     newestContract = (products.runs ?? []).find((r) => r.kind === 'assembly-check') ?? null;
+    newestMotion = (products.runs ?? []).find((r) => r.kind === 'motion' && r.hasGeometry) ?? null;
   } catch { /* the scenario reports the missing verdict */ }
   if (!newestContract) console.log('note: no assembly-check run in this corpus — the contract scenario needs one');
   else for (const s of chosen) if (s.resolve === 'contract') s.query = `t=${newestContract.id}&${s.query}`;
+  if (!newestMotion) console.log('note: no motion run in this corpus — the playback scenario needs one');
+  else for (const s of chosen) if (s.resolve === 'motion') s.query = `t=${newestMotion.id}&${s.query}`;
   for (const s of chosen) {
     await fetch(`${BASE}api/cad/assert-result?clear=1`).catch(() => {});
     // Give the page a window longer than the assert needs: the capture fires at

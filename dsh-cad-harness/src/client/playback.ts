@@ -18,6 +18,9 @@ import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { withProject } from './project';
 import { placementEuler } from './placement';
 import type { ShotFrame } from './shot-caption';
+import { T } from './tokens';
+import { runFacts, type RunEvent, type RunFact, type RunFacts, type RunKeyframe, type RunTone } from './run-facts';
+import { buildRunChart, RunChart } from './run-chart';
 
 // ---------------------------------------------------------------- scene plumbing
 
@@ -29,6 +32,11 @@ interface SceneHandle {
   fit: (center: THREE.Vector3, radius: number) => void;
   /** Re-apply the last fit (the "复原视图" control). */
   refit: () => void;
+  /** Scene bounds captured after the meshes were built (world mm). */
+  bounds: THREE.Box3 | null;
+  setBounds: (box: THREE.Box3) => void;
+  /** Clip every part material with this plane (null restores full geometry). */
+  setClip: (plane: THREE.Plane | null) => void;
   dispose: () => void;
 }
 
@@ -53,6 +61,9 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     return null;
   }
   configureStudioRenderer(renderer);
+  // The section control needs per-material clip planes; enabling it costs
+  // nothing while no plane is assigned.
+  renderer.localClippingEnabled = true;
   renderer.setSize(mount.clientWidth, mount.clientHeight || 420);
   mount.appendChild(renderer.domElement);
 
@@ -95,6 +106,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
   loop();
 
   let lastFit: { center: THREE.Vector3; radius: number } | null = null;
+  let bounds: THREE.Box3 | null = null;
   // Viewing direction is fixed; the distance follows the viewport shape, which
   // is no longer a forced square (see fitDistance).
   const VIEW_DIR = new THREE.Vector3(1.6, 1.2, 1.8).normalize();
@@ -108,12 +120,29 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     controls.update();
   };
 
+  const setClip = (plane: THREE.Plane | null) => {
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!(mesh as unknown as { isMesh?: boolean }).isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of mats) {
+        const m = mat as THREE.MeshStandardMaterial;
+        m.clippingPlanes = plane ? [plane] : [];
+        m.clipShadows = true;
+        m.needsUpdate = true;
+      }
+    });
+  };
+
   return {
     renderer,
     scene,
     camera,
     controls,
     fit,
+    get bounds() { return bounds; },
+    setBounds: (box: THREE.Box3) => { bounds = box.clone(); },
+    setClip,
     // Recomputed from the camera's live aspect, so 复原 also repairs the frame
     // after the dock (or an open disclosure) changed the viewport's shape.
     refit: () => { if (lastFit) fit(lastFit.center, lastFit.radius); },
@@ -153,19 +182,24 @@ const btn = (active = false, color = '#4a7dbd'): React.CSSProperties => ({
 const PlaybackFrame: React.FC<{
   mountRef: React.RefObject<HTMLDivElement>;
   controls: React.ReactNode[];
+  /** Key numbers + what they mean, above the transport row. */
+  data?: React.ReactNode;
+  /** Render this instead of the 3D viewport (e.g. no WebGL) but keep data/transport. */
+  fallback?: React.ReactNode;
   /** Live scene for the corner overlays (triad + scale bar + reset). */
   getScene?: () => OverlayScene | null;
   onReset?: () => void;
-}> = ({ mountRef, controls, getScene, onReset }) =>
+}> = ({ mountRef, controls, data, fallback, getScene, onReset }) =>
   React.createElement(
     'div',
     { style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' } },
     React.createElement(
       'div',
       { style: { flex: 1, position: 'relative', minHeight: 0 } },
-      React.createElement('div', { ref: mountRef, style: { position: 'absolute', inset: 0 } }),
-      getScene && React.createElement(ViewportOverlay, { getScene, onReset }),
+      fallback ?? React.createElement('div', { ref: mountRef, style: { position: 'absolute', inset: 0 } }),
+      !fallback && getScene && React.createElement(ViewportOverlay, { getScene, onReset }),
     ),
+    data ?? null,
     React.createElement(
       'div',
       { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6 } },
@@ -187,9 +221,173 @@ interface TrajectoryJson {
 
 const PART_COLORS = ['#4a7dbd', '#c0392b', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
+// ---------------------------------------------------------------- run data / timeline
+
+const toneColor = (tone?: RunTone): string =>
+  tone === 'ok' ? T.ok : tone === 'bad' ? T.danger : tone === 'warn' ? T.warn : T.muted;
+
+const factChip = (f: RunFact, key: number) => React.createElement(
+  'span',
+  {
+    key,
+    title: f.title,
+    style: {
+      display: 'inline-flex', alignItems: 'baseline', gap: 3, fontSize: 10,
+      color: T.soft, background: T.ground, border: `1px solid ${T.border}`,
+      borderRadius: 8, padding: '2px 6px', whiteSpace: 'nowrap',
+    },
+  },
+  React.createElement('span', { style: { color: T.muted } }, f.label),
+  React.createElement('b', { style: { color: toneColor(f.tone), fontWeight: 600 } }, f.value),
+);
+
+/** The first thing a human should read: verdict, the five numbers that support
+ * it, and one sentence saying what to look at. The detailed table stays in 报告. */
+function RunDataStrip(props: {
+  facts: RunFacts;
+  onSeek: (timeSec: number) => void;
+  /** Section/measure controls live here so they cost no permanent row. */
+  tools?: React.ReactNode;
+}): React.ReactElement {
+  return React.createElement(
+    'div',
+    { 'data-playback-data': '1', style: { display: 'flex', flexDirection: 'column', gap: 3, paddingTop: 6, borderTop: `1px solid ${T.border}` } },
+    React.createElement(
+      'div',
+      { style: { display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' } },
+      React.createElement('span', {
+        style: {
+          fontSize: 10, fontWeight: 700, color: toneColor(props.facts.tone),
+          border: `1px solid ${toneColor(props.facts.tone)}`, borderRadius: 9, padding: '1px 7px',
+        },
+      }, props.facts.headline),
+      ...props.facts.facts.map((f, i) => factChip(f, i)),
+    ),
+    React.createElement('div', { 'data-run-summary': '1', style: { fontSize: 11, color: T.soft, lineHeight: 1.35 } }, props.facts.summary),
+    props.tools ?? null,
+    props.facts.events.length > 0
+      ? React.createElement(
+        'details',
+        { style: { fontSize: 11 } },
+        React.createElement('summary', { style: { cursor: 'pointer', color: T.muted } },
+          `事件 ${props.facts.events.length}（点时间跳到该帧）`),
+        React.createElement('div', { style: { maxHeight: 96, overflowY: 'auto', marginTop: 2 } },
+          ...props.facts.events.slice(0, 30).map((ev, i) => React.createElement(
+            'button',
+            {
+              key: i, type: 'button', onClick: () => props.onSeek(ev.timeSec), title: ev.label,
+              style: {
+                display: 'block', width: '100%', textAlign: 'left', border: 0, background: 'transparent',
+                padding: '1px 0', fontSize: 11, color: toneColor(ev.tone), cursor: 'pointer',
+              },
+            },
+            `t=${ev.timeSec.toFixed(3)}s · ${ev.label}`,
+          )),
+        ),
+      )
+      : null,
+  );
+}
+
+/** Keyframe renders already stored by the run — the strip is just their index.
+ * The filename rule is the host's: frame_<step:5>_<label sanitised>.png. */
+export function RunKeyframeStrip(props: {
+  runId: string;
+  keyframes: RunKeyframe[];
+  activeIndex?: number;
+  onPick?: (index: number) => void;
+  compact?: boolean;
+}): React.ReactElement | null {
+  if (!Array.isArray(props.keyframes) || props.keyframes.length === 0) return null;
+  const imgHeight = props.compact ? 46 : 58;
+  return React.createElement(
+    'div',
+    { 'data-keyframe-strip': '1', style: { display: 'flex', gap: 6, overflowX: 'auto', padding: '2px 0 4px', alignItems: 'flex-start' } },
+    ...props.keyframes.map((k, i) => {
+      const safe = k.label.replace(/[^A-Za-z0-9\u4e00-\u9fff]+/g, '_').slice(0, 24);
+      const name = `frame_${String(k.step ?? 0).padStart(5, '0')}_${safe}.png`;
+      const active = props.activeIndex === i;
+      return React.createElement(
+        'button',
+        {
+          key: i, type: 'button', title: `${k.label} @ ${k.timeSec.toFixed(3)}s`,
+          onClick: () => props.onPick?.(i),
+          style: {
+            flex: '0 0 auto', width: props.compact ? 82 : 96, padding: 2, cursor: 'pointer',
+            border: `2px solid ${active ? T.accent : T.border}`, borderRadius: 5,
+            background: active ? T.accentSoft : T.plate, textAlign: 'left',
+          },
+        },
+        React.createElement('img', {
+          src: withProject(`/api/cad/run/image?id=${encodeURIComponent(props.runId)}&name=${encodeURIComponent(name)}`),
+          alt: k.label,
+          onError: (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.visibility = 'hidden'; },
+          style: { width: '100%', height: imgHeight, objectFit: 'cover', borderRadius: 3, background: T.ground, display: 'block' },
+        }),
+        React.createElement('div', {
+          style: { fontSize: 9, color: active ? T.ink : T.soft, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+        }, k.label),
+        React.createElement('div', { style: { fontSize: 9, color: T.muted } }, `t=${k.timeSec.toFixed(2)}s`),
+      );
+    }),
+  );
+}
+
+/** A real timeline instead of a 14px tick strip: keyframe diamonds (click to
+ * pause there), coloured event ticks, a playhead, and click-to-seek anywhere. */
+function RunTimeline(props: {
+  times: number[];
+  events: RunEvent[];
+  keyframes: RunKeyframe[];
+  timeSec: number;
+  onSeek: (timeSec: number) => void;
+  onKeyframe: (index: number) => void;
+}): React.ReactElement {
+  const tMax = props.times[props.times.length - 1] ?? 1;
+  const pct = (t: number): string => `${Math.max(0, Math.min(100, (t / (tMax || 1)) * 100))}%`;
+  const click = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = (e.clientX - r.left) / Math.max(1, r.width);
+    props.onSeek(Math.max(0, Math.min(tMax, f * tMax)));
+  };
+  return React.createElement(
+    'div',
+    { 'data-run-timeline': '1', onClick: click, style: { position: 'relative', height: 26, width: '100%', cursor: 'crosshair', marginTop: 2 } },
+    React.createElement('div', { style: { position: 'absolute', left: 0, right: 0, top: 13, height: 2, background: T.line } }),
+    ...props.keyframes.map((k, i) => React.createElement('button', {
+      key: `kf-${i}`, type: 'button', title: `关键帧 ${k.label} @ ${k.timeSec.toFixed(3)}s`,
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); props.onKeyframe(i); },
+      style: {
+        position: 'absolute', left: pct(k.timeSec), top: 8, width: 8, height: 8, padding: 0,
+        border: `1px solid ${T.white}`, background: T.accent, transform: 'translateX(-50%) rotate(45deg)',
+        cursor: 'pointer',
+      },
+    })),
+    ...props.events.slice(0, 40).map((ev, i) => React.createElement('button', {
+      key: `ev-${i}`, type: 'button', title: ev.label,
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); props.onSeek(ev.timeSec); },
+      style: {
+        position: 'absolute', left: pct(ev.timeSec), top: 5, width: 3, height: 16, padding: 0,
+        border: 0, borderRadius: 1, background: toneColor(ev.tone), transform: 'translateX(-50%)',
+        cursor: 'pointer',
+      },
+    })),
+    React.createElement('div', {
+      style: {
+        position: 'absolute', left: pct(props.timeSec), top: 2, width: 2, height: 22,
+        background: T.ink, transform: 'translateX(-50%)', pointerEvents: 'none',
+      },
+    }),
+  );
+}
+
 export function MotionPlaybackView(props: {
   /** The run this playback belongs to — every artifact is addressed by run id. */
   runId: string;
+  /** The run's own report (already fetched by the panel); drives the data strip. */
+  report?: unknown;
+  /** The run's verdict (pass/check/fail) for the badge. */
+  status?: string;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
@@ -200,6 +398,18 @@ export function MotionPlaybackView(props: {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [meshesVersion, setMeshesVersion] = useState(0);
+  const [kfIdx, setKfIdx] = useState(-1);
+  const [pauseAtKf, setPauseAtKf] = useState(false);
+  const [hiddenParts, setHiddenParts] = useState<Set<string>>(() => new Set());
+  const [section, setSection] = useState<{ on: boolean; axis: 'x' | 'y' | 'z'; frac: number; flip: boolean }>(
+    { on: false, axis: 'x', frac: 0.5, flip: false },
+  );
+  const [measureOn, setMeasureOn] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState(0);
+  const [measureMm, setMeasureMm] = useState<number | null>(null);
+  const measurePointsRef = useRef<THREE.Vector3[]>([]);
+  const measureGroupRef = useRef<THREE.Group | null>(null);
+  const playStartRef = useRef(0);
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
   useGround(sceneRef, props.background);
@@ -212,6 +422,15 @@ export function MotionPlaybackView(props: {
     setTraj(null);
     setErr(null);
     setFrameIdx(0);
+    setKfIdx(-1);
+    setHiddenParts(new Set());
+    setSection((cur) => ({ ...cur, on: false }));
+    setMeasureOn(false);
+    setMeasurePoints(0);
+    setMeasureMm(null);
+    measurePointsRef.current = [];
+    measureGroupRef.current = null;
+    setPlaying(false);
     void (async () => {
       try {
         const res = await fetch(withProject(`/api/cad/run/trajectory?id=${encodeURIComponent(props.runId)}`));
@@ -272,6 +491,7 @@ export function MotionPlaybackView(props: {
           maxR = Math.max(maxR, d + (mesh.geometry.boundingSphere?.radius ?? 5));
         }
         handle.fit(center, maxR);
+        handle.setBounds(new THREE.Box3().setFromObject(group));
       }
       setMeshesVersion((v) => v + 1);
     })();
@@ -279,13 +499,54 @@ export function MotionPlaybackView(props: {
     return () => {
       dead = true;
       meshesRef.current = [];
+      measureGroupRef.current = null;
       handle.dispose();
       sceneRef.current = null;
     };
   }, [traj]);
 
   const nFrames = traj?.trajectory.times.length ?? 0;
-  const tMax = traj?.trajectory.times[nFrames - 1] ?? 1;
+  const facts = React.useMemo(
+    () => runFacts(traj?.kind ?? 'motion', props.report, props.status),
+    [traj?.kind, props.report, props.status],
+  );
+  const keyframes = facts?.keyframes ?? [];
+  const chart = React.useMemo(
+    () => (traj ? buildRunChart(traj.kind, props.report) : null),
+    [traj?.kind, props.report],
+  );
+
+  const frameAt = (time: number): number => {
+    const times = traj?.trajectory.times ?? [];
+    let best = 0;
+    let bestDelta = Infinity;
+    for (let i = 0; i < times.length; i++) {
+      const d = Math.abs(times[i]! - time);
+      if (d < bestDelta) { bestDelta = d; best = i; }
+    }
+    return best;
+  };
+  const seekTime = (time: number) => {
+    setPlaying(false);
+    setKfIdx(-1);
+    setFrameIdx(frameAt(time));
+  };
+  const goKeyframe = (index: number) => {
+    const kf = keyframes[index];
+    if (!kf) return;
+    setPlaying(false);
+    setKfIdx(index);
+    setFrameIdx(frameAt(kf.timeSec));
+  };
+  const keyframeFrames = React.useMemo(() => {
+    const map = new Map<number, number>();
+    keyframes.forEach((kf, i) => {
+      const f = frameAt(kf.timeSec);
+      if (!map.has(f)) map.set(f, i);
+    });
+    return map;
+    // frameAt is derived from traj.trajectory.times; keyframes from props.report.
+  }, [traj, keyframes]);
 
   // apply the current frame's poses to the meshes
   useEffect(() => {
@@ -296,8 +557,9 @@ export function MotionPlaybackView(props: {
       if (!entry || !f) continue;
       entry.mesh.position.set(f[0]!, f[1]!, f[2]!);
       entry.mesh.quaternion.set(f[3]!, f[4]!, f![5]!, f[6]!);
+      entry.mesh.visible = !hiddenParts.has(part.name);
     }
-  }, [traj, frameIdx, meshesVersion]);
+  }, [traj, frameIdx, meshesVersion, hiddenParts]);
 
   // playback clock
   useEffect(() => {
@@ -306,36 +568,262 @@ export function MotionPlaybackView(props: {
     return () => clearInterval(iv);
   }, [playing, speed, nFrames]);
 
-  if (err) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err);
-  }
+  // "play, but stop at the next keyframe": starting ON a keyframe must not stop
+  // immediately, so the frame the play started from is exempt until the playhead
+  // reaches the following keyframe.
+  useEffect(() => {
+    if (!playing || !pauseAtKf) return;
+    const hit = keyframeFrames.get(frameIdx);
+    if (hit !== undefined && frameIdx !== playStartRef.current) {
+      setPlaying(false);
+      setKfIdx(hit);
+    }
+  }, [frameIdx, playing, pauseAtKf, keyframeFrames]);
+
+  const clearMeasure = () => {
+    const handle = sceneRef.current;
+    const group = measureGroupRef.current;
+    if (handle && group) {
+      handle.scene.remove(group);
+      group.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const mat = (mesh as unknown as { material?: THREE.Material | THREE.Material[] }).material;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+        else mat?.dispose();
+      });
+    }
+    measureGroupRef.current = null;
+    measurePointsRef.current = [];
+    setMeasurePoints(0);
+    setMeasureMm(null);
+  };
+
+  // Section cut: one world-space plane, applied to every part material. It is a
+  // live clip (no capped face) — the honest label says so, and the exact
+  // section/measurement tools remain the version viewport's job.
+  useEffect(() => {
+    const handle = sceneRef.current;
+    if (!handle) return;
+    if (!section.on) { handle.setClip(null); return; }
+    const box = handle.bounds;
+    if (!box) return;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const normal = new THREE.Vector3(
+      section.axis === 'x' ? 1 : 0,
+      section.axis === 'y' ? 1 : 0,
+      section.axis === 'z' ? 1 : 0,
+    ).multiplyScalar(section.flip ? -1 : 1);
+    const point = center.clone();
+    point[section.axis] += (section.frac - 0.5) * size[section.axis]!;
+    handle.setClip(new THREE.Plane(normal, -normal.dot(point)));
+  }, [section.on, section.axis, section.frac, section.flip, meshesVersion]);
+
+  // A measurement is tied to the pose it was taken on; moving the playhead makes
+  // it stale, so it is cleared rather than shown against a different frame.
+  useEffect(() => { clearMeasure(); }, [frameIdx, measureOn]);
+
+  useEffect(() => {
+    const handle = sceneRef.current;
+    if (!handle || !measureOn) return;
+    const canvas = handle.renderer.domElement;
+    canvas.style.cursor = 'crosshair';
+    const ray = new THREE.Raycaster();
+    let downX = 0;
+    let downY = 0;
+    const onDown = (e: PointerEvent) => { downX = e.clientX; downY = e.clientY; };
+    const onUp = (e: PointerEvent) => {
+      // A drag is an orbit, not a measurement.
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      ray.setFromCamera(ndc, handle.camera);
+      const hits = ray.intersectObjects(meshesRef.current.filter((m) => m.mesh.visible).map((m) => m.mesh), false);
+      const hit = hits[0];
+      if (!hit) return;
+      if (measurePointsRef.current.length >= 2) clearMeasure();
+      const point = hit.point.clone();
+      measurePointsRef.current.push(point);
+      const box = handle.bounds;
+      const maxDim = box ? box.getSize(new THREE.Vector3()).length() : 100;
+      const dotR = Math.max(0.6, maxDim * 0.006);
+      let group = measureGroupRef.current;
+      if (!group) {
+        group = new THREE.Group();
+        handle.scene.add(group);
+        measureGroupRef.current = group;
+      }
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(dotR, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xff3040, depthTest: false }),
+      );
+      dot.position.copy(point);
+      dot.renderOrder = 20;
+      group.add(dot);
+      if (measurePointsRef.current.length === 2) {
+        const [a, b] = measurePointsRef.current as [THREE.Vector3, THREE.Vector3];
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([a, b]),
+          new THREE.LineBasicMaterial({ color: 0xff3040, depthTest: false }),
+        );
+        line.renderOrder = 20;
+        group.add(line);
+        setMeasureMm(a.distanceTo(b));
+      }
+      setMeasurePoints(measurePointsRef.current.length);
+    };
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointerup', onUp);
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.style.cursor = '';
+    };
+  }, [measureOn, frameIdx, meshesVersion]);
+
   if (!traj) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, '加载轨迹…');
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err ?? '加载轨迹…');
   }
 
   const t = traj.trajectory.times[Math.min(frameIdx, nFrames - 1)] ?? 0;
   const isMotion = traj.kind === 'motion';
+  const frameStep = nFrames > 1 ? Math.abs(traj.trajectory.times[1]! - traj.trajectory.times[0]!) : 0;
+  const nearestKf = keyframes.findIndex((k) => Math.abs(k.timeSec - t) <= Math.max(1e-6, frameStep / 2));
+  const selectedKf = kfIdx >= 0 ? kfIdx : nearestKf;
+  const currentKf = selectedKf >= 0 ? keyframes[selectedKf] : undefined;
+  const prevKf = (() => {
+    for (let i = keyframes.length - 1; i >= 0; i--) if (keyframes[i]!.timeSec < t - 1e-6) return i;
+    return -1;
+  })();
+  const nextKf = (() => {
+    for (let i = 0; i < keyframes.length; i++) if (keyframes[i]!.timeSec > t + 1e-6) return i;
+    return -1;
+  })();
+  const timeLabel = `t=${t.toFixed(2)}s · ${frameIdx + 1}/${nFrames}` + (currentKf ? ` · ${currentKf.label}` : '');
+  const shortTime = `t=${t.toFixed(2)}s · ${frameIdx + 1}/${nFrames}`;
+  const togglePart = (name: string) => setHiddenParts((prev) => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+
+  const playbackTools = !err && sceneRef.current
+    ? React.createElement('div', {
+        'data-playback-tools': '1',
+        style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: T.soft },
+      },
+      React.createElement('button', {
+        type: 'button', title: '实时剖切（无封盖）：看内部关节/间隙', onClick: () => setSection((cur) => ({ ...cur, on: !cur.on })),
+        style: { ...btn(section.on), fontSize: 10, padding: '1px 7px' },
+      }, '✂ 剖切'),
+      React.createElement('button', {
+        type: 'button', title: '在模型上点两点测距（视口射线，近似值）', onClick: () => setMeasureOn((v) => !v),
+        style: { ...btn(measureOn, '#ff3040'), fontSize: 10, padding: '1px 7px' },
+      }, '📏 测距'),
+      section.on ? React.createElement('select', {
+        value: section.axis, title: '剖切轴',
+        onChange: (e: any) => setSection((cur) => ({ ...cur, axis: e.target.value as 'x' | 'y' | 'z' })),
+        style: { fontSize: 10, padding: '1px 3px' },
+      }, (['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a.toUpperCase()))) : null,
+      section.on ? React.createElement('input', {
+        type: 'range', min: 0, max: 1, step: 0.01, value: section.frac, title: '剖切位置',
+        onChange: (e: any) => setSection((cur) => ({ ...cur, frac: Number(e.target.value) })),
+        style: { width: 96 },
+      }) : null,
+      section.on ? React.createElement('button', {
+        type: 'button', title: '翻转保留侧', onClick: () => setSection((cur) => ({ ...cur, flip: !cur.flip })),
+        style: { ...btn(section.flip), fontSize: 10, padding: '1px 7px' },
+      }, '翻转') : null,
+      section.on ? React.createElement('span', { style: { color: T.muted } }, '无封盖') : null,
+      measureOn
+        ? React.createElement('span', { style: { color: measureMm == null ? T.muted : T.ink } },
+            measureMm == null
+              ? (measurePoints === 1 ? '再点一个点' : '点模型上两点')
+              : `距离 ${measureMm.toFixed(2)}mm（视口近似）`)
+        : null,
+      measureMm != null
+        ? React.createElement('button', {
+            type: 'button', onClick: clearMeasure, style: { ...btn(false), fontSize: 10, padding: '1px 7px' },
+          }, '清除')
+        : null,
+    )
+    : null;
 
   return React.createElement(PlaybackFrame, {
     mountRef,
-    getScene: () => (sceneRef.current
+    data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, tools: playbackTools }) : null,
+    fallback: err
+      ? React.createElement('div', {
+          style: {
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 16, textAlign: 'center', color: T.muted, fontSize: 13,
+          },
+        }, err)
+      : undefined,
+    getScene: () => (!err && sceneRef.current
       ? { camera: sceneRef.current.camera, focus: sceneRef.current.controls.target }
       : null),
-    onReset: () => sceneRef.current?.refit(),
+    onReset: () => { if (!err) sceneRef.current?.refit(); },
     controls: [
-      React.createElement('button', { key: 'play', onClick: () => setPlaying((p) => !p), style: btn(playing) },
-        playing ? '⏸ 暂停' : '▶ 播放'),
+      React.createElement('button', {
+        key: 'kf-first', title: '第一个关键帧', disabled: keyframes.length === 0,
+        onClick: () => goKeyframe(0),
+        style: { ...btn(false), opacity: keyframes.length ? 1 : 0.35 },
+      }, '⏮'),
+      React.createElement('button', {
+        key: 'kf-prev', title: '上一关键帧', disabled: prevKf < 0,
+        onClick: () => goKeyframe(prevKf),
+        style: { ...btn(false), opacity: prevKf < 0 ? 0.35 : 1 },
+      }, '⟨'),
+      React.createElement('button', {
+        key: 'play',
+        onClick: () => {
+          if (!playing) playStartRef.current = frameIdx;
+          setPlaying((p) => !p);
+        },
+        style: btn(playing), title: playing ? '暂停' : '播放',
+      }, playing ? '⏸' : '▶'),
+      React.createElement('button', {
+        key: 'kf-next', title: '下一关键帧', disabled: nextKf < 0,
+        onClick: () => goKeyframe(nextKf),
+        style: { ...btn(false), opacity: nextKf < 0 ? 0.35 : 1 },
+      }, '⟩'),
       React.createElement('input', {
         key: 'seek', type: 'range', min: 0, max: Math.max(0, nFrames - 1), value: Math.min(frameIdx, nFrames - 1),
-        onChange: (e: any) => { setPlaying(false); setFrameIdx(Number(e.target.value)); },
-        style: { flex: 1, minWidth: 120 },
+        onChange: (e: any) => { setPlaying(false); setKfIdx(-1); setFrameIdx(Number(e.target.value)); },
+        style: { flex: '1 1 60px', minWidth: 60 },
       }),
-      React.createElement('span', { key: 'time', style: { fontSize: 11, color: '#555', minWidth: 96, textAlign: 'right' } },
-        `t=${t.toFixed(2)}s · ${frameIdx + 1}/${nFrames}`),
+      // Force the speed / pause controls onto their own row: at 380px the
+      // transport row otherwise overflows and clips the speed selector.
+      React.createElement('div', { key: 'row2', style: { flexBasis: '100%', height: 0 } }),
+      React.createElement('span', { key: 'time', title: timeLabel, style: { fontSize: 10, color: T.soft, flex: '0 0 auto', maxWidth: 104, overflow: 'hidden', textAlign: 'right', whiteSpace: 'nowrap' } }, shortTime),
+      React.createElement('select', {
+        key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: '跳到关键帧',
+        onChange: (e: any) => {
+          const i = Number(e.target.value);
+          if (i >= 0) goKeyframe(i); else setKfIdx(-1);
+        },
+        style: { fontSize: 11, padding: '2px 4px', maxWidth: 145 },
+      },
+      React.createElement('option', { value: -1 }, keyframes.length ? '关键帧…' : '无关键帧'),
+      ...keyframes.map((k, i) => React.createElement('option', { value: i }, `${k.label} · ${k.timeSec.toFixed(2)}s`))),
       React.createElement('select', {
         key: 'speed', value: speed, onChange: (e: any) => setSpeed(Number(e.target.value)),
         style: { fontSize: 11, padding: '2px 4px' },
       }, [0.25, 0.5, 1, 2, 4].map((s) => React.createElement('option', { key: s, value: s }, `${s}×`))),
+      React.createElement('label', {
+        key: 'pause-kf', 'data-pause-keyframes': '1', title: '播放时在下一个关键帧自动暂停',
+        style: { fontSize: 11, color: T.soft, display: 'inline-flex', gap: 3, alignItems: 'center' },
+      },
+      React.createElement('input', {
+        type: 'checkbox', checked: pauseAtKf,
+        onChange: (e: any) => setPauseAtKf(Boolean(e.target.checked)),
+      }), '到关键帧停'),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
@@ -348,20 +836,35 @@ export function MotionPlaybackView(props: {
             style: btn(false),
           }, '📸')
         : null,
-      // event ticks under the slider + part legend
+      React.createElement('div', { key: 'timeline', style: { width: '100%' } },
+        React.createElement(RunTimeline, {
+          times: traj.trajectory.times,
+          events: facts?.events ?? [],
+          keyframes,
+          timeSec: t,
+          onSeek: seekTime,
+          onKeyframe: goKeyframe,
+        })),
+      React.createElement('details', { key: 'analysis', style: { width: '100%', fontSize: 11 } },
+        React.createElement('summary', { style: { cursor: 'pointer', color: T.muted } },
+          `曲线 / 关键帧缩略图${chart ? '' : '（这个 run 没有逐帧数据）'}`),
+        React.createElement(RunKeyframeStrip, {
+          runId: props.runId, keyframes, activeIndex: selectedKf >= 0 ? selectedKf : undefined,
+          onPick: goKeyframe, compact: true,
+        }),
+        chart ? React.createElement(RunChart, { data: chart, timeSec: t, onSeek: seekTime, height: 96 }) : null),
+      // legend doubles as visibility toggles: hide a part to see the joint/clearance inside
       React.createElement('div', { key: 'legend', style: { display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' } },
-        React.createElement('div', { key: 'ticks', style: { position: 'relative', flex: 1, minWidth: 160, height: 14 } },
-          traj.trajectory.events.map((ev, i) => React.createElement('div', {
-            key: i,
-            title: `${ev.label} (t=${ev.timeSec}s)`,
+        ...traj.trajectory.parts.map((p, i) => {
+          const hidden = hiddenParts.has(p.name);
+          return React.createElement('button', {
+            key: p.name, type: 'button', title: hidden ? '点击显示这个零件' : '点击隐藏这个零件',
+            onClick: () => togglePart(p.name),
             style: {
-              position: 'absolute', top: 2, width: 4, height: 10, borderRadius: 1,
-              left: `${Math.min(100, (ev.timeSec / (tMax || 1)) * 100)}%`,
-              background: /干涉|接触|倾倒|穿透/.test(ev.label) ? '#e74c3c' : '#4a7dbd',
+              fontSize: 11, color: T.soft, border: 0, background: 'transparent', cursor: 'pointer',
+              padding: 0, opacity: hidden ? 0.35 : 1,
             },
-          })),
-        ),
-        ...traj.trajectory.parts.map((p, i) => React.createElement('span', { key: p.name, style: { fontSize: 11, color: '#666' } },
+          },
           React.createElement('span', {
             style: {
               display: 'inline-block', width: 8, height: 8, borderRadius: 4, marginRight: 3, verticalAlign: 'middle',
@@ -369,7 +872,8 @@ export function MotionPlaybackView(props: {
               opacity: p.bodyType === 'fixed' ? 0.6 : 1,
             },
           }),
-          p.name)),
+          p.name);
+        }),
       ),
     ],
   });
@@ -388,6 +892,10 @@ interface FluidManifest {
 export function FluidPlaybackView(props: {
   /** The run this playback belongs to — every artifact is addressed by run id. */
   runId: string;
+  /** The run's own report; drives the key-number strip. */
+  report?: unknown;
+  /** The run's verdict (pass/check/fail) for the badge. */
+  status?: string;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
@@ -556,9 +1064,23 @@ export function FluidPlaybackView(props: {
   }
 
   const entry = manifest.frames[Math.min(frameIdx, manifest.frames.length - 1)]!;
+  const fluidFacts = runFacts('fluid', props.report, props.status);
 
   return React.createElement(PlaybackFrame, {
     mountRef,
+    data: fluidFacts ? React.createElement(RunDataStrip, {
+      facts: fluidFacts,
+      onSeek: (timeSec: number) => {
+        let best = 0;
+        let bestDelta = Infinity;
+        manifest.frames.forEach((f, i) => {
+          const d = Math.abs(f.timeSec - timeSec);
+          if (d < bestDelta) { bestDelta = d; best = i; }
+        });
+        setPlaying(false);
+        setFrameIdx(best);
+      },
+    }) : null,
     getScene: () => (sceneRef.current
       ? { camera: sceneRef.current.camera, focus: sceneRef.current.controls.target }
       : null),

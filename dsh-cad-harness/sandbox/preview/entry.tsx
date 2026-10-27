@@ -813,6 +813,43 @@ if (q.get('assert') === 'contract') {
   })();
 }
 
+// ?assert=playback — the simulation stage must expose the run's key numbers and
+// a keyframe transport, not only a slider. This is checked on the DOM (the
+// sandbox has no WebGL, and the data strip deliberately survives that).
+if (q.get('assert') === 'playback') {
+  const started = performance.now();
+  const finish = (lines: string[]) => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  };
+  const tick = () => {
+    const data = document.querySelector('[data-playback-data]') as HTMLElement | null;
+    const summary = document.querySelector('[data-run-summary]') as HTMLElement | null;
+    const kf = document.querySelector('[data-keyframe-select]') as HTMLSelectElement | null;
+    const timeline = document.querySelector('[data-run-timeline]');
+    const pause = document.querySelector('[data-pause-keyframes]');
+    const chart = document.querySelector('[data-run-chart]');
+    const strip = document.querySelector('[data-keyframe-strip]');
+    if (!data && performance.now() - started < 8000) return setTimeout(tick, 120);
+    const text = (data?.textContent ?? '').replace(/\s+/g, ' ');
+    finish([
+      `playback data/transport (dock ${w}×${h})`,
+      `${data ? 'PASS' : 'FAIL'}  the run data strip is rendered`,
+      `${summary && summary.textContent && summary.textContent.trim().length > 10 ? 'PASS' : 'FAIL'}  it carries a one-sentence reading`,
+      `${data && /采样|干涉|穿透|到达率/.test(text) ? 'PASS' : 'FAIL'}  the strip carries the run's key numbers`,
+      `${kf && kf.options.length >= 2 ? 'PASS' : 'FAIL'}  there is a keyframe selector (${kf?.options.length ?? 0} option(s))`,
+      `${timeline ? 'PASS' : 'FAIL'}  the event/keyframe timeline is present`,
+      `${pause ? 'PASS' : 'FAIL'}  the 'pause at keyframe' control is present`,
+      `${chart ? 'PASS' : 'FAIL'}  the time-series chart is rendered`,
+      `${strip ? 'PASS' : 'FAIL'}  the keyframe thumbnail strip is rendered`,
+    ]);
+  };
+  setTimeout(tick, 1200);
+}
+
 // ?assert=deeplink&expect=<text> — a link must land on its object, and an old
 // version must land in the HISTORY state (banner), not silently as if current.
 if (q.get('assert') === 'deeplink') {
