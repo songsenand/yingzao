@@ -15,6 +15,8 @@
 - 每一版均为**不可变版本**，可浏览、钉住、对比
 - 第三方件（STL / STEP / 3MF / DXF）可进入同一套检查并参与装配
 
+**文档分三类**：用户看 [docs/user/](docs/user/)，Agent 看 [docs/llm/](docs/llm/)，维护者看 [docs/dev/](docs/dev/)；本 README 是安装与快速开始的入口。
+
 ---
 
 ## 目录
@@ -169,6 +171,10 @@ cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
 
 | 文档 | 讲什么 |
 |---|---|
+| [docs/README.md](docs/README.md) | 文档地图：用户 / LLM / 维护者三个目录，以及“同一事实一个权威”的规则 |
+| [docs/user/](docs/user/) | 用户指南：它是什么、从描述到交付、边界（不列工具） |
+| [docs/llm/](docs/llm/) | Agent 参考：引擎边界、陷阱、交付纪律（长解释） |
+| [docs/dev/](docs/dev/) | 维护者入口：架构、设计、决策、计划、审计 |
 | [HARNESS.md](HARNESS.md) | 它是什么、不是什么、边界在哪、按什么原则取舍 |
 | [DESIGN.md](DESIGN.md) | 当前设计：架构、模块、接口、**环境变量与诊断开关全集** |
 | [docs/DECISION-LOG.md](docs/DECISION-LOG.md) | 取舍历史：当初为什么这么选（append-only） |
