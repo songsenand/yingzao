@@ -1,7 +1,7 @@
 # BUILD —— β-D-吡喃葡萄糖球棍模型（制造与验证记录）
 
 > 设计已冻结：`spec/design.md` 与 `spec/parts/*.scad` 未改动。本文只记录**制造性/装配/运动**这一步实际跑出来的结果。
-> 语料根：`examples/glucose-molecule/cad-data`（11 个版本 / 7 个零件 / 30 个运行）。
+> 语料根：`examples/glucose-molecule/cad-data`（11 个版本 / 7 个零件 / 31 个运行）。
 > 子智能体的会话 cwd 是仓库根，版本与运行最初落在根 `cad-data`（当时符号链接到 `examples/toy-balance2`），
 > 交付前用 `scripts/migrate_corpus.py` **整体迁到本目录并恢复了原语料**；版本号/运行号保持不变，
 > 所以本文引用的 vNNN / rNNN 全部有效。根目录的 `cad-data`、`assembly` 符号链接已改为指向本示例。
@@ -12,8 +12,10 @@
 （预期内的弹性卡脚与球口环带，见 §3）；六元环子装配 **37/37 接口判定 pass、0 未声明近邻**（r097）；
 代表性子装配 **0 干涉、0 过紧**（阈值 1e-6 mm，r098）；插拔行程只出现**卡珠挤过喉口的 6 次 0.769 mm³ 挤压**，
 就位与拔出位姿 **0 干涉**——但刚体引擎据此把该 run 判为 `fail`（引擎边界，见 §6）；
-**整机 48 节点契约因 O(n²) 近邻扫描超时（≈816 s ≫ 120 s 上限）未能在工具内判定**。
-因此本版可以交付"零件与子装配的证据"，**不能**宣称"整机已验证通过"。
+**整机 48 节点 / 145 接口契约已判定：145/145 pass、0 未声明近邻（r100）**。
+此前 816 s 的超时来自 O(n²) 近邻扫描；AABB 宽相位后同一契约约 10.2 s，工具预算内完成。
+因此本版可以交付"整机契约 + 零件/子装配"的证据；整机 **1128 对** `validate_assembly`
+仍是设计方的离线 manifold 复核，不是本次工具证据（§4.2 / §6）。
 
 | 零件（文件名） | 中文零件名 | 版本 | BOM 数量 |
 |---|---|---|---|
@@ -118,26 +120,28 @@ hardViolations: []   skipped: []   undeclared: []
   `— motion half NOT evidenced: run simulate_motion over the travel and cite it with params.runId`。
   即：**接口位置对，但"行程那一半"没有被这条清单认领**（清单按 §6 的决定不引用 r084 作为通过证据）。
 
-### 4.2 整机清单 `assembly/assembly.json` —— 未能在工具内判定
+### 4.2 整机清单 `assembly/assembly.json` —— 145/145 pass（r100）
 
-48 节点 / **145 接口**（24 根棍 × 2 端 × 3 条 + 1 条 motion-clearance）。两次以绝对路径调用
-`check_assembly` 都返回：
+48 节点 / **145 接口**（24 根棍 × 2 端 × 3 条 + 1 条 motion-clearance）。AABB 宽相位后，
+`check_assembly` 在 120 s 预算内返回：
+
+```
+r100 · pass · 145 接口 · 通过 145 · 硬冲突 0 · skipped 0 · 未声明 0
+```
+
+此前两次以绝对路径调用都超时：
 
 ```
 Error: python worker assembly_contracts timed out after 120000 ms
 ```
 
 原因不是清单写错，而是 **O(n²) 近邻扫描的计算量**：1128 对零件，每对做一次 Manifold 布尔 + 两次
-采样式最近距离。用 worker 自己的 `_solid_from_stl` / `_min_distance_via_sampling` 在真实 48 件上实测：
-**10 对 7.2 s → 1128 对约 816 s**，而 python worker 的硬上限是 120 s（`python-worker.ts:
-DEFAULT_WORKER_TIMEOUT_MS = 120_000`）。**这是工具限制，不是几何不合格**，也没有通过缩清单"绕过去"。
+采样式最近距离（10 对 7.2 s → 1128 对约 816 s）。**这是工具限制，不是几何不合格**。
+2026-10-28 的 AABB 宽相位把 48 节点契约降到约 **10.2 s**（commit `8963118`），整机契约因此
+第一次在工具内跑完；r100 是整机契约证据，r097/r099 仍是六元环子装配的聚焦证据。
 
-> 另一个坑：`manifestPath` 给相对路径 `assembly/assembly.json` 会按**仓库根**解析，命中的是
-> toy-pan-balance 的清单（r077）。本次所有 `check_assembly` 都使用绝对路径
-> `/home/songsenand/Project/ToyMarker/examples/glucose-molecule/assembly/assembly_ring.json`。
->
-> 整机的覆盖：子装配 r097 + `validate_assembly`（§5）+ 设计方的独立 manifold3d 布尔复核
-> （1128 对 0 干涉，**该数字来自离线脚本，不是本次工具证据**）。
+> 整机 **1128 对** `validate_assembly` 仍是设计方的离线 manifold3d 复核
+> （0 干涉，**该数字不是本次 `check_assembly` 的 145 条接口证据**）。
 
 ## 5. 代表性子装配的间隙（`validate_assembly`）
 
@@ -228,9 +232,9 @@ Sampling: 25/24 poses × 1 candidate pair(s) = 25 interference checks
    （atan(0.20/2.0)）。运动仿真按刚性/理想位姿，不建模这一项；装配后靠网络约束与重力压回。
 4. **没有做整机 48 件的运动仿真**：只做了单接口（C球 + 一根棍）的行程；48 件网络在重力/装配顺序下
    的变形、回弹、累积误差都未仿真。
-5. **整机契约超时**：48 节点 / 1128 对近邻扫描约需 816 s，超过 worker 120 s 上限，`check_assembly`
-   未能在工具内给出整机 summary。已用六元环子清单（r097）+ 子装配 `validate_assembly`（r098）覆盖；
-   整机 1128 对 0 干涉来自**设计方离线 manifold3d 复核，不是本次工具证据**。
+5. **整机契约已判定，但整机 1128 对 validate 仍是离线**：r100 的 145 接口全部 pass、0 未声明；
+   整机 1128 对 0 干涉来自**设计方离线 manifold3d 复核，不是本次 145 条接口证据**。六元环子装配
+   r099（37/37）仍保留为聚焦证据。
 6. **行程仿真的引擎边界**：r083 是假绿（drive 体同时做振荡器 → 速度型刚体忽略位置目标，零件没动）；
    r084 真动了，但刚性引擎把弹性卡珠判成干涉 → `fail`。**两个 run 都保留**，不要引用 r083。
 7. **第一版棍 v034–v037 的缺陷**（已修复，保留历史）：开缝从尖端 0.4 mm 起，留下实心端盖把四瓣在自由端
@@ -299,4 +303,5 @@ simulate_motion {parts:[C球 fixed v031@[0,0,0], 键棒 kinematic v039@[0,0,17],
 | r083 | motion | 假绿：键棒没动，**不作证据** |
 | r084 | motion | 真行程 12 mm：6 次卡珠挤压 0.769 mm³，就位/拔出 0 干涉，引擎判 fail |
 | r099 | assembly-check | 迁移后重跑六元环清单（相对路径经根符号链接解析）：37/37 pass |
+| r100 | assembly-check | 整机 145 接口：145/145 pass、0 hard、0 skipped、0 undeclared（AABB 宽相位后） |
 | r077 | assembly-check | 反面教材：相对路径解析到 toy-pan-balance 清单，且暴露 skipped[].measured schema 缺陷 |

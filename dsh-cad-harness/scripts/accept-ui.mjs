@@ -35,6 +35,13 @@ const SCENARIOS = [
   // The playback's data strip + keyframe controls are the comprehension surface;
   // the corpus decides which motion run, never a hard-coded id.
   { name: 'playback', query: 'w=520&h=1200&assert=playback&debug=0', resolve: 'motion' },
+  // The same comprehension surface at the narrow dock width: the data strip,
+  // transport and timeline must not squeeze the 3D viewport out.
+  { name: 'playback-380', query: 'w=380&h=900&assert=playback&debug=0', resolve: 'motion' },
+  // A 3D-only control, exercised under Xvfb; SKIP when this box cannot give GL.
+  { name: 'section', query: 'w=520&h=1200&open=剖切&assert=section&debug=0', resolve: 'motion' },
+  // The no-WebGL path must still show the run's data and keyframe strip.
+  { name: 'playback-no-gl', query: 'w=520&h=1200&assert=playback&debug=0', resolve: 'motion', noXvfb: true },
 ];
 
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
@@ -92,12 +99,14 @@ try {
     // never retries.
     const runShot = (slow) => {
       const query = /(^|&)slow=/.test(s.query) ? s.query : `${s.query}&slow=${slow}`;
-      return spawnSync(process.execPath, [
+      const args = [
         join(ROOT, 'sandbox', 'preview', 'shot.mjs'),
         '--name', `ui-${s.name}`,
         '--base', BASE,
         '--query', query,
-      ], { cwd: ROOT, encoding: 'utf8', timeout: 120000 });
+      ];
+      if (s.noXvfb) args.push('--no-xvfb');
+      return spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', timeout: 120000 });
     };
     const readVerdict = () => fetch(`${BASE}api/cad/assert-result`).then((x) => x.json()).catch(() => ({ ok: null }));
     let r = runShot(6000);

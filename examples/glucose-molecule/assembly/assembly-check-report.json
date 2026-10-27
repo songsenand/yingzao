@@ -1,7 +1,7 @@
 {
-  "runId": "r099",
-  "checkedAt": "2026-10-27T05:08:43.935Z",
-  "manifestPath": "/home/songsenand/Project/ToyMarker/assembly/assembly_ring.json",
-  "manifestHash": "72b2b80f",
+  "runId": "r100",
+  "checkedAt": "2026-10-27T17:42:58.229Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/assembly/assembly.json",
+  "manifestHash": "3b7de2ef",
   "schema": "assembly-check-pointer/v1"
 }

@@ -103,11 +103,22 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
     const satisfied = m.samplingSatisfied;
     const interference = typeof m.interferenceCount === 'number' ? m.interferenceCount : null;
     const drift = typeof m.maxJointDriftMm === 'number' ? m.maxJointDriftMm : null;
+    // Old runs sampled only the start pose (sampleEvery > stepsRun). The report
+    // still says "duration 0.38s" and "0 interference"; playback is a still
+    // image, so say that instead of letting the numbers imply a sweep.
+    const poses = Array.isArray(report.trajectory?.times) ? report.trajectory.times.length : null;
+    const singlePose = poses != null && poses < 2;
     const bad = status === 'fail' || (interference ?? 0) > 0;
     const tone: RunTone = bad ? 'bad'
       : baseTone === 'ok' && checks != null && satisfied === true ? 'ok' : 'warn';
     const facts: RunFact[] = [
       { label: '时长', value: `${num(report.durationSec, 2)}s` },
+      ...(singlePose ? [{
+        label: '位姿',
+        value: `${poses} 帧`,
+        tone: 'warn' as const,
+        title: '少于 2 个采样位姿：回放只有一张静止图，不能作为运动/净空证据；重跑会按至少 24 个位姿采。',
+      }] : []),
       { label: '干涉', value: interference == null ? none : `${interference} 次`, tone: bad ? 'bad' : 'ok' },
       {
         label: '采样',
@@ -131,13 +142,16 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
       if (Number.isFinite(first.periodSec)) facts.push({ label: '周期', value: `${num(first.periodSec, 2)}s` });
     }
     const legacyCoverage = checks == null;
+    const singleNote = singlePose ? ` 这个 run 只有 ${poses} 个采样位姿，事件时间线也不完整。` : '';
     const summary = bad
-      ? `不可交付：${interference ?? '?'} 次重叠事件。时间线上的红色刻度就是它们，点一下跳到该时刻。`
-      : legacyCoverage
-        ? '这个 run 早于采样覆盖字段：报告只能说“没发现干涉”，不能说“查过多少位姿”。'
-        : satisfied === false
-          ? '采样不足（少于 24 个位姿）：这次 run 的“0 干涉”不能当作净空证据。'
-          : `本次采样未发现干涉${drift == null ? '。' : `；关节最大漂移 ${num(drift, 2)}mm。`}`;
+      ? `不可交付：${interference ?? '?'} 次重叠事件。时间线上的红色刻度就是它们，点一下跳到该时刻。${singleNote}`
+      : singlePose
+        ? `这个 run 只有 ${poses} 个采样位姿（旧引擎）：回放只有静止图，不能作为运动/净空证据；重跑后再判断。`
+        : legacyCoverage
+          ? '这个 run 早于采样覆盖字段：报告只能说“没发现干涉”，不能说“查过多少位姿”。'
+          : satisfied === false
+            ? '采样不足（少于 24 个位姿）：这次 run 的“0 干涉”不能当作净空证据。'
+            : `本次采样未发现干涉${drift == null ? '。' : `；关节最大漂移 ${num(drift, 2)}mm。`}`;
     return {
       tone,
       headline: bad ? '不可交付' : tone === 'ok' ? '通过' : '需要复核',
@@ -195,15 +209,19 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
 
   if (kind === 'assembly-check') {
     const s = report.summary ?? {};
+    const scopeText = `${report.manifestName ?? ''} ${report.manifestPath ?? ''}`;
+    const subassembly = /子装配|subassembly|assembly_ring|ring/i.test(scopeText);
     const tone: RunTone = (s.hardViolations ?? 0) > 0 ? 'bad'
       : (s.skipped ?? 0) + (s.intentFlags ?? 0) > 0 || (s.undeclared ?? 0) > 0 ? 'warn' : 'ok';
     return {
       tone,
       headline: tone === 'ok' ? '契约成立' : tone === 'bad' ? '契约有冲突' : '不完整',
-      summary: tone === 'ok'
+      summary: (subassembly ? '这是子装配清单，不是整机；37/37 不能读成整机通过。' : '') + (tone === 'ok'
         ? '声明了的接口全部通过；“未声明 0”只说明近邻扫描没有发现未声明的接触，不等于整机几何已验。'
-        : '还有未判定/未声明的条目；先看报告里的缺口行，不要把“通过 N 条”当成整机通过。',
+        : '还有未判定/未声明的条目；先看报告里的缺口行，不要把“通过 N 条”当成整机通过。'),
       facts: [
+        { label: '范围', value: subassembly ? '子装配' : '整机', tone: subassembly ? 'warn' : 'ok',
+          title: String(report.manifestName ?? '—') },
         { label: '接口', value: num(s.interfaces, 0) },
         { label: '通过', value: num(s.pass, 0) },
         { label: '硬冲突', value: num(s.hardViolations, 0), tone: (s.hardViolations ?? 0) > 0 ? 'bad' : 'ok' },

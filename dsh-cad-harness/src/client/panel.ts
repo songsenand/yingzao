@@ -2170,6 +2170,9 @@ export function CadPanel(): React.ReactElement {
     const noReq = rows.filter((x) => !x.expected && x.verdict !== 'skipped').length;
     const partName = (id: string) => machine?.nodes.find((n) => n.id === id)?.part ?? id;
     const partCount = new Set(r.sourceVersionIds.map((v) => partOfVersion.get(v)).filter(Boolean)).size;
+    const scopeText = `${rep?.manifestName ?? ''} ${rep?.manifestPath ?? ''}`;
+    const subassembly = /子装配|subassembly|assembly_ring|ring/i.test(scopeText);
+    const manifestBase = String(rep?.manifestPath ?? '').split('/').pop() || '';
     // The manifest's own completeness. Read from the CURRENT manifest (`machine`)
     // and labelled as such: the report may be about an older revision.
     const ifaces = machine?.contract.interfaces ?? 0;
@@ -2200,11 +2203,15 @@ export function CadPanel(): React.ReactElement {
         ),
         row(`${rep?.manifestName ?? runTitle(r)}${rep?.manifestHash ? ` @${rep.manifestHash}` : ''}`,
           { color: T.soft, marginTop: 1 }),
+        row(`检查范围：${subassembly ? '子装配（不是整机）' : '整机'}${manifestBase ? ` · ${manifestBase}` : ''}`,
+          { color: subassembly ? T.warn : T.muted, fontSize: 10, fontWeight: subassembly ? 600 : 400 }),
         row(`${fmtTime(r.timestamp)} · ${partCount} 个零件 · ${r.sourceVersionIds.length} 个版本 · 阈值 ${rep?.adjacencyThresholdMm ?? 0.75}mm`,
           { color: T.muted, fontSize: 10 }),
       ),
       // ── scrolling body: the document ───────────────────────────────────────
       React.createElement('div', { style: { flex: '1 1 auto', overflowY: 'auto', padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 4 } },
+        ...(subassembly ? [row('这是子装配清单；整机结论需要另跑 assembly.json，不要把这里的“通过 N 条”当作整机通过。',
+          { color: T.warn, fontSize: 10, fontWeight: 600 })] : []),
         ...(thin.length ? [React.createElement('div', {
           key: 'thin', 'data-contract-thin': '1',
           style: { fontSize: 11, lineHeight: 1.5, color: T.warn, fontWeight: 600 },
@@ -2343,7 +2350,10 @@ export function CadPanel(): React.ReactElement {
         );
       }
       const undeclared = (rep.undeclared ?? []) as { partA: string; partB: string; minDistance: number; intersectionVolume: number }[];
+      const scopeText = `${rep.manifestName ?? ''} ${rep.manifestPath ?? ''}`;
+      const subassembly = /子装配|subassembly|assembly_ring|ring/i.test(scopeText);
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+        ...(subassembly ? [line('检查范围：子装配（不是整机）——整机结论需要另跑 assembly.json。', T.warn)] : []),
         // `@hash` is the ICD's revision identity: this report audited THAT contract,
         // not "whatever was at that path when it ran".
         line(`清单「${rep.manifestName ?? '—'}」${(rep as any).manifestHash ? `@${(rep as any).manifestHash}` : ''}` +

@@ -186,16 +186,22 @@ const PlaybackFrame: React.FC<{
   data?: React.ReactNode;
   /** Render this instead of the 3D viewport (e.g. no WebGL) but keep data/transport. */
   fallback?: React.ReactNode;
+  /** Short dock: hide secondary rows so the 3D viewport keeps room. */
+  compact?: boolean;
   /** Live scene for the corner overlays (triad + scale bar + reset). */
   getScene?: () => OverlayScene | null;
   onReset?: () => void;
-}> = ({ mountRef, controls, data, fallback, getScene, onReset }) =>
+}> = ({ mountRef, controls, data, fallback, compact, getScene, onReset }) =>
   React.createElement(
     'div',
-    { style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' } },
+    {
+      'data-playback-frame': '1',
+      'data-playback-compact': compact ? '1' : undefined,
+      style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' },
+    },
     React.createElement(
       'div',
-      { style: { flex: 1, position: 'relative', minHeight: 0 } },
+      { 'data-playback-viewport': '1', style: { flex: 1, position: 'relative', minHeight: 0 } },
       fallback ?? React.createElement('div', { ref: mountRef, style: { position: 'absolute', inset: 0 } }),
       !fallback && getScene && React.createElement(ViewportOverlay, { getScene, onReset }),
     ),
@@ -248,6 +254,7 @@ function RunDataStrip(props: {
   onSeek: (timeSec: number) => void;
   /** Section/measure controls live here so they cost no permanent row. */
   tools?: React.ReactNode;
+  compact?: boolean;
 }): React.ReactElement {
   return React.createElement(
     'div',
@@ -261,11 +268,18 @@ function RunDataStrip(props: {
           border: `1px solid ${toneColor(props.facts.tone)}`, borderRadius: 9, padding: '1px 7px',
         },
       }, props.facts.headline),
-      ...props.facts.facts.map((f, i) => factChip(f, i)),
+      ...(props.compact ? props.facts.facts.slice(0, 3) : props.facts.facts).map((f, i) => factChip(f, i)),
     ),
-    React.createElement('div', { 'data-run-summary': '1', style: { fontSize: 11, color: T.soft, lineHeight: 1.35 } }, props.facts.summary),
-    props.tools ?? null,
-    props.facts.events.length > 0
+    React.createElement('div', {
+      'data-run-summary': '1',
+      title: props.compact ? props.facts.summary : undefined,
+      style: {
+        fontSize: 11, color: T.soft, lineHeight: 1.35,
+        ...(props.compact ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+      },
+    }, props.facts.summary),
+    props.compact ? null : (props.tools ?? null),
+    !props.compact && props.facts.events.length > 0
       ? React.createElement(
         'details',
         { style: { fontSize: 11 } },
@@ -407,6 +421,7 @@ export function MotionPlaybackView(props: {
   const [measureOn, setMeasureOn] = useState(false);
   const [measurePoints, setMeasurePoints] = useState(0);
   const [measureMm, setMeasureMm] = useState<number | null>(null);
+  const [compact, setCompact] = useState(false);
   const measurePointsRef = useRef<THREE.Vector3[]>([]);
   const measureGroupRef = useRef<THREE.Group | null>(null);
   const playStartRef = useRef(0);
@@ -686,6 +701,20 @@ export function MotionPlaybackView(props: {
     };
   }, [measureOn, frameIdx, meshesVersion]);
 
+  // The dock at 380px is a 4:3 stage (~285px tall), not 900px. Without a compact
+  // mode the data strip + transport + timeline consume the whole viewport; the
+  // 3D scene is then 0px tall. Measure the frame, not the mount, because the mount
+  // is the thing that collapses.
+  useEffect(() => {
+    const frame = mountRef.current?.closest('[data-playback-frame]') as HTMLElement | null;
+    if (!frame) return;
+    const update = () => setCompact(frame.clientHeight < 340);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(frame);
+    return () => ro.disconnect();
+  }, [traj]);
+
   if (!traj) {
     return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err ?? '加载轨迹…');
   }
@@ -712,7 +741,7 @@ export function MotionPlaybackView(props: {
     return next;
   });
 
-  const playbackTools = !err && sceneRef.current
+  const playbackTools = !err && !compact && sceneRef.current
     ? React.createElement('div', {
         'data-playback-tools': '1',
         style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: T.soft },
@@ -755,8 +784,8 @@ export function MotionPlaybackView(props: {
     : null;
 
   return React.createElement(PlaybackFrame, {
-    mountRef,
-    data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, tools: playbackTools }) : null,
+    mountRef, compact,
+    data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, tools: playbackTools, compact }) : null,
     fallback: err
       ? React.createElement('div', {
           style: {
@@ -800,8 +829,8 @@ export function MotionPlaybackView(props: {
       }),
       // Force the speed / pause controls onto their own row: at 380px the
       // transport row otherwise overflows and clips the speed selector.
-      React.createElement('div', { key: 'row2', style: { flexBasis: '100%', height: 0 } }),
       React.createElement('span', { key: 'time', title: timeLabel, style: { fontSize: 10, color: T.soft, flex: '0 0 auto', maxWidth: 104, overflow: 'hidden', textAlign: 'right', whiteSpace: 'nowrap' } }, shortTime),
+      React.createElement('div', { key: 'row2', style: { flexBasis: '100%', height: 0 } }),
       React.createElement('select', {
         key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: '跳到关键帧',
         onChange: (e: any) => {
@@ -845,7 +874,7 @@ export function MotionPlaybackView(props: {
           onSeek: seekTime,
           onKeyframe: goKeyframe,
         })),
-      React.createElement('details', { key: 'analysis', style: { width: '100%', fontSize: 11 } },
+      compact ? null : React.createElement('details', { key: 'analysis', style: { width: '100%', fontSize: 11 } },
         React.createElement('summary', { style: { cursor: 'pointer', color: T.muted } },
           `曲线 / 关键帧缩略图${chart ? '' : '（这个 run 没有逐帧数据）'}`),
         React.createElement(RunKeyframeStrip, {
@@ -854,7 +883,7 @@ export function MotionPlaybackView(props: {
         }),
         chart ? React.createElement(RunChart, { data: chart, timeSec: t, onSeek: seekTime, height: 96 }) : null),
       // legend doubles as visibility toggles: hide a part to see the joint/clearance inside
-      React.createElement('div', { key: 'legend', style: { display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' } },
+      compact ? null : React.createElement('div', { key: 'legend', style: { display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' } },
         ...traj.trajectory.parts.map((p, i) => {
           const hidden = hiddenParts.has(p.name);
           return React.createElement('button', {

@@ -127,9 +127,9 @@ def main() -> None:
           + (f", 行程证据 {RUN}" if RUN else ", 尚无行程证据"))
 
     # 12 节点子清单：六元环（6 球 + 6 棍）。为什么单独一份：
-    # check_assembly 的近邻扫描是 O(n²) 实心布尔，48 件 × 1128 对实测要 ~800s，
-    # 而 python worker 的硬上限是 120s —— 整机清单**跑不完**（BUILD.md 记录）。
-    # 环是公差最吃紧的一段，12 节点 66 对能在预算内跑完，所以它作为可判定的那半份。
+    # 环是公差最吃紧的一段，12 节点 66 对能快速跑完，适合作为聚焦证据。
+    # （2026-10-28 AABB 宽相位后，48 节点 / 145 接口整机清单也已能在 120s 内判定，r100 145/145 pass；
+    #  r099 的 37/37 不再是因为整机跑不完，而是六元环的独立证据。）
     ring_atoms = ["O5", "C1", "C2", "C3", "C4", "C5"]
     ring_bonds = [b for b in S["bond_instances"]
                   if b["pegA_atom"] in ring_atoms and b["pegB_atom"] in ring_atoms]

@@ -833,6 +833,8 @@ if (q.get('assert') === 'playback') {
     const pause = document.querySelector('[data-pause-keyframes]');
     const chart = document.querySelector('[data-run-chart]');
     const strip = document.querySelector('[data-keyframe-strip]');
+    const viewport = document.querySelector('[data-playback-viewport]') as HTMLElement | null;
+    const compact = Boolean(document.querySelector('[data-playback-compact]'));
     if (!data && performance.now() - started < 8000) return setTimeout(tick, 120);
     const text = (data?.textContent ?? '').replace(/\s+/g, ' ');
     finish([
@@ -843,11 +845,54 @@ if (q.get('assert') === 'playback') {
       `${kf && kf.options.length >= 2 ? 'PASS' : 'FAIL'}  there is a keyframe selector (${kf?.options.length ?? 0} option(s))`,
       `${timeline ? 'PASS' : 'FAIL'}  the event/keyframe timeline is present`,
       `${pause ? 'PASS' : 'FAIL'}  the 'pause at keyframe' control is present`,
-      `${chart ? 'PASS' : 'FAIL'}  the time-series chart is rendered`,
-      `${strip ? 'PASS' : 'FAIL'}  the keyframe thumbnail strip is rendered`,
+      `${chart || compact ? 'PASS' : 'FAIL'}  the time-series chart is rendered${compact ? ' (compact → report tab)' : ''}`,
+      `${strip || compact ? 'PASS' : 'FAIL'}  the keyframe thumbnail strip is rendered${compact ? ' (compact → report tab)' : ''}`,
+      `${viewport && viewport.getBoundingClientRect().height >= 80 ? 'PASS' : 'FAIL'}  the 3D viewport keeps ${Math.round(viewport?.getBoundingClientRect().height ?? 0)}px (≥80)`,
     ]);
   };
   setTimeout(tick, 1200);
+}
+
+// ?assert=section — the playback's section control is a 3D feature: under Xvfb it
+// must open the plane controls and keep a canvas. Bare headless gets SKIP.
+if (q.get('assert') === 'section') {
+  let tries = 0;
+  const show = (lines: string[]) => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  };
+  const tick = () => {
+    const tools = document.querySelector('[data-playback-tools]') as HTMLElement | null;
+    // The sandbox freezes the canvas into an <img> at ~2.9s for the capture;
+    // the 3D surface is still there, just no longer a <canvas> node.
+    const canvas = document.querySelector('#root canvas, #root img[data-frozen]');
+    const text = (tools?.textContent ?? '').replace(/\s+/g, ' ');
+    if (tools && !text.includes('无封盖') && tries++ < 2) {
+      const btn = Array.from(tools.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes('剖切'));
+      btn?.click();
+      return setTimeout(tick, 400);
+    }
+    if (!tools) {
+      const body = (document.body.textContent ?? '').replace(/\s+/g, ' ');
+      if (/无法创建 WebGL 上下文|几何预览不可用/.test(body)) {
+        show([`section cut (dock ${w}×${h})`, 'SKIP  no WebGL context: the 3D section control is intentionally absent.']);
+      } else {
+        show([`section cut (dock ${w}×${h})`, 'FAIL  the playback section toolbar never rendered']);
+      }
+      return;
+    }
+    show([
+      `section cut (dock ${w}×${h})`,
+      `${canvas ? 'PASS' : 'FAIL'}  the playback canvas is present`,
+      `${text.includes('剖切') ? 'PASS' : 'FAIL'}  the section toggle is present`,
+      `${text.includes('无封盖') ? 'PASS' : 'FAIL'}  opening it exposes the live-clip controls (无封盖)`,
+      `${tools.querySelector('input[type=range]') ? 'PASS' : 'FAIL'}  the section position slider is present`,
+    ]);
+  };
+  setTimeout(tick, 3000);
 }
 
 // ?assert=deeplink&expect=<text> — a link must land on its object, and an old
