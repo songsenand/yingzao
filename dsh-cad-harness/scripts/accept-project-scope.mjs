@@ -187,7 +187,7 @@ const get = async (path) => {
   const fresh = join(FAKE_HOME, 'never-used');
   mkdirSync(fresh, { recursive: true });
   const prodFresh = await get(`/api/cad/products?project=${encodeURIComponent(fresh)}`);
-  check(prodFresh.status === 200 && prodFresh.json().parts.length === 0 && prodFresh.json().scene.length === 0,
+  check(prodFresh.status === 200 && prodFresh.json().parts.length === 0 && prodFresh.json().sceneRunIds.length === 0,
     'a brand-new project lists nothing (and is not an error)');
 
   // The project rides the payload so a panel can drop a stale reply.
@@ -288,15 +288,21 @@ section('static invariants');
   const tools = read('src/host/tools.ts');
   check(!/open(Version|Run|Part)Store\(/.test(tools), 'tools.ts opens no store of its own (it resolves per call)');
   check(!/ctxRevisionRoot/.test(tools), 'the plugin-root data path is gone from tools.ts');
-  const executes = tools.match(/async execute\(args: unknown\)/g) ?? [];
-  const scopedExecutes = tools.match(/async execute\(args: unknown, exec: unknown\)/g) ?? [];
+  const blocks = tools.split(/registerTool\(defineTool\(\{/).slice(1);
+  // `simulate_lbm` is a global lattice channel: it reads no project store, so
+  // there is no execution context for it to receive. Every other tool must take
+  // `exec` — that is what keeps a project-scoped body from silently losing it.
+  const unscoped = blocks
+    .filter((b) => /async execute\(args: unknown\)/.test(b))
+    .map((b) => /name: '([^']+)'/.exec(b)?.[1] ?? '?');
+  const scopedExecutes = blocks.filter((b) => /async execute\(args: unknown, exec: unknown\)/.test(b)).length;
   // Counted against the registration sites rather than a literal: adding a tool
   // must not be able to leave this check passing while a body silently loses its
   // execution context (the whole point of the invariant).
   const registrations = (tools.match(/registerTool\(defineTool\(\{/g) ?? []).length;
-  check(executes.length === 0 && scopedExecutes.length === registrations,
-    'every tool body receives its execution context',
-    `${scopedExecutes.length} scoped, ${executes.length} unscoped, ${registrations} registrations`);
+  check(unscoped.length === 1 && unscoped[0] === 'simulate_lbm' && scopedExecutes === registrations - 1,
+    'every project-scoped tool body receives its execution context',
+    `${scopedExecutes} scoped, ${unscoped.join(',') || 'none'} global, ${registrations} registrations`);
   check(!/\bstore\b\s*:\s*VersionStore\s*=/.test(tools), 'no module-level VersionStore remains');
 
   // Every route registration resolves a project (the two globals excepted).
@@ -324,17 +330,20 @@ section('static invariants');
     'the usage observer is registered profile-wide');
   check(/telemetryRoot\(\)/.test(usage), 'usage telemetry writes under the telemetry root');
 
-  // The client: every PROJECT-scoped /api/cad URL is built through withProject.
-  // `/api/cad/scope` is the one global client request (the tool-scope decision
-  // is profile-wide, exactly like the host-side whitelist above), so it must NOT
-  // carry a project.
-  const globalUrls = new Set(['/api/cad/scope']);
+  // The client: every PROJECT-scoped /api/cad URL either goes through
+  // withProject or carries `project=` explicitly. The unregistered list and the
+  // local-file preview are session-scoped by design (they must not follow the
+  // pinned corpus), so they build the URL by hand. `/api/cad/scope` and
+  // `/api/cad/projects` are global (profile-wide decision; workspace discovery)
+  // and must NOT carry a project.
+  const globalUrls = new Set(['/api/cad/scope', '/api/cad/projects']);
   const stray = [];
   for (const file of ['src/client/panel.ts', 'src/client/playback.ts', 'src/client/index.ts', 'src/client/project.ts']) {
     for (const line of read(file).split('\n')) {
       if (!/\/api\/cad/.test(line)) continue;
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;      // comment
       if (/withProject/.test(line)) continue;
+      if (/[?&]project=/.test(line)) continue;            // explicit, session-scoped
       if ([...globalUrls].some((u) => line.includes(u))) continue;
       stray.push(`${file}: ${line.trim()}`);
     }
