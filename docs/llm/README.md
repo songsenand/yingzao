@@ -14,9 +14,12 @@
 | 文件 | 内容 | 状态 |
 |---|---|---|
 | `engines.md` | 运动/物理/流体/LBM/应力的模型边界，以及它们不能回答什么 | 已有 |
-| `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 待迁入 |
-| `conventions.md` | mm/z-up、rotate、datum、manifest、run/证据 | 待迁入 |
-| `traps.md` | 长解释型陷阱（rack pitch、pivot、lattice units…） | 待迁入 |
+| `assembly.md` | 装配清单形状、五个 operator、pose、阈值、导入件/stock | 已有 |
+| `manufacturing.md` | 可打印性清单、工艺档案、信任阶梯、校准、封闭腔/刀具可达 | 已有 |
+| `modeling.md` | 导入格式/单位、merge/genus、OpenSCAD 度数/radian、twist、参考图 | 已有 |
+| `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 已有 |
+| `conventions.md` | mm/z-up、datum、manifest、judge/scan/both、run | 已有 |
+| `traps.md` | 长解释型陷阱（rack pitch、pivot、lattice units…） | 已有 |
 
 ## 写作规则
 

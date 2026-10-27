@@ -36,8 +36,10 @@
 
 - **线弹性、各向同性。** 它不知道 FDM 的层方向——通常最先断的那条——所以峰值不是安全系数。
 - **不要问“最大单元应力”**：没有这个字段。曲率/缺口边界上它会随网格细化无界增长（实测 1.002 → 1.184，填充比加权也没修好）。
-- **引 `criticalDistanceMm` 处的值**（表面内推一个声明距离；实际用的距离回报为 `effectiveSampleDistanceMm`）。`surfaceExtrapolatedMPa` 是更高的估计，只有同时通过自身拟合检查与跨分辨率检查（`extrapolationCrossResolutionPct`）才可引——R² 好不够：圆角上 R² 0.90 时两套网格差了 17%。
-- **`trustworthy` / `whyUntrustworthy` 决定能不能引。** 不可信的区域，位置和数值都不要引；细化 `dxMm`。
+- **引 `criticalDistanceMm` 处的值**（表面内推一个声明距离；实际用的距离回报为 `effectiveSampleDistanceMm`），即 `stats.peakAtDeclaredDistanceMPa`。`surfaceExtrapolatedMPa` 是更高的估计，只有同时通过自身拟合检查与跨分辨率检查（`extrapolationCrossResolutionPct`）才可引——R² 好不够：圆角上 R² 0.90 时两套网格差了 17%。`runConvergence: false` 会让所有区域不可信：稳定性检查是峰值主张的一部分。
+- **先声明工况**（supports + loads）；unsupported load 是刚体模态，会被拒绝，不是糊过去。可引的积分：反力、截面 `axialForceN` / `shearN` / `momentNmm`、`areaMm2`、`secondMomentMm4`，以及 `checks.equilibriumErrorPct` / `energyBalancePct`（机器精度，不依赖答案对）。
+- **`trustworthy` / `whyUntrustworthy` 决定能不能引。** 不可信的区域，位置和数值都不要引；细化 `dxMm`。薄于体素的构件会被抹厚、读起来更刚更安全；此时 verdict 是 `check`、零可信区域、`meshIndependence: drifting`——细化，或只引积分。
+- **`excludeFromReport` 去掉支撑/载荷 patch**（夹块不是刀口），`method.excludedCells` 报被排除的单元数。截面切在远离支撑处：切过支撑会吞掉反力，弯矩算错（实测 22.1 vs 62.8 N·mm）；切在中跨，用 `M = F·L` 对。
 - **交付看 `delivery`，不看 `verdict`。** 缺失的数不是通过；`attention` 里的几何可疑点是**探测**（去哪看），不是交付证据。
 - **永不沉默**：一个区域都认证不了时，仍返回 `geometry-suspects` 层（来自几何扫描的凹角），标明是几何、不是应力。
 

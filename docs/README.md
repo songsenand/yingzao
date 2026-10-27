@@ -52,7 +52,8 @@
 
 - [x] 目录与规则（本文件）
 - [x] `docs/user/` 第一批：它是什么、工作流、边界
+- [x] `docs/user/` 第二批：安装、配置、验证、排错、进阶
 - [x] `docs/llm/` 入口
 - [x] `docs/dev/` 入口
-- [ ] 把 `README.md` 的安装/配置/排错迁入 `docs/user/`，README 只留门面
-- [ ] 把 `skills/` 的长解释（引擎、历史、字段表）迁入 `docs/llm/`，skill 只留规则 + 指针
+- [x] 把 `README.md` 的安装/配置/首次准备/验证/排错迁入 `docs/user/`，README 只留门面 + 快速开始
+- [x] 把 `skills/` 的长解释（引擎、装配、制造、建模、交付、约定、陷阱）迁入 `docs/llm/`，skill 只留短规则 + 指针
