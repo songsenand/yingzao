@@ -848,6 +848,16 @@ export function CadPanel(): React.ReactElement {
     : (records.find((r) => r.id === recordId) ?? null);
   const version: VersionProduct | null = record?.type === 'version' ? record : null;
   const run: RunProduct | null = record?.type === 'run' ? record : null;
+  /**
+   * A contract check has no geometry, so there is no 4:3 frame for the viewport to
+   * protect: the document takes the stage and the function area keeps only its
+   * minimum. This is NOT "making it look different" — tokens, type scale, tab
+   * strip, paddings and chrome are identical; what changes is only how much height
+   * a page with no picture is allowed to spend on nothing. A manual split still
+   * wins (the user dragged it for a reason).
+   */
+  const reportOnly = Boolean(run && !run.hasGeometry);
+  const stageBody = reportOnly && bodyH === null ? BODY_MIN_PX : bodyHeight;
   const versionId = version?.id ?? null;
   // What the viewport shows: a version's stored mesh, or an unregistered file's
   // tessellation. ONE scene builder serves both — a preview that looked
@@ -3844,7 +3854,7 @@ export function CadPanel(): React.ReactElement {
         onDoubleClick: () => setBodyH(null),
         onPointerDown: (e: any) => {
           e.currentTarget.setPointerCapture?.(e.pointerId);
-          dragRef.current = { y: e.clientY, h: bodyHeight };
+          dragRef.current = { y: e.clientY, h: stageBody };
         },
         onPointerMove: (e: any) => {
           const d = dragRef.current;
@@ -3883,7 +3893,7 @@ export function CadPanel(): React.ReactElement {
       }, sheet ? '⤡' : '⤢'),
     ),
 
-    React.createElement('div', { style: { ...S.details, flexBasis: bodyHeight }, ref: detailsRef },
+    React.createElement('div', { style: { ...S.details, flexBasis: stageBody }, ref: detailsRef },
       sheet
         ? React.createElement('div', { style: S.hint }, `「${tabLabel(sheet)}」已在浮层中打开 — 点 ⤡ 收回`)
         : sectionBody(tab),
@@ -3895,8 +3905,8 @@ export function CadPanel(): React.ReactElement {
       {
         style: {
           ...S.sheet,
-          bottom: SHEET_BELOW_FIXED + bodyHeight,
-          maxHeight: `calc(100% - ${SHEET_BELOW_FIXED + bodyHeight + 12 + 26 + 8}px)`,
+          bottom: SHEET_BELOW_FIXED + stageBody,
+          maxHeight: `calc(100% - ${SHEET_BELOW_FIXED + stageBody + 12 + 26 + 8}px)`,
         },
       },
       React.createElement(
