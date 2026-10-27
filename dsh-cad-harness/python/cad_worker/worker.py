@@ -1348,6 +1348,24 @@ def _solid_from_stl(path: str, transform) -> dict:
     }
 
 
+def _aabb_gap(a: dict, b: dict) -> float:
+    """Lower bound on the distance between two solids, from their AABBs.
+
+    `_solid_from_stl` returns `bbox: {min: [x,y,z], max: [x,y,z]}` in world mm.
+    Each axis contributes `max(0, a.min - b.max, b.min - a.max)`; the largest of
+    the three is the box-to-box distance. Every point of a solid lies inside its
+    box, so this is a LOWER bound on the solid-to-solid distance: `gap > threshold`
+    proves the pair is farther apart than the threshold, and no boolean or
+    sampling can change that. Used by the adjacency broad phase.
+    """
+    return max(
+        0.0,
+        a["min"][0] - b["max"][0], b["min"][0] - a["max"][0],
+        a["min"][1] - b["max"][1], b["min"][1] - a["max"][1],
+        a["min"][2] - b["max"][2], b["min"][2] - a["max"][2],
+    )
+
+
 def _min_distance_via_sampling(verts, faces, target_verts, target_faces, max_samples: int = 1200) -> float:
     """The TS `minDistanceViaBVH` sampling rule: walk triangles with a stride, take
     ALL THREE vertices of each sampled triangle, and keep the smallest exact
@@ -1622,10 +1640,28 @@ def op_assembly_contracts(params: dict) -> dict:
             head_b = str(iface.get("b", "")).split(".")[0]
             if head_a and head_b:
                 declared_pairs.add(tuple(sorted((head_a, head_b))))
+        pairs = declared_skipped = bbox_skipped = exact_tests = 0
         for i in range(len(built)):
             for j in range(i + 1, len(built)):
                 part_a, solid_a = built[i]
                 part_b, solid_b = built[j]
+                pairs += 1
+                key = tuple(sorted((part_a["id"], part_b["id"])))
+                if key in declared_pairs:
+                    # The interface half already judged this pair; discovery exists
+                    # for the pairs nobody declared. Skipping before the boolean is
+                    # not a shortcut with a different answer — it is the same skip,
+                    # one expensive operation earlier.
+                    declared_skipped += 1
+                    continue
+                # BROAD PHASE: the AABB distance is a LOWER BOUND on the distance
+                # between the solids. If the boxes are farther apart than the
+                # threshold, no boolean or sampling can make the pair "near" —
+                # skipping is exact, not heuristic.
+                if _aabb_gap(solid_a["bbox"], solid_b["bbox"]) > threshold:
+                    bbox_skipped += 1
+                    continue
+                exact_tests += 1
                 intersection = solid_a["solid"] ^ solid_b["solid"]
                 volume = 0.0 if intersection.is_empty() else max(0.0, float(intersection.volume()))
                 min_distance = 0.0
@@ -1636,14 +1672,16 @@ def op_assembly_contracts(params: dict) -> dict:
                     )
                 if not (volume > 1e-6 or min_distance < threshold):
                     continue
-                if tuple(sorted((part_a["id"], part_b["id"]))) in declared_pairs:
-                    continue
                 undeclared.append({
                     "partA": part_a["id"],
                     "partB": part_b["id"],
                     "minDistance": _round_js(min_distance, 4),
                     "intersectionVolume": _round_js(volume, 4),
                 })
+        _log(
+            f"adjacency: {pairs} pairs, {declared_skipped} declared skipped, "
+            f"{bbox_skipped} bbox skipped, {exact_tests} exact tests"
+        )
 
     passed = sum(1 for r in results if r["verdict"] == "pass")
     hard = sum(1 for r in results if r["verdict"] == "hard-violation")
