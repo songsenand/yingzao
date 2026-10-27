@@ -1,0 +1,1173 @@
+{
+ "sock": {
+  "spot_r": 3.4,
+  "spot_d": 0.9,
+  "bore_r": 2.6,
+  "depth": 3.4,
+  "groove_r": 2.95,
+  "groove_z0": 2.15,
+  "groove_z1": 3.05,
+  "tear_r": 0.5,
+  "tear_off": 2.85,
+  "tear_z0": 0.5
+ },
+ "peg": {
+  "rod_r": 3.1,
+  "land_r": 2.5,
+  "land_to": 2.0,
+  "bead_r": 2.7,
+  "bead_z0": 2.18,
+  "bead_z1": 2.68,
+  "chamf_to": 2.88,
+  "tip_z": 3.2,
+  "tip_r": 1.6,
+  "bore_r": 2.1,
+  "bore_z0": 0.4,
+  "bore_z1": 2.6,
+  "slot_w": 0.6,
+  "slot_z0": 0.0,
+  "slot_z1": 2.8
+ },
+ "seat": 0.9,
+ "radii": {
+  "C": 8.6,
+  "O": 8.0,
+  "H": 6.0
+ },
+ "stick_files": [
+  {
+   "file": "parts/stick_7.2.scad",
+   "key": "stick_7.2",
+   "length": 7.2,
+   "kinds": [
+    "CO_ring"
+   ],
+   "count": 2,
+   "label": "键棒 stick_7.2：CO_ring"
+  },
+  {
+   "file": "parts/stick_6.6.scad",
+   "key": "stick_6.6",
+   "length": 6.6,
+   "kinds": [
+    "CC"
+   ],
+   "count": 5,
+   "label": "键棒 stick_6.6：CC"
+  },
+  {
+   "file": "parts/stick_5.2.scad",
+   "key": "stick_5.2",
+   "length": 5.2,
+   "kinds": [
+    "CH",
+    "CO_oh"
+   ],
+   "count": 12,
+   "label": "键棒 stick_5.2：CH/CO_oh"
+  },
+  {
+   "file": "parts/stick_4.8.scad",
+   "key": "stick_4.8",
+   "length": 4.8,
+   "kinds": [
+    "OH"
+   ],
+   "count": 5,
+   "label": "键棒 stick_4.8：OH"
+  }
+ ],
+ "instances": [
+  {
+   "name": "环氧原子 O5",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O5",
+   "translate": [
+    20.7418,
+    0.0,
+    3.6667
+   ],
+   "rotate": [
+    112.2077,
+    28.1255,
+    -139.1066
+   ]
+  },
+  {
+   "name": "碳1",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C1",
+   "translate": [
+    10.3709,
+    17.9629,
+    -3.6667
+   ],
+   "rotate": [
+    54.7356,
+    -54.7356,
+    60.0
+   ]
+  },
+  {
+   "name": "碳2",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C2",
+   "translate": [
+    -10.3709,
+    17.9629,
+    3.6667
+   ],
+   "rotate": [
+    -125.2644,
+    -54.7356,
+    -60.0
+   ]
+  },
+  {
+   "name": "碳3",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C3",
+   "translate": [
+    -20.7418,
+    0.0,
+    -3.6667
+   ],
+   "rotate": [
+    54.7356,
+    -54.7356,
+    180.0
+   ]
+  },
+  {
+   "name": "碳4",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C4",
+   "translate": [
+    -10.3709,
+    -17.9629,
+    3.6667
+   ],
+   "rotate": [
+    -125.2644,
+    -54.7356,
+    60.0
+   ]
+  },
+  {
+   "name": "碳5",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C5",
+   "translate": [
+    10.3709,
+    -17.9629,
+    -3.6667
+   ],
+   "rotate": [
+    54.7356,
+    -54.7356,
+    -60.0
+   ]
+  },
+  {
+   "name": "羟基氧 O1",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O1",
+   "translate": [
+    19.799,
+    34.2929,
+    3.0
+   ],
+   "rotate": [
+    -180.0,
+    70.5288,
+    60.0
+   ]
+  },
+  {
+   "name": "羟基氢 HO1",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "HO1",
+   "translate": [
+    25.1416,
+    43.5465,
+    -10.2222
+   ],
+   "rotate": [
+    36.3978,
+    -14.9204,
+    -10.7477
+   ]
+  },
+  {
+   "name": "碳上氢 H1",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H1",
+   "translate": [
+    10.3709,
+    17.9629,
+    -21.6667
+   ],
+   "rotate": [
+    -0.0,
+    0.0,
+    -0.0
+   ]
+  },
+  {
+   "name": "羟基氧 O2",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O2",
+   "translate": [
+    -19.799,
+    34.2929,
+    -3.0
+   ],
+   "rotate": [
+    -0.0,
+    -70.5288,
+    120.0
+   ]
+  },
+  {
+   "name": "羟基氢 HO2",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "HO2",
+   "translate": [
+    -25.1416,
+    43.5465,
+    10.2222
+   ],
+   "rotate": [
+    143.6022,
+    -14.9204,
+    10.7477
+   ]
+  },
+  {
+   "name": "碳上氢 H2",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H2",
+   "translate": [
+    -10.3709,
+    17.9629,
+    21.6667
+   ],
+   "rotate": [
+    180.0,
+    -0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "羟基氧 O3",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O3",
+   "translate": [
+    -39.598,
+    0.0,
+    3.0
+   ],
+   "rotate": [
+    -180.0,
+    70.5288,
+    -180.0
+   ]
+  },
+  {
+   "name": "羟基氢 HO3",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "HO3",
+   "translate": [
+    -50.2831,
+    0.0,
+    -10.2222
+   ],
+   "rotate": [
+    -0.0,
+    38.9424,
+    -0.0
+   ]
+  },
+  {
+   "name": "碳上氢 H3",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H3",
+   "translate": [
+    -20.7418,
+    0.0,
+    -21.6667
+   ],
+   "rotate": [
+    -0.0,
+    -0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "羟基氧 O4",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O4",
+   "translate": [
+    -19.799,
+    -34.2929,
+    -3.0
+   ],
+   "rotate": [
+    0.0,
+    -70.5288,
+    -120.0
+   ]
+  },
+  {
+   "name": "羟基氢 HO4",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "HO4",
+   "translate": [
+    -25.1416,
+    -43.5465,
+    10.2222
+   ],
+   "rotate": [
+    -143.6022,
+    -14.9204,
+    -10.7477
+   ]
+  },
+  {
+   "name": "碳上氢 H4",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H4",
+   "translate": [
+    -10.3709,
+    -17.9629,
+    21.6667
+   ],
+   "rotate": [
+    -180.0,
+    -0.0,
+    -0.0
+   ]
+  },
+  {
+   "name": "碳6 CH2OH",
+   "part_key": "atom_C",
+   "kind": "atom",
+   "element": "C",
+   "atom": "C6",
+   "translate": [
+    20.7418,
+    -35.9258,
+    3.6667
+   ],
+   "rotate": [
+    -109.4712,
+    -0.0,
+    30.0
+   ]
+  },
+  {
+   "name": "羟基氧 O6",
+   "part_key": "atom_O",
+   "kind": "atom",
+   "element": "O",
+   "atom": "O6",
+   "translate": [
+    27.0272,
+    -46.8125,
+    -11.8889
+   ],
+   "rotate": [
+    0.0,
+    -38.9424,
+    -60.0
+   ]
+  },
+  {
+   "name": "C6 上氢 a",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H6a",
+   "translate": [
+    9.4281,
+    -45.7238,
+    13.6667
+   ],
+   "rotate": [
+    -128.4431,
+    -26.6768,
+    -29.4911
+   ]
+  },
+  {
+   "name": "C6 上氢 b",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H6b",
+   "translate": [
+    34.8839,
+    -31.0269,
+    13.6667
+   ],
+   "rotate": [
+    141.6245,
+    44.8745,
+    -29.1932
+   ]
+  },
+  {
+   "name": "O6 上氢",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "HO6",
+   "translate": [
+    35.0411,
+    -60.6929,
+    -6.2222
+   ],
+   "rotate": [
+    -109.801,
+    10.2634,
+    26.3295
+   ]
+  },
+  {
+   "name": "碳上氢 H5",
+   "part_key": "atom_H",
+   "kind": "atom",
+   "element": "H",
+   "atom": "H5",
+   "translate": [
+    10.3709,
+    -17.9629,
+    -21.6667
+   ],
+   "rotate": [
+    -0.0,
+    -0.0,
+    0.0
+   ]
+  }
+ ],
+ "bond_instances": [
+  {
+   "name": "键 B01",
+   "part_key": "stick_7.2",
+   "kind": "stick",
+   "bond": "B01",
+   "kind_of_bond": "CO_ring",
+   "length": 22.0,
+   "translate": [
+    15.697771,
+    8.736513,
+    0.1
+   ],
+   "rotate": [
+    -112.2076542985965,
+    -28.125505702055708,
+    40.89339464913091
+   ],
+   "dir": [
+    -0.471405,
+    0.816497,
+    -0.333333
+   ],
+   "pegA_atom": "O5",
+   "pegB_atom": "C1",
+   "pegA_sock": "sock0",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B02",
+   "part_key": "stick_6.6",
+   "kind": "stick",
+   "bond": "B02",
+   "kind_of_bond": "CC",
+   "length": 22.0,
+   "translate": [
+    0.0,
+    17.962925,
+    0.0
+   ],
+   "rotate": [
+    -2.7757568129136157e-14,
+    -70.52877936550931,
+    1.9627564653359767e-14
+   ],
+   "dir": [
+    -0.942809,
+    0.0,
+    0.333333
+   ],
+   "pegA_atom": "C1",
+   "pegB_atom": "C2",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B03",
+   "part_key": "stick_6.6",
+   "kind": "stick",
+   "bond": "B03",
+   "kind_of_bond": "CC",
+   "length": 22.0,
+   "translate": [
+    -15.556349,
+    8.981462,
+    0.0
+   ],
+   "rotate": [
+    112.2076542985965,
+    -28.12550570205572,
+    -40.89339464913093
+   ],
+   "dir": [
+    -0.471405,
+    -0.816497,
+    -0.333333
+   ],
+   "pegA_atom": "C2",
+   "pegB_atom": "C3",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B04",
+   "part_key": "stick_6.6",
+   "kind": "stick",
+   "bond": "B04",
+   "kind_of_bond": "CC",
+   "length": 22.0,
+   "translate": [
+    -15.556349,
+    -8.981462,
+    0.0
+   ],
+   "rotate": [
+    67.7923457014035,
+    28.125505702055687,
+    19.10660535086908
+   ],
+   "dir": [
+    0.471405,
+    -0.816497,
+    0.333333
+   ],
+   "pegA_atom": "C3",
+   "pegB_atom": "C4",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B05",
+   "part_key": "stick_6.6",
+   "kind": "stick",
+   "bond": "B05",
+   "kind_of_bond": "CC",
+   "length": 22.0,
+   "translate": [
+    -0.0,
+    -17.962925,
+    0.0
+   ],
+   "rotate": [
+    179.99999999999997,
+    70.52877936550932,
+    179.99999999999997
+   ],
+   "dir": [
+    0.942809,
+    -0.0,
+    -0.333333
+   ],
+   "pegA_atom": "C4",
+   "pegB_atom": "C5",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B06",
+   "part_key": "stick_7.2",
+   "kind": "stick",
+   "bond": "B06",
+   "kind_of_bond": "CO_ring",
+   "length": 22.0,
+   "translate": [
+    15.697771,
+    -8.736513,
+    0.1
+   ],
+   "rotate": [
+    -67.79234570140352,
+    28.125505702055708,
+    -19.1066053508691
+   ],
+   "dir": [
+    0.471405,
+    0.816497,
+    0.333333
+   ],
+   "pegA_atom": "C5",
+   "pegB_atom": "O5",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock1"
+  },
+  {
+   "name": "键 B07",
+   "part_key": "stick_6.6",
+   "kind": "stick",
+   "bond": "B07",
+   "kind_of_bond": "CC",
+   "length": 22.0,
+   "translate": [
+    15.556349,
+    -26.944387,
+    0.0
+   ],
+   "rotate": [
+    67.79234570140349,
+    28.1255057020557,
+    19.10660535086908
+   ],
+   "dir": [
+    0.471405,
+    -0.816497,
+    0.333333
+   ],
+   "pegA_atom": "C5",
+   "pegB_atom": "C6",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B08",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B08",
+   "kind_of_bond": "CO_oh",
+   "length": 20.0,
+   "translate": [
+    15.226366,
+    26.37284,
+    -0.233333
+   ],
+   "rotate": [
+    -67.79234570140352,
+    28.12550570205572,
+    -19.106605350869106
+   ],
+   "dir": [
+    0.471405,
+    0.816497,
+    0.333333
+   ],
+   "pegA_atom": "C1",
+   "pegB_atom": "O1",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B09",
+   "part_key": "stick_4.8",
+   "kind": "stick",
+   "bond": "B09",
+   "kind_of_bond": "OH",
+   "length": 17.0,
+   "translate": [
+    22.784552,
+    39.464001,
+    -4.388889
+   ],
+   "rotate": [
+    -145.01358624197934,
+    18.316730712270115,
+    -54.18247435555642
+   ],
+   "dir": [
+    0.31427,
+    0.544331,
+    -0.777778
+   ],
+   "pegA_atom": "O1",
+   "pegB_atom": "HO1",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B10",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B10",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    10.370899,
+    17.962925,
+    -13.966667
+   ],
+   "rotate": [
+    180.0,
+    7.016709298534876e-15,
+    180.0
+   ],
+   "dir": [
+    -0.0,
+    -0.0,
+    -1.0
+   ],
+   "pegA_atom": "C1",
+   "pegB_atom": "H1",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B11",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B11",
+   "kind_of_bond": "CO_oh",
+   "length": 20.0,
+   "translate": [
+    -15.226366,
+    26.37284,
+    0.233333
+   ],
+   "rotate": [
+    -112.20765429859648,
+    -28.125505702055687,
+    40.893394649130876
+   ],
+   "dir": [
+    -0.471405,
+    0.816497,
+    -0.333333
+   ],
+   "pegA_atom": "C2",
+   "pegB_atom": "O2",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B12",
+   "part_key": "stick_4.8",
+   "kind": "stick",
+   "bond": "B12",
+   "kind_of_bond": "OH",
+   "length": 17.0,
+   "translate": [
+    -22.784552,
+    39.464001,
+    4.388889
+   ],
+   "rotate": [
+    -34.98641375802071,
+    -18.316730712270132,
+    5.8175256444435774
+   ],
+   "dir": [
+    -0.31427,
+    0.544331,
+    0.777778
+   ],
+   "pegA_atom": "O2",
+   "pegB_atom": "HO2",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B13",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B13",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    -10.370899,
+    17.962925,
+    13.966667
+   ],
+   "rotate": [
+    0.0,
+    -0.0,
+    0.0
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pegA_atom": "C2",
+   "pegB_atom": "H2",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B14",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B14",
+   "kind_of_bond": "CO_oh",
+   "length": 20.0,
+   "translate": [
+    -30.452732,
+    0.0,
+    -0.233333
+   ],
+   "rotate": [
+    -5.213662191605627e-14,
+    -70.52877936550931,
+    3.686615890500256e-14
+   ],
+   "dir": [
+    -0.942809,
+    0.0,
+    0.333333
+   ],
+   "pegA_atom": "C3",
+   "pegB_atom": "O3",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B15",
+   "part_key": "stick_4.8",
+   "kind": "stick",
+   "bond": "B15",
+   "kind_of_bond": "OH",
+   "length": 17.0,
+   "translate": [
+    -45.569104,
+    0.0,
+    -4.388889
+   ],
+   "rotate": [
+    180.0,
+    -38.94244126898138,
+    -179.99999999999994
+   ],
+   "dir": [
+    -0.628539,
+    -0.0,
+    -0.777778
+   ],
+   "pegA_atom": "O3",
+   "pegB_atom": "HO3",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B16",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B16",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    -20.741799,
+    0.0,
+    -13.966667
+   ],
+   "rotate": [
+    180.0,
+    7.016709298534876e-15,
+    180.0
+   ],
+   "dir": [
+    0.0,
+    -0.0,
+    -1.0
+   ],
+   "pegA_atom": "C3",
+   "pegB_atom": "H3",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B17",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B17",
+   "kind_of_bond": "CO_oh",
+   "length": 20.0,
+   "translate": [
+    -15.226366,
+    -26.37284,
+    0.233333
+   ],
+   "rotate": [
+    112.20765429859652,
+    -28.12550570205571,
+    -40.89339464913093
+   ],
+   "dir": [
+    -0.471405,
+    -0.816497,
+    -0.333333
+   ],
+   "pegA_atom": "C4",
+   "pegB_atom": "O4",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B18",
+   "part_key": "stick_4.8",
+   "kind": "stick",
+   "bond": "B18",
+   "kind_of_bond": "OH",
+   "length": 17.0,
+   "translate": [
+    -22.784552,
+    -39.464001,
+    4.388889
+   ],
+   "rotate": [
+    34.98641375802066,
+    -18.316730712270154,
+    -5.817525644443579
+   ],
+   "dir": [
+    -0.31427,
+    -0.544331,
+    0.777778
+   ],
+   "pegA_atom": "O4",
+   "pegB_atom": "HO4",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B19",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B19",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    -10.370899,
+    -17.962925,
+    13.966667
+   ],
+   "rotate": [
+    0.0,
+    -0.0,
+    0.0
+   ],
+   "dir": [
+    -0.0,
+    -0.0,
+    1.0
+   ],
+   "pegA_atom": "C4",
+   "pegB_atom": "H4",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B20",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B20",
+   "kind_of_bond": "CO_oh",
+   "length": 20.0,
+   "translate": [
+    23.978777,
+    -41.532459,
+    -4.344444
+   ],
+   "rotate": [
+    145.01358624197923,
+    18.31673071227017,
+    54.182474355556444
+   ],
+   "dir": [
+    0.31427,
+    -0.544331,
+    -0.777778
+   ],
+   "pegA_atom": "C6",
+   "pegB_atom": "O6",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B21",
+   "part_key": "stick_4.8",
+   "kind": "stick",
+   "bond": "B21",
+   "kind_of_bond": "OH",
+   "length": 17.0,
+   "translate": [
+    31.505535,
+    -54.569188,
+    -8.722222
+   ],
+   "rotate": [
+    67.79234570140343,
+    28.125505702055683,
+    19.106605350869053
+   ],
+   "dir": [
+    0.471405,
+    -0.816497,
+    0.333333
+   ],
+   "pegA_atom": "O6",
+   "pegB_atom": "HO6",
+   "pegA_sock": "sock1",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B22",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B22",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    14.267843,
+    -41.532459,
+    9.388889
+   ],
+   "rotate": [
+    44.41530859719299,
+    -38.942441268981426,
+    -16.4264214034764
+   ],
+   "dir": [
+    -0.628539,
+    -0.544331,
+    0.555556
+   ],
+   "pegA_atom": "C6",
+   "pegB_atom": "H6a",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B23",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B23",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    28.834243,
+    -33.122545,
+    9.388889
+   ],
+   "rotate": [
+    -26.10013878228639,
+    51.783076703838326,
+    -12.838513733634718
+   ],
+   "dir": [
+    0.785674,
+    0.272166,
+    0.555556
+   ],
+   "pegA_atom": "C6",
+   "pegB_atom": "H6b",
+   "pegA_sock": "sock2",
+   "pegB_sock": "sock0"
+  },
+  {
+   "name": "键 B24",
+   "part_key": "stick_5.2",
+   "kind": "stick",
+   "bond": "B24",
+   "kind_of_bond": "CH",
+   "length": 18.0,
+   "translate": [
+    10.370899,
+    -17.962925,
+    -13.966667
+   ],
+   "rotate": [
+    180.0,
+    7.016709298534876e-15,
+    180.0
+   ],
+   "dir": [
+    0.0,
+    -0.0,
+    -1.0
+   ],
+   "pegA_atom": "C5",
+   "pegB_atom": "H5",
+   "pegA_sock": "sock3",
+   "pegB_sock": "sock0"
+  }
+ ],
+ "counts": {
+  "atoms": 24,
+  "bonds": 24,
+  "atom_parts": {
+   "atom_O": 6,
+   "atom_C": 6,
+   "atom_H": 12
+  },
+  "stick_parts": {
+   "stick_CO_ring_7.2": 2,
+   "stick_CC_6.6": 5,
+   "stick_CO_oh_5.2": 5,
+   "stick_OH_4.8": 5,
+   "stick_CH_5.2": 7
+  }
+ },
+ "bbox_mm": {
+  "min": [
+   -50.28,
+   -60.69,
+   -21.67
+  ],
+  "max": [
+   35.04,
+   43.55,
+   21.67
+  ],
+  "size": [
+   85.32,
+   104.24,
+   43.33
+  ]
+ }
+}

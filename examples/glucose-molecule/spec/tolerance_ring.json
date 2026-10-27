@@ -1,0 +1,21 @@
+{
+ "seed": 20261027,
+ "trials": 20000,
+ "assumptions": {
+  "sigma_ang_deg": 0.5,
+  "sigma_len_mm": 0.05,
+  "joint_radial_play_mm": 0.1,
+  "joints_in_ring": 6
+ },
+ "closure_residual_mm": {
+  "P50": 0.343,
+  "P90": 0.599,
+  "P95": 0.682,
+  "P99": 0.86
+ },
+ "closure_residual_max_mm": 1.326,
+ "closable_budget_mm": 0.6000000000000001,
+ "P_residual_le_budget": 0.9012,
+ "P_residual_le_2x_budget": 0.9999,
+ "cad_closure_residual_mm": 0.0
+}

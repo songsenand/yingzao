@@ -1,0 +1,3488 @@
+{
+ "schemaVersion": 1,
+ "name": "β-D-吡喃葡萄糖 球棍模型（可拆装）",
+ "unit": "mm",
+ "up": "z",
+ "root": {
+  "id": "root",
+  "kind": "assembly",
+  "name": "整机（24 球 + 24 棍）",
+  "children": [
+   {
+    "id": "O5",
+    "kind": "part",
+    "name": "环氧原子 O5",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      20.7418,
+      0.0,
+      3.6667
+     ],
+     "rotate": [
+      112.2077,
+      28.1255,
+      -139.1066
+     ]
+    }
+   },
+   {
+    "id": "C1",
+    "kind": "part",
+    "name": "碳1",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      17.9629,
+      -3.6667
+     ],
+     "rotate": [
+      54.7356,
+      -54.7356,
+      60.0
+     ]
+    }
+   },
+   {
+    "id": "C2",
+    "kind": "part",
+    "name": "碳2",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      17.9629,
+      3.6667
+     ],
+     "rotate": [
+      -125.2644,
+      -54.7356,
+      -60.0
+     ]
+    }
+   },
+   {
+    "id": "C3",
+    "kind": "part",
+    "name": "碳3",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -20.7418,
+      0.0,
+      -3.6667
+     ],
+     "rotate": [
+      54.7356,
+      -54.7356,
+      180.0
+     ]
+    }
+   },
+   {
+    "id": "C4",
+    "kind": "part",
+    "name": "碳4",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      -17.9629,
+      3.6667
+     ],
+     "rotate": [
+      -125.2644,
+      -54.7356,
+      60.0
+     ]
+    }
+   },
+   {
+    "id": "C5",
+    "kind": "part",
+    "name": "碳5",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      -17.9629,
+      -3.6667
+     ],
+     "rotate": [
+      54.7356,
+      -54.7356,
+      -60.0
+     ]
+    }
+   },
+   {
+    "id": "O1",
+    "kind": "part",
+    "name": "羟基氧 O1",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      19.799,
+      34.2929,
+      3.0
+     ],
+     "rotate": [
+      -180.0,
+      70.5288,
+      60.0
+     ]
+    }
+   },
+   {
+    "id": "HO1",
+    "kind": "part",
+    "name": "羟基氢 HO1",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      25.1416,
+      43.5465,
+      -10.2222
+     ],
+     "rotate": [
+      36.3978,
+      -14.9204,
+      -10.7477
+     ]
+    }
+   },
+   {
+    "id": "H1",
+    "kind": "part",
+    "name": "碳上氢 H1",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      17.9629,
+      -21.6667
+     ],
+     "rotate": [
+      -0.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   {
+    "id": "O2",
+    "kind": "part",
+    "name": "羟基氧 O2",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -19.799,
+      34.2929,
+      -3.0
+     ],
+     "rotate": [
+      -0.0,
+      -70.5288,
+      120.0
+     ]
+    }
+   },
+   {
+    "id": "HO2",
+    "kind": "part",
+    "name": "羟基氢 HO2",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -25.1416,
+      43.5465,
+      10.2222
+     ],
+     "rotate": [
+      143.6022,
+      -14.9204,
+      10.7477
+     ]
+    }
+   },
+   {
+    "id": "H2",
+    "kind": "part",
+    "name": "碳上氢 H2",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      17.9629,
+      21.6667
+     ],
+     "rotate": [
+      180.0,
+      -0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "O3",
+    "kind": "part",
+    "name": "羟基氧 O3",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -39.598,
+      0.0,
+      3.0
+     ],
+     "rotate": [
+      -180.0,
+      70.5288,
+      -180.0
+     ]
+    }
+   },
+   {
+    "id": "HO3",
+    "kind": "part",
+    "name": "羟基氢 HO3",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -50.2831,
+      0.0,
+      -10.2222
+     ],
+     "rotate": [
+      -0.0,
+      38.9424,
+      -0.0
+     ]
+    }
+   },
+   {
+    "id": "H3",
+    "kind": "part",
+    "name": "碳上氢 H3",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -20.7418,
+      0.0,
+      -21.6667
+     ],
+     "rotate": [
+      -0.0,
+      -0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "O4",
+    "kind": "part",
+    "name": "羟基氧 O4",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -19.799,
+      -34.2929,
+      -3.0
+     ],
+     "rotate": [
+      0.0,
+      -70.5288,
+      -120.0
+     ]
+    }
+   },
+   {
+    "id": "HO4",
+    "kind": "part",
+    "name": "羟基氢 HO4",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -25.1416,
+      -43.5465,
+      10.2222
+     ],
+     "rotate": [
+      -143.6022,
+      -14.9204,
+      -10.7477
+     ]
+    }
+   },
+   {
+    "id": "H4",
+    "kind": "part",
+    "name": "碳上氢 H4",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      -17.9629,
+      21.6667
+     ],
+     "rotate": [
+      -180.0,
+      -0.0,
+      -0.0
+     ]
+    }
+   },
+   {
+    "id": "C6",
+    "kind": "part",
+    "name": "碳6 CH2OH",
+    "part": "碳原子 C",
+    "version": "v031",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      20.7418,
+      -35.9258,
+      3.6667
+     ],
+     "rotate": [
+      -109.4712,
+      -0.0,
+      30.0
+     ]
+    }
+   },
+   {
+    "id": "O6",
+    "kind": "part",
+    "name": "羟基氧 O6",
+    "part": "氧原子 O",
+    "version": "v032",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      27.0272,
+      -46.8125,
+      -11.8889
+     ],
+     "rotate": [
+      0.0,
+      -38.9424,
+      -60.0
+     ]
+    }
+   },
+   {
+    "id": "H6a",
+    "kind": "part",
+    "name": "C6 上氢 a",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      9.4281,
+      -45.7238,
+      13.6667
+     ],
+     "rotate": [
+      -128.4431,
+      -26.6768,
+      -29.4911
+     ]
+    }
+   },
+   {
+    "id": "H6b",
+    "kind": "part",
+    "name": "C6 上氢 b",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      34.8839,
+      -31.0269,
+      13.6667
+     ],
+     "rotate": [
+      141.6245,
+      44.8745,
+      -29.1932
+     ]
+    }
+   },
+   {
+    "id": "HO6",
+    "kind": "part",
+    "name": "O6 上氢",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      35.0411,
+      -60.6929,
+      -6.2222
+     ],
+     "rotate": [
+      -109.801,
+      10.2634,
+      26.3295
+     ]
+    }
+   },
+   {
+    "id": "H5",
+    "kind": "part",
+    "name": "碳上氢 H5",
+    "part": "氢原子 H",
+    "version": "v033",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      -17.9629,
+      -21.6667
+     ],
+     "rotate": [
+      -0.0,
+      -0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "B01",
+    "kind": "part",
+    "name": "键 B01",
+    "part": "键棒 7.2 (C-O 环)",
+    "version": "v038",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      15.6978,
+      8.7365,
+      0.1
+     ],
+     "rotate": [
+      -112.2077,
+      -28.1255,
+      40.8934
+     ]
+    }
+   },
+   {
+    "id": "B02",
+    "kind": "part",
+    "name": "键 B02",
+    "part": "键棒 6.6 (C-C)",
+    "version": "v039",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      0.0,
+      17.9629,
+      0.0
+     ],
+     "rotate": [
+      -0.0,
+      -70.5288,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "B03",
+    "kind": "part",
+    "name": "键 B03",
+    "part": "键棒 6.6 (C-C)",
+    "version": "v039",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -15.5563,
+      8.9815,
+      0.0
+     ],
+     "rotate": [
+      112.2077,
+      -28.1255,
+      -40.8934
+     ]
+    }
+   },
+   {
+    "id": "B04",
+    "kind": "part",
+    "name": "键 B04",
+    "part": "键棒 6.6 (C-C)",
+    "version": "v039",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -15.5563,
+      -8.9815,
+      0.0
+     ],
+     "rotate": [
+      67.7923,
+      28.1255,
+      19.1066
+     ]
+    }
+   },
+   {
+    "id": "B05",
+    "kind": "part",
+    "name": "键 B05",
+    "part": "键棒 6.6 (C-C)",
+    "version": "v039",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -0.0,
+      -17.9629,
+      0.0
+     ],
+     "rotate": [
+      180.0,
+      70.5288,
+      180.0
+     ]
+    }
+   },
+   {
+    "id": "B06",
+    "kind": "part",
+    "name": "键 B06",
+    "part": "键棒 7.2 (C-O 环)",
+    "version": "v038",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      15.6978,
+      -8.7365,
+      0.1
+     ],
+     "rotate": [
+      -67.7923,
+      28.1255,
+      -19.1066
+     ]
+    }
+   },
+   {
+    "id": "B07",
+    "kind": "part",
+    "name": "键 B07",
+    "part": "键棒 6.6 (C-C)",
+    "version": "v039",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      15.5563,
+      -26.9444,
+      0.0
+     ],
+     "rotate": [
+      67.7923,
+      28.1255,
+      19.1066
+     ]
+    }
+   },
+   {
+    "id": "B08",
+    "kind": "part",
+    "name": "键 B08",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      15.2264,
+      26.3728,
+      -0.2333
+     ],
+     "rotate": [
+      -67.7923,
+      28.1255,
+      -19.1066
+     ]
+    }
+   },
+   {
+    "id": "B09",
+    "kind": "part",
+    "name": "键 B09",
+    "part": "键棒 4.8 (O-H)",
+    "version": "v041",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      22.7846,
+      39.464,
+      -4.3889
+     ],
+     "rotate": [
+      -145.0136,
+      18.3167,
+      -54.1825
+     ]
+    }
+   },
+   {
+    "id": "B10",
+    "kind": "part",
+    "name": "键 B10",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      17.9629,
+      -13.9667
+     ],
+     "rotate": [
+      180.0,
+      0.0,
+      180.0
+     ]
+    }
+   },
+   {
+    "id": "B11",
+    "kind": "part",
+    "name": "键 B11",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -15.2264,
+      26.3728,
+      0.2333
+     ],
+     "rotate": [
+      -112.2077,
+      -28.1255,
+      40.8934
+     ]
+    }
+   },
+   {
+    "id": "B12",
+    "kind": "part",
+    "name": "键 B12",
+    "part": "键棒 4.8 (O-H)",
+    "version": "v041",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -22.7846,
+      39.464,
+      4.3889
+     ],
+     "rotate": [
+      -34.9864,
+      -18.3167,
+      5.8175
+     ]
+    }
+   },
+   {
+    "id": "B13",
+    "kind": "part",
+    "name": "键 B13",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      17.9629,
+      13.9667
+     ],
+     "rotate": [
+      0.0,
+      -0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "B14",
+    "kind": "part",
+    "name": "键 B14",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -30.4527,
+      0.0,
+      -0.2333
+     ],
+     "rotate": [
+      -0.0,
+      -70.5288,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "B15",
+    "kind": "part",
+    "name": "键 B15",
+    "part": "键棒 4.8 (O-H)",
+    "version": "v041",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -45.5691,
+      0.0,
+      -4.3889
+     ],
+     "rotate": [
+      180.0,
+      -38.9424,
+      -180.0
+     ]
+    }
+   },
+   {
+    "id": "B16",
+    "kind": "part",
+    "name": "键 B16",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -20.7418,
+      0.0,
+      -13.9667
+     ],
+     "rotate": [
+      180.0,
+      0.0,
+      180.0
+     ]
+    }
+   },
+   {
+    "id": "B17",
+    "kind": "part",
+    "name": "键 B17",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -15.2264,
+      -26.3728,
+      0.2333
+     ],
+     "rotate": [
+      112.2077,
+      -28.1255,
+      -40.8934
+     ]
+    }
+   },
+   {
+    "id": "B18",
+    "kind": "part",
+    "name": "键 B18",
+    "part": "键棒 4.8 (O-H)",
+    "version": "v041",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -22.7846,
+      -39.464,
+      4.3889
+     ],
+     "rotate": [
+      34.9864,
+      -18.3167,
+      -5.8175
+     ]
+    }
+   },
+   {
+    "id": "B19",
+    "kind": "part",
+    "name": "键 B19",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      -10.3709,
+      -17.9629,
+      13.9667
+     ],
+     "rotate": [
+      0.0,
+      -0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "B20",
+    "kind": "part",
+    "name": "键 B20",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      23.9788,
+      -41.5325,
+      -4.3444
+     ],
+     "rotate": [
+      145.0136,
+      18.3167,
+      54.1825
+     ]
+    }
+   },
+   {
+    "id": "B21",
+    "kind": "part",
+    "name": "键 B21",
+    "part": "键棒 4.8 (O-H)",
+    "version": "v041",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      31.5055,
+      -54.5692,
+      -8.7222
+     ],
+     "rotate": [
+      67.7923,
+      28.1255,
+      19.1066
+     ]
+    }
+   },
+   {
+    "id": "B22",
+    "kind": "part",
+    "name": "键 B22",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      14.2678,
+      -41.5325,
+      9.3889
+     ],
+     "rotate": [
+      44.4153,
+      -38.9424,
+      -16.4264
+     ]
+    }
+   },
+   {
+    "id": "B23",
+    "kind": "part",
+    "name": "键 B23",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      28.8342,
+      -33.1225,
+      9.3889
+     ],
+     "rotate": [
+      -26.1001,
+      51.7831,
+      -12.8385
+     ]
+    }
+   },
+   {
+    "id": "B24",
+    "kind": "part",
+    "name": "键 B24",
+    "part": "键棒 5.2 (C-H/C-O)",
+    "version": "v040",
+    "source": "generated",
+    "material": "PLA",
+    "transform": {
+     "translate": [
+      10.3709,
+      -17.9629,
+      -13.9667
+     ],
+     "rotate": [
+      180.0,
+      0.0,
+      180.0
+     ]
+    }
+   }
+  ],
+  "interfaces": [
+   {
+    "id": "同轴-B01-a",
+    "a": "O5.sock0",
+    "b": "B01.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O5 的 sock0 轴线与 B01 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B01-a",
+    "a": "O5.sock0",
+    "b": "B01.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B01-a",
+    "a": "O5.sock0",
+    "b": "B01.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B01-b",
+    "a": "C1.sock0",
+    "b": "B01.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C1 的 sock0 轴线与 B01 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B01-b",
+    "a": "C1.sock0",
+    "b": "B01.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B01-b",
+    "a": "C1.sock0",
+    "b": "B01.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B02-a",
+    "a": "C1.sock1",
+    "b": "B02.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C1 的 sock1 轴线与 B02 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B02-a",
+    "a": "C1.sock1",
+    "b": "B02.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B02-a",
+    "a": "C1.sock1",
+    "b": "B02.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B02-b",
+    "a": "C2.sock0",
+    "b": "B02.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C2 的 sock0 轴线与 B02 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B02-b",
+    "a": "C2.sock0",
+    "b": "B02.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B02-b",
+    "a": "C2.sock0",
+    "b": "B02.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B03-a",
+    "a": "C2.sock1",
+    "b": "B03.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C2 的 sock1 轴线与 B03 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B03-a",
+    "a": "C2.sock1",
+    "b": "B03.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B03-a",
+    "a": "C2.sock1",
+    "b": "B03.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B03-b",
+    "a": "C3.sock0",
+    "b": "B03.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C3 的 sock0 轴线与 B03 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B03-b",
+    "a": "C3.sock0",
+    "b": "B03.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B03-b",
+    "a": "C3.sock0",
+    "b": "B03.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B04-a",
+    "a": "C3.sock1",
+    "b": "B04.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C3 的 sock1 轴线与 B04 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B04-a",
+    "a": "C3.sock1",
+    "b": "B04.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B04-a",
+    "a": "C3.sock1",
+    "b": "B04.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B04-b",
+    "a": "C4.sock0",
+    "b": "B04.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C4 的 sock0 轴线与 B04 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B04-b",
+    "a": "C4.sock0",
+    "b": "B04.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B04-b",
+    "a": "C4.sock0",
+    "b": "B04.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B05-a",
+    "a": "C4.sock1",
+    "b": "B05.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C4 的 sock1 轴线与 B05 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B05-a",
+    "a": "C4.sock1",
+    "b": "B05.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B05-a",
+    "a": "C4.sock1",
+    "b": "B05.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B05-b",
+    "a": "C5.sock0",
+    "b": "B05.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C5 的 sock0 轴线与 B05 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B05-b",
+    "a": "C5.sock0",
+    "b": "B05.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B05-b",
+    "a": "C5.sock0",
+    "b": "B05.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B06-a",
+    "a": "C5.sock1",
+    "b": "B06.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C5 的 sock1 轴线与 B06 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B06-a",
+    "a": "C5.sock1",
+    "b": "B06.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B06-a",
+    "a": "C5.sock1",
+    "b": "B06.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B06-b",
+    "a": "O5.sock1",
+    "b": "B06.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O5 的 sock1 轴线与 B06 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B06-b",
+    "a": "O5.sock1",
+    "b": "B06.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B06-b",
+    "a": "O5.sock1",
+    "b": "B06.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B07-a",
+    "a": "C5.sock2",
+    "b": "B07.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C5 的 sock2 轴线与 B07 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B07-a",
+    "a": "C5.sock2",
+    "b": "B07.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B07-a",
+    "a": "C5.sock2",
+    "b": "B07.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B07-b",
+    "a": "C6.sock0",
+    "b": "B07.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C6 的 sock0 轴线与 B07 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B07-b",
+    "a": "C6.sock0",
+    "b": "B07.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B07-b",
+    "a": "C6.sock0",
+    "b": "B07.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B08-a",
+    "a": "C1.sock2",
+    "b": "B08.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C1 的 sock2 轴线与 B08 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B08-a",
+    "a": "C1.sock2",
+    "b": "B08.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B08-a",
+    "a": "C1.sock2",
+    "b": "B08.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B08-b",
+    "a": "O1.sock0",
+    "b": "B08.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O1 的 sock0 轴线与 B08 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B08-b",
+    "a": "O1.sock0",
+    "b": "B08.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B08-b",
+    "a": "O1.sock0",
+    "b": "B08.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B09-a",
+    "a": "O1.sock1",
+    "b": "B09.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O1 的 sock1 轴线与 B09 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B09-a",
+    "a": "O1.sock1",
+    "b": "B09.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B09-a",
+    "a": "O1.sock1",
+    "b": "B09.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B09-b",
+    "a": "HO1.sock0",
+    "b": "B09.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "HO1 的 sock0 轴线与 B09 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B09-b",
+    "a": "HO1.sock0",
+    "b": "B09.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B09-b",
+    "a": "HO1.sock0",
+    "b": "B09.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B10-a",
+    "a": "C1.sock3",
+    "b": "B10.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C1 的 sock3 轴线与 B10 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B10-a",
+    "a": "C1.sock3",
+    "b": "B10.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B10-a",
+    "a": "C1.sock3",
+    "b": "B10.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B10-b",
+    "a": "H1.sock0",
+    "b": "B10.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H1 的 sock0 轴线与 B10 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B10-b",
+    "a": "H1.sock0",
+    "b": "B10.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B10-b",
+    "a": "H1.sock0",
+    "b": "B10.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B11-a",
+    "a": "C2.sock3",
+    "b": "B11.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C2 的 sock3 轴线与 B11 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B11-a",
+    "a": "C2.sock3",
+    "b": "B11.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B11-a",
+    "a": "C2.sock3",
+    "b": "B11.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B11-b",
+    "a": "O2.sock0",
+    "b": "B11.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O2 的 sock0 轴线与 B11 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B11-b",
+    "a": "O2.sock0",
+    "b": "B11.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B11-b",
+    "a": "O2.sock0",
+    "b": "B11.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B12-a",
+    "a": "O2.sock1",
+    "b": "B12.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O2 的 sock1 轴线与 B12 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B12-a",
+    "a": "O2.sock1",
+    "b": "B12.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B12-a",
+    "a": "O2.sock1",
+    "b": "B12.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B12-b",
+    "a": "HO2.sock0",
+    "b": "B12.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "HO2 的 sock0 轴线与 B12 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B12-b",
+    "a": "HO2.sock0",
+    "b": "B12.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B12-b",
+    "a": "HO2.sock0",
+    "b": "B12.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B13-a",
+    "a": "C2.sock2",
+    "b": "B13.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C2 的 sock2 轴线与 B13 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B13-a",
+    "a": "C2.sock2",
+    "b": "B13.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B13-a",
+    "a": "C2.sock2",
+    "b": "B13.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B13-b",
+    "a": "H2.sock0",
+    "b": "B13.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H2 的 sock0 轴线与 B13 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B13-b",
+    "a": "H2.sock0",
+    "b": "B13.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B13-b",
+    "a": "H2.sock0",
+    "b": "B13.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B14-a",
+    "a": "C3.sock2",
+    "b": "B14.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C3 的 sock2 轴线与 B14 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B14-a",
+    "a": "C3.sock2",
+    "b": "B14.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B14-a",
+    "a": "C3.sock2",
+    "b": "B14.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B14-b",
+    "a": "O3.sock0",
+    "b": "B14.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O3 的 sock0 轴线与 B14 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B14-b",
+    "a": "O3.sock0",
+    "b": "B14.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B14-b",
+    "a": "O3.sock0",
+    "b": "B14.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B15-a",
+    "a": "O3.sock1",
+    "b": "B15.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O3 的 sock1 轴线与 B15 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B15-a",
+    "a": "O3.sock1",
+    "b": "B15.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B15-a",
+    "a": "O3.sock1",
+    "b": "B15.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B15-b",
+    "a": "HO3.sock0",
+    "b": "B15.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "HO3 的 sock0 轴线与 B15 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B15-b",
+    "a": "HO3.sock0",
+    "b": "B15.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B15-b",
+    "a": "HO3.sock0",
+    "b": "B15.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B16-a",
+    "a": "C3.sock3",
+    "b": "B16.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C3 的 sock3 轴线与 B16 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B16-a",
+    "a": "C3.sock3",
+    "b": "B16.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B16-a",
+    "a": "C3.sock3",
+    "b": "B16.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B16-b",
+    "a": "H3.sock0",
+    "b": "B16.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H3 的 sock0 轴线与 B16 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B16-b",
+    "a": "H3.sock0",
+    "b": "B16.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B16-b",
+    "a": "H3.sock0",
+    "b": "B16.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B17-a",
+    "a": "C4.sock3",
+    "b": "B17.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C4 的 sock3 轴线与 B17 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B17-a",
+    "a": "C4.sock3",
+    "b": "B17.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B17-a",
+    "a": "C4.sock3",
+    "b": "B17.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B17-b",
+    "a": "O4.sock0",
+    "b": "B17.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O4 的 sock0 轴线与 B17 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B17-b",
+    "a": "O4.sock0",
+    "b": "B17.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B17-b",
+    "a": "O4.sock0",
+    "b": "B17.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B18-a",
+    "a": "O4.sock1",
+    "b": "B18.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O4 的 sock1 轴线与 B18 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B18-a",
+    "a": "O4.sock1",
+    "b": "B18.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B18-a",
+    "a": "O4.sock1",
+    "b": "B18.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B18-b",
+    "a": "HO4.sock0",
+    "b": "B18.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "HO4 的 sock0 轴线与 B18 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B18-b",
+    "a": "HO4.sock0",
+    "b": "B18.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B18-b",
+    "a": "HO4.sock0",
+    "b": "B18.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B19-a",
+    "a": "C4.sock2",
+    "b": "B19.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C4 的 sock2 轴线与 B19 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B19-a",
+    "a": "C4.sock2",
+    "b": "B19.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B19-a",
+    "a": "C4.sock2",
+    "b": "B19.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B19-b",
+    "a": "H4.sock0",
+    "b": "B19.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H4 的 sock0 轴线与 B19 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B19-b",
+    "a": "H4.sock0",
+    "b": "B19.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B19-b",
+    "a": "H4.sock0",
+    "b": "B19.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B20-a",
+    "a": "C6.sock1",
+    "b": "B20.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C6 的 sock1 轴线与 B20 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B20-a",
+    "a": "C6.sock1",
+    "b": "B20.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B20-a",
+    "a": "C6.sock1",
+    "b": "B20.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B20-b",
+    "a": "O6.sock0",
+    "b": "B20.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O6 的 sock0 轴线与 B20 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B20-b",
+    "a": "O6.sock0",
+    "b": "B20.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B20-b",
+    "a": "O6.sock0",
+    "b": "B20.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B21-a",
+    "a": "O6.sock1",
+    "b": "B21.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "O6 的 sock1 轴线与 B21 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B21-a",
+    "a": "O6.sock1",
+    "b": "B21.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B21-a",
+    "a": "O6.sock1",
+    "b": "B21.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B21-b",
+    "a": "HO6.sock0",
+    "b": "B21.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "HO6 的 sock0 轴线与 B21 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B21-b",
+    "a": "HO6.sock0",
+    "b": "B21.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B21-b",
+    "a": "HO6.sock0",
+    "b": "B21.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B22-a",
+    "a": "C6.sock3",
+    "b": "B22.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C6 的 sock3 轴线与 B22 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B22-a",
+    "a": "C6.sock3",
+    "b": "B22.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B22-a",
+    "a": "C6.sock3",
+    "b": "B22.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B22-b",
+    "a": "H6a.sock0",
+    "b": "B22.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H6a 的 sock0 轴线与 B22 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B22-b",
+    "a": "H6a.sock0",
+    "b": "B22.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B22-b",
+    "a": "H6a.sock0",
+    "b": "B22.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B23-a",
+    "a": "C6.sock2",
+    "b": "B23.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C6 的 sock2 轴线与 B23 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B23-a",
+    "a": "C6.sock2",
+    "b": "B23.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B23-a",
+    "a": "C6.sock2",
+    "b": "B23.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B23-b",
+    "a": "H6b.sock0",
+    "b": "B23.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H6b 的 sock0 轴线与 B23 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B23-b",
+    "a": "H6b.sock0",
+    "b": "B23.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B23-b",
+    "a": "H6b.sock0",
+    "b": "B23.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B24-a",
+    "a": "C5.sock3",
+    "b": "B24.pegA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "C5 的 sock3 轴线与 B24 的 pegA 轴线应重合"
+   },
+   {
+    "id": "就位-B24-a",
+    "a": "C5.sock3",
+    "b": "B24.seatA",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B24-a",
+    "a": "C5.sock3",
+    "b": "B24.pegA",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "同轴-B24-b",
+    "a": "H5.sock0",
+    "b": "B24.pegB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "coaxial",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "H5 的 sock0 轴线与 B24 的 pegB 轴线应重合"
+   },
+   {
+    "id": "就位-B24-b",
+    "a": "H5.sock0",
+    "b": "B24.seatB",
+    "type": "贴合",
+    "severity": "hard",
+    "check": "distance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "台肩面到定心平台的轴向距离（装配名义间隙 0.05mm）"
+   },
+   {
+    "id": "配合-B24-b",
+    "a": "H5.sock0",
+    "b": "B24.pegB",
+    "type": "紧固",
+    "severity": "hard",
+    "check": "diameter-match",
+    "nominal": {
+     "quantity": "直径",
+     "value": 0.2
+    },
+    "tolerance": {
+     "min": 0.05,
+     "max": 0.35
+    },
+    "note": "直径间隙 = 孔 Ø5.20 − 轴 Ø5.00"
+   },
+   {
+    "id": "行程-B02-a",
+    "a": "C1.sock1",
+    "b": "B02.pegA",
+    "type": "滑动副",
+    "severity": "hard",
+    "check": "motion-clearance",
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.15
+    },
+    "note": "行程证据是弹性的：卡珠 Ø5.40 过 Ø5.20 喉口单边挤压 0.10mm，刚性运动仿真因此报告 6 次挤压事件（每次 0.769mm³，run r084），不能判 pass；就位状态由 0 干涉证明（validate_assembly + 整机 1128 对布尔复核）。本清单不引用该 run 作为通过证据"
+   }
+  ]
+ }
+}
