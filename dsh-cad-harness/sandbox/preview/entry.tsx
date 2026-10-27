@@ -294,7 +294,8 @@ if (recordParam) setTimeout(() => selectRecord(recordParam), 1750);
 // expands it into the overlay.
 if (openParam) {
   // After a navpick the page only exists once that pick lands (~2.15 s).
-  const openAt = q.get('navpick') ? 2700 : 1900;
+  const navpickCount = (q.get('navpick') ?? '').split(',').filter(Boolean).length;
+  const openAt = q.get('navpick') ? 2700 + 900 * Math.max(0, navpickCount - 1) : 1900;
   const seq = openParam.split(',').map((x) => x.trim()).filter(Boolean);
   seq.forEach((text, i) => setTimeout(() => clickByText(text), openAt + i * 350));
 }
@@ -322,13 +323,20 @@ if (q.get('navexpand') === '1') {
 // the breadcrumb's own label changes with the selection).
 const navpick = q.get('navpick');
 if (navpick) {
+  // Comma-separated ids pick a SEQUENCE (e.g. `v066,r061` = look at a version,
+  // then open a run), which is how the stale-view-state bugs reproduce.
+  const ids = navpick.split(',').map((x) => x.trim()).filter(Boolean);
   setTimeout(() => {
-    const open = document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
-    open?.click();
-    setTimeout(() => {
-      const row = document.querySelector(`[data-nav-id="${navpick}"]`) as HTMLElement | null;
+    const openNav = () => document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null;
+    const pick = (i: number) => {
+      const row = document.querySelector(`[data-nav-id="${ids[i]}"]`) as HTMLElement | null;
       row?.click();
-    }, 450);
+      if (i + 1 < ids.length) {
+        setTimeout(() => { openNav()?.click(); setTimeout(() => pick(i + 1), 450); }, 450);
+      }
+    };
+    openNav()?.click();
+    setTimeout(() => pick(0), 450);
   }, 1700);
 }
 // ?navq=… — type into the navigator's search box (native setter + input event, so

@@ -4516,3 +4516,52 @@ Blender，保留它既保住“颜色/材质设计作为版本数据”的低成
 **依据：** r005/r013 为 754 步 / 0.377s、r070 为 977 步 / 0.489s、`.tmp-tb2` 的 r069 为 1047 步（刚好 1 个采样点），均 `sampleEvery = 1047`。改后直接调 worker：0.03 圈 → 24 个位姿 / 0.377s / 25 帧轨迹 / 终点 0.377s；0.078 圈 → 24 个位姿；1 圈 → 25 个位姿、15°/点；0.00001 圈 → 1 个位姿、`samplingSatisfied=false`、`check`。`node scripts/accept-motion-sampling.mjs --runtime .tmp-cad-runtime` 全过（短行程正对照找到 15 次干涉，TS/Python 的 checks/events 完全一致）；`accept-motion-parity.mjs` 全过；`npm run typecheck` 0 错误。
 
 **影响：** 所有 motion run 的 trajectory/keyframes 与 `interferenceEvents.step`（终点样本不再假设是 `sampleEvery` 的整数倍）；**新** run 采样不足时一律 check，旧 run（r070/r013）不会被追溯改写，仍以历史 pass 存在——要清掉 examples 里的假绿，需重跑这三份证据并更新 README（见“未决”）；新增 `scripts/accept-motion-sampling.mjs` 与 `accept:motion-sampling`。**未决**：是否把 5° 上限、以及 `motion-clearance` 算子对“覆盖数”的显式检查（让旧 run 也无法被引用），作为下一阶段。
+
+## 2026-10-27：截图 caption 只写图里读不出的身份与事实
+
+**触发条件：** 第 1 条（用户要求必须改）——caption 缺身份时，即使能追到出处，
+模型/人也要额外翻 run 列表和轨迹才能把图对上，是 token 与心智的双重开销。
+修完回放后按同一标准复查了其余截图入口，发现零件侧还有三处同类缺口。
+
+**要解决的问题：**
+
+- 回放 caption 只有 `CAD 视口截图 — 机构回放 t=0.66s` + `包围盒 17.179 × 17.164 × 16.48 mm`：
+  没有 run id/帧号，图无法回指 `runs/rNNN/`；`t` 是两位小数显示值，跨 run、跨帧都会碰撞；
+  包围盒是**上一个零件版本**遗留的 `spec`（run 视图没有 mesh，场景 builder 在
+  `setSpec(null)` 之前就 `return`），数字描述的是别的对象。
+- 零件截图漏了三种"图里读不出"的事实：旧版（图里看不出还有新版）、热力图图例
+  （图例是 DOM chip，不在抓到的 canvas 里）、对比副视口的蓝/橙角色（边框与颜色键同样是
+  DOM，画布里只有两张模型）。
+
+**决策内容：**
+
+1. 回放 caption = `r0xx「runTitle」· <视图 label>` + 第二行
+   `帧 i/n · [事件…] · 几何来自 v…`；事件仅在与帧时间差 ≤ 半个帧步长时出现
+   （最多 2 条、单条截断 40 字）。
+2. 零件 caption 补三条：`版本 v069（旧版·最新 v077）`、`热力图：<legend>`、
+   `副视口：蓝 = 历史 v069 · 橙 = 当前 v077`（角色由当前看的是历史还是当前决定）。
+3. 回放 caption 不再打印包围盒；进入 run 视图时清空 `spec`（`[versionId, run?.id]`），
+   概览的"尺寸"行同步消失；顺带堵住"未登记文件 → 回放"这条 `versionId` 不变的残留路径。
+4. 托盘保存只读 caption；↻发 用 `auto + 用户备注` 重建同一条消息。
+5. 纯函数 `partShotCaption` / `runShotCaption` 落在 `src/client/shot-caption.ts`，
+   措辞由 `scripts/accept-shot-caption.mjs` 钉住。
+
+**理由：** 图只能给像素，caption 是这一回合之后唯一能拿到的句柄。run id + 帧号能把图指回
+产物，来源版本说明证据链；旧版、图例、副视口角色都属于"不写就猜"的事实，且都不是像素里
+能读出来的。事件只在它确实发生的那一帧才写，避免把邻帧的碰撞说成这张图。
+
+**依据：** `scripts/accept-shot-caption.mjs` **22 条断言**全过（同 t 不同 run/帧产生不同
+caption、无包围盒、事件半步长边界、长标签截断、旧版行、热力图图例、副视口角色、剖视/测量/
+壁厚/标注仍在）；`npm run typecheck` 0 错误。沙箱实拍（真实 toy-balance2 数据）：
+
+- r068：`CAD 视口截图 — r068「机构运动 · base + beam + panL + panR」· 机构回放 t=0.00s` /
+  `帧 1/25 · 几何来自 v050 + v066 + v077`；
+- v069（旧版）：`版本 v069（旧版·最新 v077）` / `包围盒 … · 副视口：蓝 = 历史 v069 · 橙 = 当前 v077`；
+- v077（最新，手动开对比）：`副视口：蓝 = 当前 v077 · 橙 = 历史 v069`；
+- v077（最新，对比关）：只有版本 + 包围盒，没有旧版/副视口；
+- 未登记文件：`未登记文件 out/disk-45.stl · 不是版本 · 未入证据 · 截图` + 格式/单位/实体；
+- `navpick=v069` 概览有 `尺寸 83.9 × 83.9 × 88.0 mm · 2156 面`，切到 r061 后该行消失。
+
+**影响：** 所有回放/装配静置截图与零件版本截图的 caption、托盘重发与概览尺寸行；
+`ShotFrame` 成为 playback → panel 的帧上下文接口。沙箱 `navpick` 支持逗号序列
+（`v069,r061`），用于复现这类"切换视图后状态残留"的问题。

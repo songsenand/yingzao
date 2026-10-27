@@ -16,6 +16,8 @@ import { ViewportOverlay, type OverlayScene } from './overlay';
 import { fitDistance } from './fit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { withProject } from './project';
+import { placementEuler } from './placement';
+import type { ShotFrame } from './shot-caption';
 
 // ---------------------------------------------------------------- scene plumbing
 
@@ -190,7 +192,7 @@ export function MotionPlaybackView(props: {
   runId: string;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
-  onScreenshot?: (canvas: HTMLCanvasElement, label: string) => void;
+  onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [traj, setTraj] = useState<TrajectoryJson | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -338,7 +340,11 @@ export function MotionPlaybackView(props: {
         ? React.createElement('button', {
             key: 'shot',
             onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement,
-              `${isMotion ? '机构' : '物理'}回放 t=${t.toFixed(2)}s`),
+              `${isMotion ? '机构' : '物理'}回放 t=${t.toFixed(2)}s`,
+              // The caption needs the exact frame, not just the rounded t it
+              // prints: the frame index is what survives a same-t collision.
+              { index: frameIdx + 1, total: nFrames, timeSec: t, events: traj.trajectory.events,
+                stepSec: nFrames > 1 ? traj.trajectory.times[1]! - traj.trajectory.times[0]! : 0 }),
             style: btn(false),
           }, '📸')
         : null,
@@ -384,7 +390,7 @@ export function FluidPlaybackView(props: {
   runId: string;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
-  onScreenshot?: (canvas: HTMLCanvasElement, label: string) => void;
+  onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [manifest, setManifest] = useState<FluidManifest | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -579,7 +585,9 @@ export function FluidPlaybackView(props: {
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
-            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, `流体回放 t=${entry.timeSec}s`),
+            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, `流体回放 t=${entry.timeSec}s`,
+              { index: frameIdx + 1, total: manifest.frames.length, timeSec: entry.timeSec,
+                stepSec: manifest.frames.length > 1 ? manifest.frames[1]!.timeSec - manifest.frames[0]!.timeSec : 0 }),
             style: btn(false),
           }, '📸')
         : null,
@@ -599,7 +607,7 @@ export function StaticPartsView(props: {
   placements?: Record<string, { translate?: number[]; rotate?: number[] }>;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
-  onScreenshot?: (canvas: HTMLCanvasElement, label: string) => void;
+  onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [err, setErr] = useState<string | null>(null);
   const [ready, setReady] = useState(0);
@@ -631,16 +639,10 @@ export function StaticPartsView(props: {
             transparent: true, opacity: 0.92,
           });
           const mesh = new THREE.Mesh(geo, material);
-          // Same convention as the host's Manifold path: rotate (XYZ, degrees)
-          // then translate.
+          // Same convention as the host's Manifold path (R = Rz·Ry·Rx), then
+          // translate. NOT three's default Euler order — see placement.ts.
           const place = props.placements?.[name];
-          if (place?.rotate) {
-            mesh.rotation.set(
-              THREE.MathUtils.degToRad(place.rotate[0] ?? 0),
-              THREE.MathUtils.degToRad(place.rotate[1] ?? 0),
-              THREE.MathUtils.degToRad(place.rotate[2] ?? 0),
-            );
-          }
+          if (place?.rotate) mesh.rotation.copy(placementEuler(place.rotate));
           if (place?.translate) {
             mesh.position.set(place.translate[0] ?? 0, place.translate[1] ?? 0, place.translate[2] ?? 0);
           }

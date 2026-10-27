@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView } from './playback';
+import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
@@ -1363,7 +1364,7 @@ export function CadPanel(): React.ReactElement {
   // --- screenshot + annotation → context tray ---
   const [annotateMode, setAnnotateMode] = useState(false);
   const [annotations, setAnnotations] = useState<{ x0: number; y0: number; x1: number; y1: number; color: string }[]>([]);
-  const [tray, setTray] = useState<{ id: string; thumb: string; label: string; status: string; time: string; note: string }[]>([]);
+  const [tray, setTray] = useState<{ id: string; thumb: string; label: string; status: string; time: string; note: string; auto: string }[]>([]);
   // A captured screenshot parks here instead of flying straight into the
   // conversation: the user asked for a beat between「📸」and「sent」to type what
   // they mean（"这里的壁厚不对，改到 3mm"）. The draft holds the canvas so
@@ -1390,6 +1391,10 @@ export function CadPanel(): React.ReactElement {
   // a fresh default axis for the new one anyway. Modes are mode-agnostic but
   // clearing them costs one extra click and removes any ambiguity about which
   // model the next click will land on. (Declared AFTER the states it resets.)
+  //
+  // `run?.id` is a dependency as well as the version: entering a run from an
+  // unregistered file preview does not change `versionId` (both null), so a
+  // version-only effect left that preview's bbox and markup behind.
   useEffect(() => {
     setAnnotations([]);
     setMeasure(null);
@@ -1400,7 +1405,12 @@ export function CadPanel(): React.ReactElement {
     setSection(false);
     setSectionPos(0.5);
     setHeat(null);
-  }, [versionId]);
+    // The bbox is a fact of the mesh being left, not of the panel. A run view
+    // has no version mesh, so the scene builder returns before its own
+    // `setSpec(null)` and the previous subject's size stayed in the overview
+    // and in the replay's screenshot caption. Clearing it here covers both.
+    setSpec(null);
+  }, [versionId, run?.id]);
   const overlayRef = useRef<HTMLDivElement>(null);
   const rectRef = useRef<{ x0: number; y0: number; x1: number; y1: number; el: HTMLDivElement } | null>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
@@ -1810,22 +1820,26 @@ export function CadPanel(): React.ReactElement {
    * the panel already knows and the picture may not show unambiguously. The
    * image carries the geometry; the text carries the identity.
    */
-  const shotPrompt = (label: string): string => {
-    const head: string[] = [];
+  const shotPrompt = (label: string, frame?: ShotFrame): string => {
+    // A replay is a RUN, not a version: cite the run and the frame, and never
+    // let the part viewport's facts describe it. `spec` used to survive the
+    // switch (the scene builder returns before clearing it when there is no
+    // mesh), so a mechanism replay could print the last part's bounding box.
+    if (run) {
+      return runShotCaption({
+        id: run.id,
+        title: runTitle(run),
+        sourceVersionIds: run.sourceVersionIds,
+        staleVersionIds: run.staleVersionIds,
+      }, label, frame);
+    }
     // A file's caption must not read like a version's: the image is the ONLY
     // handle the conversation has on it (there is no versionId to cite), so the
     // path and the "not evidence" status travel with the picture.
     const asFile = !version && kind === 'unregistered' && fileSubject ? fileSubject : null;
     if (asFile) {
-      head.push(`未登记文件 ${asFile}`);
-      head.push('不是版本 · 未入证据');
-    } else {
-      if (currentPart?.name) head.push(`零件「${currentPart.name}」`);
-      if (version?.id) head.push(`版本 ${version.id}`);
-    }
-    head.push(label);
-    const facts: string[] = [];
-    if (asFile) {
+      const head = [`未登记文件 ${asFile}`, '不是版本 · 未入证据', label];
+      const facts: string[] = [];
       if (fileMeta) {
         facts.push(`格式 ${fileMeta.format || asFile.split('.').pop()}`);
         facts.push(fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件数字显示）');
@@ -1834,21 +1848,38 @@ export function CadPanel(): React.ReactElement {
       if (annotations.length) facts.push(`${annotations.length} 处标注框`);
       return `CAD 视口截图 — ${head.join(' · ')}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
     }
-    if (spec) facts.push(`包围盒 ${spec.size.map((n) => round3(n)).join(' × ')} mm`);
-    // 剖视状态改变画面含义（模型看起来缺一半），模型必须知道截的是什么：
-    // 轴向 + 位置。没开剖视就不提，避免每张图都背一句废话。
-    if (section) facts.push(`剖视：沿 ${sectionAxis} 轴、保留 ${Math.round(sectionPos * 100)}% 侧（测量点已约束在该剖切面内）`);
-    if (measure?.b) {
-      facts.push(`两点测量 ${(measure.dist ?? 0).toFixed(2)} mm（自 [${measure.a.map((n) => n.toFixed(1)).join(', ')}] 至 [${measure.b.map((n) => n.toFixed(1)).join(', ')}]）`);
-    }
-    if (thick) facts.push(`壁厚 ${thick.dist.toFixed(2)} mm`);
-    if (annotations.length) facts.push(`${annotations.length} 处标注框`);
-    return `CAD 视口截图 — ${head.join(' · ')}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
+    // An old revision, the heatmap and the comparison inset all change what the
+    // pixels mean and none of them is readable from the image: the revision
+    // banner, the heat legend and the inset key are DOM, and the canvas capture
+    // keeps only the WebGL layer. They ride in the caption.
+    const stale = Boolean(version && latestVersionId && version.id !== latestVersionId);
+    // The picture is the WebGL canvas: state the inset only when it was actually
+    // drawn (a ghost whose STL failed to load leaves the DOM frame empty).
+    const insetShown = Boolean((compareOn ?? stale) && insetRef.current);
+    return partShotCaption({
+      partName: currentPart?.name,
+      versionId: version?.id,
+      latestVersionId,
+      label,
+      bboxMm: spec?.size,
+      section: section ? { axis: sectionAxis, keepPct: sectionPos } : undefined,
+      measureMm: measure?.b ? { dist: measure.dist ?? 0, a: measure.a, b: measure.b } : undefined,
+      thicknessMm: thick ? thick.dist : undefined,
+      annotations: annotations.length,
+      heatLegend: heat?.legend,
+      compare: insetShown && version && ghostVersionId
+        ? {
+          blue: { role: stale ? '历史' : '当前', id: version.id },
+          orange: { role: stale ? '当前' : '历史', id: ghostVersionId },
+        }
+        : undefined,
+    });
   };
 
   const pushToTray = async (
     canvas: HTMLCanvasElement,
     label: string,
+    auto: string,
     noteOverride?: string,
     opts: { autoSend?: boolean; userText?: string } = {},
   ) => {
@@ -1867,10 +1898,14 @@ export function CadPanel(): React.ReactElement {
       // later, out of context, and "which revision is this?" must survive the trip.
       label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')}`
         + `${version && latestVersionId && version.id !== latestVersionId ? '（旧版）' : ''}`
-        + ` · ${label}${annotations.length ? ` · ${annotations.length}个标注` : ''}`,
+        + ` · ${label}${!run && annotations.length ? ` · ${annotations.length}个标注` : ''}`,
       status: '发送中',
       time,
       note: noteOverride ?? '',
+      // The read-only caption rides with every re-send. It is the only part
+      // that names the run/frame, so losing it on ↻发 would downgrade the
+      // message back to "a picture of some replay".
+      auto,
     }]);
     // stash the blob for the copy action
     blobById.set(id, { blob, name: `cad-${recordId ?? 'product'}-${label}.png` });
@@ -1958,7 +1993,10 @@ export function CadPanel(): React.ReactElement {
     const row = tray.find((x) => x.id === id);
     if (!item) { setHint('原图已不在内存里（页面刷新或列表过长）— 请重新截图'); return; }
     const note = row?.note?.trim();
-    const text = [`CAD 视口截图 — ${row?.label ?? '视图'}`, note ? note : ''].filter(Boolean).join('\n');
+    // The auto caption is the identity; only fall back to the tray label for a
+    // row that somehow predates it (the tray is in-memory, so this is a guard).
+    const auto = row?.auto || `CAD 视口截图 — ${row?.label ?? '视图'}`;
+    const text = [auto, note].filter(Boolean).join('\n');
     const r = await sendImageToSession(item.blob, item.name, text);
     setTray((t) => t.map((x) => x.id === id ? {
       ...x,
@@ -1970,8 +2008,8 @@ export function CadPanel(): React.ReactElement {
   };
 
   /** Capture and open the compose dialog — nothing is sent until the user confirms. */
-  const openShotDraft = (canvas: HTMLCanvasElement, label: string, noteOverride?: string) => {
-    const auto = shotPrompt(label);
+  const openShotDraft = (canvas: HTMLCanvasElement, label: string, noteOverride?: string, frame?: ShotFrame) => {
+    const auto = shotPrompt(label, frame);
     // Capture-time staleness: a screenshot of an old revision that later gets
     // sent as "this is the part" is exactly the confusion the banner exists
     // for — carry the fact into the draft so the warning can follow the image.
@@ -1997,8 +2035,9 @@ export function CadPanel(): React.ReactElement {
     setShotDraft(null);
     const note = d.text.trim();
     const text = [d.auto, note].filter(Boolean).join('\n');
-    // The full message doubles as the tray note so ↻发 re-sends the same words.
-    await pushToTray(d.canvas, d.label, text, { userText: text });
+    // Keep the user's words separate from the machine caption: ↻发 rebuilds
+    // the same message instead of stacking a second "CAD 视口截图 — …" line.
+    await pushToTray(d.canvas, d.label, d.auto, note, { userText: text });
   };
 
   /** 只存托盘: park it, send later (or never) from the list. */
@@ -2006,7 +2045,7 @@ export function CadPanel(): React.ReactElement {
     const d = shotDraft;
     if (!d) return;
     setShotDraft(null);
-    await pushToTray(d.canvas, d.label, d.text.trim(), { autoSend: false });
+    await pushToTray(d.canvas, d.label, d.auto, d.text.trim(), { autoSend: false });
   };
 
   const overlayPointer = (kind: 'down' | 'move' | 'up') => (e: React.PointerEvent) => {
@@ -2457,6 +2496,12 @@ export function CadPanel(): React.ReactElement {
             style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
           }, item.label),
           React.createElement('div', { style: { color: T.muted, fontSize: 10 } }, item.time, ' · ', item.status),
+          // Read-only identity that rides with the image on every send. Visible
+          // here so the user can see what the model will be told, but not edit it.
+          React.createElement('div', {
+            title: `随图必发（机器生成）：\n${item.auto}`,
+            style: { color: T.soft, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+          }, item.auto.replace(/\n/g, ' · ')),
           React.createElement('input', {
             type: 'text',
             placeholder: '备注（重发时随图给模型）',
@@ -3641,13 +3686,13 @@ export function CadPanel(): React.ReactElement {
         React.createElement(MotionPlaybackView, {
           key: run.id, runId: run.id,
           background: bg.hex,
-          onScreenshot: (canvas: HTMLCanvasElement, label: string) => openShotDraft(canvas, label),
+          onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),
       run && run.kind === 'fluid' &&
         React.createElement(FluidPlaybackView, {
           key: run.id, runId: run.id,
           background: bg.hex,
-          onScreenshot: (canvas: HTMLCanvasElement, label: string) => openShotDraft(canvas, label),
+          onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),
       run && run.kind === 'assembly' && run.hasGeometry &&
         React.createElement(StaticPartsView, {
@@ -3658,7 +3703,7 @@ export function CadPanel(): React.ReactElement {
           // a pile. Latent until now only because every corpus part so far was
           // modelled in world coordinates.
           placements: run.placements,
-          onScreenshot: (canvas: HTMLCanvasElement, label: string) => openShotDraft(canvas, label),
+          onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),
       run && !run.hasGeometry && reportOnlyCard(run),
       // committed annotation boxes stay visible (any viewport with a mesh)
