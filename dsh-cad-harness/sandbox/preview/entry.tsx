@@ -877,24 +877,51 @@ if (q.get('assert') === 'deeplink') {
 // actually toggle. (Whether the two meshes DIFFER is a property of the corpus:
 // the server logs each STL id it served, so `stl v030` + `stl v066` is the
 // evidence that both were fetched.)
+//
+// The control lives in the WebGL overlay. Bare headless may fail to create a
+// context and show the no-WebGL card instead; that is a SKIP, not a UI failure.
+// Poll for a while first: the panel mounts the viewport after its products land,
+// and a fixed 2.5 s snapshot raced that mount.
 if (q.get('assert') === 'ghost') {
-  setTimeout(() => {
+  const started = performance.now();
+  const show = (lines: string[]) => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  };
+  const tick = () => {
     const btn = document.querySelector('[data-compare-toggle]') as HTMLElement | null;
-    const before = (btn?.textContent ?? '').trim();
-    btn?.click();
+    if (!btn && performance.now() - started < 6000) return setTimeout(tick, 150);
+    if (!btn) {
+      const body = (document.body.textContent ?? '').replace(/\s+/g, ' ');
+      if (/无法创建 WebGL 上下文|几何预览不可用/.test(body)) {
+        show([
+          `compare inset (dock ${w}×${h})`,
+          'SKIP  this environment has no WebGL context; the comparison inset is intentionally absent.',
+          'INFO  run scripts/accept-ui.mjs with xvfb-run (the shot tool prefers it) to exercise the 3D control.',
+        ]);
+        return;
+      }
+      show([
+        `compare inset (dock ${w}×${h})`,
+        `FAIL  the comparison control never appeared (${Math.round(performance.now() - started)} ms)`,
+      ]);
+      return;
+    }
+    const before = (btn.textContent ?? '').trim();
+    btn.click();
     setTimeout(() => {
       const after = (document.querySelector('[data-compare-toggle]')?.textContent ?? '').trim();
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = [
+      show([
         `compare inset (dock ${w}×${h})`,
         `${/对比 v\d{3,}/.test(before) ? 'PASS' : 'FAIL'}  the control names the compared version: ${before || '(none)'}`,
         `${/对比 v\d{3,}/.test(after) && after !== before ? 'PASS' : 'FAIL'}  clicking it toggles the inset: ${after || '(none)'}`,
-      ].join('\n');
+      ]);
     }, 420);
-  }, 2500);
+  };
+  setTimeout(tick, 2500);
 }
 
 // ?assert=history — the version gate: five recent revisions are one click away,

@@ -7,8 +7,11 @@
 //   * `--profile <dir>` requires the directory to already exist.
 //   * The profile is created under the OS temp dir (a Firefox profile is
 //     ~100MB — it must never land in the repo).
-//   * WebGL canvases are NOT composited into `--screenshot` captures; the
-//     sandbox entry freezes each canvas into an <img> so the model still shows.
+//   * Under headless Firefox WebGL may be unavailable at all, which hides every
+//     3D-only control (the compare inset, section/measure). When `xvfb-run`
+//     exists we launch Firefox inside a virtual display: Mesa then provides a
+//     software GL context, so those controls are testable. `--no-xvfb` keeps the
+//     old bare-headless behaviour for environments that cannot run Xvfb.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -47,10 +50,18 @@ if (!probe || !probe.ok) {
 rmSync(out, { force: true });
 
 try {
-  const r = spawnSync('firefox', [
+  // WebGL is the difference between "the 3D control is missing" and "this box
+  // cannot render 3D". Prefer a virtual display when one is available; fall back
+  // to bare headless (and the no-WebGL card the app renders there).
+  const hasXvfb = !process.argv.includes('--no-xvfb') && !process.env.CAD_SHOT_NO_XVFB
+    && spawnSync('which', ['xvfb-run'], { stdio: 'ignore' }).status === 0;
+  const ffArgs = [
     '--headless', '--profile', profile, `--window-size=${size}`,
     '--screenshot', out, url,
-  ], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 120000 });
+  ];
+  const r = hasXvfb
+    ? spawnSync('xvfb-run', ['-a', 'firefox', ...ffArgs], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 120000 })
+    : spawnSync('firefox', ffArgs, { stdio: ['ignore', 'ignore', 'pipe'], timeout: 120000 });
   const noise = /dconf|headless mode|Read-only file system|只读文件系统|Glean store|WARNING/g;
   const err = (r.stderr?.toString() ?? '').split('\n').filter((l) => l && !noise.test(l));
   if (err.length) console.error(err.join('\n'));
