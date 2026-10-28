@@ -1,6 +1,6 @@
 # 项目身份与隔离：从 cwd 到最近标记（B 方案）
 
-> 状态：**B 已落地**：Phase 1 resolver + 测试 `a935778`；Phase 2 面板按标记发现 `e47fadd`；Phase 3 `projectCwdOf` 切 resolver + 删 `00a6013` 桥 `628ef7b`。根 `cad-data` / `assembly` 别名已清理。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
+> 状态：**B 已落地，C-lite 已落地**：Phase 1 resolver + 测试 `a935778`；Phase 2 面板按标记发现 `e47fadd`；Phase 3 `projectCwdOf` 切 resolver + 删 `00a6013` 桥 `628ef7b`；C-lite 会话绑定 `48c1f09`。根 `cad-data` / `assembly` 别名已清理。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
 
 ## 0. 定位：B 是过渡阶段，不是最终形态
 
@@ -102,6 +102,9 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 | 老语料只有 `cad-data/`、无标记 | 该项目根；第一次写补标记 |
 | 符号链接路径 | 先 realpath，再按真实路径找标记 |
 
+> C-lite（2026-10-28）在 B 之上加了会话绑定：第一次 CAD 调用后，上表的“切换”只对
+> 新会话/未绑定会话成立；已绑定会话 `cd` 不切换。
+
 ### 3.4 不做什么
 
 - 不做稳定 `id` / 注册表（C/D）。
@@ -185,7 +188,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 1. B resolver + 测试（不改行为）。**已完成（`a935778`）。**
 2. 面板按标记发现。**已完成（`e47fadd`）。**
 3. 删 `00a6013` 的 delegationDepth 桥 + 根 `cad-data` / `assembly` 别名；`projectCwdOf` 统一走 resolver。**已完成（`628ef7b`；根别名已清理）。**
-4. C：会话显式绑定。
+4. C：会话显式绑定。**C-lite 已完成（`48c1f09`）；创建时选项目的 UI 留到下一层。**
 5. D：稳定 id + 注册表 + 权限。
 
 B 在准生产档够用；C/D 是最终形态，不要因为 B 够用就停在 B，也不要在 B 阶段过度投资路径 hack。
