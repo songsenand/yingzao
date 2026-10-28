@@ -43,8 +43,8 @@
 | 4 | 25 件干涉 | 300 对布尔求交：**只有 2 处设计内自攻过盈** 13.521 / 37.639 mm³（Ø3 杆在 Ø2.5 预孔），其余 0；与 r045 的 "干涉 2" 一致 |
 | 5 | 打印件质量 | 152 137.7 mm³ × 1.24 = **188.65 g**；加钢制 M3（≈1256 mm³ × 7.85）**≈ 198.5 g**（不是 190.1 g，见 §4.7.2） |
 | 6 | **底座悬垂** | 8264.8 mm² @ z=15（`n.z < -sin45°` 且离床 >0.8 mm）；翻转 X/Y 后 8285.2 mm²，绕 X 转 90° 后 3314.3 mm²——**没有不加支撑的姿态** |
-| 7 | 运动 | r013：754 步 / 0.377 s，0→10.8°，**0 干涉、0 关节漂移**（与子智能体一致） |
-| 8 | 装配契约 | 我重跑 `check_assembly`（r054）：**25/25 通过，13 未声明邻接**——但 25 条全部无 tolerance，I3/I4 的 116 mm 轴偏移也报 pass（§4.2） |
+| 7 | 运动 | r102（r013 的 24 位姿重跑）：754 步 / 0.377 s，0→10.8°，**采样 24/24、0 关节漂移**；r101 是无转动副的诊断（见 BUILD §7） |
+| 8 | 装配契约 | 我重跑 `check_assembly`（r054）：**25/25 通过，13 未声明邻接**——但 25 条全部无 tolerance，I3/I4 的 116 mm 轴偏移也报 pass（§4.2）。**2026-10-28 复跑 r104：25 条全部改判 skipped，不再假绿** |
 
 > 旁注：两盘在 `whole-front.png` 里看着不等高，是渲染透视造成的；装配位姿的 z 完全相同（74.0–81.5），不是设计错误。
 
@@ -72,7 +72,7 @@
 ### 4.2 工具：`check_assembly` 的无 tolerance 假绿（严重，也是 25/25 的真相）
 
 - 新清单 25 条接口**没有一条**声明 `tolerance`；旧规则 `in_range = tolerance ? ... : true` 把"没有判据"直接当"在范围内"→ **pass**。
-- 直接证据：I3/I4 把 `beam.左叉孔`（x=−58）配到 `stirrupL.吊眼`（x=+58），测得 **116 mm 轴偏移**，r044/r054 的原文仍是 `verdict: pass`。
+- 直接证据：I3/I4 把 `beam.左叉孔`（x=−58）配到 `stirrupL.吊眼`（x=+58），测得 **116 mm 轴偏移**，r044/r054 的原文仍是 `verdict: pass`；2026-10-28 的 r104 已按“缺判据不是通过”改判 `skipped`。
 - 所以 25/25 不是"25 条被验证"，而是"25 条没有被判据约束"。旧示例 35/35 的每条都带 tolerance（±0.25、±0.5…），两者不可比。
 - 修复（已改）：无 tolerance → `skipped`，detail 写明 `add tolerance {min,max}; a missing criterion is NOT a pass`；`skipped` 也计入 `overallStatus`（→ `check`，不再是 `pass`）。修后本清单应为 **0 pass / 25 skipped**。
 - 同一条病根：**把"缺失"当"通过"**。printability 的 `judge` 是"缺字段就崩"，这里是"缺判据就绿"——方向相反，性质相同。
@@ -122,7 +122,7 @@ v026（横梁组件）、v030（整机）是合并研究件，但 `delivery_audi
 |---|---|
 | 路由器 skill（先选组、再选工具） | 子智能体第一步就 `skill("cad-toolbox")`，随后按需加载另外 4 本；工具调用顺序基本符合"instrument → assembly → simulate → deliver" |
 | `check_assembly` 未声明邻接 | 开发中抓出 5 个真缺陷（螺母圆柱化 10.18×3、指针键 5.29、滑块螺钉 21.17、吊架横臂 504、吊篮竖腿 45.90×2），最终版全部修掉（我复测 0 残留） |
-| `simulate_motion` STALE | r005 引用的 v019 被 v026 取代后判 STALE，逼出 r013 重跑 |
+| `simulate_motion` STALE | r005 引用的 v019 被 v026 取代后判 STALE；r013 后来因单采样被 r102 取代 |
 | profile 的 `unevaluable/notApplicable` | 明确说 tolMm / surfaceRaUm 没有需求可比，阻止把 `not-excluded` 读成"能打" |
 | `delivery_audit` claims | 点出 2 blocked / 2 warn，缺口可执行 |
 
@@ -172,8 +172,8 @@ v026（横梁组件）、v030（整机）是合并研究件，但 `delivery_audi
 复现（工作目录 = 仓库根）：
 
 ```bash
-check_assembly(manifestPath="assembly/assembly.json", adjacencyThresholdMm=0.75)  # → 25/25, 13 undeclared
-simulate_motion(...)     # r013 的 parts/joints 见 BUILD.md §7 → 10.8°, 0 干涉
+check_assembly(manifestPath="assembly/assembly.json", adjacencyThresholdMm=0.75)  # → 25 skipped (缺 tolerance), 13 undeclared；r104
+simulate_motion(...)     # r102 的 parts/joints 见 BUILD.md §7 → 10.8°, 24 位姿
 check_printability(versionId="v008", mode="both", profileIds=["fdm-pla-0.4"])      # → ok（唯一能用的路径）
 check_printability(versionId="v001", mode="judge", profileIds=["fdm-pla-0.4"])     # → 复现 missing attention
 preflight(claims=[...])                                                            # → 复现 userExecute

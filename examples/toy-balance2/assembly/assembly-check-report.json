@@ -1,7 +1,7 @@
 {
-  "runId": "r077",
-  "checkedAt": "2026-10-27T04:43:21.233Z",
-  "manifestPath": "/home/songsenand/Project/ToyMarker/assembly/assembly.json",
-  "manifestHash": "17c72abb",
+  "runId": "r104",
+  "checkedAt": "2026-10-28T01:35:36.182Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/toy-balance2/assembly/assembly.json",
+  "manifestHash": "59e85d3c",
   "schema": "assembly-check-pointer/v1"
 }

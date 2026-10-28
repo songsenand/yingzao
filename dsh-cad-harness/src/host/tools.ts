@@ -6021,6 +6021,12 @@ export function registerCadTools(
                 a: { type: 'string', required: true },
                 b: { type: 'string', required: true },
                 verdict: { type: 'string', required: true },
+                // `verdictFor` sets `measured` on every skipped item too (the
+                // "missing criterion is not a pass" verdicts still carry the
+                // number they measured). Omitting it here rejected the tool's
+                // own value on tolerance-less manifests while the run had
+                // already committed — the worst half of both worlds.
+                measured: { type: 'number' },
                 detail: { type: 'string', required: true },
               },
             },
