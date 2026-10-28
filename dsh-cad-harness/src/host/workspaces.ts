@@ -1,13 +1,14 @@
 // Discover the CAD corpora that live under one workspace root.
 //
-// WHY THIS EXISTS. A corpus is addressed by cwd (`<cwd>/cad-data/`, DESIGN §19),
-// which means the panel can only ever see the ONE corpus the session sits in.
+// WHY THIS EXISTS. A corpus is a `<dir>/cad-data/` with a project marker (B;
+// docs/dev/PROJECT-SCOPE.md). The panel can only ever see the ONE corpus the
+// session sits in.
 // A project with several components (`components/<name>/`) or a repo that keeps
 // worked examples (`examples/<name>/`) therefore has its other corpora invisible:
 // you cannot browse them without opening a session in each of them.
 //
 // `discoverWorkspaces` is the read-side counterpart: given a root, it finds every
-// shallow `<dir>/cad-data` corpus and reports enough about each (parts, versions,
+// `<dir>/cad-data` corpus and reports enough about each (parts, versions,
 // newest stamp) for a human to pick one in a dropdown. It is deliberately:
 //
 //   * READ-ONLY — no corpus directory is created, no manifest is rewritten, so
@@ -21,7 +22,6 @@
 // It never decides which corpus a session WRITES to. Writes stay bound to the
 // session cwd (`projectStoresFor`); this module only answers "what can be viewed".
 
-import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, relative, resolve } from 'node:path';
 import type { WorkspaceEntry } from '../shared/types.ts';
@@ -40,8 +40,10 @@ const SKIP = new Set([
   'assembly', 'parts', 'runs', 'versions', 'measure', 'frames', 'cad-data',
 ]);
 
-/** Hard ceilings so a pathological tree cannot hang the endpoint. */
-const MAX_DEPTH = 2;
+/** Hard ceilings so a pathological tree cannot hang the endpoint.
+ *  MAX_DEPTH is a traversal cap, NOT the project boundary: B finds a marker at any
+ *  depth (docs/dev/PROJECT-SCOPE.md). */
+const MAX_DEPTH = 6;
 const MAX_DIRS = 400;
 const MAX_ENTRIES = 64;
 
@@ -78,7 +80,7 @@ async function readCorpus(cwd: string): Promise<Omit<WorkspaceEntry, 'cwd' | 're
 }
 
 /**
- * Every corpus directly under (or one/two levels below) `root`.
+ * Every corpus under `root`, found by `<dir>/cad-data/` and traversal-capped.
  *
  * Ordering is stable and human: the root's own corpus first, then subtrees in
  * path order. A corpus that cannot be read is skipped rather than failing the
@@ -99,7 +101,11 @@ export async function discoverWorkspaces(root: string): Promise<WorkspaceEntry[]
     visited += 1;
 
     const cadData = join(dir, 'cad-data');
-    if (seen.size < MAX_ENTRIES && (existsSync(join(cadData, 'manifest.json')) || existsSync(join(cadData, 'versions')))) {
+    let hasCorpus = false;
+    try {
+      hasCorpus = (await stat(cadData)).isDirectory();
+    } catch { /* no corpus here */ }
+    if (hasCorpus && seen.size < MAX_ENTRIES) {
       if (!seen.has(dir)) {
         seen.add(dir);
         try {
