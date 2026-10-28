@@ -542,7 +542,7 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 simulate_physics({ parts: [] })
 ```
 
-returns: `overallStatus`, `settledPenetrationMm`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `holdAnalysis`, `notes`, `keyframes`
+returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `holdAnalysis`, `notes`, `keyframes`
 
 
 ## `simulate_stress`

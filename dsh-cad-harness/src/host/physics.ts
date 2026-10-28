@@ -93,6 +93,9 @@ export interface PhysicsReport {
     maxHorizontalDisplacementMm: Record<string, number>;
     jointViolations: string[];
     settled: boolean;
+    /** Written by the tool (it owns the world AABBs and the declared joints). */
+    geometrySuspects?: string[];
+    geometrySuspectRule?: string;
     /** Quasi-static "will the slide hold?" answers, when staticFriction was given. */
     holdAnalysis?: { joint: string; mu: number; massKg: number; axialDriveN: number; frictionCapN: number; holds: boolean }[];
     /** Honest-input notes: contact topology, hold-analysis caveats. */

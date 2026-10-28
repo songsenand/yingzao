@@ -26,6 +26,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - **"Will it hold?" is `staticFriction`**, not the solver: give the prismatic joint `staticFriction: μ` and read the analytic hold analysis; without it the slider always falls.
 - A prismatic joint is checked across its axis only; sliding along it is the joint working.
 - No force/torque output.
+- **The same geometry-sanity rule runs here** (`geometrySuspects`): a body dropped 500mm from everything reports a penetration number that describes nothing. Same criterion, same "fact, not a gate".
 
 ## Fluid (`simulate_fluid`)
 

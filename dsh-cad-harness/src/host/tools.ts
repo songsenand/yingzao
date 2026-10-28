@@ -2148,10 +2148,23 @@ export function registerCadTools(
       const usedVersions: (string | null)[] = [];
       const geometries: { name: string; stl: Uint8Array }[] = [];
 
+      const sceneSolids: SceneSolid[] = [];
       for (const p of a.parts) {
         const g = await resolvePartGeometry(p, project);
         usedVersions.push(g.versionId);
         geometries.push({ name: p.name, stl: g.stl });
+        // Same sanity pass as motion, same criterion (gap ÷ the part's own size):
+        // a body dropped 500mm from everything gives "settled penetration 0" for
+        // exactly the same empty reason a parked motion part does.
+        sceneSolids.push({
+          name: p.name,
+          triangles: Math.round(parseBinaryStl(g.stl).triVerts.length / 3),
+          ...transformedAabb(
+            boundingBoxOf(parseBinaryStl(g.stl)),
+            p.position as [number, number, number],
+            p.rotation as [number, number, number] | undefined,
+          ),
+        });
         parts.push({
           name: p.name,
           stl: g.stl,
@@ -2163,6 +2176,10 @@ export function registerCadTools(
         });
       }
       const sourceVersionIds = collectVersions(usedVersions);
+      for (const solid of sceneSolids) {
+        solid.connected = (a.joints ?? []).some((j) => j.bodyA === solid.name || j.bodyB === solid.name);
+      }
+      const suspectLines = formatSuspects(suspectParts(sceneSolids));
 
       const run = await beginRun(runStore, {
         kind: 'physics',
@@ -2214,6 +2231,8 @@ export function registerCadTools(
         report.metrics.jointViolations.push(`attachment save failed: ${String((e as Error).message)}`);
       }
 
+      report.metrics.geometrySuspects = suspectLines;
+      report.metrics.geometrySuspectRule = SUSPECT_RULE;
       await run.json('report.json', report);
       await run.json('trajectory.json', { kind: 'physics', durationSec: report.durationSec, trajectory: report.trajectory });
       const svg = report.metrics;
@@ -2238,6 +2257,8 @@ export function registerCadTools(
         jointViolations: svg.jointViolations,
         ...(svg.holdAnalysis ? { holdAnalysis: svg.holdAnalysis } : {}),
         notes: svg.notes,
+        geometrySuspects: suspectLines,
+        geometrySuspectRule: SUSPECT_RULE,
         keyframes: keep.map((f) => f.view),
       };
       physicsResultForFinalize = { refs, overall: result.overallStatus };
@@ -2309,6 +2330,11 @@ export function registerCadTools(
         properties: {
           overallStatus: { type: 'string', required: true },
           settledPenetrationMm: { type: 'number', required: true },
+          geometrySuspects: {
+            type: 'array', required: true, items: { type: 'string' },
+            description: 'Parts far from everything BY THEIR OWN SIZE (gap ÷ bbox diagonal > 5) or simple box geometry (<= 24 triangles). A fact, not a verdict: status is unchanged. Empty is the normal case.',
+          },
+          geometrySuspectRule: { type: 'string', required: true, description: 'The rule applied to produce geometrySuspects, in words.' },
           maxPenetrationMm: { type: 'number', required: true },
           fellOver: { type: 'object', required: true, additionalProperties: true },
           jointViolations: { type: 'array', required: true, items: { type: 'string' } },
@@ -2373,6 +2399,10 @@ export function registerCadTools(
           ? [`Joint violations: ${value.jointViolations.join('; ')}`]
           : []),
         ...holds,
+        ...(((value as { geometrySuspects?: string[] }).geometrySuspects ?? []).length
+          ? [`几何疑点（${(value as { geometrySuspectRule?: string }).geometrySuspectRule ?? ''}）：` +
+             `${((value as { geometrySuspects?: string[] }).geometrySuspects ?? []).join('；')}`]
+          : []),
         ...((value.notes ?? []).length ? ['Notes:', ...(value.notes ?? []).map((n) => `- ${n}`)] : []),
         `Attached keyframes in order: ${refs.map((r) => r.view).join(', ') || 'none'}.`,
         'Inspect the motion: does the part rest stably? does the hinge stay anchored?',
