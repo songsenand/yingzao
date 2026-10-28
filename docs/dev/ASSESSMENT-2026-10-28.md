@@ -71,7 +71,7 @@
 
 - **成立**：按它自己声明的范围（CAD 证据 + 打印协议），设计、契约、负样本、边界都成立。
 - **不成立为"生产验证"**：拉脱试验、试打、profile 标定都没做；36/41 零件没做 printability；4/5 代表件 `excluded`。
-- **未入库**：`git status` 显示整个 `examples/ball-and-stick/fructose-molecule/` 未跟踪（68 个文件）；`cad-data/` 由根 `.gitignore` 忽略。设计完成，但不在项目历史里。
+- **已入库（2026-10-28，提交 `4576124`）**：68 个非忽略文件已提交；`cad-data/` 仍由根 `.gitignore` 忽略，r001–r014 证据只在本地。设计完成并进入项目历史。
 
 ## 5. 缺口（更新后）
 
@@ -91,7 +91,7 @@
 
 ### P0（最近两周）
 
-1. **入库**：把果糖交付按 AGENTS.md 提交（`git commit -s`，Why/Verified/Risk）；`cad-data/` 保持忽略。它是"规格→契约→验证"的参考案例。
+1. **入库**（已完成，`4576124`）：果糖交付已按 AGENTS.md 提交；`cad-data/` 保持忽略。它是"规格→契约→验证"的参考案例。
 2. **标定 coupon**：打一块测试片——间隙 0.2/0.25/0.3、壁厚 0.6/0.75/0.9、卡扣过盈 0.075/0.125；用卡尺+拉脱试验量出来，回填 `process-profile` 与 tolerance 带。**把声明值变成实测值。**
 3. **产品化 spec→contract**：把 `build_spec.py` 的模式抽象成模板/工具；`check_assembly` 输出 `coverage: {hard, evaluated, skipped}`；生成式 manifest 成为 examples 的默认路径。
 

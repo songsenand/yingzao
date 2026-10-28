@@ -12,7 +12,7 @@ examples/ball-and-stick/
 │   ├── scripts/              ← 语料迁移等一次性脚本
 │   ├── BUILD.md              ← 逐次工具与数字
 │   └── README.md             ← 打印与装配说明
-└── fructose-molecule/        ← 以后画果糖时建在这里
+└── fructose-molecule/        ← 果糖（39 零件 / 41 版，2026-10-28）
 ```
 
 ## 怎么开一个分子
