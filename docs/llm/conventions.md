@@ -6,7 +6,7 @@
 ## Conventions every tool assumes
 
 - **Millimetres, z-up.** No tool takes a unit argument.
-- **A delegated session's CAD project follows its working directory.** The `cwd` passed to `subagent` becomes the child's working directory, and `generate_part` / `import_part` write under `<that cwd>/cad-data`. A top-level session keeps its durable creation cwd, so `cd` inside it does not relocate the corpus. On the first write, read the returned `project` / store root rather than assuming it.
+- **A CAD project is the nearest `cad-data/project.json` marker.** The agent's current working directory is only the starting point: `cd` into a subdirectory stays on the project; `cd` to a sibling with its own marker switches; a directory with no marker is a new project candidate (first write creates the marker). A delegated session's `cwd` works the same way — no symlinks, no `delegationDepth` special case. On the first write, read the returned `project` / store root rather than assuming it.
 - **`generate_part` renders are the review channel** — look at all four views
   (front/side/top/iso) before claiming a shape is right. Renders are for
   *shape*; numbers come from `measure_*`.

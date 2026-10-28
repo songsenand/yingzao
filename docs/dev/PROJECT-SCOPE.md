@@ -1,7 +1,6 @@
 # 项目身份与隔离：从 cwd 到最近标记（B 方案）
 
-> 状态：**B 分阶段落地中**：Phase 1（resolver + 测试）已提交 `a935778`；面板发现、`projectCwdOf` 接线、删桥/符号链接待做。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
-> 当前代码仍是“cwd 直连 + `00a6013` 的 delegationDepth 桥”；resolver 已存在但尚未接线。
+> 状态：**B 已落地**：Phase 1 resolver + 测试 `a935778`；Phase 2 面板按标记发现 `e47fadd`；Phase 3 `projectCwdOf` 切 resolver + 删 `00a6013` 桥 `628ef7b`。根 `cad-data` / `assembly` 别名已清理。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
 
 ## 0. 定位：B 是过渡阶段，不是最终形态
 
@@ -68,7 +67,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 - **cwd 只是选择器**：从 Agent 的当前工作目录开始向上找；第一个标记胜出。
 - **没有标记**：当前工作目录是“新项目候选”；第一次**写**才创建 `<cwd>/cad-data/` 和标记。读取不创建。
 - **嵌套项目**：目录自己带标记就胜出；要建嵌套项目，必须显式创建标记，不能靠“碰巧在父项目里”。
-- **符号链接不再用于项目切换**；根 `cad-data` / `assembly` 别名在 B 落地后删除。
+- **符号链接不再用于项目切换**；根 `cad-data` / `assembly` 别名已清理。
 
 ### 3.2 解析规则
 
@@ -128,7 +127,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 - 现有 6 个 example 已有 `project.json`（葡萄糖、果糖、toy-balance、toy-balance2、microscope5、multirotor-propeller）；其余老语料按 legacy 处理，**不需要搬数据**。
 - legacy 语料（只有 `cad-data/`）第一次写补标记；读取照常。
-- 根 `cad-data` / `assembly` 符号链接、`fructose-molecule` 根别名：B 落地后删除；删除前先确认没有会话依赖。
+- 根 `cad-data` / `assembly` 符号链接、`fructose-molecule` 根别名：**已在 2026-10-28 收尾时清理**；查看用 cwd 指向分子目录或 `?project=`。
 - `project.json.cwd` 过期不自动改写；等 C/D 的稳定 `id` 再处理迁移。
 - `docs/llm/conventions.md` 的“子会话 CAD 项目跟随 working directory”在 B 下仍然成立，但描述改成“最近的 `cad-data/project.json`”。
 
@@ -181,8 +180,8 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 ### 6.3 实施顺序（2026-10-28 用户定）
 
 1. B resolver + 测试（不改行为）。**已完成（`a935778`）。**
-2. 面板按标记发现。
-3. 删 `00a6013` 的 delegationDepth 桥 + 根 `cad-data` / `assembly` 别名；`projectCwdOf` 统一走 resolver。
+2. 面板按标记发现。**已完成（`e47fadd`）。**
+3. 删 `00a6013` 的 delegationDepth 桥 + 根 `cad-data` / `assembly` 别名；`projectCwdOf` 统一走 resolver。**已完成（`628ef7b`；根别名已清理）。**
 4. C：会话显式绑定。
 5. D：稳定 id + 注册表 + 权限。
 

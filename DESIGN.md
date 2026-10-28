@@ -2295,8 +2295,8 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 
 ### 19.2 落地
 
-- `projectStores` root 改为 `<cwd>/cad-data/`；`projectKey` 保留（迁移定位
-  旧目录用）；遥测**仍留在** `<DSH_HOME>/cad/telemetry/`（profile 级，量的是
+- `projectStores` root 改为 `<root>/cad-data/`（`root` = 最近的 `cad-data/project.json` 标记，
+  2026-10-28 B；§30.13）；`projectKey` 保留（迁移定位旧目录用）；遥测**仍留在** `<DSH_HOME>/cad/telemetry/`（profile 级，量的是
   请求不是设计）；
 - 迁移 `scripts/migrate-to-project-dir.mjs`：按 `project.json.cwd` 把
   `<DSH_HOME>/cad/<hash>/` 搬到 `<cwd>/cad-data/`；按 id 合并、拒绝覆盖；
@@ -2354,22 +2354,23 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 **形状**（只读浏览，不动写路径）：
 
 - 新端点 `GET /api/cad/projects?root=<绝对路径>` → `discoverWorkspaces(root)`
-  （`src/host/workspaces.ts`）：在 root 及其下两层内找 `<dir>/cad-data`（有
-  `manifest.json` 或 `versions/` 即算），返回 `{cwd, rel, name, parts, versions, latest}`。
-  深度 ≤2、skip 列表挡掉 `node_modules`/`lib`/`out` 等重目录，总目录数 ≤400；
+  （`src/host/workspaces.ts`）：按 `<dir>/cad-data/` 标记扫描（`project.json` 或 legacy
+  `manifest.json`/`versions/` 即算），返回 `{cwd, rel, name, parts, versions, latest}`。
+  遍历深度 ≤6（只是上限，不再是项目边界）、skip 列表挡掉 `node_modules`/`lib`/`out` 等重目录，总目录数 ≤400；
   **只读**，不建目录、不改 manifest；单份语料读不动只跳过该项，不拖垮整个列表。
 - 面板 `S.bar` 最左侧「工作目录」下拉：默认「跟随会话 · <名>」，列出发现到的其余语料
   （`rel · N零件/M版`）。切换只改 `?project=`（`client/project.ts` 的
   `setProjectOverride`），读数即换语料；列表 ≤1 项或发现失败时不显示，行为与旧版一致。
-- **写路径不变**：Agent 的工具仍写会话 cwd 的语料（`projectStoresFor`）。「看 A 写 B」
-  在结构上不可能；下拉的 tooltip 明说"只读浏览"。
+- **写路径按标记**：Agent 的工具从 workingDirectory 起点走 `resolveProjectRoot`，写最近
+  `cad-data/project.json` 标记的语料（`projectStoresFor`）。「看 A 写 B」在结构上不可能；
+  下拉的 tooltip 明说"只读浏览"。
 
 **边界**：会话切换（`refreshProjectScope` 返回 switched）自动清空 override，避免钉在
 上一个会话的语料上；发现范围永远相对**会话** cwd，不受当前浏览目标影响；不引入
 语料内"组件"分组——跨组件的联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
 
-**验证**：`discoverWorkspaces(仓库根)` 返回 7 份语料（根 + 5 套显微镜 + 多旋翼螺旋桨），
-耗时 9ms；不存在的 root → `[]`；单语料 root（`examples/microscope5`）→ `[.] v83`。
+**验证**：B 后 `discoverWorkspaces(examples)` 返回 10 份语料（含 `ball-and-stick` 的 glucose/fructose），
+深度 3 的分子项目可见；不存在的 root → `[]`；单语料 root（`examples/microscope5`）→ `[.] v83`。
 host/client 两端 `esbuild` 构建通过，`tsc` 对本轮改动文件无报错。
 
 ---
@@ -3506,15 +3507,17 @@ overlay 的 `chrome` 槽，与「复原」同一坐标系。挂完**用 DOM 探�
    请求省 1,227 tok（−27%）且对任何会话零打扰。
 7. **"零打扰"是硬门槛**：第一条不是"省多少"，而是"对正在进行的会话有没有影响"。
 
-**30.13 一个项目一份语料**：项目身份 = **会话的工作目录（cwd）**。规则：
-1. **两侧都必须带项目，缺一不可**：工具侧从 `exec.agent.session.header.cwd` 取（**没有模块级
-   store**）；浏览器侧走 `?project=<绝对目录>`，客户端用 `withProject()` 这**唯一**的 URL
-   构造器。只修面板等于只把症状盖住。
+**30.13 一个项目一份语料**：项目身份 = **最近的 `cad-data/project.json` 标记**（2026-10-28 B）。规则：
+1. **两侧都必须带项目，缺一不可**：工具侧从 Agent 的 workingDirectory 起点调用
+   `resolveProjectRoot`（**没有模块级 store**）；浏览器侧走 `?project=<绝对目录>` 并按同一
+   resolver 解析，客户端用 `withProject()` 这**唯一**的 URL 构造器。只修面板等于只把症状盖住。
 2. **读取不创建，写入才落盘**：目录不存在 = 空语料 = 新项目的正常状态。
 3. **遥测反过来，留在 profile 层**：usage 量的是**请求**不是**设计**。
 4. **迁移必须可重跑**：按条目合并、冲突 id 拒绝覆盖并报出、遥测按行去重追加。
 5. **判据**：任何 `join(pluginRoot, …)` 形式的持久化路径，当场回答**"第二个项目来了会怎样"**。
    实现见 §13.13（`src/host/project.ts` + `scripts/accept-project-scope.mjs`）。
+6. **不按 delegationDepth 特判，不用符号链接切项目**：子智能体的 `cwd` 就是它的
+   workingDirectory，resolver 统一处理；顶层 `cd` 进子目录不搬语料，进兄弟项目按标记切换。
 
 **30.14 两半作用域不一致时，面板必须说出来**：人的半边是全局的（路由、面板、遥测），模型的
 半边是按预设的（工具表、skill 目录），于是会出现静默失败——标准模式会话里面板一切正常、
