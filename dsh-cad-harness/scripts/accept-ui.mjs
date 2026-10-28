@@ -38,6 +38,9 @@ const SCENARIOS = [
   // The same comprehension surface at the narrow dock width: the data strip,
   // transport and timeline must not squeeze the 3D viewport out.
   { name: 'playback-380', query: 'w=380&h=900&assert=playback&debug=0', resolve: 'motion' },
+  // The playback toolbar's 「▭ 标注」: a screen-space box that must survive a drag
+  // (and must not steal the orbit controls while disarmed).
+  { name: 'playback-ann', query: 'w=520&h=900&assert=playback-annotate&debug=0', resolve: 'motion' },
   // A 3D-only control, exercised under Xvfb; SKIP when this box cannot give GL.
   { name: 'section', query: 'w=520&h=1200&open=剖切&assert=section&debug=0', resolve: 'motion' },
   // The no-WebGL path must still show the run's data and keyframe strip.

@@ -191,7 +191,9 @@ const PlaybackFrame: React.FC<{
   /** Live scene for the corner overlays (triad + scale bar + reset). */
   getScene?: () => OverlayScene | null;
   onReset?: () => void;
-}> = ({ mountRef, controls, data, fallback, compact, getScene, onReset }) =>
+  /** Drawn above the canvas, inside the viewport box (annotation boxes, hints). */
+  overlay?: React.ReactNode;
+}> = ({ mountRef, controls, data, fallback, compact, getScene, onReset, overlay }) =>
   React.createElement(
     'div',
     {
@@ -203,6 +205,7 @@ const PlaybackFrame: React.FC<{
       'div',
       { 'data-playback-viewport': '1', style: { flex: 1, position: 'relative', minHeight: 0 } },
       fallback ?? React.createElement('div', { ref: mountRef, style: { position: 'absolute', inset: 0 } }),
+      overlay ?? null,
       !fallback && getScene && React.createElement(ViewportOverlay, { getScene, onReset }),
     ),
     data ?? null,
@@ -224,6 +227,90 @@ interface TrajectoryJson {
     events: { timeSec: number; label: string }[];
   };
 }
+
+/** One committed annotation box, in the viewport's CSS-pixel frame. */
+interface AnnBox { x0: number; y0: number; x1: number; y1: number; color: string }
+
+const ANN_COLORS = [T.danger, T.warn, T.ok, T.accent];
+
+/**
+ * Bake the boxes into a COPY of the canvas, in device pixels.
+ *
+ * A box is screen-space (a rect), so this works in a playback view where the
+ * picking machinery (raycast into the animated solids) is not wired up. The copy
+ * matters: stroking the live canvas would smear the boxes across the next frames.
+ */
+const bakeBoxes = (src: HTMLCanvasElement, boxes: AnnBox[], rect: { width: number; height: number }): HTMLCanvasElement => {
+  if (boxes.length === 0) return src;
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const g = out.getContext('2d');
+  if (!g) return src;
+  g.drawImage(src, 0, 0);
+  const sx = out.width / Math.max(1, rect.width);
+  const sy = out.height / Math.max(1, rect.height);
+  g.lineWidth = Math.max(2, out.width / 300);
+  for (const b of boxes) {
+    g.strokeStyle = b.color;
+    g.strokeRect(
+      Math.min(b.x0, b.x1) * sx, Math.min(b.y0, b.y1) * sy,
+      Math.abs(b.x1 - b.x0) * sx, Math.abs(b.y1 - b.y0) * sy,
+    );
+  }
+  return out;
+};
+
+/** The drag/commit layer: `pointer-events` only while annotating, so orbiting is
+ *  never stolen by an invisible sheet. */
+const annotateLayer = (opts: {
+  on: boolean;
+  boxes: AnnBox[];
+  drag: AnnBox | null;
+  onStart: (x: number, y: number) => void;
+  onMove: (x: number, y: number) => void;
+  onEnd: () => void;
+}): React.ReactNode => React.createElement(
+  'div',
+  {
+    'data-annotate-layer': '1',
+    style: { position: 'absolute', inset: 0, cursor: opts.on ? 'crosshair' : 'default', pointerEvents: opts.on ? 'auto' : 'none', zIndex: 3 },
+    onPointerDown: (e: any) => {
+      if (!opts.on) return;
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      // Start FIRST, capture second: setPointerCapture throws on a pointer id that
+      // is not active (a dispatched/synthetic pointer, or a stylus that already
+      // lifted), and it used to abort the handler before the box existed.
+      opts.onStart(e.clientX - r.left, e.clientY - r.top);
+      try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* not a live pointer */ }
+    },
+    onPointerMove: (e: any) => {
+      if (!opts.on) return;
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      // No `opts.drag` guard here: state updates are batched, so a fast drag can
+      // deliver move before the re-render that sets `drag`. The parent's updater
+      // is the one place that knows whether a drag is in progress.
+      opts.onMove(e.clientX - r.left, e.clientY - r.top);
+    },
+    onPointerUp: () => { if (opts.on) opts.onEnd(); },
+  },
+  ...opts.boxes.map((b, i) => React.createElement('div', {
+    key: `b${i}`, 'data-annotate-box': String(i),
+    style: {
+      position: 'absolute', left: Math.min(b.x0, b.x1), top: Math.min(b.y0, b.y1),
+      width: Math.abs(b.x1 - b.x0), height: Math.abs(b.y1 - b.y0),
+      border: `2px solid ${b.color}`, pointerEvents: 'none', borderRadius: 2,
+    },
+  })),
+  opts.drag ? React.createElement('div', {
+    'data-annotate-drag': '1',
+    style: {
+      position: 'absolute', left: Math.min(opts.drag.x0, opts.drag.x1), top: Math.min(opts.drag.y0, opts.drag.y1),
+      width: Math.abs(opts.drag.x1 - opts.drag.x0), height: Math.abs(opts.drag.y1 - opts.drag.y0),
+      border: `2px dashed ${opts.drag.color}`, pointerEvents: 'none',
+    },
+  }) : null,
+);
 
 const PART_COLORS = ['#4a7dbd', '#c0392b', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
@@ -421,6 +508,15 @@ export function MotionPlaybackView(props: {
   const [measureOn, setMeasureOn] = useState(false);
   const [measurePoints, setMeasurePoints] = useState(0);
   const [measureMm, setMeasureMm] = useState<number | null>(null);
+  // Annotation boxes are per-view and stay across frames: a box drawn at t=0.30
+  // marks a PLACE, and the screenshot label carries the frame it was read on.
+  const [annotOn, setAnnotOn] = useState(false);
+  const [boxes, setBoxes] = useState<AnnBox[]>([]);
+  const [dragBox, setDragBox] = useState<AnnBox | null>(null);
+  // The live drag lives in a ref as well: `onEnd` must COMMIT the box, and doing
+  // that inside a setState updater is a side effect (React may drop or repeat it —
+  // which is exactly how the first version lost every box).
+  const dragBoxRef = useRef<AnnBox | null>(null);
   const [compact, setCompact] = useState(false);
   const measurePointsRef = useRef<THREE.Vector3[]>([]);
   const measureGroupRef = useRef<THREE.Group | null>(null);
@@ -754,6 +850,21 @@ export function MotionPlaybackView(props: {
         type: 'button', title: '在模型上点两点测距（视口射线，近似值）', onClick: () => setMeasureOn((v) => !v),
         style: { ...btn(measureOn, '#ff3040'), fontSize: 10, padding: '1px 7px' },
       }, '📏 测距'),
+      // Screen-space box: works here because it does not need the picking stack
+      // (the main viewer's 标注 was the only place this existed).
+      React.createElement('button', {
+        type: 'button', 'data-annotate-toggle': '1',
+        title: '在画面上拖出一个框，圈出要说明的地方；框随截图一起带走',
+        onClick: () => setAnnotOn((v) => !v),
+        style: { ...btn(annotOn, T.danger), fontSize: 10, padding: '1px 7px' },
+      }, annotOn ? '▭ 标注中' : '▭ 标注'),
+      boxes.length
+        ? React.createElement('button', {
+            type: 'button', 'data-annotate-clear': '1', title: '清除所有标注框',
+            onClick: () => setBoxes([]),
+            style: { ...btn(false), fontSize: 10, padding: '1px 7px' },
+          }, `清除 ${boxes.length}`)
+        : null,
       section.on ? React.createElement('select', {
         value: section.axis, title: '剖切轴',
         onChange: (e: any) => setSection((cur) => ({ ...cur, axis: e.target.value as 'x' | 'y' | 'z' })),
@@ -785,6 +896,32 @@ export function MotionPlaybackView(props: {
 
   return React.createElement(PlaybackFrame, {
     mountRef, compact,
+    overlay: annotateLayer({
+      on: annotOn,
+      boxes,
+      drag: dragBox,
+      onStart: (x, y) => {
+        const box = { x0: x, y0: y, x1: x, y1: y, color: ANN_COLORS[boxes.length % ANN_COLORS.length]! };
+        dragBoxRef.current = box;
+        setDragBox(box);
+      },
+      onMove: (x, y) => {
+        const cur = dragBoxRef.current;
+        if (!cur) return;
+        const next = { ...cur, x1: x, y1: y };
+        dragBoxRef.current = next;
+        setDragBox(next);
+      },
+      onEnd: () => {
+        const cur = dragBoxRef.current;
+        dragBoxRef.current = null;
+        setDragBox(null);
+        // A click (not a drag) must not leave a 0×0 "box" behind.
+        if (cur && Math.abs(cur.x1 - cur.x0) > 6 && Math.abs(cur.y1 - cur.y0) > 6) {
+          setBoxes((prev) => [...prev, { ...cur, x1: (cur as AnnBox).x1, y1: (cur as AnnBox).y1 }]);
+        }
+      },
+    }),
     data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, tools: playbackTools, compact }) : null,
     fallback: err
       ? React.createElement('div', {
@@ -856,12 +993,18 @@ export function MotionPlaybackView(props: {
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
-            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement,
-              `${isMotion ? '机构' : '物理'}回放 t=${t.toFixed(2)}s`,
+            onClick: () => {
+              const canvas = sceneRef.current!.renderer.domElement;
+              const viewport = mountRef.current?.closest('[data-playback-viewport]') as HTMLElement | null;
+              props.onScreenshot?.(
+                bakeBoxes(canvas, boxes, { width: viewport?.clientWidth ?? canvas.clientWidth, height: viewport?.clientHeight ?? canvas.clientHeight }),
+                `${isMotion ? '机构' : '物理'}回放 t=${t.toFixed(2)}s`,
               // The caption needs the exact frame, not just the rounded t it
               // prints: the frame index is what survives a same-t collision.
-              { index: frameIdx + 1, total: nFrames, timeSec: t, events: traj.trajectory.events,
-                stepSec: nFrames > 1 ? traj.trajectory.times[1]! - traj.trajectory.times[0]! : 0 }),
+                { index: frameIdx + 1, total: nFrames, timeSec: t, events: traj.trajectory.events,
+                  stepSec: nFrames > 1 ? traj.trajectory.times[1]! - traj.trajectory.times[0]! : 0 },
+              );
+            },
             style: btn(false),
           }, '📸')
         : null,

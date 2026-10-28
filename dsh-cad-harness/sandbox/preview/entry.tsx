@@ -752,6 +752,59 @@ if (q.get('assert') === 'review') {
   })();
 }
 
+// ?assert=playback-annotate — the playback toolbar's 「▭ 标注」 must really draw a
+// box: a button that renders but commits nothing is the failure mode this checks.
+// (The box is screen-space; that is WHY it can exist in a playback view at all.)
+if (q.get('assert') === 'playback-annotate') {
+  const waitFor = (fn: () => boolean, ms = 8000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const ready = await waitFor(() => Boolean(document.querySelector('[data-annotate-toggle]')));
+    const layer = document.querySelector('[data-annotate-layer]') as HTMLElement | null;
+    const lines = [`playback annotation (dock ${w}×${h})`];
+    lines.push(`${ready ? 'PASS' : 'FAIL'}  the playback toolbar carries 「▭ 标注」`);
+    lines.push(`${layer ? 'PASS' : 'FAIL'}  the annotation layer exists over the canvas`);
+    (document.querySelector('[data-annotate-toggle]') as HTMLElement | null)?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const armed = layer ? getComputedStyle(layer).pointerEvents : 'none';
+    lines.push(`${armed === 'auto' ? 'PASS' : 'FAIL'}  arming it takes pointer events (was ${armed}; orbit keeps them otherwise)`);
+    let committed = 0;
+    if (layer) {
+      const r = layer.getBoundingClientRect();
+      const fire = (type: string, x: number, y: number) => layer.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, clientX: r.left + x, clientY: r.top + y, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+      }));
+      // Separate ticks: a real drag arrives as separate events, and React has to
+      // re-render between them for the layer to see its own drag state.
+      fire('pointerdown', 20, 20);
+      await new Promise((r) => setTimeout(r, 60));
+      fire('pointermove', 120, 90);
+      await new Promise((r) => setTimeout(r, 60));
+      fire('pointerup', 120, 90);
+      committed = await waitFor(() => document.querySelectorAll('[data-annotate-box]').length > 0, 2000)
+        ? document.querySelectorAll('[data-annotate-box]').length : 0;
+    }
+    lines.push(`${committed === 1 ? 'PASS' : 'FAIL'}  a drag commits exactly one box (${committed})`);
+    const clear = document.querySelector('[data-annotate-clear]') as HTMLElement | null;
+    clear?.click();
+    await new Promise((r) => setTimeout(r, 120));
+    const left = document.querySelectorAll('[data-annotate-box]').length;
+    lines.push(`${left === 0 ? 'PASS' : 'FAIL'}  清除 removes them (${left} left)`);
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  })();
+}
+
 // ?assert=contract — the contract card must be a DOCUMENT, not a splash: a table
 // with rows, the undeclared pairs it counts (as many as it says), the manifest's
 // own holes, and its boundary. Machine-checked because "looks full" is not a check.
