@@ -12,6 +12,7 @@
 | [UI-PLAN.md](../UI-PLAN.md) | 面板/交互的计划与已完成项 | 改 UI 前 |
 | [UI-EXECUTION.md](../UI-EXECUTION.md) | UI 的执行记录 | 查 UI 改动历史 |
 | [AUDIT-2026-10-23.md](../AUDIT-2026-10-23.md) | 一次全量审计的发现与修复 | 查已知缺陷/修复依据 |
+| [ASSESSMENT-2026-10-28.md](ASSESSMENT-2026-10-28.md) | 能力评估：玩具→准生产的证据、缺口与路线图 | 排优先级/看现状 |
 | [THIRD-PARTY-AUDIT.md](../THIRD-PARTY-AUDIT.md) | 第三方依赖与素材的许可审计 | 引入依赖/素材前 |
 | [INTERFACE-FIGURE-PLAN.md](../INTERFACE-FIGURE-PLAN.md) | 接口示意图的延期方案 | 做接口图前 |
 | [AGENTS.md](../../AGENTS.md) | 编码纪律：提交信息 Why / Verified / Risk、决策记录、文档同步 | 每次提交前 |
