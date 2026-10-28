@@ -23,6 +23,10 @@ Thirty tools, but **three jobs first**. Pick the group, not the tool — the gro
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
 
+## Project boundary (C-lite, 2026-10-28)
+
+The first CAD call binds the session to its nearest `cad-data/project.json`; `cd` does not switch. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, **stop and tell the user this is the C/D gap** — do not fork a corpus or add symlinks.
+
 ## Reading errors
 
 - `invalid arguments: ...` —— 入参形状错，消息里已点名（`"parts[0].position"`、`"versionId" must be a string`）；照路径改。

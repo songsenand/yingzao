@@ -4771,3 +4771,22 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** B 的事故/成本见 `docs/dev/PROJECT-SCOPE.md` §1；C 的设计见 §6.1；会话 id 由 `agent.session.header.id` 提供（`tool-scope.ts` 已这样用）。
 
 **影响：** `src/host/project.ts`（session binding）、`scripts/accept-project-cwd.mjs`（C 用例）、`docs/dev/PROJECT-SCOPE.md`；浏览器 `?project=` 仍按 B resolver，不受会话绑定影响；项目移动/改名仍留给 D。
+
+## 2026-10-28：准生产阶段封版，C-lite 为边界；C/D 暂缓
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（阶段边界）+ 第 4 条（影响后续路线）。
+
+**要解决的问题：** B/C-lite 已覆盖单用户、本地、准生产；继续做 C 的创建/切换 UI 或 D 的注册表/权限是过度设计。但 C-lite 有明确缺口，若不说清，后续会把 workaround 当常态。
+
+**决策内容：**
+- 准生产阶段到此为止；C-lite 是当前交付边界。
+- C 的创建/切换 UI、D 的稳定 id/注册表/权限暂缓。
+- 缺口触发器：① 同一会话切项目；② 项目移动/改名；③ 多人/共享/权限；④ 跨项目；⑤ 跨机/远程/云；⑥ 创建/恢复时显式选项目。
+- 看到任一，提示用户补 C/D，不要用符号链接/复制语料/改 header 绕过。
+- 这条规则写进 `skills/cad-toolbox/SKILL.md` 与 `docs/llm/conventions.md`，让后续 Agent 在 CAD 任务里直接看到。
+
+**理由：** 当前需求够用；C/D 成本高；用触发条件而不是时间点，避免为不存在的需求提前建设，也避免 C-lite 被当成终点。
+
+**依据：** B/C-lite 的测试（`accept-project-*` / `accept-workspaces`）；`docs/dev/ASSESSMENT-2026-10-28.md` 的能力判断；用户 2026-10-28 的决定。
+
+**影响：** 文档/技能规则；无代码；未来触发时再开 C 或 D。C-lite 的 sidecar 绑定仍保留。
