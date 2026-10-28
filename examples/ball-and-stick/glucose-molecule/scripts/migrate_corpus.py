@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """把本示例的语料从"仓库根项目"（`<repo>/cad-data`，指向 examples/toy-balance2/cad-data 的符号链接）
-整体迁到 `examples/glucose-molecule/cad-data/`。
+整体迁到 `examples/ball-and-stick/glucose-molecule/cad-data/`。
 
 为什么要迁：CAD 语料的根是**会话 cwd 下的 cad-data/**。子智能体的会话 cwd 是仓库根，
 而仓库根的 cad-data 是符号链接 —— 于是它的 7 个零件的版本与全部运行记录被写进了另一个示例的语料里。
@@ -17,8 +17,8 @@ import shutil
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent.parent          # examples/glucose-molecule
-SRC = (HERE.parent / "toy-balance2" / "cad-data").resolve()
+HERE = Path(__file__).resolve().parent.parent          # examples/ball-and-stick/glucose-molecule
+SRC = (HERE.parent.parent / "toy-balance2" / "cad-data").resolve()
 DST = (HERE / "cad-data")
 DRY = "--dry-run" in sys.argv
 

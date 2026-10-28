@@ -112,7 +112,7 @@ BUILD.md                 过程记录：每一步跑了什么、返回什么数�
 重新生成（改参数后照这个顺序）：
 
 ```bash
-cd examples/glucose-molecule
+cd examples/ball-and-stick/glucose-molecule
 PY=/home/songsenand/.dsh/cad/runtime/venv/bin/python
 $PY spec/build_molecule.py     # 分子几何（改了环/键长才需要）
 $PY spec/gen_scad.py           # 零件 SCAD + 位姿表

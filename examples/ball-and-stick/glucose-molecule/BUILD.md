@@ -1,7 +1,7 @@
 # BUILD —— β-D-吡喃葡萄糖球棍模型（制造与验证记录）
 
 > 设计已冻结：`spec/design.md` 与 `spec/parts/*.scad` 未改动。本文只记录**制造性/装配/运动**这一步实际跑出来的结果。
-> 语料根：`examples/glucose-molecule/cad-data`（11 个版本 / 7 个零件 / 31 个运行）。
+> 语料根：`examples/ball-and-stick/glucose-molecule/cad-data`（11 个版本 / 7 个零件 / 31 个运行）。
 > 子智能体的会话 cwd 是仓库根，版本与运行最初落在根 `cad-data`（当时符号链接到 `examples/toy-balance2`），
 > 交付前用 `scripts/migrate_corpus.py` **整体迁到本目录并恢复了原语料**；版本号/运行号保持不变，
 > 所以本文引用的 vNNN / rNNN 全部有效。根目录的 `cad-data`、`assembly` 符号链接已改为指向本示例。
@@ -248,7 +248,7 @@ Sampling: 25/24 poses × 1 candidate pair(s) = 25 interference checks
      跑得完、又出现 skipped，会撞上这条。
 9. **悬垂面**：球的 32.8–121.4 mm²、棍的 37.3 mm² 朝下悬垂面需要支撑或改朝向；球必须按自身 +Z 姿态打印
    （泪滴排屑方向按 +Z 算）。
-10. **语料位置**：已迁移到 `examples/glucose-molecule/cad-data/`（v031–v041、r069–r099），
+10. **语料位置**：已迁移到 `examples/ball-and-stick/glucose-molecule/cad-data/`（v031–v041、r069–r099），
     原 `examples/toy-balance2/cad-data` 已恢复（30 版本 / 18 零件 / 69 运行）。迁移后重跑了一次六元环
     契约（**r099 pass**，37/37），确认迁移后的语料能被工具正常解析。
     另外：`examples/toy-balance2` 的语料里留了一个误跑的运行 **r077**（相对路径解析到了它的清单），
@@ -257,7 +257,7 @@ Sampling: 25/24 poses × 1 candidate pair(s) = 25 interference checks
 ## 8. 复现命令
 
 ```bash
-cd /home/songsenand/Project/ToyMarker/examples/glucose-molecule
+cd /home/songsenand/Project/ToyMarker/examples/ball-and-stick/glucose-molecule
 
 # 1) 几何真值 → SCAD + 位姿表（设计冻结，一般不需要重跑）
 python3 spec/build_molecule.py        # → spec/molecule.json
@@ -276,7 +276,7 @@ python3 spec/gen_scad.py              # → spec/parts/*.scad + spec/instances.j
 ```text
 generate_part   {part:"<中文名>", scadCode:<spec/parts/*.scad 全文>, views:["iso"]}
 check_printability {versionId:"vNNN", profileIds:["fdm-pla-0.4"]}
-check_assembly  {manifestPath:"/home/songsenand/Project/ToyMarker/examples/glucose-molecule/assembly/assembly_ring.json"}   # 必须绝对路径
+check_assembly  {manifestPath:"/home/songsenand/Project/ToyMarker/examples/ball-and-stick/glucose-molecule/assembly/assembly_ring.json"}   # 必须绝对路径
 validate_assembly {parts:[C1 v031, B01 v038, B02 v039, B08 v040, B10 v040 各自 rotate/translate 照 instances.json], clearanceThreshold:1e-6}
 simulate_motion {parts:[C球 fixed v031@[0,0,0], 键棒 kinematic v039@[0,0,17], 曲柄 kinematic cube(4)@[100,0,0]],
                  joints:[], drive:{body:"曲柄",axis:[0,0,1],omegaRadPerSec:6.2832},

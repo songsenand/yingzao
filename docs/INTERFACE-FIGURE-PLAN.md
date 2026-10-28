@@ -102,7 +102,7 @@
 - **默认只出 1 张**；"换方向"再生成下一张（仍懒生成），最多 4 张；缩略图条 + 平面参数。
 - 对圆柱配合，绕轴转不改变名义配合（轴对称），改变的是"切到了哪个特征"——
   多平面的价值是**暴露被单平面藏住的缝/倒扣/卡珠瓣**，不是看"另一个配合"。
-- 判例：`examples/glucose-molecule` 的 `y=0` 剖面正好落在 0.6mm 开缝里，剖面里根本没有
+- 判例：`examples/ball-and-stick/glucose-molecule` 的 `y=0` 剖面正好落在 0.6mm 开缝里，剖面里根本没有
   卡脚壁——"单平面骗人"的现成例子。
 
 ## 6. 图上必须有什么
@@ -190,7 +190,7 @@
 ## 12. 未决问题
 
 1. **SVG 还是 PNG/Pillow**：SVG 不加 pinned 依赖、可缩放、浏览器字体支持中文；
-   PIL 更像 `examples/glucose-molecule/renders/interface_section.png` 的观感，但要加依赖。
+   PIL 更像 `examples/ball-and-stick/glucose-molecule/renders/interface_section.png` 的观感，但要加依赖。
 2. **清单快照还是仅 hash**：没有快照就有"图新、判定旧"的风险。
 3. **切面启发式**：默认滚转角、候选数量、是否按接口记住用户选择。
 4. **字体**：SVG 在浏览器里能中文；导出到外部取决于查看器。
@@ -205,6 +205,6 @@
 - 契约表与浮层：[`panel.ts`](../dsh-cad-harness/src/client/panel.ts)（约 2297 / 3940 行）。
 - 截面拾取纯函数：[`section.ts`](../dsh-cad-harness/src/client/section.ts)。
 - 图的身份纪律：[`shot-caption.ts`](../dsh-cad-harness/src/client/shot-caption.ts)。
-- 参考图（LLM 侧原型）：[`make_figure_section.py`](../examples/glucose-molecule/spec/make_figure_section.py)、
-  [`interface_section.png`](../examples/glucose-molecule/renders/interface_section.png)。
+- 参考图（LLM 侧原型）：[`make_figure_section.py`](../examples/ball-and-stick/glucose-molecule/spec/make_figure_section.py)、
+  [`interface_section.png`](../examples/ball-and-stick/glucose-molecule/renders/interface_section.png)。
 - 商业参照：见 §11 的链接。
