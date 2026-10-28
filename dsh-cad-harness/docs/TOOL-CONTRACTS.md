@@ -522,7 +522,7 @@ Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoi
 simulate_motion({ parts: [], joints: [] })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`

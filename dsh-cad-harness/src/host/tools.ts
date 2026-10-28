@@ -33,6 +33,7 @@ import {
   type ProcessProfile,
 } from './process-profile.ts';
 import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, boundingBoxCentre, isWatertight, rebaseMesh, shellCount, writeBinaryStl } from './mesh.ts';
+import { suspectParts, formatSuspects, transformedAabb, SUSPECT_RULE, type SceneSolid } from './geometry-sanity.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
@@ -604,6 +605,7 @@ export function registerCadTools(
       );
     }
     const parts: MotionPartInput[] = [];
+    const sceneSolids: SceneSolid[] = [];
     const stlFiles: { name: string; stlPath: string }[] = [];
     const usedVersions: (string | null)[] = [];
     const geometries: { name: string; stl: Uint8Array }[] = [];
@@ -653,6 +655,17 @@ export function registerCadTools(
       pivotOf.set(p.name, pivot);
       pivots[p.name] = pivot.map((v) => +v.toFixed(4)) as [number, number, number];
 
+      // The world pose this run STARTS from: the sanity pass below asks "is this
+      // part at the machine?" about the scene a human would see at t=0.
+      sceneSolids.push({
+        name: p.name,
+        triangles: Math.round(mesh.triVerts.length / 3),
+        ...transformedAabb(
+          boundingBoxOf(mesh),
+          p.position as [number, number, number],
+          p.rotation as [number, number, number] | undefined,
+        ),
+      });
       const rebased = rebaseMesh(mesh, pivot);
       const stl = writeBinaryStl(rebased, `motion part ${p.name} rebased on its pivot`);
       usedVersions.push(g.versionId);
@@ -684,6 +697,20 @@ export function registerCadTools(
 
     const sourceVersionIds = collectVersions(usedVersions);
 
+    // ---- geometry sanity (a FACT, not a verdict) --------------------------
+    // Is every part actually AT the machine? r013 parked two 12-triangle cubes at
+    // (500,500), reported "interference 0", and nothing said so. The criterion is
+    // a RATIO (gap to the nearest part ÷ the part's own diagonal > 5), declared
+    // below and reported with every line — a fixed distance would flag a big
+    // machine's normal spacing and miss a tiny part lost in space.
+    for (const solid of sceneSolids) {
+      solid.connected = jointsIn.some((j) => j.bodyA === solid.name || j.bodyB === solid.name)
+        || (a.oscillators ?? []).some((o) => o.body === solid.name)
+        || a.drive?.body === solid.name;
+    }
+    const suspectList = suspectParts(sceneSolids);
+    const suspectLines = formatSuspects(suspectList);
+
     // The run owns its geometry: parts are written where the panel can fetch
     // them per run (and where the keyframe renderer can import them).
     const run = await beginRun(runStore, {
@@ -705,6 +732,10 @@ export function registerCadTools(
       cycles: a.cycles,
       recordParts: a.parts.map((p) => p.name).filter((n) => n !== a.drive?.body),
     });
+    // Same facts in the stored report: a fact that only exists in the chat reply
+    // is lost the moment another session opens the run.
+    report.metrics.geometrySuspects = suspectLines;
+    report.metrics.geometrySuspectRule = SUSPECT_RULE;
     await run.json('report.json', report);
     await run.json('trajectory.json', { kind: 'motion', durationSec: report.durationSec, trajectory: report.trajectory });
     const { frames, warnings: renderWarnings } = await renderKeyframes(report as unknown as PhysicsReport, stlFiles, join(run.dir, 'frames'));
@@ -763,6 +794,10 @@ export function registerCadTools(
           '要么在装配契约中把该接口声明为有意过盈/预压（intent 严重级）。修复或声明之前，此机构不可交付。',
       } : {}),
       followers: report.metrics.followers,
+      // Empty is the normal case; when it is not, the rule travels with it so the
+      // reader can see the criterion, not just the verdict.
+      geometrySuspects: suspectLines,
+      geometrySuspectRule: SUSPECT_RULE,
       // "This run has no crank" is a fact about the run, not a missing field: the
       // schema cannot carry a null number (see maxSampleGapDeg below), so it is a
       // boolean. Without it, a prescribed-mover run is indistinguishable from one
@@ -2570,6 +2605,11 @@ export function registerCadTools(
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
           deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
+          geometrySuspects: {
+            type: 'array', required: true, items: { type: 'string' },
+            description: 'Parts that are far from everything BY THEIR OWN SIZE (gap ÷ bbox diagonal > 5) or are placeholder geometry (<= 24 triangles). A fact, not a verdict: status is unchanged. Each line carries the numbers behind it.',
+          },
+          geometrySuspectRule: { type: 'string', required: true, description: 'The rule applied to produce geometrySuspects, in words.' },
           hasCrank: {
             type: 'boolean', required: true,
             description: 'false when the run has no crank — every mover follows a prescribed path (oscillators). Read this before quoting a period.',
@@ -2631,6 +2671,8 @@ export function registerCadTools(
           keyframes: string[];
           stepsRun: number;
           durationSec: number;
+          geometrySuspects?: string[];
+          geometrySuspectRule?: string;
         };
       }).value;
       const state = motionRefsForFinalize;
@@ -2659,6 +2701,9 @@ export function registerCadTools(
           (value.samplingSatisfied === true
             ? ''
             : ' — INSUFFICIENT: too little travel to sample 24 poses; "0 interference" is NOT evidence.'),
+        ...(value.geometrySuspects?.length
+          ? [`几何疑点（${value.geometrySuspectRule}）：${value.geometrySuspects.join('；')}`]
+          : []),
         `Max joint drift: ${value.maxJointDriftMm}mm` +
           ((value.jointViolations ?? []).length ? ` — VIOLATIONS: ${value.jointViolations.join('; ')}` : '.') +
           (pivots.length ? ` Rotation/slide pivots (part file frame): ${pivots.map(([n, p]) => `${n}[${(p as number[]).join(',')}]`).join(' ')}` : ''),

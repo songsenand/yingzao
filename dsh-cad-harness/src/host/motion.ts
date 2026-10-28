@@ -195,6 +195,13 @@ export interface MotionReport {
     maxJointDriftMm: number;
     jointViolations: string[];
     diverged: boolean;
+    /**
+     * Parts that are far from everything by their OWN size, or placeholder
+     * geometry. Written by the tool (it owns the world AABBs and the declared
+     * connections), read here so the type carries the fact.
+     */
+    geometrySuspects?: string[];
+    geometrySuspectRule?: string;
   };
   /** Per-sample positions along each recorded part's dominant axis. */
   followersDetail: Record<string, { t: number[]; vals: number[]; axis: 'x' | 'y' | 'z' }>;

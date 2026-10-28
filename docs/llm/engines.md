@@ -10,6 +10,8 @@
 - **干涉覆盖是判定的一部分。** 每次运行至少 24 个采样位姿，且必采最终位姿；`interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` 回报覆盖。**0 次检查不是 0 碰撞。** 行程太小放不下 24 位姿时判 `check`，不判 pass。
 - **被 revolute joint 连接的一对零件之间的重叠不报**——那是轴承。也正因如此，限位挡块恰好落在这一对上时，要另找方式验证。
 - **`cycles` 接受小数。** 摆杆 ±14° 只扫 0.078 圈；整圈会变成风车并撞上一切。
+- **没有曲柄也能跑。** `drive` 是可选的：全部运动件都是 `oscillators`（规定轨迹的导向件/阀门）时不需要曲柄，时间基取**振荡周期**；回复里 `hasCrank: false`。只有“既无 drive 又无 oscillator”才拒绝——那意味着什么都不动。
+- **几何合理性是事实，不是判定。** 每个零件对最近零件的间隙 ÷ 自身包围盒对角线 > 5 → `离群`；≤ 24 个三角面 → `简单盒体`。两者都**不改变** pass/fail，但 `geometrySuspects` 非空时，“干涉 0 次”可能什么都没证明：fructose r013 的两个假件停在 500mm 外，报告照样通过。规则本身写在 `geometrySuspectRule` 里随结果一起返回。
 
 ## 物理（`simulate_physics`）
 

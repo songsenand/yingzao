@@ -17,6 +17,8 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - **Coverage is part of the verdict.** At least 24 sampled poses and the final pose; `interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` are reported. **0 checks is not 0 collisions.**
 - **Overlap between a revolute-jointed pair is not reported** (it is a bearing); a stopper on exactly that pair must be verified another way. `cycles` accepts fractions.
 - No gravity. A rack is driven by `pitchRadiusMm`, never a sinusoid; `phaseRad` offsets by `r × phaseRad`.
+- **A crank is not required.** `drive` is optional: when every mover is an `oscillator` (a guide/valve on a prescribed path) the time base is the oscillator period and the reply says `hasCrank: false`. Only "no drive AND no oscillator" is refused (nothing would move).
+- **Geometry sanity is a fact, not a verdict.** A part whose gap to the nearest part ÷ its own bbox diagonal > 5 is listed as 离群; ≤24 triangles is listed as 简单盒体. Neither changes pass/fail, but a non-empty `geometrySuspects` means "interference 0" may have proven nothing (two dummies parked 500mm away). The rule travels with the result as `geometrySuspectRule`.
 
 ## Physics (`simulate_physics`)
 

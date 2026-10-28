@@ -95,5 +95,27 @@ check('5  a run with neither drive nor oscillator is refused', Boolean(refused),
 check('5b …and the refusal names BOTH ways to move', Boolean(refused && /drive/.test(refused) && /oscillator/.test(refused)),
   refused?.slice(0, 160) ?? '');
 
+// ---------- 6: a part parked far away is reported as a FACT, not a gate ----------
+const far = await call('simulate_motion', {
+  cycles: 2,
+  parts: [
+    { name: 'base', bodyType: 'fixed', position: [500, 500, 100], scadCode: body },
+    { name: 'guide', bodyType: 'kinematic', position: [0, 0, 40], scadCode: guide },
+  ],
+  joints: [],
+  oscillators: [{ body: 'guide', axis: [0, 0, 1], periodSec: 0.5, amplitudeMm: 4 }],
+});
+check('6  a part parked 500mm away is listed, with its numbers',
+  (far.geometrySuspects ?? []).some((l) => /base/.test(l) && /离群/.test(l)),
+  (far.geometrySuspects ?? []).join(' | ') || 'none');
+check('6b the rule that produced the list travels with it',
+  /÷/.test(far.geometrySuspectRule ?? '') && /5/.test(far.geometrySuspectRule ?? ''),
+  far.geometrySuspectRule ?? '');
+check('6c it does NOT change the verdict (a fact, not a gate)',
+  far.overallStatus === r.overallStatus, `${far.overallStatus} vs ${r.overallStatus}`);
+check('6d the near run has no 离群 flag (its cubes are still reported as simple boxes)',
+  (r.geometrySuspects ?? []).every((l) => !/离群/.test(l)),
+  (r.geometrySuspects ?? []).join(' | ') || 'none');
+
 console.log(fail ? `\nFAILED (${fail})` : '\nOK');
 process.exit(fail ? 1 : 0);
