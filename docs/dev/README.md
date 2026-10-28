@@ -8,6 +8,7 @@
 |---|---|---|
 | [HARNESS.md](../../HARNESS.md) | 它是什么、不是什么、边界、取舍原则 | 第一次接触项目 |
 | [DESIGN.md](../../DESIGN.md) | 当前设计：架构、模块、接口、环境变量与诊断开关全集 | 改架构/接口前 |
+| [PROJECT-SCOPE.md](PROJECT-SCOPE.md) | 项目身份与隔离：cwd 选择器 + `cad-data/project.json` 标记；B 设计与 C/D 路线 | 改项目解析/子智能体 cwd 前 |
 | [DECISION-LOG.md](../DECISION-LOG.md) | 历史取舍（append-only，不回改） | 想知道“当初为什么这么选” |
 | [UI-PLAN.md](../UI-PLAN.md) | 面板/交互的计划与已完成项 | 改 UI 前 |
 | [UI-EXECUTION.md](../UI-EXECUTION.md) | UI 的执行记录 | 查 UI 改动历史 |
