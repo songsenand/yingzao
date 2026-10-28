@@ -4734,3 +4734,21 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** 事故与数字见 `docs/dev/PROJECT-SCOPE.md` §1.2；代码现状：`project.ts:54/123/193`、`workspaces.ts` 的 `MAX_DEPTH = 2`；DSH 子会话 `header.cwd` 与 `workingDirectory` 分离（`dsh-subagent` 的 `childSessionMeta` + `workingDirectory.set`），`00a6013` 是过渡桥。现有 6 个 example 已有 `cad-data/project.json`（葡萄糖、果糖、toy-balance、toy-balance2、microscope5、multirotor-propeller），其余按 legacy 兼容。
 
 **影响：** `src/host/project.ts`（`resolveProjectRoot` / `projectCwdOf` / `ensureProjectDir`）、`src/host/workspaces.ts`（按标记发现）、面板项目列表、`accept-project-scope` / `accept-project-cwd`、`docs/llm/conventions.md`；`DESIGN.md` §19 / §30.13 在实现落地时同步改为“标记即身份”；不搬数据，legacy 第一次写补标记；根 `cad-data` / `assembly` 别名在落地后删除。**实现未开始，本条只定方向。**
+
+## 2026-10-28：B 的定位与 C/D 中长期路线
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响后续路线）。
+
+**要解决的问题：** 前一条把 B 定为当前方案，但没有写清它是过渡阶段还是最终形态；大型项目/多人协作是必然需求，若不把 C/D 放进中长期规划，B 的路径身份会被误当成终点，后续会继续在 cwd/符号链接上打补丁。
+
+**决策内容：**
+- B 是**准生产力工具档的过渡方案**：单用户、本地、项目数十个以内、无权限/共享/跨机需求时够用；它把路径耦合收敛成一个 resolver，成本低、可回退。
+- 最终形态是 **C + D**：C = 会话显式绑定项目（`cd` 不误切换，子智能体显式继承/覆盖）；D = 稳定 `id` + 注册表 + 权限/共享/审计，按 id 而不是路径选择项目。
+- B 的 resolver 在 C/D 仍保留为“定位器”：C/D 把身份从路径换成 id，resolver 负责从起点找到项目根/标记。
+- 实施顺序：① B resolver + 测试（不改行为）；② 面板按标记发现；③ 删 `00a6013` 桥 + 根符号链接，`projectCwdOf` 统一走 resolver；④ C；⑤ D。
+
+**理由：** 当前痛点在准生产档用 B 足够，先做 C/D 是过度设计；但把 C/D 写成最终形态，能防止 B 的路径 hack 固化。B 的 resolver 是 C/D 的定位基础，不是白做。
+
+**依据：** 事故与成本见 `docs/dev/PROJECT-SCOPE.md` §1；B 的场景/落地/风险见同文 §3–§5；用户 2026-10-28 明确要求把 C/D 放进中长期规划、并定下实施顺序。
+
+**影响：** `docs/dev/PROJECT-SCOPE.md` 增加 §0 定位与 §6 路线；后续 C/D 会改会话创建/恢复、子智能体参数、`project.json` schema、面板/注册表/权限；当前不写代码，B 的实现仍按原顺序推进。
