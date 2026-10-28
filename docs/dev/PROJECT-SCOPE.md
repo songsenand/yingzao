@@ -1,7 +1,7 @@
 # 项目身份与隔离：从 cwd 到最近标记（B 方案）
 
-> 状态：**已决策，待实现**。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
-> 当前代码仍是“cwd 直连 + `00a6013` 的 delegationDepth 桥”；本文描述目标模型，不声称已落地。
+> 状态：**B 分阶段落地中**：Phase 1（resolver + 测试）已提交 `a935778`；面板发现、`projectCwdOf` 接线、删桥/符号链接待做。决策记录见 `docs/DECISION-LOG.md` 2026-10-28。
+> 当前代码仍是“cwd 直连 + `00a6013` 的 delegationDepth 桥”；resolver 已存在但尚未接线。
 
 ## 0. 定位：B 是过渡阶段，不是最终形态
 
@@ -180,7 +180,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 ### 6.3 实施顺序（2026-10-28 用户定）
 
-1. B resolver + 测试（不改行为）。
+1. B resolver + 测试（不改行为）。**已完成（`a935778`）。**
 2. 面板按标记发现。
 3. 删 `00a6013` 的 delegationDepth 桥 + 根 `cad-data` / `assembly` 别名；`projectCwdOf` 统一走 resolver。
 4. C：会话显式绑定。
