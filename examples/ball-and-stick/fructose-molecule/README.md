@@ -44,12 +44,10 @@
 3. 按 [`PRINT.md`](PRINT.md) §4 从 C2 开始装五元环，最后装 H。
 4. 携带时拆成球/棍两袋；不要长期放高温车内。
 
-> 面板查看：本项目的语料在 `examples/ball-and-stick/fructose-molecule/cad-data/`。仓库根的
-> `cad-data` / `assembly` 符号链接在构建后已恢复指向 glucose；请新建一个 cwd 指向本目录的
-> 会话，或在面板工作目录下拉里选择本目录，才能看到这批版本。
-> 本机仓库根还有一个 **`fructose-molecule` 视图别名**（指向本目录的 symlink），它只是让面板
-> 的 depth≤2 发现逻辑能在根会话里列出本项目；真正的语料仍在
-> `examples/ball-and-stick/fructose-molecule/cad-data/`，删除别名不影响项目。
+> 面板查看：本项目的语料在 `examples/ball-and-stick/fructose-molecule/cad-data/`。请新建一个
+> cwd 指向本目录的会话，或在面板工作目录下拉里选择本目录，才能看到这批版本。
+> 仓库根的 `cad-data` / `assembly` 临时符号链接与 `fructose-molecule` 视图别名已在 2026-10-28
+> 收尾时清理；真正的语料仍在本目录的 `cad-data/`，不再依赖根别名。
 
 ## 当前状态
 

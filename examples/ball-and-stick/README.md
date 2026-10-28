@@ -32,6 +32,6 @@ cd examples/ball-and-stick/glucose-molecule
 
 ## 迁移记录
 
-2026-10-28：`examples/glucose-molecule/` 整体移到 `examples/ball-and-stick/glucose-molecule/`。仓库根的 `cad-data` / `assembly` 符号链接已指向新位置；`examples/ball-and-stick/glucose-molecule/BUILD.md`、`README.md`、`scripts/migrate_corpus.py` 以及非历史的计划文档已更新路径。
+2026-10-28：`examples/glucose-molecule/` 整体移到 `examples/ball-and-stick/glucose-molecule/`。仓库根的 `cad-data` / `assembly` 临时符号链接已在收尾时清理；请用 cwd 指向具体分子目录（或 `?project=`）查看。`examples/ball-and-stick/glucose-molecule/BUILD.md`、`README.md`、`scripts/migrate_corpus.py` 以及非历史的计划文档已更新路径。
 
 历史记录（`docs/DECISION-LOG.md` 的旧条目）仍写旧路径，这是 append-only 的历史，不回改；读到时按上面的新位置理解。迁移前的 run 记录里 `manifestPath` 也仍是旧绝对路径——那是历史证据，不回写；新会话的 run 会用新路径。
