@@ -7,10 +7,10 @@
 // case — a subagent's `cwd` is its working directory, and the resolver handles it.
 //
 //   node scripts/accept-project-cwd.mjs
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { projectCwdOf } from '../src/host/project.ts';
+import { projectCwdOf, clearSessionBindingCache } from '../src/host/project.ts';
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
@@ -18,6 +18,8 @@ const check = (ok, label, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
 };
 
+const home = mkdtempSync(join(tmpdir(), 'cad-project-cwd-home-'));
+process.env.DSH_HOME = home;
 const base = mkdtempSync(join(tmpdir(), 'cad-project-cwd-'));
 const real = (path) => {
   try { return realpathSync(path); } catch { return path; }
@@ -66,8 +68,31 @@ try {
   check(projectCwdOf(exec({}, fresh)) === real(fresh),
     'no header cwd uses the working directory',
     projectCwdOf(exec({}, fresh)));
+
+  // --- C-lite: the first CAD call binds the session; later cd does not switch.
+  check(projectCwdOf(exec({ id: 's1', cwd: parent }, join(parent, 'spec'))) === real(parent),
+    'the first CAD call binds the session to the nearest marker',
+    projectCwdOf(exec({ id: 's1', cwd: parent }, join(parent, 'spec'))));
+  check(existsSync(join(home, 'cad', 'sessions', 's1.json')), 'the binding is persisted');
+  check(projectCwdOf(exec({ id: 's1', cwd: parent }, child)) === real(parent),
+    'a later cd to a sibling does not switch a bound session',
+    projectCwdOf(exec({ id: 's1', cwd: parent }, child)));
+  clearSessionBindingCache();
+  check(projectCwdOf(exec({ id: 's1', cwd: parent }, child)) === real(parent),
+    'the binding survives an in-process cache clear',
+    projectCwdOf(exec({ id: 's1', cwd: parent }, child)));
+  check(projectCwdOf(exec({ id: 's2', cwd: parent }, child)) === real(child),
+    'a new session binds its own working directory',
+    projectCwdOf(exec({ id: 's2', cwd: parent }, child)));
+  check(projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, child)) === real(child),
+    'a delegated session binds its own cwd',
+    projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, child)));
+  check(projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, parent)) === real(child),
+    'a bound delegated session stays put',
+    projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, parent)));
 } finally {
   rmSync(base, { recursive: true, force: true });
+  rmSync(home, { recursive: true, force: true });
 }
 
 console.log(failures ? `\n${failures} FAIL` : '\nall PASS');

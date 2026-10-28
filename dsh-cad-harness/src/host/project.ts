@@ -25,7 +25,7 @@
 // project with no data yet reads as empty, which is the whole point.
 
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -127,6 +127,59 @@ export function clearProjectRootCache(): void {
   projectRootCache.clear();
 }
 
+// --- C-lite: one project per session, bound on the first CAD call ------------
+
+const sessionBindingCache = new Map<string, string>();
+
+function safeSessionId(id: string): string {
+  return id.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[-.]+|[-.]+$/g, '').slice(0, 80) || 'session';
+}
+
+/** `$DSH_HOME/cad/sessions/` — plugin-owned, one JSON per session. */
+export function sessionBindingsDir(): string {
+  return join(projectsHome(), 'sessions');
+}
+
+/** The binding file for one session id. */
+export function sessionBindingPath(sessionId: string): string {
+  return join(sessionBindingsDir(), `${safeSessionId(sessionId)}.json`);
+}
+
+function readSessionBinding(sessionId: string): string | undefined {
+  const cached = sessionBindingCache.get(sessionId);
+  if (cached) return cached;
+  try {
+    const parsed = JSON.parse(readFileSync(sessionBindingPath(sessionId), 'utf8'));
+    const root = parsed?.projectRoot;
+    if (typeof root === 'string' && root.trim() && isDirectory(root)) {
+      sessionBindingCache.set(sessionId, root);
+      return root;
+    }
+  } catch { /* no binding yet, or unreadable: fall back to the resolver */ }
+  return undefined;
+}
+
+function writeSessionBinding(sessionId: string, root: string): void {
+  sessionBindingCache.set(sessionId, root);
+  try {
+    mkdirSync(sessionBindingsDir(), { recursive: true });
+    const target = sessionBindingPath(sessionId);
+    const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify({
+      schemaVersion: 1,
+      sessionId,
+      projectRoot: root,
+      boundAt: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8');
+    renameSync(tmp, target);
+  } catch { /* the in-process cache still keeps the session bound */ }
+}
+
+/** Test hook: forget in-process bindings (files stay on disk). */
+export function clearSessionBindingCache(): void {
+  sessionBindingCache.clear();
+}
+
 /**
  * Profile-wide telemetry (token/image accounting), deliberately NOT per
  * project: `registerUsageObserver` observes every session's `llm/stream` at
@@ -197,16 +250,27 @@ export function projectStores(cwd: string): ProjectStores {
  * workingDirectory service is present. There is no delegationDepth special case:
  * a subagent's `cwd` is its working directory, and the resolver handles it.
  *
+ * C-lite: after the first CAD call, the session is bound to that root in
+ * `$DSH_HOME/cad/sessions/<id>.json`; later `cd` calls do not switch. A session
+ * with no id keeps the pure B behavior (the resolver follows the working
+ * directory), which is what maintenance callers and tests use.
+ *
  * A call with no agent (a maintenance caller, a script) falls back to the
  * server's own cwd, which is the workspace the profile was started in.
  */
 export function projectCwdOf(exec: unknown): string {
   const agent = (exec as {
     agent?: {
-      session?: { header?: { cwd?: unknown } };
+      session?: { header?: { id?: unknown; cwd?: unknown } };
       ctx?: { get?: (name: string) => unknown };
     };
   })?.agent;
+  const rawId = agent?.session?.header?.id;
+  const sessionId = typeof rawId === 'string' && rawId.trim() ? rawId : undefined;
+  if (sessionId) {
+    const bound = readSessionBinding(sessionId);
+    if (bound) return bound;
+  }
   let start: string | undefined;
   try {
     const service = agent?.ctx?.get?.('workingDirectory') as
@@ -221,7 +285,9 @@ export function projectCwdOf(exec: unknown): string {
     const headerCwd = agent?.session?.header?.cwd;
     if (typeof headerCwd === 'string' && headerCwd.trim()) start = headerCwd;
   }
-  return resolveProjectRoot(start ?? process.cwd()).root;
+  const root = resolveProjectRoot(start ?? process.cwd()).root;
+  if (sessionId) writeSessionBinding(sessionId, root);
+  return root;
 }
 
 /** Store root for a tool call, creating the project directory if needed. */
