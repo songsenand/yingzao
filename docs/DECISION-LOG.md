@@ -4752,3 +4752,22 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** 事故与成本见 `docs/dev/PROJECT-SCOPE.md` §1；B 的场景/落地/风险见同文 §3–§5；用户 2026-10-28 明确要求把 C/D 放进中长期规划、并定下实施顺序。
 
 **影响：** `docs/dev/PROJECT-SCOPE.md` 增加 §0 定位与 §6 路线；后续 C/D 会改会话创建/恢复、子智能体参数、`project.json` schema、面板/注册表/权限；当前不写代码，B 的实现仍按原顺序推进。
+
+## 2026-10-28：C 的第一阶段——首次 CAD 调用绑定会话
+
+**触发条件：** 第 1 条（用户继续推进 C）+ 第 3 条（会话状态模型）+ 第 4 条（影响项目解析/测试）。
+
+**要解决的问题：** B 仍会因 `cd` 到兄弟项目而切换；C 的最终形态要改会话创建/恢复/UI/子智能体参数，成本和并行冲突都高。需要一个不碰 DSH core、不碰 `tools.ts` schema 的第一阶段。
+
+**决策内容：** C-lite：
+- 会话第一次 CAD 工具调用时，把 B 解析出的项目根写入 `$DSH_HOME/cad/sessions/<sessionId>.json`；
+- 之后该会话固定用它，`cd` 不再切换；
+- 子智能体独立绑定：`cwd` 在父项目内 → B 找到父项目；`cwd` 指向别的项目 → 绑定那个项目；
+- 显式切换先靠新会话；创建时选项目的 UI 留到 C 的下一层；
+- 绑定文件缺失/root 不存在时回退 B 并重绑；写失败仍保留进程内缓存。
+
+**理由：** 插件私有 sidecar，无 DSH core 改动；不改工具 schema，避免与另一条车道在 `tools.ts` 冲突；语义可迁移到 D 的稳定 id。
+
+**依据：** B 的事故/成本见 `docs/dev/PROJECT-SCOPE.md` §1；C 的设计见 §6.1；会话 id 由 `agent.session.header.id` 提供（`tool-scope.ts` 已这样用）。
+
+**影响：** `src/host/project.ts`（session binding）、`scripts/accept-project-cwd.mjs`（C 用例）、`docs/dev/PROJECT-SCOPE.md`；浏览器 `?project=` 仍按 B resolver，不受会话绑定影响；项目移动/改名仍留给 D。
