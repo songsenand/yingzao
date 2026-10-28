@@ -4715,3 +4715,22 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** skill 审计：924 行 / 65.7 KB；长段落占比 46–86%；toolbox 的 104 个反引号标识符里 68 个与 `TOOL-CONTRACTS.md` 重复。首版已建：`docs/README.md`、`docs/user/`（what-is / workflow / limits，grep 工具名为空）、`docs/llm/`（README + engines）、`docs/dev/README.md`；链接检查无断链。
 
 **影响：** 下一步把 `README.md` 的安装/配置/排错迁入 `docs/user/`，README 只留门面；把 `skills/` 的长解释迁入 `docs/llm/` 并改成指针，skill 只留规则。skill 瘦身与文档迁移是同一件事的两个方向。
+
+## 2026-10-28：项目身份改为“最近标记”，cwd 只做选择器（B）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（目录结构 / 身份模型）+ 第 4 条（影响多模块）。
+
+**要解决的问题：** 项目身份 = 会话 cwd，把“进程在哪 / 会话属于哪个 workspace / 语料属于哪个项目”绑在一个字段上。已发生：葡萄糖子智能体写进 toy-balance2（7 版本 / 30 run 后迁移）；果糖子智能体 `pwd` 正确但 import 写到仓库根，第一次注册 47 步 / 5.5 min 失败（`ENOTDIR`），重试 45 步 / 7.0 min 才成功；面板 `MAX_DEPTH = 2` 看不到第 3 层；目录一移，`project.json.cwd` 和 run 的 `manifestPath` 变成历史路径。cwd 作为选择器很好，作为身份不匹配。
+
+**决策内容：** 采用 B：**项目身份 = 最近的、包含 `cad-data/project.json` 的祖先目录**；cwd 只做起点。规则：
+- 从 Agent 的 workingDirectory 向上找第一个标记；没有标记时，当前目录是新项目候选，第一次写才创建；
+- legacy 的 `cad-data/`（无 `project.json`）也算标记，第一次写补 `project.json`；
+- 嵌套项目由更近的标记胜出，必须显式创建；
+- 不再用根符号链接 / `MAX_DEPTH` / `delegationDepth` 特判做项目切换；
+- 稳定 id / 注册表（C/D）暂不做。
+
+**理由：** 保留 cwd 的零配置（`cd` 即选择），把身份从路径改为标记；一次去掉子智能体、嵌套、面板深度、符号链接四类 workaround；标记已经存在，不需要搬数据。成本是一个向上解析函数 + 面板扫描 + 测试，远低于每次加场景补规则。
+
+**依据：** 事故与数字见 `docs/dev/PROJECT-SCOPE.md` §1.2；代码现状：`project.ts:54/123/193`、`workspaces.ts` 的 `MAX_DEPTH = 2`；DSH 子会话 `header.cwd` 与 `workingDirectory` 分离（`dsh-subagent` 的 `childSessionMeta` + `workingDirectory.set`），`00a6013` 是过渡桥。现有 6 个 example 已有 `cad-data/project.json`（葡萄糖、果糖、toy-balance、toy-balance2、microscope5、multirotor-propeller），其余按 legacy 兼容。
+
+**影响：** `src/host/project.ts`（`resolveProjectRoot` / `projectCwdOf` / `ensureProjectDir`）、`src/host/workspaces.ts`（按标记发现）、面板项目列表、`accept-project-scope` / `accept-project-cwd`、`docs/llm/conventions.md`；`DESIGN.md` §19 / §30.13 在实现落地时同步改为“标记即身份”；不搬数据，legacy 第一次写补标记；根 `cad-data` / `assembly` 别名在落地后删除。**实现未开始，本条只定方向。**
