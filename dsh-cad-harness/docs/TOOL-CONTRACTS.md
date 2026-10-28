@@ -508,21 +508,21 @@ returns: `overallStatus`, `metrics`
 
 ## `simulate_motion`
 
-Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.
+Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `parts` | array | **required** | Parts of the mechanism. The crank should be bodyType "kinematic". |
 | `joints` | array | **required** | Joints between parts. |
-| `drive` | object | **required** | The constant-speed crank drive. |
+| `drive` | object | — | The constant-speed crank drive. Omit it when every mover is a prescribed oscillator (a guide/valve following a sinusoid): the time base is then the oscillator period. A run with neither a drive nor an oscillator is refused — nothing would move. |
 | `oscillators` | array | — | Prescribed sinusoidal movers (valves). bodyType must be "kinematic". |
 | `cycles` | number | — | Drive cycles to simulate. Default 2. FRACTIONAL values are meaningful and are honoured: a balance whose design range is ±14° sweeps 0.078 of a turn, and asking for a whole turn instead answers a different question (the beam becomes a windmill and every part of it collides). |
 
 ```js
-simulate_motion({ parts: [], joints: [], drive: {} })
+simulate_motion({ parts: [], joints: [] })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`

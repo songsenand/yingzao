@@ -5371,7 +5371,16 @@ def op_simulate_motion(params: dict) -> dict:
     oscillator_inputs = scenario.get("oscillators") or []
     drive = scenario.get("drive")
     omega = float((drive or {}).get("omegaRadPerSec") or 0)
-    cycle_period = (2 * math.pi) / omega if omega > 0 else 1.0
+    # No crank -> the time base is the prescribed mover's period (mirrors
+    # src/host/motion.ts; 1 s only when there is no oscillator to ask either).
+    if omega > 0:
+        cycle_period = (2 * math.pi) / omega
+    else:
+        _periods = [
+            float(o["periodSec"]) for o in (scenario.get("oscillators") or [])
+            if not o.get("pitchRadiusMm") and isinstance(o.get("periodSec"), (int, float)) and float(o["periodSec"]) > 0
+        ]
+        cycle_period = max(_periods) if _periods else 1.0
     total_sec = cycles * cycle_period
     steps = max(1, int(round(total_sec / dt)))
     # Interference is an EXACT Manifold boolean per sampled pose. "24 per crank

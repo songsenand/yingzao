@@ -763,6 +763,11 @@ export function registerCadTools(
           '要么在装配契约中把该接口声明为有意过盈/预压（intent 严重级）。修复或声明之前，此机构不可交付。',
       } : {}),
       followers: report.metrics.followers,
+      // "This run has no crank" is a fact about the run, not a missing field: the
+      // schema cannot carry a null number (see maxSampleGapDeg below), so it is a
+      // boolean. Without it, a prescribed-mover run is indistinguishable from one
+      // whose crank was silently dropped.
+      hasCrank: report.metrics.driveOmegaRadPerSec !== null,
       interferenceCount: report.metrics.interferenceCount,
       interferenceEvents: report.metrics.interferenceEvents,
       interferenceChecks: report.metrics.interferenceChecks,
@@ -2468,7 +2473,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_motion',
     description:
-      'Assembled-mechanism kinematics: one constant-speed crank, revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.',
+      'Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.',
     parameters: {
       parts: {
         type: 'array',
@@ -2508,8 +2513,16 @@ export function registerCadTools(
       },
       drive: {
         type: 'object',
-        required: true,
-        description: 'The constant-speed crank drive.',
+        // OPTIONAL (2026-10-28). A crank is one way to make a mechanism move, not a
+        // precondition for measuring one: a guide/valve on a prescribed sinusoid has
+        // NO crank, and demanding one forced authors to park a dummy crank+base far
+        // outside the assembly just to pass validation (fructose-molecule r013: two
+        // 12-triangle cubes at (500,500), and an "interference 0" that could never
+        // have been anything else). When drive is absent the time base is the
+        // oscillator period, and the report says driveOmegaRadPerSec: null.
+        description: 'The constant-speed crank drive. Omit it when every mover is a prescribed oscillator (' +
+          'a guide/valve following a sinusoid): the time base is then the oscillator period. A run with neither ' +
+          'a drive nor an oscillator is refused — nothing would move.',
         additionalProperties: false,
         properties: {
           body: { type: 'string', required: true, description: 'Name of the driven (kinematic) part.' },
@@ -2557,6 +2570,10 @@ export function registerCadTools(
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
           deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
+          hasCrank: {
+            type: 'boolean', required: true,
+            description: 'false when the run has no crank — every mover follows a prescribed path (oscillators). Read this before quoting a period.',
+          },
           initialJointGaps: {
             type: 'array', required: true,
             description: 'Per joint: the anchor gap measured in the STARTING pose, before the first step. The run refuses a gap over the tolerance; this is how close the accepted ones were (margin, not just a pass/fail).',
@@ -2583,7 +2600,15 @@ export function registerCadTools(
       const a = args as Parameters<typeof runMotionJob>[0];
       if (!Array.isArray(a.parts) || a.parts.length < 2) throw argError('simulate_motion', 'parts', 'needs at least 2 parts', 'an array of { name, versionId } — a mechanism has at least two bodies',
           { example: 'simulate_motion({ parts: […], joints: […], drive: {…} })', received: a?.parts });
-      if (!a.drive) throw argError('simulate_motion', 'drive', 'is required', 'a constant-speed crank drive object — its exact field shape is in docs/TOOL-CONTRACTS.md §simulate_motion (not reproduced here on purpose: a wrong example is worse than none)', { received: a?.drive });
+      // A drive is one kind of mover, not a requirement. What IS required is that
+      // something moves: a kinematics run of nothing but fixed parts answers nothing.
+      if (!a.drive && !(Array.isArray(a.oscillators) && a.oscillators.length > 0)) {
+        throw argError('simulate_motion', 'drive',
+          'is absent and no oscillator is given — nothing would move',
+          'either a crank drive {body, axis, omegaRadPerSec}, or oscillators [{body, axis, periodSec, amplitudeMm}] ' +
+          '(a guide/valve on a prescribed path has no crank). The time base is then the oscillator period',
+          { received: { drive: a?.drive, oscillators: a?.oscillators } });
+      }
       const result = await runMotionJob(a, await allStores(exec));
       motionRefsForFinalize = motionRefsForFinalize ?? { refs: [] };
       return result;

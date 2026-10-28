@@ -369,7 +369,13 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   const samplePerCycle = scenario.samplePerCycle ?? 24;
   const oscillators = scenario.oscillators ?? [];
   const omega = scenario.drive?.omegaRadPerSec ?? 0;
-  const cyclePeriod = omega > 0 ? (2 * Math.PI) / omega : 1;
+  // Without a crank the time base is the prescribed mover's period: silently using
+  // 1 s made `cycles` mean "seconds since I left omega at 0", which is not a cycle
+  // of anything. (1 s stays only when there is no oscillator to ask either.)
+  const oscPeriods = oscillators
+    .filter((o) => !o.pitchRadiusMm && typeof o.periodSec === 'number' && o.periodSec > 0)
+    .map((o) => o.periodSec as number);
+  const cyclePeriod = omega > 0 ? (2 * Math.PI) / omega : (oscPeriods.length ? Math.max(...oscPeriods) : 1);
   const totalSec = cycles * cyclePeriod;
   const steps = Math.max(1, Math.round(totalSec / dt));
   // A density per crank PERIOD is not a density per RUN: a 0.03-cycle sweep got
