@@ -189,15 +189,13 @@ export function projectStores(cwd: string): ProjectStores {
 /**
  * The project a tool call belongs to: the calling agent's session cwd.
  *
- * WHY the delegated branch exists. DSH keeps a child session's `header.cwd` at
- * the PARENT's creation workspace and records the requested `cwd` only in the
- * `workingDirectory` session projection (`dsh-subagent` calls
- * `workingDirectory.set(child, create.cwd)`; `childSessionMeta` builds the
- * header from `parentHeader.cwd`). A delegated CAD build therefore had `pwd` =
- * the new project while every CAD tool still read the parent's corpus — the
- * child imported into the wrong `cad-data/`. Follow the projection for
- * delegated sessions; top-level sessions keep their durable creation cwd,
- * because a `cd` into a subdirectory must not relocate the corpus.
+ * B (`docs/dev/PROJECT-SCOPE.md`): the project is the nearest ancestor with
+ * `cad-data/project.json` (or legacy `cad-data/`). The agent's current working
+ * directory is only the starting point; a `cd` inside the project stays on it,
+ * a `cd` to a sibling with its own marker switches, and a directory with no
+ * marker is a new project candidate. The session header is the fallback when no
+ * workingDirectory service is present. There is no delegationDepth special case:
+ * a subagent's `cwd` is its working directory, and the resolver handles it.
  *
  * A call with no agent (a maintenance caller, a script) falls back to the
  * server's own cwd, which is the workspace the profile was started in.
@@ -205,24 +203,25 @@ export function projectStores(cwd: string): ProjectStores {
 export function projectCwdOf(exec: unknown): string {
   const agent = (exec as {
     agent?: {
-      session?: { header?: { cwd?: unknown; delegationDepth?: unknown } };
+      session?: { header?: { cwd?: unknown } };
       ctx?: { get?: (name: string) => unknown };
     };
   })?.agent;
-  const headerCwd = agent?.session?.header?.cwd;
-  const depth = agent?.session?.header?.delegationDepth;
-  if (typeof depth === 'number' && depth > 0) {
-    try {
-      const service = agent?.ctx?.get?.('workingDirectory') as
-        | { get?: (session: unknown) => unknown }
-        | undefined;
-      const current = service?.get?.(agent?.session);
-      if (typeof current === 'string' && current.trim()) return current;
-    } catch {
-      /* fall through to the durable header */
-    }
+  let start: string | undefined;
+  try {
+    const service = agent?.ctx?.get?.('workingDirectory') as
+      | { get?: (session: unknown) => unknown }
+      | undefined;
+    const current = service?.get?.(agent?.session);
+    if (typeof current === 'string' && current.trim()) start = current;
+  } catch {
+    /* fall through to the durable header */
   }
-  return typeof headerCwd === 'string' && headerCwd.trim() ? headerCwd : process.cwd();
+  if (start === undefined) {
+    const headerCwd = agent?.session?.header?.cwd;
+    if (typeof headerCwd === 'string' && headerCwd.trim()) start = headerCwd;
+  }
+  return resolveProjectRoot(start ?? process.cwd()).root;
 }
 
 /** Store root for a tool call, creating the project directory if needed. */
@@ -248,7 +247,7 @@ export function requestCwd(request: Request): string {
 
 /** Stores for a browser request (read-only path: does not create directories). */
 export function requestStores(request: Request): ProjectStores {
-  return projectStores(requestCwd(request));
+  return projectStores(resolveProjectRoot(requestCwd(request)).root);
 }
 
 // `project.json` is written once per project; the memo keeps the write off the
