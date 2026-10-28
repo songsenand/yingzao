@@ -202,6 +202,8 @@ export interface MotionReport {
      */
     geometrySuspects?: string[];
     geometrySuspectRule?: string;
+    /** How many of `geometrySuspects` are WARNINGS (placement), not notes. */
+    geometrySuspectWarn?: number;
   };
   /** Per-sample positions along each recorded part's dominant axis. */
   followersDetail: Record<string, { t: number[]; vals: number[]; axis: 'x' | 'y' | 'z' }>;

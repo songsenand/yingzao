@@ -111,8 +111,9 @@ check('6  a part parked 500mm away is listed, with its numbers',
 check('6b the rule that produced the list travels with it',
   /÷/.test(far.geometrySuspectRule ?? '') && /5/.test(far.geometrySuspectRule ?? ''),
   far.geometrySuspectRule ?? '');
-check('6c it does NOT change the verdict (a fact, not a gate)',
-  far.overallStatus === r.overallStatus, `${far.overallStatus} vs ${r.overallStatus}`);
+check('6c it is a WARNING, not a failure (check, never fail)',
+  far.overallStatus === 'check', String(far.overallStatus));
+check('6c2 …and the clean run stays pass', r.overallStatus === 'pass', String(r.overallStatus));
 check('6d the near run has no 离群 flag (its cubes are still reported as simple boxes)',
   (r.geometrySuspects ?? []).every((l) => !/离群/.test(l)),
   (r.geometrySuspects ?? []).join(' | ') || 'none');

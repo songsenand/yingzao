@@ -96,6 +96,8 @@ export interface PhysicsReport {
     /** Written by the tool (it owns the world AABBs and the declared joints). */
     geometrySuspects?: string[];
     geometrySuspectRule?: string;
+    /** How many of `geometrySuspects` are WARNINGS (placement), not notes. */
+    geometrySuspectWarn?: number;
     /** Quasi-static "will the slide hold?" answers, when staticFriction was given. */
     holdAnalysis?: { joint: string; mu: number; massKg: number; axialDriveN: number; frictionCapN: number; holds: boolean }[];
     /** Honest-input notes: contact topology, hold-analysis caveats. */

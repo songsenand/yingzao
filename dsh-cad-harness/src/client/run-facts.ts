@@ -29,6 +29,28 @@ export interface RunKeyframe {
   label: string;
 }
 
+/**
+ * The geometry-sanity warning as a data-strip chip (and the sentence for the
+ * summary). A compiler-style warning: the run succeeded, but its numbers may
+ * describe an empty field (a part parked 500mm away makes "0 interference"
+ * unearned). The rule rides in the tooltip, because a warning nobody can
+ * re-derive is just noise.
+ */
+const geometrySuspectFact = (report: any): RunFact | null => {
+  const lines = (report?.metrics?.geometrySuspects ?? []) as string[];
+  // Only WARNINGS get a chip. A "simple box" note must not paint every plate
+  // yellow, or the warning becomes wallpaper; those notes stay in the tool reply.
+  const warnCount = Number(report?.metrics?.geometrySuspectWarn ?? 0);
+  if (!Array.isArray(lines) || lines.length === 0 || !(warnCount > 0)) return null;
+  const rule = String(report?.metrics?.geometrySuspectRule ?? '');
+  return {
+    label: '几何',
+    value: `⚠ ${warnCount} 处`,
+    tone: 'warn',
+    title: [rule, ...lines].filter(Boolean).join('\n'),
+  };
+};
+
 export interface RunFacts {
   tone: RunTone;
   headline: string;
@@ -137,6 +159,8 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
         title: '关节锚点在末态的轴向偏差；超过 2mm 时求解器可能已经掩盖了装配错误',
       },
     ];
+    const geoSuspect = geometrySuspectFact(report);
+    if (geoSuspect) facts.push(geoSuspect);
     if (first) {
       facts.push({ label: '行程', value: `${num(first.travelMm, 1)}mm`, title: `${followers[0]![0]} 的 ${first.axis ?? '?'} 向行程` });
       if (Number.isFinite(first.periodSec)) facts.push({ label: '周期', value: `${num(first.periodSec, 2)}s` });
@@ -151,7 +175,9 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
           ? '这个 run 早于采样覆盖字段：报告只能说“没发现干涉”，不能说“查过多少位姿”。'
           : satisfied === false
             ? '采样不足（少于 24 个位姿）：这次 run 的“0 干涉”不能当作净空证据。'
-            : `本次采样未发现干涉${drift == null ? '。' : `；关节最大漂移 ${num(drift, 2)}mm。`}`;
+            : (geoSuspect
+              ? `本次采样未发现干涉，但有 ${geoSuspect.value.replace('⚠ ', '')}几何疑点（零件离主体很远或只是盒体）：净空结论要打折看。`
+              : `本次采样未发现干涉${drift == null ? '。' : `；关节最大漂移 ${num(drift, 2)}mm。`}`);
     return {
       tone,
       headline: bad ? '不可交付' : tone === 'ok' ? '通过' : '需要复核',
@@ -175,14 +201,19 @@ export function runFacts(kind: string, report: any, status?: string): RunFacts |
       { label: '倾倒', value: fell.length ? `${fell.length} 件` : '无', tone: fell.length ? 'warn' : 'ok', title: fell.join('、') || '没有零件超过 60° 倾倒判据' },
       { label: '关节违规', value: violations.length ? `${violations.length} 条` : '无', tone: violations.length ? 'warn' : 'ok', title: violations.join('; ') || undefined },
     ];
-    const tone: RunTone = fell.length || violations.length || settled === false ? 'warn' : baseTone === 'bad' ? 'bad' : 'ok';
+    const geoSuspect = geometrySuspectFact(report);
+    if (geoSuspect) facts.push(geoSuspect);
+    const tone: RunTone = fell.length || violations.length || settled === false || geoSuspect
+      ? 'warn' : baseTone === 'bad' ? 'bad' : 'ok';
     const summary = fell.length
       ? `有零件倾倒：${fell.join('、')}。时间线上标出了首次倾倒的时刻。`
       : violations.length
         ? `关节约束违规：${violations[0]}${violations.length > 1 ? ` 等 ${violations.length} 条` : ''}。`
         : settled === false
           ? '求解器没有达到稳定状态，穿透数字只能当量级参考。'
-          : '没有发现倾倒或关节违规；穿透数字是求解器接触深度，不是配合间隙。';
+          : geoSuspect
+            ? '没有发现倾倒或关节违规，但有零件离主体很远（几何疑点）：穿透数字描述的可能是一片空场。'
+            : '没有发现倾倒或关节违规；穿透数字是求解器接触深度，不是配合间隙。';
     return { tone, headline: tone === 'ok' ? '通过' : '需要复核', summary, facts, events: physicsEvents(report), keyframes };
   }
 

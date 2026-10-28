@@ -710,6 +710,10 @@ export function registerCadTools(
     }
     const suspectList = suspectParts(sceneSolids);
     const suspectLines = formatSuspects(suspectList);
+    // Only placement suspects (离群 / degenerate) are warnings; a simple box is a
+    // note, and turning every plate into a warning would make the warning useless.
+    const warnCount = suspectList.filter((x) => x.warn).length;
+    const suspectWarn = warnCount > 0;
 
     // The run owns its geometry: parts are written where the panel can fetch
     // them per run (and where the keyframe renderer can import them).
@@ -736,6 +740,7 @@ export function registerCadTools(
     // is lost the moment another session opens the run.
     report.metrics.geometrySuspects = suspectLines;
     report.metrics.geometrySuspectRule = SUSPECT_RULE;
+    report.metrics.geometrySuspectWarn = warnCount;
     await run.json('report.json', report);
     await run.json('trajectory.json', { kind: 'motion', durationSec: report.durationSec, trajectory: report.trajectory });
     const { frames, warnings: renderWarnings } = await renderKeyframes(report as unknown as PhysicsReport, stlFiles, join(run.dir, 'frames'));
@@ -760,9 +765,13 @@ export function registerCadTools(
     // 相互重叠 = 几何上不可制造（要么留间隙要么有过盈声明），直接 fail（红）。
     const interferenceBlocking = report.metrics.interferenceCount > 0;
     const samplingSatisfied = report.metrics.samplingSatisfied === true;
+    // A geometry suspect is a WARNING, the way a compiler warns: the build
+    // (run) succeeded, but the numbers describe something you probably did not
+    // mean — a part parked 500mm away makes "0 interference" unearned. It is not
+    // a failure either: a long link really can be far from its neighbours.
     const motionStatus: 'pass' | 'check' | 'fail' =
       interferenceBlocking ? 'fail'
-        : !samplingSatisfied ? 'check'
+        : !samplingSatisfied || suspectWarn ? 'check'
           : report.overallStatus === 'pass' ? 'pass' : 'check';
     await run.commit({
       title: runSubject('motion', geometries.map((g) => g.name), sourceVersionIds)
@@ -774,13 +783,14 @@ export function registerCadTools(
       // -> difficult, never a clean bill. Insufficient sampling is the same kind
       // of statement: there was no pose to test, so "0 interference" is unearned.
       judgement: interferenceBlocking ? 'excluded'
-        : (!samplingSatisfied || report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
+        : (!samplingSatisfied || suspectWarn || report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
           : 'not-excluded',
       summary: (interferenceBlocking ? '❌ 不可交付 · ' : '') +
         (initialGaps.length ? `初始最大失配 ${Math.max(...initialGaps.map((g) => g.gapMm)).toFixed(2)}mm · ` : '') +
         `采样 ${report.metrics.interferenceChecks}/${24}${samplingSatisfied ? '' : '（不足，干涉未检查）'}` +
         ` · 干涉 ${report.metrics.interferenceCount} 次` +
-        (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : ''),
+        (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : '') +
+        (suspectWarn ? ` · ⚠ 几何疑点 ${warnCount}` : ''),
     });
     const blocking = interferenceBlocking
       ? report.metrics.interferenceEvents.slice(0, 6).map((e) =>
@@ -2179,7 +2189,10 @@ export function registerCadTools(
       for (const solid of sceneSolids) {
         solid.connected = (a.joints ?? []).some((j) => j.bodyA === solid.name || j.bodyB === solid.name);
       }
-      const suspectLines = formatSuspects(suspectParts(sceneSolids));
+      const suspectList = suspectParts(sceneSolids);
+      const suspectLines = formatSuspects(suspectList);
+      const warnCountPhys = suspectList.filter((x) => x.warn).length;
+      const suspectWarnPhys = warnCountPhys > 0;
 
       const run = await beginRun(runStore, {
         kind: 'physics',
@@ -2233,20 +2246,25 @@ export function registerCadTools(
 
       report.metrics.geometrySuspects = suspectLines;
       report.metrics.geometrySuspectRule = SUSPECT_RULE;
+      report.metrics.geometrySuspectWarn = warnCountPhys;
       await run.json('report.json', report);
       await run.json('trajectory.json', { kind: 'physics', durationSec: report.durationSec, trajectory: report.trajectory });
       const svg = report.metrics;
       const sank = svg.settledPenetrationMm > 1;
       const fellNames = Object.entries(svg.fellOver).filter(([, v]) => v === true).map(([n]) => n);
-      const overall: RunStatus = sank || fellNames.length > 0 || svg.jointViolations.length > 0 ? 'check' : 'pass';
+      const overall: RunStatus = sank || fellNames.length > 0 || svg.jointViolations.length > 0 || suspectWarnPhys ? 'check' : 'pass';
       await run.commit({
         title: runSubject('physics', geometries.map((g) => g.name), sourceVersionIds)
           ?? `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
         sourceVersionIds,
         status: overall,
+        // Physics has no "excluded" case (a topple is not a contract violation),
+        // but nothing here is a clean bill either: every warning is `difficult`.
+        judgement: overall === 'check' ? 'difficult' : 'not-excluded',
         summary: `稳态穿透 ${svg.settledPenetrationMm.toFixed(2)}mm` +
           (fellNames.length ? ` · 倒下 ${fellNames.join(',')}` : '') +
-          (svg.jointViolations.length ? ` · 约束异常 ${svg.jointViolations.length}` : ''),
+          (svg.jointViolations.length ? ` · 约束异常 ${svg.jointViolations.length}` : '') +
+          (suspectWarnPhys ? ` · ⚠ 几何疑点 ${warnCountPhys}` : ''),
       });
 
       const result = {

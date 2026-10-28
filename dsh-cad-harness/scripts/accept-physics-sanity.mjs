@@ -63,9 +63,8 @@ check('2  a body 500mm from everything is listed, with its numbers',
 check('2b the ratio comes from the part\'s own size (both parts are boxes, both reported as such)',
   (far.geometrySuspects ?? []).every((l) => /自身 [\d.]+mm/.test(l)),
   (far.geometrySuspects ?? []).join(' | ') || 'none');
-check('2c it does not turn the run into a failure by itself',
-  typeof far.overallStatus === 'string' && far.overallStatus !== 'fail',
-  String(far.overallStatus));
+check('2c it is a WARNING, not a failure', far.overallStatus === 'check', String(far.overallStatus));
+check('2d …and the body on the plate is still pass', near.overallStatus === 'pass', String(near.overallStatus));
 
 console.log(fail ? `\nFAILED (${fail})` : '\nOK');
 process.exit(fail ? 1 : 0);
