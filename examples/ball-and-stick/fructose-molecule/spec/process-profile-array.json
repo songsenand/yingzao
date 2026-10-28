@@ -1,0 +1,111 @@
+[
+  {
+    "schemaVersion": 1,
+    "id": "fdm-pla-0.4-fructose",
+    "process": "FDM",
+    "material": "PLA+",
+    "machine": "0.4 mm nozzle, 0.2 mm layers, 3 perimeters, calibrated on the C3/B03 fit coupon",
+    "description": "Declared process window for the fructose ball-and-stick kit. The 0.8 mm snap cups and 0.65 mm spline ribs are intentional; this profile states the capability they are designed to, instead of hiding behind the generic 1.2 mm wall default.",
+    "rules": {
+      "wallMinMm": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 0.75,
+        "direction": "min",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "two 0.42 mm perimeters plus overlap; the 0.8 mm cup wall is the design minimum",
+          "by": "design"
+        }
+      },
+      "featureMinMm": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 0.6,
+        "direction": "min",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "0.65 mm spline rib / 0.45 mm slit with a 0.4 mm nozzle",
+          "by": "design"
+        }
+      },
+      "gapMinMm": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 0.08,
+        "direction": "min",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "0.1 mm nominal spline/side clearance; 0.08 mm is the calibrated lower bound",
+          "by": "design"
+        }
+      },
+      "overhangDeg": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 45,
+        "direction": "max",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "standard 45-degree FDM support threshold; atom balls are printed with tree supports",
+          "by": "design"
+        }
+      },
+      "bridgeMaxMm": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 12,
+        "direction": "max",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "11.2 mm cup ceiling bridges; print the down-facing cup with a light internal support",
+          "by": "design"
+        }
+      },
+      "holeAspectMax": {
+        "applies": true,
+        "decidable": "geometry",
+        "value": 8,
+        "direction": "max",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "7 mm cup depth / 11.2 mm bore = 0.63",
+          "by": "design"
+        }
+      },
+      "draftMinDeg": {
+        "applies": false,
+        "reason": "FDM has no mould release draft.",
+        "decidable": "geometry"
+      },
+      "escapePassageMinMm": {
+        "applies": false,
+        "reason": "FDM is not a powder-bed or resin process.",
+        "decidable": "geometry"
+      },
+      "toolRadiusMm": {
+        "applies": false,
+        "reason": "FDM has no cutter.",
+        "decidable": "geometry"
+      },
+      "tolMm": {
+        "applies": true,
+        "decidable": "declared-requirement",
+        "value": 0.2,
+        "direction": "max",
+        "source": {
+          "kind": "rule-of-thumb",
+          "ref": "printed mating pairs +/-0.15 mm loose, 0.2 mm diametral clearance chosen",
+          "by": "design"
+        },
+        "detail": "A capability, not an exclusion: compare against the declared 0.05..0.35 mm diameter-match band."
+      },
+      "surfaceRaUm": {
+        "applies": false,
+        "reason": "Surface roughness is not a geometric exclusion for this kit.",
+        "decidable": "not-decidable"
+      }
+    },
+    "notes": "Custom profile, not a shipped one. It must be re-calibrated on the user's printer with the C3/B03 coupon before the thin-wall verdict is trusted."
+  }
+]

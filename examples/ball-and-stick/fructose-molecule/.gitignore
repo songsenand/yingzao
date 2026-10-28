@@ -1,0 +1,5 @@
+# local build/test scratch (compiled STLs are import sources, not deliverables)
+.tmp/
+.mplconfig/
+__pycache__/
+*.pyc

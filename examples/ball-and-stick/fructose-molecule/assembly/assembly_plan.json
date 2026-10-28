@@ -1,0 +1,2965 @@
+{
+  "schemaVersion": 1,
+  "name": "β-D-呋喃果糖球棍模型",
+  "root": {
+    "id": "fructose",
+    "name": "果糖球棍模型",
+    "kind": "assembly",
+    "children": [
+      {
+        "id": "C1",
+        "kind": "part",
+        "name": "C1",
+        "part": "Fru-C1",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -82.22170833333332,
+            -22.485458333333334,
+            -21.550958333333334
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "C2",
+        "kind": "part",
+        "name": "C2",
+        "part": "Fru-C2",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -38.20220833333334,
+            -7.659458333333333,
+            4.429541666666667
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "C3",
+        "kind": "part",
+        "name": "C3",
+        "part": "Fru-C3",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -22.483708333333333,
+            41.87254166666667,
+            -7.802958333333334
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "C4",
+        "kind": "part",
+        "name": "C4",
+        "part": "Fru-C4",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            28.598791666666667,
+            40.29404166666667,
+            6.176041666666667
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "C5",
+        "kind": "part",
+        "name": "C5",
+        "part": "Fru-C5",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            42.37479166666667,
+            -8.544958333333332,
+            -10.312458333333334
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "C6",
+        "kind": "part",
+        "name": "C6",
+        "part": "Fru-C6",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            79.78629166666667,
+            -30.916958333333334,
+            20.116541666666667
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "H01",
+        "kind": "part",
+        "name": "H01",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -77.24120833333333,
+            -21.963958333333334,
+            -59.53295833333333
+          ],
+          "rotate": [
+            -3.975693351829396e-16,
+            -7.510828771865402,
+            5.9775650719474
+          ]
+        }
+      },
+      {
+        "id": "H02",
+        "kind": "part",
+        "name": "H02",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -111.93670833333334,
+            -0.1344583333333331,
+            -12.408958333333333
+          ],
+          "rotate": [
+            180.0,
+            -76.18682176266503,
+            -36.949717762208536
+          ]
+        }
+      },
+      {
+        "id": "H03",
+        "kind": "part",
+        "name": "H03",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -30.649208333333334,
+            14.971541666666667,
+            69.47704166666666
+          ],
+          "rotate": [
+            -180.0,
+            -62.40238489905743,
+            -120.03490245076792
+          ]
+        }
+      },
+      {
+        "id": "H04",
+        "kind": "part",
+        "name": "H04",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -25.738708333333335,
+            48.58204166666667,
+            -45.48745833333333
+          ],
+          "rotate": [
+            1.2722218725854067e-14,
+            -11.193622848293511,
+            115.8795550384604
+          ]
+        }
+      },
+      {
+        "id": "H05",
+        "kind": "part",
+        "name": "H05",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -32.738708333333335,
+            106.71704166666667,
+            9.644541666666667
+          ],
+          "rotate": [
+            6.3611093629270335e-15,
+            -78.73847192704298,
+            63.23344046437933
+          ]
+        }
+      },
+      {
+        "id": "H06",
+        "kind": "part",
+        "name": "H06",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            33.33779166666667,
+            45.28854166666667,
+            43.888541666666676
+          ],
+          "rotate": [
+            179.99999999999997,
+            -10.346279046252503,
+            -133.4963568337869
+          ]
+        }
+      },
+      {
+        "id": "H07",
+        "kind": "part",
+        "name": "H07",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            50.634791666666665,
+            71.35654166666667,
+            -50.64645833333333
+          ],
+          "rotate": [
+            0.0,
+            -9.869496156630106,
+            -141.3831501479919
+          ]
+        }
+      },
+      {
+        "id": "H08",
+        "kind": "part",
+        "name": "H08",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            54.28879166666667,
+            -8.394458333333334,
+            -46.81395833333333
+          ],
+          "rotate": [
+            -1.4908850069360235e-16,
+            -18.07790389926897,
+            0.7237331035368699
+          ]
+        }
+      },
+      {
+        "id": "H09",
+        "kind": "part",
+        "name": "H09",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            67.86529166666666,
+            -35.064458333333334,
+            56.30304166666667
+          ],
+          "rotate": [
+            180.0,
+            -19.228820326583122,
+            19.183575090145386
+          ]
+        }
+      },
+      {
+        "id": "H10",
+        "kind": "part",
+        "name": "H10",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            112.01779166666667,
+            -10.259958333333332,
+            19.983541666666667
+          ],
+          "rotate": [
+            1.876527262063475e-13,
+            -89.80094752710761,
+            32.655598144379745
+          ]
+        }
+      },
+      {
+        "id": "H11",
+        "kind": "part",
+        "name": "H11",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -67.16470833333334,
+            -88.66695833333333,
+            -15.961458333333333
+          ],
+          "rotate": [
+            -1.90833280887811e-14,
+            -76.82422533408455,
+            -36.71017507811689
+          ]
+        }
+      },
+      {
+        "id": "H12",
+        "kind": "part",
+        "name": "H12",
+        "part": "Fru-H",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            60.966791666666666,
+            -93.97645833333334,
+            2.5045416666666673
+          ],
+          "rotate": [
+            179.99999999999943,
+            -89.75252666019529,
+            31.612520437652538
+          ]
+        }
+      },
+      {
+        "id": "O1",
+        "kind": "part",
+        "name": "O1",
+        "part": "Fru-O1",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -93.73670833333334,
+            -68.85345833333334,
+            -8.201958333333332
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "O2",
+        "kind": "part",
+        "name": "O2",
+        "part": "Fru-O2",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -45.71670833333333,
+            -11.089458333333333,
+            53.74104166666667
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "O3",
+        "kind": "part",
+        "name": "O3",
+        "part": "Fru-O3",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -47.771208333333334,
+            76.91454166666666,
+            16.291041666666665
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "O4",
+        "kind": "part",
+        "name": "O4",
+        "part": "Fru-O4",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            55.19179166666667,
+            74.99654166666667,
+            -17.123458333333335
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "O5",
+        "kind": "part",
+        "name": "O5",
+        "part": "Fru-O5",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            0.588291666666666,
+            -36.845958333333336,
+            -9.06995833333333
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "O6",
+        "kind": "part",
+        "name": "O6",
+        "part": "Fru-O6",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            89.95029166666667,
+            -76.13695833333334,
+            2.3575416666666675
+          ],
+          "rotate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "B01",
+        "kind": "part",
+        "name": "C1-C2",
+        "part": "Fru-B01",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -60.21195833333333,
+            -15.072458333333334,
+            -8.560708333333334
+          ],
+          "rotate": [
+            0.0,
+            -60.78033222940103,
+            -161.3862029692413
+          ]
+        }
+      },
+      {
+        "id": "B02",
+        "kind": "part",
+        "name": "C2-C3",
+        "part": "Fru-B02",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -30.342958333333335,
+            17.10654166666667,
+            -1.6867083333333337
+          ],
+          "rotate": [
+            -179.99999999999997,
+            -76.75410091122681,
+            72.39366902213735
+          ]
+        }
+      },
+      {
+        "id": "B03",
+        "kind": "part",
+        "name": "C3-C4",
+        "part": "Fru-B03",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            3.0575416666666655,
+            41.08329166666667,
+            -0.8134583333333332
+          ],
+          "rotate": [
+            0.0,
+            -74.70235835216069,
+            178.23006669972816
+          ]
+        }
+      },
+      {
+        "id": "B04",
+        "kind": "part",
+        "name": "C4-C5",
+        "part": "Fru-B04",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            35.48679166666667,
+            15.87454166666667,
+            -2.0682083333333336
+          ],
+          "rotate": [
+            180.0,
+            -71.99944582732381,
+            -74.2478510925562
+          ]
+        }
+      },
+      {
+        "id": "B05",
+        "kind": "part",
+        "name": "C5-O5",
+        "part": "Fru-B05",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            20.860749467392605,
+            -23.115906086355366,
+            -9.672749397849431
+          ],
+          "rotate": [
+            -1.0813885916975958e-13,
+            -88.58969879805534,
+            34.108848585387605
+          ]
+        }
+      },
+      {
+        "id": "B06",
+        "kind": "part",
+        "name": "O5-C2",
+        "part": "Fru-B06",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -18.22956315729027,
+            -22.687148320071863,
+            -2.5211478978914927
+          ],
+          "rotate": [
+            -3.1805546814635168e-15,
+            -74.45950238339555,
+            -36.958300413627626
+          ]
+        }
+      },
+      {
+        "id": "B07",
+        "kind": "part",
+        "name": "C1-O1",
+        "part": "Fru-B07",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -88.15330425409616,
+            -46.37049868538983,
+            -14.674634065312237
+          ],
+          "rotate": [
+            0.0,
+            -74.38933942581487,
+            76.05334155905194
+          ]
+        }
+      },
+      {
+        "id": "B08",
+        "kind": "part",
+        "name": "C2-O2",
+        "part": "Fru-B08",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -42.07217906525213,
+            -9.425909808545454,
+            29.824985375098876
+          ],
+          "rotate": [
+            7.951386703658792e-15,
+            -9.509480627901224,
+            24.534367795039625
+          ]
+        }
+      },
+      {
+        "id": "B09",
+        "kind": "part",
+        "name": "C3-O3",
+        "part": "Fru-B09",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -35.51078455295337,
+            59.9247336543256,
+            4.609275949831276
+          ],
+          "rotate": [
+            -3.1805546814635168e-15,
+            -60.85778443752547,
+            -54.18450116468135
+          ]
+        }
+      },
+      {
+        "id": "B10",
+        "kind": "part",
+        "name": "C4-O4",
+        "part": "Fru-B10",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            42.297881861627964,
+            58.17065120641941,
+            -5.826438384380627
+          ],
+          "rotate": [
+            180.0,
+            -61.945790809769754,
+            52.536560815149016
+          ]
+        }
+      },
+      {
+        "id": "B11",
+        "kind": "part",
+        "name": "C5-C6",
+        "part": "Fru-B11",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            61.08054166666667,
+            -19.730958333333334,
+            4.902041666666667
+          ],
+          "rotate": [
+            0.0,
+            -55.082421976194915,
+            149.12066318084052
+          ]
+        }
+      },
+      {
+        "id": "B12",
+        "kind": "part",
+        "name": "C6-O6",
+        "part": "Fru-B12",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            85.02187579664098,
+            -54.21025962784715,
+            10.968692535988406
+          ],
+          "rotate": [
+            180.0,
+            -69.03492330180941,
+            -77.33228005126742
+          ]
+        }
+      },
+      {
+        "id": "B13",
+        "kind": "part",
+        "name": "C1-H01",
+        "part": "Fru-B13",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -79.24394765269861,
+            -22.17366188820714,
+            -44.25978398775919
+          ],
+          "rotate": [
+            180.0,
+            -7.510828771865402,
+            5.977565071947404
+          ]
+        }
+      },
+      {
+        "id": "B14",
+        "kind": "part",
+        "name": "C1-H02",
+        "part": "Fru-B14",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -99.98939980314353,
+            -9.120973324357138,
+            -16.084620274541315
+          ],
+          "rotate": [
+            -1.2722218725854067e-14,
+            -76.18682176266503,
+            -36.949717762208536
+          ]
+        }
+      },
+      {
+        "id": "B15",
+        "kind": "part",
+        "name": "C3-H04",
+        "part": "Fru-B15",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -24.42895296771679,
+            45.88225560657321,
+            -30.323871213340496
+          ],
+          "rotate": [
+            -179.99999999999997,
+            -11.193622848293499,
+            115.87955503846042
+          ]
+        }
+      },
+      {
+        "id": "B16",
+        "kind": "part",
+        "name": "C4-H06",
+        "part": "Fru-B16",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            31.43185930895427,
+            43.279852246832405,
+            28.72131777128182
+          ],
+          "rotate": [
+            -1.2722218725854067e-14,
+            -10.346279046252503,
+            -133.49635683378688
+          ]
+        }
+      },
+      {
+        "id": "B17",
+        "kind": "part",
+        "name": "C5-H08",
+        "part": "Fru-B17",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            49.49536073518812,
+            -8.455009899154009,
+            -32.128091357895684
+          ],
+          "rotate": [
+            180.0,
+            -18.07790389926897,
+            0.7237331035368724
+          ]
+        }
+      },
+      {
+        "id": "B18",
+        "kind": "part",
+        "name": "C6-H09",
+        "part": "Fru-B18",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            72.65934106247559,
+            -33.396534512419194,
+            41.75058227052209
+          ],
+          "rotate": [
+            1.5902773407317584e-15,
+            -19.228820326583122,
+            19.18357509014539
+          ]
+        }
+      },
+      {
+        "id": "B19",
+        "kind": "part",
+        "name": "C6-H10",
+        "part": "Fru-B19",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            99.05925708759918,
+            -18.565015460671404,
+            20.037013738987717
+          ],
+          "rotate": [
+            -179.9999999999998,
+            -89.80094752710761,
+            32.655598144379745
+          ]
+        }
+      },
+      {
+        "id": "B20",
+        "kind": "part",
+        "name": "O1-H11",
+        "part": "Fru-B20",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -78.10901080302501,
+            -80.5063028695656,
+            -12.76552596040045
+          ],
+          "rotate": [
+            180.0,
+            -76.82422533408455,
+            -36.71017507811689
+          ]
+        }
+      },
+      {
+        "id": "B21",
+        "kind": "part",
+        "name": "O2-H03",
+        "part": "Fru-B21",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -36.85222170421394,
+            4.2427059966139336,
+            62.99881910790262
+          ],
+          "rotate": [
+            -2.5444437451708134e-14,
+            -62.40238489905744,
+            -120.03490245076786
+          ]
+        }
+      },
+      {
+        "id": "B22",
+        "kind": "part",
+        "name": "O3-H05",
+        "part": "Fru-B22",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            -38.929902286673695,
+            94.44276541225615,
+            12.381928702148237
+          ],
+          "rotate": [
+            -179.99999999999997,
+            -78.73847192704298,
+            63.23344046437933
+          ]
+        }
+      },
+      {
+        "id": "B23",
+        "kind": "part",
+        "name": "O4-H07",
+        "part": "Fru-B23",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            52.51151739087778,
+            72.85561597786449,
+            -36.84056049424423
+          ],
+          "rotate": [
+            -180.0,
+            -9.869496156630094,
+            -141.38315014799193
+          ]
+        }
+      },
+      {
+        "id": "B24",
+        "kind": "part",
+        "name": "O6-H12",
+        "part": "Fru-B24",
+        "version": "VERSION",
+        "transform": {
+          "translate": [
+            72.90372826504299,
+            -86.6292097109539,
+            2.4439993001491205
+          ],
+          "rotate": [
+            -5.7886095202636e-13,
+            -89.75252666019529,
+            31.612520437652538
+          ]
+        }
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "I_B01_A_axis",
+        "a": "C1.ax_C2",
+        "b": "B01.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B01 A 端同轴"
+      },
+      {
+        "id": "I_B01_A_face",
+        "a": "C1.to_C2",
+        "b": "B01.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B01 A 端贴合面"
+      },
+      {
+        "id": "I_B01_B_axis",
+        "a": "C2.ax_C1",
+        "b": "B01.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B01 B 端同轴"
+      },
+      {
+        "id": "I_B01_B_face",
+        "a": "C2.to_C1",
+        "b": "B01.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B01 B 端贴合面"
+      },
+      {
+        "id": "I_B01_fit",
+        "a": "B01.A_cyl",
+        "b": "C1.cyl_C2",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B01 孔径/轴径"
+      },
+      {
+        "id": "I_B02_A_axis",
+        "a": "C2.ax_C3",
+        "b": "B02.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B02 A 端同轴"
+      },
+      {
+        "id": "I_B02_A_face",
+        "a": "C2.to_C3",
+        "b": "B02.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B02 A 端贴合面"
+      },
+      {
+        "id": "I_B02_B_axis",
+        "a": "C3.ax_C2",
+        "b": "B02.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B02 B 端同轴"
+      },
+      {
+        "id": "I_B02_B_face",
+        "a": "C3.to_C2",
+        "b": "B02.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B02 B 端贴合面"
+      },
+      {
+        "id": "I_B02_fit",
+        "a": "B02.A_cyl",
+        "b": "C2.cyl_C3",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B02 孔径/轴径"
+      },
+      {
+        "id": "I_B03_A_axis",
+        "a": "C3.ax_C4",
+        "b": "B03.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B03 A 端同轴"
+      },
+      {
+        "id": "I_B03_A_face",
+        "a": "C3.to_C4",
+        "b": "B03.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B03 A 端贴合面"
+      },
+      {
+        "id": "I_B03_B_axis",
+        "a": "C4.ax_C3",
+        "b": "B03.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B03 B 端同轴"
+      },
+      {
+        "id": "I_B03_B_face",
+        "a": "C4.to_C3",
+        "b": "B03.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B03 B 端贴合面"
+      },
+      {
+        "id": "I_B03_fit",
+        "a": "B03.A_cyl",
+        "b": "C3.cyl_C4",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B03 孔径/轴径"
+      },
+      {
+        "id": "I_B04_A_axis",
+        "a": "C4.ax_C5",
+        "b": "B04.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B04 A 端同轴"
+      },
+      {
+        "id": "I_B04_A_face",
+        "a": "C4.to_C5",
+        "b": "B04.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B04 A 端贴合面"
+      },
+      {
+        "id": "I_B04_B_axis",
+        "a": "C5.ax_C4",
+        "b": "B04.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B04 B 端同轴"
+      },
+      {
+        "id": "I_B04_B_face",
+        "a": "C5.to_C4",
+        "b": "B04.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B04 B 端贴合面"
+      },
+      {
+        "id": "I_B04_fit",
+        "a": "B04.A_cyl",
+        "b": "C4.cyl_C5",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B04 孔径/轴径"
+      },
+      {
+        "id": "I_B05_A_axis",
+        "a": "C5.ax_O5",
+        "b": "B05.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B05 A 端同轴"
+      },
+      {
+        "id": "I_B05_A_face",
+        "a": "C5.to_O5",
+        "b": "B05.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B05 A 端贴合面"
+      },
+      {
+        "id": "I_B05_B_axis",
+        "a": "O5.ax_C5",
+        "b": "B05.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B05 B 端同轴"
+      },
+      {
+        "id": "I_B05_B_face",
+        "a": "O5.to_C5",
+        "b": "B05.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B05 B 端贴合面"
+      },
+      {
+        "id": "I_B05_fit",
+        "a": "B05.A_cyl",
+        "b": "C5.cyl_O5",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B05 孔径/轴径"
+      },
+      {
+        "id": "I_B06_A_axis",
+        "a": "O5.ax_C2",
+        "b": "B06.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B06 A 端同轴"
+      },
+      {
+        "id": "I_B06_A_face",
+        "a": "O5.to_C2",
+        "b": "B06.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B06 A 端贴合面"
+      },
+      {
+        "id": "I_B06_B_axis",
+        "a": "C2.ax_O5",
+        "b": "B06.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B06 B 端同轴"
+      },
+      {
+        "id": "I_B06_B_face",
+        "a": "C2.to_O5",
+        "b": "B06.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B06 B 端贴合面"
+      },
+      {
+        "id": "I_B06_fit",
+        "a": "B06.A_cyl",
+        "b": "O5.cyl_C2",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B06 孔径/轴径"
+      },
+      {
+        "id": "I_B07_A_axis",
+        "a": "C1.ax_O1",
+        "b": "B07.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B07 A 端同轴"
+      },
+      {
+        "id": "I_B07_A_face",
+        "a": "C1.to_O1",
+        "b": "B07.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B07 A 端贴合面"
+      },
+      {
+        "id": "I_B07_B_axis",
+        "a": "O1.ax_C1",
+        "b": "B07.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B07 B 端同轴"
+      },
+      {
+        "id": "I_B07_B_face",
+        "a": "O1.to_C1",
+        "b": "B07.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B07 B 端贴合面"
+      },
+      {
+        "id": "I_B07_fit",
+        "a": "B07.A_cyl",
+        "b": "C1.cyl_O1",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B07 孔径/轴径"
+      },
+      {
+        "id": "I_B08_A_axis",
+        "a": "C2.ax_O2",
+        "b": "B08.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B08 A 端同轴"
+      },
+      {
+        "id": "I_B08_A_face",
+        "a": "C2.to_O2",
+        "b": "B08.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B08 A 端贴合面"
+      },
+      {
+        "id": "I_B08_B_axis",
+        "a": "O2.ax_C2",
+        "b": "B08.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B08 B 端同轴"
+      },
+      {
+        "id": "I_B08_B_face",
+        "a": "O2.to_C2",
+        "b": "B08.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B08 B 端贴合面"
+      },
+      {
+        "id": "I_B08_fit",
+        "a": "B08.A_cyl",
+        "b": "C2.cyl_O2",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B08 孔径/轴径"
+      },
+      {
+        "id": "I_B09_A_axis",
+        "a": "C3.ax_O3",
+        "b": "B09.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B09 A 端同轴"
+      },
+      {
+        "id": "I_B09_A_face",
+        "a": "C3.to_O3",
+        "b": "B09.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B09 A 端贴合面"
+      },
+      {
+        "id": "I_B09_B_axis",
+        "a": "O3.ax_C3",
+        "b": "B09.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B09 B 端同轴"
+      },
+      {
+        "id": "I_B09_B_face",
+        "a": "O3.to_C3",
+        "b": "B09.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B09 B 端贴合面"
+      },
+      {
+        "id": "I_B09_fit",
+        "a": "B09.A_cyl",
+        "b": "C3.cyl_O3",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B09 孔径/轴径"
+      },
+      {
+        "id": "I_B10_A_axis",
+        "a": "C4.ax_O4",
+        "b": "B10.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B10 A 端同轴"
+      },
+      {
+        "id": "I_B10_A_face",
+        "a": "C4.to_O4",
+        "b": "B10.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B10 A 端贴合面"
+      },
+      {
+        "id": "I_B10_B_axis",
+        "a": "O4.ax_C4",
+        "b": "B10.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B10 B 端同轴"
+      },
+      {
+        "id": "I_B10_B_face",
+        "a": "O4.to_C4",
+        "b": "B10.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B10 B 端贴合面"
+      },
+      {
+        "id": "I_B10_fit",
+        "a": "B10.A_cyl",
+        "b": "C4.cyl_O4",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B10 孔径/轴径"
+      },
+      {
+        "id": "I_B11_A_axis",
+        "a": "C5.ax_C6",
+        "b": "B11.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B11 A 端同轴"
+      },
+      {
+        "id": "I_B11_A_face",
+        "a": "C5.to_C6",
+        "b": "B11.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B11 A 端贴合面"
+      },
+      {
+        "id": "I_B11_B_axis",
+        "a": "C6.ax_C5",
+        "b": "B11.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B11 B 端同轴"
+      },
+      {
+        "id": "I_B11_B_face",
+        "a": "C6.to_C5",
+        "b": "B11.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B11 B 端贴合面"
+      },
+      {
+        "id": "I_B11_fit",
+        "a": "B11.A_cyl",
+        "b": "C5.cyl_C6",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B11 孔径/轴径"
+      },
+      {
+        "id": "I_B12_A_axis",
+        "a": "C6.ax_O6",
+        "b": "B12.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B12 A 端同轴"
+      },
+      {
+        "id": "I_B12_A_face",
+        "a": "C6.to_O6",
+        "b": "B12.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B12 A 端贴合面"
+      },
+      {
+        "id": "I_B12_B_axis",
+        "a": "O6.ax_C6",
+        "b": "B12.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B12 B 端同轴"
+      },
+      {
+        "id": "I_B12_B_face",
+        "a": "O6.to_C6",
+        "b": "B12.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B12 B 端贴合面"
+      },
+      {
+        "id": "I_B12_fit",
+        "a": "B12.A_cyl",
+        "b": "C6.cyl_O6",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.1999999999999993
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B12 孔径/轴径"
+      },
+      {
+        "id": "I_B13_A_axis",
+        "a": "C1.ax_H01",
+        "b": "B13.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B13 A 端同轴"
+      },
+      {
+        "id": "I_B13_A_face",
+        "a": "C1.to_H01",
+        "b": "B13.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B13 A 端贴合面"
+      },
+      {
+        "id": "I_B13_B_axis",
+        "a": "H01.ax_heavy",
+        "b": "B13.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B13 B 端同轴"
+      },
+      {
+        "id": "I_B13_B_face",
+        "a": "H01.to_heavy",
+        "b": "B13.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B13 B 端贴合面"
+      },
+      {
+        "id": "I_B13_fit",
+        "a": "B13.A_cyl",
+        "b": "C1.cyl_H01",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B13 孔径/轴径"
+      },
+      {
+        "id": "I_B14_A_axis",
+        "a": "C1.ax_H02",
+        "b": "B14.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B14 A 端同轴"
+      },
+      {
+        "id": "I_B14_A_face",
+        "a": "C1.to_H02",
+        "b": "B14.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B14 A 端贴合面"
+      },
+      {
+        "id": "I_B14_B_axis",
+        "a": "H02.ax_heavy",
+        "b": "B14.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B14 B 端同轴"
+      },
+      {
+        "id": "I_B14_B_face",
+        "a": "H02.to_heavy",
+        "b": "B14.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B14 B 端贴合面"
+      },
+      {
+        "id": "I_B14_fit",
+        "a": "B14.A_cyl",
+        "b": "C1.cyl_H02",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B14 孔径/轴径"
+      },
+      {
+        "id": "I_B15_A_axis",
+        "a": "C3.ax_H04",
+        "b": "B15.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B15 A 端同轴"
+      },
+      {
+        "id": "I_B15_A_face",
+        "a": "C3.to_H04",
+        "b": "B15.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B15 A 端贴合面"
+      },
+      {
+        "id": "I_B15_B_axis",
+        "a": "H04.ax_heavy",
+        "b": "B15.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B15 B 端同轴"
+      },
+      {
+        "id": "I_B15_B_face",
+        "a": "H04.to_heavy",
+        "b": "B15.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B15 B 端贴合面"
+      },
+      {
+        "id": "I_B15_fit",
+        "a": "B15.A_cyl",
+        "b": "C3.cyl_H04",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B15 孔径/轴径"
+      },
+      {
+        "id": "I_B16_A_axis",
+        "a": "C4.ax_H06",
+        "b": "B16.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B16 A 端同轴"
+      },
+      {
+        "id": "I_B16_A_face",
+        "a": "C4.to_H06",
+        "b": "B16.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B16 A 端贴合面"
+      },
+      {
+        "id": "I_B16_B_axis",
+        "a": "H06.ax_heavy",
+        "b": "B16.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B16 B 端同轴"
+      },
+      {
+        "id": "I_B16_B_face",
+        "a": "H06.to_heavy",
+        "b": "B16.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B16 B 端贴合面"
+      },
+      {
+        "id": "I_B16_fit",
+        "a": "B16.A_cyl",
+        "b": "C4.cyl_H06",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B16 孔径/轴径"
+      },
+      {
+        "id": "I_B17_A_axis",
+        "a": "C5.ax_H08",
+        "b": "B17.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B17 A 端同轴"
+      },
+      {
+        "id": "I_B17_A_face",
+        "a": "C5.to_H08",
+        "b": "B17.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B17 A 端贴合面"
+      },
+      {
+        "id": "I_B17_B_axis",
+        "a": "H08.ax_heavy",
+        "b": "B17.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B17 B 端同轴"
+      },
+      {
+        "id": "I_B17_B_face",
+        "a": "H08.to_heavy",
+        "b": "B17.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B17 B 端贴合面"
+      },
+      {
+        "id": "I_B17_fit",
+        "a": "B17.A_cyl",
+        "b": "C5.cyl_H08",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B17 孔径/轴径"
+      },
+      {
+        "id": "I_B18_A_axis",
+        "a": "C6.ax_H09",
+        "b": "B18.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B18 A 端同轴"
+      },
+      {
+        "id": "I_B18_A_face",
+        "a": "C6.to_H09",
+        "b": "B18.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B18 A 端贴合面"
+      },
+      {
+        "id": "I_B18_B_axis",
+        "a": "H09.ax_heavy",
+        "b": "B18.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B18 B 端同轴"
+      },
+      {
+        "id": "I_B18_B_face",
+        "a": "H09.to_heavy",
+        "b": "B18.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B18 B 端贴合面"
+      },
+      {
+        "id": "I_B18_fit",
+        "a": "B18.A_cyl",
+        "b": "C6.cyl_H09",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B18 孔径/轴径"
+      },
+      {
+        "id": "I_B19_A_axis",
+        "a": "C6.ax_H10",
+        "b": "B19.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B19 A 端同轴"
+      },
+      {
+        "id": "I_B19_A_face",
+        "a": "C6.to_H10",
+        "b": "B19.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B19 A 端贴合面"
+      },
+      {
+        "id": "I_B19_B_axis",
+        "a": "H10.ax_heavy",
+        "b": "B19.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B19 B 端同轴"
+      },
+      {
+        "id": "I_B19_B_face",
+        "a": "H10.to_heavy",
+        "b": "B19.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B19 B 端贴合面"
+      },
+      {
+        "id": "I_B19_fit",
+        "a": "B19.A_cyl",
+        "b": "C6.cyl_H10",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B19 孔径/轴径"
+      },
+      {
+        "id": "I_B20_A_axis",
+        "a": "O1.ax_H11",
+        "b": "B20.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B20 A 端同轴"
+      },
+      {
+        "id": "I_B20_A_face",
+        "a": "O1.to_H11",
+        "b": "B20.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B20 A 端贴合面"
+      },
+      {
+        "id": "I_B20_B_axis",
+        "a": "H11.ax_heavy",
+        "b": "B20.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B20 B 端同轴"
+      },
+      {
+        "id": "I_B20_B_face",
+        "a": "H11.to_heavy",
+        "b": "B20.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B20 B 端贴合面"
+      },
+      {
+        "id": "I_B20_fit",
+        "a": "B20.A_cyl",
+        "b": "O1.cyl_H11",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B20 孔径/轴径"
+      },
+      {
+        "id": "I_B21_A_axis",
+        "a": "O2.ax_H03",
+        "b": "B21.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B21 A 端同轴"
+      },
+      {
+        "id": "I_B21_A_face",
+        "a": "O2.to_H03",
+        "b": "B21.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B21 A 端贴合面"
+      },
+      {
+        "id": "I_B21_B_axis",
+        "a": "H03.ax_heavy",
+        "b": "B21.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B21 B 端同轴"
+      },
+      {
+        "id": "I_B21_B_face",
+        "a": "H03.to_heavy",
+        "b": "B21.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B21 B 端贴合面"
+      },
+      {
+        "id": "I_B21_fit",
+        "a": "B21.A_cyl",
+        "b": "O2.cyl_H03",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B21 孔径/轴径"
+      },
+      {
+        "id": "I_B22_A_axis",
+        "a": "O3.ax_H05",
+        "b": "B22.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B22 A 端同轴"
+      },
+      {
+        "id": "I_B22_A_face",
+        "a": "O3.to_H05",
+        "b": "B22.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B22 A 端贴合面"
+      },
+      {
+        "id": "I_B22_B_axis",
+        "a": "H05.ax_heavy",
+        "b": "B22.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B22 B 端同轴"
+      },
+      {
+        "id": "I_B22_B_face",
+        "a": "H05.to_heavy",
+        "b": "B22.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B22 B 端贴合面"
+      },
+      {
+        "id": "I_B22_fit",
+        "a": "B22.A_cyl",
+        "b": "O3.cyl_H05",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B22 孔径/轴径"
+      },
+      {
+        "id": "I_B23_A_axis",
+        "a": "O4.ax_H07",
+        "b": "B23.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B23 A 端同轴"
+      },
+      {
+        "id": "I_B23_A_face",
+        "a": "O4.to_H07",
+        "b": "B23.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B23 A 端贴合面"
+      },
+      {
+        "id": "I_B23_B_axis",
+        "a": "H07.ax_heavy",
+        "b": "B23.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B23 B 端同轴"
+      },
+      {
+        "id": "I_B23_B_face",
+        "a": "H07.to_heavy",
+        "b": "B23.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B23 B 端贴合面"
+      },
+      {
+        "id": "I_B23_fit",
+        "a": "B23.A_cyl",
+        "b": "O4.cyl_H07",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B23 孔径/轴径"
+      },
+      {
+        "id": "I_B24_A_axis",
+        "a": "O6.ax_H12",
+        "b": "B24.A_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B24 A 端同轴"
+      },
+      {
+        "id": "I_B24_A_face",
+        "a": "O6.to_H12",
+        "b": "B24.A_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B24 A 端贴合面"
+      },
+      {
+        "id": "I_B24_B_axis",
+        "a": "H12.ax_heavy",
+        "b": "B24.B_axis",
+        "type": "贴合",
+        "check": "coaxial",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "同轴度",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B24 B 端同轴"
+      },
+      {
+        "id": "I_B24_B_face",
+        "a": "H12.to_heavy",
+        "b": "B24.B_face",
+        "type": "贴合",
+        "check": "distance",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.0
+        },
+        "tolerance": {
+          "min": 0.0,
+          "max": 0.25
+        },
+        "note": "B24 B 端贴合面"
+      },
+      {
+        "id": "I_B24_fit",
+        "a": "B24.A_cyl",
+        "b": "O6.cyl_H12",
+        "type": "紧固",
+        "check": "diameter-match",
+        "severity": "hard",
+        "nominal": {
+          "quantity": "直径",
+          "value": 0.20000000000000018
+        },
+        "tolerance": {
+          "min": 0.05,
+          "max": 0.35
+        },
+        "note": "B24 孔径/轴径"
+      }
+    ]
+  }
+}

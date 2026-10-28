@@ -1,0 +1,38 @@
+part,kind,element_or_bond,instances,notes
+Fru-C1,atom,C,1,4 bosses
+Fru-C2,atom,C,1,4 bosses
+Fru-C3,atom,C,1,4 bosses
+Fru-C4,atom,C,1,4 bosses
+Fru-C5,atom,C,1,4 bosses
+Fru-C6,atom,C,1,4 bosses
+Fru-O1,atom,O,1,2 bosses
+Fru-O2,atom,O,1,2 bosses
+Fru-O3,atom,O,1,2 bosses
+Fru-O4,atom,O,1,2 bosses
+Fru-O5,atom,O,1,2 bosses
+Fru-O6,atom,O,1,2 bosses
+Fru-B01,rod,C1-C2,1,"heavy, L=25.221 mm"
+Fru-B02,rod,C2-C3,1,"heavy, L=25.387 mm"
+Fru-B03,rod,C3-C4,1,"heavy, L=24.984 mm"
+Fru-B04,rod,C4-C5,1,"heavy, L=25.356 mm"
+Fru-B05,rod,C5-O5,1,"heavy, L=23.984 mm"
+Fru-B06,rod,O5-C2,1,"heavy, L=23.886 mm"
+Fru-B07,rod,C1-O1,1,"heavy, L=23.106 mm"
+Fru-B08,rod,C2-O2,1,"heavy, L=23.499 mm"
+Fru-B09,rod,C3-O3,1,"heavy, L=22.976 mm"
+Fru-B10,rod,C4-O4,1,"heavy, L=23.041 mm"
+Fru-B11,rod,C5-C6,1,"heavy, L=25.161 mm"
+Fru-B12,rod,C6-O6,1,"heavy, L=23.134 mm"
+Fru-B13,rod,C1-H01,1,"light, L=17.811 mm"
+Fru-B14,rod,C1-H02,1,"light, L=17.790 mm"
+Fru-B15,rod,C3-H04,1,"light, L=17.915 mm"
+Fru-B16,rod,C4-H06,1,"light, L=17.836 mm"
+Fru-B17,rod,C5-H08,1,"light, L=17.897 mm"
+Fru-B18,rod,C6-H09,1,"light, L=17.825 mm"
+Fru-B19,rod,C6-H10,1,"light, L=17.783 mm"
+Fru-B20,rod,O1-H11,1,"light, L=15.042 mm"
+Fru-B21,rod,O2-H03,1,"light, L=14.968 mm"
+Fru-B22,rod,O3-H05,1,"light, L=15.034 mm"
+Fru-B23,rod,O4-H07,1,"light, L=15.027 mm"
+Fru-B24,rod,O6-H12,1,"light, L=15.034 mm"
+Fru-H,atom,H,12,one light boss; all 12 H atoms identical
