@@ -25,9 +25,10 @@
 // project with no data yet reads as empty, which is the whole point.
 
 import { createHash } from 'node:crypto';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { openPartStore, type PartStore } from './parts.ts';
 import { openRunStore, type RunStore } from './runs.ts';
 import { openVersionStore, type VersionStore } from './version.ts';
@@ -53,6 +54,77 @@ export function projectsHome(): string {
  */
 export function projectDataDir(cwd: string): string {
   return join(resolve(cwd), 'cad-data');
+}
+
+/** How a project root was recognized (see docs/dev/PROJECT-SCOPE.md). */
+export type ProjectRootMarker = 'project' | 'legacy' | 'new';
+
+/** The nearest project root for one working directory. */
+export interface ResolvedProjectRoot {
+  root: string;
+  marker: ProjectRootMarker;
+}
+
+const projectRootCache = new Map<string, ResolvedProjectRoot>();
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function markerAt(dir: string): ProjectRootMarker | null {
+  const cadData = join(dir, 'cad-data');
+  if (!isDirectory(cadData)) return null;
+  return existsSync(join(cadData, 'project.json')) ? 'project' : 'legacy';
+}
+
+/**
+ * Find the project root that owns `start`.
+ *
+ * B (`docs/dev/PROJECT-SCOPE.md`): the nearest ancestor with
+ * `cad-data/project.json` is the project; a bare `cad-data/` is a legacy
+ * marker; with neither, `start` itself is a new project candidate (the first
+ * WRITE creates the marker). Realpath first so a symlinked working directory
+ * resolves to one identity. Cached by canonical start; a newly written marker
+ * clears the cache.
+ */
+export function resolveProjectRoot(start: string): ResolvedProjectRoot {
+  let canonical: string;
+  try {
+    canonical = realpathSync(start);
+  } catch {
+    canonical = resolve(start);
+  }
+  try {
+    if (!statSync(canonical).isDirectory()) canonical = dirname(canonical);
+  } catch { /* keep the unresolved path; the walk below still works */ }
+
+  const hit = projectRootCache.get(canonical);
+  if (hit) return hit;
+
+  let dir = canonical;
+  while (true) {
+    const marker = markerAt(dir);
+    if (marker !== null) {
+      const result: ResolvedProjectRoot = { root: dir, marker };
+      projectRootCache.set(canonical, result);
+      return result;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  const result: ResolvedProjectRoot = { root: canonical, marker: 'new' };
+  projectRootCache.set(canonical, result);
+  return result;
+}
+
+/** Test/ensure hook: a newly written marker invalidates earlier "new" answers. */
+export function clearProjectRootCache(): void {
+  projectRootCache.clear();
 }
 
 /**
@@ -203,4 +275,5 @@ export async function ensureProjectDir(project: ProjectStores): Promise<void> {
     }, null, 2)}\n`, 'utf8');
   } catch { /* the corpus is still usable without its identity stamp */ }
   ensured.add(project.root);
+  clearProjectRootCache();
 }
