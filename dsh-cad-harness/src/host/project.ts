@@ -117,13 +117,40 @@ export function projectStores(cwd: string): ProjectStores {
 /**
  * The project a tool call belongs to: the calling agent's session cwd.
  *
+ * WHY the delegated branch exists. DSH keeps a child session's `header.cwd` at
+ * the PARENT's creation workspace and records the requested `cwd` only in the
+ * `workingDirectory` session projection (`dsh-subagent` calls
+ * `workingDirectory.set(child, create.cwd)`; `childSessionMeta` builds the
+ * header from `parentHeader.cwd`). A delegated CAD build therefore had `pwd` =
+ * the new project while every CAD tool still read the parent's corpus — the
+ * child imported into the wrong `cad-data/`. Follow the projection for
+ * delegated sessions; top-level sessions keep their durable creation cwd,
+ * because a `cd` into a subdirectory must not relocate the corpus.
+ *
  * A call with no agent (a maintenance caller, a script) falls back to the
  * server's own cwd, which is the workspace the profile was started in.
  */
 export function projectCwdOf(exec: unknown): string {
-  const cwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })
-    ?.agent?.session?.header?.cwd;
-  return typeof cwd === 'string' && cwd.trim() ? cwd : process.cwd();
+  const agent = (exec as {
+    agent?: {
+      session?: { header?: { cwd?: unknown; delegationDepth?: unknown } };
+      ctx?: { get?: (name: string) => unknown };
+    };
+  })?.agent;
+  const headerCwd = agent?.session?.header?.cwd;
+  const depth = agent?.session?.header?.delegationDepth;
+  if (typeof depth === 'number' && depth > 0) {
+    try {
+      const service = agent?.ctx?.get?.('workingDirectory') as
+        | { get?: (session: unknown) => unknown }
+        | undefined;
+      const current = service?.get?.(agent?.session);
+      if (typeof current === 'string' && current.trim()) return current;
+    } catch {
+      /* fall through to the durable header */
+    }
+  }
+  return typeof headerCwd === 'string' && headerCwd.trim() ? headerCwd : process.cwd();
 }
 
 /** Store root for a tool call, creating the project directory if needed. */
