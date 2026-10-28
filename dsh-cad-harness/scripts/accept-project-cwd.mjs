@@ -90,6 +90,11 @@ try {
   check(projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, parent)) === real(child),
     'a bound delegated session stays put',
     projectCwdOf(exec({ id: 's3', cwd: parent, delegationDepth: 1 }, parent)));
+
+  rmSync(parent, { recursive: true, force: true });
+  check(projectCwdOf(exec({ id: 's1', cwd: parent }, child)) === real(child),
+    'a deleted bound root falls back to the resolver and rebinds',
+    projectCwdOf(exec({ id: 's1', cwd: parent }, child)));
 } finally {
   rmSync(base, { recursive: true, force: true });
   rmSync(home, { recursive: true, force: true });

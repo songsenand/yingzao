@@ -147,7 +147,8 @@ export function sessionBindingPath(sessionId: string): string {
 
 function readSessionBinding(sessionId: string): string | undefined {
   const cached = sessionBindingCache.get(sessionId);
-  if (cached) return cached;
+  if (cached && isDirectory(cached)) return cached;
+  if (cached) sessionBindingCache.delete(sessionId);
   try {
     const parsed = JSON.parse(readFileSync(sessionBindingPath(sessionId), 'utf8'));
     const root = parsed?.projectRoot;
