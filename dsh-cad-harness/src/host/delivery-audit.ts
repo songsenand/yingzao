@@ -13,7 +13,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
-import { listParts } from './parts.ts';
+import { listParts, partRoleOf } from './parts.ts';
 import { listRuns, type RunEntry } from './runs.ts';
 import { listVersions, type VersionManifestEntry } from './version.ts';
 import { mergedInputVersionIds, newestVersionPerPart, supersededVersionIds } from './latest.ts';
@@ -47,7 +47,7 @@ const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: st
   strength: { kinds: ['stress'], label: 'a fresh stress run citing the newest version' },
   motion: { kinds: ['motion', 'physics'], label: 'a fresh motion/physics run' },
   assembly: { kinds: ['assembly-check'], label: 'a fresh assembly check' },
-  manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY part' },
+  manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY printed part (stock/research roles are exempt by declaration)' },
   appearance: { kinds: ['assembly'], label: 'a fresh assembly run carrying the renders' },
   review: { kinds: ['assembly'], label: 'a fresh assembly render to look at' },
 };
@@ -109,11 +109,21 @@ export async function auditDelivery(
   for (const r of runs) for (const id of r.sourceVersionIds ?? []) cited.add(id);
   const neverCited = versionList.filter((v) => !cited.has(v.id)).map((v) => v.id);
 
+  // G4 (2026-10-29): a part DECLARED stock/research is not a printed part, so the
+  // printability and newest-validated expectations do not apply to it. The
+  // exemption stays visible as an info finding below — a declared exemption,
+  // never a silent shrink of what the audit demands (roberval r025–r036 was 12
+  // ceremony printability runs on merged bodies and M3 models because role did
+  // not exist).
+  const roleExempt = parts.filter((p) => partRoleOf(p) !== 'printed');
+  const roleExemptIds = new Set(roleExempt.map((p) => p.id));
+
   // Parts whose NEWEST version nobody validated: the sharpest form of "you
   // changed it and never re-checked".
   const newestNeverValidated: string[] = [];
   for (const [partId, newestId] of newestOfPart) {
     if (cited.has(newestId)) continue;
+    if (roleExemptIds.has(partId)) continue;
     const part = parts.find((p) => p.id === partId);
     newestNeverValidated.push(part?.name ?? partId);
   }
@@ -238,11 +248,11 @@ export async function auditDelivery(
         (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
     );
   const partsMissingPrintability = [...newestOfPart.entries()]
-    .filter(
-      ([, vid]) =>
-        !freshRuns.some((r) => r.kind === 'printability' && r.status !== 'fail' &&
-          (r.sourceVersionIds ?? []).includes(vid)),
-    )
+    .filter(([pid, vid]) => {
+      if (roleExemptIds.has(pid)) return false;
+      return !freshRuns.some((r) => r.kind === 'printability' && r.status !== 'fail' &&
+        (r.sourceVersionIds ?? []).includes(vid));
+    })
     .map(([pid]) => parts.find((x) => x.id === pid)?.name ?? pid);
   const claims = opts.claims ?? [];
   for (const claim of claims) {
@@ -337,6 +347,12 @@ export async function auditDelivery(
   if (scan.exempt.length > 0) {
     push('info', 'unregistered-exempt',
       `${scan.exempt.length} file(s) declared exempt: ${scan.exempt.slice(0, 5).map((e) => `${e.path} (${e.reason})`).join(', ')}`);
+  }
+  if (roleExempt.length > 0) {
+    push('info', 'role-exempt-parts',
+      `${roleExempt.length} part(s) declared stock/research and exempt from the printability and ` +
+      `newest-version-validated checks: ${roleExempt.slice(0, 8).map((p) => `${p.name} (${partRoleOf(p)})`).join(', ')}` +
+      `${roleExempt.length > 8 ? ` … (+${roleExempt.length - 8})` : ''} — if one of these IS delivered as a printed part, set its role back to printed`);
   }
   if (scan.missingExempt.length > 0) {
     push('warn', 'exemption-missing',

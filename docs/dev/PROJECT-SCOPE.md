@@ -174,6 +174,12 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 - 显式切换：新会话；创建时选项目的 UI 是后续层。
 - 项目移动/改名：C 不解决，D 的稳定 id 才解决。
 - 代价：插件私有 sidecar；无 DSH core 改动；无 `tools.ts` schema 改动，便于两条线并行。
+- **G5 修正（2026-10-29）**：B 解析的"当前 cwd"此前读的是 `agent.ctx.get('workingDirectory')`——真实
+  exec 上不存在这个形状，静默回退到会话头 cwd，C-lite 于是把**错误的根**固定了一整个会话
+  （roberval-balance：语料落在仓库根，靠手工搬家）。现在插件经 `inject` 注入 DSH 的
+  workingDirectory 服务（与 stock bash 工具同一来源 `ctx.workingDirectory.ensure(agent, signal)`），
+  首绑解析的是会话的**实时** cwd；且首次绑定会在该次工具回复的 warnings 里回显绑定路径与
+  解绑方法（删 `$DSH_HOME/cad/sessions/<id>.json`），绑错从"永久静默"变成"当场可见"。
 
 ### 6.2 D：稳定 id + 注册表（长期）
 

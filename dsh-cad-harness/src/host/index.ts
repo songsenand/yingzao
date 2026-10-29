@@ -8,6 +8,7 @@
 import { registerCadTools } from './tools.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
+import { configureWorkingDirectoryService } from './project.ts';
 import { configurePythonRuntime, ensurePythonRuntime, pythonRuntimeMode, recordRuntimeFailure } from './python-runtime.ts';
 import { resetPythonWorker } from './python-worker.ts';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -17,7 +18,10 @@ export const name = 'cad-harness';
 
 // `connection` is optional: the headless profile has no web server, so the
 // client-facing routes only register when the service exists.
-export const inject = ['tools', 'attachments'];
+// `workingDirectory` (G5, 2026-10-29): the live-cwd service the stock tools use —
+// the project resolver prefers it over the session-header cwd, so the FIRST CAD
+// call binds the project the session actually cd'd into.
+export const inject = ['tools', 'attachments', 'workingDirectory'];
 
 /**
  * Say it out loud when the CAD skills would be invisible.
@@ -46,6 +50,10 @@ function warnIfSkillRootIsStale(ctx: any): void {
 }
 
 export function apply(ctx: any, config: ToolScopeConfig = {}) {
+  // G5: hand the injected live-cwd service to the project resolver. Absent on
+  // exotic deployments — the resolver then falls back to the session header,
+  // exactly as before this fix.
+  configureWorkingDirectoryService(ctx?.workingDirectory);
   const cadTools = registerCadTools(ctx, config);
   warnIfSkillRootIsStale(ctx);
 

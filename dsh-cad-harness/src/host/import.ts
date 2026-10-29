@@ -122,6 +122,54 @@ function vec3(value: unknown, what: string): [number, number, number] {
   return [value[0], value[1], value[2]] as [number, number, number];
 }
 
+const mag3 = (v: readonly number[]) => Math.hypot(v[0], v[1], v[2]);
+
+/**
+ * G2 (2026-10-29): a direction that is exactly zero is ALWAYS wrong — an axis
+ * with no direction can never be an assembly endpoint (assembly-check refuses
+ * point datums for coaxial for the same reason), so it is refused here at
+ * declaration time instead of surfacing later as a silently unusable anchor.
+ */
+function rejectZeroDirection(name: string, kind: 'axis' | 'plane' | 'cylinder', dir: readonly number[]): void {
+  if (mag3(dir) === 0) {
+    throw new Error(
+      `datum "${name}" (${kind}) direction is [0, 0, 0] — an axis with no direction can never be an assembly ` +
+        `endpoint. Declare a non-zero direction (signature: ${kind === 'plane' ? 'normal' : 'dir'} = [dx, dy, dz]).`,
+    );
+  }
+}
+
+/**
+ * G2 (2026-10-29): the positional p/dir swap (`datum_axis("rail", [0,0,1], [10,0,205])`)
+ * is silent in OpenSCAD, and the swapped numbers land in datums.json where `coaxial`
+ * reads them without complaint (roberval-balance: v048 bottom_axis was point=[0,1,0]
+ * dir=[0,0,140]; four parts needed set_datums repair). The swap puts the SHORT true
+ * direction into `point` and the LONG position into `dir`, so a direction that dwarfs
+ * its own point is the signature. A WARNING, never an error — model scale cannot
+ * disambiguate (a swapped [0,0,140] looks exactly like a legit endpoint-form dir in a
+ * 205 mm model), and a missed swap (silent datums corruption) costs more than a
+ * spurious warning, so this is allowed to over-trigger.
+ */
+export function datumDirectionWarnings(set: DatumSet): string[] {
+  const out: string[] = [];
+  const check = (kind: string, name: string, point: readonly number[], dir: readonly number[]) => {
+    const mag = mag3(dir);
+    const ptMag = mag3(point);
+    if (mag > 4.0 * ptMag + 10.0) {
+      out.push(
+        `datum_${kind} "${name}": |dir|=${mag.toPrecision(6)} dwarfs its point (|p|=${ptMag.toPrecision(6)}) ` +
+          '— this looks like swapped p/dir arguments (signature: ' +
+          `datum_${kind}(name, point, dir), the direction is a short vector). ` +
+          'If the magnitude is intentional (endpoint form), ignore this warning.',
+      );
+    }
+  };
+  for (const d of set.axes) check('axis', d.name, d.point, d.dir);
+  for (const d of set.planes) check('plane', d.name, d.point, d.normal);
+  for (const d of set.cylinders) check('cylinder', d.name, d.point, d.dir);
+  return out;
+}
+
 /**
  * Turn declared datums into the canonical DatumSet.
  *
@@ -149,14 +197,17 @@ export function normalizeDatums(input: readonly DatumInput[] | undefined): Datum
         (set.points as DatumPoint[]).push({ name, point });
         break;
       case 'axis':
+        rejectZeroDirection(name, 'axis', vec3(d.dir, `datum "${name}" dir`));
         (set.axes as DatumAxis[]).push({ name, point, dir: vec3(d.dir, `datum "${name}" dir`) });
         break;
       case 'plane':
+        rejectZeroDirection(name, 'plane', vec3(d.normal, `datum "${name}" normal`));
         (set.planes as DatumPlane[]).push({ name, point, normal: vec3(d.normal, `datum "${name}" normal`) });
         break;
       case 'cylinder': {
         const radius = Number(d.radius);
         if (!Number.isFinite(radius) || radius <= 0) throw new Error(`datum "${name}" needs a positive radius`);
+        rejectZeroDirection(name, 'cylinder', vec3(d.dir, `datum "${name}" dir`));
         (set.cylinders as DatumCylinder[]).push({ name, point, dir: vec3(d.dir, `datum "${name}" dir`), radius });
         break;
       }

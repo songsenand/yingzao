@@ -49,6 +49,8 @@ export interface StressMaterial {
   poissonRatio: number;
   /** Strength used for the colour tiers and the region classification only. */
   strengthMPa: number;
+  /** Density for self-weight; REQUIRED when includeSelfWeight is true. */
+  densityKgPerM3?: number;
   /** Where the numbers come from — a verdict without its premise is not evidence. */
   source: string;
   assumed: boolean;
@@ -64,7 +66,9 @@ export const SHIPPED_MATERIALS: Record<string, StressMaterial> = {
     // the isotropic model cannot represent layer direction, so the tiers must not be
     // drawn with a bulk strength that the printed part will not reach across layers.
     strengthMPa: 25,
-    source: 'builtin-default (bulk E ~3.5 GPa; strength = the 25-30 MPa layer-adhesion band)',
+    // Solid PLA, for the self-weight body force only (not a strength claim).
+    densityKgPerM3: 1240,
+    source: 'builtin-default (bulk E ~3.5 GPa; strength = the 25-30 MPa layer-adhesion band; density 1240 kg/m^3)',
     assumed: true,
   },
 };
@@ -98,6 +102,10 @@ export interface StressSolveRequest {
   fixedFaces?: StressSupportFace[];
   fixedPoints?: StressSupportPoint[];
   loads: StressLoad[];
+  /** Body force rho*g. The low-level default is false so the Python probes keep
+   *  their old external-load numbers; `simulate_stress` turns it on by default. */
+  includeSelfWeight?: boolean;
+  gravityMmPerS2?: number[];
   probeAtMm?: number[];
   resultants?: StressResultantSpec[];
   /** Support/load patches dropped from the report: their stress is the idealisation's. */
@@ -160,6 +168,14 @@ export interface StressSolveResult {
   reactionN: number[];
   appliedN: number[];
   equilibriumErrorPct: number;
+  loadCase: 'gravity' | 'service' | 'combined';
+  selfWeight: {
+    included: boolean;
+    densityKgPerM3: number | null;
+    gravityMmPerS2: number[];
+    totalWeightN: number;
+  };
+  totalWeightN: number;
   probeDisplacementMm: number[] | null;
   resultants: {
     axis: string;
@@ -205,12 +221,16 @@ export function resolveStressMaterial(materialJson?: string, materialIds?: strin
       throw new Error('materialJson poissonRatio must be in (0, 0.5)');
     }
     if (!(parsed.strengthMPa! > 0)) throw new Error('materialJson strengthMPa must be > 0');
+    if (parsed.densityKgPerM3 !== undefined && !(parsed.densityKgPerM3 > 0)) {
+      throw new Error('materialJson densityKgPerM3 must be > 0 when given');
+    }
     return {
       id: String(parsed.id),
       name: parsed.name ?? String(parsed.id),
       youngModulusMPa: parsed.youngModulusMPa!,
       poissonRatio: parsed.poissonRatio!,
       strengthMPa: parsed.strengthMPa!,
+      densityKgPerM3: parsed.densityKgPerM3,
       source: 'declared-inline',
       assumed: false,
     };
@@ -267,6 +287,9 @@ export async function solveStress(req: StressSolveRequest): Promise<StressSolveR
     fixedFaces: req.fixedFaces,
     fixedPoints: req.fixedPoints,
     loads: req.loads,
+    includeSelfWeight: req.includeSelfWeight,
+    gravityMmPerS2: req.gravityMmPerS2,
+    densityKgPerM3: req.material.densityKgPerM3,
     probeAtMm: req.probeAtMm,
     resultants: req.resultants,
     excludeFromReport: req.excludeFromReport,

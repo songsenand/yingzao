@@ -6,7 +6,7 @@ import { compileAndRender, compileStlOnly, renderScadPng } from './compile.ts';
 import { datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
 import {
   attachVersion, createUniquePart, derivePartName, ensurePart, findPartById, findPartByName,
-  listParts, type PartEntry,
+  listParts, partRoleOf, setPartRole, PART_ROLES, type PartEntry, type PartRole,
 } from './parts.ts';
 import { buildProductsWire } from './products.ts';
 import { storeFor } from './store.ts';
@@ -23,7 +23,7 @@ import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
 import type { Json } from './inspect.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
-import { projectStoresFor, requestStores, ensureProjectDir, type ProjectStores } from './project.ts';
+import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, type ProjectStores } from './project.ts';
 import { discoverWorkspaces } from './workspaces.ts';
 import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
@@ -36,6 +36,7 @@ import { connectedBodies, parseBinaryStl, boundingBox as boundingBoxOf, bounding
 import { suspectParts, formatSuspects, transformedAabb, SUSPECT_RULE, type SceneSolid } from './geometry-sanity.ts';
 import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport } from './physics.ts';
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
+import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
@@ -55,7 +56,7 @@ import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial,
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
-  deriveNameFromFile, importGeometry, normalizeDatums, type DatumInput, type Unit,
+  deriveNameFromFile, importGeometry, normalizeDatums, datumDirectionWarnings, type DatumInput, type Unit,
 } from './import.ts';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -587,7 +588,7 @@ export function registerCadTools(
   // POST /api/cad/motion/run route — identical report shape either way.
   async function runMotionJob(a: {
     parts: { name: string; scadCode?: string; versionId?: string; bodyType: string; position: number[]; rotation?: number[]; pivot?: number[] }[];
-    joints?: { type: string; bodyA: string; bodyB: string; anchorA: number[]; anchorB: number[]; axis: number[]; limits?: [number, number] }[];
+    joints?: { type: string; bodyA: string; bodyB: string; anchorA?: number[]; anchorB?: number[]; anchorWorld?: number[]; axis: number[]; limits?: [number, number] }[];
     drive?: { body: string; axis: number[]; omegaRadPerSec: number };
     oscillators?: { body: string; axis: number[]; amplitudeMm?: number; periodSec?: number; phaseRad?: number; pitchRadiusMm?: number }[];
     cycles?: number;
@@ -638,7 +639,37 @@ export function registerCadTools(
     //
     // The stored STL is the re-based one and the trajectory is the engine's own,
     // so the panel's playback and the keyframe renders stay consistent.
-    const jointsIn = a.joints ?? [];
+    // ---- G1b: world-frame anchors ------------------------------------------
+    // `anchorWorld` says the joint point in WORLD coordinates and the tool derives
+    // each side's file-frame anchor — the inverse of the trap roberval fell into
+    // (anchors 10mm apart because a [90,0,0]-rotated body's file frame was treated
+    // as world). world→local: v_local = Rᵀ·(v_world − pos), R = euler XYZ columns.
+    const worldToLocal = (name: string, world: number[]): [number, number, number] => {
+      const p = a.parts.find((x) => x.name === name);
+      if (!p) {
+        throw argError('simulate_motion', 'joints', 'names a part that is not in this scenario', 'bodyA/bodyB must name parts of this scenario', { received: name });
+      }
+      const pos = p.position as [number, number, number];
+      const rot = (p.rotation ?? undefined) as [number, number, number] | undefined;
+      const w: [number, number, number] = [world[0]! - pos[0]!, world[1]! - pos[1]!, world[2]! - pos[2]!];
+      if (!rot) return w;
+      const R = eulerMatrix(rot);
+      return [
+        R[0]![0]! * w[0] + R[1]![0]! * w[1] + R[2]![0]! * w[2],
+        R[0]![1]! * w[0] + R[1]![1]! * w[1] + R[2]![1]! * w[2],
+        R[0]![2]! * w[0] + R[1]![2]! * w[1] + R[2]![2]! * w[2],
+      ];
+    };
+    const jointsIn = (a.joints ?? []).map((j) => {
+      if (j.anchorA !== undefined && j.anchorB !== undefined) return j;
+      if (!Array.isArray((j as unknown as { anchorWorld?: number[] }).anchorWorld) || (j as unknown as { anchorWorld?: number[] }).anchorWorld!.length !== 3) {
+        throw argError('simulate_motion', 'joints', 'needs anchorA + anchorB (each body\'s own file frame) OR anchorWorld (world frame)',
+          'either both per-body anchors, or one anchorWorld — anchors 10mm apart is how a run describes an unassembled pose',
+          { received: { bodyA: j.bodyA, bodyB: j.bodyB, anchorA: j.anchorA, anchorB: j.anchorB }, example: 'joints: [{ type: "revolute", bodyA: "base", bodyB: "beam", anchorWorld: [0, 0, 205], axis: [0, 1, 0] }]' });
+      }
+      const w = (j as unknown as { anchorWorld: number[] }).anchorWorld;
+      return { ...j, anchorA: worldToLocal(j.bodyA, w), anchorB: worldToLocal(j.bodyB, w) };
+    });
     const pivotOf = new Map<string, [number, number, number]>();
     const pivots: Record<string, [number, number, number]> = {};
     for (const p of a.parts) {
@@ -683,8 +714,8 @@ export function registerCadTools(
       const pb = pivotOf.get(j.bodyB) ?? [0, 0, 0];
       return {
         ...j,
-        anchorA: [j.anchorA[0]! - pa[0], j.anchorA[1]! - pa[1], j.anchorA[2]! - pa[2]],
-        anchorB: [j.anchorB[0]! - pb[0], j.anchorB[1]! - pb[1], j.anchorB[2]! - pb[2]],
+        anchorA: [(j.anchorA as number[])[0]! - pa[0], (j.anchorA as number[])[1]! - pa[1], (j.anchorA as number[])[2]! - pa[2]],
+        anchorB: [(j.anchorB as number[])[0]! - pb[0], (j.anchorB as number[])[1]! - pb[1], (j.anchorB as number[])[2]! - pb[2]],
       };
     });
 
@@ -839,7 +870,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'generate_part',
     description:
-      'Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. ' +
+      'Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. G2 (2026-10-29): datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; OpenSCAD positional arguments are silent, so a swap compiles and corrupts the contract (roberval v048). A zero direction is a compile error; a direction that dwarfs its own point comes back as a compile warning naming the datum. ' +
       'The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.',
     parameters: {
       scadCode: {
@@ -943,6 +974,10 @@ export function registerCadTools(
       // budget" — the panel still loads model.stl, so the human still sees it.
       const selection = selectAttachedViews(result.renders, a.views);
       if (selection.warning) result.warnings.push(selection.warning);
+      // G5: say the binding OUT LOUD in the turn that wrote it — a wrong bind
+      // (roberval: corpus landed at the repo root) used to be silent forever.
+      const bindNotice = takeBindingNotice(exec);
+      if (bindNotice) result.warnings.push(bindNotice);
       const attachedRenders = selection.attached;
 
       // Persist renders as durable model-visible attachments.
@@ -1563,6 +1598,14 @@ export function registerCadTools(
     }, project);
 
     const warnings: string[] = [];
+    // G4 (2026-10-29): a merged body is a research artifact, not a printed part — the
+    // roberval audit demanded printability runs for kinematic stand-ins (r025–r036)
+    // because nothing said otherwise. Mark the resolved part 'research' unless it
+    // already carries an explicit role (a declared role is never overwritten).
+    if (part.role === undefined) {
+      const { entry } = await setPartRole(project.partStore, part.id, 'research');
+      warnings.push(`part "${entry.name}" marked role=research (merged body): the delivery audit exempts it from printability and newest-validated checks — set_part_role back to printed if it IS a printed part`);
+    }
     const sources: { name: string; versionId?: string }[] = [];
     const provenance: { name: string; versionId: string | null }[] = [];
     // The union is Python's (batch 1). Each part's STL goes to the worker's
@@ -1673,7 +1716,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'merge_parts',
     description:
-      'Union two or more parts, each at its assembly placement, into ONE new solid part version. Use it when the whole machine must be a single rigid body: simulate_physics topple/stability, or a whole-assembly measure_part. Replaces hand-merging STLs in OpenSCAD. mm, z-up; rotate first (degrees in R = Rz·Ry·Rx — the OpenSCAD/Manifold composition; three.js order `ZYX`), then translate.',
+      'Union two or more parts, each at its assembly placement, into ONE new solid part version. Use it when the whole machine must be a single rigid body: simulate_physics topple/stability, or a whole-assembly measure_part. Replaces hand-merging STLs in OpenSCAD. mm, z-up; rotate first (degrees in R = Rz·Ry·Rx — the OpenSCAD/Manifold composition; three.js order `ZYX`), then translate. G4 (2026-10-29): the merged part is marked role=research (an analysis body, not a printed part) unless it already carries an explicit role — the delivery audit then exempts it from the printability and newest-validated checks; set_part_role back to printed if it IS printed.',
     parameters: {
       parts: {
         type: 'array',
@@ -1756,7 +1799,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'set_datums',
     description:
-      'Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical.',
+      'Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical. G2 (2026-10-29): a zero dir/normal is REFUSED (an axis with no direction can never be an assembly endpoint), and an axis whose direction dwarfs its own point warns as a probable p/dir swap — the anchor is still recorded, because this tool is also the repair path (roberval v048).',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Version to read or edit, e.g. "v003".' },
       datums: {
@@ -1836,6 +1879,10 @@ export function registerCadTools(
       const incoming = normalizeDatums(a.datums);
       if (!incoming) throw new Error('set_datums: no usable anchors in the request');
       const next = a.replace ? incoming : unionDatumSets(current, incoming);
+      // G2 (2026-10-29): the p/dir positional swap is the trap this tool exists to
+      // repair (roberval v048 bottom_axis was point=[0,1,0] dir=[0,0,140]) — say so
+      // at the repair site too, not only at the compile echo.
+      for (const w of datumDirectionWarnings(next)) warnings.push(w);
       if (entry?.source?.kind === 'merged') {
         warnings.push('this version is a merged body; its anchors live in the merged frame, which is where check_assembly resolves them');
       }
@@ -1874,6 +1921,61 @@ export function registerCadTools(
         datums: describe(next),
         counts: summarise(next),
         warnings,
+      };
+    },
+  }));
+
+  // --- set_part_role: the audit exempts what was DECLARED not-printed (G4) ---
+
+  registerTool(defineTool({
+    name: 'set_part_role',
+    description:
+      'Declare what a part IS: printed (default — full printability and delivery expectations), stock (purchased hardware modelled for reference, e.g. an M3 screw), or research (an analysis/merged body, e.g. a kinematic stand-in). The delivery audit exempts stock/research parts from the printability-for-every-part claim and from the newest-version-unvalidated check, and reports the exemption as an info finding — a declared exemption, never an inference from the name. merge_parts marks its output research automatically. If a part actually ships as a printed part, its role must be printed.',
+    parameters: {
+      part: { type: 'string', required: true, description: 'Part name (as shown by the part picker) or part id, e.g. "m3_screw_20" or "p012".' },
+      role: { type: 'string', required: true, description: `One of ${PART_ROLES.join(' | ')}.` },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          partId: { type: 'string', required: true, description: 'The part this role now belongs to.' },
+          name: { type: 'string', required: true },
+          role: { type: 'string', required: true, description: 'The role now in effect.' },
+          previousRole: { type: 'string', required: true, description: 'What it was before (printed is the implicit default).' },
+          effect: { type: 'string', required: true, description: 'What the audit now does with this part.' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { part?: string; role?: string };
+      if (!a.part?.trim()) throw argError('set_part_role', 'part', 'is required', 'a part name or id, e.g. "m3_screw_20"', { received: a?.part });
+      const role = a.role as PartRole;
+      if (!PART_ROLES.includes(role)) {
+        throw argError('set_part_role', 'role', 'is not a known role',
+          'one of printed | stock | research — the role decides what the delivery audit expects of this part',
+          { received: a?.role });
+      }
+      const { partStore } = await allStores(exec);
+      const entry = (await findPartByName(partStore, a.part)) ?? (await findPartById(partStore, a.part.trim()));
+      if (!entry) {
+        const known = await listParts(partStore);
+        throw argError('set_part_role', 'part', 'does not match any part',
+          'a part name from the picker / parts manifest (role: printed | stock | research)',
+          { example: `set_part_role({ part: "${known[0]?.name ?? 'bracket'}", role: "stock" })`, received: { given: a.part, knownParts: known.slice(0, 8).map((p) => p.name) } });
+      }
+      const { previous } = await setPartRole(partStore, entry.id, role);
+      const effect = role === 'printed'
+        ? 'full delivery expectations: printability run required per manufacturability claim, newest version must be validated'
+        : 'exempt from the printability claim and the newest-version-unvalidated check; the audit reports this exemption as info (role-exempt-parts)';
+      return {
+        partId: entry.id,
+        name: entry.name,
+        role,
+        previousRole: previous,
+        effect,
       };
     },
   }));
@@ -2587,8 +2689,9 @@ export function registerCadTools(
             type: { type: 'string', required: true, description: '"revolute" (hinge) or "prismatic" (slide).' },
             bodyA: { type: 'string', required: true },
             bodyB: { type: 'string', required: true },
-            anchorA: { type: 'array', required: true, description: 'Joint anchor in A local frame [x,y,z] mm.', items: { type: 'number' } },
-            anchorB: { type: 'array', required: true, description: 'Joint anchor in B local frame [x,y,z] mm.', items: { type: 'number' } },
+            anchorA: { type: 'array', description: 'Joint anchor in A local frame [x,y,z] mm — give this AND anchorB, OR anchorWorld.', items: { type: 'number' } },
+            anchorB: { type: 'array', description: 'Joint anchor in B local frame [x,y,z] mm.', items: { type: 'number' } },
+            anchorWorld: { type: 'array', description: 'G1 (2026-10-29): the joint point in WORLD coordinates — the tool derives both file-frame anchors from each body\'s placement. Preferred: it removes the frame bookkeeping that produced 10mm-apart refusals and 105mm drift (roberval).', items: { type: 'number' } },
             axis: { type: 'array', required: true, description: 'Rotation/slide axis [x,y,z].', items: { type: 'number' } },
             limits: { type: 'array', description: 'Prismatic travel limits [min,max] mm.', items: { type: 'number' } },
           },
@@ -4104,6 +4207,7 @@ export function registerCadTools(
     a: {
       versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
       profileIds?: string[]; profilesJson?: string; mode?: string;
+      printOrientationDeg?: [number, number, number];
     },
     project: ProjectStores,
   ) {
@@ -4235,6 +4339,7 @@ export function registerCadTools(
         wallMinMm: wall?.value ?? a.wallMinMm,
         overhangDeg: overhang?.value ?? a.overhangDeg,
         samples: a.samples,
+        ...(a.printOrientationDeg ? { printOrientationDeg: a.printOrientationDeg } : {}),
         withSampleField: true,
       });
       base = base ?? screen;
@@ -4513,7 +4618,7 @@ export function registerCadTools(
       await run.commit({
         status: verdict === 'not-excluded' ? 'pass' : verdict === 'excluded' ? 'fail' : 'check',
         judgement: verdict,
-        summary: `悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
+        summary: `打印悬垂 ${forModel.overhangAreaMm2}mm² · 最薄 ${forModel.minWallMm ?? '—'}mm · 可疑处 ${forModel.attention.layers.reduce((n, l) => n + l.peaks.length, 0)}`,
         title: `制造筛查 · ${a.versionId}`,
         sourceVersionIds: [a.versionId],
         subject: `printability:${a.versionId}`,
@@ -4548,7 +4653,7 @@ export function registerCadTools(
       // the cad-manufacturing skill (loaded on demand). What stays HERE is what a caller
       // must know at call time — every token in a tool description is paid on EVERY
       // request, while the skill is not (DESIGN §31.4 / DESIGN 13.12).
-      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
+      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
       'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. ' +
       'JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).',
     parameters: {
@@ -4561,7 +4666,7 @@ export function registerCadTools(
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width).' },
       overhangDeg: {
         type: 'number',
-        description: 'A down-facing face tilted more than this many degrees from vertical counts as needing support. Default 45.',
+        description: 'A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45.',
       },
       samples: { type: 'number', description: 'Approximate surface samples. Default 600; raise for big meshes, lower for quick passes.' },
       profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles to judge against, e.g. ["fdm-pla-0.4"]. Each yields its own two-valued verdict. Omit (with profilesJson) to use the built-in fallback, which the report then names.' },
@@ -4597,7 +4702,7 @@ export function registerCadTools(
           thinAreaMm2: { type: 'number', required: true, description: 'Area of the sub-threshold region, scaled from the sample to the whole surface.' },
           thinAreaPct: { type: 'number', required: true, description: 'That area as a % of the whole surface — a thin SHELL spans a lot of it, a blunt edge only a strip.' },
           surfaceAreaMm2: { type: 'number', required: true, description: 'Measured surface area; sqrt(area / sampled) is the sampling spacing, i.e. the smallest wall difference this screen can resolve (the band width, DESIGN §27.4).' },
-          overhangAreaMm2: { type: 'number', required: true, description: 'Exact: summed over every triangle, not sampled.' },
+          overhangAreaMm2: { type: 'number', required: true, description: 'Exact print-overhang area: summed over every triangle, not sampled. NOT structural overhang/self-weight stress.' },
           overhangZRange: { type: 'array', items: { type: 'number' } },
           findings: { type: 'array', required: true, items: { type: 'string' } },
           minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found — the witness a human can go and look at.' },
@@ -4733,7 +4838,8 @@ export function registerCadTools(
       },
       profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability).' },
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported (printability half). Default 1.2.' },
-      overhangDeg: { type: 'number', description: 'Down-facing faces steeper than this count as overhang (printability half). Default 45.' },
+      overhangDeg: { type: 'number', description: 'Down-facing faces steeper than this count as print-overhang (FDM support, printability half; NOT structural overhang/self-weight stress). Default 45.' },
+      printOrientationDeg: { type: 'array', items: { type: 'number' }, description: 'G6 (2026-10-29): the PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it; the reply\'s overhang/witness numbers are then in the printed frame.' },
       samples: { type: 'number', description: 'Approximate surface samples for the wall half. Default 600.' },
     },
     output: {
@@ -4887,6 +4993,7 @@ export function registerCadTools(
     name: 'simulate_stress',
     description:
       'Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG). You must declare the CASE — material, supports and loads — because "the stress" without one is not a number. ' +
+      'SELF-WEIGHT IS A LOAD CASE NOW (2026-10-29): `includeSelfWeight` defaults to true and applies rho*g; `loads` is then optional. Use `supports: [{ground:true}]` for a part resting on the bed; ground is a HELD FACE, not a frictional/unilateral contact. `loadCase` reports gravity / service / combined; "gravity stress" / "structural overhang" is valid only when the reply says so. ' +
       'TRUST from this tool: the integrals (reaction, section force/moment, compliance, strain energy), the hot-spot LOCATIONS, and the surface stress recovered by extrapolating the depth profile inward from each hot spot. ' +
       'DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). ' +
       'DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part\'s layer-direction weakness — usually what breaks first — is invisible to it. ' +
@@ -4899,8 +5006,7 @@ export function registerCadTools(
       versionId: { type: 'string', required: true, description: 'Saved version id to analyse, e.g. "v050".' },
       loads: {
         type: 'array',
-        required: true,
-        description: 'The load case. Each entry is a force in N applied either to a whole bounding-box face or to the nodes within radiusMm of atMm.',
+        description: 'The EXTERNAL load case. Optional when `includeSelfWeight` is true; at least one of `loads` / self-weight is required. Each entry is a force in N applied either to a whole bounding-box face or to the nodes within radiusMm of atMm.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -4921,7 +5027,7 @@ export function registerCadTools(
       },
       supports: {
         type: 'array',
-        description: 'Where the part is held. A face locks the outermost node layer; atMm locks the nodes within radiusMm (e.g. a knife edge resting on a pin). An unsupported load is a rigid-body mode and is REFUSED, not fudged.',
+        description: 'Where the part is held. A face locks the outermost node layer; atMm locks the nodes within radiusMm (e.g. a knife edge resting on a pin); `ground: true` holds the lowest z face (a part resting on the bed). An unsupported load is a rigid-body mode and is REFUSED, not fudged. Ground is a HELD FACE, not a frictional or unilateral contact.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -4935,6 +5041,7 @@ export function registerCadTools(
             },
             atMm: { type: 'array', items: { type: 'number' }, description: 'Lock the nodes near this point.' },
             radiusMm: { type: 'number', description: 'Radius around atMm. Default 1.5 cells.' },
+            ground: { type: 'boolean', description: 'Hold the lowest z face as a bed/ground support. Equivalent to face {axis:"z",side:"min"}; a HELD FACE, not a contact law.' },
           },
         },
       },
@@ -4955,8 +5062,10 @@ export function registerCadTools(
         },
       },
       materialIds: { type: 'array', items: { type: 'string' }, description: 'Shipped materials, e.g. ["fdm-pla"]. The strength behind the tiers is the LAYER-ADHESION band, not the bulk figure. Omit (with materialJson) for your own; the built-in is marked assumed.' },
-      materialJson: { type: 'string', description: 'Inline material: {"id","name","youngModulusMPa","poissonRatio","strengthMPa"}. Use for a filament you have data for.' },
+      materialJson: { type: 'string', description: 'Inline material: {"id","name","youngModulusMPa","poissonRatio","strengthMPa","densityKgPerM3"}. `densityKgPerM3` is required when includeSelfWeight is true. Use for a filament you have data for.' },
       dxMm: { type: 'number', description: 'Voxel size in mm. Default: 8 cells across the thinnest dimension. Halving it costs ~8x. A hot spot thinner than ~8 cells needs a finer grid before its position is trustworthy.' },
+      includeSelfWeight: { type: 'boolean', description: 'Include the body force rho*g (default true). Requires the material density; a gravity-only case is valid as long as `supports` is given. Set false to reproduce an external-load-only result.' },
+      gravityMmPerS2: { type: 'array', items: { type: 'number' }, description: 'Gravity vector [gx,gy,gz] in mm/s^2 (default [0,0,-9810], -z is down). Only used when includeSelfWeight is true.' },
       criticalDistanceMm: { type: 'number', description: 'Distance inside the surface at which peaks are read. Default 1.0 mm (the grid cannot sample closer than one cell; the distance actually used comes back as effectiveSampleDistanceMm).' },
       probeAtMm: { type: 'array', items: { type: 'number' }, description: 'Watch this point: report its displacement, e.g. a pan centre or a beam tip.' },
       resultants: {
@@ -4996,6 +5105,8 @@ export function registerCadTools(
           verdict: { type: 'string', description: '"ok" | "check" | "overstressed" (absent in scan mode) — a SUMMARY for a human, NOT the delivery form. Deliver against `delivery` (excluded / difficult / not-excluded), which is the two-or-three-valued judgement with witnesses.' },
           delivery: { type: 'object', additionalProperties: true, description: 'The delivery discipline: an allowable-stress requirement and a three-valued verdict — "excluded" (a witness contradicts it), "difficult" (the bounds straddle it), "not-excluded" (no counter-example; NEVER "ok"); plus `unevaluable` for numbers this mesh cannot decide. DETECTION IS NOT DELIVERY: the geometry suspects live in `attention`, never as witnesses here.' },
           material: { type: 'object', required: true, additionalProperties: true },
+          loadCase: { type: 'string', required: true, description: '"gravity" (self-weight only), "service" (external loads only), or "combined" (both). The solver reports what it actually applied, not what the caller intended.' },
+          selfWeight: { type: 'object', required: true, additionalProperties: true, description: 'Body-force premise: included, densityKgPerM3, gravityMmPerS2 and totalWeightN. totalWeightN is rho*V*g; it is not a stress and not a safety factor.' },
           method: { type: 'object', required: true, additionalProperties: true, description: 'What was actually solved: grid, degrees of freedom, CG iterations and residual, the sampling distance, the field file, how many cells the report excluded. A result without this is not reproducible.' },
           checks: { type: 'object', required: true, additionalProperties: true, description: 'Self-checks that do not need the answer to be right: equilibrium residual, strain-energy balance, mesh-independence deltas.' },
           resultants: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
@@ -5074,12 +5185,14 @@ export function registerCadTools(
       const a = args as {
         versionId: string;
         mode?: 'judge' | 'scan' | 'both';
-        loads: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
-        supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
+        loads?: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
+        supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
         excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
         materialIds?: string[];
         materialJson?: string;
         dxMm?: number;
+        includeSelfWeight?: boolean;
+        gravityMmPerS2?: number[];
         criticalDistanceMm?: number;
         probeAtMm?: number[];
         resultants?: { axis: string; atMm: number }[];
@@ -5091,6 +5204,13 @@ export function registerCadTools(
         throw new Error(await versionNotFound(store, a.versionId));
       }
       const material = resolveStressMaterial(a.materialJson, a.materialIds);
+      const includeSelfWeight = a.includeSelfWeight ?? true;
+      if (includeSelfWeight && !(material.densityKgPerM3 && material.densityKgPerM3 > 0)) {
+        throw new Error(
+          'simulate_stress: material densityKgPerM3 is required when includeSelfWeight is true ' +
+          '(shipped fdm-pla has 1240; materialJson must declare it, or pass includeSelfWeight:false)',
+        );
+      }
       const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
       const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
 
@@ -5110,7 +5230,7 @@ export function registerCadTools(
         path: modelPath,
         material,
         dxMm: a.dxMm,
-        loads: a.loads.map((l) => ({
+        loads: (a.loads ?? []).map((l) => ({
           forceN: l.forceN,
           face: l.face
             ? { axis: l.face.axis as 'x' | 'y' | 'z', side: (l.face.side as 'min' | 'max') ?? 'min' }
@@ -5118,9 +5238,16 @@ export function registerCadTools(
           atMm: l.atMm,
           radiusMm: l.radiusMm,
         })),
-        fixedFaces: (a.supports ?? [])
-          .filter((s) => s.face)
-          .map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
+        includeSelfWeight,
+        gravityMmPerS2: a.gravityMmPerS2,
+        fixedFaces: [
+          ...(a.supports ?? [])
+            .filter((s) => s.face)
+            .map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
+          ...(a.supports ?? [])
+            .filter((s) => s.ground)
+            .map(() => ({ axis: 'z' as const, side: 'min' as const })),
+        ],
         fixedPoints: (a.supports ?? [])
           .filter((s) => s.atMm)
           .map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
@@ -5194,6 +5321,8 @@ export function registerCadTools(
         verdict,
         delivery,
         material,
+        loadCase: result.loadCase,
+        selfWeight: result.selfWeight,
         method: {
           dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm,
           // The factors decide the allowable stress; a reader must be able to see that they
@@ -5222,7 +5351,7 @@ export function registerCadTools(
         judgement: delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
           : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
             : 'not-excluded',
-        summary: `${material.id} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
+        summary: `${material.id} · ${result.loadCase} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
         title: `应力分析 · ${a.versionId} · ${verdict}`,
         sourceVersionIds: [a.versionId],
         subject: `stress:${a.versionId}`,
@@ -5235,6 +5364,8 @@ export function registerCadTools(
         // `delivery`" was impossible: judge mode returned a verdict with no judgement.
         delivery: delivery as unknown as { [key: string]: Json },
         material: material as unknown as { [key: string]: Json },
+        loadCase: result.loadCase,
+        selfWeight: result.selfWeight as unknown as { [key: string]: Json },
         method: {
           solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
           warnFactor, badFactor, factorSource: FACTOR_SOURCE,
@@ -5321,9 +5452,13 @@ export function registerCadTools(
       'Where to LOOK on a saved version — not a verdict. Mesh health (watertight, body count) plus ' +
       'REENTRANT CORNERS: concave edges whose face normals turn by more than `concaveMinDeg` (default 100°), ' +
       'chained and located. θ=90° is an ordinary T-junction (not reported); θ=135° is a 45° V-notch; ' +
-      'θ→180° is a knife slit. A notch is where printed parts initiate cracks, so each one comes back with ' +
-      'a coordinate, a bbox and a runnable next observation. Run it on a new part, and again after any ' +
-      'geometry change: it is how a fix is shown to have worked (the repaired part must go quiet).',
+      'θ→180° is a knife slit. Plus MESH HEALTH (multi-body / non-manifold / degenerate) and NON-PLANAR ' +
+      'CLOSED SHARP LOOPS (`boolean-seam`, 80° edges): a curved/angled boolean seam, the trace a missed ' +
+      'difference/union often leaves. Flat hole rims and 90° pocket rims are excluded on purpose, so a ' +
+      'molecule with many bond necks does not flood the list; at most 8 seams are returned, the count is in stats. ' +
+      'A notch is where printed parts initiate cracks, so each one comes back with a coordinate, a bbox and ' +
+      'a runnable next observation. Run it on a new part, and again after any geometry change: it is how a ' +
+      'fix is shown to have worked (the repaired part must go quiet).',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id to scan, e.g. "v012".' },
       concaveMinDeg: { type: 'number', description: 'Report concave edges sharper than this face-normal angle. Default 100 (just past a right angle).' },
@@ -5341,7 +5476,7 @@ export function registerCadTools(
             items: {
               type: 'object', additionalProperties: false,
               properties: {
-                kind: { type: 'string', required: true, description: '"reentrant-corner" | "degenerate-faces" | "non-manifold" | "multi-body".' },
+                kind: { type: 'string', required: true, description: '"reentrant-corner" | "degenerate-faces" | "non-manifold" | "multi-body" | "boolean-seam".' },
                 where: {
                   type: 'object', required: true, additionalProperties: false,
                   properties: {
@@ -5669,11 +5804,15 @@ export function registerCadTools(
           const conn = rConn.value;
           const watertight = conn.watertight !== false;
           const bodies = Number(conn.bodies ?? conn.components ?? conn.shells ?? 1);
+          // G3 (2026-10-29): name the hole-core plugs instead of just "bodies N" —
+          // the roberval bottom beam shipped with two of them and nobody said why.
+          const strayShells = Array.isArray(conn.strayShells) ? conn.strayShells.length : 0;
           steps.push({
             step: `mesh-health:${part.name}@${vid}`,
             ran: true,
             judgement: !watertight ? 'excluded' : bodies > 1 ? 'difficult' : 'not-excluded',
-            detail: `watertight ${watertight} · bodies ${bodies} · keys ${Object.keys(conn).join(',')}`,
+            detail: `watertight ${watertight} · bodies ${bodies} · keys ${Object.keys(conn).join(',')}` +
+              (strayShells > 0 ? ` · ${strayShells} 个腔内碎壳（布尔残片/孔芯，体积与位置见 run 的 strayShells）——合并前删除或修布尔` : ''),
           });
         } catch (e) {
           steps.push({
@@ -5793,19 +5932,28 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'analyze',
     description:
-      'EXPERIMENTAL — do not base a delivery claim on this yet: its overhang handling is still AREA-based, ' +
-      'which lights up whole regions (the toy-balance pan showed 1041 of 2871 samples red) instead of pointing. ' +
-      'Build the risk map for a version and say where to LOOK: geometry corners (scan_attention) + ' +
-      'measured wall thickness + overhang faces, each normalised to |u| in [0,1] against its own DECLARED ' +
+      'EXPERIMENTAL — do not base a delivery claim on this yet. The POINT map is thin-wall (lower side) + ' +
+      'reentrant corners + (when `stressRunId` is given) STRENGTH from that stress run; PRINT overhang and thick-wall are PER-PART facts (area / thickness), never points — ' +
+      'scoring them per sample painted whole rims red and buried the real corner signals (fixed 2026-10-21). ' +
+      'The remaining caveats: the print-overhang fact is AREA-based, not mass-based; `support` is a mass-based ' +
+      'estimate not verified on real prints; the |u| bands are declared, not calibrated. ' +
+      'Build the risk map for a version and say where to LOOK: reentrant corners + mesh health ' +
+      '(multi-body / non-manifold / degenerate) + non-planar boolean seams (scan_attention) + ' +
+      'measured wall thickness (thin side), each normalised to |u| in [0,1] against its own DECLARED ' +
       'band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus ' +
-      'an agreement count. It never gates and never returns a verdict: a peak means "look here", not "this ' +
-      'will break". Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".',
+      'an agreement count. When `stressRunId` is given, that run\'s local stress peaks also enter as ' +
+      '`strength-concentration` at |u|=0.5 (a LOOK, not a risk); the absolute `strength` layer may be silent. ' +
+      'Overhang area / thick-wall are reported once per part in `partNotes`; the ' +
+      'mass-based unsupported regions are in `support`. It never gates and never returns a verdict: a peak ' +
+      'means "look here", not "this will break". Comfortable regions are dropped, so an empty peak list ' +
+      'means "nothing stands out", NOT "safe".',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v069".' },
       cellMm: { type: 'number', description: 'Clustering cell for peaks (default 8 mm).' },
       wallMinMm: { type: 'number', description: 'Wall band lower edge (default: the declared profile\'s wallMinMm, else 1.2 mm — and the reply says which).' },
-      wallMaxMm: { type: 'number', description: 'Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement).' },
+      wallMaxMm: { type: 'number', description: 'Wall band upper edge — thick masses are counted per part in `partNotes.thickSamples` (default 4.0 mm, a DECLARED heuristic, not a measurement); they are NOT scored as points.' },
       profileIds: { type: 'array', items: { type: 'string' }, description: 'Process profiles to take the wall band from (same meaning as in check_printability). Omit and the band source says "no profile" — an unsigned threshold, which DESIGN §27.1 exists to prevent.' },
+      stressRunId: { type: 'string', description: 'Optional stress run id (kind "stress") for this version. Its von-mises field is fused as the STRENGTH layer, normalised by that run\'s declared warnAt/badAt. Without it strength is `notMapped` — absence is not 0. The run must cite this version.' },
       dxMm: { type: 'number', description: 'Voxel size for the support estimate (default 1.0 mm).' },
       minMassG: { type: 'number', description: 'Unsupported MASS above which a hanging region is reported (default 1.0 g, declared). A 0.2 g sliver is free.' },
       bridgeMaxMm: { type: 'number', description: 'Horizontal span a printer can bridge without support (default 10 mm, declared).' },
@@ -5817,10 +5965,12 @@ export function registerCadTools(
           peaks: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
           layers: { type: 'object', required: true, additionalProperties: true },
           notMapped: { type: 'array', required: true, items: { type: 'string' } },
-          partNotes: { type: 'object', required: true, additionalProperties: true, description: 'Per-PART facts that are not places: overhang faces/area (a global support cost). Deliberately not a point layer — scoring it per sample paints whole bowls red and buries the local signals.' },
-          support: { type: 'object', additionalProperties: true, description: 'Support adequacy by MASS: regions of material with no 45-degree support path to the bed, above `minMassG`, with bridgeable spans excused. null when the runtime could not run it (the reply says so).' },
+          partNotes: { type: 'object', required: true, additionalProperties: true, description: 'Per-PART facts that are not places: PRINT-overhang faces/area (a global support cost; NOT structural overhang/self-weight stress) plus max wall / thick samples. ALWAYS present; zeros mean "none", never "not written". Deliberately not a point layer — scoring it per sample paints whole bowls red and buries the local signals.' },
+          stress: { type: 'object', additionalProperties: true, description: 'Provenance of the fused STRENGTH layer: runId, loadCase, warnAt/badAt, source. Omitted when no `stressRunId` was given.' },
+          support: { type: 'object', additionalProperties: true, description: 'Support adequacy by MASS: regions of material with no 45-degree support path to the bed, above `minMassG`, with bridgeable spans excused. OMITTED when the runtime could not run it; `notMapped` names the reason.' },
           bands: { type: 'object', required: true, additionalProperties: true },
           note: { type: 'string', required: true },
+          timings: { type: 'object', required: true, additionalProperties: true, description: 'Per-step wall time in ms (printability / scan / support / total); a step that blew its budget is named in notMapped instead of being silently dropped.' },
         },
       },
       render: (_a, v) => {
@@ -5839,6 +5989,7 @@ export function registerCadTools(
         // three reads below as errors on a type that the runtime does populate.
         dxMm?: number; minMassG?: number; bridgeMaxMm?: number;
         profileIds?: string[];
+        stressRunId?: string;
       };
       const project = await allStores(exec);
       // The band is a DECLARED claim, so the reply must say where it came from. Before this,
@@ -5934,17 +6085,83 @@ export function registerCadTools(
         if (rSup.ok) support = rSup.value;
         else supportError = rSup.reason; // reported, never swallowed
       }
-      const out = analyzeVersion({ suspects, field: screen.field as never, wallBand, cellMm: a.cellMm });
+      // The STRENGTH layer is an EXISTING stress run, not a second solve: the run pins
+      // its own material/load case, and re-solving here would silently choose a case.
+      let stressLayer: {
+        samples: { p: number[]; v: number }[]; peaks: { p: number[]; v: number }[];
+        warnAt: number; badAt: number; source: string; runId: string; loadCase: string;
+      } | undefined;
+      if (a.stressRunId) {
+        const dir = join(project.store.root, 'runs', a.stressRunId);
+        const metaPath = join(dir, 'run.json');
+        if (!existsSync(metaPath)) {
+          throw new Error(`unknown stress run "${a.stressRunId}" — it is a run id (rNNN) from simulate_stress, not a version id`);
+        }
+        const meta = JSON.parse(await readFile(metaPath, 'utf8')) as { kind?: string; sourceVersionIds?: string[] };
+        if (meta.kind !== 'stress') {
+          throw new Error(`run "${a.stressRunId}" is kind "${meta.kind ?? 'unknown'}", not "stress" — pass a simulate_stress run`);
+        }
+        if (!(meta.sourceVersionIds ?? []).includes(a.versionId)) {
+          throw new Error(`stress run "${a.stressRunId}" does not cite version "${a.versionId}" — its field cannot be fused into this version`);
+        }
+        const att = JSON.parse(await readFile(join(dir, 'attention.json'), 'utf8')) as {
+          normalization?: Record<string, { warnAt?: number; badAt?: number; source?: string }>;
+          samples?: Record<string, { p: number[]; v: number }[]>;
+        };
+        const norm = att.normalization?.['von-mises'];
+        const samples = att.samples?.['von-mises'];
+        const warnAt = Number(norm?.warnAt);
+        const badAt = Number(norm?.badAt);
+        if (!norm || !samples || !(warnAt > 0) || !(badAt > warnAt)) {
+          throw new Error(`stress run "${a.stressRunId}" has no usable von-mises normalization/samples`);
+        }
+        const report = JSON.parse(await readFile(join(dir, 'report.json'), 'utf8')) as {
+          loadCase?: string;
+          attention?: { layers?: { id?: string; peaks?: { atMm?: number[]; value?: number }[] }[] };
+        };
+        const stressAttentionLayer = (report.attention?.layers ?? []).find((l) => l.id === 'von-mises');
+        const peaks = (stressAttentionLayer?.peaks ?? [])
+          .filter((p) => p.atMm?.length === 3 && Number.isFinite(p.value))
+          .map((p) => ({ p: p.atMm!, v: Number(p.value) }));
+        stressLayer = {
+          samples,
+          peaks,
+          warnAt,
+          badAt,
+          source: String(norm.source ?? 'stress run'),
+          runId: a.stressRunId,
+          loadCase: String(report.loadCase ?? 'unknown'),
+        };
+      }
+      const out = analyzeVersion({
+        suspects,
+        field: screen.field as never,
+        wallBand,
+        cellMm: a.cellMm,
+        stress: stressLayer,
+      });
       if (cornerError) out.notMapped.push(`corner-scan: ${cornerError}`);
       if (supportError) out.notMapped.push(`support: ${supportError}`);
       if (!screen.field) out.notMapped.push('wall-field: per-sample field missing — wall layer absent from this map');
+      if (!stressLayer) out.notMapped.push('strength: no stress run (pass stressRunId)');
       // Persist the map so the panel can DRAW it and a later reader can audit it: the
       // heat map and the JSON come from the same object (one surface, two readers).
       const run = await beginRun(project.runStore, {
         kind: 'analyze',
         title: `风险图 · ${a.versionId}`,
       });
-      await run.json('report.json', { peaks: out.peaks, layers: out.layers, bands: { wall: wallBand }, notMapped: out.notMapped });
+      await run.json('report.json', {
+        peaks: out.peaks,
+        layers: out.layers,
+        bands: { wall: wallBand },
+        notMapped: out.notMapped,
+        // The per-PART facts are part of the report, not just the reply: `partNotes: null`
+        // must mean "nothing to note", never "this field was not written". `support` is
+        // the mass-based unsupported-region estimate; both were reply-only before.
+        partNotes: out.partNotes,
+        stress: out.stress,
+        support,
+      });
       await run.json('attention.json', {
         id: 'analyze',
         versionId: a.versionId,
@@ -5959,21 +6176,24 @@ export function registerCadTools(
         // clean bill (the tool says so itself). It carries no judgement, so the revision
         // band reads 未验证 rather than borrowing this word (2026-10-23 audit, FIX-B4).
         status: 'check',
-        summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'}` +
+        summary: `${out.peaks.length} 处风险峰 · ${suspects.length} 处再入角 · 最高 |u| ${out.peaks[0]?.risk.toFixed(2) ?? '—'} · strength ${stressLayer ? stressLayer.runId : 'notMapped'}` +
           (cornerError ? ' · 角扫描失败（见 notMapped）' : ''),
       });
       // `samples` is the panel's fused field (already in the run's attention.json).
       // It is not in the reply schema and MUST NOT ride into the model's context:
       // the schema is closed, so it rejected the whole reply
       // (`"value.samples" is not a declared property`).
-      const { samples: _samples, ...forModel } = out;
+      const { samples: _samples, stress: stressMeta, ...forModel } = out;
       void _samples;
       return {
         ...forModel,
-        support,
+        // Omit rather than send null: the output schema is a closed object type, and
+        // `notMapped` already names the reason support/strength is absent.
+        ...(support ? { support } : {}),
+        ...(stressMeta ? { stress: stressMeta } : {}),
         timings: { ...timings, total: Date.now() - t0 },
         bands: { wall: wallBand },
-        note: `${out.peaks.length} peak(s) · ${suspects.length} corner suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
+        note: `${out.peaks.length} peak(s) · ${suspects.length} geometry suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · strength ${stressLayer ? `${stressLayer.loadCase}（${stressLayer.runId}）` : `未映射（没有 stress run）`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
       } as never;
     },
   }));
@@ -6057,7 +6277,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'check_assembly',
     description:
-      'Validate the assembly manifest (BOM + interface contracts): distance, diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
+      'Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
     parameters: {
       manifestPath: {
         type: 'string',

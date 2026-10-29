@@ -258,26 +258,47 @@ export function projectStores(cwd: string): ProjectStores {
  *
  * A call with no agent (a maintenance caller, a script) falls back to the
  * server's own cwd, which is the workspace the profile was started in.
+ *
+ * G5 (2026-10-29): the live cwd comes from the workingDirectory SERVICE — the
+ * same one the stock bash tool uses (`ctx.workingDirectory.ensure(agent, signal)`
+ * via the plugin `inject` array). Until this fix the code guessed an
+ * `agent.ctx.get('workingDirectory')` shape that exists on no real exec, so the
+ * lookup silently fell back to the session-header cwd — and C-lite then bound
+ * the WRONG root forever (roberval-balance: the corpus was generated at the repo
+ * root and had to be moved by hand). The acceptance that covered the old shape
+ * was measuring its own stub.
  */
-export function projectCwdOf(exec: unknown): string {
+
+/** The DSH workingDirectory service, injected at plugin activation (may be absent). */
+let workingDirectoryService: { ensure?: (agent: unknown, signal?: unknown) => Promise<unknown> } | undefined;
+
+/** Called once from the plugin entry after DSH injects the services. */
+export function configureWorkingDirectoryService(
+  service: { ensure?: (agent: unknown, signal?: unknown) => Promise<unknown> } | undefined,
+): void {
+  workingDirectoryService = service;
+}
+
+export interface ResolvedProjectCwd {
+  cwd: string;
+  /** True when THIS call wrote the session binding (the session's first CAD call). */
+  newlyBound: boolean;
+}
+
+/** Async resolver: binding → live working directory → session header → server cwd. */
+export async function resolveProjectCwd(exec: unknown): Promise<ResolvedProjectCwd> {
   const agent = (exec as {
-    agent?: {
-      session?: { header?: { id?: unknown; cwd?: unknown } };
-      ctx?: { get?: (name: string) => unknown };
-    };
+    agent?: { session?: { header?: { id?: unknown; cwd?: unknown } } };
   })?.agent;
   const rawId = agent?.session?.header?.id;
   const sessionId = typeof rawId === 'string' && rawId.trim() ? rawId : undefined;
   if (sessionId) {
     const bound = readSessionBinding(sessionId);
-    if (bound) return bound;
+    if (bound) return { cwd: bound, newlyBound: false };
   }
   let start: string | undefined;
   try {
-    const service = agent?.ctx?.get?.('workingDirectory') as
-      | { get?: (session: unknown) => unknown }
-      | undefined;
-    const current = service?.get?.(agent?.session);
+    const current = await workingDirectoryService?.ensure?.(agent, undefined);
     if (typeof current === 'string' && current.trim()) start = current;
   } catch {
     /* fall through to the durable header */
@@ -287,13 +308,44 @@ export function projectCwdOf(exec: unknown): string {
     if (typeof headerCwd === 'string' && headerCwd.trim()) start = headerCwd;
   }
   const root = resolveProjectRoot(start ?? process.cwd()).root;
-  if (sessionId) writeSessionBinding(sessionId, root);
-  return root;
+  let newlyBound = false;
+  if (sessionId) {
+    newlyBound = readSessionBinding(sessionId) === undefined;
+    writeSessionBinding(sessionId, root);
+    if (newlyBound && sessionId) {
+      pendingBindNotices.set(
+        sessionId,
+        `CAD project bound to ${root} (resolved from the session's working directory) — later cd calls do NOT switch; delete $DSH_HOME/cad/sessions/${safeSessionId(sessionId)}.json to rebind`,
+      );
+    }
+  }
+  return { cwd: root, newlyBound };
+}
+
+/** Compatibility wrapper: the resolved root only. */
+export async function projectCwdOf(exec: unknown): Promise<string> {
+  return (await resolveProjectCwd(exec)).cwd;
+}
+
+// First-bind echo (G5). A binding written from a WRONG cwd is what made the
+// roberval corpus land at the repo root, and nothing surfaced the choice — the
+// resolver just wrote it. The session's first CAD call now carries a notice in
+// its reply, so a wrong bind is visible in the very turn that made it.
+const pendingBindNotices = new Map<string, string>();
+
+/** Pop the first-bind notice for this call's session, if this call wrote one. */
+export function takeBindingNotice(exec: unknown): string | undefined {
+  const sessionId = (exec as { agent?: { session?: { header?: { id?: unknown } } } })?.agent?.session?.header?.id;
+  if (typeof sessionId !== 'string' || !sessionId.trim()) return undefined;
+  const notice = pendingBindNotices.get(sessionId);
+  pendingBindNotices.delete(sessionId);
+  return notice;
 }
 
 /** Store root for a tool call, creating the project directory if needed. */
 export async function projectStoresFor(exec: unknown): Promise<ProjectStores> {
-  const project = projectStores(projectCwdOf(exec));
+  const { cwd } = await resolveProjectCwd(exec);
+  const project = projectStores(cwd);
   await ensureProjectDir(project);
   return project;
 }

@@ -284,10 +284,20 @@ section('project resolution');
   check(requestCwd(new Request('http://x/api/cad/products?project=')) === process.cwd(),
     'an empty ?project= falls back too');
 
-  check(projectCwdOf({ agent: { session: { header: { cwd: cwdA } } } }) === cwdA,
+  check(await projectCwdOf({ agent: { session: { header: { cwd: cwdA } } } }) === cwdA,
     'a tool call takes its project from the agent session cwd');
-  check(projectCwdOf({}) === process.cwd(), 'a call with no agent falls back to the server cwd');
-  check(projectCwdOf({ agent: { session: { header: {} } } }) === process.cwd(), 'a session without a cwd falls back too');
+  // The fallback resolves from the server cwd UPWARD: run inside a markerless dir
+  // so a real corpus at/above the repo root cannot satisfy the assertion for us.
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir: tmpd } = await import('node:os');
+  const { join: jn } = await import('node:path');
+  const cleanDir = mkdtempSync(jn(tmpd(), 'proj-scope-clean-'));
+  const scopeOrigCwd = process.cwd();
+  process.chdir(cleanDir);
+  check(await projectCwdOf({}) === cleanDir, 'a call with no agent falls back to the server cwd', await projectCwdOf({}));
+  check(await projectCwdOf({ agent: { session: { header: {} } } }) === cleanDir, 'a session without a cwd falls back too');
+  process.chdir(scopeOrigCwd);
+  rmSync(cleanDir, { recursive: true, force: true });
 }
 
 // --- 5. static invariants: nothing is captured at apply time ----------------

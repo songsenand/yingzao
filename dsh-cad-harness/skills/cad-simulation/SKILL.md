@@ -41,7 +41,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 
 ## Stress (`simulate_stress`)
 
-- **Declare the case** (supports + loads); an unsupported load is refused. `mode`: `judge` (default), `scan` (field, **no verdict**), `both`; `judge` returns `nextLook` where to look.
+- **Declare the case** (supports + loads; `loads` is optional when `includeSelfWeight` is true, which is the default). `supports:[{ground:true}]` holds the lowest z face (a held face, not a contact law). `loadCase` reports `gravity` / `service` / `combined`. An unsupported load is refused. `mode`: `judge` (default), `scan` (field, **no verdict**), `both`; `judge` returns `nextLook` where to look.
 - **Deliver against `delivery`, not `verdict`**; `unevaluable` is not a pass; `attention` is detection, not evidence.
 - **No "largest element stress" and no safety factor** (isotropic; the tiers are a colour scale). Quote `stats.peakAtDeclaredDistanceMPa`; `surfaceExtrapolatedMPa` only when the cross-resolution check passes.
 - **`trustworthy` / `whyUntrustworthy` decides what may be quoted**; a member thinner than the voxel comes back `check` with zero trustworthy regions and `meshIndependence: drifting`.

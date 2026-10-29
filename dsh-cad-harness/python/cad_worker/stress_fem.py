@@ -174,6 +174,10 @@ def _solve_once(
     cg_max_iter: int,
     warn_at: float,
     bad_at: float,
+    density_kg_m3: float = 0.0,
+    include_self_weight: bool = False,
+    gravity_mm_s2=None,
+    load_case: str = "service",
 ):
     nx, ny, nz = solid.shape
     cells = np.argwhere(solid)
@@ -265,6 +269,25 @@ def _solve_once(
                     continue
                 applied[gd] += share[c]
                 rhs[free_of_dof[gd]] += share[c]
+
+    # --- self-weight (body force) -----------------------------------------
+    # rho*g*V is a VOLUME load. For a trilinear hex8 with a uniform body force the
+    # consistent nodal load is rho*g*V/8 at each of the eight corners. Units:
+    # density kg/m^3 -> kg/mm^3 (1e-9), gravity mm/s^2 -> m/s^2 (1e-3), hence
+    # rho*g in N/mm^3 is density * gravity * 1e-12. `applied` carries the weight too:
+    # equilibrium compares reactions against EVERY applied load, including weight.
+    total_weight_n = 0.0
+    gravity_vec = np.zeros(3) if gravity_mm_s2 is None else np.asarray(gravity_mm_s2, dtype=float)
+    if include_self_weight:
+        rho_g = float(density_kg_m3) * gravity_vec * 1e-12  # N/mm^3
+        total_weight_n = float(np.linalg.norm(rho_g) * ne * dx ** 3)
+        body_node = rho_g * dx ** 3 / 8.0
+        for a in range(8):
+            for c in range(3):
+                gd = dof3[elem_nodes[:, a], c]
+                np.add.at(applied, gd, body_node[c])
+                free = ~fixed_dof[gd]
+                np.add.at(rhs, free_of_dof[gd[free]], body_node[c])
 
     # --- stiffness + matrix-free CG ---------------------------------------
     KE, D = element_stiffness(dx, young, poisson)
@@ -567,6 +590,14 @@ def _solve_once(
         "reactionN": [round(float(v), 4) for v in reaction_sum],
         "appliedN": [round(float(v), 4) for v in applied_sum],
         "equilibriumErrorPct": equilibrium_pct,
+        "loadCase": load_case,
+        "selfWeight": {
+            "included": bool(include_self_weight),
+            "densityKgPerM3": float(density_kg_m3) if include_self_weight else None,
+            "gravityMmPerS2": [round(float(v), 6) for v in gravity_vec],
+            "totalWeightN": round(total_weight_n, 6),
+        },
+        "totalWeightN": round(total_weight_n, 6),
         "probeDisplacementMm": (
             None if probe_displacement is None else [round(v, 5) for v in probe_displacement]
         ),
@@ -655,6 +686,24 @@ def run(params: dict) -> dict:
     stability_pct = float(params.get("stabilityPct") or 10.0)
     cg_max_iter = int(params.get("cgMaxIterations") or 20000)
 
+    loads = params.get("loads") or []
+    # Low-level default is OFF so the Python probes keep reproducing their old
+    # external-load numbers; the TOOL turns self-weight on by default (2026-10-29).
+    include_self_weight = bool(params.get("includeSelfWeight", False))
+    density_kg_m3 = params.get("densityKgPerM3")
+    if include_self_weight:
+        if density_kg_m3 is None or not float(density_kg_m3) > 0:
+            raise ValueError("densityKgPerM3 must be > 0 when includeSelfWeight is true")
+        density_kg_m3 = float(density_kg_m3)
+    else:
+        density_kg_m3 = 0.0
+    gravity_vec = np.asarray(params.get("gravityMmPerS2") or [0.0, 0.0, -9810.0], dtype=float)
+    if gravity_vec.shape != (3,):
+        raise ValueError("gravityMmPerS2 must be [gx, gy, gz] in mm/s^2")
+    if not loads and not include_self_weight:
+        raise ValueError("no load case: declare `loads` or set includeSelfWeight true")
+    load_case = "combined" if loads and include_self_weight else ("gravity" if include_self_weight else "service")
+
     yield_mpa = params.get("yieldMPa")
     warn_at = None
     bad_at = None
@@ -677,7 +726,11 @@ def run(params: dict) -> dict:
                 poisson=poisson,
                 fixed_faces=params.get("fixedFaces"),
                 fixed_points=params.get("fixedPoints"),
-                loads=params.get("loads"),
+                loads=loads,
+                density_kg_m3=density_kg_m3,
+                include_self_weight=include_self_weight,
+                gravity_mm_s2=gravity_vec,
+                load_case=load_case,
                 probe_at=params.get("probeAtMm"),
                 resultants=params.get("resultants"),
                 exclude_from_report=params.get("excludeFromReport"),
@@ -871,6 +924,9 @@ def run(params: dict) -> dict:
         "reactionN": fine["reactionN"],
         "appliedN": fine["appliedN"],
         "equilibriumErrorPct": round(fine["equilibriumErrorPct"], 10),
+        "loadCase": fine["loadCase"],
+        "selfWeight": fine["selfWeight"],
+        "totalWeightN": fine["totalWeightN"],
         "probeDisplacementMm": fine["probeDisplacementMm"],
         "resultants": fine["resultants"],
         "percentilesMPa": fine["percentilesMPa"],

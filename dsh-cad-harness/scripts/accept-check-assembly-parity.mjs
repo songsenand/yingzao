@@ -110,6 +110,9 @@ const candidates = [
   ['examples/microscope2/cad-data', 'examples/microscope2/cad-data/assembly/assembly.json'],
   ['examples/microscope3/cad-data', 'examples/microscope3/cad-data/assembly/assembly.json'],
   ['examples/microscope5', 'examples/microscope5/assembly/assembly.json'],
+  // Plane-datum distance: toy-balance2 I9/I16 are the regression that motivated
+  // `datumDistance` (plane anchors offset laterally, 8.5mm reported for a 0mm gap).
+  ['examples/toy-balance2/cad-data', 'examples/toy-balance2/assembly/assembly.json'],
 ];
 let corpusCount = 0;
 for (const [storeDir, manifestRel] of candidates) {

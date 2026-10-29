@@ -18,7 +18,7 @@ Thirty tools, but **three jobs first**. Pick the group, not the tool — the gro
 
 1. **先结账，再交付**：任何“可以交了”之前，`check_printability`（每个零件）与 `check_assembly`（每份契约）都要跑过；最后 `delivery_audit`，并把你要主张的东西写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。
 2. **`not-excluded` 不是“ok”，更不是“安全”**：只表示“没找到反例”。`difficult` 表示余量落在仪器噪声内，**不许当过**。没有 “safe” 这个词可报。
-3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。
+3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**外购件/研究体用 `set_part_role` 声明** `stock` / `research`（`merge_parts` 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
 4. **检测 ≠ 交付**：`attention` 里的位置是“去看这里”，不是判定证据；反过来，工具沉默是检测的失败，“检测到嫌疑”也不构成交付失败。
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
@@ -84,7 +84,7 @@ The first CAD call binds the session to its nearest `cad-data/project.json`; `cd
 ## Conventions
 
 - **Millimetres, z-up.** No tool takes a unit argument.
-- **Datums** are declared `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. `datum_axis` / `datum_plane` / `datum_cyl` exist for assemblies. `set_datums` lists or records; recording creates a **new version** (mesh copied, no recompile) — point the manifest at the returned id. Do not spend a `generate_part` round on an anchor-only change.
+- **Datums** are declared `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. `datum_axis` / `datum_plane` / `datum_cyl` exist for assemblies — signature is `(name, point, dir)`, POINT FIRST: a positional swap compiles silently and corrupts the contract (a zero dir is now a compile error; a dir that dwarfs its point warns as a swap). `set_datums` lists or records; recording creates a **new version** (mesh copied, no recompile) — point the manifest at the returned id. Do not spend a `generate_part` round on an anchor-only change.
 - **The manifest** is an ordinary file, by default `<workspace>/assembly/assembly.json`; `check_assembly` resolves a relative `manifestPath` against the workspace first. Edit it with `write` / `edit`; do not patch JSON by shell.
 - **BOSL2 is available** in `generate_part` (`std`, `screws`, `gears`, `walls`, `threading`, `sliders`, `ball_bearings`); use the library instead of hand-rolling a thread/gear/fillet.
 - **`judge` / `scan` / `both`**: `judge` (default) returns the verdict and no field; `scan` returns the field and **no verdict**; `both` returns both. The **run report** always records both halves — the mode trims the reply, not the record. In `judge` the reply still carries `nextLook` (`{tool, args, why}`) because a verdict without a place is the failure HARNESS §11.14 exists to prevent.

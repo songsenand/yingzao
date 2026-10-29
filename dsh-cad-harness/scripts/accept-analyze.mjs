@@ -1,5 +1,5 @@
 // Acceptance for the risk-map contract (DESIGN §25.7, user-ratified 2026-10-20).
-import { signedOf, riskOf, fuseAt } from '../src/host/analyze.ts';
+import { signedOf, riskOf, fuseAt, stressU, analyzeVersion } from '../src/host/analyze.ts';
 
 let failures = 0;
 const check = (ok, label, detail = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`); };
@@ -22,6 +22,50 @@ check(near(signedOf(25, stress), (25 - 16.67) / 16.67), 'half-way over the allow
 // corner: one-sided (blunt is fine)
 const corner = { id: 'corner', quantity: 'reentrant-angle', units: 'deg', lo: -Infinity, hi: 135, scaleLo: 1, scaleHi: 45, source: 'scan_attention concaveMinDeg' };
 check(signedOf(90, corner) === 0 && near(signedOf(180, corner), 1), 'a sharp corner saturates, a blunt one is silent');
+
+// strength: 0.5 at the declared warnAt, 1 at badAt; below warn is silent even if it is
+// the field's maximum (a low absolute stress is not a strength risk)
+check(near(stressU(5, 5, 10), 0.5) && near(stressU(10, 5, 10), 1) && near(stressU(2.5, 5, 10), 0.25),
+  'stress |u| is 0.5 at warnAt and 1 at badAt', `${stressU(2.5, 5, 10)} / ${stressU(5, 5, 10)} / ${stressU(10, 5, 10)}`);
+check(stressU(0, 5, 10) === 0 && stressU(4.9, 5, 10) < 0.5, 'below warn stays out of the peak list');
+
+const fusedStrength = analyzeVersion({
+  wallBand: wall,
+  suspects: [{ kind: 'reentrant-corner', where: { atMm: [0, 0, 0] }, severity: 'likely-defect' }],
+  stress: {
+    samples: [{ p: [0, 0, 0], v: 10 }, { p: [50, 0, 0], v: 2 }],
+    peaks: [{ p: [50, 0, 0], v: 2 }],
+    warnAt: 5, badAt: 10, source: 'test run', runId: 'r-test', loadCase: 'gravity',
+  },
+});
+const rootPeak = fusedStrength.peaks.find((p) => p.atMm[0] === 0);
+const lowPeak = fusedStrength.peaks.find((p) => p.atMm[0] === 50);
+check(rootPeak && rootPeak.count === 2 &&
+  rootPeak.layers.includes('strength') && rootPeak.layers.includes('reentrant-corner'),
+'strength and corner agree at the notch root (count 2)', JSON.stringify(rootPeak));
+check(lowPeak && lowPeak.risk === 0.5 && lowPeak.layers.includes('strength-concentration'),
+  'a low absolute stress peak is still a concentration LOOK (0.5), not a fake risk', JSON.stringify(lowPeak));
+check(fusedStrength.layers.strength === 2 && fusedStrength.stress?.loadCase === 'gravity' &&
+  fusedStrength.stress?.concentrationPeaks === 1,
+  'the strength layer is present and carries its stress-run provenance', JSON.stringify(fusedStrength.stress));
+
+// mesh health and boolean seams enter as their own layers (item 2/3, 2026-10-29):
+// multi-body/non-manifold are likely-defect (1.0); a non-planar seam is a look (0.5)
+const health = analyzeVersion({
+  wallBand: wall,
+  suspects: [
+    { kind: 'multi-body', where: { atMm: [0, 0, 0] }, severity: 'likely-defect' },
+    { kind: 'non-manifold', where: { atMm: [20, 0, 0] }, severity: 'likely-defect' },
+    { kind: 'boolean-seam', where: { atMm: [40, 0, 0] }, severity: 'look' },
+  ],
+});
+const at = (x) => health.peaks.find((p) => p.atMm[0] === x);
+check(at(0)?.risk === 1 && at(0)?.layers.includes('multi-body'),
+  'multi-body is a 1.0 look (a union that did not merge)', JSON.stringify(at(0)));
+check(at(20)?.risk === 1 && at(20)?.layers.includes('non-manifold'),
+  'non-manifold is a 1.0 look', JSON.stringify(at(20)));
+check(at(40)?.risk === 0.5 && at(40)?.layers.includes('boolean-seam'),
+  'a non-planar boolean seam is a 0.5 look, not a verdict', JSON.stringify(at(40)));
 
 // fusion: worst sets the colour, count says how many agree — no weighted total
 const f = fuseAt([

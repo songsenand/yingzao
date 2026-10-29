@@ -88,7 +88,12 @@ export function assertAssembledAtStart(
   joints: MotionJointInput[],
   toleranceMm = 2,
 ): InitialJointGap[] {
+  // G1 (2026-10-29): report EVERY unassembled joint in ONE refusal, each with its
+  // gap and both world anchors — roberval's first attempt was refused for one 10mm
+  // joint, "fixed", and residual mismatches on the OTHER joints only surfaced later
+  // as 105mm of drift. One structured refusal closes that loop.
   const gaps: InitialJointGap[] = [];
+  const broken: string[] = [];
   for (const j of joints) {
     const a = parts.find((p) => p.name === j.bodyA);
     const b = parts.find((p) => p.name === j.bodyB);
@@ -107,15 +112,23 @@ export function assertAssembledAtStart(
     const gapMm = Math.hypot(dx, dy, dz);
     gaps.push({ joint: `${j.bodyA}↔${j.bodyB}`, gapMm: +gapMm.toFixed(4) });
     if (gapMm > toleranceMm) {
-      throw new Error(
-        `simulate_motion REFUSED: the mechanism is not assembled at t=0 — joint ${j.bodyA}↔${j.bodyB} ` +
-        `starts with its anchors ${gapMm.toFixed(2)}mm apart (tolerance ${toleranceMm}mm), ` +
-        `at [${[ra[0]! + a.position[0]!, ra[1]! + a.position[1]!, ra[2]! + a.position[2]!].map((v) => v.toFixed(2)).join(', ')}] ` +
-        `and [${[rb[0]! + b.position[0]!, rb[1]! + b.position[1]!, rb[2]! + b.position[2]!].map((v) => v.toFixed(2)).join(', ')}]. ` +
-        'Every result such a run could produce (drift, interference, travel) would describe that ' +
-        'unassembled pose, not the design — fix the anchors, the placement or the pivot instead.',
+      const wa = [ra[0]! + a.position[0]!, ra[1]! + a.position[1]!, ra[2]! + a.position[2]!];
+      const wb = [rb[0]! + b.position[0]!, rb[1]! + b.position[1]!, rb[2]! + b.position[2]!];
+      broken.push(
+        `joint ${j.bodyA}↔${j.bodyB} (${j.type}): anchors ${gapMm.toFixed(2)}mm apart — ` +
+        `A-side world [${wa.map((v) => v.toFixed(2)).join(', ')}] vs B-side world [${wb.map((v) => v.toFixed(2)).join(', ')}]`,
       );
     }
+  }
+  if (broken.length > 0) {
+    throw new Error(
+      `simulate_motion REFUSED: the mechanism is not assembled at t=0 — ${broken.length} of ${joints.length} joints ` +
+      `exceed the ${toleranceMm}mm anchor tolerance (anchors are in EACH body's own file frame; a body placed with ` +
+      `rotation [90,0,0] does not share world coordinates with an unrotated one):\n` +
+      broken.map((s, i) => `  ${i + 1}. ${s}`).join('\n') +
+      '\nEvery result such a run could produce (drift, interference, travel) would describe that ' +
+      'unassembled pose, not the design — fix the anchors, the placement or the pivot instead.',
+    );
   }
   return gaps;
 }

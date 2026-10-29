@@ -66,8 +66,10 @@ working, not an error.
 
 ## Facts that are not obvious from the tool descriptions
 
-- **`check_assembly` machine-checks five operators.** `distance` (point datums)
-  and `diameter-match` (`datum_cyl`) are pure geometry. `coaxial` measures the
+- **`check_assembly` machine-checks five operators.** `distance` is datum-kind
+  aware: **plane/plane → perpendicular plane distance** (lateral anchor offset is
+  not a gap), **plane/point → point-to-plane**, anything else → point-to-point.
+  `diameter-match` (`datum_cyl`) is pure geometry. `coaxial` measures the
   offset between two axis datums (line-to-line) and flags non-parallel axes —
   the operator for "these two bores line up". `motion-clearance`
   evaluates the static distance AND records whether motion was evidenced, so

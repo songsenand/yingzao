@@ -269,6 +269,57 @@ function pointOf(feature: unknown): Vec3 {
   return (feature as { point: Vec3 }).point;
 }
 
+/**
+ * Distance between two resolved datums, honoring the FEATURE KIND.
+ *
+ * A plane datum's meaning is the plane, not its anchor point: two coplanar
+ * planes whose anchors are laterally offset would report that offset as a gap
+ * if this stayed point-to-point. `resolveEndpoint` already carries `normal` for
+ * planes; use it instead of throwing the direction away.
+ *
+ *   plane/plane  → perpendicular distance (parallel); an angled pair reports the
+ *                  same point-to-plane number but names the angle so a wedge
+ *                  cannot hide behind a small gap
+ *   plane/point  → point-to-plane
+ *   anything else → point-to-point (the pre-existing semantics)
+ */
+export function datumDistance(aFeature: unknown, bFeature: unknown): { measured: number; detail: string } {
+  const pa = pointOf(aFeature);
+  const pb = pointOf(bFeature);
+  const sub = (u: Vec3, v: Vec3): Vec3 => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+  const dot = (u: Vec3, v: Vec3): number => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const len = (u: Vec3): number => Math.hypot(u[0], u[1], u[2]) || 1;
+  const unit = (u: Vec3): Vec3 => [u[0] / len(u), u[1] / len(u), u[2] / len(u)];
+  const na = (aFeature as { normal?: Vec3 }).normal;
+  const nb = (bFeature as { normal?: Vec3 }).normal;
+  if (na && nb) {
+    const ua = unit(na);
+    const ub = unit(nb);
+    // Anti-parallel normals describe the SAME plane orientation (0°, not 180°).
+    const angle = Math.acos(Math.max(-1, Math.min(1, Math.abs(dot(ua, ub))))) * 180 / Math.PI;
+    const measured = +Math.abs(dot(sub(pb, pa), ua)).toFixed(4);
+    if (angle <= 1.0) {
+      return { measured, detail: `plane-to-plane distance ${measured}mm (normals ${angle.toFixed(3)}° apart)` };
+    }
+    return {
+      measured,
+      detail: `point-to-plane distance ${measured}mm (planes ${angle.toFixed(3)}° apart — NOT parallel)`,
+    };
+  }
+  if (na) {
+    const measured = +Math.abs(dot(sub(pb, pa), unit(na))).toFixed(4);
+    return { measured, detail: `point-to-plane distance ${measured}mm` };
+  }
+  if (nb) {
+    const measured = +Math.abs(dot(sub(pa, pb), unit(nb))).toFixed(4);
+    return { measured, detail: `point-to-plane distance ${measured}mm` };
+  }
+  return {
+    measured: +Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]).toFixed(4),
+    detail: 'point-to-point distance between declared datums',
+  };
+}
+
 export interface InterfaceCheckResult {
   interfaceId: string;
   ownerPath: string[];
@@ -496,8 +547,13 @@ export async function runAssemblyCheckInTs(
     if (checkName === 'distance' || checkName === 'motion-clearance') {
       const pa = pointOf(ra.feature);
       const pb = pointOf(rb.feature);
-      const measured = +Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]).toFixed(4);
-      const r = verdictFor(iface, measured, `point-to-point distance between declared datums`);
+      const d = checkName === 'distance'
+        ? datumDistance(ra.feature, rb.feature)
+        : {
+            measured: +Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]).toFixed(4),
+            detail: 'point-to-point distance between declared datums',
+          };
+      const r = verdictFor(iface, d.measured, d.detail);
       if (checkName === 'motion-clearance') {
         // A motion claim has two halves, and this engine can only decide one of
         // them: the relationship at the modelled pose (that is a distance, and

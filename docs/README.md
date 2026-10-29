@@ -33,7 +33,7 @@
 
 **用户版**：交付前每个零件会做可打印性检查，报告会指出“哪里太薄、哪里需要支撑”。它按你声明的工艺判断，不会替你选工艺，也不会给“合格证”。
 
-**LLM 版**：`check_printability` 采样壁厚 + 精确悬垂面积；`wallMeasured:false` 时永不通过；`not-excluded` ≠ 可制造；未声明 profile 时用内建回退并降级；每次检查写 run。
+**LLM 版**：`check_printability` 采样壁厚 + 精确打印悬垂面积（FDM 支撑，不是结构悬挑/自重应力）；`wallMeasured:false` 时永不通过；`not-excluded` ≠ 可制造；未声明 profile 时用内建回退并降级；每次检查写 run。
 
 两版说的是同一件事，但**读者拿它做的事不同**，所以内容不同。
 

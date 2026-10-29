@@ -2658,7 +2658,7 @@ microscope5 复盘时，"cad 图片窗口到底有没有跑"这个问题**无法
 | **容器与流体通断** | 装得下吗？倒得出来吗？有死区吗？ | 容器几何、液量、倾角/开口 | 静力平衡、质量守恒 | 改口径/加导流/改底形 | ⚠️ 内核有，物性缺（§24、`docs/archive/M4-M5-REVIEW.md`） |
 | **机构能不能动** | 转得动吗？行程够吗？会卡吗？ | 驱动、行程、铰链 | 运动学包络 | 改连杆/加让位 | ✅ M3.6 |
 | **稳定性** | 站得稳吗？多重才倒？ | 支撑面、重心、外载 | 静力倾覆平衡 | 加配重/加宽底面 | ⚠️ 部分 |
-| **可制造与装配** | 打得出吗？装得上吗？ | 几何 | 壁厚/悬垂/干涉 | 改壁厚/加拔模 | ✅ M2 |
+| **可制造与装配** | 打得出吗？装得上吗？ | 几何 | 壁厚/打印悬垂/干涉 | 改壁厚/加拔模 | ✅ M2 |
 | **颗粒与堆积** | 卸得干净吗？会起拱吗？ | 料仓几何、粒径、摩擦 | **Beverloo 定律** | 改锥角/加流化 | ❌ 无 |
 | **传热** | 会不会过热？要散热吗？ | 热源、材料、环境 | 热平衡、解析解 | 加散热片/开孔 | ❌ 无 |
 
@@ -2668,7 +2668,7 @@ microscope5 复盘时，"cad 图片窗口到底有没有跑"这个问题**无法
 应变能）、热点区域（特征尺寸 ≥ 约 8 个单元时可信）、以及按声明深度采样并沿深度外推得到的
 表面应力。"模型内最大单元应力"在曲边界上不收敛（1.002→1.184，①填充比加权实测不解决），
 **因此不是结果**；安全系数同样不可报（各向同性模型看不见打印件的层间弱面）。**处方/复验的
-几何自动改写**（加筋、圆角、加厚）仍未落地。详见 `docs/DECISION-LOG.md` 2026-10-19。
+几何自动改写**（加筋、圆角、加厚）仍未落地。详见 `docs/DECISION-LOG.md` 2026-10-19。2026-10-29 已加自重体力（`includeSelfWeight` 默认 true，`loads` 可选；`supports:[{ground:true}]` 固定最低 z 面）。“重力内部应力”现在是可算的 load case，但仍不是安全系数；见 DECISION-LOG 2026-10-29。
 
 ### 25.5 对接口形状的影响
 
@@ -2754,6 +2754,23 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 就能"否决"一个零件；反过来，工具沉默是检测的失败，但"检测到了嫌疑"也不构成交付的失败。
 `simulate_stress` 的 `delivery` 块由应力结果与声明材料生成，`stressDelivery()` 不接受任何
 几何嫌疑作为输入（验收有一条源码断言守住这件事）。
+
+**术语：print-overhang ≠ structural overhang（2026-10-29，用户拍板）。** 中文“悬垂”必须分语境；否则会把支撑问题塞进强度图，或把“无重力外载应力”说成“重力内部应力”：
+
+| 词 | 问什么 | 归属 | 层 | 现状 |
+|---|---|---|---|---|
+| **`print-overhang`** | 下方有没有支撑？ | 制造性/支撑 | 区域 | `check_printability` / `support_map`；动作=加支撑/改朝向 |
+| **`structural overhang` / `self-weight stress`** | 重力下内部应力多大？ | **strength** | 点 | `includeSelfWeight` 默认 true；`loadCase: gravity`；`supports:[{ground:true}]` |
+| **`service stress`** | 外载下够不够强？ | **strength** | 点 | `includeSelfWeight:false` + 显式 `loads` |
+
+规则：注意力/强度语境的“悬垂”一律指 structural overhang（重力下的内部应力），不指 FDM 支撑；制造性语境必须写 print-overhang。点图第三层目标是 strength（含自重），不是 print-overhang；print-overhang 最多是 `partNotes` 的制造性整件/成片事实。自重/重力 load case 已于 2026-10-29 实现：`includeSelfWeight` 默认 true，`loads` 可选；`supports:[{ground:true}]` 固定最低 z 面（是 held face，不是摩擦/单边接触）；旧的外载结果用 `includeSelfWeight:false` 复现。
+
+**布尔痕迹是“看这里”，不是“证明错”（2026-10-29）。** 差集/并集没到位是 LLM 最难自查的静默错误；但 feature 契约成本太高（按件线性增长），静态 SCAD lint 又绑定单一引擎。折中是两条 mesh 层信号：
+
+- `boolean-seam`：**闭合 + 非平面**的锐边环（≥80° 边）。平面孔环、90° 口袋、球-球键颈都不报；实测果糖 C3 在 80° 下有 44 条凹环（全是键颈），过滤后 0。最多返回 8 条，总数在 `stats.nonplanar_seam_loops`。
+- `multi-body` / `non-manifold` / `degenerate-faces`：沿用 `scan_attention`，`analyze` 自动融合（前两者 1.0，seam 0.5）。
+
+它只抓“留了痕迹”的布尔错误，抓不到“干净的缺失”（孔完全没切、也没留痕）；这是粗信号的硬边界，不是实现缺陷。
 
 **三类工具与两档交付触发（2026-10-19，用户拍板）。** 工具按**职责**分三类，按**交付触发**
 分两档——两者是正交的，混在一起谈就会出现"哪些必须查"说不清的局面：
@@ -2841,8 +2858,10 @@ HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是�
 | 入口 | 回答 | 产出 | 会阻止吗 |
 |---|---|---|---|
 | `preflight` | 能不能交 | 逐步骤三值 + `unevaluable` + `coverage.notCovered`（本 cut 不编排的步骤及原因）；`judgement` = 跑过的步骤的最劣值 | 可以（excluded） |
-| `analyze` | 该往哪看 | `\|u\|` 风险图（壁厚/再入角/悬垂）+ 峰表 + `attention.json` 的 `fused` 层 | 永不 |
+| `analyze` | 该往哪看 | `\|u\|` 风险图（薄壁/再入角；strength 通过 `stressRunId` 接入：绝对风险 + 相对集中）+ 峰表 + `attention.json` 的 `fused` 层；打印悬垂面积/厚壁在 `partNotes` | 永不 |
 | `simulate_*` | 这种工况下会怎样 | 方向性读数 + 可靠性 + 证据（写 run，供 claim 检查） | 永不（由 `preflight` 判定） |
+
+**`analyze` 的 strength 层（2026-10-29）。** 读取一个已有 stress run（`stressRunId`），绝对 `strength` 按该 run 的 `warnAt`/`badAt`（0.5/1.0；低应力静默）；相对 `strength-concentration` 把该 run 的局部峰以 `0.5` 放进融合图（是 look，不是风险）。没有 run 是 `notMapped`，不是 0。`cellMm` 决定峰聚类：40mm 长的 V 缺口根部在 8mm 下是 6 个分离峰，16mm 下角峰与最近应力峰合并为 `count=2`。
 
 **「没跑」有两种，必须分开（2026-10-23，审计判例）。** 把两者压进一个 `ran:false` 会让
 `judgement` 变成常量：
@@ -3091,7 +3110,7 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   `Rotation3.from_quaternion(w,x,y,z).scaled_axis`（注意参数序 w,x,y,z）；
   `additional_mass_properties()` 只收**一个 `MassProperties` 对象**，而它只能用关键字构造。
   **批次 3 完成。**
-- **`check_printability` 迁 Python，并修掉两个被暴露的真缺陷（2026-10-08）。** 悬垂面积是纯算术
+- **`check_printability` 迁 Python，并修掉两个被暴露的真缺陷（2026-10-08）。** 打印悬垂面积是纯算术
   （逐位相同），壁厚是一次空间索引查询（实测 0.121 s/601 根，无②类负收益）。迁移过程中暴露：
   **① `buildMeshBvh` 会就地重排索引**，先建 BVH 再采样会让"每第 N 个面"随库的内部策略改变
   （真实件 647.6 vs 244.1 mm²）⇒ BVH 改用索引拷贝、采样固定解析序；
@@ -3233,7 +3252,7 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
    **`not-excluded` 的含义是"没有找到几何反例"，不是"能做出来"。**
 2. **永不推荐**：无排序、无打分、无 `recommended` 字段；schema 层面就拒绝这类字段。
    成本、良率、交期、可达公差不是几何事实。
-3. **不适用要说出来**：粉末床与机加工没有悬垂约束、只有注塑有拔模。把 SLS 件的悬垂报成
+3. **不适用要说出来**：粉末床与机加工没有打印悬垂约束、只有注塑有拔模。把 SLS 件的打印悬垂报成
    "需要支撑"不是保守，是**错的**。每条规则带 `applies` + 原因，报告列出。
 4. **缺项不是"无约束"**：未声明的规则进 `unevaluable`；工具判不了的能力项（公差、表面粗糙度）
    同样进 `unevaluable`。
@@ -3256,7 +3275,7 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
 
 | 规则 | 可判部分 | 不可判部分（明说） |
 | --- | --- | --- |
-| `wallMinMm` / `overhangDeg` | 壁厚（抽样射线，`wallMeasured` 门禁：未测到永不返回 ok）；悬垂面积（全三角形精确） | 抽样漏掉的细特征 |
+| `wallMinMm` / `overhangDeg` | 壁厚（抽样射线，`wallMeasured` 门禁：未测到永不返回 ok）；打印悬垂面积（全三角形精确） | 抽样漏掉的细特征 |
 | `escapePassageMinMm` | **封闭内腔**（壳的带符号体积为负 ⇒ 通道尺寸 0，精确）；**圆孔且贯通**的通道（直径精确） | 盲特征（是否积住不是几何事实）、非圆截面通道 |
 | `draftMinDeg` | **可行抽芯方向锥为空**（盖交的完备判定：2k 盖心 + O(k²) 边界圆交点） | 锥非空时的采样锥宽是估计（判定用枚举，报告用采样） |
 | `toolRadiusMm` / `holeAspectMax` | 圆孔的直径与深径比（精确） | 非圆槽/窄凹腔（需体素可达性，未接线） |

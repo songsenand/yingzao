@@ -39,6 +39,13 @@
   record. In `judge` mode the reply still carries `nextLook`: runnable observations
   (`{tool, args, why}`) for this same version, because a verdict without a place is
   the failure HARNESS §11.14 exists to prevent.
+- **`analyze` can fuse ONE stress run.** Pass `stressRunId`; the run must cite the
+  version. `strength` is the absolute warn/bad layer (safe to be silent), while
+  `strength-concentration` carries the run's local peaks at `|u|=0.5` — a LOOK, not a
+  risk. Without a run, strength is `notMapped`, never 0. `cellMm` controls clustering:
+  a long corner chain needs a cell large enough to merge its stress peaks (the 40mm
+  V-notch root: 8mm kept 6 separate peaks; 16mm merged the corner and the nearest one,
+  count 2).
 - **Rigid simulation costs seconds, fluid costs minutes.** Ask for the cheap
   check first.
 - **Images are the biggest context spend.** Each attached render lives in your

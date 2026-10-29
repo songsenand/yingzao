@@ -28,7 +28,8 @@
 | 玩具天平 | r079 | 35/35 pass，4 未声明（砝码储运接触） | 手写契约 |
 | 玩具天平运动 | r078 | 24/24 采样、0 干涉、0 漂移、18.3mm | 采样下限已修 |
 | 玩具天平2 运动 | r102 | 24/24、0 漂移 | — |
-| 玩具天平2 契约 | r104 | **0 pass / 25 skipped / 13 未声明**，`difficult` | 手写契约、无 tolerance |
+| 玩具天平2 契约（无判据） | r104 | **0 pass / 25 skipped / 13 未声明**，`difficult` | 手写契约、无 tolerance |
+| 玩具天平2 契约（加判据） | r105 → r106 | r105: 19 pass / 5 hard / 1 intent；r106: **23 pass / 1 hard / 1 intent**，116mm 归零 | 25 条 tolerance + 4 处配对修正 |
 | **果糖** | **r001–r014** | **r007 122/122 pass**；4 个 motion run；5 个打印筛查 | 规格驱动 |
 
 ## 3. 自然实验：判据供给是"作者路径"问题
@@ -44,6 +45,15 @@
 | 真实错位 | I3/I4 量到 **116mm**（=2×58 左右互换），因无判据被 `skipped` | 同类错位 >0.25mm 会 `hard-violation` |
 
 **结论**：G1 不是"agent 不会写 tolerance"，而是**手写契约会漏判据，生成的契约按构造完整**。产品化要做的不是教模型写 122 个数字，而是让 `assembly.json` 成为构建产物。
+
+### 3.1 实验回填：25 条判据跑出来的三件事（2026-10-28）
+
+- **r105（加 25 条 tolerance，未修配对）**：19 pass / **5 hard** / 1 intent / 0 skipped。四条 116mm 不只是 I3/I4——**I19/I20 也错**（stirrup/pan 的 L/R 与 beam/axle 相反）；I9 8.5mm；I16 79.2465。
+- **r106（按坐标修正 I3/I4/I19/I20）**：**23 pass / 1 hard / 1 intent / 0 skipped**，116mm 归零，未声明 13→11。
+- **I9/I16 不是几何错**：`distance` 只做点对点。I9 两平面都在 z=111，锚点在 y 差 8.5；I16 把 58mm 横向偏移算进 54mm 垂直间隙。剩下的是**算子表达力缺口**（缺平面-平面距离），不是设计错。
+- **r107（`distance` 认 plane normal）**：**25/25 pass / 0 hard / 0 intent / 0 skipped**；I9 `plane-to-plane 0mm`、I16 `plane-to-plane 54mm`，未声明仍 11。TS oracle 与 worker 在 toy-balance2 上逐字段一致（已加入 `accept-check-assembly-parity` 的语料）。
+
+**代价**：三次 `check_assembly`，一次 25 个数字的改动，一个 `distance` 分支。**收益**：4 处真实错位（2 处此前从未记录）+ 一个算子表达力修复。
 
 ## 4. 果糖交付核查
 
@@ -118,7 +128,8 @@
 - 39/39 水密未用工具重跑（独立 STL 边计数已复核）。
 - 卡扣保持力、拉脱试验、试打、profile 标定：未做。
 - bench 未重跑。
-- r104 的 116mm 左右互换未修。
+- r105/r106 已复现并修正 4 处 116mm（I3/I4/I19/I20）；I9/I16 由 r107 的 plane-aware `distance` 修复（25/25）。
+- **重力/自重应力已实现（2026-10-29），但未实物验证**：`simulate_stress` 的 `includeSelfWeight` 默认 true，`supports:[{ground:true}]` 固定最低 z 面；自检用悬臂梁自重对梁理论（总重、反力、挠度 -1.41%），工具端到端在 toy-balance2 上通过；见 DECISION-LOG 2026-10-29 与 [`experiments/20261029_fem-cost.md`](../../experiments/20261029_fem-cost.md)。仍不是安全系数，也未做试打/拉脱验证。
 
 ## 8. 一句话
 

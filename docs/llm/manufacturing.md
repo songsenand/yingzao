@@ -4,9 +4,11 @@
 
 A manufacturing screen answers "does this violate a declared rule". It never answers "which process should I use" — that is a business decision, not a check result.
 
+> **Terminology (2026-10-29).** In this document "overhang" always means **print-overhang**: an FDM surface that is not self-supporting, a support/printability question. It is **not** structural overhang / self-weight stress (internal stress under gravity), which belongs to `simulate_stress`'s **strength** question. That load case now exists (`includeSelfWeight` defaults true; `supports:[{ground:true}]` holds the lowest z face), but it is not physically validated. Do not use unqualified "overhang" for the strength layer.
+
 ## Printability checklist (volunteer it with the design, don't wait to be asked)
 
-- **Overhangs**: holes, racks, threaded cavities with the axis along Z print
+- **Overhangs (print-overhang)**: holes, racks, threaded cavities with the axis along Z print
   support-free; a horizontal closed ceiling is a bridge — keep spans ≤30mm and
   say so when one is longer.
 - **Layer direction**: stiff parts (columns, tubes) print standing; a spring
@@ -49,8 +51,8 @@ Four rules that are not negotiable, and each is enforced in code rather than pro
    profile schema refuses a `recommendedProcess`-style field. Cost, yield, lead time and
    achievable tolerance are not geometric facts; inventing them is how a tool starts
    making business decisions. Ask for the comparison, then decide yourself.
-3. **Not applicable is said out loud.** Powder-bed and machining have no overhang
-   constraint; only molding has draft. Reporting an SLS part's overhang as "needs
+3. **Not applicable is said out loud.** Powder-bed and machining have no print-overhang
+   constraint; only molding has draft. Reporting an SLS part's print-overhang as "needs
    support" is not conservative, it is *wrong*. Every rule carries `applies` + a reason,
    and the report lists them.
 4. **A missing number is not "no constraint".** Rules the profile never declares come

@@ -4790,3 +4790,121 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** B/C-lite 的测试（`accept-project-*` / `accept-workspaces`）；`docs/dev/ASSESSMENT-2026-10-28.md` 的能力判断；用户 2026-10-28 的决定。
 
 **影响：** 文档/技能规则；无代码；未来触发时再开 C 或 D。C-lite 的 sidecar 绑定仍保留。
+
+## 2026-10-28：装配契约的 `distance` 按 datum 特征种类求距
+
+**触发条件：** 第 1 条（用户拍板"就按照你的想法改"）+ 第 4 条（改变契约语义，影响所有含 plane datum 的装配清单）。
+
+**要解决的问题：** `distance` 只做 datum 锚点的点对点。toy-balance2 的 I9（两块共面、锚点 y 差 8.5）与 I16（垂直间隙 54，但点对点把 58mm 横向偏移算进去，报 79.2465）被误报；加 tolerance 后 r105 的 5 个 hard 中有 2 个是这类假阳性。`resolveEndpoint` 已经解析出 plane 的 `normal`，`distance` 却没用。
+
+**决策内容：** `distance` 按特征种类分支：plane/plane 平行取 `|(pB−pA)·nA|`（法向相反视为 0°），不平行报点到面并注明角度；plane/point 取点到面；其余保持点对点。TS oracle 与 Python worker 同步实现，`accept-check-assembly-parity` 加入 toy-balance2 语料。
+
+**理由：** 平面 datum 的语义是平面，不是锚点；保留法向是已有数据，不是新测量能力。加新工具会形成第四份"距离"实现，违背单一权威副本。
+
+**依据：** r105（19 pass / 5 hard / 1 intent）→ r106（23 pass / 1 hard / 1 intent，116mm 归零）→ r107（25/25 pass，0 hard / 0 intent / 0 skipped；I9 0mm、I16 54mm）；parity 在 toy-balance2 上 25 条逐字段一致；`accept-assembly` / `accept-icd` / `accept-tool-contracts` / `accept-tool-output` 全过；`tsc --noEmit` 0 错误。
+
+**影响：** `python/cad_worker/worker.py`（`_datum_distance`）、`src/host/assembly-check.ts`（`datumDistance` + oracle 分支）、`src/host/tools.ts`（工具描述）、`docs/llm/assembly.md`、`scripts/accept-check-assembly-parity.mjs`。平面 datum 的 `distance` 结果会从锚点距离改为平面距离；只含点/轴 datum 的清单不受影响。toy-balance2 的 `assembly.json` 同时加了 25 条 tolerance 与 4 处按坐标配对（I3/I4/I19/I20）。
+
+## 2026-10-29：注意力语境的“悬垂”指重力下的结构内部应力，不指 FDM 打印悬垂
+
+**触发条件：** 第 1 条（用户拍板并更正术语）+ 第 3 条（数据模型/语义契约，改变注意力层与 strength 的边界）+ 第 4 条（影响 `analyze` / `simulate_stress` / 文档与后续热力图路线）。
+
+**要解决的问题：** “悬垂”在两条语境里被混用：
+
+- 制造性语境：FDM 打印悬垂——下方有没有支撑，`check_printability` / `support_map` 回答；
+- 注意力/强度语境：结构悬挑在重力场下的内部应力——自重应力，属于 strength。
+
+混用导致两个错误：把 FDM 支撑问题塞进点热力图（toy-balance 盘上 1041/2871 采样涂红），以及把“无重力外载应力”当作“重力内部应力”。
+
+**决策内容：**
+
+- **`print-overhang`（打印悬垂）**：FDM 支撑/可打印性问题，区域层；由 `check_printability` / `support_map` 回答。它的动作是加支撑/改朝向，不是补强。
+- **`structural overhang` / `self-weight stress`（结构悬挑/自重应力）**：重力场下的结构内部应力，属于 **strength**；用 `loadCase` 表达（`gravity` / `service` / `combined` / `motion`），目标默认含自重。
+- **注意力词典不再使用未限定的“悬垂”**。点图第三层目标是 **strength（含自重）**，不是 print-overhang；print-overhang 最多是 `partNotes` 里的制造性整件/成片事实。
+- **现状（2026-10-29）**：`simulate_stress` 仍是静态线弹性 + 声明外载，`StressMaterial` 无密度，`stress_fem.py` 无体力项；**尚未实现自重/重力 load case**。本决策先固定术语与目标，代码落地另记。
+
+**理由：** 两个问题触发不同动作：print-overhang → 加支撑/改朝向；structural overhang → 补强/改截面/改路径。按动作分组，不能合并；共享重力物理不等于共享问题。把 print-overhang 塞进点图会让图描述形状而不是风险，这是 1041/2871 的实证。
+
+**依据：**
+
+- 用户 2026-10-29 的更正与拍板。
+- 1041/2871 涂红事故（toy-balance 盘 v069）：print-overhang 逐点着色失败，后由 `68bb7aa` 移出点层。
+- 全件 FEM 实测（默认 dx，果糖 41 版）：总计 **31.3–31.6 s**（两次运行），median **0.73 s**，p90 **0.81 s**，max **3.48 s**（首调用含 worker 启动）；细化 dx 0.8–2.0：单件约 **7–50 s**（两次运行，冷/热与系统负载可致 ~2× 波动）；天平 base 默认 dx=10 mm 只有 **17 个实体单元**，0.43 s 的结果不可信。详见 [`experiments/20261029_fem-cost.md`](../experiments/20261029_fem-cost.md)。
+- 代码现状：`src/host/stress.ts` 的 `StressMaterial` 只有 `youngModulusMPa`/`poissonRatio`/`strengthMPa`，无密度；`python/cad_worker/stress_fem.py` 的 `rhs` 只装外载，无 `ρg` 体力。
+
+**影响：** `DESIGN.md` §25.7 新增术语表并修正 `analyze` 的过时描述；`docs/llm/manufacturing.md` 明确 overhang 指 print-overhang；`analyze` / `check_printability` / `simulate_stress` / `support_map` 的工具描述；后续 `simulate_stress` 的 density/body-force/`loadCase` 与 `analyze` 第三层接入。**未改 skill**：顶层 `cad-toolbox/SKILL.md` 是每会话加载的路由地图，这次是一张重复的术语表，未达到“短规则 + 按需加载 + 不重复”的标准，已撤回（无 diff）。
+
+## 2026-10-29：`simulate_stress` 加自重 load case 与地面支撑
+
+**触发条件：** 第 1 条（用户“请实现”）+ 第 4 条（跨 `stress.ts` / `stress_fem.py` / `tools.ts` / 验收 / 文档）。本条取代同日前一条的“自重尚未实现”状态。
+
+**要解决的问题：** 上一条把 structural overhang 定为重力下的内部应力，但 `simulate_stress` 只有外载；零件“放在地面”也没有显式支撑表达。
+
+**决策内容：**
+
+- `includeSelfWeight` 默认 true；`loads` 可选；至少一个载荷源（`loads` 或自重）。
+- `StressMaterial.densityKgPerM3`：内置 `fdm-pla` 1240；自定义材料在自重开启时必须声明。
+- 体素体力：`ρg = density × gravity × 1e-12 N/mm³`；每个 hex8 单元 8 节点各 `ρg·dx³/8`；同时进 `rhs` 与 `applied`（equilibrium 才能对）。
+- `gravityMmPerS2` 默认 `[0,0,-9810]`（-z 向下）。
+- `supports:[{ground:true}]` = 固定最低 z 面；是 **held face**，不是摩擦/单边接触；等价于 `face {axis:"z",side:"min"}`。
+- `loadCase` 由实际载荷推导：`gravity` / `service` / `combined`；报告 `selfWeight.totalWeightN`。
+- 低层 `stress_fem.run` 默认仍为 false，保持旧探针数值；工具层默认 true。
+
+**理由：** 重力应力必须真的把体力装进 rhs，否则只是外载重命名；ground 是“放在床上”的最常见支撑，显式表达比让调用者手写 face 更少歧义。
+
+**依据：**
+
+- 自重悬臂自检：`totalWeightN` 0.121644 N = ρVg；reaction +0.1216 / applied -0.1216；equilibrium 6.6e-9%；tip deflection -1.41% vs `qL⁴/(8EI)`。
+- 工具端到端（toy-balance2 v001，ground，gravity-only）：`loadCase` gravity；`totalWeightN` 0.206795 N；reaction +0.2068 / applied -0.2068；equilibrium 3.56e-5%。
+- `accept-stress` 37/37；`tsc --noEmit` / `npm run build` 通过。
+
+**影响：** `src/host/stress.ts`（density / request / result）、`python/cad_worker/stress_fem.py`（体力 / loadCase / totalWeight）、`src/host/tools.ts`（参数 / ground / 输出 / schema）、`scripts/stress-selftest.py`、`scripts/accept-stress.mjs`、`docs/llm/engines.md`、`skills/cad-simulation/SKILL.md`、`DESIGN.md`。旧 stress 结果用 `includeSelfWeight:false` 复现。ground 不是接触律：滑动、摩擦、单边分离不在模型内。
+
+## 2026-10-29：`analyze` 接入 stress 运行（strength + strength-concentration）
+
+**触发条件：** 第 1 条（用户“继续推进下一步”）+ 第 4 条（跨 `analyze.ts` / `tools.ts` / schema / 文档 / 验收）。
+
+**要解决的问题：** `analyze` 之前只融合壁厚 + 再入角，stress 场是分开的；低绝对应力但相对集中的地方（V 缺口根部 0.019 MPa）不会进入融合图，热力图错过真正的应力异常。
+
+**决策内容：**
+
+- `analyze` 增加 `stressRunId`：读已有 stress run 的 `von-mises` 场，不重新求解；run 必须 `sourceVersionIds` 包含当前版本，否则拒绝。
+- **`strength`（绝对风险）**：按 run 的 `warnAt`/`badAt` 映射，`0.5` 在 warn、`1` 在 bad；低应力保持静默。
+- **`strength-concentration`（相对集中）**：stress run 的局部峰以 `|u|=0.5` 进入融合图；这是“看这里”的检测层，不是“会断”的风险层，禁止当成 1.0。
+- 没有 `stressRunId` → `notMapped: strength: no stress run`，不是 0。
+- `cellMm` 控制聚类：40mm 长的 V 缺口根部在 8mm 下是 6 个分离峰，16mm 下角峰与最近应力峰合并为 `count=2`。
+
+**理由：** 绝对许用和相对集中是两个问题；小件的绝对应力远低于许用，但应力集中仍值得看。用 0.5 的检测层而不是伪造高风险，保持“检测 ≠ 交付”。
+
+**依据：**
+
+- V 缺口纯自重悬臂（`r010`）：绝对 `strength` 层 14450 采样但无峰（0.019 MPa << 10 MPa warn）；`strength-concentration` 6 个峰沿根部。
+- `analyze(stressRunId:"r010", cellMm:16)`：顶部峰 `(40,20,30)`，risk 1，count 2，layers `reentrant-corner` + `strength-concentration`。
+- `accept-analyze` 新增断言：`stressU(warnAt)=0.5`、`stressU(badAt)=1`；低应力峰仍是 0.5 look；角峰 + strength 在根部 count 2；全部通过。
+
+**影响：** `src/host/analyze.ts`（stress/concentration 融合）、`src/host/tools.ts`（`stressRunId` / 读 run / 输出/schema）、`scripts/accept-analyze.mjs`、`docs/llm/conventions.md`、`docs/TOOL-CONTRACTS.md`、`DESIGN.md`。`analyze` 的输出仍不带 `samples`；融合图只在 run 的 `attention.json` 里。
+
+## 2026-10-29：`scan_attention` 增加非平面布尔缝与 mesh health 融合
+
+**触发条件：** 第 1 条（用户“做2和3”）+ 第 4 条（跨 Python worker / `analyze` / 契约 / 文档 / 验收）。
+
+**要解决的问题：** 差集/并集没到位是 LLM 最难自查的静默错误；但“所有闭合锐边环”在 80° 下会刷屏（果糖 C3 有 44 条球-球键颈，全是正常几何）。需要低刷屏、只抓“痕迹”的信号。
+
+**决策内容：**
+
+- `scan_attention` 新增 `boolean-seam`：**闭合 + 非平面**的锐边环（≥80° 边）；平面孔环、90° 口袋环、键颈都不报。
+- seam 最多返回 8 条（按环长排序），总数在 `stats.nonplanar_seam_loops`，避免单件多孔时刷屏。
+- `multi-body` / `non-manifold` / `degenerate-faces` 沿用现有 `scan_attention` 输出；`analyze` 自动把它们作为独立 layer 融合（`multi-body` / `non-manifold` 为 1.0，`boolean-seam` 为 0.5 look）。
+- 不做静态 SCAD lint：插件不绑定 OpenSCAD，必须从 mesh/渲染结果判断。
+- 自交（watertight 单壳自交）暂不检测：没有便宜可靠的三角形-三角形自交测试；multi-body/non-manifold 覆盖常见 union 痕迹。
+
+**理由：** 这是“粗、便宜、能引导注意力”的折中：只抓留了痕迹的布尔错误，不承诺覆盖干净的缺失；阈值/非平面过滤把刷屏压到可控。
+
+**依据：**
+
+- 80° 闭合环实测：B03 26/2、C3 12/44、盘 7/7；100° 全为 0。C3 的 44 条凹环是键颈，全平面/圆环。
+- 侧面打孔圆柱（v009）：`nonplanar_seam_loops=2`，`boolean-seam` 在 `x=±9.77`，110°/平面度 0.23mm；`analyze` 为 2 个 0.5 look。
+- 双方块（v010）：`multi-body` 在 `(25,5,5)`；`analyze` 峰 risk 1、layer `multi-body`。
+- `scripts/scan-seam-selftest.py` 6/6；`accept-analyze` 的 mesh health/seam 断言通过；`accept-attention-scan` 原有 8 条全过。
+
+**影响：** `python/cad_worker/worker.py`（P2b seam）、`src/host/tools.ts`（`scan_attention` 描述/schema、`analyze` 描述/note）、`scripts/accept-analyze.mjs`、`scripts/scan-seam-selftest.py`、`docs/TOOL-CONTRACTS.md`、`experiments/20261029_contact_corner_attention.md`、`DESIGN.md`。

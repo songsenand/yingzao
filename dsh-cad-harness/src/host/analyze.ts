@@ -100,6 +100,17 @@ export interface AnalyzePeak {
   layers: string[];
 }
 
+/** Stress (MPa) -> |u|: 0.5 at the declared `warnAt`, 1 at `badAt`; below warn is
+ *  comfortable. This is the same 0.5/1.0 split the stress panel uses, not a re-scaled
+ *  max: a low absolute stress must stay silent, even if it is the field's maximum. */
+export function stressU(v: number, warnAt: number, badAt: number): number {
+  if (!Number.isFinite(v) || !(warnAt > 0) || !(badAt > warnAt)) return 0;
+  if (v <= 0) return 0;
+  if (v <= warnAt) return 0.5 * (v / warnAt);
+  if (v >= badAt) return 1;
+  return 0.5 + 0.5 * (v - warnAt) / (badAt - warnAt);
+}
+
 /** The detector's own word -> how extreme it is. A missing word is treated as half-way:
  *  an unlabelled suspect must not silently score 0 (that would erase it from the map). */
 function cornerU(s: SuspectLike, band?: BandNorm): number {
@@ -121,8 +132,29 @@ function cornerU(s: SuspectLike, band?: BandNorm): number {
  * a heat map that lists "the whole part is fine" as a peak is noise, not guidance.
  */
 export function analyzeVersion(
-  input: { suspects?: readonly SuspectLike[]; field?: SampleFieldLike; wallBand: BandNorm; cornerBand?: BandNorm; cellMm?: number },
-): { peaks: AnalyzePeak[]; samples: { fused: { p: number[]; v: number }[] }; layers: Record<string, number>; notMapped: string[]; partNotes: { overhangFaces: number; overhangAreaMm2: number; note: string } | null } {
+  input: {
+    suspects?: readonly SuspectLike[];
+    field?: SampleFieldLike;
+    wallBand: BandNorm;
+    cornerBand?: BandNorm;
+    cellMm?: number;
+    /** The stress run's `von-mises` field, already normalised by its own declared
+     *  warn/bad values. Optional: without it the strength layer is `notMapped`, never
+     *  silently 0. */
+    stress?: {
+      samples: { p: number[]; v: number }[];
+      /** Local maxima already selected by the stress tool. They are a DETECTION layer
+       *  at |u|=0.5 ("look here"), not an allowable claim: a low absolute stress peak
+       *  still points at a real concentration. */
+      peaks?: { p: number[]; v: number }[];
+      warnAt: number;
+      badAt: number;
+      source: string;
+      runId: string;
+      loadCase: string;
+    };
+  },
+): { peaks: AnalyzePeak[]; samples: { fused: { p: number[]; v: number }[] }; layers: Record<string, number>; notMapped: string[]; partNotes: { overhangFaces: number; overhangAreaMm2: number; maxWallMm: number; thickSamples: number; thickLimitMm: number; note: string }; stress: { runId: string; loadCase: string; warnAt: number; badAt: number; source: string; concentrationPeaks: number } | null } {
   const cell = input.cellMm ?? 8;
   const key = (p: readonly number[]) => p.map((x) => Math.floor(x / cell)).join(',');
   const buckets = new Map<string, { at: number[]; risk: number; layers: Set<string>; count: number }>();
@@ -167,6 +199,21 @@ export function analyzeVersion(
     add('wall', p.p, u < 0 ? u : 0);
   }
 
+  // STRENGTH is a POINT question, but only when the stress run says so: the |u| is
+  // against the run's declared warnAt/badAt (0.5/1.0), never a re-scaled max. A low
+  // absolute stress stays silent even if it is the field's maximum.
+  const stressSamples = input.stress?.samples ?? [];
+  for (const s of stressSamples) {
+    if (s.p?.length !== 3 || !Number.isFinite(s.v)) continue;
+    add('strength', s.p, stressU(s.v, input.stress!.warnAt, input.stress!.badAt));
+  }
+  // A local stress maximum is a DETECTION point even when its absolute value is far
+  // below the allowable: "stress concentrates here" is a different question from
+  // "this will break". It enters at 0.5 (a look), never as a fake 1.0 risk.
+  for (const pk of input.stress?.peaks ?? []) {
+    if (pk.p?.length === 3 && Number.isFinite(pk.v)) add('strength-concentration', pk.p, 0.5);
+  }
+
   // The heat map needs EVERY sampled point (including comfortable ones) so the surface
   // is covered; `peaks` is the other view (only where it matters). Same buckets, two
   // projections — never two computations.
@@ -177,28 +224,52 @@ export function analyzeVersion(
     if (p2.p?.length !== 3) continue;
     allPts.push({ p: p2.p, v: cellRisk.get(key(p2.p)) ?? 0 });
   }
+  for (const s2 of stressSamples) {
+    if (s2.p?.length !== 3) continue;
+    allPts.push({ p: s2.p, v: cellRisk.get(key(s2.p)) ?? 0 });
+  }
+  for (const pk of input.stress?.peaks ?? []) {
+    if (pk.p?.length === 3) allPts.push({ p: pk.p, v: cellRisk.get(key(pk.p)) ?? 0 });
+  }
   for (const s2 of input.suspects ?? []) {
     const at = s2.where?.atMm ?? s2.atMm;
     if (at && at.length === 3) allPts.push({ p: [...at], v: cellRisk.get(key(at)) ?? 0 });
   }
 
   const overhangPts = input.field?.samples?.overhang ?? [];
-  const partNotes: { overhangFaces: number; overhangAreaMm2: number; maxWallMm: number; thickSamples: number; thickLimitMm: number; note: string } | null =
-    overhangPts.length === 0
-      ? null
-      : {
-          overhangFaces: overhangPts.length,
-          overhangAreaMm2: +overhangPts.reduce((a, p) => a + (Number.isFinite(p.v) ? Math.max(0, p.v) : 0), 0).toFixed(1),
-          maxWallMm: +maxWallMm.toFixed(2),
-          thickSamples,
-          thickLimitMm: input.wallBand.hi,
-          note:
-            '悬垂与厚壁都是整件/成片性质（要支撑、会缩痕），不是局部风险：它们满布碗底与实体，' +
-            '逐点着色会把注意力从真正的信号上引开，所以只作为整件事实报告；逐点层只留薄壁与再入角。',
-        };
+  // ALWAYS an object: `null` would make "no print-overhang" indistinguishable from "the
+  // field was not written" — the exact ambiguity the run report had. Zero is a fact.
+  const partNotes: { overhangFaces: number; overhangAreaMm2: number; maxWallMm: number; thickSamples: number; thickLimitMm: number; note: string } = {
+    overhangFaces: overhangPts.length,
+    overhangAreaMm2: +overhangPts.reduce((a, p) => a + (Number.isFinite(p.v) ? Math.max(0, p.v) : 0), 0).toFixed(1),
+    maxWallMm: +maxWallMm.toFixed(2),
+    thickSamples,
+    thickLimitMm: input.wallBand.hi,
+    note:
+      overhangPts.length === 0
+        ? '无朝下打印悬垂面（按声明角度）：整件打印悬垂事实为 0；薄壁/厚壁仍按 wall 层计。'
+        : '打印悬垂与厚壁都是整件/成片性质（要支撑、会缩痕），不是局部风险：它们满布碗底与实体，' +
+          '逐点着色会把注意力从真正的信号上引开，所以只作为整件事实报告；逐点层只留薄壁、再入角、强度与应力集中。',
+  };
 
   const peaks = [...buckets.values()]
     .map((b) => ({ atMm: b.at, risk: b.risk, count: b.count, layers: [...b.layers].sort() }))
     .sort((a, b) => b.risk - a.risk || b.count - a.count || 0);
-  return { peaks, samples: { fused: allPts }, layers, notMapped: [], partNotes };
+  return {
+    peaks,
+    samples: { fused: allPts },
+    layers,
+    notMapped: [],
+    partNotes,
+    stress: input.stress
+      ? {
+          runId: input.stress.runId,
+          loadCase: input.stress.loadCase,
+          warnAt: input.stress.warnAt,
+          badAt: input.stress.badAt,
+          source: input.stress.source,
+          concentrationPeaks: input.stress.peaks?.length ?? 0,
+        }
+      : null,
+  };
 }

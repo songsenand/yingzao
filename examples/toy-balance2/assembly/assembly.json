@@ -372,7 +372,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "base.V轴",
-    "b": "beam.刀口"
+    "b": "beam.刀口",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.2
+    }
    },
    {
     "id": "I2",
@@ -383,6 +391,14 @@
     "b": "beam.刀口",
     "params": {
      "runId": "r102"
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.2
     }
    },
    {
@@ -391,7 +407,16 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.左叉孔",
-    "b": "stirrupL.吊眼"
+    "b": "stirrupR.吊眼",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    },
+    "note": "按坐标配对：stirrupL/R 的位姿与 beam/axle 的 L/R 命名相反（stirrupL 在 +x），本接口按同侧坐标配对；命名债待后续统一。"
    },
    {
     "id": "I4",
@@ -399,7 +424,16 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.右叉孔",
-    "b": "stirrupR.吊眼"
+    "b": "stirrupL.吊眼",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    },
+    "note": "按坐标配对：stirrupL/R 的位姿与 beam/axle 的 L/R 命名相反（stirrupL 在 +x），本接口按同侧坐标配对；命名债待后续统一。"
    },
    {
     "id": "I5",
@@ -410,6 +444,14 @@
     "b": "panL.底面",
     "params": {
      "distanceMm": 0
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.3
     }
    },
    {
@@ -421,6 +463,14 @@
     "b": "panR.底面",
     "params": {
      "distanceMm": 0
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.3
     }
    },
    {
@@ -429,7 +479,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.指孔",
-    "b": "pointer.螺孔"
+    "b": "pointer.螺孔",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I8",
@@ -440,6 +498,14 @@
     "b": "pointer.贴面",
     "params": {
      "distanceMm": 0
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.3
     }
    },
    {
@@ -451,6 +517,14 @@
     "b": "slider.槽顶面",
     "params": {
      "distanceMm": 0
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.3
     }
    },
    {
@@ -462,6 +536,14 @@
     "b": "w16.底面",
     "params": {
      "distanceMm": 0
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.3
     }
    },
    {
@@ -470,7 +552,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "base.脚1轴",
-    "b": "foot1.轴"
+    "b": "foot1.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I12",
@@ -478,7 +568,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "base.脚2轴",
-    "b": "foot2.轴"
+    "b": "foot2.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I13",
@@ -486,7 +584,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "base.脚3轴",
-    "b": "foot3.轴"
+    "b": "foot3.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I14",
@@ -494,7 +600,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.左叉孔",
-    "b": "axleL.轴"
+    "b": "axleL.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I15",
@@ -502,7 +616,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.右叉孔",
-    "b": "axleR.轴"
+    "b": "axleR.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I16",
@@ -514,6 +636,14 @@
     "params": {
      "distanceMm": 54,
      "toleranceMm": 5
+    },
+    "nominal": {
+     "quantity": "距离",
+     "value": 54.0
+    },
+    "tolerance": {
+     "min": 49.0,
+     "max": 59.0
     }
    },
    {
@@ -522,7 +652,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "beam.指孔",
-    "b": "pscrew.轴"
+    "b": "pscrew.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I18",
@@ -530,7 +668,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "slider.锁紧轴",
-    "b": "sscrew.轴"
+    "b": "sscrew.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I19",
@@ -538,7 +684,16 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "stirrupL.吊眼",
-    "b": "axleL.轴"
+    "b": "axleR.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    },
+    "note": "按坐标配对：stirrupL/R 的位姿与 beam/axle 的 L/R 命名相反（stirrupL 在 +x），本接口按同侧坐标配对；命名债待后续统一。"
    },
    {
     "id": "I20",
@@ -546,7 +701,16 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "stirrupR.吊眼",
-    "b": "axleR.轴"
+    "b": "axleL.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    },
+    "note": "按坐标配对：stirrupL/R 的位姿与 beam/axle 的 L/R 命名相反（stirrupL 在 +x），本接口按同侧坐标配对；命名债待后续统一。"
    },
    {
     "id": "I21",
@@ -554,7 +718,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "foot1.轴",
-    "b": "nut1.轴"
+    "b": "nut1.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I22",
@@ -562,7 +734,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "foot2.轴",
-    "b": "nut2.轴"
+    "b": "nut2.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I23",
@@ -570,7 +750,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "foot3.轴",
-    "b": "nut3.轴"
+    "b": "nut3.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I24",
@@ -578,7 +766,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "axleL.轴",
-    "b": "axlenutL.轴"
+    "b": "axlenutL.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    },
    {
     "id": "I25",
@@ -586,7 +782,15 @@
     "check": "coaxial",
     "severity": "hard",
     "a": "axleR.轴",
-    "b": "axlenutR.轴"
+    "b": "axlenutR.轴",
+    "nominal": {
+     "quantity": "同轴度",
+     "value": 0.0
+    },
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.25
+    }
    }
   ]
  }

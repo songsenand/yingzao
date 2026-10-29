@@ -20,16 +20,33 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock, writeJsonAtomic } from './file-lock.ts';
 
+// G4 (2026-10-29): parts carry an optional ROLE. The roberval delivery audit demanded
+// a fresh printability run for merged kinematic research bodies and for M3 hardware
+// models — 12 runs (r025–r036) of pure ceremony, because the corpus had no way to say
+// "this is not a printed part". Role is DECLARED, never inferred (same rule as part
+// identity): 'printed' is the default everything falls back to, and the audit exempts
+// only what was explicitly declared otherwise — visibly, as an info finding.
+export type PartRole = 'printed' | 'stock' | 'research';
+
 export interface PartEntry {
   id: string;
   /** Display name as declared (trimmed, inner whitespace collapsed). */
   name: string;
   /** How the name was obtained — a migrated bucket must not look declared. */
   nameSource: 'agent' | 'intent';
+  /** printed (default) | stock (purchased hardware) | research (merged/analysis body). */
+  role?: PartRole;
   createdAt: string;
   lastActiveAt: string;
   /** Version ids in creation order. */
   versionIds: string[];
+}
+
+export const PART_ROLES: readonly PartRole[] = ['printed', 'stock', 'research'];
+
+/** The effective role — the manifest may omit it, and omission means printed. */
+export function partRoleOf(entry: { role?: PartRole } | undefined): PartRole {
+  return entry?.role ?? 'printed';
 }
 
 export interface PartManifest {
@@ -195,5 +212,30 @@ export async function renamePart(store: PartStore, partId: string, name: string)
     if (!part) throw new Error(`no such part: ${partId}`);
     part.name = name.trim().replace(/\s+/g, ' ');
     await writeManifest(store, manifest);
+  });
+}
+
+/**
+ * Declare (or clear, with null) a part's role (G4, 2026-10-29).
+ *
+ * The audit exempts stock/research parts from the printability and
+ * newest-version-validated checks — an exemption that is only honest when it is
+ * DECLARED per part, never inferred from a name or a tool that made it. The
+ * previous role is returned so the caller can report a change.
+ */
+export async function setPartRole(store: PartStore, partId: string, role: PartRole | null): Promise<{ entry: PartEntry; previous: PartRole }> {
+  if (role !== null && !PART_ROLES.includes(role)) {
+    throw new Error(`unknown role "${String(role)}" — expected one of ${PART_ROLES.join(' | ')} (or null to clear)`);
+  }
+  return withFileLock(manifestPath(store), async () => {
+    const manifest = await readPartManifest(store);
+    const part = manifest.parts.find((p) => p.id === partId);
+    if (!part) throw new Error(`no such part: ${partId}`);
+    const previous = partRoleOf(part);
+    if (role === null) delete part.role;
+    else part.role = role;
+    part.lastActiveAt = new Date().toISOString();
+    await writeManifest(store, manifest);
+    return { entry: part, previous };
   });
 }

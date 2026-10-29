@@ -4,15 +4,16 @@
 
 ## `analyze`
 
-EXPERIMENTAL — do not base a delivery claim on this yet: its overhang handling is still AREA-based, which lights up whole regions (the toy-balance pan showed 1041 of 2871 samples red) instead of pointing. Build the risk map for a version and say where to LOOK: geometry corners (scan_attention) + measured wall thickness + overhang faces, each normalised to |u| in [0,1] against its own DECLARED band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus an agreement count. It never gates and never returns a verdict: a peak means "look here", not "this will break". Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".
+EXPERIMENTAL — do not base a delivery claim on this yet. The POINT map is thin-wall (lower side) + reentrant corners + (when `stressRunId` is given) STRENGTH from that stress run; PRINT overhang and thick-wall are PER-PART facts (area / thickness), never points — scoring them per sample painted whole rims red and buried the real corner signals (fixed 2026-10-21). The remaining caveats: the print-overhang fact is AREA-based, not mass-based; `support` is a mass-based estimate not verified on real prints; the |u| bands are declared, not calibrated. Build the risk map for a version and say where to LOOK: reentrant corners + mesh health (multi-body / non-manifold / degenerate) + non-planar boolean seams (scan_attention) + measured wall thickness (thin side), each normalised to |u| in [0,1] against its own DECLARED band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus an agreement count. When `stressRunId` is given, that run's local stress peaks also enter as `strength-concentration` at |u|=0.5 (a LOOK, not a risk); the absolute `strength` layer may be silent. Overhang area / thick-wall are reported once per part in `partNotes`; the mass-based unsupported regions are in `support`. It never gates and never returns a verdict: a peak means "look here", not "this will break". Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version id, e.g. "v069". |
 | `cellMm` | number | — | Clustering cell for peaks (default 8 mm). |
 | `wallMinMm` | number | — | Wall band lower edge (default: the declared profile's wallMinMm, else 1.2 mm — and the reply says which). |
-| `wallMaxMm` | number | — | Wall band upper edge — thick masses are a risk too (default 4.0 mm, a DECLARED heuristic, not a measurement). |
+| `wallMaxMm` | number | — | Wall band upper edge — thick masses are counted per part in `partNotes.thickSamples` (default 4.0 mm, a DECLARED heuristic, not a measurement); they are NOT scored as points. |
 | `profileIds` | array | — | Process profiles to take the wall band from (same meaning as in check_printability). Omit and the band source says "no profile" — an unsigned threshold, which DESIGN §27.1 exists to prevent. |
+| `stressRunId` | string | — | Optional stress run id (kind "stress") for this version. Its von-mises field is fused as the STRENGTH layer, normalised by that run's declared warnAt/badAt. Without it strength is `notMapped` — absence is not 0. The run must cite this version. |
 | `dxMm` | number | — | Voxel size for the support estimate (default 1.0 mm). |
 | `minMassG` | number | — | Unsupported MASS above which a hanging region is reported (default 1.0 g, declared). A 0.2 g sliver is free. |
 | `bridgeMaxMm` | number | — | Horizontal span a printer can bridge without support (default 10 mm, declared). |
@@ -21,7 +22,7 @@ EXPERIMENTAL — do not base a delivery claim on this yet: its overhang handling
 analyze({ versionId: "…" })
 ```
 
-returns: `peaks`, `layers`, `notMapped`, `partNotes`, `support`, `bands`, `note`
+returns: `peaks`, `layers`, `notMapped`, `partNotes`, `stress`, `support`, `bands`, `note`, `timings`
 
 
 ## `attach_appearance`
@@ -43,7 +44,7 @@ returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replace
 
 ## `check_assembly`
 
-Validate the assembly manifest (BOM + interface contracts): distance, diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
+Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -67,7 +68,8 @@ Screen up to 12 saved versions in ONE call: per version, the measure half (water
 | `checks` | array | — | Which halves to run: "measure" and/or "printability". Default both. |
 | `profileIds` | array | — | Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability). |
 | `wallMinMm` | number | — | Wall thinner than this is reported (printability half). Default 1.2. |
-| `overhangDeg` | number | — | Down-facing faces steeper than this count as overhang (printability half). Default 45. |
+| `overhangDeg` | number | — | Down-facing faces steeper than this count as print-overhang (FDM support, printability half; NOT structural overhang/self-weight stress). Default 45. |
+| `printOrientationDeg` | array | — | G6 (2026-10-29): the PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it; the reply's overhang/witness numbers are then in the printed frame. |
 | `samples` | number | — | Approximate surface samples for the wall half. Default 600. |
 
 ```js
@@ -79,14 +81,14 @@ returns: `parts`, `failures`, `summary`
 
 ## `check_printability`
 
-Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact down-facing area steeper than the overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).
+Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `mode` | string (judge \| scan \| both) | — | "judge" (default) returns ONLY the judgement half (verdict / findings / profiles, no attention field); "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The run ALWAYS records both halves (report.json + attention.json) — the mode trims the reply, not the record (DESIGN §25.7). |
 | `versionId` | string | **required** | Saved version id to screen, e.g. "v012". |
 | `wallMinMm` | number | — | Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width). |
-| `overhangDeg` | number | — | A down-facing face tilted more than this many degrees from vertical counts as needing support. Default 45. |
+| `overhangDeg` | number | — | A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45. |
 | `samples` | number | — | Approximate surface samples. Default 600; raise for big meshes, lower for quick passes. |
 | `profileIds` | array | — | Shipped process profiles to judge against, e.g. ["fdm-pla-0.4"]. Each yields its own two-valued verdict. Omit (with profilesJson) to use the built-in fallback, which the report then names. |
 | `profilesJson` | string | — | An inline JSON array of process profiles (schema: schemas/process-profile.schema.json). Use for a profile you authored; an invalid one is REFUSED with the offending rule named. |
@@ -133,7 +135,7 @@ returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `ru
 
 ## `generate_part`
 
-Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
+Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. G2 (2026-10-29): datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; OpenSCAD positional arguments are silent, so a swap compiles and corrupts the contract (roberval v048). A zero direction is a compile error; a direction that dwarfs its own point comes back as a compile warning naming the datum. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -311,7 +313,7 @@ returns: `direction`, `from`, `fromInsideSolid`, `spans`, `gaps`, `thinnestSpanM
 
 ## `merge_parts`
 
-Union two or more parts, each at its assembly placement, into ONE new solid part version. Use it when the whole machine must be a single rigid body: simulate_physics topple/stability, or a whole-assembly measure_part. Replaces hand-merging STLs in OpenSCAD. mm, z-up; rotate first (degrees in R = Rz·Ry·Rx — the OpenSCAD/Manifold composition; three.js order `ZYX`), then translate.
+Union two or more parts, each at its assembly placement, into ONE new solid part version. Use it when the whole machine must be a single rigid body: simulate_physics topple/stability, or a whole-assembly measure_part. Replaces hand-merging STLs in OpenSCAD. mm, z-up; rotate first (degrees in R = Rz·Ry·Rx — the OpenSCAD/Manifold composition; three.js order `ZYX`), then translate. G4 (2026-10-29): the merged part is marked role=research (an analysis body, not a printed part) unless it already carries an explicit role — the delivery audit then exempts it from the printability and newest-validated checks; set_part_role back to printed if it IS printed.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -435,7 +437,7 @@ returns: `ok`, `python`, `runtimeSource`, `scriptPath`, `exitCode`, `signal`, `t
 
 ## `scan_attention`
 
-Where to LOOK on a saved version — not a verdict. Mesh health (watertight, body count) plus REENTRANT CORNERS: concave edges whose face normals turn by more than `concaveMinDeg` (default 100°), chained and located. θ=90° is an ordinary T-junction (not reported); θ=135° is a 45° V-notch; θ→180° is a knife slit. A notch is where printed parts initiate cracks, so each one comes back with a coordinate, a bbox and a runnable next observation. Run it on a new part, and again after any geometry change: it is how a fix is shown to have worked (the repaired part must go quiet).
+Where to LOOK on a saved version — not a verdict. Mesh health (watertight, body count) plus REENTRANT CORNERS: concave edges whose face normals turn by more than `concaveMinDeg` (default 100°), chained and located. θ=90° is an ordinary T-junction (not reported); θ=135° is a 45° V-notch; θ→180° is a knife slit. Plus MESH HEALTH (multi-body / non-manifold / degenerate) and NON-PLANAR CLOSED SHARP LOOPS (`boolean-seam`, 80° edges): a curved/angled boolean seam, the trace a missed difference/union often leaves. Flat hole rims and 90° pocket rims are excluded on purpose, so a molecule with many bond necks does not flood the list; at most 8 seams are returned, the count is in stats. A notch is where printed parts initiate cracks, so each one comes back with a coordinate, a bbox and a runnable next observation. Run it on a new part, and again after any geometry change: it is how a fix is shown to have worked (the repaired part must go quiet).
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -452,7 +454,7 @@ returns: `versionId`, `stats`, `suspects`
 
 ## `set_datums`
 
-Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical.
+Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical. G2 (2026-10-29): a zero dir/normal is REFUSED (an axis with no direction can never be an assembly endpoint), and an axis whose direction dwarfs its own point warns as a probable p/dir swap — the anchor is still recorded, because this tool is also the repair path (roberval v048).
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -465,6 +467,22 @@ set_datums({ versionId: "…" })
 ```
 
 returns: `versionId`, `previousVersionId`, `userIntent`, `mode`, `datums`, `counts`, `warnings`
+
+
+## `set_part_role`
+
+Declare what a part IS: printed (default — full printability and delivery expectations), stock (purchased hardware modelled for reference, e.g. an M3 screw), or research (an analysis/merged body, e.g. a kinematic stand-in). The delivery audit exempts stock/research parts from the printability-for-every-part claim and from the newest-version-unvalidated check, and reports the exemption as an info finding — a declared exemption, never an inference from the name. merge_parts marks its output research automatically. If a part actually ships as a printed part, its role must be printed.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `part` | string | **required** | Part name (as shown by the part picker) or part id, e.g. "m3_screw_20" or "p012". |
+| `role` | string | **required** | One of printed \| stock \| research. |
+
+```js
+set_part_role({ part: "…", role: "…" })
+```
+
+returns: `partId`, `name`, `role`, `previousRole`, `effect`
 
 
 ## `simulate_fluid`
@@ -547,28 +565,30 @@ returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometryS
 
 ## `simulate_stress`
 
-Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG). You must declare the CASE — material, supports and loads — because "the stress" without one is not a number. TRUST from this tool: the integrals (reaction, section force/moment, compliance, strain energy), the hot-spot LOCATIONS, and the surface stress recovered by extrapolating the depth profile inward from each hot spot. DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part's layer-direction weakness — usually what breaks first — is invisible to it. Peaks are read at `criticalDistanceMm` inside the surface (a declared distance; the distance actually used comes back as effectiveSampleDistanceMm) — that declared-distance reading is the number to quote. A region's `surfaceExtrapolatedMPa` (the depth profile fitted out to the surface) is a HIGHER estimate and is only quoted when it passes BOTH its own fit check and a cross-resolution check (`extrapolationCrossResolutionPct`), because a good fit R^2 is not sufficient: on a fillet the fit looked fine (R^2 0.90) while the value moved 17% between grids. Every region also carries the wall thickness it tunnels through in cells and a `trustworthy` flag with `whyUntrustworthy`; an untrustworthy region means the position/value may not be quoted — refine dxMm. Deliver against `delivery` (excluded / difficult / not-excluded, with witnesses), NOT against `verdict`: a missing number is not a pass, and the geometry suspects in `attention` are DETECTION (where to look), never delivery evidence. THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.
+Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG). You must declare the CASE — material, supports and loads — because "the stress" without one is not a number. SELF-WEIGHT IS A LOAD CASE NOW (2026-10-29): `includeSelfWeight` defaults to true and applies rho*g; `loads` is then optional. Use `supports: [{ground:true}]` for a part resting on the bed; ground is a HELD FACE, not a frictional/unilateral contact. `loadCase` reports gravity / service / combined; "gravity stress" / "structural overhang" is valid only when the reply says so. TRUST from this tool: the integrals (reaction, section force/moment, compliance, strain energy), the hot-spot LOCATIONS, and the surface stress recovered by extrapolating the depth profile inward from each hot spot. DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part's layer-direction weakness — usually what breaks first — is invisible to it. Peaks are read at `criticalDistanceMm` inside the surface (a declared distance; the distance actually used comes back as effectiveSampleDistanceMm) — that declared-distance reading is the number to quote. A region's `surfaceExtrapolatedMPa` (the depth profile fitted out to the surface) is a HIGHER estimate and is only quoted when it passes BOTH its own fit check and a cross-resolution check (`extrapolationCrossResolutionPct`), because a good fit R^2 is not sufficient: on a fillet the fit looked fine (R^2 0.90) while the value moved 17% between grids. Every region also carries the wall thickness it tunnels through in cells and a `trustworthy` flag with `whyUntrustworthy`; an untrustworthy region means the position/value may not be quoted — refine dxMm. Deliver against `delivery` (excluded / difficult / not-excluded, with witnesses), NOT against `verdict`: a missing number is not a pass, and the geometry suspects in `attention` are DETECTION (where to look), never delivery evidence. THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version id to analyse, e.g. "v050". |
-| `loads` | array | **required** | The load case. Each entry is a force in N applied either to a whole bounding-box face or to the nodes within radiusMm of atMm. |
-| `supports` | array | — | Where the part is held. A face locks the outermost node layer; atMm locks the nodes within radiusMm (e.g. a knife edge resting on a pin). An unsupported load is a rigid-body mode and is REFUSED, not fudged. |
+| `loads` | array | — | The EXTERNAL load case. Optional when `includeSelfWeight` is true; at least one of `loads` / self-weight is required. Each entry is a force in N applied either to a whole bounding-box face or to the nodes within radiusMm of atMm. |
+| `supports` | array | — | Where the part is held. A face locks the outermost node layer; atMm locks the nodes within radiusMm (e.g. a knife edge resting on a pin); `ground: true` holds the lowest z face (a part resting on the bed). An unsupported load is a rigid-body mode and is REFUSED, not fudged. Ground is a HELD FACE, not a frictional or unilateral contact. |
 | `mode` | string (judge \| scan \| both) | — | "judge" (default) returns ONLY the delivery judgement; "scan" returns ONLY the attention field and NO verdict, because a risk map must never be read as a gate; "both" returns the two halves as separate keys. The default is the stricter half (DESIGN §25.7). |
 | `excludeFromReport` | array | — | Cells to drop from the reported field, peaks, regions and percentiles — for SUPPORT and LOAD patches, whose stress is an artifact of the idealisation (a clamped patch is not a knife edge on a pin). The excluded cell count comes back in method.excludedCells, so the exclusion is declared rather than silent. |
 | `materialIds` | array | — | Shipped materials, e.g. ["fdm-pla"]. The strength behind the tiers is the LAYER-ADHESION band, not the bulk figure. Omit (with materialJson) for your own; the built-in is marked assumed. |
-| `materialJson` | string | — | Inline material: {"id","name","youngModulusMPa","poissonRatio","strengthMPa"}. Use for a filament you have data for. |
+| `materialJson` | string | — | Inline material: {"id","name","youngModulusMPa","poissonRatio","strengthMPa","densityKgPerM3"}. `densityKgPerM3` is required when includeSelfWeight is true. Use for a filament you have data for. |
 | `dxMm` | number | — | Voxel size in mm. Default: 8 cells across the thinnest dimension. Halving it costs ~8x. A hot spot thinner than ~8 cells needs a finer grid before its position is trustworthy. |
+| `includeSelfWeight` | boolean | — | Include the body force rho*g (default true). Requires the material density; a gravity-only case is valid as long as `supports` is given. Set false to reproduce an external-load-only result. |
+| `gravityMmPerS2` | array | — | Gravity vector [gx,gy,gz] in mm/s^2 (default [0,0,-9810], -z is down). Only used when includeSelfWeight is true. |
 | `criticalDistanceMm` | number | — | Distance inside the surface at which peaks are read. Default 1.0 mm (the grid cannot sample closer than one cell; the distance actually used comes back as effectiveSampleDistanceMm). |
 | `probeAtMm` | array | — | Watch this point: report its displacement, e.g. a pan centre or a beam tip. |
 | `resultants` | array | — | Section resultants to integrate — the trustworthy half of this tool: axial force, shear, bending moment, plus the section area and its second moment so an analytic check can be closed on a profile too complex to hand-compute. Place the cut AWAY from a support: a cut through the support patch swallows part of the reaction. |
 | `runConvergence` | boolean | — | Also solve a coarser grid and report the deltas (default true; costs ~30% more). A drifting verdict means refine before quoting. |
 
 ```js
-simulate_stress({ versionId: "…", loads: [] })
+simulate_stress({ versionId: "…" })
 ```
 
-returns: `versionId`, `nextLook`, `verdict`, `delivery`, `material`, `method`, `checks`, `resultants`, `capability`, `attention`
+returns: `versionId`, `nextLook`, `verdict`, `delivery`, `material`, `loadCase`, `selfWeight`, `method`, `checks`, `resultants`, `capability`, `attention`
 
 
 ## `validate_assembly`

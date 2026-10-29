@@ -1,0 +1,499 @@
+{
+  "schemaVersion": 1,
+  "name": "roberval-balance",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "machine",
+    "name": "罗伯威尔天平",
+    "kind": "assembly",
+    "children": [
+      {
+        "id": "base",
+        "name": "底座+立柱",
+        "kind": "part",
+        "version": "v066",
+        "transform": {
+          "translate": [
+            0,
+            0,
+            10
+          ]
+        }
+      },
+      {
+        "id": "scale",
+        "name": "刻度板",
+        "kind": "part",
+        "version": "v067",
+        "transform": {
+          "translate": [
+            0,
+            -10,
+            40
+          ]
+        }
+      },
+      {
+        "id": "top",
+        "name": "上横梁",
+        "kind": "part",
+        "version": "v049",
+        "transform": {
+          "rotate": [
+            90,
+            0,
+            0
+          ],
+          "translate": [
+            0,
+            0,
+            215
+          ]
+        }
+      },
+      {
+        "id": "bottom",
+        "name": "下横梁",
+        "kind": "part",
+        "version": "v050",
+        "transform": {
+          "rotate": [
+            90,
+            0,
+            0
+          ],
+          "translate": [
+            0,
+            0,
+            150
+          ]
+        }
+      },
+      {
+        "id": "pointer",
+        "name": "指针",
+        "kind": "part",
+        "version": "v063",
+        "transform": {
+          "rotate": [
+            90,
+            0,
+            0
+          ],
+          "translate": [
+            0,
+            0,
+            140
+          ]
+        }
+      },
+      {
+        "id": "linkL",
+        "name": "左边杆",
+        "kind": "part",
+        "version": "v051",
+        "transform": {
+          "translate": [
+            -80,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "linkR",
+        "name": "右边杆",
+        "kind": "part",
+        "version": "v051",
+        "transform": {
+          "translate": [
+            80,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "carrierL",
+        "name": "左托盘支架",
+        "kind": "part",
+        "version": "v046",
+        "transform": {
+          "translate": [
+            -80,
+            0,
+            239
+          ]
+        }
+      },
+      {
+        "id": "carrierR",
+        "name": "右托盘支架",
+        "kind": "part",
+        "version": "v046",
+        "transform": {
+          "translate": [
+            80,
+            0,
+            239
+          ]
+        }
+      },
+      {
+        "id": "panL",
+        "name": "左托盘",
+        "kind": "part",
+        "version": "v069",
+        "transform": {
+          "translate": [
+            -80,
+            0,
+            253
+          ]
+        }
+      },
+      {
+        "id": "panR",
+        "name": "右托盘",
+        "kind": "part",
+        "version": "v069",
+        "transform": {
+          "translate": [
+            80,
+            0,
+            253
+          ]
+        }
+      },
+      {
+        "id": "trimL",
+        "name": "左调零滑块",
+        "kind": "part",
+        "version": "v028",
+        "transform": {
+          "rotate": [
+            0,
+            90,
+            180
+          ],
+          "translate": [
+            -45,
+            0,
+            110
+          ]
+        }
+      },
+      {
+        "id": "trimR",
+        "name": "右调零滑块",
+        "kind": "part",
+        "version": "v028",
+        "transform": {
+          "rotate": [
+            0,
+            90,
+            0
+          ],
+          "translate": [
+            45,
+            0,
+            110
+          ]
+        }
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "I1",
+        "name": "下中心铰",
+        "a": "base.bottom_axis",
+        "b": "bottom.center_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I2",
+        "name": "上中心铰",
+        "a": "base.top_axis",
+        "b": "top.center_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I3",
+        "name": "左上角铰",
+        "a": "top.left_axis",
+        "b": "linkL.top_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I4",
+        "name": "右上角铰",
+        "a": "top.right_axis",
+        "b": "linkR.top_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I5",
+        "name": "左下角铰",
+        "a": "bottom.left_axis",
+        "b": "linkL.bottom_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I6",
+        "name": "右下角铰",
+        "a": "bottom.right_axis",
+        "b": "linkR.bottom_axis",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        }
+      },
+      {
+        "id": "I7",
+        "name": "指针左安装面",
+        "a": "pointer.flange_top_l",
+        "b": "bottom.pointer_mount_l",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I8",
+        "name": "指针右安装面",
+        "a": "pointer.flange_top_r",
+        "b": "bottom.pointer_mount_r",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I9",
+        "name": "左边杆法兰-支架",
+        "a": "linkL.flange_face",
+        "b": "carrierL.seat",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I10",
+        "name": "右边杆法兰-支架",
+        "a": "linkR.flange_face",
+        "b": "carrierR.seat",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I11",
+        "name": "左支架-托盘",
+        "a": "carrierL.seat_center",
+        "b": "panL.seat",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I12",
+        "name": "右支架-托盘",
+        "a": "carrierR.seat_center",
+        "b": "panR.seat",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I13",
+        "name": "左托盘0°螺钉",
+        "a": "panL.screw_0_axis",
+        "b": "carrierL.pan_screw_0_axis",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I14",
+        "name": "左托盘120°螺钉",
+        "a": "panL.screw_120_axis",
+        "b": "carrierL.pan_screw_120_axis",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I15",
+        "name": "右托盘0°螺钉",
+        "a": "panR.screw_0_axis",
+        "b": "carrierR.pan_screw_0_axis",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I16",
+        "name": "右托盘120°螺钉",
+        "a": "panR.screw_120_axis",
+        "b": "carrierR.pan_screw_120_axis",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I17",
+        "name": "刻度板-立柱",
+        "a": "scale.back_face",
+        "b": "base.scale_face",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I18",
+        "name": "左调零滑块-导轨",
+        "a": "trimL.rail_seat",
+        "b": "pointer.rail_left_seat",
+        "type": "滑动副",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I19",
+        "name": "右调零滑块-导轨",
+        "a": "trimR.rail_seat",
+        "b": "pointer.rail_right_seat",
+        "type": "滑动副",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 0
+        },
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I20",
+        "name": "指针尖-刻度面间隙",
+        "a": "pointer.tip_back",
+        "b": "scale.front_face",
+        "type": "读数间隙",
+        "severity": "hard",
+        "check": "distance",
+        "params": {
+          "distanceMm": 2
+        },
+        "tolerance": {
+          "min": 1.5,
+          "max": 2.5
+        }
+      }
+    ]
+  }
+}

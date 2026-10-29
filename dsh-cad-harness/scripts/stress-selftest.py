@@ -99,6 +99,51 @@ with tempfile.TemporaryDirectory() as tmp:
         ),
     }
 
+# ---- 1b. self-weight only: body force + equilibrium ------------------------
+# Same cantilever, but NO external load: the only load is rho*g. The analytic
+# check is the uniform-load tip deflection (q = rho*g*A), plus the total weight
+# and the reaction/equilibrium that prove the body force was assembled at all.
+E_G, NU_G, RHO_G = 3500.0, 0.35, 1240.0  # PLA, kg/m^3
+G_MM_S2 = 9810.0                         # mm/s^2, downward
+with tempfile.TemporaryDirectory() as tmp:
+    beam = trimesh.creation.box(extents=[L, B, H])
+    beam.apply_translation([L / 2, 0, 0])
+    path = os.path.join(tmp, "gravity-cantilever.stl")
+    beam.export(path)
+    res = stress_fem.run(
+        {
+            "path": path,
+            "dxMm": 1.25,
+            "youngModulusMPa": E_G,
+            "poissonRatio": NU_G,
+            "yieldMPa": 25.0,
+            "fixedFaces": [{"axis": "x", "side": "min"}],
+            "loads": [],
+            "includeSelfWeight": True,
+            "densityKgPerM3": RHO_G,
+            "gravityMmPerS2": [0.0, -G_MM_S2, 0.0],
+            "probeAtMm": [L, 0, 0],
+            "runConvergence": False,
+        }
+    )
+    q_g = RHO_G * G_MM_S2 * 1e-12 * (B * H)  # N/mm, uniform self-weight
+    delta_ref_g = q_g * L**4 / (8 * E_G * I)
+    weight_ref_g = RHO_G * G_MM_S2 * 1e-12 * (L * B * H)
+    OUT["gravityCantilever"] = {
+        "dxMm": res["dxMm"],
+        "solidCells": res["solidCells"],
+        "loadCase": res.get("loadCase"),
+        "selfWeight": res.get("selfWeight"),
+        "totalWeightN": res.get("totalWeightN"),
+        "weightRefN": weight_ref_g,
+        "deltaMm": -res["probeDisplacementMm"][1],
+        "deltaRefMm": delta_ref_g,
+        "deltaErrPct": 100 * (-res["probeDisplacementMm"][1] - delta_ref_g) / delta_ref_g,
+        "reactionN": res["reactionN"],
+        "appliedN": res["appliedN"],
+        "equilibriumErrorPct": res["equilibriumErrorPct"],
+    }
+
 # ---- 2. toy-balance beam: integrals fine, peak refused ---------------------
 repo = os.path.abspath(os.path.join(HERE, "..", ".."))
 beam_stl = os.path.join(repo, "examples", "toy-balance", "cad-data", "versions", "v050", "model.stl")

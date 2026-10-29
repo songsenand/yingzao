@@ -37,6 +37,13 @@ export interface PrintabilityOptions {
   overhangDeg?: number;
   samples?: number;
   /**
+   * G6 (2026-10-29): the PRINT orientation as Rz·Ry·Rx degrees, applied before the
+   * overhang/wall analysis. The modelling pose is not the printing pose — the roberval
+   * beams print flat but were modelled upright, and the tool judged 890 mm² of
+   * phantom overhang. Declared, not inferred.
+   */
+  printOrientationDeg?: [number, number, number];
+  /**
    * Also return the per-sample values behind the field. They are what a heatmap is
    * drawn from, and they are deliberately NOT part of the report the model reads —
    * the caller writes them into a run and hands the digest to the LLM.
@@ -583,6 +590,7 @@ export async function checkPrintability(store: VersionStore, options: Printabili
     wallMinMm: options.wallMinMm ?? 1.2,
     overhangDeg: options.overhangDeg ?? 45,
     samples: Math.max(100, Math.min(options.samples ?? 600, 4000)),
+    ...(options.printOrientationDeg ? { printOrientationDeg: options.printOrientationDeg } : {}),
     ...(options.withSampleField ? { withSampleField: true } : {}),
   });
   const { field, ...rest } = solved;

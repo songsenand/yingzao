@@ -89,6 +89,13 @@ export interface SuspectPart {
   triangles: number;
   connected: boolean;
   reasons: string[];
+  /**
+   * True when this is a WARNING (placement: 离群, or a degenerate box), false when
+   * it is a NOTE (simple box geometry — a spacer that is a box is legitimate).
+   * Only warnings move the run to `check`; a note must not make every plate-shaped
+   * part look suspicious, or the warning becomes wallpaper.
+   */
+  warn: boolean;
 }
 
 const boxGap = (a: SceneSolid, b: SceneSolid): number => {
@@ -132,6 +139,7 @@ export function suspectParts(solids: SceneSolid[]): SuspectPart[] {
       triangles: s.triangles,
       connected: Boolean(s.connected),
       reasons,
+      warn: degenerate || (others.length > 0 && ratio > SUSPECT_RATIO),
     });
   }
   return out;

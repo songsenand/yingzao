@@ -908,9 +908,9 @@ def op_passage_bottleneck(params: dict) -> dict:
 
 
 def op_support_map(params: dict) -> dict:
-    """Does anything actually HOLD UP an overhang? (mass, not area)
+    """Does anything actually HOLD UP a print-overhang? (mass, not area)
 
-    WHY: the area-based overhang screen is unactionable — it lights up a whole bowl
+    WHY: the area-based print-overhang screen is unactionable — it lights up a whole bowl
     underside (the toy-balance pan: 1451 mm² flagged) and says nothing about whether the
     print will hold. What matters is unsupported MASS: a 0.2 g sliver is free, a 12 g
     plate with nothing beneath it is not. So: voxelise, sweep z upward, mark a solid cell
@@ -919,6 +919,9 @@ def op_support_map(params: dict) -> dict:
 
     DECLARED, not measured: the support cone (45° default), the bridgeable span, and the
     density. This answers "does this need support / a redesign", never "will it fail".
+
+    This is print-overhang/support only: structural overhang / self-weight stress is a
+    strength question (simulate_stress), not this tool (2026-10-29).
     """
     path = str(params.get("path") or "")
     dx = float(params.get("dxMm") or 1.0)
@@ -933,6 +936,10 @@ def op_support_map(params: dict) -> dict:
     from scipy import ndimage
 
     mesh = trimesh.load(path, process=True)
+    m4 = _print_frame_matrix(params.get("printOrientationDeg"))
+    if m4 is not None:
+        mesh = mesh.copy()
+        mesh.apply_transform(m4)
     vox = mesh.voxelized(pitch=dx).fill()
     grid = np.asarray(vox.matrix, dtype=bool)
     if grid.ndim != 3 or not grid.any():
@@ -1124,10 +1131,56 @@ def op_connectivity(params: dict) -> dict:
         )
     voids.sort(key=lambda void: -void["volumeMm3"])
 
+    # --- G3 (2026-10-29): HOLE-CORE STRAY SHELLS ----------------------------
+    # A horizontal/closed boolean difference can leave the CUT MATERIAL inside as
+    # its own tiny positive shell — the "孔芯" the roberval bottom beam shipped
+    # with (two 3.4×17×3.4 plugs inside the part, bodies=3, silently). They are
+    # the difference between "3 bodies" and "why 3 bodies". Classification, NOT
+    # removal: auto-dropping shells can mask a real modelling error, so the
+    # verdict stays with the human. A stray is a POSITIVE-volume body that is
+    # (a) tiny against the main body (<1% of its bbox-diagonal-scaled volume
+    # proxy: both plugs were ~1/5000) and (b) strictly inside the main body's
+    # bbox — a legitimate second body (a dowel, a key) sticks OUT or is
+    # comparable in size.
+    strays = []
+    if len(components) > 1:
+        comps = []
+        for component in components:
+            tris = faces[np.asarray(component, dtype=np.int64)]
+            a = vertices[tris[:, 0]]
+            b = vertices[tris[:, 1]]
+            c = vertices[tris[:, 2]]
+            signed = float(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
+            pts = vertices[np.unique(tris.reshape(-1))]
+            comps.append({"signed": signed, "min": pts.min(axis=0), "max": pts.max(axis=0), "center": pts.mean(axis=0)})
+        comps.sort(key=lambda e: -float((e["max"] - e["min"]).prod()))
+        main = comps[0]
+        main_vol = abs(main["signed"])
+        main_diag = float(np.linalg.norm(main["max"] - main["min"]))
+        for e in comps[1:]:
+            if e["signed"] <= 0:
+                continue  # a void shell — already reported above
+            vol = abs(e["signed"])
+            inside = bool(
+                np.all(e["min"] > main["min"] + 1e-6) and np.all(e["max"] < main["max"] - 1e-6)
+            )
+            tiny = vol < 0.01 * main_vol and vol < 0.001 * main_diag**3
+            if inside and tiny:
+                strays.append(
+                    {
+                        "volumeMm3": round(vol, 3),
+                        "center": [round(float(x), 3) for x in e["center"]],
+                        "min": [round(float(x), 3) for x in e["min"]],
+                        "max": [round(float(x), 3) for x in e["max"]],
+                    }
+                )
+    strays.sort(key=lambda s: -s["volumeMm3"])
+
     return {
         "bodies": bodies,
         "count": len(bodies),
         "voids": voids,
+        "strayShells": strays,
         "watertight": _is_watertight(faces),
         "triangles": int(len(faces)),
     }
@@ -1493,6 +1546,56 @@ def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
     return out
 
 
+def _datum_distance(ra: dict, rb: dict):
+    """Distance between two resolved datums, honoring the FEATURE KIND.
+
+    A plane datum's meaning is the plane, not its anchor point. `resolveEndpoint`
+    (src/host/assembly-check.ts) already resolves `normal` for planes; keeping
+    point-to-point here made two coplanar planes with laterally offset anchors
+    report the offset as a gap (toy-balance2 I9: 8.5mm for a 0mm plane gap).
+
+      plane/plane  → perpendicular distance; an angled pair reports the same
+                     point-to-plane number but names the angle
+      plane/point  → point-to-plane
+      anything else → point-to-point (the pre-existing semantics)
+
+    This is the worker twin of `datumDistance` in assembly-check.ts; the parity
+    acceptance compares the two on real manifests.
+    """
+    pa = [float(x) for x in ra["point"]]
+    pb = [float(x) for x in rb["point"]]
+
+    def sub(u, v):
+        return [u[0] - v[0], u[1] - v[1], u[2] - v[2]]
+
+    def dot(u, v):
+        return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+
+    def unit(v):
+        n = math.sqrt(dot(v, v)) or 1.0
+        return [x / n for x in v]
+
+    na, nb = ra.get("normal"), rb.get("normal")
+    if na and nb:
+        ua, ub = unit(na), unit(nb)
+        # Anti-parallel normals describe the SAME plane orientation (0°, not 180°).
+        angle = math.degrees(math.acos(max(-1.0, min(1.0, abs(dot(ua, ub))))))
+        measured = _round_js(abs(dot(sub(pb, pa), ua)), 4)
+        if angle <= 1.0:
+            return measured, f"plane-to-plane distance {_js_num(measured)}mm (normals {angle:.3f}° apart)"
+        return measured, (
+            f"point-to-plane distance {_js_num(measured)}mm "
+            f"(planes {angle:.3f}° apart — NOT parallel)"
+        )
+    if na:
+        measured = _round_js(abs(dot(sub(pb, pa), unit(na))), 4)
+        return measured, f"point-to-plane distance {_js_num(measured)}mm"
+    if nb:
+        measured = _round_js(abs(dot(sub(pa, pb), unit(nb))), 4)
+        return measured, f"point-to-plane distance {_js_num(measured)}mm"
+    return _round_js(math.dist(pa, pb), 4), "point-to-point distance between declared datums"
+
+
 def op_assembly_contracts(params: dict) -> dict:
     """Evaluate the declared interfaces and discover undeclared neighbours.
 
@@ -1529,8 +1632,12 @@ def op_assembly_contracts(params: dict) -> dict:
         pb = [float(x) for x in rb["point"]]
 
         if check in ("distance", "motion-clearance"):
-            measured = _round_js(float(math.dist(pa, pb)), 4)
-            verdict = _assembly_verdict(iface, measured, "point-to-point distance between declared datums")
+            if check == "distance":
+                measured, detail = _datum_distance(ra, rb)
+            else:
+                measured = _round_js(float(math.dist(pa, pb)), 4)
+                detail = "point-to-point distance between declared datums"
+            verdict = _assembly_verdict(iface, measured, detail)
             if check == "motion-clearance":
                 # A motion claim has two halves and this engine can decide one: the
                 # relationship at the modelled pose (a distance, evaluated above) and
@@ -3217,6 +3324,9 @@ def _round_js(value: float, digits: int = 3) -> float:
 
 DATUM_PRELUDE = """
 // ---- harness datum anchors (do not remove) ----
+// Signature: datum_axis(name, point, dir) — POINT FIRST. OpenSCAD positional
+// arguments are silent: swapping p/dir compiles, but the reader (scad_parse_output)
+// errors on a zero dir and warns when a dir dwarfs its own point (G2, 2026-10-29).
 module datum(name, p = [0, 0, 0]) {
   echo(str("__DATUM__", name, "=", p[0], ",", p[1], ",", p[2]));
 }
@@ -3300,6 +3410,43 @@ def op_scad_parse_output(params: dict) -> dict:
                     "radius": float(match.group(8)),
                 }
             )
+
+    # --- G2 (2026-10-29): the positional p/dir swap is silent in OpenSCAD ------
+    # `datum_axis("rail", [0, 0, 1], [10, 0, 205])` compiles, echoes, and the
+    # swapped numbers land in datums.json where `coaxial` reads them without
+    # complaint (roberval-balance 2026-10-28: v048 bottom_axis was
+    # point=[0,1,0] dir=[0,0,140]; four parts needed set_datums repair). Two
+    # checks here, at the single READER half of the echo protocol:
+    #   * a zero direction is ALWAYS wrong — an axis with no direction can never
+    #     be an assembly endpoint — so it is a compile ERROR;
+    #   * a direction that dwarfs its OWN point is the swap signature (the swap
+    #     puts the short true dir into `point` and the long position into `dir`)
+    #     — that is a WARNING. Model scale cannot disambiguate: v048's swapped
+    #     dir [0,0,140] is indistinguishable from a legit endpoint-form dir in a
+    #     205 mm model, and a missed swap (silent datums corruption) costs more
+    #     than a spurious warning, so the warning is allowed to over-trigger.
+    def _mag3(v):
+        return math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+
+    for kind, group, vec_key in (("axis", axes, "dir"), ("plane", planes, "normal"), ("cylinder", cylinders, "dir")):
+        for d in group:
+            dname = d["name"]
+            vec = d[vec_key]
+            mag = _mag3(vec)
+            pt_mag = _mag3(d["point"])
+            if mag == 0.0:
+                errors.append(
+                    'datum_' + kind + ' "' + dname + '": direction is [0, 0, 0] — an axis with no direction '
+                    "can never be an assembly endpoint. Signature: datum_" + kind + "(name, [x,y,z], [dx,dy,dz]); "
+                    "pass a non-zero direction (named arguments recommended: datum_axis(name=, p=, dir=))."
+                )
+            elif mag > 4.0 * pt_mag + 10.0:
+                warnings.append(
+                    'datum_' + kind + ' "' + dname + '": |dir|=' + format(mag, ".6g") + " dwarfs its point (|p|="
+                    + format(pt_mag, ".6g") + ") and the datum scale — this looks like swapped p/dir arguments "
+                    "(signature: datum_" + kind + "(name, point, dir), the direction is a short vector). "
+                    "If the magnitude is intentional (endpoint form), ignore this warning."
+                )
     return {
         "errors": errors,
         "warnings": warnings,
@@ -4563,6 +4710,60 @@ def _json_safe(value):
     return value
 
 
+def _print_frame_matrix(rotate_deg):
+    """The Rz·Ry·Rx (degrees) matrix behind _rotated_print_frame — shared with the
+    voxel-based support_map, which rotates the trimesh directly."""
+    import numpy as np
+
+    if not rotate_deg:
+        return None
+    rx, ry, rz = (float(v) for v in rotate_deg)
+
+    def rot(axis, a):
+        c, s = np.cos(a), np.sin(a)
+        m = np.eye(3)
+        if axis == "x":
+            m[1, 1], m[1, 2], m[2, 1], m[2, 2] = c, -s, s, c
+        elif axis == "y":
+            m[0, 0], m[0, 2], m[2, 0], m[2, 2] = c, s, -s, c
+        else:
+            m[0, 0], m[0, 1], m[1, 0], m[1, 1] = c, -s, s, c
+        return m
+
+    m = rot("z", np.deg2rad(rz)) @ rot("y", np.deg2rad(ry)) @ rot("x", np.deg2rad(rx))
+    m4 = np.eye(4)
+    m4[:3, :3] = m
+    return m4
+
+
+def _rotated_print_frame(vertices, faces, rotate_deg):
+    """G6 (2026-10-29): the PRINT orientation is a declaration, not the modelling
+    pose — the roberval beams print FLAT but were modelled upright, so the tool
+    judged 890 mm² of phantom overhang. Applies Rz·Ry·Rx (degrees, the same
+    composition validate_assembly documents for R) to the vertices before any
+    overhang/support analysis. Faces are untouched; winding is preserved because
+    rotations are proper."""
+    import numpy as np
+
+    if not rotate_deg:
+        return vertices, faces
+    rx, ry, rz = (float(v) for v in rotate_deg)
+
+    def rot(axis, a):
+        c, s = np.cos(a), np.sin(a)
+        m = np.eye(3)
+        if axis == "x":
+            m[1, 1], m[1, 2], m[2, 1], m[2, 2] = c, -s, s, c
+        elif axis == "y":
+            m[0, 0], m[0, 2], m[2, 0], m[2, 2] = c, s, -s, c
+        else:
+            m[0, 0], m[0, 1], m[1, 0], m[1, 1] = c, -s, s, c
+        return m
+
+    m = rot("z", np.deg2rad(rz)) @ rot("y", np.deg2rad(ry)) @ rot("x", np.deg2rad(rx))
+    return np.asarray(vertices, dtype=float) @ m.T, faces
+
+
 def op_check_printability(params: dict) -> dict:
     """Manufacturability screen (FDM bias): sampled wall thickness by a ray along the
     inward normal, plus down-facing overhang area — the `checkPrintabilityInTs` of
@@ -4589,6 +4790,7 @@ def op_check_printability(params: dict) -> dict:
     target_samples = max(100, min(int(params.get("samples") or 600), 4000))
 
     vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(params["path"]))
+    vertices, faces = _rotated_print_frame(vertices, faces, params.get("printOrientationDeg"))
     points = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
     triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     watertight = _is_watertight(triangles)
@@ -5203,6 +5405,7 @@ def op_scan_attention(params: dict) -> dict:
 
     # ---- P2 内凹尖角 -------------------------------------------------------
     sharp_edges = 0
+    chain_edge_ids: set = set()
     if watertight and len(mesh.faces):
         angles = np.degrees(np.asarray(mesh.face_adjacency_angles, dtype=np.float64))
         convex = np.asarray(mesh.face_adjacency_convex, dtype=bool)
@@ -5210,6 +5413,7 @@ def op_scan_attention(params: dict) -> dict:
         concave = ~convex
         sharp = concave & (angles > concave_min_deg)
         idx = np.where(sharp)[0]
+        chain_edge_ids = set(int(k) for k in idx)
         sharp_edges = int(len(idx))
         stats["concave_edges"] = int(concave.sum())
         stats["sharp_concave_edges"] = sharp_edges
@@ -5268,6 +5472,89 @@ def op_scan_attention(params: dict) -> dict:
                     "look": {"tool": "render_part", "args": {"section": {
                         "axis": "y", "atMm": round(float(center[1]), 2)}}},
                 })
+
+    # ---- P2b 闭合的非平面锐边环：布尔缝候选 --------------------------------
+    # A boolean seam on a curved or angled cut is a CLOSED loop of sharp edges that
+    # does not lie in one plane. Flat circular hole rims and 90-degree pocket rims
+    # are excluded on purpose: on a molecule with 44 bond necks, counting every
+    # closed loop painted 44 normal seams (measured 2026-10-29, C3 at 80 deg).
+    # Keeping only NON-PLANAR loops keeps this layer quiet; it is a "look", not a
+    # verdict, and it never tries to prove a boolean was wrong.
+    loop_min_deg = 80.0
+    closed_sharp_loops = 0
+    nonplanar_seam_loops = 0
+    seam_candidates: list = []
+    if watertight and len(mesh.faces):
+        sel = np.where(angles >= loop_min_deg)[0]
+        loop_parent: dict = {}
+
+        def lfind(a: int) -> int:
+            loop_parent.setdefault(a, a)
+            while loop_parent[a] != a:
+                loop_parent[a] = loop_parent[loop_parent[a]]
+                a = loop_parent[a]
+            return a
+
+        def lunion(a: int, b: int) -> None:
+            ra, rb = lfind(a), lfind(b)
+            if ra != rb:
+                loop_parent[ra] = rb
+
+        for e in sel:
+            a, b = edges[e]
+            lunion(int(a), int(b))
+        loop_groups: dict = {}
+        for e in sel:
+            a, b = edges[e]
+            loop_groups.setdefault(lfind(int(a)), []).append(int(e))
+
+        for members in loop_groups.values():
+            deg: dict = {}
+            for e in members:
+                a, b = edges[e]
+                deg[int(a)] = deg.get(int(a), 0) + 1
+                deg[int(b)] = deg.get(int(b), 0) + 1
+            if not deg or not all(d == 2 for d in deg.values()):
+                continue
+            closed_sharp_loops += 1
+            if set(members).issubset(chain_edge_ids):
+                continue  # already reported as a reentrant-corner chain
+            pts_l = points[list(deg.keys())]
+            if pts_l.shape[0] < 3:
+                continue
+            ctr = pts_l.mean(axis=0)
+            _, _, vt = np.linalg.svd(pts_l - ctr)
+            dev = float(np.abs((pts_l - ctr) @ vt[-1]).max())
+            span = float(np.linalg.norm(pts_l.max(axis=0) - pts_l.min(axis=0)))
+            if span <= 1e-6 or dev / span <= 0.02:
+                continue  # planar: a hole/pocket rim, not a seam
+            length = sum(float(np.linalg.norm(points[edges[e][0]] - points[edges[e][1]])) for e in members)
+            if length < max(min_chain_mm, 2.0):
+                continue
+            worst = max(float(angles[e]) for e in members)
+            nonplanar_seam_loops += 1
+            seam_candidates.append((length, {
+                "kind": "boolean-seam",
+                "where": {
+                    "atMm": [round(float(v), 2) for v in ctr],
+                    "bboxMm": [[round(float(v), 2) for v in pts_l.min(axis=0)],
+                               [round(float(v), 2) for v in pts_l.max(axis=0)]],
+                },
+                "why": (f"闭合的非平面锐边环：长 {length:.1f}mm，二面角最大 {worst:.0f}°，"
+                        f"平面度偏差 {dev:.2f}mm（跨度 {span:.1f}mm）——曲面/斜切上的布尔缝常见形态；"
+                        "若这里不该有孔/槽，检查 difference 的 cutter 或 translate"),
+                "severity": "look",
+                "look": {"tool": "render_part", "args": {"section": {
+                    "axis": "xyz"[int(np.argmax(pts_l.max(axis=0) - pts_l.min(axis=0)))],
+                    "atMm": round(float(ctr[int(np.argmax(pts_l.max(axis=0) - pts_l.min(axis=0)))]), 2)}}},
+            }))
+    # Attention budget: a part with many radial holes can produce 2 seams per hole.
+    # Keep the longest 8; the count is still reported in stats so "the rest" is not silent.
+    seam_candidates.sort(key=lambda t: -t[0])
+    for _, seam in seam_candidates[:8]:
+        suspects.append(seam)
+    stats["closed_sharp_loops"] = closed_sharp_loops
+    stats["nonplanar_seam_loops"] = nonplanar_seam_loops
 
     order = {"likely-defect": 0, "look": 1}
     suspects.sort(key=lambda s: order.get(s["severity"], 2))

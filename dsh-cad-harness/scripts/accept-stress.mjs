@@ -71,6 +71,23 @@ check(Math.abs(momentErr) < 3,
 check(c.equilibriumErrorPct < 1e-4, 'equilibrium residual is machine-precision', `${c.equilibriumErrorPct.toExponential(1)}%`);
 check(c.energyBalancePct < 1e-4, 'strain energy balances the external work', `${c.energyBalancePct.toExponential(1)}%`);
 
+// --- 1b. self-weight only: body force + reaction + beam theory -------------
+const g = out.gravityCantilever;
+console.log(`\nself-weight cantilever dx=${g.dxMm}mm, ${g.solidCells} solid cells`);
+check(g.loadCase === 'gravity', 'the load case is reported as gravity', String(g.loadCase));
+check(g.selfWeight?.included === true, 'the reply says self-weight was included');
+check(Math.abs(g.totalWeightN - g.weightRefN) / g.weightRefN < 0.01,
+  'total weight matches rho*V*g', `${g.totalWeightN} vs ${g.weightRefN} N`);
+check(g.reactionN[1] > 0 && Math.abs(g.reactionN[1] - g.weightRefN) / g.weightRefN < 0.01,
+  'the support reaction carries the whole weight', `${g.reactionN[1]} N`);
+check(g.appliedN[1] < 0 && Math.abs(g.appliedN[1] + g.weightRefN) / g.weightRefN < 0.01,
+  'the applied load is downward and equal to the weight', `${g.appliedN[1]} N`);
+check(g.equilibriumErrorPct < 1e-4, 'gravity equilibrium closes at machine precision',
+  `${g.equilibriumErrorPct.toExponential(1)}%`);
+check(g.deltaErrPct <= 0 && g.deltaErrPct > -6,
+  'self-weight tip deflection is within the beam-theory band',
+  `${g.deltaErrPct.toFixed(2)}% (ref ${g.deltaRefMm.toFixed(5)}mm)`);
+
 // --- 3. surface extrapolation --------------------------------------------
 check(c.surfaceExtrapolatedMPa !== null,
   'a region carries an extrapolated surface stress', `${c.surfaceExtrapolatedMPa} MPa`);
