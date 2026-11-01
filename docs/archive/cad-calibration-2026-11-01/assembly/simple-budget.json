@@ -1,0 +1,96 @@
+{
+ "schemaVersion": 1,
+ "product": "simple-3part",
+ "envelope": {
+  "x": [
+   -60,
+   60
+  ],
+  "y": [
+   -40,
+   40
+  ],
+  "z": [
+   0,
+   80
+  ]
+ },
+ "groups": [
+  {
+   "id": "底座组",
+   "envelope": {
+    "x": [
+     -60,
+     60
+    ],
+    "y": [
+     -40,
+     40
+    ],
+    "z": [
+     0,
+     8
+    ]
+   }
+  },
+  {
+   "id": "立柱组",
+   "envelope": {
+    "x": [
+     -12,
+     12
+    ],
+    "y": [
+     -12,
+     12
+    ],
+    "z": [
+     8,
+     60
+    ]
+   }
+  },
+  {
+   "id": "承重组",
+   "envelope": {
+    "x": [
+     -20,
+     20
+    ],
+    "y": [
+     -20,
+     20
+    ],
+    "z": [
+     60,
+     80
+    ]
+   }
+  }
+ ],
+ "overruns": [
+  {
+   "group": "底座组",
+   "axis": "z",
+   "direction": "above",
+   "overMm": 2,
+   "reason": "底板 10 mm 是打印刚性下限；8 mm 在 120×80 上会翘曲（首版壁厚筛查已报）",
+   "evidence": [
+    "v005"
+   ],
+   "status": "proposed"
+  },
+  {
+   "group": "立柱组",
+   "axis": "z",
+   "direction": "above",
+   "overMm": 10,
+   "reason": "托盘要在 z=70 落在立柱顶，立柱必须高出包络 8..60 的上界 10 mm 才能承托",
+   "evidence": [
+    "v006",
+    "v007"
+   ],
+   "status": "proposed"
+  }
+ ]
+}

@@ -20,6 +20,7 @@ await mkdir(join(workspace, 'cad-data'), { recursive: true });
 
 const { registerCadTools } = await import('../src/host/tools.ts');
 const { openVersionStore, saveVersion, readVersionDatums, listVersions } = await import('../src/host/version.ts');
+const { openPartStore, ensurePart, attachVersion, listParts } = await import('../src/host/parts.ts');
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
@@ -44,10 +45,13 @@ const call = async (name, args) => {
 // A saved version with a known byte pattern instead of a compiled mesh: set_datums copies
 // bytes and never parses them, and this test is about the STORE, not geometry.
 const store = openVersionStore(join(workspace, 'cad-data'));
+const partStore = openPartStore(join(workspace, 'cad-data'));
+const part = await ensurePart(partStore, '锚点测试件');
 const STL = new Uint8Array([0x53, 0x54, 0x4c, 0x20, 0x62, 0x79, 0x74, 0x65, 0x73, 0x21]);
 const v1 = await saveVersion(store, {
-  stl: STL, userIntent: 'cube 20', partId: 'p001', datumSet: { points: [], axes: [], planes: [], cylinders: [] },
+  stl: STL, userIntent: 'cube 20', partId: part.id, datumSet: { points: [], axes: [], planes: [], cylinders: [] },
 });
+await attachVersion(partStore, part.id, v1);
 
 // ── write mode: a new version ─────────────────────────────────────────────
 const written = await call('set_datums', {
@@ -74,7 +78,11 @@ check(a.length === STL.length && a.every((x, i) => x === STL[i]) && b.every((x, 
 
 const rows = (await listVersions(store)).filter((r) => r.id === v2);
 check(rows.length === 1 && rows[0].parentVersion === v1, 'the index records the parent', JSON.stringify(rows[0] ?? {}));
-check(rows.length === 1 && rows[0].partId === 'p001', 'and the part identity follows', rows[0]?.partId);
+check(rows.length === 1 && rows[0].partId === part.id, 'and the part identity follows', rows[0]?.partId);
+const afterDatums = (await listParts(partStore)).find((p) => p.id === part.id);
+check(afterDatums?.versionIds.includes(v2),
+  'the anchor version is attached to the SAME part (parts manifest, not only the version index)',
+  JSON.stringify(afterDatums?.versionIds));
 
 // ── the old anchors stay addressable (history is intact) ──────────────────
 const listedOld = await call('set_datums', { versionId: v1 });

@@ -22,6 +22,7 @@ import { mergedInputVersionIds, newestVersionPerPart, supersededVersionIds } fro
 // the human would see a different list than the machine flags.
 import { SCAN_BUDGET, scanUnregistered, type UnregisteredFile, type UnregisteredScan } from './unregistered.ts';
 import type { ProjectStores } from './project.ts';
+import { readVisualReview, reviewCoversRequiredViews, reviewIsFresh } from './visual-review.ts';
 
 export type AuditSeverity = 'blocked' | 'warn' | 'info';
 
@@ -56,6 +57,13 @@ export interface DeliveryAudit {
   /** Canonical since 2026-10-20 (was blocked/attention/ok). */
   verdict: 'excluded' | 'difficult' | 'not-excluded';
   findings: AuditFinding[];
+  /** Per-version LLM visual review gate (top+iso, fresh for the exact version). */
+  visual: {
+    required: boolean;
+    checked: number;
+    missing: { name: string; version: string }[];
+    stale: { name: string; version: string; reviewedAt?: string }[];
+  };
   versions: { total: number; neverCited: string[]; newest: string | null; newestTimestamp: string | null };
   parts: { total: number; newestNeverValidated: string[] };
   runs: {
@@ -93,6 +101,13 @@ export async function auditDelivery(
     scanPaths?: string[];
     /** Files intentionally left as files (reference geometry), with a reason. */
     exempt?: { path: string; reason: string }[];
+    /**
+     * The per-version visual-review gate. `required` (default): a delivery is
+     * blocked until every printed part in the assembly has a fresh top+iso
+     * review. `off` exists for legacy/bench corpora and is reported as info —
+     * it is a declared opt-out, never a silent pass.
+     */
+    visualReview?: 'required' | 'off';
   } = {},
 ): Promise<DeliveryAudit> {
   const [versions, parts, runs] = await Promise.all([
@@ -160,6 +175,8 @@ export async function auditDelivery(
   };
   let contractPath: string | null = null;
   let contractError: string | null = null;
+  /** Delivered versions named by the manifest: the visual gate's subject. */
+  const manifestVersions = new Map<string, string>();
   try {
     const resolved = await resolveAssemblyManifestPath(opts.manifestPath, {
       workspace: opts.workspace ?? project.cwd,
@@ -176,6 +193,7 @@ export async function auditDelivery(
         contract.byCheck[check] = (contract.byCheck[check] ?? 0) + 1;
       }
       if (node?.kind === 'part' && typeof node.version === 'string') {
+        manifestVersions.set(node.version, String(node.name ?? node.id ?? node.version));
         const v = versionById.get(node.version);
         const cur = v?.partId ? newestOfPart.get(v.partId) : undefined;
         if (cur && cur !== node.version) {
@@ -211,6 +229,71 @@ export async function auditDelivery(
 
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
+
+  // ── per-version visual review ─────────────────────────────────────────────
+  //
+  // The wind-up-frog key shipped a cut-through D hole that was visible in
+  // `versions/v029/render_top.png`; the model had passed `views: []` at generation
+  // and never opened that image. A delivery gate therefore has to require a
+  // POSITIVE per-version record, not infer "reviewed" from the presence of renders.
+  // The record is fresh only for the exact version; a shape change needs another
+  // look. `visualReview: 'off'` is a declared opt-out for legacy corpora.
+  const visualRequired = (opts.visualReview ?? 'required') !== 'off';
+  const visualTargets = new Map<string, string>();
+  if (manifestVersions.size > 0) {
+    for (const [versionId, name] of manifestVersions) {
+      const v = versionById.get(versionId);
+      if (v?.partId && roleExemptIds.has(v.partId)) continue; // stock/research: not a printed delivery
+      visualTargets.set(versionId, name);
+    }
+  } else {
+    // No contract: the newest printed version of every part is the delivery set.
+    for (const [partId, versionId] of newestOfPart) {
+      if (roleExemptIds.has(partId)) continue;
+      const part = parts.find((p) => p.id === partId);
+      visualTargets.set(versionId, part?.name ?? partId);
+    }
+  }
+  const visualMissing: { name: string; version: string }[] = [];
+  const visualStale: { name: string; version: string; reviewedAt?: string }[] = [];
+  for (const [versionId, name] of visualTargets) {
+    const version = versionById.get(versionId);
+    if (!version) continue;
+    const review = await readVisualReview(project.store, versionId);
+    if (!review) {
+      visualMissing.push({ name, version: versionId });
+    } else if (!reviewIsFresh(review, version.timestamp) || !reviewCoversRequiredViews(review)) {
+      visualStale.push({ name, version: versionId, reviewedAt: review.reviewedAt });
+    }
+  }
+  if (visualRequired && visualMissing.length > 0) {
+    push('blocked', 'visual-review-missing',
+      `${visualMissing.length} delivered printed part(s) have NO visual review: ` +
+      `${visualMissing.slice(0, 8).map((x) => `${x.name} ${x.version}`).join(', ')}` +
+      `${visualMissing.length > 8 ? ` … (+${visualMissing.length - 8})` : ''} — ` +
+      'call review_visual (top+iso, with a note) on the exact version before claiming delivery');
+  }
+  if (visualRequired && visualStale.length > 0) {
+    push('blocked', 'visual-review-stale',
+      `${visualStale.length} delivered printed part(s) have a STALE/INCOMPLETE visual review: ` +
+      `${visualStale.slice(0, 8).map((x) => `${x.name} ${x.version}${x.reviewedAt ? ` @ ${x.reviewedAt}` : ''}`).join(', ')}` +
+      `${visualStale.length > 8 ? ` … (+${visualStale.length - 8})` : ''} — ` +
+      'the review predates the version or lacks top/iso; look again at the current geometry');
+  }
+  if (!visualRequired) {
+    push('info', 'visual-review-disabled',
+      'visualReview: "off" — the per-version top+iso gate was NOT applied; this audit cannot say whether a human/model ever looked at the delivered geometry');
+  }
+  if (visualRequired && visualTargets.size === 0) {
+    push('warn', 'visual-review-no-targets',
+      'no delivered printed version was found for the visual gate (no manifest, or every part is stock/research) — nothing was required, which is not the same as reviewed');
+  }
+  const visual = {
+    required: visualRequired,
+    checked: visualTargets.size,
+    missing: visualMissing,
+    stale: visualStale,
+  };
 
   // A corpus with nothing in it is not a clean corpus (2026-10-23 audit, FIX-B4): the
   // audit used to answer `not-excluded` for an empty project, which reads as "nothing
@@ -397,6 +480,7 @@ export async function auditDelivery(
   return {
     verdict,
     findings,
+    visual,
     versions: {
       total: versionList.length,
       neverCited,

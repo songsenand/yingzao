@@ -1,31 +1,41 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the full 30-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the full 35-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Thirty tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
+Thirty-five tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
 | **交付** | 能不能交？ | **`preflight`** · `check_printability` · `check_assembly` · `check_parts` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
-| **检测** | 该往哪看？ | `analyze`（实验性，不可作交付依据） · `scan_attention` · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据 | 产**证据**，不自己判交付 |
 
 ## Six rules
 
 1. **先结账，再交付**：任何“可以交了”之前，`check_printability`（每个零件）与 `check_assembly`（每份契约）都要跑过；最后 `delivery_audit`，并把你要主张的东西写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。
 2. **`not-excluded` 不是“ok”，更不是“安全”**：只表示“没找到反例”。`difficult` 表示余量落在仪器噪声内，**不许当过**。没有 “safe” 这个词可报。
-3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**外购件/研究体用 `set_part_role` 声明** `stock` / `research`（`merge_parts` 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
+3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**每个交付打印件的最新版本必须先过 `review_visual`（top+iso，带 note）；没有 fresh 记录，`delivery_audit` 直接 blocked。`generate_part({views:[]})` 会被强制改成 top+iso，不要再靠“只登记不看图”省图。****外购件/研究体用 `set_part_role` 声明** `stock` / `research`（`merge_parts` 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
 4. **检测 ≠ 交付**：`attention` 里的位置是“去看这里”，不是判定证据；反过来，工具沉默是检测的失败，“检测到嫌疑”也不构成交付失败。
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
 
 ## Project boundary (C-lite, 2026-10-28)
 
-The first CAD call binds the session to its nearest `cad-data/project.json`; `cd` does not switch. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, **stop and tell the user this is the C/D gap** — do not fork a corpus or add symlinks.
+The first CAD call binds the session to its nearest `cad-data/project.json`; `cd` does not switch. **A directory with no marker is NOT a new project when an ancestor has one** — it inherits the ancestor. To create a separate example/subproject:
+
+1. `init_project` (with `{dir}`) writes ONLY `cad-data/project.json` (no versions, no rebind);
+2. open a new session with `cwd = dir`; its first CAD call binds the new marker.
+
+**The write target fails closed.** If an UNBOUND session's cwd is inside an ancestor project but is
+not itself a project, the first CAD write is REFUSED — it does not silently bind the ancestor and it
+never requires a later move. Choose explicitly: `init_project` (make this directory a project) or
+`bind_project` (you really mean the ancestor), or `cd` to a project root.
+
+`project_info` is read-only and says `boundRoot`, `liveCwd`, `mismatch`, `ambiguous`, and where a
+first call would bind — call it before assuming a path is a project. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, **stop and tell the user this is the C/D gap** — do not fork a corpus or add symlinks. A copied corpus is still a fork even if it has its own `project.json`.
 
 ## Reading errors
 
@@ -50,6 +60,7 @@ The first CAD call binds the session to its nearest `cad-data/project.json`; `cd
 | "does the mechanism move correctly", "what's the stroke", "does it jam mid-travel" | `simulate_motion` | `simulate_physics` |
 | "how strong is it", "where does it break", "stress at this section" | `simulate_stress` | anything else — it is the only tool that reports a force |
 | **"where should I even look", "any sharp internal corner", "is this mesh clean"** | **`scan_attention`** | waiting for a render to reveal it |
+| "I need to deliver this printed part", "is the D hole really a D hole" | `review_visual` (top+iso, section when internal; writes the per-version record) | `generate_part({views:[]})`, or claiming "looks good" without an image |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
 | "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `simulate_lbm` | embedded solids (box walls only) |
 | "how big / how many holes / is it watertight", whole-part numbers | `measure_part` | renders |

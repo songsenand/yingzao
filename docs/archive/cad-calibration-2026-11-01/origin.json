@@ -1,0 +1,9 @@
+{
+  "archivedAt": "2026-11-01",
+  "from": "/home/songsenand/Project/ToyMarker",
+  "versions": ["v001", "v002", "v003", "v004", "v005", "v006", "v007"],
+  "parts": ["p001", "p002", "p003", "p004", "p005", "p006", "p007"],
+  "runs": ["r001", "r002", "r003", "r004", "r005"],
+  "assembly": ["appearance-missing.json", "appearance-single.json", "appearance-smoke.json", "simple-budget.json", "simple.json"],
+  "reason": "calibration / process-test / appearance-smoke data, not part of the wind-up-frog project; root becomes a workspace container"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "kind": "workspace",
+  "title": "ToyMarker",
+  "createdAt": "2026-11-01T09:05:00.000Z",
+  "note": "This root is a container, not a CAD project. Projects live in subdirectories with their own cad-data/project.json; a CAD write at the workspace root is refused."
+}

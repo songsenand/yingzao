@@ -1,0 +1,10 @@
+{
+ "schemaVersion": 1,
+ "name": "single",
+ "root": {
+  "kind": "part",
+  "id": "only",
+  "part": "校准件-平端杆",
+  "version": "v002"
+ }
+}

@@ -6,10 +6,18 @@
 ## Conventions every tool assumes
 
 - **Millimetres, z-up.** No tool takes a unit argument.
-- **A CAD project is the nearest `cad-data/project.json` marker.** The agent's current working directory is only the starting point: `cd` into a subdirectory stays on the project; `cd` to a sibling with its own marker switches; a directory with no marker is a new project candidate (first write creates the marker). A delegated session's `cwd` works the same way — no symlinks, no `delegationDepth` special case. After the first CAD call the session is bound to that root (`$DSH_HOME/cad/sessions/<id>.json`): later `cd` does not switch; start a new session to switch. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, stop and tell the user this is the C-lite gap (C/D are deferred); do not fork a corpus or add symlinks. On the first write, read the returned `project` / store root rather than assuming it.
+- **A CAD project is the nearest `cad-data/project.json` marker.** The agent's current working directory is only the starting point: `cd` into a subdirectory stays on the project; `cd` to a sibling with its own marker switches; a directory with no marker is a new project candidate **only when no ancestor has a marker** — otherwise it inherits the ancestor. A delegated session's `cwd` works the same way — no symlinks, no `delegationDepth` special case. After the first CAD call the session is bound to that root (`$DSH_HOME/cad/sessions/<id>.json`): later `cd` does not switch; start a new session to switch. **`init_project` writes a marker-only project before the first call; `bind_project` explicitly chooses an ancestor; `project_info` reports the binding, the live-cwd mismatch, and ambiguity.** The write target fails closed: an unbound session whose cwd is inside an ancestor project but is not itself a project is REFUSED on the first CAD write — no silent root write, no later move. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, stop and tell the user this is the C-lite gap (C/D are deferred); do not fork a corpus (a copied corpus is still a fork) or add symlinks. On the first write, read the returned `project` / store root rather than assuming it.
 - **`generate_part` renders are the review channel** — look at all four views
   (front/side/top/iso) before claiming a shape is right. Renders are for
-  *shape*; numbers come from `measure_*`.
+  *shape*; numbers come from `measure_*`. `views: []` is no longer a way to
+  skip this: a version registered with no image is overridden to top+iso with
+  a warning.
+- **Delivery needs a separate, per-version visual review.** Call
+  `review_visual` on every printed part's exact version (top+iso, plus a
+  section for an internal feature) and write a note saying what you checked.
+  `delivery_audit` blocks the newest printed part if the record is missing or
+  older than the version. A review of the parent does not cover a shape
+  change; re-review after a fix.
 - **Anchors**: declare `datum("name", [x,y,z])` at top level, in **final world
   coordinates** (a transform at the call site does not move the echoed value).
   Datums do not affect the mesh. Extended kinds exist for assemblies:

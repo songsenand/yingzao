@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "parts": [
+    {
+      "id": "p001",
+      "name": "底座立柱（圆角验证）",
+      "nameSource": "agent",
+      "createdAt": "2026-10-30T07:20:30.562Z",
+      "lastActiveAt": "2026-10-31T00:39:57.005Z",
+      "versionIds": [
+        "v001"
+      ],
+      "role": "research"
+    },
+    {
+      "id": "p002",
+      "name": "校准件-平端杆",
+      "nameSource": "agent",
+      "createdAt": "2026-10-30T11:38:48.994Z",
+      "lastActiveAt": "2026-10-31T00:39:51.924Z",
+      "versionIds": [
+        "v002"
+      ],
+      "role": "research"
+    },
+    {
+      "id": "p003",
+      "name": "校准件-圆端杆",
+      "nameSource": "agent",
+      "createdAt": "2026-10-30T11:38:49.392Z",
+      "lastActiveAt": "2026-10-31T00:39:57.000Z",
+      "versionIds": [
+        "v003"
+      ],
+      "role": "research"
+    },
+    {
+      "id": "p004",
+      "name": "校准件-宽底座",
+      "nameSource": "agent",
+      "createdAt": "2026-10-30T11:39:06.522Z",
+      "lastActiveAt": "2026-10-31T00:39:51.914Z",
+      "versionIds": [
+        "v004"
+      ],
+      "role": "research"
+    },
+    {
+      "id": "p005",
+      "name": "简易-底座",
+      "nameSource": "agent",
+      "createdAt": "2026-10-31T08:51:48.196Z",
+      "lastActiveAt": "2026-10-31T08:51:50.214Z",
+      "versionIds": [
+        "v005"
+      ]
+    },
+    {
+      "id": "p006",
+      "name": "简易-立柱",
+      "nameSource": "agent",
+      "createdAt": "2026-10-31T08:51:50.223Z",
+      "lastActiveAt": "2026-10-31T08:51:50.544Z",
+      "versionIds": [
+        "v006"
+      ]
+    },
+    {
+      "id": "p007",
+      "name": "简易-托盘",
+      "nameSource": "agent",
+      "createdAt": "2026-10-31T08:51:59.791Z",
+      "lastActiveAt": "2026-10-31T08:52:00.110Z",
+      "versionIds": [
+        "v007"
+      ]
+    }
+  ]
+}

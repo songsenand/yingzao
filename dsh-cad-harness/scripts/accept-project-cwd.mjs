@@ -19,7 +19,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   projectCwdOf, resolveProjectCwd, configureWorkingDirectoryService,
-  takeBindingNotice, clearSessionBindingCache,
+  takeBindingNotice, clearSessionBindingCache, resolveProjectRoot,
+  createProjectMarker, projectInfoFor, bindSessionToProject,
 } from '../src/host/project.ts';
 
 let failures = 0;
@@ -133,6 +134,98 @@ try {
   check(await projectCwdOf(execOf({ id: 's3', cwd: parent, delegationDepth: 1 })) === real(child),
     'a bound delegated session stays put',
     await projectCwdOf(execOf({ id: 's3', cwd: parent, delegationDepth: 1 })));
+
+  // --- fail-closed write target: a subdirectory of an ancestor is NOT a target -
+  {
+    const ambiguous = join(parent, 'ambiguous');
+    mkdirSync(ambiguous, { recursive: true });
+    useLiveCwd(ambiguous);
+    let refused = '';
+    try {
+      await resolveProjectCwd(execOf({ id: 'strict-refused', cwd: parent }), { requireExplicit: true });
+    } catch (e) { refused = String(e); }
+    check(/write target is ambiguous/.test(refused) && /init_project/.test(refused) && /bind_project/.test(refused),
+      'an unbound session in a subdirectory of an ancestor project is REFUSED (not silently bound)',
+      refused.slice(0, 120));
+    check(!existsSync(join(home, 'cad', 'sessions', 'strict-refused.json')),
+      'the refused call wrote NO binding');
+    const ambInfo = await projectInfoFor(execOf({ id: 'strict-refused', cwd: parent }));
+    check(ambInfo.ambiguous === true && /REFUSED/.test(ambInfo.note),
+      'project_info warns that the write target is ambiguous', JSON.stringify(ambInfo));
+
+    // The sanctioned fix: make this directory a project, then the same session
+    // can bind it on the next call.
+    await createProjectMarker(ambiguous, 'ambiguous example');
+    const afterInit = await resolveProjectCwd(execOf({ id: 'strict-init', cwd: parent }), { requireExplicit: true });
+    check(afterInit.cwd === real(ambiguous) && afterInit.newlyBound,
+      'init_project + retry binds the new marker (no move/copy)', `${afterInit.cwd}`);
+
+    // Or explicitly choose the ancestor from a subdirectory.
+    useLiveCwd(join(parent, 'spec'));
+    const bound = await bindSessionToProject(execOf({ id: 'strict-bind', cwd: parent }), parent);
+    check(bound.root === real(parent),
+      'bind_project explicitly chooses an existing ancestor', JSON.stringify(bound));
+    const afterBind = await resolveProjectCwd(execOf({ id: 'strict-bind', cwd: parent }), { requireExplicit: true });
+    check(afterBind.cwd === real(parent) && !afterBind.newlyBound,
+      'the explicit binding is what the write path uses', afterBind.cwd);
+    let rebind = '';
+    try { await bindSessionToProject(execOf({ id: 'strict-bind', cwd: parent }), ambiguous); }
+    catch (e) { rebind = String(e); }
+    check(/already bound/.test(rebind),
+      'bind_project refuses to rebind an already-bound session (no move after writes)',
+      rebind.slice(0, 120));
+  }
+
+  // --- a workspace is a container, never a write target ----------------------
+  {
+    const ws = join(base, 'workspace');
+    mkdirSync(ws, { recursive: true });
+    writeFileSync(join(ws, 'cad-workspace.json'), JSON.stringify({ schemaVersion: 1, kind: 'workspace', title: 'ws' }));
+    check(resolveProjectRoot(ws).root === real(ws) && resolveProjectRoot(ws).marker === 'workspace',
+      'cad-workspace.json makes the root a workspace, not a project');
+    useLiveCwd(ws);
+    let refused = '';
+    try { await resolveProjectCwd(execOf({ id: 'ws-refused', cwd: ws }), { requireExplicit: true }); }
+    catch (e) { refused = String(e); }
+    check(/WORKSPACE, not a project/.test(refused), 'a write at the workspace root is REFUSED', refused.slice(0, 120));
+    let rootInit = '';
+    try { await createProjectMarker(ws); } catch (e) { rootInit = String(e); }
+    check(/workspace, not a project/.test(rootInit), 'init_project refuses to turn the workspace root into a project');
+    const member = await createProjectMarker(join(ws, 'member'), 'member');
+    check(member.created === true, 'init_project works in a workspace member directory', JSON.stringify(member));
+    let bindWs = '';
+    try { await bindSessionToProject(execOf({ id: 'ws-bind', cwd: ws }), ws); } catch (e) { bindWs = String(e); }
+    check(/workspace, not a project/.test(bindWs), 'bind_project refuses a workspace root');
+  }
+
+  // --- C-lite lifecycle: create a marker WITHOUT rebinding; see the binding ----
+  {
+    const nested = join(parent, 'nested-example');
+    mkdirSync(nested, { recursive: true });
+    const made = await createProjectMarker(nested, 'nested example');
+    check(made.created && existsSync(join(nested, 'cad-data', 'project.json')),
+      'init_project creates only cad-data/project.json', JSON.stringify(made));
+    check(made.inheritedFrom === real(parent),
+      'it names the ancestor project the new marker shadows', String(made.inheritedFrom));
+    check(resolveProjectRoot(nested).root === real(nested) && resolveProjectRoot(nested).marker === 'project',
+      'the new marker becomes the nearest project for a new session');
+    const madeAgain = await createProjectMarker(nested);
+    check(madeAgain.created === false && madeAgain.key === made.key,
+      're-running is idempotent (created:false, same key)');
+
+    // A session already bound to parent must NOT switch when the live cwd moves
+    // into the new nested marker; project_info must say so.
+    useLiveCwd(join(parent, 'spec'));
+    await projectCwdOf(execOf({ id: 'bound-parent', cwd: parent }));
+    useLiveCwd(nested);
+    const info = await projectInfoFor(execOf({ id: 'bound-parent', cwd: parent }));
+    check(info.boundRoot === real(parent) && info.mismatch === true,
+      'project_info reports boundRoot + mismatch when live cwd is a different project',
+      JSON.stringify(info));
+    const freshInfo = await projectInfoFor(execOf({ id: 'fresh-nested', cwd: nested }));
+    check(freshInfo.boundRoot === null && freshInfo.wouldBindTo === real(nested),
+      'an unbound session would bind the nested marker', JSON.stringify(freshInfo));
+  }
 
   rmSync(parent, { recursive: true, force: true });
   useLiveCwd(child);

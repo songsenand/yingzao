@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { discoverWorkspaces } from '../src/host/workspaces.ts';
+import { discoverWorkspaces, workspaceRootOf } from '../src/host/workspaces.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(ROOT, '..');
@@ -63,6 +63,19 @@ try {
 
   // The real examples tree is the regression that started this: the fructose
   // project sits at examples/ball-and-stick/<molecule> (depth 2 from examples).
+  // A member project must be able to list its SIBLINGS: the panel asks from the
+  // session cwd, and normalizes to the nearest cad-workspace.json.
+  const ws = join(base, 'ws');
+  mkdirSync(ws, { recursive: true });
+  writeFileSync(join(ws, 'cad-workspace.json'), JSON.stringify({ schemaVersion: 1, kind: 'workspace' }));
+  corpus(join(ws, 'memberA'), { versions: 1 });
+  corpus(join(ws, 'deep', 'memberB'), { versions: 1 });
+  check(workspaceRootOf(join(ws, 'memberA')) === ws,
+    'workspaceRootOf walks from a member to the workspace root');
+  const siblings = await discoverWorkspaces(workspaceRootOf(join(ws, 'memberA')));
+  check(siblings.some((e) => e.rel === 'memberA') && siblings.some((e) => e.rel === 'deep/memberB'),
+    'a member sees its siblings through the workspace root', siblings.map((e) => e.rel).join(', '));
+
   const real = await discoverWorkspaces(join(REPO, 'examples'));
   const realRels = real.map((e) => e.rel);
   check(realRels.includes('ball-and-stick/glucose-molecule'), 'the real glucose project is discovered', realRels.join(', '));

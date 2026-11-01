@@ -1,0 +1,136 @@
+{
+  "parts": {
+    "analysed": 2,
+    "reference": 0,
+    "roleAssumed": 2
+  },
+  "judgement": {
+    "visibleSharpMm": 208,
+    "hiddenSharpMm": 0,
+    "hiddenShare": 0,
+    "volumeMm3": 2512.4,
+    "areaMm2": 1785.5,
+    "visibleSharpPerKmm2": 116.49,
+    "exemptCaps": 0,
+    "findings": [
+      {
+        "part": "flat",
+        "version": "v002",
+        "role": "printed",
+        "volumeMm3": 1440,
+        "areaMm2": 1032,
+        "sharpEdgesMm": 208,
+        "visibleSharpMm": 208,
+        "hiddenSharpMm": 0,
+        "clusters": 10,
+        "visibleClusters": 10,
+        "topVisible": [
+          {
+            "atMm": [
+              -25,
+              -3,
+              -3
+            ],
+            "lenMm": 40,
+            "visibility": 0.38
+          },
+          {
+            "atMm": [
+              -25,
+              3,
+              3
+            ],
+            "lenMm": 40,
+            "visibility": 1
+          },
+          {
+            "atMm": [
+              -25,
+              3,
+              -3
+            ],
+            "lenMm": 40,
+            "visibility": 0.38
+          }
+        ],
+        "exemptCaps": 0
+      },
+      {
+        "part": "capsule",
+        "version": "v003",
+        "role": "printed",
+        "volumeMm3": 1072.4,
+        "areaMm2": 753.5,
+        "sharpEdgesMm": 0,
+        "visibleSharpMm": 0,
+        "hiddenSharpMm": 0,
+        "clusters": 0,
+        "visibleClusters": 0,
+        "topVisible": [],
+        "exemptCaps": 0
+      }
+    ]
+  },
+  "attention": {
+    "count": 4,
+    "items": [
+      {
+        "kind": "termination",
+        "part": "flat",
+        "version": "v002",
+        "atMm": [
+          -5,
+          0,
+          0
+        ],
+        "areaMm2": 36,
+        "memberLengthMm": 40,
+        "slender": 6.7,
+        "detail": "flat cap 36.0 mm2, slenderness 6.7, boundary all 90 deg"
+      },
+      {
+        "kind": "termination",
+        "part": "flat",
+        "version": "v002",
+        "atMm": [
+          -45,
+          0,
+          0
+        ],
+        "areaMm2": 36,
+        "memberLengthMm": 40,
+        "slender": 6.7,
+        "detail": "flat cap 36.0 mm2, slenderness 6.7, boundary all 90 deg"
+      },
+      {
+        "kind": "silhouette",
+        "view": "front",
+        "heightMm": 5.5,
+        "widthMaxMm": 90,
+        "maxWidthAtZMm": -1,
+        "baseWidthMm": 89,
+        "maxOverBase": 1.01,
+        "waists": [],
+        "peaks": [
+          {
+            "zMm": -0.5,
+            "widthMm": 89.7
+          }
+        ],
+        "symmetryMatch": 0.998
+      },
+      {
+        "kind": "silhouette",
+        "view": "side",
+        "heightMm": 5.5,
+        "widthMaxMm": 6,
+        "maxWidthAtZMm": -3,
+        "baseWidthMm": 6,
+        "maxOverBase": 1,
+        "waists": [],
+        "peaks": [],
+        "symmetryMatch": 1
+      }
+    ]
+  }
+}

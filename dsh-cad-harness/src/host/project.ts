@@ -30,6 +30,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { openPartStore, type PartStore } from './parts.ts';
+import { writeJsonAtomic } from './file-lock.ts';
 import { openRunStore, type RunStore } from './runs.ts';
 import { openVersionStore, type VersionStore } from './version.ts';
 
@@ -57,7 +58,7 @@ export function projectDataDir(cwd: string): string {
 }
 
 /** How a project root was recognized (see docs/dev/PROJECT-SCOPE.md). */
-export type ProjectRootMarker = 'project' | 'legacy' | 'new';
+export type ProjectRootMarker = 'project' | 'legacy' | 'workspace' | 'new';
 
 /** The nearest project root for one working directory. */
 export interface ResolvedProjectRoot {
@@ -77,8 +78,14 @@ function isDirectory(path: string): boolean {
 
 function markerAt(dir: string): ProjectRootMarker | null {
   const cadData = join(dir, 'cad-data');
-  if (!isDirectory(cadData)) return null;
-  return existsSync(join(cadData, 'project.json')) ? 'project' : 'legacy';
+  if (isDirectory(cadData)) {
+    return existsSync(join(cadData, 'project.json')) ? 'project' : 'legacy';
+  }
+  // A workspace is a CONTAINER: it holds projects but is never a write target.
+  // It is a separate sentinel so `cad-data/` (and its absence) keeps its old
+  // meaning and the legacy migration path is unchanged.
+  if (existsSync(join(dir, 'cad-workspace.json'))) return 'workspace';
+  return null;
 }
 
 /**
@@ -145,19 +152,26 @@ export function sessionBindingPath(sessionId: string): string {
   return join(sessionBindingsDir(), `${safeSessionId(sessionId)}.json`);
 }
 
-function readSessionBinding(sessionId: string): string | undefined {
+function readSessionBindingRecord(sessionId: string): { projectRoot: string; boundAt?: string } | undefined {
   const cached = sessionBindingCache.get(sessionId);
-  if (cached && isDirectory(cached)) return cached;
+  if (cached && isDirectory(cached)) return { projectRoot: cached };
   if (cached) sessionBindingCache.delete(sessionId);
   try {
     const parsed = JSON.parse(readFileSync(sessionBindingPath(sessionId), 'utf8'));
     const root = parsed?.projectRoot;
     if (typeof root === 'string' && root.trim() && isDirectory(root)) {
       sessionBindingCache.set(sessionId, root);
-      return root;
+      return {
+        projectRoot: root,
+        ...(typeof parsed?.boundAt === 'string' ? { boundAt: parsed.boundAt } : {}),
+      };
     }
   } catch { /* no binding yet, or unreadable: fall back to the resolver */ }
   return undefined;
+}
+
+function readSessionBinding(sessionId: string): string | undefined {
+  return readSessionBindingRecord(sessionId)?.projectRoot;
 }
 
 function writeSessionBinding(sessionId: string, root: string): void {
@@ -285,8 +299,21 @@ export interface ResolvedProjectCwd {
   newlyBound: boolean;
 }
 
+export interface ResolveProjectOptions {
+  /**
+   * Write-time guard. An unbound session whose cwd is a SUBDIRECTORY of an
+   * ancestor project is refused instead of silently binding the ancestor:
+   * that is how the wind-up-frog corpus landed at the repo root and had to be
+   * copied/moved later. The caller must choose explicitly:
+   *   - `init_project({dir})` to make the cwd a project, or
+   *   - `bind_project({dir: ancestor})` to declare the ancestor as the target.
+   * Reads (`projectCwdOf`) stay permissive.
+   */
+  requireExplicit?: boolean;
+}
+
 /** Async resolver: binding → live working directory → session header → server cwd. */
-export async function resolveProjectCwd(exec: unknown): Promise<ResolvedProjectCwd> {
+export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptions = {}): Promise<ResolvedProjectCwd> {
   const agent = (exec as {
     agent?: { session?: { header?: { id?: unknown; cwd?: unknown } } };
   })?.agent;
@@ -307,7 +334,32 @@ export async function resolveProjectCwd(exec: unknown): Promise<ResolvedProjectC
     const headerCwd = agent?.session?.header?.cwd;
     if (typeof headerCwd === 'string' && headerCwd.trim()) start = headerCwd;
   }
-  const root = resolveProjectRoot(start ?? process.cwd()).root;
+  let startDir = resolve(start ?? process.cwd());
+  try { startDir = realpathSync(startDir); } catch { /* keep the resolved path */ }
+  const resolved = resolveProjectRoot(startDir);
+  const root = resolved.root;
+  // FAIL CLOSED (write-time): a workspace root is never a project, and a cwd
+  // inside an ancestor project that is not itself a project has two plausible
+  // targets (the cwd and the ancestor). Picking the ancestor is what made the
+  // original corpus land one level too high. Refuse and make the caller choose;
+  // no post-hoc move is then needed.
+  if (opts.requireExplicit && resolved.marker === 'workspace') {
+    throw new Error(
+      `CAD write target is a WORKSPACE, not a project: ${resolved.root}. ` +
+      'A workspace holds projects and is never written to. Choose a member project, ' +
+      `or create one with init_project({dir:${JSON.stringify(join(startDir, 'project-name'))}}) / bind_project.`,
+    );
+  }
+  if (opts.requireExplicit && root !== startDir && markerAt(startDir) === null) {
+    throw new Error(
+      `CAD write target is ambiguous: the session cwd ${startDir} is inside project ${root} but is not itself a project. ` +
+      `Writing here would put versions in ${root}, and moving them later is exactly what this guard prevents. ` +
+      `Choose explicitly: ` +
+      `init_project({dir:${JSON.stringify(startDir)}}) to make this directory a project, ` +
+      `or bind_project({dir:${JSON.stringify(root)}}) if you really mean to write to ${root}; ` +
+      `or cd to a project root before the first CAD call.`,
+    );
+  }
   let newlyBound = false;
   if (sessionId) {
     newlyBound = readSessionBinding(sessionId) === undefined;
@@ -342,9 +394,198 @@ export function takeBindingNotice(exec: unknown): string | undefined {
   return notice;
 }
 
+/**
+ * Read-only answer to "which corpus would this session write to, and why?".
+ *
+ * WHY: the binding is sticky and was previously echoed only by `generate_part`.
+ * A session whose first CAD call is a read/measure therefore had no way to ask
+ * where it was bound; the wind-up-frog session discovered it only after v008.
+ */
+export interface ProjectInfo {
+  sessionId: string | null;
+  /** The bound corpus, or null when no binding exists yet. */
+  boundRoot: string | null;
+  boundAt: string | null;
+  /** Marker kind at the bound root ('project' | 'legacy'), or null. */
+  marker: ProjectRootMarker | null;
+  /** The live working directory the resolver would start from. */
+  liveCwd: string | null;
+  /** Where a FIRST CAD call would bind right now. */
+  wouldBindTo: string;
+  /** Marker kind the resolver sees at wouldBindTo. */
+  wouldBindMarker: ProjectRootMarker;
+  /** True when the live cwd resolves to a different corpus than the binding. */
+  mismatch: boolean;
+  /** True when an UNBOUND session's cwd is inside a project but is not one:
+   *  the first write is refused until init_project/bind_project. */
+  ambiguous: boolean;
+  /** True when the resolved root is a workspace (a container, never a write target). */
+  workspace: boolean;
+  note: string;
+}
+
+export async function projectInfoFor(exec: unknown): Promise<ProjectInfo> {
+  const agent = (exec as { agent?: { session?: { header?: { id?: unknown; cwd?: unknown } } } })?.agent;
+  const rawId = agent?.session?.header?.id;
+  const sessionId = typeof rawId === 'string' && rawId.trim() ? rawId : null;
+  const binding = sessionId ? readSessionBindingRecord(sessionId) : undefined;
+  let liveCwd: string | null = null;
+  try {
+    const current = await workingDirectoryService?.ensure?.(agent, undefined);
+    if (typeof current === 'string' && current.trim()) liveCwd = current;
+  } catch { /* fall through to the durable header */ }
+  if (!liveCwd) {
+    const headerCwd = agent?.session?.header?.cwd;
+    if (typeof headerCwd === 'string' && headerCwd.trim()) liveCwd = headerCwd;
+  }
+  const resolved = resolveProjectRoot(liveCwd ?? process.cwd());
+  const boundRoot = binding?.projectRoot ?? null;
+  const marker = boundRoot ? markerAt(boundRoot) : null;
+  const mismatch = Boolean(boundRoot && liveCwd && resolveProjectRoot(liveCwd).root !== boundRoot);
+  const liveResolved = liveCwd ? resolve(liveCwd) : null;
+  const ambiguous = Boolean(
+    !boundRoot && liveResolved && resolved.root !== liveResolved && markerAt(liveResolved) === null,
+  );
+  const workspaceRoot = !boundRoot && resolved.marker === 'workspace' ? resolved.root : null;
+  const wouldBindTo = boundRoot ?? resolved.root;
+  const note = workspaceRoot
+    ? `this session is NOT bound and ${workspaceRoot} is a WORKSPACE, not a project. A CAD write here is REFUSED: choose a member project, or init_project a subdirectory.`
+    : ambiguous
+    ? `this session is NOT bound and its cwd ${liveCwd} is inside project ${resolved.root} but is not itself a project. ` +
+      'A CAD write here is REFUSED: call init_project to make this directory a project, or bind_project to choose the ancestor explicitly.'
+    : boundRoot
+      ? `this session is BOUND to ${boundRoot}${mismatch ? `; its live cwd ${liveCwd} would resolve to ${resolved.root}, but a bound session does not switch` : ''}`
+      : `this session is not bound yet; its first CAD call will bind ${resolved.root} (${resolved.marker === 'new' ? 'a new project candidate' : `${resolved.marker} marker`})`;
+  return {
+    sessionId,
+    boundRoot,
+    boundAt: binding?.boundAt ?? null,
+    marker,
+    liveCwd,
+    wouldBindTo,
+    wouldBindMarker: boundRoot ? (marker ?? 'new') : resolved.marker,
+    mismatch,
+    ambiguous,
+    workspace: Boolean(workspaceRoot),
+    note,
+  };
+}
+
+/**
+ * Create ONLY a project marker (`cad-data/project.json`) in `dir`.
+ *
+ * This is the missing C-lite lifecycle action: `ensureProjectDir` stamps a
+ * marker only on a write, and by then the first CAD call has already bound an
+ * ancestor. `init_project` must be callable BEFORE that first call; it writes
+ * no versions, parts or runs, and it never rebinds the calling session.
+ */
+export async function createProjectMarker(
+  dir: string,
+  title?: string,
+): Promise<{ root: string; key: string; created: boolean; inheritedFrom: string | null; note: string }> {
+  const root = resolve(dir);
+  // Resolve the ANCESTOR before creating anything: a bare `cad-data/` made here
+  // would look like a legacy marker at `root` and hide the ancestor we need to
+  // name in `inheritedFrom`.
+  const inherited = resolveProjectRoot(root);
+  if (inherited.root === root && inherited.marker === 'workspace') {
+    throw new Error(
+      `${root} is a CAD workspace, not a project. Create the project in a subdirectory, ` +
+      'e.g. init_project({dir:"examples/my-part"}), so the workspace stays a container.',
+    );
+  }
+  const inheritedFrom = inherited.root !== root && inherited.marker !== 'new' ? inherited.root : null;
+  mkdirSync(join(root, 'cad-data'), { recursive: true });
+  const markerPath = join(root, 'cad-data', 'project.json');
+  if (existsSync(markerPath)) {
+    let key = projectKey(root);
+    try {
+      const parsed = JSON.parse(readFileSync(markerPath, 'utf8'));
+      if (typeof parsed?.key === 'string' && parsed.key.trim()) key = parsed.key;
+    } catch { /* keep the derived key */ }
+    return {
+      root,
+      key,
+      created: false,
+      inheritedFrom,
+      note: `${root} already has a project marker; nothing was written. A session already bound elsewhere does not switch — open a new session with cwd=${root}.`,
+    };
+  }
+  const key = projectKey(root);
+  await writeJsonAtomic(markerPath, {
+    schemaVersion: 1,
+    cwd: root,
+    key,
+    title: (title?.trim() || basename(root) || 'project'),
+    createdAt: new Date().toISOString(),
+  });
+  clearProjectRootCache();
+  return {
+    root,
+    key,
+    created: true,
+    inheritedFrom,
+    note: `marker created${inheritedFrom ? ` INSIDE the ancestor project ${inheritedFrom} (it now shadows that project for new sessions)` : ''}. ` +
+      'This call does NOT rebind the current session; open a new session with cwd=' + root + ' before the first CAD call.',
+  };
+}
+
+/** The live working directory, or the durable header cwd, or null. */
+export async function liveCwdOf(exec: unknown): Promise<string | null> {
+  const agent = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent;
+  try {
+    const current = await workingDirectoryService?.ensure?.(agent, undefined);
+    if (typeof current === 'string' && current.trim()) return current;
+  } catch { /* fall through to the durable header */ }
+  const headerCwd = agent?.session?.header?.cwd;
+  return typeof headerCwd === 'string' && headerCwd.trim() ? headerCwd : null;
+}
+
+/**
+ * Explicitly bind this session to an EXISTING project root.
+ *
+ * This is the sanctioned way to say "yes, I mean the ancestor corpus" when the
+ * cwd is a subdirectory. It refuses to rebind an already-bound session — a
+ * wrong target is fixed by a new session, not by moving the corpus after the
+ * fact. It never creates a marker; use `init_project` for that.
+ */
+export async function bindSessionToProject(
+  exec: unknown,
+  dir: string,
+): Promise<{ root: string; marker: ProjectRootMarker; boundAt: string }> {
+  const sessionId = (exec as { agent?: { session?: { header?: { id?: unknown } } } })?.agent?.session?.header?.id;
+  if (typeof sessionId !== 'string' || !sessionId.trim()) {
+    throw new Error('bind_project needs a live session id; this caller cannot bind a project');
+  }
+  const existing = readSessionBinding(sessionId);
+  if (existing) {
+    throw new Error(
+      `this session is already bound to ${existing}; bind_project does not rebind. ` +
+      'Start a new session with the target cwd and run the first CAD call there.',
+    );
+  }
+  const root = resolve(dir);
+  const marker = markerAt(root);
+  if (marker === null) {
+    throw new Error(
+      `${root} has no cad-data/project.json marker. ` +
+      `Create it with init_project({dir:${JSON.stringify(root)}}), then bind, or start a session there.`,
+    );
+  }
+  if (marker === 'workspace') {
+    throw new Error(
+      `${root} is a CAD workspace, not a project; bind_project needs a member project. ` +
+      'Create one with init_project in a subdirectory, then start a session there.',
+    );
+  }
+  const boundAt = new Date().toISOString();
+  writeSessionBinding(sessionId, root);
+  return { root, marker, boundAt };
+}
+
 /** Store root for a tool call, creating the project directory if needed. */
 export async function projectStoresFor(exec: unknown): Promise<ProjectStores> {
-  const { cwd } = await resolveProjectCwd(exec);
+  const { cwd } = await resolveProjectCwd(exec, { requireExplicit: true });
   const project = projectStores(cwd);
   await ensureProjectDir(project);
   return project;

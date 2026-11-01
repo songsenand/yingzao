@@ -2358,16 +2358,19 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
   `manifest.json`/`versions/` 即算），返回 `{cwd, rel, name, parts, versions, latest}`。
   遍历深度 ≤6（只是上限，不再是项目边界）、skip 列表挡掉 `node_modules`/`lib`/`out` 等重目录，总目录数 ≤400；
   **只读**，不建目录、不改 manifest；单份语料读不动只跳过该项，不拖垮整个列表。
-- 面板 `S.bar` 最左侧「工作目录」下拉：默认「跟随会话 · <名>」，列出发现到的其余语料
-  （`rel · N零件/M版`）。切换只改 `?project=`（`client/project.ts` 的
-  `setProjectOverride`），读数即换语料；列表 ≤1 项或发现失败时不显示，行为与旧版一致。
+- 面板 `S.bar` 最左侧「项目」下拉：列出发现到的**全部**项目，根项目（如果根自己也是项目）
+  和子目录项目**同级**（根用 basename，子目录用 `rel`，统一 `· N零件/M版`）；没有「跟随会话」选项。
+  根为 workspace（`cad-workspace.json`）时它本身不出现在列表里。
+  默认选中会话所在项目（只是一个普通选项），切换只改 `?project=`（`client/project.ts` 的
+  `setProjectOverride`），读数即换语料；只要有发现结果就显示，发现失败时不显示。
 - **写路径按标记**：Agent 的工具从 workingDirectory 起点走 `resolveProjectRoot`，写最近
   `cad-data/project.json` 标记的语料（`projectStoresFor`）。「看 A 写 B」在结构上不可能；
   下拉的 tooltip 明说"只读浏览"。
 
-**边界**：会话切换（`refreshProjectScope` 返回 switched）自动清空 override，避免钉在
-上一个会话的语料上；发现范围永远相对**会话** cwd，不受当前浏览目标影响；不引入
-语料内"组件"分组——跨组件的联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
+**边界**：项目选择是**项目**，不是会话事实。会话切换（`refreshProjectScope`）不清空
+override；只有选中项目不在新会话 workspace 的发现列表里时，才回落到会话项目或第一项。
+发现范围永远相对**会话** cwd，不受当前浏览目标影响；不引入语料内"组件"分组——跨组件的
+联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
 
 **验证**：B 后 `discoverWorkspaces(examples)` 返回 10 份语料（含 `ball-and-stick` 的 glucose/fructose），
 深度 3 的分子项目可见；不存在的 root → `[]`；单语料 root（`examples/microscope5`）→ `[.] v83`。
@@ -3541,6 +3544,9 @@ overlay 的 `chrome` 槽，与「复原」同一坐标系。挂完**用 DOM 探�
    `$DSH_HOME/cad/sessions/<id>.json`；之后该会话固定用它，`cd` 不再切换。子智能体各自绑定；
    显式切换靠新会话；项目移动/改名留给 D 的稳定 id。无 id 的调用保持 B 的纯 resolver 行为。
    **准生产封版**：C 的创建/切换 UI 与 D 暂缓；缺口触发时提示用户，见 PROJECT-SCOPE §6.4。
+8. **写目标 fail-closed（2026-11-01）**：未绑定会话的 cwd 在祖先项目内、自己无 marker 时，
+   首次 CAD 写被拒绝；必须 `init_project`（当前目录成为项目）或 `bind_project`（显式选祖先）。
+   `project_info.ambiguous` 提前暴露该状态。目标是**写入即终态**：不静默写根，不事后复制/移动。
 
 **30.14 两半作用域不一致时，面板必须说出来**：人的半边是全局的（路由、面板、遥测），模型的
 半边是按预设的（工具表、skill 目录），于是会出现静默失败——标准模式会话里面板一切正常、

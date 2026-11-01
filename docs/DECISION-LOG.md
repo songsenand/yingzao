@@ -4908,3 +4908,185 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 - `scripts/scan-seam-selftest.py` 6/6；`accept-analyze` 的 mesh health/seam 断言通过；`accept-attention-scan` 原有 8 条全过。
 
 **影响：** `python/cad_worker/worker.py`（P2b seam）、`src/host/tools.ts`（`scan_attention` 描述/schema、`analyze` 描述/note）、`scripts/accept-analyze.mjs`、`scripts/scan-seam-selftest.py`、`docs/TOOL-CONTRACTS.md`、`experiments/20261029_contact_corner_attention.md`、`DESIGN.md`。
+
+## 2026-10-31：交付打印件必须逐版本视觉复核，视觉预算不许省
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（跨 `generate_part` / 新工具 / `delivery_audit` / 技能文档）。
+
+**要解决的问题：** 发条青蛙的 `v029` 上弦钥匙把 D 孔切成了通到齿缘的矩形槽；这个缺陷在
+`versions/v029/render_top.png` 里一眼可见，但模型 40 次 `generate_part` 中有 37 次传了
+`views: []`（推理原话是“save image budget”），钥匙的顶视图从未进入上下文。结果水密/干涉/
+打印性全绿，用户截图才暴露。
+
+**决策内容：**
+
+- **视觉复核是交付门，不是可选项。** 新增 `review_visual`：对每个打印件的**精确版本**渲染
+  top+iso（内部特征可加 section），把图像附到回复里，并写 `versions/<id>/visual-review.json`；
+  `note` 必须写清看了什么、哪里可能有问题。
+- `generate_part({views: []})` 被强制改成 top+iso（带 warning）；“只登记不看图”不再是省图路径。
+- `delivery_audit` 默认 `visualReview: "required"`：装配清单里每个打印件的最新版本必须有一份
+  fresh（`reviewedAt >= version.timestamp`）且含 top+iso 的记录，否则 blocked。`visualReview: "off"`
+  只作 legacy/bench 的显式退出，并报 info。
+- 记录与版本绑定：改一版就重新看一版；父版本的复核不覆盖形状变更。
+- 允许在上下文上省 token（例如不把热力图逐点塞进上下文），但**不许省“看一眼”**。
+
+**理由：** 全局体检查（水密/干涉/薄壁采样）只能证明“当前这组错误之间不打架”；自由空间里的
+槽、错位、特征意图错误不会和任何零件干涉。视觉是唯一能直接回答“这个孔是不是孔”的通道；
+把图关掉等于把最便宜的一道门关掉。
+
+**依据：**
+
+- `v029` 的 `render_top.png` 清楚显示槽；`v040` 修复后同视图是一个 D 孔。
+- 40 次 `generate_part`：37 次 `views: []`，3 次 `["iso"]`；16 次 `read_image` 没有一次读钥匙的版本视图。
+- `r042` 的打印性报告已报 `minWallMm=0.028` / `thinAreaPct=26.96` / `excluded`，但被“尖角”叙事解释掉。
+- 修复时 `v040` 传 `["iso"]`，模型推理写“No rectangular notch ✓”——能力在，分配错了。
+
+**影响：** `src/host/visual-review.ts`（新）、`src/host/tools.ts`（`review_visual`、`generate_part`
+override、`delivery_audit` 参数/输出）、`src/host/delivery-audit.ts`（visual gate）、
+`src/host/tool-groups.ts`、`skills/cad-toolbox/SKILL.md`、`docs/llm/conventions.md`、
+`docs/TOOL-CONTRACTS.md`、`scripts/accept-check-parts.mjs`、`scripts/accept-delivery-audit.mjs`。
+旧语料在默认 `required` 下会被 blocked；这是有意为之，legacy 可用 `visualReview: "off"` 显式退出。
+
+## 2026-10-31（补）：C-lite 项目生命周期——`init_project` + `project_info`，不推进 C/D
+
+**触发条件：** 第 1 条（用户拍板 / 用户追问“是否必须 C/D”）+ 第 4 条（跨 project resolver / 工具目录 / 技能 / 文档）。
+
+**要解决的问题：** 发条青蛙示例在 root 已有语料的仓库里新建 `examples/windup-frog/`，首次 CAD 调用绑定 root；
+示例目录没有 marker，所以它只是 root 项目里的一个目录。产品没有“在首次调用前创建 marker”的动作，
+也没有“我现在绑在哪”的只读查询；模型做完 44 个版本后把 42 MB 语料复制进示例，制造了 twin corpus。
+
+**决策内容：**
+
+- 新增 `init_project({dir})`：只写 `cad-data/project.json`，不写版本/零件/run，**不 rebind 当前会话**；
+  返回 `inheritedFrom`（它 shadow 的祖先项目）。正确用法：先 init，再开新会话把 cwd 指进去。
+- 新增 `project_info()`：只读返回 `boundRoot / boundAt / liveCwd / wouldBindTo / mismatch / note`；
+  绑定的会话与 live cwd 解析到不同语料时显式 `mismatch: true`，提示“bound session 不会切”。
+- 保留 C-lite 的“一会话一项目、首调用绑定”语义，不实现会话内切换/迁移/共享/双写。
+- 修复 `set_datums` 的版本化路径：新版本现在会 `attachVersion` 到同一 part（frog 的 p010 曾只列 v013，
+  装配却用 v034）。
+- 文档修正：目录无 marker **不等于**新项目（祖先有 marker 时继承）；`SKILL.md` / `conventions.md` /
+  `PROJECT-SCOPE.md` 都写明“先 init，再新会话”。
+
+**理由：** frog 案例需要的是“创建 + 可见性 + root 布局 + 防 fork”，不是会话内多项目。C/D 是通用解，
+但它不自动提供创建动作、可见性、路径可移植或防止复制；把它当这个案例的前置条件会过度设计。
+C-lite 补上生命周期动作后，示例可以在一个独立新会话里闭环。
+
+**依据：**
+
+- `resolveProjectRoot` 找最近祖先 marker；`examples/windup-frog` 无 marker 时解析到 root。
+- `ensureProjectDir` 只在首次**写**时写 marker，此时已绑定 root，无法创建子项目。
+- `takeBindingNotice` 只在 `generate_part` 消费；首次调用为读/测量时绑定不可见。
+- `accept-project-cwd`：init_project 只写 project.json；bound session 的 live cwd 移到 nested 后
+  `project_info.mismatch=true`；unbound session `wouldBindTo=nested`；重复 init 幂等。
+- `accept-check-parts`：`init_project` 不 rebind 当前会话；`project_info` 的 `wouldBindTo` 不变。
+- `accept-set-datums-versioned`：新版本进入同一 part 的 `versionIds`。
+
+**影响：** `src/host/project.ts`、`src/host/tools.ts`（`init_project` / `project_info` / `set_datums`）、
+`src/host/tool-groups.ts`、`skills/cad-toolbox/SKILL.md`、`docs/llm/conventions.md`、
+`docs/dev/PROJECT-SCOPE.md`、`docs/TOOL-CONTRACTS.md`、`scripts/accept-project-cwd.mjs`、
+`scripts/accept-check-parts.mjs`、`scripts/accept-set-datums-versioned.mjs`。
+C/D（会话内切换/迁移/共享/双写）仍未实现，触发条件见 `PROJECT-SCOPE.md §6.4`。
+
+## 2026-11-01：CAD 面板去掉「跟随会话」，项目选择根/子目录同级
+
+**触发条件：** 第 1 条（用户拍板）。
+
+**要解决的问题：** 面板的「工作目录」下拉以「跟随会话」为默认，根语料被标成「根语料」并
+排在子目录之前；这让“项目”再次变成会话的附属物，用户无法把根语料和 `examples/windup-frog`
+当两个同级项目来选，也看不见当前选中的到底是哪份语料。
+
+**决策内容：**
+
+- 删除「跟随会话」选项；只要有发现结果，就显示项目下拉。
+- 列出**全部**语料：根用 basename、子目录用 `rel`，统一 `· N零件/M版`；不再有「根语料」标签，
+  也不再过滤掉会话当前语料。
+- 默认选中会话所在项目，但这只是普通选项；选择是**项目**，会话切换不清空，只有选中项目
+  不在新 workspace 的发现列表里时才回落。
+- 下拉的语义改成「项目」；写路径不变（Agent 仍写会话所在项目，面板只读）。
+- `init_project` / `project_info` 仍负责创建与绑定可见性；C/D 的会话内切换仍暂缓。
+
+**理由：** 根目录不该因为“在仓库根”而自动高一级；项目是语料根，不是会话的投影。面板先做到
+“所有项目平级可见”，后面的项目身份/注册表才有落点。
+
+**依据：**
+
+- `discoverWorkspaces` 已返回根与子目录的 `{cwd, rel, name}`；旧 UI 只是过滤/特殊命名。
+- 旧实现中 `workspaceCwd === ''` 同时表示“跟随会话”和“未选择”，无法表达“选根语料”。
+- 改后 `lib/client.js` 不再含「跟随会话」；`npm run typecheck` / `npm run build` 通过。
+
+**影响：** `src/client/panel.ts`、`src/client/project.ts`、`DESIGN.md`。刷新面板后生效；
+若没有 `pnpm run dev:web`，client bundle 已重建，刷新页面即可。
+
+## 2026-11-01（补）：写目标 fail-closed——写入即终态，不写错、不搬家
+
+**触发条件：** 第 1 条（用户拍板）：写入时就该写在确定目录，写入后不应再移动；此前每次移动都是因为写错到了根。
+
+**要解决的问题：** 会话 cwd 在 `examples/windup-frog`（无 marker），祖先 `ToyMarker` 有 marker；
+C-lite 的 resolver 静默绑定祖先。44 个版本写进根语料后，只能靠复制/搬移把示例救出来。
+根因不是“搬得不够快”，是**写之前没有确定目标**。
+
+**决策内容：**
+
+- **写路径 fail-closed**：未绑定会话的 cwd 在祖先项目内、自己却没有 marker 时，首次 CAD 写
+  直接拒绝；不再静默绑定祖先。错误信息给出三条路：`init_project`（当前目录成为项目）、
+  `bind_project`（显式选祖先）、`cd` 到项目根。
+- `project_info` 增加 `ambiguous`：在真正写之前就能看到“cwd 在项目内但不是项目”。
+- 新增 `bind_project`：显式绑定一个**已存在**的 marker，不创建、不复制、不移动；已绑定会话
+  拒绝 rebind（写错只能新会话，不能搬语料补救）。
+- `init_project` 不走 `projectStoresFor`，因为它必须在“目标尚未确定”时可用。
+- 读路径（`projectCwdOf`）保持宽松，面板/路由仍可按路径浏览；**写路径**严格。
+
+**理由：** “写入后不移动”不能靠事后修；唯一可靠的做法是写之前拒绝歧义。把“祖先项目”
+从默认值降级为需要显式声明的选择，才不会再有“先写根、再复制到示例”的路径。
+
+**依据：**
+
+- `accept-project-cwd`：未标记子目录的 `requireExplicit` 解析抛 `write target is ambiguous`，
+  且不写 binding；`init_project` 后重试绑定新 marker；`bind_project` 后写祖先；rebind 被拒。
+- `accept-check-parts`：`check_parts` 从子目录写被拒；`init_project({dir:"."})` 以 live cwd 解析；
+  `bind_project` 工具显式选祖先并返回目标。
+- 拒绝错误包含 `init_project` / `bind_project` / `cd` 三个可执行动作，不是只报“失败”。
+
+**影响：** `src/host/project.ts`（`requireExplicit`、`bindSessionToProject`、`liveCwdOf`、
+`projectInfoFor.ambiguous`）、`src/host/tools.ts`（`bind_project`、`init_project` 不走 stores）、
+`src/host/tool-groups.ts`、`skills/cad-toolbox/SKILL.md`、`docs/llm/conventions.md`、
+`docs/dev/PROJECT-SCOPE.md`、`DESIGN.md`、`docs/TOOL-CONTRACTS.md`、`accept-project-cwd`、
+`accept-check-parts`、`accept-skill-tools`。既有语料仍需一次迁移；新写入不再产生“写错再搬”。
+
+## 2026-11-01（补）：根改为 workspace 容器；校准归档，frog 只留一份
+
+**触发条件：** 第 1 条（用户拍板：twin corpus 删除，孤儿/意义不明确迁到 `docs/archive/`，保持干净）。
+
+**要解决的问题：** 根 `cad-data/` 同时有 7 个校准/简易版本和 44 个 frog 副本；frog 在
+`examples/windup-frog/cad-data/` 又有一份。两份语料同号同哈希，审计/面板/README 各说一套；
+根 `assembly/` 还留着外观 smoke/简易装配。
+
+**决策内容：**
+
+- 根 `ToyMarker` 改为 **workspace 容器**：新增 `cad-workspace.json`；删除根 `cad-data/` 与
+  `assembly/`。workspace 根不是写目标；`resolveProjectRoot` 返回 `workspace`，写路径拒绝。
+- 校准件 `v001–v007` / `p001–p007` / `r001–r005` 和根 `assembly/` 的五个 JSON 迁到
+  `docs/archive/cad-calibration-2026-11-01/`（含 README/origin；1.5 MB）。
+- frog **只保留一份**：`examples/windup-frog/cad-data/`（44 版 / 59 run / 14 零件 / 11 visual-review）。
+  根里的 frog 副本删除前逐版本比对过 `model.stl` SHA-256：44/44 相同；run/parts 也覆盖。
+- 空目录 `examples/windup-frog/examples/` 删除。
+- 根 no longer has a project; a new CAD write at root is refused until `init_project` a subdirectory
+  or `bind_project` a member.
+
+**理由：** 复制语料不是合法状态；根是容器、项目在子目录。这样面板只列真正的项目，
+`delivery_audit` 只面对一份语料，frog 的证据/视觉记录/run 不再分叉。
+
+**依据：**
+
+- 44 个 frog 版本 `model.stl` 哈希全同；根 frog run r006–r064 与示例 r006–r064 一一对应；
+  p008–p021 名称/版本列表一致。
+- 归档内容校验：7 个版本、5 个 run、7 个零件、5 个 assembly JSON；归档 1.5 MB。
+- `resolveProjectRoot(ToyMarker)` → `marker:'workspace'`；`projectInfoFor` 报 `workspace:true`；
+  `projectStoresFor` 在 workspace 根拒绝写。`accept-project-cwd` 覆盖 workspace 拒绝、
+  member 创建、bind 拒绝。
+
+**影响：** 根目录（`cad-workspace.json`）、`docs/archive/cad-calibration-2026-11-01/`、
+`src/host/project.ts`（workspace 标记 + 写拒绝 + `bindSessionToProject` / `liveCwdOf`）、
+`src/host/tools.ts`（`bind_project` / `project_info.workspace` / `init_project` 不走 stores）、
+`docs/dev/PROJECT-SCOPE.md`、`DESIGN.md`、`examples/windup-frog/README.md`。
+C/D 的会话内切换/迁移/共享仍未实现；现在没有“搬语料”这条补救路径。

@@ -1,0 +1,38 @@
+{
+  "id": "r005",
+  "kind": "appearance",
+  "timestamp": "2026-10-31T00:40:19.232Z",
+  "title": "外观检查 · appearance smoke",
+  "status": "check",
+  "judgement": "difficult",
+  "summary": "可见锐边 208 mm · 密度 116.49 · 平端面 2",
+  "sourceVersionIds": [
+    "v002",
+    "v003"
+  ],
+  "hasGeometry": false,
+  "parts": [],
+  "subject": "manifest:assembly/appearance-smoke.json",
+  "supersedes": [
+    "r004"
+  ],
+  "pythonOverlay": {
+    "packages": [
+      "attrs==26.1.0",
+      "bpy==5.2.3",
+      "cattrs==26.2.1",
+      "certifi==2026.10.23",
+      "charset-normalizer==3.5.2",
+      "Cython==3.3.0",
+      "idna==3.20",
+      "numpy==2.5.4",
+      "pillow==13.0.0",
+      "requests==2.34.2",
+      "typing_extensions==4.16.0",
+      "urllib3==2.8.0",
+      "zstandard==0.25.0"
+    ],
+    "overrides": [],
+    "digest": "e59c4d2e703e946349c718538835a61ee8d49ad40280a705b79ef02898c70170"
+  }
+}

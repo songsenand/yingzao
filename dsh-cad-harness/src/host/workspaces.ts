@@ -23,7 +23,8 @@
 // session cwd (`projectStoresFor`); this module only answers "what can be viewed".
 
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, join, relative, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import type { WorkspaceEntry } from '../shared/types.ts';
 
 /** One browsable corpus (shape shared with the panel — see shared/types). */
@@ -77,6 +78,25 @@ async function readCorpus(cwd: string): Promise<Omit<WorkspaceEntry, 'cwd' | 're
   } catch { /* parts are optional */ }
 
   return { parts, versions, latest };
+}
+
+/**
+ * The workspace root that owns `start`, or `start` itself when there is none.
+ *
+ * A project inside a workspace must still be able to list its siblings: the
+ * panel asks "what projects are here?" from the session cwd, which may be a
+ * member (`examples/windup-frog`). Walking up to the nearest `cad-workspace.json`
+ * makes the project selector a workspace-level list instead of "only me".
+ * Read-only; no directory is created.
+ */
+export function workspaceRootOf(start: string): string {
+  let dir = resolve(start);
+  while (true) {
+    if (existsSync(join(dir, 'cad-workspace.json'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return resolve(start);
+    dir = parent;
+  }
 }
 
 /**

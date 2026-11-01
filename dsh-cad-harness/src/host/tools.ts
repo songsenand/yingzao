@@ -23,8 +23,8 @@ import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
 import type { Json } from './inspect.ts';
 import { resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
-import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, type ProjectStores } from './project.ts';
-import { discoverWorkspaces } from './workspaces.ts';
+import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, type ProjectStores } from './project.ts';
+import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
 import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
 import { resolveWorkspaceFile } from './unregistered.ts';
@@ -40,6 +40,7 @@ import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
+import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } from './visual-review.ts';
 import { asJudgement } from '../shared/judgement.ts';
 import { runSubject } from '../shared/labels.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
@@ -49,7 +50,7 @@ import { withOutputContract } from './tool-contract.ts';
 import { nextLookFor } from './next-look.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
@@ -109,6 +110,8 @@ let finalizeOnce: { versionId: string; label: string; file: string; refs: { view
 let motionRefsForFinalize: { refs: { view: string; ref: unknown }[] } | null = null;
 let fluidRefsForFinalize: { refs: { view: string; ref: unknown }[] } | null = null;
 let assemblyRefsForFinalize: { refs: { view: string; ref: unknown }[]; views: number; runId: string; thresholdMm: number } | null = null;
+/** Visual-review images waiting for finalizeContent, keyed by the tool's reviewId. */
+const visualReviewRefs = new Map<string, { refs: { view: string; ref: unknown }[]; versions: string[] }>();
 
 /**
  * Collect every model-facing tool name this plugin registers.
@@ -972,7 +975,20 @@ export function registerCadTools(
       // and a numeric iteration does not need four pictures of an unchanged
       // silhouette. An explicit [] means "register the version, spend no image
       // budget" — the panel still loads model.stl, so the human still sees it.
-      const selection = selectAttachedViews(result.renders, a.views);
+      // A version registered with NO image is a version the model never saw. The
+      // wind-up-frog key shipped a cut-through D hole because `views: []` was used
+      // 37/40 times to save image budget; the top view would have shown the slot.
+      // `views: []` is therefore no longer a way to skip the review channel for a
+      // NEW version: override it to the two views that catch plan and 3D defects.
+      const requestedNoViews = Array.isArray(a.views) && a.views.length === 0;
+      const requestedViews = requestedNoViews ? ['top', 'iso'] : a.views;
+      if (requestedNoViews) {
+        result.warnings.push(
+          'views: [] was overridden — a version registered with no image is a shape nobody looked at. ' +
+          'Attached top+iso; call review_visual with a note before delivery (delivery_audit blocks an unreviewed newest part).',
+        );
+      }
+      const selection = selectAttachedViews(result.renders, requestedViews);
       if (selection.warning) result.warnings.push(selection.warning);
       // G5: say the binding OUT LOUD in the turn that wrote it — a wrong bind
       // (roberval: corpus landed at the repo root) used to be silent forever.
@@ -1838,7 +1854,7 @@ export function registerCadTools(
     },
     async execute(args: unknown, exec: unknown) {
       const a = args as SetDatumsArgs;
-      const { store } = await allStores(exec);
+      const { store, partStore } = await allStores(exec);
       const entry = await readVersionEntry(store, a.versionId);
       // The index is not the artifact: a version directory can exist without a
       // manifest row (hand-copied or older corpora). Refuse only when there is
@@ -1910,6 +1926,14 @@ export function registerCadTools(
         ...(known.source ? { source: known.source } : {}),
         solid: true,
       });
+      // A versioned anchor edit is still a version of the SAME part. The first cut
+      // saved the version but never attached it, so `parts/manifest.json` kept only
+      // the pre-edit id (wind-up-frog p010 listed v013 while the assembly used v034).
+      // Attach when the part exists; a repair path on a bare corpus has no part row.
+      if (entry?.partId) {
+        const part = await findPartById(partStore, entry.partId);
+        if (part) await attachVersion(partStore, part.id, newId);
+      }
       warnings.push(
         `${a.versionId} still declares its previous anchors; interfaces pointing at it must be re-pointed to ${newId}.`,
       );
@@ -3022,6 +3046,151 @@ export function registerCadTools(
     },
   }));
 
+  // --- project_info / init_project: the C-lite lifecycle, made explicit -----
+  //
+  // B/C-lite made the WRITE target deterministic but left two holes: a session
+  // could not SEE its binding (the notice only rode on generate_part), and a
+  // new example could not CREATE a marker before its first CAD call — so it
+  // inherited the repo-root corpus and the only "fix" was copying 42 MB after
+  // the fact. These two tools close those holes without C/D: creation is a
+  // marker-only action, and visibility is a read-only question.
+  registerTool(defineTool({
+    name: 'project_info',
+    description:
+      'Read-only: which CAD corpus THIS session writes to (boundRoot/boundAt), which marker it has, the live working directory, and where a first CAD call would bind. ' +
+      'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the binding — a bound session does not switch, so this is the moment to tell the user rather than silently write to the old project. ' +
+      'Call it before assuming a path is a project; a directory with no marker is NOT a new project when an ancestor has one.',
+    parameters: {},
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          sessionId: { type: 'string', description: 'The session id, when the caller has one.' },
+          boundRoot: { type: 'string', description: 'The corpus this session is bound to; absent when unbound.' },
+          boundAt: { type: 'string' },
+          marker: { type: 'string', description: '"project" | "legacy"; absent when unbound.' },
+          liveCwd: { type: 'string' },
+          wouldBindTo: { type: 'string', required: true, description: 'Where a first CAD call would bind right now.' },
+          wouldBindMarker: { type: 'string', required: true, description: '"project" | "legacy" | "new".' },
+          mismatch: { type: 'boolean', required: true, description: 'True when liveCwd resolves to a different corpus than boundRoot.' },
+          ambiguous: { type: 'boolean', required: true, description: 'True when an UNBOUND session is inside a project but not itself one — the first write is refused until init_project/bind_project.' },
+          workspace: { type: 'boolean', required: true, description: 'True when the resolved root is a workspace (a container, never a write target).' },
+          note: { type: 'string', required: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: `project_info — ${value.note}` +
+          `\n  bound: ${value.boundRoot ?? '(unbound)'}${value.boundAt ? ` @ ${value.boundAt}` : ''}` +
+          `\n  live cwd: ${value.liveCwd ?? '(none)'} → would bind ${value.wouldBindTo} (${value.wouldBindMarker})` +
+          (value.mismatch ? '\n  MISMATCH: live cwd is a different corpus; a bound session will NOT switch.' : '') +
+          (value.workspace ? '\n  WORKSPACE: this root is a container, not a project; writes are REFUSED. Choose a member project or init_project a subdirectory.' : '') +
+          (value.ambiguous ? '\n  AMBIGUOUS: live cwd is inside a project but is not a project; writes are REFUSED. init_project or bind_project.' : ''),
+      }],
+    },
+    timeoutMs: 15_000,
+    async execute(_args: unknown, exec: unknown) {
+      const info = await projectInfoFor(exec);
+      const out: Record<string, unknown> = {
+        wouldBindTo: info.wouldBindTo,
+        wouldBindMarker: info.wouldBindMarker,
+        mismatch: info.mismatch,
+        ambiguous: info.ambiguous,
+        workspace: info.workspace,
+        note: info.note,
+      };
+      if (info.sessionId) out.sessionId = info.sessionId;
+      if (info.boundRoot) out.boundRoot = info.boundRoot;
+      if (info.boundAt) out.boundAt = info.boundAt;
+      if (info.marker) out.marker = info.marker;
+      if (info.liveCwd) out.liveCwd = info.liveCwd;
+      return out as never;
+    },
+  }));
+
+  registerTool(defineTool({
+    name: 'init_project',
+    description:
+      'Create a CAD project marker (`cad-data/project.json`) in a directory, WITHOUT writing any version/part/run. ' +
+      'Use this BEFORE the first CAD call when a new example/subproject must not inherit an ancestor corpus: write the marker, then open a new session with cwd = that directory. ' +
+      'It does NOT rebind the calling session; if the session is already bound, the marker is for the next session. ' +
+      'Refuses nothing and creates nothing else; a directory with an existing marker is reported as created:false. ' +
+      'A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions, which is the intended nested-project behaviour.',
+    parameters: {
+      dir: { type: 'string', required: true, description: 'Directory to make a project (absolute, or relative to the session workspace). Created if missing.' },
+      title: { type: 'string', description: 'Human title for project.json (default: the directory basename).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          root: { type: 'string', required: true },
+          key: { type: 'string', required: true },
+          created: { type: 'boolean', required: true, description: 'False when a marker already existed.' },
+          inheritedFrom: { type: 'string', description: 'Ancestor project this marker shadows; absent when the directory was already outside one.' },
+          note: { type: 'string', required: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{ type: 'text', text: `init_project — ${value.note}` }],
+    },
+    timeoutMs: 15_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { dir?: string; title?: string };
+      if (!a.dir?.trim()) throw new Error('dir is required (the directory to make a project)');
+      // Deliberately NOT allStores(): init_project is the action that resolves
+      // the ambiguous write target, so it must work before a project is bound.
+      const live = await liveCwdOf(exec);
+      const dir = isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir);
+      const made = await createProjectMarker(dir, a.title);
+      return {
+        root: made.root,
+        key: made.key,
+        created: made.created,
+        ...(made.inheritedFrom ? { inheritedFrom: made.inheritedFrom } : {}),
+        note: made.note,
+      };
+    },
+  }));
+
+  registerTool(defineTool({
+    name: 'bind_project',
+    description:
+      'Explicitly bind this session to an EXISTING project root before the first CAD write. ' +
+      'Use it when the session cwd is a subdirectory of the project (e.g. src/) and you really mean the ancestor corpus: ' +
+      'otherwise the first write is REFUSED when the cwd is inside a project but is not itself a project. ' +
+      'It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-bound session — ' +
+      'a wrong target is fixed by a new session, not by moving data after the fact.',
+    parameters: {
+      dir: { type: 'string', description: 'Existing project root (absolute or relative to the live cwd). Default: the live cwd.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          root: { type: 'string', required: true },
+          marker: { type: 'string', required: true, description: '"project" | "legacy".' },
+          boundAt: { type: 'string', required: true },
+          note: { type: 'string', required: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{ type: 'text', text: `bind_project — ${value.note}` }],
+    },
+    timeoutMs: 15_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { dir?: string };
+      const live = await liveCwdOf(exec);
+      const dir = a.dir?.trim()
+        ? (isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir))
+        : (live ?? process.cwd());
+      const bound = await bindSessionToProject(exec, dir);
+      return {
+        ...bound,
+        note: `session bound to ${bound.root} (${bound.marker}); later cd calls do NOT switch. ` +
+          'Writes now go there; no corpus move is needed.',
+      };
+    },
+  }));
+
   // --- render_part: on-demand view with camera params (model-initiated) ---
   registerTool(defineTool({
     name: 'render_part',
@@ -3078,6 +3247,183 @@ export function registerCadTools(
         text: `Render of ${value.versionId} — ${value.label}`,
       }];
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
+      return blocks as never;
+    },
+  }));
+
+  // --- review_visual: the delivery gate's "the model has LOOKED" record ------
+  //
+  // WHY this is its own tool: `generate_part` is an authoring step, and an author
+  // can register a version without ever seeing it (37/40 calls in the wind-up-frog
+  // session passed `views: []`). A delivery claim needs a separate, citable moment
+  // where the images were put in front of the model and the model wrote down what
+  // it saw. The record is a per-version sidecar, so `delivery_audit` can check the
+  // exact version — a review of the parent does not cover a shape change.
+  //
+  // It is NOT a proof of understanding: no machine can read the model's mind. It is
+  // evidence that (a) the required views were rendered and attached, and (b) the
+  // model articulated a note. A missing record blocks delivery; a thin note is a
+  // human-review smell, not a machine verdict.
+  registerTool(defineTool({
+    name: 'review_visual',
+    description:
+      'MANDATORY before delivering a printed part: render the version from top and iso (plus an optional section), attach the images to THIS reply, and write a per-version visual-review record. ' +
+      '`note` must say what you actually checked and what could be wrong — a bare "looks good" is not a review. ' +
+      'A version changed after its last review is UNREVIEWED; call this again. ' +
+      'delivery_audit blocks the newest printed part of every assembly whose version has no fresh top+iso review. ' +
+      'The images are attached here, so this call spends image context by design; that is the point — do not save tokens by skipping it.',
+    parameters: {
+      items: {
+        type: 'array', required: true,
+        description: 'Versions to review, 1–8 per call. Each needs its own note: a batch shares the views, not the judgment.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            versionId: { type: 'string', required: true, description: 'Saved version, e.g. "v040".' },
+            note: { type: 'string', required: true, description: 'What you checked and what could be wrong (at least 8 characters). E.g. "D hole is one closed D; no slot to the rim; hub wall ~0.5 mm at the wing root."' },
+          },
+        },
+      },
+      views: {
+        type: 'array',
+        description: 'Views to render/attach. Default and minimum ["top","iso"]; both are required for the delivery gate. You may add front/side.',
+        items: { type: 'string' },
+      },
+      section: {
+        type: 'object',
+        description: 'Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show.',
+        additionalProperties: false,
+        properties: {
+          axis: { type: 'string', required: true, description: 'x | y | z' },
+          fraction: { type: 'number', required: true, description: '0..1 of the bounding box along the axis.' },
+        },
+      },
+      imgSize: { type: 'integer', description: 'Image size in px (default 512).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          reviewId: { type: 'string', required: true, description: 'Opaque id for this review batch (the images are attached to this reply).' },
+          reviewed: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                versionId: { type: 'string', required: true },
+                views: { type: 'array', required: true, items: { type: 'string' } },
+                note: { type: 'string', required: true },
+                record: { type: 'string', required: true, description: 'versions/<id>/visual-review.json' },
+              },
+            },
+          },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        items?: { versionId?: string; note?: string }[];
+        views?: string[];
+        section?: { axis: 'x' | 'y' | 'z'; fraction: number };
+        imgSize?: number;
+      };
+      const items = (a.items ?? []).filter((it) => it?.versionId?.trim());
+      if (items.length === 0) throw new Error('items must name at least one saved version');
+      if (items.length > 8) throw new Error('review_visual takes at most 8 versions per call; split the batch');
+      const seen = new Set<string>();
+      for (const it of items) {
+        const id = it.versionId!.trim();
+        if (seen.has(id)) throw new Error(`version ${id} appears twice in one review batch`);
+        seen.add(id);
+        if (!it.note || it.note.trim().length < 8) {
+          throw new Error(`a visual review of ${id} needs a substantive note (at least 8 characters), not "${it.note ?? ''}"`);
+        }
+      }
+      const allowed = new Set(['top', 'front', 'side', 'iso']);
+      const requested = a.views?.length ? [...new Set(a.views)] : [...REQUIRED_REVIEW_VIEWS];
+      for (const v of requested) if (!allowed.has(v)) throw new Error(`unknown view "${v}" (allowed: top, front, side, iso)`);
+      for (const v of REQUIRED_REVIEW_VIEWS) {
+        if (!requested.includes(v)) throw new Error(`a delivery visual review must include "${v}"; got [${requested.join(', ')}]`);
+      }
+      if (a.section && !['x', 'y', 'z'].includes(a.section.axis)) throw new Error('section.axis must be x, y or z');
+      const project = await allStores(exec);
+      const { store } = project;
+      const reviewId = randomUUID();
+      const refs: { view: string; ref: unknown }[] = [];
+      const reviewed: { versionId: string; views: string[]; note: string; record: string }[] = [];
+      const renderDir = join(store.root, 'render');
+      await mkdir(renderDir, { recursive: true });
+      for (const it of items) {
+        const versionId = it.versionId!.trim();
+        if (!(await versionExists(store, versionId))) throw new Error(`unknown version "${versionId}"`);
+        const images: VisualReviewImage[] = [];
+        const views: string[] = [];
+        const toRender: { view?: string; section?: { axis: 'x' | 'y' | 'z'; fraction: number }; label: string }[] = [];
+        for (const v of requested) toRender.push({ view: v, label: v });
+        // The section is an EXTRA look, not a replacement: the gate still needs the
+        // full top/iso, and a section-only record is not a delivery review.
+        if (a.section) toRender.push({ section: a.section, label: `section-${a.section.axis}` });
+        for (const spec of toRender) {
+          const { png, label } = await renderVersionFrame(store, {
+            versionId,
+            ...(spec.view ? { view: spec.view as 'top' | 'front' | 'side' | 'iso' } : {}),
+            ...(spec.section ? { section: spec.section } : {}),
+            ...(a.imgSize ? { imgSize: a.imgSize } : {}),
+          }, `${Date.now()}-${reviewId.slice(0, 8)}-${spec.label}`);
+          const fileName = `${versionId}-review-${safeArtifactName(spec.label) ?? spec.label}.png`;
+          const filePath = join(renderDir, fileName);
+          await writeFile(filePath, png);
+          images.push({
+            view: spec.label,
+            file: filePath,
+            bytes: png.byteLength,
+            sha256: createHash('sha256').update(png).digest('hex'),
+          });
+          views.push(spec.label);
+        }
+        const imageData = await Promise.all(images.map((img) => readFile(img.file)));
+        const attachments = await ctx.attachments.saveImages(images.map((img, i) => ({
+          data: imageData[i]!,
+          mediaType: 'image/png',
+          name: `${versionId}-${img.view}`,
+        })));
+        for (let i = 0; i < attachments.length; i++) {
+          refs.push({ view: images[i]!.view, ref: attachments[i] });
+        }
+        await recordVisualReview({
+          store,
+          versionId,
+          views,
+          ...(a.section ? { sections: [a.section] } : {}),
+          note: it.note!.trim(),
+          images,
+          source: 'review_visual',
+        });
+        reviewed.push({
+          versionId,
+          views,
+          note: it.note!.trim(),
+          record: `versions/${versionId}/visual-review.json`,
+        });
+      }
+      visualReviewRefs.set(reviewId, { refs, versions: reviewed.map((r) => r.versionId) });
+      return { reviewId, reviewed };
+    },
+    finalizeContent(_exec, result) {
+      const value = (result as { value?: { reviewId: string; reviewed: { versionId: string; views: string[] }[] } }).value;
+      if (!value) return undefined;
+      const state = visualReviewRefs.get(value.reviewId);
+      visualReviewRefs.delete(value.reviewId);
+      if (!state) return undefined;
+      const blocks: unknown[] = [{
+        type: 'text',
+        text: `Visual review recorded for ${value.reviewed.map((r) => r.versionId).join(', ')} — ` +
+          `${state.refs.length} image(s): ${state.refs.map((r) => `${r.view}`).join(', ')}. ` +
+          `The record is fresh for these exact versions; a later change needs another review.`,
+      }];
+      for (const r of state.refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
   }));
@@ -4703,6 +5049,7 @@ export function registerCadTools(
           thinAreaPct: { type: 'number', required: true, description: 'That area as a % of the whole surface — a thin SHELL spans a lot of it, a blunt edge only a strip.' },
           surfaceAreaMm2: { type: 'number', required: true, description: 'Measured surface area; sqrt(area / sampled) is the sampling spacing, i.e. the smallest wall difference this screen can resolve (the band width, DESIGN §27.4).' },
           overhangAreaMm2: { type: 'number', required: true, description: 'Exact print-overhang area: summed over every triangle, not sampled. NOT structural overhang/self-weight stress.' },
+          printOrientationDeg: { type: 'array', items: { type: 'number' }, description: 'The print frame these numbers were measured in; absent = modelling pose.' },
           overhangZRange: { type: 'array', items: { type: 'number' } },
           findings: { type: 'array', required: true, items: { type: 'string' } },
           minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found — the witness a human can go and look at.' },
@@ -4865,6 +5212,7 @@ export function registerCadTools(
                     minWallAtMm: { type: 'array', items: { type: 'number' } },
                     thinAreaPct: { type: 'number' },
                     overhangAreaMm2: { type: 'number' },
+                    printOrientationDeg: { type: 'array', items: { type: 'number' }, description: 'The print frame these overhang numbers were measured in; absent = modelling pose.' },
                     profiles: {
                       type: 'array',
                       items: {
@@ -4910,6 +5258,7 @@ export function registerCadTools(
       const a = args as {
         versionIds?: string[]; checks?: string[]; profileIds?: string[];
         wallMinMm?: number; overhangDeg?: number; samples?: number;
+        printOrientationDeg?: [number, number, number];
       };
       const ids = [...new Set((a.versionIds ?? []).filter((id) => typeof id === 'string' && id.trim()))].slice(0, 12);
       if (ids.length === 0) throw new Error('versionIds must name at least one saved version');
@@ -4948,6 +5297,7 @@ export function registerCadTools(
               ...(a.wallMinMm !== undefined ? { wallMinMm: a.wallMinMm } : {}),
               ...(a.overhangDeg !== undefined ? { overhangDeg: a.overhangDeg } : {}),
               ...(a.samples !== undefined ? { samples: a.samples } : {}),
+              ...(a.printOrientationDeg ? { printOrientationDeg: a.printOrientationDeg } : {}),
             }, project);
             const report = screened.report;
             row.printability = {
@@ -4956,6 +5306,7 @@ export function registerCadTools(
               ...(report.minWallAtMm ? { minWallAtMm: report.minWallAtMm } : {}),
               ...(report.thinAreaPct !== undefined ? { thinAreaPct: report.thinAreaPct } : {}),
               ...(report.overhangAreaMm2 !== undefined ? { overhangAreaMm2: report.overhangAreaMm2 } : {}),
+              ...(report.printOrientationDeg ? { printOrientationDeg: report.printOrientationDeg } : {}),
               ...(report.profiles?.length
                 ? { profiles: report.profiles.map((p) => ({ profileId: p.profileId, verdict: p.verdict })) }
                 : {}),
@@ -5566,6 +5917,11 @@ export function registerCadTools(
           },
         },
       },
+      visualReview: {
+        type: 'string',
+        enum: ['required', 'off'],
+        description: 'Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info.',
+      },
     },
     output: {
       schema: {
@@ -5591,6 +5947,7 @@ export function registerCadTools(
           runs: { type: 'object', required: true, additionalProperties: true },
           contract: { type: 'object', required: true, additionalProperties: true },
           unregistered: { type: 'object', required: true, additionalProperties: true, description: 'Mesh files on disk that no version accounts for: {scanned, files[], exempt[], missingExempt[], truncated}.' },
+          visual: { type: 'object', required: true, additionalProperties: true, description: 'Per-version visual-review gate: {required, checked, missing[], stale[]}.' },
         },
       },
       render: (_args: unknown, value: any) => [{
@@ -5610,6 +5967,7 @@ export function registerCadTools(
         claims?: import('./delivery-audit.ts').DeliveryClaim[];
         scanPaths?: string[];
         exempt?: { path: string; reason: string }[];
+        visualReview?: 'required' | 'off';
       };
       const project = await allStores(exec);
       const report = await auditDelivery(project, {
@@ -5617,6 +5975,7 @@ export function registerCadTools(
         claims: a.claims,
         scanPaths: a.scanPaths,
         exempt: a.exempt,
+        visualReview: a.visualReview,
       });
       const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
       const warn = report.findings.filter((f) => f.severity === 'warn').length;
@@ -6813,7 +7172,10 @@ export function registerCadTools(
         // Only an absolute path names a discovery root; a relative or missing
         // value falls back to the corpus already being viewed. Discovery reads
         // shallowly and never creates anything, so this cannot escape the demo.
-        const root = rootParam && isAbsolute(rootParam) ? rootParam : cwd;
+        const requested = rootParam && isAbsolute(rootParam) ? rootParam : cwd;
+        // A member project lists its SIBLINGS: normalize to the nearest
+        // cad-workspace.json. Without a workspace marker this is the old behavior.
+        const root = workspaceRootOf(requested);
         const workspaces = await discoverWorkspaces(root);
         return new Response(JSON.stringify({ root, workspaces }), {
           status: 200,

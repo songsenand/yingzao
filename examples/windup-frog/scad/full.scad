@@ -1,0 +1,13 @@
+$fn=64;
+color("SteelBlue") import("m/base.stl");
+color("LightSlateGray") import("m/top.stl");
+color("Goldenrod") import("m/drum.stl");
+color("Gold") import("m/lid.stl");
+color("Silver") import("m/arbor.stl");
+color("Orange") import("m/cam.stl");
+color("Coral") import("m/slider.stl");
+color("MediumSeaGreen") import("m/gearB.stl");
+color("Teal") import("m/fly.stl");
+color("Khaki") import("m/key.stl");
+color("Plum") import("m/click.stl");
+color("DimGray") import("m/spring.stl");

@@ -7,12 +7,13 @@
 //
 //   node scripts/accept-delivery-audit.mjs [path-to-project-dir]
 
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync as rmVisualSidecar } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { auditDelivery } from '../src/host/delivery-audit.ts';
 import { projectStores } from '../src/host/project.ts';
+import { recordVisualReview } from '../src/host/visual-review.ts';
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
@@ -107,6 +108,12 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
     datums: [{ name: '角点', point: [5, 5, 5] }], partId: partA.id,
   });
   await attachVersion(project.partStore, partA.id, v1);
+  // The delivery gate is per-version: a clean corpus needs a fresh top+iso
+  // review, not just a green run.
+  await recordVisualReview({
+    store: project.store, versionId: v1, views: ['top', 'iso'],
+    note: 'reviewed the clean cube: six faces, no notch, no thin wall', source: 'review_visual',
+  });
 
   // One GREEN run over that newest version.
   const run = await beginRun(project.runStore, {
@@ -140,6 +147,18 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
     `${clean.verdict}: ${clean.findings.map((f) => f.code).join(', ') || '(no findings)'}`);
   check(!clean.parts.newestNeverValidated.includes('支架'),
     'the clean part is not flagged as unvalidated');
+
+  // The visual gate must be able to say NO: remove the record and the same clean
+  // corpus becomes undeliverable. This is the wind-up-frog failure in one fixture.
+  rmVisualSidecar(join(project.store.root, 'versions', v1, 'visual-review.json'));
+  const unreviewed = await auditDelivery(projectStores(workspace), { manifestPath: join(workspace, 'assembly', 'assembly.json') });
+  check(unreviewed.findings.some((f) => f.code === 'visual-review-missing' && f.severity === 'blocked'),
+    'a delivered version with NO visual review blocks delivery',
+    unreviewed.findings.map((f) => `${f.severity}/${f.code}`).join(', '));
+  await recordVisualReview({
+    store: project.store, versionId: v1, views: ['top', 'iso'],
+    note: 'reviewed the clean cube: six faces, no notch, no thin wall', source: 'review_visual',
+  });
 
   // ── 3. a finished part written straight to disk is BLOCKED ─────────────────
   //

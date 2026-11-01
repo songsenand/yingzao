@@ -1,0 +1,258 @@
+{
+ "schemaVersion": 1,
+ "name": "windup-frog-movement",
+ "unit": "mm",
+ "up": "z",
+ "root": {
+  "id": "machine",
+  "name": "发条青蛙机芯",
+  "kind": "assembly",
+  "children": [
+   {
+    "id": "base",
+    "name": "机架底板",
+    "kind": "part",
+    "version": "v032"
+   },
+   {
+    "id": "top",
+    "name": "机架顶板",
+    "kind": "part",
+    "version": "v034"
+   },
+   {
+    "id": "drum",
+    "name": "发条盒",
+    "kind": "part",
+    "version": "v043"
+   },
+   {
+    "id": "lid",
+    "name": "发条盒盖",
+    "kind": "part",
+    "version": "v044"
+   },
+   {
+    "id": "arbor",
+    "name": "上弦轴",
+    "kind": "part",
+    "version": "v048"
+   },
+   {
+    "id": "cam",
+    "name": "偏心凸轮",
+    "kind": "part",
+    "version": "v049"
+   },
+   {
+    "id": "slider",
+    "name": "凸轮滑块",
+    "kind": "part",
+    "version": "v033"
+   },
+   {
+    "id": "gearB",
+    "name": "复合齿轮B",
+    "kind": "part",
+    "version": "v045"
+   },
+   {
+    "id": "fly",
+    "name": "风轮",
+    "kind": "part",
+    "version": "v046"
+   },
+   {
+    "id": "key",
+    "name": "上弦钥匙",
+    "kind": "part",
+    "version": "v040"
+   },
+   {
+    "id": "click",
+    "name": "棘爪",
+    "kind": "part",
+    "version": "v047"
+   },
+   {
+    "id": "spring",
+    "name": "发条",
+    "kind": "part",
+    "version": "v026"
+   }
+  ],
+  "interfaces": [
+   {
+    "id": "I1",
+    "a": "base.轴A",
+    "b": "arbor.轴A",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.2,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I2",
+    "a": "top.轴A",
+    "b": "arbor.轴A",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.2,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I3",
+    "a": "drum.轴A",
+    "b": "arbor.轴A",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.25,
+     "max": 0.25
+    }
+   },
+   {
+    "id": "I4",
+    "a": "lid.轴A",
+    "b": "arbor.轴A",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.25,
+     "max": 0.25
+    }
+   },
+   {
+    "id": "I5",
+    "a": "cam.轴A",
+    "b": "arbor.轴A",
+    "type": "固定副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.15,
+     "max": 0.15
+    }
+   },
+   {
+    "id": "I6",
+    "a": "key.轴A",
+    "b": "arbor.轴A",
+    "type": "固定副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.15,
+     "max": 0.15
+    }
+   },
+   {
+    "id": "I7",
+    "a": "gearB.轴B",
+    "b": "base.轴B",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.2,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I8",
+    "a": "fly.轴C",
+    "b": "base.轴C",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.2,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I9",
+    "a": "click.轴P",
+    "b": "top.轴P",
+    "type": "转动副",
+    "severity": "hard",
+    "check": "coaxial",
+    "tolerance": {
+     "min": -0.2,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I10",
+    "a": "base.顶面",
+    "b": "top.底面",
+    "type": "柱距",
+    "severity": "hard",
+    "check": "distance",
+    "tolerance": {
+     "min": 16.4,
+     "max": 16.8
+    }
+   },
+   {
+    "id": "I11",
+    "a": "drum.口面",
+    "b": "lid.配合面",
+    "type": "盒口配合",
+    "severity": "hard",
+    "check": "distance",
+    "tolerance": {
+     "min": 0.0,
+     "max": 0.2
+    }
+   },
+   {
+    "id": "I12",
+    "a": "key.底面",
+    "b": "top.顶面",
+    "type": "轴向定位",
+    "severity": "hard",
+    "check": "distance",
+    "tolerance": {
+     "min": -0.1,
+     "max": 0.1
+    }
+   },
+   {
+    "id": "I13",
+    "a": "drum.底面",
+    "b": "base.顶面",
+    "type": "盒底支承",
+    "severity": "hard",
+    "check": "distance",
+    "tolerance": {
+     "min": 4.1,
+     "max": 4.3
+    }
+   },
+   {
+    "id": "I14",
+    "a": "slider.凸轮面",
+    "b": "cam.轴A",
+    "type": "凸轮—滑块",
+    "severity": "hard",
+    "check": "motion-clearance",
+    "params": {
+     "runId": "r060"
+    },
+    "tolerance": {
+     "min": 3.8,
+     "max": 4.2
+    }
+   }
+  ]
+ }
+}

@@ -1,6 +1,6 @@
 # 项目身份与隔离：从 cwd 到最近标记（B 方案）
 
-> 状态：**B 已落地，C-lite 已落地，准生产阶段封版**：Phase 1 resolver + 测试 `a935778`；Phase 2 面板按标记发现 `e47fadd`；Phase 3 `projectCwdOf` 切 resolver + 删 `00a6013` 桥 `628ef7b`；C-lite 会话绑定 `48c1f09`。根 `cad-data` / `assembly` 别名已清理。**C-lite 为当前交付边界；C 的创建/切换 UI 与 D 暂缓，缺口触发器见 §6.4。**
+> 状态：**B 已落地，C-lite 已落地，准生产阶段封版**：Phase 1 resolver + 测试 `a935778`；Phase 2 面板按标记发现 `e47fadd`；Phase 3 `projectCwdOf` 切 resolver + 删 `00a6013` 桥 `628ef7b`；C-lite 会话绑定 `48c1f09`。根 `cad-data` / `assembly` 别名已清理。**C-lite 为当前交付边界；`init_project` / `project_info` 已补上头less 的创建与可见性；C 的创建/切换 UI 与 D 暂缓，缺口触发器见 §6.4。**
 
 ## 0. 定位：B 是过渡阶段，不是最终形态
 
@@ -66,6 +66,10 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 - **项目身份 = 最近的、包含 `cad-data/project.json` 的祖先目录**。标记的父目录就是项目根。
 - **cwd 只是选择器**：从 Agent 的当前工作目录开始向上找；第一个标记胜出。
 - **没有标记**：当前工作目录是“新项目候选”；第一次**写**才创建 `<cwd>/cad-data/` 和标记。读取不创建。
+- **workspace 是容器**：目录里有 `cad-workspace.json`（且没有 `cad-data/project.json`）时，解析结果是
+  **workspace**，不是项目；写路径在 workspace 根上直接拒绝。项目必须在其子目录里显式建 marker。
+- **写目标 fail-closed**：未绑定会话的 cwd 在祖先项目内、自己无 marker 时，首次 CAD 写被拒绝；
+  必须 `init_project` 或 `bind_project`。不再静默绑祖先，也不事后搬语料。
 - **嵌套项目**：目录自己带标记就胜出；要建嵌套项目，必须显式创建标记，不能靠“碰巧在父项目里”。
 - **符号链接不再用于项目切换**；根 `cad-data` / `assembly` 别名已清理。
 
@@ -77,6 +81,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 2. 从 `canonical` 向上逐级：
    - `<dir>/cad-data/project.json` 存在 → 返回 `<dir>`（新式标记）。
    - `<dir>/cad-data/` 存在但没有 `project.json` → 返回 `<dir>`，标记为 **legacy**；第一次写时补写 `project.json`。
+   - `<dir>/cad-workspace.json` 存在（且没有上面的 cad-data）→ 返回 `<dir>`，标记为 **workspace**；写路径拒绝。
 3. 到文件系统根都没有 → 返回 `canonical`，标记为 **new**；第一次写时创建 `cad-data/project.json`。
 
 规则要点：
@@ -99,11 +104,18 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 | 子智能体 `cwd` = 项目子目录 | 同一个项目 |
 | 子智能体 `cwd` = 兄弟项目 | 兄弟项目 |
 | 父项目里显式建了嵌套标记 | 嵌套项目（最近优先） |
+| 父项目内的子目录，自己无标记 | **不是可写目标**：未绑定会话的首次 CAD 写被拒绝，要求 `init_project` 或 `bind_project` |
+| 根有 `cad-workspace.json` | **workspace**：容器，不是项目；写路径拒绝，项目在其子目录 |
 | 老语料只有 `cad-data/`、无标记 | 该项目根；第一次写补标记 |
 | 符号链接路径 | 先 realpath，再按真实路径找标记 |
 
 > C-lite（2026-10-28）在 B 之上加了会话绑定：第一次 CAD 调用后，上表的“切换”只对
 > 新会话/未绑定会话成立；已绑定会话 `cd` 不切换。
+>
+> **写目标 fail-closed（2026-11-01）**：未绑定会话的 cwd 在祖先项目内、自己却没有 marker 时，
+> 首次 CAD 写直接拒绝（不静默绑祖先、不事后搬家）。选择是显式的：`init_project` 把当前目录
+> 变成项目，`bind_project` 明确选择祖先项目，或 `cd` 到项目根。`project_info` 的 `ambiguous`
+> 会提前说出这个状态。
 
 ### 3.4 不做什么
 
@@ -117,7 +129,9 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 ### 4.1 API
 
-- 新增 `resolveProjectRoot(start): { root, marker: 'project' | 'legacy' | 'new' }`；同步实现（`existsSync` + 缓存），放在 `project.ts`。
+- 新增 `resolveProjectRoot(start): { root, marker: 'project' | 'legacy' | 'workspace' | 'new' }`；同步实现（`existsSync` + 缓存），放在 `project.ts`。
+- `projectStoresFor` 走 `resolveProjectCwd(exec, { requireExplicit: true })`：workspace / 未标记子目录直接拒绝；
+  `projectCwdOf` 保持宽松（读/测试）。`init_project` / `bind_project` 不走 `projectStoresFor`。
 - `projectCwdOf(exec)` 改为：
   1. 取 Agent 的 **workingDirectory**（`agent.ctx.get('workingDirectory').get(agent.session)`）；没有 service 时回退 `session.header.cwd`；
   2. 对起点调用 `resolveProjectRoot`，返回 `root`。
@@ -131,6 +145,9 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 - 现有 6 个 example 已有 `project.json`（葡萄糖、果糖、toy-balance、toy-balance2、microscope5、multirotor-propeller）；其余老语料按 legacy 处理，**不需要搬数据**。
 - legacy 语料（只有 `cad-data/`）第一次写补标记；读取照常。
 - 根 `cad-data` / `assembly` 符号链接、`fructose-molecule` 根别名：**已在 2026-10-28 收尾时清理**；查看用 cwd 指向分子目录或 `?project=`。
+- **2026-11-01 收口**：根 `cad-data`（v001–v007 + frog 副本）与根 `assembly/` 已清理；校准/简易件归档到
+  `docs/archive/cad-calibration-2026-11-01/`，frog 只保留 `examples/windup-frog/cad-data/`；根改为
+  `cad-workspace.json` 容器。
 - `project.json.cwd` 过期不自动改写；等 C/D 的稳定 `id` 再处理迁移。
 - `docs/llm/conventions.md` 的“子会话 CAD 项目跟随 working directory”在 B 下仍然成立，但描述改成“最近的 `cad-data/project.json`”。
 
@@ -172,6 +189,8 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 `$DSH_HOME/cad/sessions/<sessionId>.json`，之后该会话固定用它。
 - 子智能体独立绑定：`cwd` 在父项目内 → B 找到父项目（等同继承）；`cwd` 指向别的项目 → 绑定那个项目（等同显式覆盖）。
 - 显式切换：新会话；创建时选项目的 UI 是后续层。
+- **写目标显式**：`init_project` 创建 marker；`bind_project` 显式选祖先；两者都不复制/移动语料。
+  未绑定且 cwd 在祖先项目内的子目录，首次写被拒绝（避免“写错到根、再搬家”）。
 - 项目移动/改名：C 不解决，D 的稳定 id 才解决。
 - 代价：插件私有 sidecar；无 DSH core 改动；无 `tools.ts` schema 改动，便于两条线并行。
 - **G5 修正（2026-10-29）**：B 解析的"当前 cwd"此前读的是 `agent.ctx.get('workingDirectory')`——真实
@@ -202,6 +221,10 @@ B 在准生产档够用；C/D 是最终形态，不要因为 B 够用就停在 B
 ### 6.4 准生产封版与 C-lite 缺口触发器（2026-10-28）
 
 **封版**：准生产阶段到此为止。C-lite 是当前交付边界，不再实现 C 的创建/切换 UI 或 D 的稳定 id/注册表。
+2026-10-31 补：`init_project`（只写 marker，不 rebind）与 `project_info`（boundRoot/liveCwd/mismatch）
+已落地，覆盖“新建子项目”和“知道绑到哪”两个缺口；这仍属 C-lite，不需要 C/D。
+2026-11-01 补：写目标 fail-closed + `bind_project`；未标记子目录的首次写被拒绝，不再产生
+“先写根、后搬家”的路径。语料复制仍不是合法操作；一个项目最终只应有一份 canonical corpus。
 
 **触发条件（看到任一，提示用户补 C/D，不要绕）**：
 

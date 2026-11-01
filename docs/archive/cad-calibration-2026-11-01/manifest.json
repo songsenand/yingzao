@@ -1,0 +1,60 @@
+{
+  "versions": [
+    {
+      "id": "v001",
+      "timestamp": "2026-10-30T07:20:33.000Z",
+      "userIntent": "v001 底座立柱的圆角默认值验证：注入 15 行 style 前导，只圆外露棱，功能尺寸（V 座、脚轴、台面、刻度面）全部不动",
+      "parentVersion": null,
+      "partId": "p001",
+      "status": "draft"
+    },
+    {
+      "id": "v002",
+      "timestamp": "2026-10-30T11:38:49.384Z",
+      "userIntent": "校准正样本：40×6×6 直杆，两端平切",
+      "parentVersion": null,
+      "partId": "p002",
+      "status": "draft"
+    },
+    {
+      "id": "v003",
+      "timestamp": "2026-10-30T11:38:49.809Z",
+      "userIntent": "校准负样本：40 长 Ø6 胶囊杆，两端球面收口",
+      "parentVersion": null,
+      "partId": "p003",
+      "status": "draft"
+    },
+    {
+      "id": "v004",
+      "timestamp": "2026-10-30T11:39:06.996Z",
+      "userIntent": "剪影校准件：底板 150→180，其余同 v001，用于验证 max/base 指标",
+      "parentVersion": null,
+      "partId": "p004",
+      "status": "draft"
+    },
+    {
+      "id": "v005",
+      "timestamp": "2026-10-31T08:51:50.214Z",
+      "userIntent": "简易流程测试：底板 120×80×10",
+      "parentVersion": null,
+      "partId": "p005",
+      "status": "draft"
+    },
+    {
+      "id": "v006",
+      "timestamp": "2026-10-31T08:51:50.543Z",
+      "userIntent": "简易流程测试：立柱 20×20×60，z 10..70",
+      "parentVersion": null,
+      "partId": "p006",
+      "status": "draft"
+    },
+    {
+      "id": "v007",
+      "timestamp": "2026-10-31T08:52:00.110Z",
+      "userIntent": "简易流程测试：托盘 Ø40×5，z 70..75",
+      "parentVersion": null,
+      "partId": "p007",
+      "status": "draft"
+    }
+  ]
+}

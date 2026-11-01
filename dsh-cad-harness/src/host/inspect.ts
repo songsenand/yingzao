@@ -87,6 +87,8 @@ export interface PrintabilityReport {
   surfaceAreaMm2: number;
   overhangAreaMm2: number;
   overhangZRange: number[];
+  /** The print frame this screen was run in, when the caller declared one. */
+  printOrientationDeg?: [number, number, number];
   /** The per-sample values behind the attention digest (withSampleField). */
   field?: AttentionFieldSamples;
   findings: string[];
@@ -600,6 +602,7 @@ export async function checkPrintability(store: VersionStore, options: Printabili
   return {
     versionId: options.versionId,
     ...rest,
+    ...(options.printOrientationDeg ? { printOrientationDeg: options.printOrientationDeg } : {}),
     // One normalisation point: the engine's own word (ok / check / unprintable, produced by
     // the Python path too) becomes the canonical three (src/shared/judgement.ts). Doing it
     // HERE rather than in the worker keeps the engine vocabulary internal and stops the two

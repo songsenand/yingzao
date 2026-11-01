@@ -1,0 +1,418 @@
+{
+  "versionId": "v001",
+  "verdict": "difficult",
+  "minWallMm": 0.7,
+  "minWallAtMm": [
+    -6.35,
+    10.2,
+    62.17
+  ],
+  "wallMeasured": true,
+  "surfaceAreaMm2": 28877.8,
+  "thinSamples": 5,
+  "sampled": 651,
+  "thinAreaMm2": 47.2,
+  "thinAreaPct": 0.16,
+  "overhangAreaMm2": 8058.8,
+  "overhangZRange": [
+    10.5,
+    61
+  ],
+  "findings": [
+    "最薄壁 0.70mm @ [-6.3,10.2,62.2]（阈值 1.2mm；651 个采样面中 5 个低于阈值，薄区≈47.2mm²（占表面 0.2%）） — 薄**壳**（两自由面近似平行、成片）会断或翘；实心件收敛到棱线的**薄边**（翼型前后缘那种）不属此列，用薄区面积占比区分",
+    "8059mm² 朝下悬垂面比 45.0° 更平（z ∈ [11, 61]） — 需要支撑、改打印朝向、或改成 45° 以内/桥接"
+  ],
+  "watertight": true,
+  "attention": {
+    "id": "v001:check_printability:s651-w1.2-o45.0",
+    "layers": [
+      {
+        "id": "wall",
+        "quantity": "wall-thickness",
+        "units": "mm",
+        "direction": "smaller-is-worse",
+        "domain": {
+          "kind": "surface-samples",
+          "samples": 651,
+          "measured": 635
+        },
+        "normalization": {
+          "mode": "absolute",
+          "warnAt": 1.2,
+          "badAt": 0.48,
+          "source": "declared-arg"
+        },
+        "stats": {
+          "minWallMm": 0.7,
+          "thinSamples": 5,
+          "thinAreaMm2": 47.2
+        },
+        "peaks": [
+          {
+            "atMm": [
+              -6.35,
+              10.2,
+              62.17
+            ],
+            "value": 0.7,
+            "normalMm": [
+              -1,
+              0,
+              0
+            ],
+            "evidence": "5 个采样面低于 1.2mm，最薄 0.70mm，约 47.2mm²",
+            "probe": {
+              "tool": "measure_thickness",
+              "args": {
+                "versionId": "v001",
+                "from": [
+                  -6.85,
+                  10.2,
+                  62.167
+                ],
+                "directionVector": [
+                  1,
+                  0,
+                  0
+                ]
+              }
+            }
+          }
+        ],
+        "regions": [
+          {
+            "tier": "warn",
+            "areaMm2": 47.2,
+            "samples": 5,
+            "minWallMm": 0.7,
+            "atMm": [
+              -6.35,
+              10.2,
+              62.17
+            ],
+            "bboxMm": [
+              [
+                -6.35,
+                9.9,
+                62.17
+              ],
+              [
+                5.65,
+                10.2,
+                63.33
+              ]
+            ],
+            "look": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "y",
+                  "atMm": 10.05
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "overhang",
+        "quantity": "down-facing-area",
+        "units": "mm2",
+        "direction": "larger-is-more-support",
+        "domain": {
+          "kind": "triangles",
+          "triangles": 734
+        },
+        "normalization": {
+          "mode": "absolute",
+          "warnAt": 20,
+          "source": "declared-arg"
+        },
+        "stats": {
+          "areaMm2": 8058.8,
+          "zRangeMm": [
+            10.5,
+            61
+          ]
+        },
+        "peaks": [
+          {
+            "atMm": [
+              -10.33,
+              -6.33,
+              15
+            ],
+            "value": 7998.6,
+            "evidence": "7999mm² 朝下悬垂（510 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.073
+                }
+              }
+            }
+          },
+          {
+            "atMm": [
+              -57.17,
+              -29.1,
+              10.5
+            ],
+            "value": 18.4,
+            "evidence": "18mm² 朝下悬垂（70 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          },
+          {
+            "atMm": [
+              52.83,
+              -26.9,
+              10.5
+            ],
+            "value": 18.4,
+            "evidence": "18mm² 朝下悬垂（70 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          },
+          {
+            "atMm": [
+              -2.17,
+              33.1,
+              10.5
+            ],
+            "value": 18.4,
+            "evidence": "18mm² 朝下悬垂（70 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          },
+          {
+            "atMm": [
+              -0.23,
+              10.2,
+              61
+            ],
+            "value": 1.3,
+            "evidence": "1mm² 朝下悬垂（2 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.552
+                }
+              }
+            }
+          },
+          {
+            "atMm": [
+              -5.88,
+              9.9,
+              61
+            ],
+            "value": 0.6,
+            "evidence": "1mm² 朝下悬垂（2 个三角面）",
+            "probe": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.552
+                }
+              }
+            }
+          }
+        ],
+        "regions": [
+          {
+            "tier": "warn",
+            "areaMm2": 7998.6,
+            "triangles": 510,
+            "atMm": [
+              0,
+              0.44,
+              15
+            ],
+            "bboxMm": [
+              [
+                -75,
+                -40,
+                15
+              ],
+              [
+                75,
+                40,
+                15.5
+              ]
+            ],
+            "look": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.073
+                }
+              }
+            }
+          },
+          {
+            "tier": "warn",
+            "areaMm2": 18.4,
+            "triangles": 70,
+            "atMm": [
+              -55,
+              -28,
+              10.5
+            ],
+            "bboxMm": [
+              [
+                -58.25,
+                -30.81,
+                10.5
+              ],
+              [
+                -51.75,
+                -25.19,
+                10.5
+              ]
+            ],
+            "look": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          },
+          {
+            "tier": "warn",
+            "areaMm2": 18.4,
+            "triangles": 70,
+            "atMm": [
+              55,
+              -28,
+              10.5
+            ],
+            "bboxMm": [
+              [
+                51.75,
+                -30.81,
+                10.5
+              ],
+              [
+                58.25,
+                -25.19,
+                10.5
+              ]
+            ],
+            "look": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          },
+          {
+            "tier": "warn",
+            "areaMm2": 18.4,
+            "triangles": 70,
+            "atMm": [
+              0,
+              32,
+              10.5
+            ],
+            "bboxMm": [
+              [
+                -3.25,
+                29.19,
+                10.5
+              ],
+              [
+                3.25,
+                34.81,
+                10.5
+              ]
+            ],
+            "look": {
+              "tool": "render_part",
+              "args": {
+                "versionId": "v001",
+                "section": {
+                  "axis": "z",
+                  "fraction": 0.026
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "profileSource": "declared",
+  "profiles": [
+    {
+      "profileId": "fdm-pla-0.4",
+      "profileHash": "0df660e86f4cd629",
+      "verdict": "excluded",
+      "witnesses": [
+        {
+          "rule": "wallMinMm",
+          "measured": 0.7,
+          "required": 1.2,
+          "unit": "mm",
+          "locationMm": [
+            -6.35,
+            10.2,
+            62.17
+          ]
+        }
+      ],
+      "notApplicable": [
+        "draftMinDeg: FDM has no mold release; draft angle does not govern this process.",
+        "escapePassageMinMm: No trapped medium to evacuate: material is deposited, not filled or sintered in a bed.",
+        "toolRadiusMm: Not a cutting process."
+      ],
+      "unevaluable": [
+        "tolMm (declared-requirement): needs a requirement declared elsewhere to compare against (a capability is not a violation)",
+        "surfaceRaUm (not-decidable): not a geometric fact at all — never used to exclude"
+      ]
+    }
+  ]
+}

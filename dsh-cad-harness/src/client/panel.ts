@@ -601,9 +601,11 @@ export function CadPanel(): React.ReactElement {
   const [recordId, setRecordId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
-   * Which corpus the panel is looking at. '' = follow the session (the default);
-   * any other value is an absolute project dir pinned via the workspace
-   * dropdown. Writes are unaffected: the agent always writes the session corpus.
+   * Which PROJECT the panel is looking at. '' until the project list resolves;
+   * after that it is an absolute project dir selected in the project dropdown.
+   * There is no "follow the session" mode: the root corpus and a nested corpus
+   * are peers, and a selection survives a session switch when the project is
+   * still in the new session's workspace.
    */
   const [workspaceCwd, setWorkspaceCwd] = useState<string>('');
   /** Corpora discoverable under the session's workspace root. */
@@ -1046,9 +1048,9 @@ export function CadPanel(): React.ReactElement {
         setRecordId(null);
         setRunReport(null);
         setError(null);
-        // A pinned workspace belongs to the old session's tree; follow the new one.
-        setWorkspaceCwd('');
-        setWorkspaces([]);
+        // The project selection is NOT cleared here: a project is a project, not
+        // a session fact. The discovery effect below re-lists projects under the
+        // new session's workspace and keeps the selection if it is still present.
         // The 未登记 list and any selected file belong to the old session's
         // workspace; a path from there is not addressable in the new one.
         setUnregistered([]);
@@ -1082,6 +1084,28 @@ export function CadPanel(): React.ReactElement {
       .catch(() => { /* discovery is a convenience; "follow session" always works */ });
     return () => { dead = true; };
   }, [scopeTick, sessionDir]);
+
+  // Pick a project when none is selected, and repair a stale selection when the
+  // selected project is no longer under this session's workspace. The session's
+  // own corpus is a PREFERENCE, not a special mode: it is an ordinary entry in
+  // the dropdown, and only used here to choose the initial value.
+  useEffect(() => {
+    if (workspaces.length === 0) return;
+    if (workspaceCwd && workspaces.some((w) => w.cwd === workspaceCwd)) return;
+    const preferred = workspaces.find((w) => w.cwd === sessionDir) ?? workspaces[0]!;
+    setWorkspaceCwd(preferred.cwd);
+    setProjectOverride(preferred.cwd);
+    prevIdsRef.current = new Set();
+    subjectRef.current = '';
+    setParts([]);
+    setScene([]);
+    setSubjectId('');
+    setRecordId(null);
+    setError(null);
+    setUnregistered([]);
+    setFileSubject('');
+    setFileMeta(null);
+  }, [workspaces, sessionDir, workspaceCwd]);
 
   // (Re)build the Three.js scene whenever the selected *version* changes.
   // Run products render through their own view instead.
@@ -3550,12 +3574,12 @@ export function CadPanel(): React.ReactElement {
       onImported: (versionId: string) => {
         pendingFocusRef.current = versionId;
         setFileOpen(false);
-        // An import lands in the SESSION corpus. If the panel is pinned to a
-        // different corpus, following the session is the only way the new
-        // version can appear — and the human just asked for exactly that.
-        if (workspaceCwd) {
-          setWorkspaceCwd('');
-          setProjectOverride(null);
+        // An import lands in the SESSION corpus. Select that project (an ordinary
+        // project selection, not a "follow session" mode) so the new version is
+        // visible; the human just asked for exactly that.
+        if (workspaceCwd !== sessionDir) {
+          setWorkspaceCwd(sessionDir);
+          setProjectOverride(sessionDir || null);
           prevIdsRef.current = new Set();
           subjectRef.current = '';
           setParts([]);
@@ -3577,15 +3601,16 @@ export function CadPanel(): React.ReactElement {
     React.createElement(
       'div',
       { style: S.bar },
-      (workspaces.length > 1 || workspaceCwd) && React.createElement(
+      workspaces.length > 0 && React.createElement(
         'select',
         {
           key: 'workspace',
           value: workspaceCwd,
           onChange: (e: any) => {
             const next = e.target.value;
+            if (!next) return;
             setWorkspaceCwd(next);
-            setProjectOverride(next || null);
+            setProjectOverride(next);
             // Nothing from the previous corpus survives the switch.
             prevIdsRef.current = new Set();
             subjectRef.current = '';
@@ -3594,17 +3619,16 @@ export function CadPanel(): React.ReactElement {
             setSubjectId('');
             setRecordId(null);
             setError(null);
+            setUnregistered([]);
+            setFileSubject('');
+            setFileMeta(null);
           },
-          title: '工作目录：面板看哪份 CAD 语料（只读浏览）\nAgent 的工具始终写入会话所在目录，切换不会改变写入位置',
-          'aria-label': '工作目录',
-          style: { ...S.select, flex: 'none', maxWidth: 110 },
+          title: '项目：面板查看哪份 CAD 语料（只读浏览）。\n根目录和子目录都是同级的独立项目；切换只改变查看目标，Agent 的写入仍属于会话所在项目。',
+          'aria-label': '项目',
+          style: { ...S.select, flex: 'none', maxWidth: 150 },
         },
-        React.createElement('option', { value: '' },
-          `跟随会话 · ${sessionDir ? (sessionDir.replace(/\/+$/, '').split('/').pop() || '') : ''}`.trim()),
-        workspaces
-          .filter((w) => w.cwd !== sessionDir)
-          .map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
-            `${w.rel === '.' ? '根语料' : w.rel} · ${w.parts}零件/${w.versions}版`)),
+        workspaces.map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
+          `${w.rel === '.' ? w.name : w.rel} · ${w.parts}零件/${w.versions}版`)),
       ),
       React.createElement('button', {
         type: 'button',

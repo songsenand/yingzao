@@ -1,0 +1,31 @@
+{
+ "schemaVersion": 1,
+ "name": "simple-3part",
+ "root": {
+  "kind": "assembly",
+  "id": "machine",
+  "children": [
+   {
+    "id": "base",
+    "kind": "part",
+    "part": "简易-底座",
+    "version": "v005",
+    "group": "底座组"
+   },
+   {
+    "id": "column",
+    "kind": "part",
+    "part": "简易-立柱",
+    "version": "v006",
+    "group": "立柱组"
+   },
+   {
+    "id": "pan",
+    "kind": "part",
+    "part": "简易-托盘",
+    "version": "v007",
+    "group": "承重组"
+   }
+  ]
+ }
+}

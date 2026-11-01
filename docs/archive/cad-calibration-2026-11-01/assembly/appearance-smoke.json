@@ -1,0 +1,36 @@
+{
+ "schemaVersion": 1,
+ "name": "appearance smoke",
+ "root": {
+  "kind": "assembly",
+  "id": "root",
+  "children": [
+   {
+    "id": "flat",
+    "kind": "part",
+    "part": "校准件-平端杆",
+    "version": "v002",
+    "transform": {
+     "translate": [
+      -25,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "capsule",
+    "kind": "part",
+    "part": "校准件-圆端杆",
+    "version": "v003",
+    "transform": {
+     "translate": [
+      25,
+      0,
+      0
+     ]
+    }
+   }
+  ]
+ }
+}

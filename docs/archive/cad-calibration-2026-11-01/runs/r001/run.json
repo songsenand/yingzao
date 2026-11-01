@@ -1,0 +1,34 @@
+{
+  "id": "r001",
+  "kind": "printability",
+  "timestamp": "2026-10-30T07:20:43.008Z",
+  "title": "制造筛查 · v001",
+  "status": "check",
+  "judgement": "difficult",
+  "summary": "打印悬垂 8058.8mm² · 最薄 0.7mm · 可疑处 7",
+  "sourceVersionIds": [
+    "v001"
+  ],
+  "hasGeometry": false,
+  "parts": [],
+  "subject": "printability:v001",
+  "pythonOverlay": {
+    "packages": [
+      "attrs==26.1.0",
+      "bpy==5.2.3",
+      "cattrs==26.2.1",
+      "certifi==2026.10.23",
+      "charset-normalizer==3.5.2",
+      "Cython==3.3.0",
+      "idna==3.20",
+      "numpy==2.5.4",
+      "pillow==13.0.0",
+      "requests==2.34.2",
+      "typing_extensions==4.16.0",
+      "urllib3==2.8.0",
+      "zstandard==0.25.0"
+    ],
+    "overrides": [],
+    "digest": "e59c4d2e703e946349c718538835a61ee8d49ad40280a705b79ef02898c70170"
+  }
+}

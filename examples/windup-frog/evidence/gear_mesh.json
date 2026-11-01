@@ -1,0 +1,23 @@
+{
+  "module": 0.7,
+  "teeth": {
+    "A": 30,
+    "B": 10,
+    "C": 10,
+    "B_big": 24
+  },
+  "centre_distance_mm": {
+    "A-B": 14.2719,
+    "B-C": 12.1692
+  },
+  "calculated_centre_distance_mm": {
+    "A-B": 14.0,
+    "B-C": 11.899999999999999
+  },
+  "samples": 25,
+  "sweep_deg": 12.0,
+  "A-B_max_interference_mm3": 0.0,
+  "B-C_max_interference_mm3": 0.00011,
+  "A-B_all_zero": true,
+  "B-C_all_zero": false
+}

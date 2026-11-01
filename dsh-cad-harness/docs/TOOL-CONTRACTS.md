@@ -42,6 +42,21 @@ attach_appearance({ versionId: "…", file: "…" })
 returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replaced`, `note`
 
 
+## `bind_project`
+
+Explicitly bind this session to an EXISTING project root before the first CAD write. Use it when the session cwd is a subdirectory of the project (e.g. src/) and you really mean the ancestor corpus: otherwise the first write is REFUSED when the cwd is inside a project but is not itself a project. It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-bound session — a wrong target is fixed by a new session, not by moving data after the fact.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `dir` | string | — | Existing project root (absolute or relative to the live cwd). Default: the live cwd. |
+
+```js
+bind_project({ dir: "…" })
+```
+
+returns: `root`, `marker`, `boundAt`, `note`
+
+
 ## `check_assembly`
 
 Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
@@ -97,7 +112,7 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 check_printability({ versionId: "…" })
 ```
 
-returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
+returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `printOrientationDeg`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
 ## `create_part`
@@ -125,12 +140,13 @@ Audit the corpus before delivering: failing runs that are still the newest of th
 | `claims` | array | — | Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength \| motion \| assembly \| manufacturability \| appearance \| review. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent. |
 | `scanPaths` | array | — | Workspace-relative roots scanned for mesh files no version accounts for. Default ["."] (whole workspace, skipping the corpus, nested projects and common build dirs); pass [] to disable. A found file NEWER than the newest version is blocked — register it with import_part or declare it exempt. |
 | `exempt` | array | — | Declared exceptions for files intentionally left as files (e.g. bought/reference geometry): {path, reason}. Reported as info, never blocked, and the reason is echoed. Use it instead of narrowing scanPaths when the file is a legitimate non-version. |
+| `visualReview` | string (required \| off) | — | Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info. |
 
 ```js
 delivery_audit({ manifestPath: "…" })
 ```
 
-returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `unregistered`
+returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `unregistered`, `visual`
 
 
 ## `generate_part`
@@ -176,6 +192,22 @@ import_part({ file: "…" })
 ```
 
 returns: `versionId`, `part`, `format`, `solid`, `watertight`, `repaired`, `triangles`, `shells`, `genus`, `volumeMm3`, `sizeMm`, `unit`, `scaleApplied`, `sha256`, `sourcePath`, `datums`, `warnings`, `durationMs`, `views`
+
+
+## `init_project`
+
+Create a CAD project marker (`cad-data/project.json`) in a directory, WITHOUT writing any version/part/run. Use this BEFORE the first CAD call when a new example/subproject must not inherit an ancestor corpus: write the marker, then open a new session with cwd = that directory. It does NOT rebind the calling session; if the session is already bound, the marker is for the next session. Refuses nothing and creates nothing else; a directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions, which is the intended nested-project behaviour.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `dir` | string | **required** | Directory to make a project (absolute, or relative to the session workspace). Created if missing. |
+| `title` | string | — | Human title for project.json (default: the directory basename). |
+
+```js
+init_project({ dir: "…" })
+```
+
+returns: `root`, `key`, `created`, `inheritedFrom`, `note`
 
 
 ## `list_features`
@@ -346,6 +378,20 @@ preflight({ claims: [] })
 returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summary`, `timings`
 
 
+## `project_info`
+
+Read-only: which CAD corpus THIS session writes to (boundRoot/boundAt), which marker it has, the live working directory, and where a first CAD call would bind. Also reports `mismatch: true` when the live cwd resolves to a different corpus than the binding — a bound session does not switch, so this is the moment to tell the user rather than silently write to the old project. Call it before assuming a path is a project; a directory with no marker is NOT a new project when an ancestor has one.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+
+```js
+project_info({  })
+```
+
+returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
+
+
 ## `python_runtime`
 
 Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; "provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; "install" adds packages to the user overlay — the runtime is the user's machine, so installing is a normal act, not a favour: the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; agree it with the human first and expect runs to carry it in pythonOverlay.overrides. Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.
@@ -414,6 +460,24 @@ request_review({ items: [] })
 ```
 
 returns: `queued`, `merged`, `dropped`, `unread`, `rateLimited`
+
+
+## `review_visual`
+
+MANDATORY before delivering a printed part: render the version from top and iso (plus an optional section), attach the images to THIS reply, and write a per-version visual-review record. `note` must say what you actually checked and what could be wrong — a bare "looks good" is not a review. A version changed after its last review is UNREVIEWED; call this again. delivery_audit blocks the newest printed part of every assembly whose version has no fresh top+iso review. The images are attached here, so this call spends image context by design; that is the point — do not save tokens by skipping it.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `items` | array | **required** | Versions to review, 1–8 per call. Each needs its own note: a batch shares the views, not the judgment. |
+| `views` | array | — | Views to render/attach. Default and minimum ["top","iso"]; both are required for the delivery gate. You may add front/side. |
+| `section` | object | — | Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show. |
+| `imgSize` | integer | — | Image size in px (default 512). |
+
+```js
+review_visual({ items: [] })
+```
+
+returns: `reviewId`, `reviewed`
 
 
 ## `run_python`

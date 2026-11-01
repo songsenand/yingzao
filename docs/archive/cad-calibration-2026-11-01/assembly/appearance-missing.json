@@ -1,0 +1,22 @@
+{
+ "schemaVersion": 1,
+ "name": "missing",
+ "root": {
+  "kind": "assembly",
+  "id": "root",
+  "children": [
+   {
+    "id": "a",
+    "kind": "part",
+    "part": "x",
+    "version": "v002"
+   },
+   {
+    "id": "b",
+    "kind": "part",
+    "part": "y",
+    "version": "v999"
+   }
+  ]
+ }
+}
