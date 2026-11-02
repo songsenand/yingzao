@@ -18,7 +18,7 @@
 静态装配契约 **20/20 通过**、13 件整机 **0 干涉 0 过紧**、0 未声明邻接；每个打印件都跑过 `fdm-pla-0.4`。
 
 **但有两条必须说清：**
-1. r001/r002 是**旧版引擎**的负结果（关节漂移 105.6 mm / 39.2 mm，见 §6.3）。2026-11-02 修正后，同一批 STL 在 physics（穿透 0、约束异常 0）和 motion（漂移 0、24/24 采样）都已能稳定复跑；但那是**引擎级回归**，还没有生成新的 run id。运动证据暂仍由解析扫掠脚本给出，装配契约因此**没有 motion-clearance 接口**——`delivery_audit` 会报 `contract-without-motion`。
+1. r001/r002 是**旧版引擎**的负结果（关节漂移 105.6 mm / 39.2 mm，见 §6.3），已被 **r039 / r038**（均 `pass`）取代。修正后同一批 STL 在 physics（穿透 0、约束异常 0）和 motion（漂移 0、24/24 采样）都能稳定复跑。运动证据仍以 §6.1 的解析脚本为主，装配契约因此**没有 motion-clearance 接口**——`delivery_audit` 会报 `contract-without-motion`；r039 可作为后续接入该接口的候选证据。
 2. 框架叉口按严格 `fdm-pla-0.4` 判 **excluded**（890 / 1026 mm² 悬垂），需要局部支撑；托盘沉孔已从 0.86 mm 薄壁改成 1.75 mm 平底沉孔。这不是"能直接无支撑打印"的零件。
 
 ---
@@ -181,7 +181,14 @@
 | motion 最大关节漂移 | 105.566 mm | **0 mm** |
 | motion 采样 | 24/24 | **24/24** |
 
-所以"闭环不可用"的结论**作废**：physics 和 motion 都能在同一批 STL 上稳定复跑。本示例的运动证据仍以 §6.1 的解析脚本为准，直到用真实 `simulate_motion` 工具（`anchorWorld`）重跑 r001 生成一个可引用的 run id；当前 `accept-motion-axes` 是引擎级回归，不是 run。
+真实工具重跑已生成可引用的 run：
+
+| run | 工具 | 结果 |
+|---|---|---|
+| **r038** | `simulate_physics`（5 体 6 铰，`anchorWorld`/`axisWorld`） | **pass** · 穿透 0mm · 约束异常 0 · `fellOver` 全 false |
+| **r039** | `simulate_motion`（同上，top_beam kinematic，0.02 圈） | **pass** · 漂移 0mm · 24/24 采样 · 干涉 0 |
+
+r001 / r002 的 `supersededBy` 已分别指向 r039 / r038；旧轨迹保留作历史对照，不再作为当前证据。`accept-physics-contact` / `accept-motion-axes` 是可复跑的引擎级回归，r038 / r039 是工具级证据。
 
 ---
 
@@ -240,7 +247,7 @@
 
 | # | 缺口 | 现象 | 本示例的替代 | 应有的修法 |
 |---|---|---|---|---|
-| G1 | **闭环机构运动/物理不可用** | `simulate_motion` 105.6 mm 关节漂移；`simulate_physics` 39.2 mm、5 个约束异常（r001/r002） | 解析扫掠脚本 + 交付 STL | **2026-11-02 已修**：凹件精确 trimesh、关节对接触默认关、t=0 门禁、逐体轴/`axisWorld`。`accept-physics-contact` 复跑 0 穿透/0 约束异常；`accept-motion-axes` 复跑 0 漂移/24 采样。**仍待**：用真实工具重跑 r001/r002 生成新 run |
+| G1 | **闭环机构运动/物理不可用** | `simulate_motion` 105.6 mm 关节漂移；`simulate_physics` 39.2 mm、5 个约束异常（r001/r002） | 解析扫掠脚本 + 交付 STL | **2026-11-02 已修**：凹件精确 trimesh、关节对接触默认关、t=0 门禁、逐体轴/`axisWorld`。`accept-physics-contact` 复跑 0 穿透/0 约束异常；`accept-motion-axes` 复跑 0 漂移/24 采样。**已生成**：r038（physics）/ r039（motion），均 pass |
 | G2 | **`datum_axis` 参数顺序陷阱** | SCAD helper 是 `datum_axis(name, point, dir)`；写成 `(dir, point)` 时 datums.json 里 point/dir 互换，`coaxial` 静默错 | 用 `set_datums` 重写四个零件的轴（v049/v050/v051/v052 → v049/v050/v051/v052 的替换版本） | 在 helper 里校验/文档化，或在 `set_datums` 拒绝零方向 |
 | G3 | **水平/封闭孔布尔残片** | 下横梁两只 Ø3.4 指针孔留下两个 3.4×17×3.4 的独立"孔芯"实体（3 bodies） | 改贯通方孔（3.4×3.4） | 修布尔/网格后处理，或在工具层拒绝多实体 |
 | G4 | **审计把研究件/外购件当打印件** | 6 个合并研究体 + 6 个 M3 示意件被要求逐个 `check_printability`（r025–r036） | 按字面补跑并在本文声明"不是打印件" | 给 part 加 role（printed / stock / research），审计按 role 判 |
@@ -255,7 +262,7 @@
 2. **打印实测未做**：没有切片/试打；上/下横梁的 890/1026 mm² 悬垂要靠叉口内支撑；底座的 329 mm² 也需要支撑/brim。首件需验证支撑印痕是否影响叉口配合。
 3. **绝对质量未称**：PLA 密度 1.24 是假设；砝码的 1:2:4:8:16 **比值**由几何保证，绝对质量随填充率/密度约 ±1.5%。
 4. **层间强度/疲劳/蠕变**：应力模型各向同性，层间弱面、长期零漂不在内；0.18 MPa 只是名义弯曲。
-5. **动态/接触仿真的边界**：physics 侧同一组 STL 已能稳定复跑（0 穿透 / 0 约束异常，`accept-physics-contact`），motion 侧也复跑出 0 漂移 / 24 采样（`accept-motion-axes`）；但 r001/r002 旧 run 仍是负结果，且没有新的工具 run id。指针周期、落盘冲击、限位撞击、摩擦自锁仍**没有数字**。
+5. **动态/接触仿真的边界**：physics 侧同一组 STL 已能稳定复跑（0 穿透 / 0 约束异常，`accept-physics-contact`），motion 侧也复跑出 0 漂移 / 24 采样（`accept-motion-axes`）；r001/r002 已被 r038/r039 取代（`supersededBy`），新 run 均为 pass。指针周期、落盘冲击、限位撞击、摩擦自锁仍**没有数字**。
 6. **刻度标定**：2.653 mm/g 来自下摆件（v064）的实测 CoM 和 1.24 密度；滑块在 ±45 mm 的名义位置；刻度板装配后未做实物零点标定。刻度槽只允许 ±6 mm 竖向调整。
 7. **自攻强度未测**：中心铰 M3×30 自攻入底座 8 mm PLA、4 只支架 M3×12、4 只盘头 M3×12、2 只刻度 M3×10；反复拆装的保持力未知。
 8. **外购件未进契约**：螺钉/螺母/垫片是示意模型，配合、夹紧力矩、垫片压缩都没在 `check_assembly` 里。
