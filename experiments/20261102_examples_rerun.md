@@ -50,6 +50,7 @@
 | run | 结果 |
 |---|---|
 | r066 motion | **pass** · 49 次检查 / 0 干涉 · 行程 4.000mm · 漂移 0 · 周期 0.979s · 98 pair-checks |
+| r069 assembly | **pass** · 12 件 / 66 对 / 0 干涉 / 0 过紧 |
 | r068 assembly | **pass** · 14/14 · 0 hard/skipped · 9 undeclared（功能接触） |
 | I14 | 已从 r060 改指 r066；r068 detail 写明 “motion evidenced by r066” |
 
@@ -95,7 +96,7 @@
 **run（本地 `cad-data`，gitignored）：**
 
 - roberval：r038、r042、r043
-- windup-frog：r066、r068（r065 是失败的重建尝试）
+- windup-frog：r066、r068、r069（r065 是失败的重建尝试）
 - toy-balance2：r118、r120
 
 **运行命令（示意，均需 `bind_project` 到对应目录）：**
