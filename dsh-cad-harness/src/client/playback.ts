@@ -211,7 +211,7 @@ const PlaybackFrame: React.FC<{
     data ?? null,
     React.createElement(
       'div',
-      { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6 } },
+      { style: { display: 'flex', gap: 6, rowGap: 4, alignItems: 'center', flexWrap: 'wrap', paddingTop: 4 } },
       ...controls,
     ),
   );
@@ -339,13 +339,11 @@ const factChip = (f: RunFact, key: number) => React.createElement(
 function RunDataStrip(props: {
   facts: RunFacts;
   onSeek: (timeSec: number) => void;
-  /** Section/measure controls live here so they cost no permanent row. */
-  tools?: React.ReactNode;
   compact?: boolean;
 }): React.ReactElement {
   return React.createElement(
     'div',
-    { 'data-playback-data': '1', style: { display: 'flex', flexDirection: 'column', gap: 3, paddingTop: 6, borderTop: `1px solid ${T.border}` } },
+    { 'data-playback-data': '1', style: { display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 4, borderTop: `1px solid ${T.border}` } },
     React.createElement(
       'div',
       { style: { display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' } },
@@ -359,13 +357,14 @@ function RunDataStrip(props: {
     ),
     React.createElement('div', {
       'data-run-summary': '1',
-      title: props.compact ? props.facts.summary : undefined,
+      // Always one line: a wrapped sentence is a second row of chrome paid for
+      // by the viewport. The full text stays in the tooltip/report tab.
+      title: props.facts.summary,
       style: {
-        fontSize: 11, color: T.soft, lineHeight: 1.35,
-        ...(props.compact ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+        fontSize: 11, color: T.soft, lineHeight: 1.3,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       },
     }, props.facts.summary),
-    props.compact ? null : (props.tools ?? null),
     !props.compact && props.facts.events.length > 0
       ? React.createElement(
         'details',
@@ -453,13 +452,13 @@ function RunTimeline(props: {
   };
   return React.createElement(
     'div',
-    { 'data-run-timeline': '1', onClick: click, style: { position: 'relative', height: 26, width: '100%', cursor: 'crosshair', marginTop: 2 } },
-    React.createElement('div', { style: { position: 'absolute', left: 0, right: 0, top: 13, height: 2, background: T.line } }),
+    { 'data-run-timeline': '1', onClick: click, style: { position: 'relative', height: 22, width: '100%', cursor: 'crosshair', marginTop: 0 } },
+    React.createElement('div', { style: { position: 'absolute', left: 0, right: 0, top: 10, height: 2, background: T.line } }),
     ...props.keyframes.map((k, i) => React.createElement('button', {
       key: `kf-${i}`, type: 'button', title: `关键帧 ${k.label} @ ${k.timeSec.toFixed(3)}s`,
       onClick: (e: React.MouseEvent) => { e.stopPropagation(); props.onKeyframe(i); },
       style: {
-        position: 'absolute', left: pct(k.timeSec), top: 8, width: 8, height: 8, padding: 0,
+        position: 'absolute', left: pct(k.timeSec), top: 6, width: 8, height: 8, padding: 0,
         border: `1px solid ${T.white}`, background: T.accent, transform: 'translateX(-50%) rotate(45deg)',
         cursor: 'pointer',
       },
@@ -468,14 +467,14 @@ function RunTimeline(props: {
       key: `ev-${i}`, type: 'button', title: ev.label,
       onClick: (e: React.MouseEvent) => { e.stopPropagation(); props.onSeek(ev.timeSec); },
       style: {
-        position: 'absolute', left: pct(ev.timeSec), top: 5, width: 3, height: 16, padding: 0,
+        position: 'absolute', left: pct(ev.timeSec), top: 3, width: 3, height: 16, padding: 0,
         border: 0, borderRadius: 1, background: toneColor(ev.tone), transform: 'translateX(-50%)',
         cursor: 'pointer',
       },
     })),
     React.createElement('div', {
       style: {
-        position: 'absolute', left: pct(props.timeSec), top: 2, width: 2, height: 22,
+        position: 'absolute', left: pct(props.timeSec), top: 1, width: 2, height: 20,
         background: T.ink, transform: 'translateX(-50%)', pointerEvents: 'none',
       },
     }),
@@ -837,10 +836,20 @@ export function MotionPlaybackView(props: {
     return next;
   });
 
+  // The tool row used to live under the data strip and cost a full line of
+  // viewport height. It is now a translucent strip INSIDE the viewport (same
+  // language as 复原/triad), so the 3D stage keeps the pixels.
   const playbackTools = !err && !compact && sceneRef.current
     ? React.createElement('div', {
         'data-playback-tools': '1',
-        style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: T.soft },
+        style: {
+          position: 'absolute', top: 6, left: 6, zIndex: 7,
+          display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap',
+          maxWidth: 'calc(100% - 70px)', padding: '3px 5px',
+          borderRadius: 7, background: 'rgba(255,255,255,0.88)',
+          border: `1px solid ${T.border}`, boxShadow: '0 1px 4px rgba(20,30,40,0.14)',
+          fontSize: 10, color: T.soft,
+        },
       },
       React.createElement('button', {
         type: 'button', title: '实时剖切（无封盖）：看内部关节/间隙', onClick: () => setSection((cur) => ({ ...cur, on: !cur.on })),
@@ -896,33 +905,36 @@ export function MotionPlaybackView(props: {
 
   return React.createElement(PlaybackFrame, {
     mountRef, compact,
-    overlay: annotateLayer({
-      on: annotOn,
-      boxes,
-      drag: dragBox,
-      onStart: (x, y) => {
-        const box = { x0: x, y0: y, x1: x, y1: y, color: ANN_COLORS[boxes.length % ANN_COLORS.length]! };
-        dragBoxRef.current = box;
-        setDragBox(box);
-      },
-      onMove: (x, y) => {
-        const cur = dragBoxRef.current;
-        if (!cur) return;
-        const next = { ...cur, x1: x, y1: y };
-        dragBoxRef.current = next;
-        setDragBox(next);
-      },
-      onEnd: () => {
-        const cur = dragBoxRef.current;
-        dragBoxRef.current = null;
-        setDragBox(null);
-        // A click (not a drag) must not leave a 0×0 "box" behind.
-        if (cur && Math.abs(cur.x1 - cur.x0) > 6 && Math.abs(cur.y1 - cur.y0) > 6) {
-          setBoxes((prev) => [...prev, { ...cur, x1: (cur as AnnBox).x1, y1: (cur as AnnBox).y1 }]);
-        }
-      },
-    }),
-    data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, tools: playbackTools, compact }) : null,
+    overlay: React.createElement(React.Fragment, null,
+      annotateLayer({
+        on: annotOn,
+        boxes,
+        drag: dragBox,
+        onStart: (x, y) => {
+          const box = { x0: x, y0: y, x1: x, y1: y, color: ANN_COLORS[boxes.length % ANN_COLORS.length]! };
+          dragBoxRef.current = box;
+          setDragBox(box);
+        },
+        onMove: (x, y) => {
+          const cur = dragBoxRef.current;
+          if (!cur) return;
+          const next = { ...cur, x1: x, y1: y };
+          dragBoxRef.current = next;
+          setDragBox(next);
+        },
+        onEnd: () => {
+          const cur = dragBoxRef.current;
+          dragBoxRef.current = null;
+          setDragBox(null);
+          // A click (not a drag) must not leave a 0×0 "box" behind.
+          if (cur && Math.abs(cur.x1 - cur.x0) > 6 && Math.abs(cur.y1 - cur.y0) > 6) {
+            setBoxes((prev) => [...prev, { ...cur, x1: (cur as AnnBox).x1, y1: (cur as AnnBox).y1 }]);
+          }
+        },
+      }),
+      playbackTools,
+    ),
+    data: facts ? React.createElement(RunDataStrip, { facts, onSeek: seekTime, compact }) : null,
     fallback: err
       ? React.createElement('div', {
           style: {
@@ -964,23 +976,40 @@ export function MotionPlaybackView(props: {
         onChange: (e: any) => { setPlaying(false); setKfIdx(-1); setFrameIdx(Number(e.target.value)); },
         style: { flex: '1 1 60px', minWidth: 60 },
       }),
-      // Force the speed / pause controls onto their own row: at 380px the
-      // transport row otherwise overflows and clips the speed selector.
-      React.createElement('span', { key: 'time', title: timeLabel, style: { fontSize: 10, color: T.soft, flex: '0 0 auto', maxWidth: 104, overflow: 'hidden', textAlign: 'right', whiteSpace: 'nowrap' } }, shortTime),
-      React.createElement('div', { key: 'row2', style: { flexBasis: '100%', height: 0 } }),
+      // No forced row break: at 842px the transport fits on one line, and the
+      // old `flexBasis:100%` spacer cost a permanent 28px at that width. At
+      // narrow widths `flexWrap` still moves the select/speed/checkbox down.
+      // Fixed width + tabular digits: the label changes every frame/keyframe,
+      // and an auto-width flex item made the whole transport row twitch (some
+      // browsers repaint the native <select> at a new width). Reserve the box;
+      // let the text be clipped, never the layout.
+      React.createElement('span', {
+        key: 'time', title: timeLabel,
+        style: {
+          fontSize: 10, color: T.soft, flex: '0 0 100px', width: 100,
+          fontVariantNumeric: 'tabular-nums', overflow: 'hidden',
+          textAlign: 'right', whiteSpace: 'nowrap',
+        },
+      }, shortTime),
       React.createElement('select', {
         key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: '跳到关键帧',
         onChange: (e: any) => {
           const i = Number(e.target.value);
           if (i >= 0) goKeyframe(i); else setKfIdx(-1);
         },
-        style: { fontSize: 11, padding: '2px 4px', maxWidth: 145 },
+        // Same reason as the time label: native selects size themselves from
+        // the selected option's text, so changing keyframe made the control
+        // (and the row) jump. A fixed 150px box keeps the text change local.
+        style: {
+          fontSize: 11, padding: '2px 4px', flex: '0 0 150px', width: 150,
+          fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
+        },
       },
       React.createElement('option', { value: -1 }, keyframes.length ? '关键帧…' : '无关键帧'),
       ...keyframes.map((k, i) => React.createElement('option', { value: i }, `${k.label} · ${k.timeSec.toFixed(2)}s`))),
       React.createElement('select', {
         key: 'speed', value: speed, onChange: (e: any) => setSpeed(Number(e.target.value)),
-        style: { fontSize: 11, padding: '2px 4px' },
+        style: { fontSize: 11, padding: '2px 4px', flex: '0 0 48px', width: 48 },
       }, [0.25, 0.5, 1, 2, 4].map((s) => React.createElement('option', { key: s, value: s }, `${s}×`))),
       React.createElement('label', {
         key: 'pause-kf', 'data-pause-keyframes': '1', title: '播放时在下一个关键帧自动暂停',

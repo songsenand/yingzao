@@ -8,7 +8,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import * as THREE from 'three';
 import { CadPanel, setClientServices } from '../../src/client/panel';
-import { setProjectServices } from '../../src/client/project';
+import { setProjectServices, setProjectOverride } from '../../src/client/project';
 import { ViewportOverlay } from '../../src/client/overlay';
 
 const q = new URLSearchParams(location.search);
@@ -33,6 +33,10 @@ document.documentElement.style.setProperty('--stage-h', `${h}px`);
 // "未识别" guard, which is correct but hides the normal state.
 const projectParam = q.get('project');
 if (projectParam) {
+  // The panel deliberately has no cwd→project fallback; `?project=` is the
+  // sandbox's explicit view selection (and the session stub below covers the
+  // project-scoped import target).
+  setProjectOverride(projectParam);
   const sessions = {
     list: { getSnapshot: () => ({ byId: { 'session-1': { id: 'session-1', cwd: projectParam } } }) },
     binding: (id: string) => (id === 'session-1' ? { sessionId: id } : undefined),
@@ -896,6 +900,7 @@ if (q.get('assert') === 'playback') {
       `${summary && summary.textContent && summary.textContent.trim().length > 10 ? 'PASS' : 'FAIL'}  it carries a one-sentence reading`,
       `${data && /采样|干涉|穿透|到达率/.test(text) ? 'PASS' : 'FAIL'}  the strip carries the run's key numbers`,
       `${kf && kf.options.length >= 2 ? 'PASS' : 'FAIL'}  there is a keyframe selector (${kf?.options.length ?? 0} option(s))`,
+      `${kf && Math.abs(kf.getBoundingClientRect().width - 150) < 1 ? 'PASS' : 'FAIL'}  the keyframe selector reserves 150px (no text-driven resize) (${Math.round(kf?.getBoundingClientRect().width ?? 0)}px)`,
       `${timeline ? 'PASS' : 'FAIL'}  the event/keyframe timeline is present`,
       `${pause ? 'PASS' : 'FAIL'}  the 'pause at keyframe' control is present`,
       `${chart || compact ? 'PASS' : 'FAIL'}  the time-series chart is rendered${compact ? ' (compact → report tab)' : ''}`,

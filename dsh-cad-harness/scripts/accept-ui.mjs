@@ -94,6 +94,9 @@ try {
   if (!newestMotion) console.log('note: no motion run in this corpus — the playback scenario needs one');
   else for (const s of chosen) if (s.resolve === 'motion') s.query = `t=${newestMotion.id}&${s.query}`;
   for (const s of chosen) {
+    // The panel now requires an explicit project; the sandbox session is the
+    // corpus directory, so every scenario must stand one in front of the panel.
+    if (!/(^|&)project=/.test(s.query)) s.query += `&project=${encodeURIComponent(DATA)}`;
     await fetch(`${BASE}api/cad/assert-result?clear=1`).catch(() => {});
     // Give the page a window longer than the assert needs: the capture fires at
     // the load event, and a verdict posted after that would be lost with the tab.
