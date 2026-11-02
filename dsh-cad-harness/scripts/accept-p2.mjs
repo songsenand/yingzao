@@ -252,6 +252,9 @@ const springBare = await call('check_assembly', {});
 check('  …and an under-declared spring interface is skipped WITH instructions',
   springBare.value.skipped.length === 1 && /freeLengthMm/.test(springBare.value.skipped[0].detail),
   springBare.value.skipped[0]?.detail?.slice(0, 90) ?? '(none)');
+check('  …and the skipped item is lossless JSON (no undefined `measured`)',
+  !Object.prototype.hasOwnProperty.call(springBare.value.skipped[0], 'measured'),
+  JSON.stringify(springBare.value.skipped[0]));
 
 // (e) adjacency threshold is a parameter now (P2-10)
 const gapChildren = [

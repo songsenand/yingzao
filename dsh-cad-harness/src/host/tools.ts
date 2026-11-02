@@ -7293,7 +7293,14 @@ export function registerCadTools(
       });
       const trim = (r: InterfaceCheckResult) => ({
         interfaceId: r.interfaceId, a: r.a, b: r.b,
-        verdict: r.verdict, measured: r.measured, detail: r.detail,
+        verdict: r.verdict,
+        // A skipped interface may have no measurement (e.g. spring-preload
+        // without freeLength/stiffness). An `undefined` property is not
+        // lossless JSON and the output guard rejects the whole value — the run
+        // had already committed, so the caller lost both the value and the
+        // reason. Omit the key instead of writing `undefined`.
+        ...(Number.isFinite(r.measured) ? { measured: r.measured } : {}),
+        detail: r.detail,
       });
       return {
         overallStatus: report.overallStatus,
