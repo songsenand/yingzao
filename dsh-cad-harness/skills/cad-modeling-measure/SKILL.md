@@ -27,7 +27,7 @@ The hard part is naming the thing you want measured. `list_features` gives coord
 
 ## Traps
 
-- **OpenSCAD trig is DEGREES in and out; gear/thread math is radians.** Convert with `d2r`/`r2d` at the boundary. On the pitch circle the mixed terms cancel, so a spot check can pass while the flank is garbage.
+- **OpenSCAD trig is DEGREES in and out; gear/thread math is radians.** Convert with `d2r`/`r2d` at the boundary. On the pitch circle the mixed terms cancel, so a spot check can pass while the flank is garbage; the involute function `inv(α) = tanα − α` is where the mixed units usually hide.
 - **`linear_extrude(twist=)` turns opposite to 2D `rotate()`.** A positive twist rotates the section clockwise viewed from +Z; a blade built as `rotate(β_root) linear_extrude(twist = β_tip − β_root)` is twisted the wrong way and still looks plausible. Check a radial slice numerically.
 - **A render that exits 0 may not have done what you asked.** OpenSCAD warns on unknown parameters and carries on (`rotate(m=…)` silently became identity). Read the renderer's warnings.
 - **The user's reference image is the oldest and gets pruned first.** When it is omitted, call `recall_reference_image({ path })`; do not work from memory. Before claiming "matches the reference", make sure it is in vision.

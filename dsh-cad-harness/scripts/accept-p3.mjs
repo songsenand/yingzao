@@ -160,6 +160,14 @@ const manifestWith = async (ifaces, children) => {
   };
   await writeFile(join(workspace, 'assembly', 'assembly.json'), JSON.stringify(m));
 };
+// The pointer beside the manifest is rewritten by every check; this fixture
+// used to compute reportPath once and then read the FIRST run's report for the
+// next two checks (so the 0.8mm case kept seeing the 0.5mm result). Follow the
+// pointer after each check instead.
+const latestReport = async () => {
+  const pointer = JSON.parse(await readFile(join(workspace, 'assembly', 'assembly-check-report.json'), 'utf8'));
+  return JSON.parse(await readFile(join(project.runStore.root, pointer.runId, 'report.json'), 'utf8'));
+};
 const plainChildren = [
   { id: 'lower', name: '下块', kind: 'part', version: vLower },
   // 0.5mm sideways offset: the two axis LINES are 0.5mm apart even though both
@@ -179,9 +187,7 @@ check('coaxial measures the axis-to-axis offset (0.5mm parallel axes)',
   coaxR.summary.pass === 1 && coaxR.summary.skipped === 0,
   `pass=${coaxR.summary.pass} skipped=${coaxR.summary.skipped}`);
 // The file beside the manifest is a POINTER to the immutable run (FIX-C1); follow it.
-const reportPointer = JSON.parse(await readFile(join(workspace, 'assembly', 'assembly-check-report.json'), 'utf8'));
-const reportPath = join(project.runStore.root, reportPointer.runId, 'report.json');
-const coaxReport = JSON.parse(await readFile(reportPath, 'utf8'));
+const coaxReport = await latestReport();
 const axResult = coaxReport.results.find((r) => r.interfaceId === 'if-ax');
 check('  …measured 0.5mm, not a point distance (points are 10mm apart)',
   axResult.verdict === 'pass' && Math.abs(axResult.measured - 0.5) < 1e-6,
@@ -196,7 +202,7 @@ await manifestWith([{
   { ...plainChildren[1], transform: { translate: [0.8, 0, 10] } },
 ]);
 await call('check_assembly', {});
-const coaxBad2 = JSON.parse(await readFile(reportPath, 'utf8'));
+const coaxBad2 = await latestReport();
 check('  …an 0.8mm offset against a 0.2 tolerance is a hard-violation',
   coaxBad2.results.find((r) => r.interfaceId === 'if-ax').verdict === 'hard-violation',
   coaxBad2.results.find((r) => r.interfaceId === 'if-ax').detail);
@@ -207,7 +213,7 @@ await manifestWith([{
   nominal: { quantity: '同轴度', value: 0 }, tolerance: { min: 0, max: 0.6 }, severity: 'hard',
 }], plainChildren);
 await call('check_assembly', {});
-const coaxPoint = JSON.parse(await readFile(reportPath, 'utf8'));
+const coaxPoint = await latestReport();
 check('  …a point endpoint is skipped with instructions, not silently passed',
   coaxPoint.results.find((r) => r.interfaceId === 'if-ax').verdict === 'skipped' &&
     /datum_axis|datum_cyl/.test(coaxPoint.results.find((r) => r.interfaceId === 'if-ax').detail),
@@ -243,7 +249,7 @@ await manifestWith([{
   { id: 'obstacle', name: '障碍块', kind: 'part', version: vObstacle },
 ]);
 await call('check_assembly', {});
-const poseReport = JSON.parse(await readFile(reportPath, 'utf8'));
+const poseReport = await latestReport();
 const tip = poseReport.results.find((r) => r.interfaceId === 'if-tip');
 check('the pose rotates DATUMS with the part (tip lands exactly on the target datum)',
   tip.verdict === 'pass' && tip.measured < 1e-6,
@@ -263,7 +269,7 @@ await manifestWith([{
   { id: 'obstacle', name: '障碍块', kind: 'part', version: vObstacle },
 ]);
 await call('check_assembly', {});
-const noPoseReport = JSON.parse(await readFile(reportPath, 'utf8'));
+const noPoseReport = await latestReport();
 check('  …and without the pose nothing lines up (control)',
   noPoseReport.results.find((r) => r.interfaceId === 'if-tip').verdict === 'hard-violation' &&
     noPoseReport.undeclared.length === 0,
@@ -484,8 +490,12 @@ check('measure_angle: a POINT datum is refused with a way forward (it has no dir
   await call('measure_angle', { versionId: vMeasure, aDatum: 'nope', bDir: [1, 0, 0] })
     .then(() => false, (error) => /not found|POINT/.test(String(error?.message ?? error))));
 
-const panelSrc = await readFile(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'client', 'panel.ts'), 'utf8');
+// The section caption moved to shot-caption.ts; the section SNAP logic still
+// lives in panel.ts. Read both so the caption assertion follows the code.
+const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'client');
+const panelSrc = (await Promise.all(
+  ['panel.ts', 'shot-caption.ts'].map((f) => readFile(join(clientDir, f), 'utf8')),
+)).join('\n');
 check('panel: 📸 opens a compose dialog (draft + send/park), text travels with the image',
   /shotDraft/.test(panelSrc) && /发送到会话/.test(panelSrc) && /只存托盘/.test(panelSrc) &&
     /userText: text/.test(panelSrc));
@@ -785,7 +795,7 @@ check('an open mesh carries the watertight warning into its findings',
     !/"(rank|score|recommend|recommended|best)"\s*:/.test(surface));
 }
 check('the skill set carries the delivery-discipline section (green numbers ≠ done)',
-  /Delivery discipline/.test(skillTree) && /check_printability/.test(skillTree));
+  /## Delivery\b/.test(skillTree) && /check_printability/.test(skillTree));
 // Every tool the agent can call must be NAMED in the manual. This replaces a
 // literal "Fifteen tools" that had gone stale: it asserted a number from two
 // catalog generations ago, so it failed for a reason unrelated to what it was
