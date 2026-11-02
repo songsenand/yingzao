@@ -246,7 +246,7 @@
     "severity": "hard",
     "check": "motion-clearance",
     "params": {
-     "runId": "r060"
+     "runId": "r066"
     },
     "tolerance": {
      "min": 3.8,

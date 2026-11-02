@@ -1,7 +1,7 @@
 {
-  "runId": "r062",
-  "checkedAt": "2026-10-31T13:23:05.248Z",
+  "runId": "r068",
+  "checkedAt": "2026-11-02T12:07:36.192Z",
   "manifestPath": "/home/songsenand/Project/ToyMarker/examples/windup-frog/assembly/assembly.json",
-  "manifestHash": "7330a843",
+  "manifestHash": "179b47bd",
   "schema": "assembly-check-pointer/v1"
 }

@@ -5287,3 +5287,26 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 
 **影响：** `src/host/joint-graph.ts`（新）、`src/host/physics.ts` / `motion.ts`（字段与计算）、`python/cad_worker/worker.py`（同一 union-find）、`src/host/tools.ts`（输出/schema）、`docs/TOOL-CONTRACTS.md`、`DESIGN.md`、`docs/llm/engines.md`、`skills/cad-simulation/SKILL.md`、`examples/roberval-balance/assembly/assembly.json`、示例 README、两个 acceptance。
 **行为变化：** 新报告多两个字段；契约从 20 个接口变为 26 个，`contract-without-motion` 不再出现。
+
+## 2026-11-02（补三）：examples 清理分阶段，只重跑当前示例的关键证据
+
+**触发条件：** 第 1 条（用户拍板“先做 1，再重跑 roberval/windup/toy-balance2”）。
+
+**要解决的问题：** `examples/` 有 428 个 run、11 个带语料的示例，混着当前示例、历史迭代、夹具、题库和 `DSH_HOME` 沙箱；本地语料约 700MB，且没有索引。全量重跑既不现实（0 个 run 存了入参），也会销毁 r001/r002 这类历史负结果。
+
+**决策内容：**
+
+- **不全量重跑。** 只重跑被 README/assembly 引用的当前证据；历史迭代加 `ARCHIVED.md`，保留 tracked 文档，本地 `cad-data/` 暂不删除。
+- 新增 `examples/README.md` 作为唯一索引，按 current / archived / fixture / bench / sandbox 分类。
+- 阶段 2 先抽 `verification/fixtures/`（microscope4 r020/r024、microscope2 v010、toy-balance v069），再归档旧语料；不先删 `cad-data/`。
+- 三个示例的复跑：roberval r038/r042/r043、windup-frog r066/r068、toy-balance2 r118/r120；I14/I2 分别改指 r066/r118。
+
+**理由：** 重跑的价值在“当前主张有当前证据”，不在“把历史全部重写”。旧 run 没有入参，重建成本高且容易把历史负结果洗掉；索引 + 归档 + 关键复跑能同时降低认知负担和回归风险。
+
+**依据：**
+
+- 复跑数字：windup r066 49 检查/0 干涉/4.000mm/0 漂移；r068 14/14；toy r118 754 步/24 采样/0 漂移；r120 25/25、11 undeclared；roberval r042 `closedLoop=true`、r043 26/26。
+- `accept-p2`/`accept-p3` 已转绿（`trim` 省略 undefined `measured`；P3 跟随每次 check 的 report 指针、caption 文件迁移、skill 标题）。
+- 阶段 1 移走 77MB 缓存/临时目录，未删任何 `cad-data/`；`git status` 只含索引/标记/README 与两处 runId 变更。
+
+**影响：** `examples/README.md`、5 个 `ARCHIVED.md`、windup/toy 的 README 与 assembly、`tools.ts` 的 `trim`、`accept-p2/p3`、`skill`、实验报告。后续阶段 2 需要改 20+ 个 acceptance 的夹具路径。

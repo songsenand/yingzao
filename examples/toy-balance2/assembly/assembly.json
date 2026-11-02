@@ -390,7 +390,7 @@
     "a": "base.V轴",
     "b": "beam.刀口",
     "params": {
-     "runId": "r102"
+     "runId": "r118"
     },
     "nominal": {
      "quantity": "距离",

@@ -4,6 +4,8 @@
 > 旧版：`examples/toy-balance/`（2026-10-19，18 个版本含历史 / 35 条接口）
 > 本版：2026-10-20 由**干净上下文的子智能体**从零完成（未读旧示例、旧语料、docs、experiments、git）
 > 语料位置：`examples/toy-balance2/cad-data/`（预览下拉里的 `examples/toy-balance2`）；仓库根的 `cad-data/` 与 `assembly/` 是指向它的软链接，会话的读写仍落在同一份。旧语料完整备份在 `.tmp-tb2/root-cad-data`。
+>
+> **2026-11-02 复跑（当前引擎）：** motion **r118**（base v001 + beam v026，754 步 / 0.377 s，24/24 采样，0 漂移）；assembly **r120**（25/25 pass，0 hard/skipped，11 undeclared）。manifest 在 2026-10-29 的 `9319e03` 后已补 tolerance，I3/I4 的 116 mm 偏移也已修正为 0 mm；§4.2 的“25 条全 skipped / 假绿”是 r104 及之前的历史状态，不是当前状态。
 
 ![整机 iso](renders/whole-iso.png)
 
@@ -43,8 +45,8 @@
 | 4 | 25 件干涉 | 300 对布尔求交：**只有 2 处设计内自攻过盈** 13.521 / 37.639 mm³（Ø3 杆在 Ø2.5 预孔），其余 0；与 r045 的 "干涉 2" 一致 |
 | 5 | 打印件质量 | 152 137.7 mm³ × 1.24 = **188.65 g**；加钢制 M3（≈1256 mm³ × 7.85）**≈ 198.5 g**（不是 190.1 g，见 §4.7.2） |
 | 6 | **底座悬垂** | 8264.8 mm² @ z=15（`n.z < -sin45°` 且离床 >0.8 mm）；翻转 X/Y 后 8285.2 mm²，绕 X 转 90° 后 3314.3 mm²——**没有不加支撑的姿态** |
-| 7 | 运动 | r102（r013 的 24 位姿重跑）：754 步 / 0.377 s，0→10.8°，**采样 24/24、0 关节漂移**；r101 是无转动副的诊断（见 BUILD §7） |
-| 8 | 装配契约 | 我重跑 `check_assembly`（r054）：**25/25 通过，13 未声明邻接**——但 25 条全部无 tolerance，I3/I4 的 116 mm 轴偏移也报 pass（§4.2）。**2026-10-28 复跑 r104：25 条全部改判 skipped，不再假绿** |
+| 7 | 运动 | **r118**（2026-11-02 重跑 r102 场景）：754 步 / 0.377 s，0→10.8°，**采样 24/24、0 关节漂移**；r101 是无转动副的诊断（见 BUILD §7） |
+| 8 | 装配契约 | 历史：r054 25/25 但无 tolerance（假绿），r104 改判 25 skipped。**当前 r120：25/25 pass，0 hard/skipped，11 undeclared**——manifest 已补 tolerance，I3/I4 偏移为 0mm |
 
 > 旁注：两盘在 `whole-front.png` 里看着不等高，是渲染透视造成的；装配位姿的 z 完全相同（74.0–81.5），不是设计错误。
 
@@ -71,8 +73,10 @@
 
 ### 4.2 工具：`check_assembly` 的无 tolerance 假绿（严重，也是 25/25 的真相）
 
+> **2026-11-02 注：** 本节记录的是 2026-10-20 评审时的状态。2026-10-29 的 `9319e03` 已给 25 条接口补上 tolerance，I3/I4 的 116mm 偏移也已修正；当前 r120 是 25/25 pass、0 skipped。下面的 r044/r054/r104 是历史证据，不回改。
+
 - 新清单 25 条接口**没有一条**声明 `tolerance`；旧规则 `in_range = tolerance ? ... : true` 把"没有判据"直接当"在范围内"→ **pass**。
-- 直接证据：I3/I4 把 `beam.左叉孔`（x=−58）配到 `stirrupL.吊眼`（x=+58），测得 **116 mm 轴偏移**，r044/r054 的原文仍是 `verdict: pass`；2026-10-28 的 r104 已按“缺判据不是通过”改判 `skipped`。
+- 直接证据：I3/I4 把 `beam.左叉孔`（x=−58）配到 `stirrupL.吊眼`（x=+58），测得 **116 mm 轴偏移**，r044/r054 的原文仍是 `verdict: pass`；2026-10-28 的 r104 已按“缺判据不是通过”改判 `skipped`；当前 r120 已因补 tolerance + 修正偏移而 25/25 pass。
 - 所以 25/25 不是"25 条被验证"，而是"25 条没有被判据约束"。旧示例 35/35 的每条都带 tolerance（±0.25、±0.5…），两者不可比。
 - 修复（已改）：无 tolerance → `skipped`，detail 写明 `add tolerance {min,max}; a missing criterion is NOT a pass`；`skipped` 也计入 `overallStatus`（→ `check`，不再是 `pass`）。修后本清单应为 **0 pass / 25 skipped**。
 - 同一条病根：**把"缺失"当"通过"**。printability 的 `judge` 是"缺字段就崩"，这里是"缺判据就绿"——方向相反，性质相同。
@@ -172,8 +176,8 @@ v026（横梁组件）、v030（整机）是合并研究件，但 `delivery_audi
 复现（工作目录 = 仓库根）：
 
 ```bash
-check_assembly(manifestPath="assembly/assembly.json", adjacencyThresholdMm=0.75)  # → 25 skipped (缺 tolerance), 13 undeclared；r104
-simulate_motion(...)     # r102 的 parts/joints 见 BUILD.md §7 → 10.8°, 24 位姿
+check_assembly(manifestPath="assembly/assembly.json", adjacencyThresholdMm=0.75)  # → 当前 r120: 25 pass, 11 undeclared
+simulate_motion(...)     # r118: base v001 + beam v026 → 10.8°, 24 位姿
 check_printability(versionId="v008", mode="both", profileIds=["fdm-pla-0.4"])      # → ok（唯一能用的路径）
 check_printability(versionId="v001", mode="judge", profileIds=["fdm-pla-0.4"])     # → 复现 missing attention
 preflight(claims=[...])                                                            # → 复现 userExecute
@@ -200,6 +204,6 @@ preflight(claims=[...])                                                         
 | 9 | `src/host/tools.ts` | `versionNotFound()` 统一 8 个"未知版本"报错（说明 vNNN 是版本号，pNNN/rNNN 不是）；mode/bodyType 加 enum | `tsc --noEmit` 通过 |
 | 10 | `skills/cad-toolbox/SKILL.md` | "报错怎么读"四条：invalid arguments / unknown version / returned invalid output / 清单 path | — |
 
-`lib/` 已用 `node esbuild.mjs` 重新构建，但**正在运行的 DSH web 进程仍持有旧模块**（`patchReload: startup`）。要看到上面这些行为，需要重启**进程**（只开新会话不够——工具注册在进程里）；重启后本清单的 25 条应从 `25 pass` 变成 `0 pass / 25 skipped`（因为一条 tolerance 都没有）。
+`lib/` 已用 `node esbuild.mjs` 重新构建，但**正在运行的 DSH web 进程仍持有旧模块**（`patchReload: startup`）。要看到上面这些行为，需要重启**进程**（只开新会话不够——工具注册在进程里）；重启后本清单的 25 条曾从 `25 pass` 变成 `0 pass / 25 skipped`（当时一条 tolerance 都没有）；2026-10-29 补 tolerance 后，当前 r120 为 25/25 pass。
 
 > 这也是一条可直接写进 DESIGN 的结论：**"缺字段 → 崩"和"缺判据 → 绿"是同一种病的两面**。工具对自己知道的契约必须自描述；对不知道的判据必须拒绝给绿。
