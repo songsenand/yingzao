@@ -631,7 +631,7 @@ returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`
 
 ## `simulate_physics`
 
-Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Start parts slightly separated — gravity closes the gap.
+Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -641,12 +641,13 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 | `gravity` | array | — | mm/s². Default [0,0,-9810] (z-up). |
 | `tiltDeg` | number | — | Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing the gravity vector. Ignored when gravity is given. |
 | `tiltAboutAxis` | array | — | Axis to tilt about, default [0,1,0]. |
+| `jointContacts` | boolean | — | Default false: the two bodies of a JOINT do not collide, because a bearing is designed to have its parts inside one another's clearance. Set true only when a stopper really is supposed to collide on the jointed pair. |
 
 ```js
 simulate_physics({ parts: [] })
 ```
 
-returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `holdAnalysis`, `notes`, `keyframes`
+returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `holdAnalysis`, `notes`, `keyframes`
 
 
 ## `simulate_stress`

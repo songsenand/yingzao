@@ -395,11 +395,12 @@ interface PhysicsResult {
 **实现要点**：
 - `await RAPIER.init()`（host 侧 headless）
 - 碰撞体：静态/运动学用 `ColliderDesc.trimesh`；动态件先经 Manifold 凸性检测（体积差 <1% 走凸包，非凸才 trimesh），全开 CCD（毫米尺度隧穿）
-- 关节：`RAPIER.JointData.revolute(anchor1, anchor2, axis)`
+- 关节：`revolute` 用 `revoluteWithAxes(anchor1, anchor2, axis1, axis2)`，`prismatic` 用单轴；两端局部轴由 `axisA`/`axisB` 给出（或 `axisWorld` 由工具换算），建关节前若两端世界方向相反则翻转 B，避免 180° 框架扭转。关节两端接触默认关闭（`contactsDisabled` 回报）；`jointContacts: true` 才让关节对互撞。
+- t=0 装配门禁：每个关节的 anchor 间隙先量后跑，>2mm 直接拒绝并列出两侧世界坐标；不靠调大容差绕过。
 - 仿真循环：`world.step()`
 - **关键帧选择（v2.9 更正，取代原文「每 10 步渲染一次」）**：**事件驱动 + 预算内均匀补位**——事件帧 = 碰撞开始（`接触:A↔B`）、倾倒转折（up 倾角首破 30°）、最大穿透步、`final`（不可裁）；预算 `keyframeCount` 默认 6，事件帧按 `minGap` 去重后仍不足则按 `keyframeEvery = steps/keyframeCount` 均匀补 `context` 帧；被选步的位姿取邻近轨迹帧（网格间距 ≈0.6%，标签保留真实步号）。**另有一条与关键帧分离的轨迹时间线**（`trajEvery = ceil(steps/160)`，循环内均匀采样 ≈160 帧，含 `events`），供面板回放与轨迹数据消费（v2.5）
 - 穿透检测：遍历接触对读 `contact.dist` 取最小值，**瞬态最大**与**稳态**（末 10% 步）双指标分开
-- 倒地检测：up 向量与重力方向夹角 > 60°
+- 倒地检测：相对 authored 姿态的局部 up 偏转角 >60°（不是世界 up 的绝对倾角；90° 装配的横梁在 t=0 不算倒下）。事件阈值 30°，最终判定 60°，各自命名常量。
 
 **验收**：盒子在平面上静止不穿透；铰链门绕轴旋转不飞出；高重心零件倒地；关键帧能展示接触/倾倒事件过程（模型判读 + 人复核）。
 

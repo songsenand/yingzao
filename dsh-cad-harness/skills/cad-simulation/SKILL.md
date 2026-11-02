@@ -14,6 +14,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 
 - **Pivot, not world origin.** The tool re-bases each part on a pivot (default: the first joint's anchor naming it, else the geometry centre) and reports `pivots`. Pass `pivot` only when the axis passes through neither.
 - **Anchors are measured before stepping.** A joint gap > 2mm is refused, naming the joint and both anchors; `initialJointGaps` / `jointToleranceMm` are in the reply. Do not widen the tolerance.
+- **A joint between differently-oriented bodies needs per-body axes.** `axis` is one local vector for both and only right for parallel frames; use `axisA`/`axisB`, or `axisWorld` (resolved to each body). r001's 105mm drift was file-frame anchors + a single axis, not a closed-loop impossibility.
 - **Coverage is part of the verdict.** At least 24 sampled poses and the final pose; `interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` are reported. **0 checks is not 0 collisions.**
 - **Overlap between a revolute-jointed pair is not reported** (it is a bearing); a stopper on exactly that pair must be verified another way. `cycles` accepts fractions.
 - No gravity. A rack is driven by `pitchRadiusMm`, never a sinusoid; `phaseRad` offsets by `r × phaseRad`.
@@ -25,6 +26,11 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - **`tiltDeg` for slopes**, not a hand-built gravity vector; `gravity` only when tiltDeg cannot say it.
 - **"Will it hold?" is `staticFriction`**, not the solver: give the prismatic joint `staticFriction: μ` and read the analytic hold analysis; without it the slider always falls.
 - A prismatic joint is checked across its axis only; sliding along it is the joint working.
+- **Contact model: concave dynamic parts use their EXACT mesh, convex parts a hull.** A single hull fills a fork/cavity and reports phantom penetration (r002: 12,140mm³ at each hinge where the real overlap was 0). `colliders` says which shape each body got.
+- **Jointed pairs do not collide by default.** A bearing is designed to overlap in clearance; `contactsDisabled` lists the pairs. `jointContacts: true` is the explicit opt-in for a stopper that really must collide on that pair.
+- **t=0 is gated.** A joint anchor gap > 2mm is REFUSED with both world anchors (`initialJointGaps`), never warmed up. Same rule as motion.
+- **A joint between differently-oriented bodies needs per-body axes (and anchors).** `axis` is one local vector for both and is only correct for parallel frames; use `axisA`/`axisB`, or `axisWorld` (resolved to each body), and prefer `anchorWorld` over hand-converted local anchors. A bare `axis` on a [90,0,0]-rotated beam is how the Roberval frame got twisted.
+- **Topple is relative to the authored pose**, not world up: a beam authored at 90° is not "toppled" at t=0. 30° labels the event, 60° sets `fellOver`.
 - No force/torque output.
 - **The same geometry-sanity rule runs here** (`geometrySuspects`): a body dropped 500mm from everything reports a penetration number that describes nothing. Same criterion, same "fact, not a gate".
 

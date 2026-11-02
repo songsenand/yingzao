@@ -5205,3 +5205,62 @@ C/D 的会话内切换/迁移/共享仍未实现；现在没有“搬语料”�
 `src/client/panel.ts`（无默认选择/空路径错误/导入指向已选项目）、`SKILL.md`、conventions、
 PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acceptance。
 **行为变化：** 旧会话若未写 binding，第一次 CAD 调用不再自动绑定，必须显式选择；这是有意的破坏性收紧。
+
+## 2026-11-02：`simulate_physics` 接触模型按凸性分流、关节对默认不碰撞、t=0 门禁
+
+**触发条件：** 第 2 条（定量分析：r002 的凸包假重叠实测）+ 第 3 条（碰撞模型与关节语义是不可逆的契约变化）+ 第 4 条（跨 worker / physics / tools / 示例 / 验收）。
+
+**要解决的问题：** 罗伯威尔 r002 报 25.18mm 稳态穿透、5 个约束异常，回放里托盘在 0.13s 飞出叉口。
+复查同一批 STL 后定位到三个独立原因：① 所有 dynamic 件都用单凸包碰撞体，而托盘/边杆在 t=0 的
+真实网格重叠是 **0mm³**，凸包却在每个上铰链重叠 **12,140mm³**、每个下铰链 **3,937mm³**；② 关节两端
+的接触默认开启，轴承的“设计重叠”被当成穿模；③ 关节只收一个局部轴，`[90,0,0]` 装的横梁与未旋转
+托盘对同一个世界 +Y 轴需要不同局部向量，单轴会把框架拧掉。另有 ④ 倾倒按世界 up 算，90° 装配姿态
+在 t=0 就报“倾倒”。
+
+**决策内容：**
+
+- dynamic 件按凸性选碰撞体：凸件用 hull，凹件用精确 trimesh（与 fixed 侧同一条规则）。
+- 关节两端接触默认关闭；报告 `contactsDisabled`。需要“挡块确实在这一对相撞”时显式传 `jointContacts: true`。
+- 新增 t=0 装配门禁：关节锚点间隙 > 2mm 直接 `REFUSED`，逐关节列出两侧世界坐标；`initialJointGaps` / `jointToleranceMm` 随报告返回。
+- 关节轴支持 `axisA` / `axisB` / `axisWorld`；`axis` 保留为“两件坐标系平行”的简写。引擎在两端世界方向相反时翻转 B，避免 180° 框架扭转。
+- 倾倒改为相对 authored 姿态：30° 记事件，60° 置 `fellOver`。
+
+**理由：** 单凸包在凹腔/叉口处会填实本来空的区域，导致“真实 0 重叠、求解器看到 12L 穿透”；这是碰撞体近似错误，不是闭环不可解。关节对是设计好的轴承间隙，默认让它们互撞没有物理依据；关闭它并显式声明，比让求解器用分离冲量“解决”轴承更诚实。逐体轴是几何事实：同一个世界轴在不同朝向的刚体上就是不同的局部向量。
+
+**依据：**
+
+- r002 报告：`settledPenetrationMm=25.1832`、`maxPenetrationMm=40.1637`、5 个 `jointViolations`（39.18/33.13/19.63/14.28/3.26mm）。
+- 实测重叠：`top_beam↔pan_unit_*` 网格 0 / 凸包 12,140.8mm³；`bottom_unit↔pan_unit_*` 网格 0 / 凸包 3,937.3mm³。
+- A/B：同一 5 体 6 铰，去掉 collider 2s 最大漂移 0.5mm；保留 collider 则 pan 漂 24.7mm、横梁下沉 2mm。
+- 修复后 `node scripts/accept-physics-contact.mjs`：同一批 STL，稳态穿透 0、约束异常 0、最大位移 0.54mm、`fellOver` 全 false；Python 与 TS 最终位姿差 0.0001mm。
+- `accept-physics-parity` 全过（含新增字段；many-shell 接触主导用例只断言 start/final 键帧）。
+
+**影响：** `python/cad_worker/worker.py`（碰撞体选择、门禁、逐体轴、接触开关、相对倾倒）、`src/host/physics.ts`（TS oracle 同步）、`src/host/tools.ts`（`jointContacts` / `axisA` / `axisB` / `axisWorld` / 新输出字段）、`docs/TOOL-CONTRACTS.md`、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md`、`examples/roberval-balance/README.md` §6.3/§10/§11、`scripts/accept-physics-contact.mjs`（新）、`scripts/accept-physics-parity.mjs`。
+**行为变化：** 关节对不再互撞（默认）；凹件 dynamic 碰撞改为 trimesh，复杂场景会更慢；单 `axis` 在旋转件上会按“同一局部向量”解释，跨朝向必须用 `axisWorld`/逐体轴。
+**风险/回滚：** 关节对关碰撞会漏掉“挡块恰好在这一对之间”的真实碰撞（与 motion 同一限制），用 `jointContacts: true` 可恢复；回滚 = 恢复单凸包 + 关节接触开启。
+
+## 2026-11-02（补）：`simulate_motion` 也支持逐体轴，r001 的 105mm 复跑为 0
+
+**触发条件：** 第 2 条（定量分析：同一批 STL 的 motion 复跑）+ 第 4 条（跨 motion / tools / 示例 / 验收）。
+
+**要解决的问题：** r001 报 105.566mm 关节漂移，旧归因是“闭环求解能力不足”。复查发现两个输入事实：
+① 关节锚点在世界系与文件系之间混用（`[90,0,0]` 横梁上尤其致命）；② `axis` 是“两个 body 同一个局部
+向量”，世界 +Y 在横梁上是局部 +Z、在托盘上是局部 +Y，单轴会把框架拧掉。锚点和轴都不对时，闭环
+求解器只是把错误拖出来，不能据此判“闭环不可解”。
+
+**决策内容：** `simulate_motion` 的 joint 增加 `axisA` / `axisB` / `axisWorld`；`axis` 保留为平行
+坐标系的简写。引擎（TS 与 Python）在两端世界方向相反时翻转 B，并使用 `revoluteWithAxes` /
+`local_axis2`；prismatic 的门禁和漂移检查改用它自己那段世界轴。
+
+**理由：** 与 physics 同一条几何事实：同一个世界轴在不同朝向的刚体上就是不同的局部向量。把它
+留在“单轴”语义里，等于要求调用者手算坐标变换，而 r001 已经证明这一步会静默错。
+
+**依据：**
+
+- r001：`maxJointDriftMm=105.566`，violations 19.75 / 36.50 / 105.57mm，pan 主要沿 y 漂（绕 y 驱动应沿 x/z）。
+- 复跑同一批 STL，按工具 pivot 规则重基、6 个转动副逐体轴、上横梁 0.5 rad/s × 0.02 圈：
+  `overallStatus=pass`、`maxJointDriftMm=0`、0 约束异常、24/24 采样；Python 与 TS 漂移都是 0。
+- `node scripts/accept-motion-axes.mjs` 全过。
+
+**影响：** `src/host/motion.ts`（`MotionJointInput` / `assertAssembledAtStart` / joint 构造 / 漂移检查）、`python/cad_worker/worker.py`（motion joint 构造）、`src/host/tools.ts`（`simulate_motion` 的 `axisA`/`axisB`/`axisWorld` 解析与 schema）、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md`、`examples/roberval-balance/README.md` §6.3/§10/§11、`scripts/accept-motion-axes.mjs`（新）。
+**行为变化：** 单 `axis` 在旋转件上仍按“同一局部向量”解释；跨朝向必须用 `axisWorld`/逐体轴，否则会得到错误运动而不是拒绝。

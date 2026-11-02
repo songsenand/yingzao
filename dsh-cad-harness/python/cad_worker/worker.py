@@ -3499,6 +3499,37 @@ def _up_tilt_degrees(q) -> float:
     return math.acos(uz) * 180 / math.pi
 
 
+def _body_up_vector(q) -> tuple:
+    """The body's local +Z expressed in world coordinates."""
+    matrix = _quat_to_matrix3(q)
+    return (matrix[0][2], matrix[1][2], matrix[2][2])
+
+
+def _relative_tilt_degrees(q_now, q_initial) -> float:
+    """How far the body has TIPPED since its authored pose, in degrees.
+
+    Absolute `_up_tilt_degrees` is wrong for a part that is authored tilted: a
+    beam placed with rotation [90,0,0] read as "90° toppled" at t=0, so the run
+    logged a topple event before a single step. A hinge rotation about the
+    authored up axis is also not a topple. Comparing the body's own local +Z at
+    t=0 with its local +Z now keeps both facts straight.
+    """
+    a = _body_up_vector(q_now)
+    b = _body_up_vector(q_initial)
+    dot = max(-1.0, min(1.0, sum(a[i] * b[i] for i in range(3))))
+    return math.acos(dot) * 180 / math.pi
+
+
+# A joint anchor may be authored up to this far apart and still be absorbed by
+# the solver's warm-up. Beyond it the scenario is not assembled, and every number
+# the run produces describes a pose nobody designed. Same value as motion's gate.
+JOINT_TOLERANCE_MM = 2.0
+# Event label vs final verdict, named once: the two thresholds used to be bare
+# 30 and 60, which read as a contradiction in the same report.
+TOPPLE_EVENT_DEG = 30.0
+TOPPLE_VERDICT_DEG = 60.0
+
+
 def _euler_to_quat(deg) -> tuple:
     """Euler XYZ degrees → quaternion (x, y, z, w), same composition as TS."""
     rx, ry, rz = (float(d) * math.pi / 180 for d in deg)
@@ -5736,15 +5767,35 @@ def op_simulate_motion(params: dict) -> dict:
         b = bodies.get(joint["bodyB"])
         if a is None or b is None:
             raise ValueError(f"motion: joint references unknown body ({joint['bodyA']}, {joint['bodyB']})")
-        axis = _norm3(joint["axis"])
+        axis_a = _norm3(joint.get("axisA") or joint["axis"])
+        axis_b = _norm3(joint.get("axisB") or joint["axis"])
+        # Same sign trap as physics: the two joint FRAMES are aligned, so a pair
+        # of local axes pointing in opposite world directions becomes a 180°
+        # twist instead of a hinge. Flip B when their world directions disagree.
+        ma = _quat_to_matrix3(world.rigid_bodies[a].rotation.quaternion)
+        mb = _quat_to_matrix3(world.rigid_bodies[b].rotation.quaternion)
+        wa = [sum(ma[i][j] * axis_a[j] for j in range(3)) for i in range(3)]
+        wb = [sum(mb[i][j] * axis_b[j] for j in range(3)) for i in range(3)]
+        if sum(wa[i] * wb[i] for i in range(3)) < 0:
+            axis_b = tuple(-v for v in axis_b)
         anchor_a = tuple(float(v) for v in joint["anchorA"])
         anchor_b = tuple(float(v) for v in joint["anchorB"])
         if joint["type"] == "prismatic":
-            builder = R.PrismaticJoint.builder(axis=tuple(axis)).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            builder = (
+                R.PrismaticJoint.builder(axis=tuple(axis_a))
+                .local_axis2(tuple(axis_b))
+                .local_anchor1(anchor_a)
+                .local_anchor2(anchor_b)
+            )
             if joint.get("limits"):
                 builder = builder.limits(float(joint["limits"][0]), float(joint["limits"][1]))
         else:
-            builder = R.RevoluteJoint.builder(axis=tuple(axis)).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            builder = (
+                R.RevoluteJoint.builder(axis=tuple(axis_a))
+                .local_axis2(tuple(axis_b))
+                .local_anchor1(anchor_a)
+                .local_anchor2(anchor_b)
+            )
         world.impulse_joints.insert(a, b, builder.build())
 
     oscillators = []
@@ -5975,7 +6026,7 @@ def op_simulate_motion(params: dict) -> dict:
         wb = _world_anchor(world, b, joint["anchorB"])
         drift = math.hypot(wa[0] - wb[0], wa[1] - wb[1], wa[2] - wb[2])
         if joint["type"] == "prismatic":
-            axis = _norm3(joint["axis"])
+            axis = _norm3(joint.get("axisA") or joint["axis"])
             delta = [wa[i] - wb[i] for i in range(3)]
             along = sum(delta[i] * axis[i] for i in range(3))
             drift = math.hypot(*[delta[i] - along * axis[i] for i in range(3)])
@@ -6108,8 +6159,10 @@ def op_simulate_physics(params: dict) -> dict:
 
     bodies: dict = {}
     colliders: dict = {}
+    collider_kinds: dict = {}
     fell_over_checks: list = []
     initial_pos: dict = {}
+    initial_rotations: dict = {}
 
     for part in scenario["parts"]:
         name = part["name"]
@@ -6122,10 +6175,29 @@ def op_simulate_physics(params: dict) -> dict:
             builder = builder.rotation(_scaled_axis_of_euler(part["rotation"]))
         body = world.add_body(builder)
         raw = _parse_stl_raw(part["path"])
+        # A single convex hull is a WRONG collision shape for a non-convex part:
+        # the pan/link fork of the Roberval balance had 0 mm³ of real overlap at
+        # t=0 but 12,140 mm³ of HULL overlap at each top hinge and 3,937 mm³ at
+        # each bottom hinge. The solver read that as deep penetration and threw
+        # the pans across the machine (r002: 25mm settled penetration, 5 joint
+        # violations). Convex parts keep the cheap hull; concave parts now use
+        # their exact mesh, the same rule the fixed side already used.
         if part["bodyType"] == "dynamic":
-            collider = world.add_collider(
-                R.Collider.convex_hull(raw.reshape(-1, 3)).density(float(part.get("density") or 1.05e-6)), body
-            )
+            if _is_convex(part["path"]):
+                collider = world.add_collider(
+                    R.Collider.convex_hull(raw.reshape(-1, 3)).density(float(part.get("density") or 1.05e-6)), body
+                )
+                collider_kinds[name] = "hull"
+            else:
+                vertices, faces, _degenerate = _weld_raw(raw)
+                collider = world.add_collider(
+                    R.Collider.trimesh(
+                        np.asarray(vertices, dtype=np.float32),
+                        np.asarray(faces, dtype=np.uint32),
+                    ).density(float(part.get("density") or 1.05e-6)),
+                    body,
+                )
+                collider_kinds[name] = "trimesh"
             if part.get("initialAngularVelocity"):
                 world.rigid_bodies[body].angvel = tuple(float(v) for v in part["initialAngularVelocity"])
             if part.get("fellOverCheck", True) is not False:
@@ -6134,15 +6206,84 @@ def op_simulate_physics(params: dict) -> dict:
             # CCD does not help a fixed body against a trimesh collider, so convex
             # fixed geometry MUST be a convex hull (robust + fast).
             collider = world.add_collider(R.Collider.convex_hull(raw.reshape(-1, 3)), body)
+            collider_kinds[name] = "hull"
         else:
             vertices, faces, _degenerate = _weld_raw(raw)
             collider = world.add_collider(
                 R.Collider.trimesh(np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32)), body
             )
+            collider_kinds[name] = "trimesh"
         bodies[name] = body
         colliders[name] = collider
         initial_pos[name] = [float(v) for v in part["position"]]
+        initial_rotations[name] = tuple(
+            float(v) for v in world.rigid_bodies[body].rotation.quaternion
+        )
 
+    def world_point(handle, local) -> list:
+        body = world.rigid_bodies[handle]
+        matrix = _quat_to_matrix3(body.rotation.quaternion)
+        translation = body.translation
+        return [
+            float(translation[i]) + matrix[i][0] * float(local[0]) + matrix[i][1] * float(local[1]) + matrix[i][2] * float(local[2])
+            for i in range(3)
+        ]
+
+    # ---- t=0 assembly gate -------------------------------------------------
+    # Measured BEFORE anything moves (mirrors motion's assertAssembledAtStart).
+    # Without it a scenario whose anchors are 10mm apart is "solved" by dragging
+    # the parts together, and every number describes a pose nobody designed.
+    initial_joint_gaps = []
+    broken = []
+    for joint in scenario.get("joints") or []:
+        name = f"{joint['bodyA']}~{joint['bodyB']}"
+        a = bodies.get(joint["bodyA"])
+        b = bodies.get(joint["bodyB"])
+        if a is None or b is None:
+            raise ValueError(f"joint references unknown part: {joint['bodyA'] if a is None else joint['bodyB']}")
+        anchor_a = [float(v) for v in joint["anchorA"]]
+        anchor_b = [float(v) for v in joint["anchorB"]]
+        pa = world_point(a, anchor_a)
+        pb = world_point(b, anchor_b)
+        delta = [pa[i] - pb[i] for i in range(3)]
+        if joint["type"] == "prismatic":
+            # A slider may start anywhere ALONG its axis; only a perpendicular
+            # offset means the two bodies are not on one rail.
+            matrix = _quat_to_matrix3(world.rigid_bodies[a].rotation.quaternion)
+            axis_local = joint.get("axisA") or joint["axis"]
+            axis = [sum(matrix[i][j] * float(axis_local[j]) for j in range(3)) for i in range(3)]
+            length = math.hypot(*axis) or 1.0
+            unit = [value / length for value in axis]
+            along = sum(delta[i] * unit[i] for i in range(3))
+            delta = [delta[i] - along * unit[i] for i in range(3)]
+        gap = math.hypot(*delta)
+        initial_joint_gaps.append({"joint": name, "gapMm": round(gap, 4)})
+        if gap > JOINT_TOLERANCE_MM:
+            broken.append(
+                f"joint {name} ({joint['type']}): anchors {gap:.2f}mm apart — "
+                f"A-side world [{', '.join(f'{v:.2f}' for v in pa)}] vs "
+                f"B-side world [{', '.join(f'{v:.2f}' for v in pb)}]"
+            )
+    if broken:
+        raise ValueError(
+            f"simulate_physics REFUSED: the mechanism is not assembled at t=0 — "
+            f"{len(broken)} of {len(initial_joint_gaps)} joints exceed the "
+            f"{JOINT_TOLERANCE_MM}mm anchor tolerance:\n"
+            + "\n".join(f"  {index + 1}. {line}" for index, line in enumerate(broken))
+            + "\nFix the anchors or the placement; do not widen the tolerance. "
+            "Every result such a run could produce (drift, penetration, topple) "
+            "would describe that unassembled pose, not the design."
+        )
+
+    # ---- joints ------------------------------------------------------------
+    # Jointed parts are allowed to overlap at the bearing by design, and the
+    # solver must not resolve that design clearance as a collision. Rapier's
+    # default is contacts ON between jointed bodies, which is exactly how r002
+    # was destroyed (the pans were thrown out of their forks). Off by default;
+    # `jointContacts: true` is the explicit opt-in for a stopper that really is
+    # supposed to collide on the same pair.
+    joint_contacts = bool(scenario.get("jointContacts", False))
+    contacts_disabled = []
     joint_anchors = []
     for joint in scenario.get("joints") or []:
         a = bodies.get(joint["bodyA"])
@@ -6153,23 +6294,54 @@ def op_simulate_physics(params: dict) -> dict:
             raise ValueError(f"joint references unknown part: {joint['bodyB']}")
         anchor_a = tuple(float(v) for v in joint["anchorA"])
         anchor_b = tuple(float(v) for v in joint["anchorB"])
-        axis = tuple(float(v) for v in joint["axis"])
+        # One local axis for both bodies is only correct when their frames are
+        # parallel. A hinge between a [90,0,0]-rotated beam and an unrotated pan
+        # needs different local vectors for the SAME world axis; `axisA`/`axisB`
+        # carry that, `axis` remains the same-frame shorthand.
+        axis_a = tuple(float(v) for v in (joint.get("axisA") or joint["axis"]))
+        axis_b = tuple(float(v) for v in (joint.get("axisB") or joint["axis"]))
+        # The hinge axis is a LINE, but rapier aligns the two joint FRAMES, so a
+        # pair of local axes that point in opposite world directions is not the
+        # same joint: a 180° frame twist is resolved as motion. Flip B when the
+        # two world directions disagree (measured: the Roberval beam rotated back
+        # to identity and the pans swung out at zero gravity until this).
+        ma = _quat_to_matrix3(world.rigid_bodies[a].rotation.quaternion)
+        mb = _quat_to_matrix3(world.rigid_bodies[b].rotation.quaternion)
+        wa = [sum(ma[i][j] * axis_a[j] for j in range(3)) for i in range(3)]
+        wb = [sum(mb[i][j] * axis_b[j] for j in range(3)) for i in range(3)]
+        if sum(wa[i] * wb[i] for i in range(3)) < 0:
+            axis_b = tuple(-v for v in axis_b)
         if joint["type"] == "prismatic":
-            builder = R.PrismaticJoint.builder(axis=axis).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            builder = (
+                R.PrismaticJoint.builder(axis=axis_a)
+                .local_axis2(axis_b)
+                .local_anchor1(anchor_a)
+                .local_anchor2(anchor_b)
+            )
             if joint.get("limits"):
                 builder = builder.limits(float(joint["limits"][0]), float(joint["limits"][1]))
         else:
-            builder = R.RevoluteJoint.builder(axis=axis).local_anchor1(anchor_a).local_anchor2(anchor_b)
+            builder = (
+                R.RevoluteJoint.builder(axis=axis_a)
+                .local_axis2(axis_b)
+                .local_anchor1(anchor_a)
+                .local_anchor2(anchor_b)
+            )
+        if not joint_contacts:
+            builder = builder.contacts_enabled(False)
         world.impulse_joints.insert(a, b, builder.build())
+        name = f"{joint['bodyA']}~{joint['bodyB']}"
+        if not joint_contacts:
+            contacts_disabled.append(name)
         joint_anchors.append(
             {
-                "name": f"{joint['bodyA']}~{joint['bodyB']}",
+                "name": name,
                 "type": joint["type"],
                 "a": a,
                 "b": b,
                 "anchorA": anchor_a,
                 "anchorB": anchor_b,
-                "axis": axis,
+                "axis": axis_a,
             }
         )
 
@@ -6237,7 +6409,7 @@ def op_simulate_physics(params: dict) -> dict:
             if name in topple_noted:
                 continue
             rotation = pose_of(name)["rotation"]
-            if _up_tilt_degrees(rotation) > 30:
+            if _relative_tilt_degrees(rotation, initial_rotations[name]) > TOPPLE_EVENT_DEG:
                 topple_noted.add(name)
                 note_step(step, f"倾倒:{name}")
 
@@ -6289,7 +6461,9 @@ def op_simulate_physics(params: dict) -> dict:
     final_positions = {}
     any_moving = False
     for name in fell_over_checks:
-        fell_over[name] = _up_tilt_degrees(pose_of(name)["rotation"]) > 60
+        fell_over[name] = (
+            _relative_tilt_degrees(pose_of(name)["rotation"], initial_rotations[name]) > TOPPLE_VERDICT_DEG
+        )
     for part in scenario["parts"]:
         name = part["name"]
         pose = pose_of(name)
@@ -6300,15 +6474,6 @@ def op_simulate_physics(params: dict) -> dict:
             velocity = world.rigid_bodies[bodies[name]].linvel
             if math.hypot(float(velocity[0]), float(velocity[1]), float(velocity[2])) > 5:
                 any_moving = True
-
-    def world_point(handle, local) -> list:
-        body = world.rigid_bodies[handle]
-        matrix = _quat_to_matrix3(body.rotation.quaternion)
-        translation = body.translation
-        return [
-            float(translation[i]) + matrix[i][0] * local[0] + matrix[i][1] * local[1] + matrix[i][2] * local[2]
-            for i in range(3)
-        ]
 
     joint_violations = []
     for joint in joint_anchors:
@@ -6375,6 +6540,22 @@ def op_simulate_physics(params: dict) -> dict:
             "with sparse ground contacts the settled-penetration figure is a solver artefact, not a fit measurement — "
             "cross-check part fit with check_assembly / validate_assembly instead"
         )
+    if contacts_disabled:
+        notes.append(
+            "jointed pairs do not collide (bearing clearance is design intent): "
+            + ", ".join(contacts_disabled)
+            + "; a stopper that really is supposed to collide on exactly that pair "
+            "must be verified another way (or pass jointContacts: true and expect the "
+            "solver to resolve the bearing overlap as a collision)"
+        )
+    non_convex_dynamic = [name for name, kind in collider_kinds.items() if kind == "trimesh"
+                          and any(p["name"] == name and p["bodyType"] == "dynamic" for p in scenario["parts"])]
+    if non_convex_dynamic:
+        notes.append(
+            "non-convex dynamic part(s) use exact trimesh colliders, not a single convex hull: "
+            + ", ".join(non_convex_dynamic)
+            + " (a hull would fill their cavities and report phantom contact)"
+        )
 
     hold_analysis = []
     for joint in scenario.get("joints") or []:
@@ -6386,7 +6567,8 @@ def op_simulate_physics(params: dict) -> dict:
             continue
         mass_kg = float(world.rigid_bodies[body].mass)
         matrix = _quat_to_matrix3(world.rigid_bodies[body].rotation.quaternion)
-        axis_world = [sum(matrix[i][j] * float(joint["axis"][j]) for j in range(3)) for i in range(3)]
+        axis_local_b = joint.get("axisB") or joint["axis"]
+        axis_world = [sum(matrix[i][j] * float(axis_local_b[j]) for j in range(3)) for i in range(3)]
         axis_length = math.hypot(*axis_world) or 1.0
         unit = [value / axis_length for value in axis_world]
         g_parallel = sum(gravity[i] * unit[i] for i in range(3))
@@ -6419,6 +6601,10 @@ def op_simulate_physics(params: dict) -> dict:
         "maxHorizontalDisplacementMm": max_horizontal,
         "jointViolations": joint_violations,
         "settled": not any_moving,
+        "initialJointGaps": initial_joint_gaps,
+        "jointToleranceMm": JOINT_TOLERANCE_MM,
+        "contactsDisabled": contacts_disabled,
+        "colliders": collider_kinds,
         "notes": notes,
     }
     if hold_analysis:

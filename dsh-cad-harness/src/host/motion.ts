@@ -104,8 +104,10 @@ export function assertAssembledAtStart(
     let dy = ra[1]! + a.position[1]! - (rb[1]! + b.position[1]!);
     let dz = ra[2]! + a.position[2]! - (rb[2]! + b.position[2]!);
     if (j.type === 'prismatic') {
-      const len = Math.hypot(j.axis[0]!, j.axis[1]!, j.axis[2]!) || 1;
-      const ax = [j.axis[0]! / len, j.axis[1]! / len, j.axis[2]! / len];
+      const raw = j.axisA ?? j.axis!;
+      const world = rotateVec([raw[0]!, raw[1]!, raw[2]!], a.rotation);
+      const len = Math.hypot(world[0]!, world[1]!, world[2]!) || 1;
+      const ax = [world[0]! / len, world[1]! / len, world[2]! / len];
       const along = dx * ax[0]! + dy * ax[1]! + dz * ax[2]!;
       dx -= along * ax[0]!; dy -= along * ax[1]!; dz -= along * ax[2]!;
     }
@@ -141,7 +143,13 @@ export interface MotionJointInput {
   anchorA: [number, number, number];
   /** Anchor in B's local frame, mm. */
   anchorB: [number, number, number];
-  axis: [number, number, number];
+  /** Same local axis in BOTH bodies; only correct for parallel frames. */
+  axis?: [number, number, number];
+  /** Per-body axes for a joint between differently-oriented bodies. */
+  axisA?: [number, number, number];
+  axisB?: [number, number, number];
+  /** World-space direction at t=0; the tool resolves it per body. */
+  axisWorld?: [number, number, number];
   /** Prismatic travel limits [min, max] in mm along the axis. */
   limits?: [number, number];
 }
@@ -463,10 +471,25 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     const a = bodyByName.get(j.bodyA);
     const b = bodyByName.get(j.bodyB);
     if (!a || !b) throw new Error(`motion: joint references unknown body (${j.bodyA}, ${j.bodyB})`);
-    const axis = norm(j.axis);
+    const rawA = j.axisA ?? j.axis;
+    const rawB = j.axisB ?? j.axisA ?? j.axis;
+    if (!rawA || !rawB) {
+      throw new Error(`motion: joint ${j.bodyA}↔${j.bodyB} needs axis, axisA + axisB, or axisWorld`);
+    }
+    const axisA = norm(rawA);
+    let axisB = norm(rawB);
+    // The hinge axis is a line, but rapier aligns the two joint FRAMES: a pair
+    // of local axes pointing in opposite world directions becomes a 180° twist.
+    const ma = quatToMatrix3(a.rotation());
+    const mb = quatToMatrix3(b.rotation());
+    const wa = [0, 1, 2].map((i) => ma[i]![0]! * axisA[0] + ma[i]![1]! * axisA[1] + ma[i]![2]! * axisA[2]);
+    const wb = [0, 1, 2].map((i) => mb[i]![0]! * axisB[0] + mb[i]![1]! * axisB[1] + mb[i]![2]! * axisB[2]);
+    if (wa[0]! * wb[0]! + wa[1]! * wb[1]! + wa[2]! * wb[2]! < 0) {
+      axisB = [-axisB[0], -axisB[1], -axisB[2]];
+    }
     const data = j.type === 'prismatic'
-      ? RAPIER.JointData.prismatic(V(j.anchorA), V(j.anchorB), V(axis))
-      : RAPIER.JointData.revolute(V(j.anchorA), V(j.anchorB), V(axis));
+      ? RAPIER.JointData.prismatic(V(j.anchorA), V(j.anchorB), V(axisA))
+      : RAPIER.JointData.revoluteWithAxes(V(j.anchorA), V(j.anchorB), V(axisA), V(axisB));
     if (j.type === 'prismatic' && j.limits) {
       data.limitsEnabled = true;
       data.limits = j.limits;
@@ -739,8 +762,14 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     let drift = Math.hypot(wa[0] - wb[0], wa[1] - wb[1], wa[2] - wb[2]);
     if (j.type === 'prismatic') {
       // sliding along the axis is the joint's purpose — measure only the
-      // perpendicular offset from the slide axis
-      const axis = norm(j.axis);
+      // perpendicular offset from the slide axis, in WORLD coordinates
+      const raw = j.axisA ?? j.axis!;
+      const m = quatToMatrix3(a.rotation());
+      const axis = norm([
+        m[0]![0]! * raw[0] + m[0]![1]! * raw[1] + m[0]![2]! * raw[2],
+        m[1]![0]! * raw[0] + m[1]![1]! * raw[1] + m[1]![2]! * raw[2],
+        m[2]![0]! * raw[0] + m[2]![1]! * raw[1] + m[2]![2]! * raw[2],
+      ]);
       const d = [wa[0] - wb[0], wa[1] - wb[1], wa[2] - wb[2]];
       const along = d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
       drift = Math.hypot(d[0] - along * axis[0], d[1] - along * axis[1], d[2] - along * axis[2]);

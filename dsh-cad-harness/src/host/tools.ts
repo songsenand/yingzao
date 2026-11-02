@@ -75,12 +75,28 @@ interface GeneratePartArgs {
 
 interface PhysicsToolArgs {
   parts: { name: string; scadCode: string; bodyType: string; position: number[]; rotation?: number[]; density?: number; initialAngularVelocity?: number[] }[];
-  joints?: { type?: string; bodyA: string; bodyB: string; anchorA: number[]; anchorB: number[]; axis: number[]; limits?: number[]; staticFriction?: number }[];
+  joints?: {
+    type?: string; bodyA: string; bodyB: string;
+    anchorA?: number[]; anchorB?: number[];
+    /** World-space joint point; the tool derives both local anchors. */
+    anchorWorld?: number[];
+    /** Same local axis in both bodies (only correct for parallel frames). */
+    axis?: number[];
+    /** Per-body local axes; the pair for a rotated body. */
+    axisA?: number[];
+    axisB?: number[];
+    /** World-space hinge/slide direction, resolved to each body's local frame. */
+    axisWorld?: number[];
+    limits?: number[];
+    staticFriction?: number;
+  }[];
   durationSec?: number;
   gravity?: number[];
   /** Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing a gravity vector. Ignored when gravity is given explicitly. */
   tiltDeg?: number;
   tiltAboutAxis?: number[];
+  /** Default false: jointed parts do not collide (bearing clearance is design intent). */
+  jointContacts?: boolean;
 }
 
 interface GeneratePartResult {
@@ -591,7 +607,12 @@ export function registerCadTools(
   // POST /api/cad/motion/run route — identical report shape either way.
   async function runMotionJob(a: {
     parts: { name: string; scadCode?: string; versionId?: string; bodyType: string; position: number[]; rotation?: number[]; pivot?: number[] }[];
-    joints?: { type: string; bodyA: string; bodyB: string; anchorA?: number[]; anchorB?: number[]; anchorWorld?: number[]; axis: number[]; limits?: [number, number] }[];
+    joints?: {
+      type: string; bodyA: string; bodyB: string;
+      anchorA?: number[]; anchorB?: number[]; anchorWorld?: number[];
+      axis?: number[]; axisA?: number[]; axisB?: number[]; axisWorld?: number[];
+      limits?: [number, number];
+    }[];
     drive?: { body: string; axis: number[]; omegaRadPerSec: number };
     oscillators?: { body: string; axis: number[]; amplitudeMm?: number; periodSec?: number; phaseRad?: number; pitchRadiusMm?: number }[];
     cycles?: number;
@@ -663,15 +684,53 @@ export function registerCadTools(
         R[0]![2]! * w[0] + R[1]![2]! * w[1] + R[2]![2]! * w[2],
       ];
     };
-    const jointsIn = (a.joints ?? []).map((j) => {
-      if (j.anchorA !== undefined && j.anchorB !== undefined) return j;
-      if (!Array.isArray((j as unknown as { anchorWorld?: number[] }).anchorWorld) || (j as unknown as { anchorWorld?: number[] }).anchorWorld!.length !== 3) {
-        throw argError('simulate_motion', 'joints', 'needs anchorA + anchorB (each body\'s own file frame) OR anchorWorld (world frame)',
-          'either both per-body anchors, or one anchorWorld — anchors 10mm apart is how a run describes an unassembled pose',
-          { received: { bodyA: j.bodyA, bodyB: j.bodyB, anchorA: j.anchorA, anchorB: j.anchorB }, example: 'joints: [{ type: "revolute", bodyA: "base", bodyB: "beam", anchorWorld: [0, 0, 205], axis: [0, 1, 0] }]' });
+    const dirToLocal = (name: string, world: number[]): [number, number, number] => {
+      const p = a.parts.find((x) => x.name === name);
+      if (!p) {
+        throw argError('simulate_motion', 'joints', 'names a part that is not in this scenario',
+          'bodyA/bodyB must name parts of this scenario', { received: name });
       }
-      const w = (j as unknown as { anchorWorld: number[] }).anchorWorld;
-      return { ...j, anchorA: worldToLocal(j.bodyA, w), anchorB: worldToLocal(j.bodyB, w) };
+      const rot = (p.rotation ?? undefined) as [number, number, number] | undefined;
+      const w: [number, number, number] = [world[0]!, world[1]!, world[2]!];
+      if (!rot) return w;
+      const R = eulerMatrix(rot);
+      return [
+        R[0]![0]! * w[0] + R[1]![0]! * w[1] + R[2]![0]! * w[2],
+        R[0]![1]! * w[0] + R[1]![1]! * w[1] + R[2]![1]! * w[2],
+        R[0]![2]! * w[0] + R[1]![2]! * w[1] + R[2]![2]! * w[2],
+      ];
+    };
+    const jointsIn = (a.joints ?? []).map((j) => {
+      let out = j;
+      if (j.anchorA === undefined || j.anchorB === undefined) {
+        if (!Array.isArray(j.anchorWorld) || j.anchorWorld.length !== 3) {
+          throw argError('simulate_motion', 'joints', 'needs anchorA + anchorB (each body\'s own file frame) OR anchorWorld (world frame)',
+            'either both per-body anchors, or one anchorWorld — anchors 10mm apart is how a run describes an unassembled pose',
+            { received: { bodyA: j.bodyA, bodyB: j.bodyB, anchorA: j.anchorA, anchorB: j.anchorB }, example: 'joints: [{ type: "revolute", bodyA: "base", bodyB: "beam", anchorWorld: [0, 0, 205], axisWorld: [0, 1, 0] }]' });
+        }
+        out = { ...out, anchorA: worldToLocal(j.bodyA, j.anchorWorld), anchorB: worldToLocal(j.bodyB, j.anchorWorld) };
+      }
+      if (j.axisWorld) {
+        if (!Array.isArray(j.axisWorld) || j.axisWorld.length !== 3) {
+          throw argError('simulate_motion', 'joints', 'axisWorld must be [x,y,z]',
+            'a world-space hinge/slide direction', { received: j.axisWorld });
+        }
+        return { ...out, axisA: dirToLocal(j.bodyA, j.axisWorld), axisB: dirToLocal(j.bodyB, j.axisWorld) };
+      }
+      if (j.axisA || j.axisB) {
+        if (!Array.isArray(j.axisA) || !Array.isArray(j.axisB)) {
+          throw argError('simulate_motion', 'joints', 'needs BOTH axisA and axisB',
+            'axisA + axisB, or axisWorld, or the same-frame axis shorthand',
+            { received: { bodyA: j.bodyA, bodyB: j.bodyB, axisA: j.axisA, axisB: j.axisB } });
+        }
+        return out;
+      }
+      if (!Array.isArray(j.axis)) {
+        throw argError('simulate_motion', 'joints', 'needs an axis',
+          'axis (same local vector in both bodies), axisA + axisB, or axisWorld',
+          { received: { bodyA: j.bodyA, bodyB: j.bodyB } });
+      }
+      return out;
     });
     const pivotOf = new Map<string, [number, number, number]>();
     const pivots: Record<string, [number, number, number]> = {};
@@ -2347,12 +2406,83 @@ export function registerCadTools(
         ];
         gravity = rot([0, 0, -9810]);
       }
+      // ---- joint axes -----------------------------------------------------
+      // `axis` is one local vector for BOTH bodies, which is only right when
+      // their frames are parallel. A hinge between a [90,0,0]-rotated beam and
+      // an unrotated pan needs world→local per body; `axisWorld` does that, and
+      // `axisA`/`axisB` are the explicit form.
+      const partOf = (name: string) => {
+        const part = a.parts.find((p) => p.name === name);
+        if (!part) {
+          throw argError('simulate_physics', 'joints', 'names a part that is not in this scenario',
+            'bodyA/bodyB must name parts of this scenario', { received: name });
+        }
+        return part;
+      };
+      const localDir = (name: string, world: number[]): [number, number, number] => {
+        const part = partOf(name);
+        const rot = (part.rotation ?? undefined) as [number, number, number] | undefined;
+        const w: [number, number, number] = [world[0]!, world[1]!, world[2]!];
+        if (!rot) return w;
+        const R = eulerMatrix(rot);
+        return [
+          R[0]![0]! * w[0] + R[1]![0]! * w[1] + R[2]![0]! * w[2],
+          R[0]![1]! * w[0] + R[1]![1]! * w[1] + R[2]![1]! * w[2],
+          R[0]![2]! * w[0] + R[1]![2]! * w[1] + R[2]![2]! * w[2],
+        ];
+      };
+      const localPoint = (name: string, world: number[]): [number, number, number] => {
+        const part = partOf(name);
+        const pos = part.position as [number, number, number];
+        const rot = (part.rotation ?? undefined) as [number, number, number] | undefined;
+        const w: [number, number, number] = [world[0]! - pos[0]!, world[1]! - pos[1]!, world[2]! - pos[2]!];
+        if (!rot) return w;
+        const R = eulerMatrix(rot);
+        return [
+          R[0]![0]! * w[0] + R[1]![0]! * w[1] + R[2]![0]! * w[2],
+          R[0]![1]! * w[0] + R[1]![1]! * w[1] + R[2]![1]! * w[2],
+          R[0]![2]! * w[0] + R[1]![2]! * w[1] + R[2]![2]! * w[2],
+        ];
+      };
+      const resolvedJoints = (a.joints ?? []).map((j) => {
+        let out = j;
+        if (j.anchorA === undefined || j.anchorB === undefined) {
+          if (!Array.isArray(j.anchorWorld) || j.anchorWorld.length !== 3) {
+            throw argError('simulate_physics', 'joints', 'needs anchorA + anchorB OR anchorWorld',
+              'both per-body anchors, or one anchorWorld in mm',
+              { received: { bodyA: j.bodyA, bodyB: j.bodyB, anchorA: j.anchorA, anchorB: j.anchorB } });
+          }
+          out = { ...out, anchorA: localPoint(j.bodyA, j.anchorWorld), anchorB: localPoint(j.bodyB, j.anchorWorld) };
+        }
+        if (j.axisWorld) {
+          return {
+            ...out,
+            axisA: localDir(j.bodyA, j.axisWorld),
+            axisB: localDir(j.bodyB, j.axisWorld),
+          };
+        }
+        if (j.axisA || j.axisB) {
+          if (!Array.isArray(j.axisA) || !Array.isArray(j.axisB)) {
+            throw argError('simulate_physics', 'joints', 'needs BOTH axisA and axisB (each body\'s own frame)',
+              'axisA + axisB, or axisWorld, or the same-frame axis shorthand',
+              { received: { bodyA: j.bodyA, bodyB: j.bodyB, axisA: j.axisA, axisB: j.axisB } });
+          }
+          return out;
+        }
+        if (!Array.isArray(j.axis)) {
+          throw argError('simulate_physics', 'joints', 'needs an axis',
+            'axis (same local vector in both bodies), axisA + axisB, or axisWorld',
+            { received: { bodyA: j.bodyA, bodyB: j.bodyB } });
+        }
+        return out;
+      });
       const report = await runPhysics({
         parts,
-        joints: a.joints as never,
+        joints: resolvedJoints as never,
         durationSec: a.durationSec,
         gravity,
         keyframeCount: 6,
+        jointContacts: a.jointContacts === true,
       });
       // Render keyframes and persist the newest 4 as model-visible attachments.
       const { frames, warnings: renderWarnings } = await renderKeyframes(report, stlFiles, join(run.dir, 'frames'));
@@ -2378,7 +2508,9 @@ export function registerCadTools(
       const svg = report.metrics;
       const sank = svg.settledPenetrationMm > 1;
       const fellNames = Object.entries(svg.fellOver).filter(([, v]) => v === true).map(([n]) => n);
-      const overall: RunStatus = sank || fellNames.length > 0 || svg.jointViolations.length > 0 || suspectWarnPhys ? 'check' : 'pass';
+      const maxJointGap = Math.max(0, ...(svg.initialJointGaps ?? []).map((g) => g.gapMm));
+      const gapWarn = maxJointGap > 0.5;
+      const overall: RunStatus = sank || fellNames.length > 0 || svg.jointViolations.length > 0 || suspectWarnPhys || gapWarn ? 'check' : 'pass';
       await run.commit({
         title: runSubject('physics', geometries.map((g) => g.name), sourceVersionIds)
           ?? `刚体物理 · ${provenanceLabel(sourceVersionIds)}`,
@@ -2388,6 +2520,7 @@ export function registerCadTools(
         // but nothing here is a clean bill either: every warning is `difficult`.
         judgement: overall === 'check' ? 'difficult' : 'not-excluded',
         summary: `稳态穿透 ${svg.settledPenetrationMm.toFixed(2)}mm` +
+          (maxJointGap > 0.1 ? ` · 初始失配 ${maxJointGap.toFixed(2)}mm` : '') +
           (fellNames.length ? ` · 倒下 ${fellNames.join(',')}` : '') +
           (svg.jointViolations.length ? ` · 约束异常 ${svg.jointViolations.length}` : '') +
           (suspectWarnPhys ? ` · ⚠ 几何疑点 ${warnCountPhys}` : ''),
@@ -2399,6 +2532,10 @@ export function registerCadTools(
         maxPenetrationMm: svg.maxPenetrationMm,
         fellOver: svg.fellOver,
         jointViolations: svg.jointViolations,
+        initialJointGaps: svg.initialJointGaps ?? [],
+        jointToleranceMm: svg.jointToleranceMm ?? 2,
+        contactsDisabled: svg.contactsDisabled ?? [],
+        colliders: svg.colliders ?? {},
         ...(svg.holdAnalysis ? { holdAnalysis: svg.holdAnalysis } : {}),
         notes: svg.notes,
         geometrySuspects: suspectLines,
@@ -2413,7 +2550,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_physics',
     description:
-      'Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Start parts slightly separated — gravity closes the gap.',
+      'Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames.',
     parameters: {
       parts: {
         type: 'array',
@@ -2448,9 +2585,13 @@ export function registerCadTools(
             type: { type: 'string', description: '"revolute" (hinge, default) or "prismatic" (slide along the axis).' },
             bodyA: { type: 'string', required: true },
             bodyB: { type: 'string', required: true },
-            anchorA: { type: 'array', required: true, description: 'Joint point in A local frame [x,y,z] mm.', items: { type: 'number' } },
-            anchorB: { type: 'array', required: true, description: 'Joint point in B local frame [x,y,z] mm.', items: { type: 'number' } },
-            axis: { type: 'array', required: true, description: 'Hinge/slide axis in local frames [x,y,z].', items: { type: 'number' } },
+            anchorA: { type: 'array', description: 'Joint point in A local frame [x,y,z] mm — give this AND anchorB, OR anchorWorld.', items: { type: 'number' } },
+            anchorB: { type: 'array', description: 'Joint point in B local frame [x,y,z] mm.', items: { type: 'number' } },
+            anchorWorld: { type: 'array', description: 'Joint point in WORLD coordinates [x,y,z] mm; the tool derives both local anchors. Preferred whenever either body is rotated.', items: { type: 'number' } },
+            axis: { type: 'array', description: 'Same local hinge/slide axis in BOTH bodies. Only correct when their frames are parallel; for a rotated pair give axisA + axisB, or axisWorld.', items: { type: 'number' } },
+            axisA: { type: 'array', description: 'Hinge/slide axis in A\'s local frame — give with axisB.', items: { type: 'number' } },
+            axisB: { type: 'array', description: 'Hinge/slide axis in B\'s local frame — give with axisA.', items: { type: 'number' } },
+            axisWorld: { type: 'array', description: 'Hinge/slide axis in WORLD coordinates at t=0; the tool converts it to each body\'s local frame. Use this whenever the two bodies have different rotations.', items: { type: 'number' } },
             limits: { type: 'array', description: 'prismatic only: allowed travel [min,max] mm along the axis.', items: { type: 'number' } },
             staticFriction: {
               type: 'number',
@@ -2466,6 +2607,10 @@ export function registerCadTools(
         description: 'Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing the gravity vector. Ignored when gravity is given.',
       },
       tiltAboutAxis: { type: 'array', description: 'Axis to tilt about, default [0,1,0].', items: { type: 'number' } },
+      jointContacts: {
+        type: 'boolean',
+        description: 'Default false: the two bodies of a JOINT do not collide, because a bearing is designed to have its parts inside one another\'s clearance. Set true only when a stopper really is supposed to collide on the jointed pair.',
+      },
     },
     output: {
       schema: {
@@ -2482,6 +2627,26 @@ export function registerCadTools(
           maxPenetrationMm: { type: 'number', required: true },
           fellOver: { type: 'object', required: true, additionalProperties: true },
           jointViolations: { type: 'array', required: true, items: { type: 'string' } },
+          initialJointGaps: {
+            type: 'array', required: true,
+            description: 'Anchor gap per joint measured at t=0, before any step. A gap > jointToleranceMm is REFUSED, not simulated.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                joint: { type: 'string', required: true },
+                gapMm: { type: 'number', required: true },
+              },
+            },
+          },
+          jointToleranceMm: { type: 'number', required: true },
+          contactsDisabled: {
+            type: 'array', required: true, items: { type: 'string' },
+            description: 'Jointed pairs whose mutual contact is OFF. A bearing is designed to have clearance, not a clash; a stopper on exactly that pair needs another check.',
+          },
+          colliders: {
+            type: 'object', required: true, additionalProperties: true,
+            description: 'Collision shape per part: "hull" (convex) or "trimesh" (concave; exact, no phantom contact).',
+          },
           holdAnalysis: {
             type: 'array',
             items: {
@@ -2716,7 +2881,10 @@ export function registerCadTools(
             anchorA: { type: 'array', description: 'Joint anchor in A local frame [x,y,z] mm — give this AND anchorB, OR anchorWorld.', items: { type: 'number' } },
             anchorB: { type: 'array', description: 'Joint anchor in B local frame [x,y,z] mm.', items: { type: 'number' } },
             anchorWorld: { type: 'array', description: 'G1 (2026-10-29): the joint point in WORLD coordinates — the tool derives both file-frame anchors from each body\'s placement. Preferred: it removes the frame bookkeeping that produced 10mm-apart refusals and 105mm drift (roberval).', items: { type: 'number' } },
-            axis: { type: 'array', required: true, description: 'Rotation/slide axis [x,y,z].', items: { type: 'number' } },
+            axis: { type: 'array', description: 'Same local rotation/slide axis in BOTH bodies. Only correct for parallel frames; for a rotated pair use axisA + axisB, or axisWorld.', items: { type: 'number' } },
+            axisA: { type: 'array', description: 'Axis in A\'s local frame — give with axisB.', items: { type: 'number' } },
+            axisB: { type: 'array', description: 'Axis in B\'s local frame — give with axisA.', items: { type: 'number' } },
+            axisWorld: { type: 'array', description: 'Hinge/slide axis in WORLD coordinates at t=0; the tool converts it to each body\'s local frame. Use this whenever the two bodies have different rotations.', items: { type: 'number' } },
             limits: { type: 'array', description: 'Prismatic travel limits [min,max] mm.', items: { type: 'number' } },
           },
         },

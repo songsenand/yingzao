@@ -41,8 +41,18 @@ export interface PhysicsJointInput {
   anchorA: [number, number, number];
   /** Anchor in B's local frame, mm. */
   anchorB: [number, number, number];
-  /** Axis in both bodies' local frames (should match in world when aligned). */
-  axis: [number, number, number];
+  /**
+   * The same local axis in BOTH bodies. Correct only when their frames are
+   * parallel; for a joint between differently-oriented bodies use `axisA` +
+   * `axisB`, or `axisWorld` (resolved by the tool). Kept as the simple shorthand.
+   */
+  axis?: [number, number, number];
+  /** Axis in A's local frame — give with `axisB` for a rotated pair. */
+  axisA?: [number, number, number];
+  /** Axis in B's local frame — give with `axisA`. */
+  axisB?: [number, number, number];
+  /** World-space hinge/slide direction, resolved to each body's local frame. */
+  axisWorld?: [number, number, number];
   /** prismatic only: the travel the slide is allowed, mm along the axis. */
   limits?: [number, number];
   /**
@@ -63,6 +73,14 @@ export interface PhysicsScenario {
   durationSec?: number;
   timestepSec?: number;
   keyframeCount?: number;
+  /**
+   * Compute contacts between the two bodies of a joint. Default false: a
+   * bearing is DESIGNED to have its parts sit inside one another's clearance,
+   * and resolving that as a collision is what threw the Roberval pans out of
+   * their forks. Set true only for a stopper that really is supposed to collide
+   * on the jointed pair.
+   */
+  jointContacts?: boolean;
 }
 
 export interface PoseSample {
@@ -100,6 +118,14 @@ export interface PhysicsReport {
     geometrySuspectWarn?: number;
     /** Quasi-static "will the slide hold?" answers, when staticFriction was given. */
     holdAnalysis?: { joint: string; mu: number; massKg: number; axialDriveN: number; frictionCapN: number; holds: boolean }[];
+    /** Anchor gap per joint, measured at t=0 (before any step). */
+    initialJointGaps?: { joint: string; gapMm: number }[];
+    /** The t=0 tolerance used by the assembly gate, mm. */
+    jointToleranceMm?: number;
+    /** Jointed pairs whose mutual contact is OFF (bearing clearance, not a clash). */
+    contactsDisabled?: string[];
+    /** The collision shape each body actually got: "hull" or "trimesh". */
+    colliders?: Record<string, 'hull' | 'trimesh'>;
     /** Honest-input notes: contact topology, hold-analysis caveats. */
     notes: string[];
   };
@@ -126,13 +152,33 @@ function quatToMatrix3(q: { x: number; y: number; z: number; w: number }): numbe
   ];
 }
 
-/** Angle in degrees between initial up vector and current up for a body quat. */
-function upTiltDegrees(q: { x: number; y: number; z: number; w: number }): number {
+/** The body's local +Z in world coordinates. */
+function bodyUp(q: { x: number; y: number; z: number; w: number }): [number, number, number] {
   const m = quatToMatrix3(q);
-  // z-up world: local +Z in world = third column diagonal
-  const uz = m[2][2]!;
-  return Math.acos(Math.max(-1, Math.min(1, uz))) * 180 / Math.PI;
+  return [m[0]![2]!, m[1]![2]!, m[2]![2]!];
 }
+
+/**
+ * How far the body has TIPPED since its authored pose, in degrees.
+ *
+ * Measuring against world up called a beam authored at [90,0,0] "90° toppled"
+ * at t=0, and it could not tell a hinge rotation (allowed) from a tip (failure).
+ * Comparing the body's own up at t=0 with its up now fixes both.
+ */
+function relativeTiltDegrees(
+  q: { x: number; y: number; z: number; w: number },
+  q0: { x: number; y: number; z: number; w: number },
+): number {
+  const a = bodyUp(q);
+  const b = bodyUp(q0);
+  const dot = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+  return Math.acos(dot) * 180 / Math.PI;
+}
+
+/** Same values as the Python canonical, named once. */
+const JOINT_TOLERANCE_MM = 2;
+const TOPPLE_EVENT_DEG = 30;
+const TOPPLE_VERDICT_DEG = 60;
 
 /** Euler XYZ degrees → quaternion (matches rapier setRotation from euler convention). */
 function eulerToQuat(deg: [number, number, number]): { x: number; y: number; z: number; w: number } {
@@ -223,6 +269,7 @@ export async function runPhysics(scenario: PhysicsScenario): Promise<PhysicsRepo
         ...(scenario.durationSec !== undefined ? { durationSec: scenario.durationSec } : {}),
         ...(scenario.timestepSec !== undefined ? { timestepSec: scenario.timestepSec } : {}),
         ...(scenario.keyframeCount !== undefined ? { keyframeCount: scenario.keyframeCount } : {}),
+        ...(scenario.jointContacts !== undefined ? { jointContacts: scenario.jointContacts } : {}),
       },
     });
   } finally {
@@ -249,8 +296,10 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
 
   const bodies = new Map<string, RAPIER.RigidBody>();
   const colliders = new Map<string, RAPIER.Collider>();
+  const colliderKinds: Record<string, 'hull' | 'trimesh'> = {};
   const fellOverChecks: string[] = [];
   const initialPos = new Map<string, [number, number, number]>();
+  const initialRotations = new Map<string, { x: number; y: number; z: number; w: number }>();
 
   for (const part of scenario.parts) {
     const desc = part.bodyType === 'fixed'
@@ -262,10 +311,23 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     if (part.rotation) desc.setRotation(eulerToQuat(part.rotation));
     const body = world.createRigidBody(desc);
     if (part.bodyType === 'dynamic') {
-      const hullPoints = verticesOf(part.stl);
-      const cd = RAPIER_.ColliderDesc.convexHull(hullPoints)!;
-      cd.setDensity(part.density ?? 1.05e-6);
-      world.createCollider(cd, body);
+      // A single convex hull is a wrong collision shape for a concave part: the
+      // Roberval pan/link fork had 0 mm³ of real overlap at t=0 but 12,140 mm³ of
+      // HULL overlap at each top hinge. The solver read that as penetration and
+      // threw the pans across the machine. Convex parts keep the cheap hull;
+      // concave parts use their exact mesh, as the fixed side already did.
+      if (await isConvexStl(part.stl)) {
+        const cd = RAPIER_.ColliderDesc.convexHull(verticesOf(part.stl))!;
+        cd.setDensity(part.density ?? 1.05e-6);
+        world.createCollider(cd, body);
+        colliderKinds[part.name] = 'hull';
+      } else {
+        const { vertices, indices } = trimeshOf(part.stl);
+        const cd = RAPIER_.ColliderDesc.trimesh(vertices, indices);
+        cd.setDensity(part.density ?? 1.05e-6);
+        world.createCollider(cd, body);
+        colliderKinds[part.name] = 'trimesh';
+      }
       if (part.initialAngularVelocity) {
         body.setAngvel({ x: part.initialAngularVelocity[0], y: part.initialAngularVelocity[1], z: part.initialAngularVelocity[2] }, true);
       }
@@ -276,16 +338,83 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       // Non-convex geometry falls back to trimesh with finer substeps.
       if (await isConvexStl(part.stl)) {
         world.createCollider(RAPIER_.ColliderDesc.convexHull(verticesOf(part.stl))!, body);
+        colliderKinds[part.name] = 'hull';
       } else {
         const { vertices, indices } = trimeshOf(part.stl);
         world.createCollider(RAPIER_.ColliderDesc.trimesh(vertices, indices), body);
+        colliderKinds[part.name] = 'trimesh';
       }
     }
     bodies.set(part.name, body);
     initialPos.set(part.name, [...part.position]);
+    const q = body.rotation();
+    initialRotations.set(part.name, { x: q.x, y: q.y, z: q.z, w: q.w });
+  }
+
+  /** Per-body axes, with B flipped when the two world directions disagree. */
+  const axesOf = (j: PhysicsJointInput, a: RAPIER.RigidBody, b: RAPIER.RigidBody) => {
+    const rawA = j.axisA ?? j.axis;
+    const rawB = j.axisB ?? j.axisA ?? j.axis;
+    if (!rawA || !rawB) {
+      throw new Error(`joint ${j.bodyA}~${j.bodyB} needs axis, axisA + axisB, or axisWorld`);
+    }
+    let axisB: [number, number, number] = [rawB[0], rawB[1], rawB[2]];
+    const ma = quatToMatrix3(a.rotation());
+    const mb = quatToMatrix3(b.rotation());
+    const wa = [0, 1, 2].map((i) => ma[i]![0]! * rawA[0] + ma[i]![1]! * rawA[1] + ma[i]![2]! * rawA[2]);
+    const wb = [0, 1, 2].map((i) => mb[i]![0]! * axisB[0] + mb[i]![1]! * axisB[1] + mb[i]![2]! * axisB[2]);
+    // The axis is a LINE, but rapier aligns the two joint FRAMES; opposite world
+    // directions make the solver resolve a 180° frame twist as motion.
+    if (wa[0]! * wb[0]! + wa[1]! * wb[1]! + wa[2]! * wb[2]! < 0) {
+      axisB = [-axisB[0], -axisB[1], -axisB[2]];
+    }
+    return { axisA: [rawA[0], rawA[1], rawA[2]] as [number, number, number], axisB };
+  };
+
+  // ---- t=0 assembly gate (mirrors motion's assertAssembledAtStart) ----------
+  const initialJointGaps: { joint: string; gapMm: number }[] = [];
+  const broken: string[] = [];
+  for (const j of scenario.joints ?? []) {
+    const a = bodies.get(j.bodyA);
+    const b = bodies.get(j.bodyB);
+    if (!a || !b) throw new Error(`joint references unknown part: ${!a ? j.bodyA : j.bodyB}`);
+    const pa = worldPoint(a, { x: j.anchorA[0], y: j.anchorA[1], z: j.anchorA[2] });
+    const pb = worldPoint(b, { x: j.anchorB[0], y: j.anchorB[1], z: j.anchorB[2] });
+    let dx = pa[0] - pb[0];
+    let dy = pa[1] - pb[1];
+    let dz = pa[2] - pb[2];
+    if (j.type === 'prismatic') {
+      const { axisA } = axesOf(j, a, b);
+      const m = quatToMatrix3(a.rotation());
+      const axis = [0, 1, 2].map((i) => m[i]![0]! * axisA[0] + m[i]![1]! * axisA[1] + m[i]![2]! * axisA[2]);
+      const len = Math.hypot(axis[0]!, axis[1]!, axis[2]!) || 1;
+      const u = axis.map((v) => v! / len);
+      const along = dx * u[0]! + dy * u[1]! + dz * u[2]!;
+      dx -= along * u[0]!; dy -= along * u[1]!; dz -= along * u[2]!;
+    }
+    const gap = Math.hypot(dx, dy, dz);
+    initialJointGaps.push({ joint: `${j.bodyA}~${j.bodyB}`, gapMm: +gap.toFixed(4) });
+    if (gap > JOINT_TOLERANCE_MM) {
+      broken.push(
+        `joint ${j.bodyA}~${j.bodyB} (${j.type}): anchors ${gap.toFixed(2)}mm apart — `
+        + `A-side world [${pa.map((v) => v.toFixed(2)).join(', ')}] vs `
+        + `B-side world [${pb.map((v) => v.toFixed(2)).join(', ')}]`,
+      );
+    }
+  }
+  if (broken.length > 0) {
+    throw new Error(
+      `simulate_physics REFUSED: the mechanism is not assembled at t=0 — ${broken.length} of `
+      + `${initialJointGaps.length} joints exceed the ${JOINT_TOLERANCE_MM}mm anchor tolerance:\n`
+      + broken.map((line, index) => `  ${index + 1}. ${line}`).join('\n')
+      + '\nFix the anchors or the placement; do not widen the tolerance. Every result such a run '
+      + 'could produce (drift, penetration, topple) would describe that unassembled pose, not the design.',
+    );
   }
 
   // Joints: revolute (hinge) and prismatic (slide).
+  const jointContacts = scenario.jointContacts === true;
+  const contactsDisabled: string[] = [];
   const jointAnchors: {
     name: string;
     type: 'revolute' | 'prismatic';
@@ -302,12 +431,15 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     if (!a || !b) throw new Error(`joint references unknown part: ${!a ? j.bodyA : j.bodyB}`);
     const anchorA = { x: j.anchorA[0], y: j.anchorA[1], z: j.anchorA[2] };
     const anchorB = { x: j.anchorB[0], y: j.anchorB[1], z: j.anchorB[2] };
-    const axis = { x: j.axis[0], y: j.axis[1], z: j.axis[2] };
+    const { axisA, axisB } = axesOf(j, a, b);
+    const axis = { x: axisA[0], y: axisA[1], z: axisA[2] };
     const type = j.type === 'prismatic' ? 'prismatic' : 'revolute';
     const params = type === 'prismatic'
       ? RAPIER_.JointData.prismatic(anchorA, anchorB, axis)
-      : RAPIER_.JointData.revolute(anchorA, anchorB, axis);
+      : RAPIER_.JointData.revoluteWithAxes(anchorA, anchorB, { x: axisA[0], y: axisA[1], z: axisA[2] }, { x: axisB[0], y: axisB[1], z: axisB[2] });
     const joint = world.createImpulseJoint(params, a, b, true);
+    joint.setContactsEnabled(jointContacts);
+    if (!jointContacts) contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
     if (type === 'prismatic' && j.limits) {
       (joint as RAPIER.PrismaticImpulseJoint).setLimits(j.limits[0], j.limits[1]);
     }
@@ -400,7 +532,8 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     for (const name of fellOverChecks) {
       if (toppleNoted.has(name)) continue;
       const r = samplePose(name).rotation;
-      if (upTiltDegrees({ x: r[0], y: r[1], z: r[2], w: r[3] }) > 30) {
+      const q0 = initialRotations.get(name)!;
+      if (relativeTiltDegrees({ x: r[0], y: r[1], z: r[2], w: r[3] }, q0) > TOPPLE_EVENT_DEG) {
         toppleNoted.add(name);
         noteStep(step, `倾倒:${name}`);
       }
@@ -459,7 +592,8 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
   const finalPositions: Record<string, [number, number, number]> = {};
   for (const name of fellOverChecks) {
     const r = samplePose(name).rotation;
-    fellOver[name] = upTiltDegrees({ x: r[0], y: r[1], z: r[2], w: r[3] }) > 60;
+    const q0 = initialRotations.get(name)!;
+    fellOver[name] = relativeTiltDegrees({ x: r[0], y: r[1], z: r[2], w: r[3] }, q0) > TOPPLE_VERDICT_DEG;
   }
   let anyMoving = false;
   for (const p of scenario.parts) {
@@ -533,6 +667,23 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       'cross-check part fit with check_assembly / validate_assembly instead',
     );
   }
+  if (contactsDisabled.length > 0) {
+    notes.push(
+      'jointed pairs do not collide (bearing clearance is design intent): '
+      + `${contactsDisabled.join(', ')}; a stopper that really is supposed to collide on exactly that pair `
+      + 'must be verified another way (or pass jointContacts: true and expect the solver to resolve the '
+      + 'bearing overlap as a collision)',
+    );
+  }
+  const nonConvexDynamic = scenario.parts
+    .filter((p) => p.bodyType === 'dynamic' && colliderKinds[p.name] === 'trimesh')
+    .map((p) => p.name);
+  if (nonConvexDynamic.length > 0) {
+    notes.push(
+      'non-convex dynamic part(s) use exact trimesh colliders, not a single convex hull: '
+      + `${nonConvexDynamic.join(', ')} (a hull would fill their cavities and report phantom contact)`,
+    );
+  }
 
   // ---- quasi-static hold analysis for prismatic joints with staticFriction ----
   const holdAnalysis: NonNullable<PhysicsReport['metrics']['holdAnalysis']> = [];
@@ -542,10 +693,11 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     if (!b) continue;
     const massKg = b.mass(); // density kg/mm³ × mm³ → kg
     const m = quatToMatrix3(b.rotation());
+    const rawAxis = j.axisB ?? j.axis ?? j.axisA!;
     const axisWorld: [number, number, number] = [
-      m[0]![0]! * j.axis[0] + m[0]![1]! * j.axis[1] + m[0]![2]! * j.axis[2],
-      m[1]![0]! * j.axis[0] + m[1]![1]! * j.axis[1] + m[1]![2]! * j.axis[2],
-      m[2]![0]! * j.axis[0] + m[2]![1]! * j.axis[1] + m[2]![2]! * j.axis[2],
+      m[0]![0]! * rawAxis[0] + m[0]![1]! * rawAxis[1] + m[0]![2]! * rawAxis[2],
+      m[1]![0]! * rawAxis[0] + m[1]![1]! * rawAxis[1] + m[1]![2]! * rawAxis[2],
+      m[2]![0]! * rawAxis[0] + m[2]![1]! * rawAxis[1] + m[2]![2]! * rawAxis[2],
     ];
     const alen = Math.hypot(...axisWorld) || 1;
     const u = axisWorld.map((x) => x / alen) as [number, number, number];
@@ -578,6 +730,10 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       maxHorizontalDisplacementMm,
       jointViolations,
       settled: !anyMoving,
+      initialJointGaps,
+      jointToleranceMm: JOINT_TOLERANCE_MM,
+      contactsDisabled,
+      colliders: colliderKinds,
       ...(holdAnalysis.length ? { holdAnalysis } : {}),
       notes,
     },
