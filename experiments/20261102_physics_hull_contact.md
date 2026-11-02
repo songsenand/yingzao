@@ -62,6 +62,8 @@
 
 命令：`node scripts/accept-motion-axes.mjs`。这支持了“r001 是锚点/轴输入错误，不是闭环不可解”的判断。
 
+工具级复跑：`examples/roberval-balance` 已生成 **r038**（physics，pass，0mm 穿透/0 约束异常）与 **r039**（motion，pass，0mm 漂移/24 采样）；r001/r002 的 `supersededBy` 分别指向 r039/r038。
+
 ## 分析
 
 - H1 成立：r002 的直接触发因素是凸包把真实 0 重叠变成 12L 穿模；`maxPenetrationMm=40.16` 与 12L 重叠的尺度一致。
@@ -109,4 +111,4 @@ node scripts/accept-physics-parity.mjs
 
 ## 结论与下一步
 
-physics 侧的 r002 不是“闭环不可解”，而是凸包碰撞体 + 关节接触 + 单轴三个可修错误；修复后同一批 STL 从 25.18mm 穿透/5 个约束异常降到 0/0，漂移 0.54mm。motion 侧的 r001 用重基 + 逐体轴复跑也从 105.6mm 漂移降到 0，说明它同样是输入/轴问题。下一步：把两个新回归加入 CI，并用真实 `simulate_motion` 工具（`anchorWorld`）重跑 r001 生成可引用的 run。
+physics 侧的 r002 不是“闭环不可解”，而是凸包碰撞体 + 关节接触 + 单轴三个可修错误；修复后同一批 STL 从 25.18mm 穿透/5 个约束异常降到 0/0，漂移 0.54mm。motion 侧的 r001 用重基 + 逐体轴复跑也从 105.6mm 漂移降到 0，说明它同样是输入/轴问题。下一步：把两个新回归加入 CI；r038/r039 已作为工具级证据生成（见上）。
