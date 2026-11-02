@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { parseBinaryStl } from './mesh.ts';
 import { rotateVec } from './assembly-check.ts';
+import { jointLoopClosers } from './joint-graph.ts';
 import type { PhysicsReport, PoseSample, Trajectory } from './physics.ts';
 
 export interface MotionPartInput {
@@ -225,6 +226,10 @@ export interface MotionReport {
     geometrySuspectRule?: string;
     /** How many of `geometrySuspects` are WARNINGS (placement), not notes. */
     geometrySuspectWarn?: number;
+    /** The kinematic graph contains a cycle (a fact, not a verdict). */
+    closedLoop?: boolean;
+    /** The joints that close a loop, in declaration order. */
+    loopJoints?: string[];
   };
   /** Per-sample positions along each recorded part's dominant axis. */
   followersDetail: Record<string, { t: number[]; vals: number[]; axis: 'x' | 'y' | 'z' }>;
@@ -835,6 +840,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     })),
   };
 
+  const loopJoints = jointLoopClosers(scenario.joints);
   return {
     overallStatus: clean ? 'pass' : 'check',
     metrics: {
@@ -851,6 +857,8 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       maxJointDriftMm: +maxJointDriftMm.toFixed(4),
       jointViolations,
       diverged,
+      closedLoop: loopJoints.length > 0,
+      loopJoints,
     },
     followersDetail,
     keyframes: keyframes.slice(0, 8),

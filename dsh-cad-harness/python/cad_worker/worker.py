@@ -3530,6 +3530,37 @@ TOPPLE_EVENT_DEG = 30.0
 TOPPLE_VERDICT_DEG = 60.0
 
 
+def _joint_loop_closers(joints) -> list:
+    """Joints whose endpoints are already connected, in declaration order.
+
+    A closed loop is a property of the kinematic graph, not of a solver. The
+    Roberval balance (5 links, 6 hinges) closes two loops and passes; the report
+    should say both facts instead of leaving the loop implicit. Tree -> [].
+    """
+    parent: dict = {}
+
+    def find(x: str) -> str:
+        root = x
+        while parent.get(root, root) != root:
+            root = parent[root]
+        cur = x
+        while parent.get(cur, cur) != cur:
+            nxt = parent[cur]
+            parent[cur] = root
+            cur = nxt
+        return root
+
+    closers: list = []
+    for j in joints:
+        a = find(j["bodyA"])
+        b = find(j["bodyB"])
+        if a == b:
+            closers.append(f"{j['bodyA']}~{j['bodyB']}")
+            continue
+        parent[a] = b
+    return closers
+
+
 def _euler_to_quat(deg) -> tuple:
     """Euler XYZ degrees → quaternion (x, y, z, w), same composition as TS."""
     rx, ry, rz = (float(d) * math.pi / 180 for d in deg)
@@ -6101,6 +6132,7 @@ def op_simulate_motion(params: dict) -> dict:
         ],
     }
 
+    loop_closers = _joint_loop_closers(scenario["joints"])
     return {
         "overallStatus": "pass" if clean else "check",
         "metrics": {
@@ -6117,6 +6149,8 @@ def op_simulate_motion(params: dict) -> dict:
             "maxJointDriftMm": round(max_joint_drift, 4),
             "jointViolations": joint_violations,
             "diverged": diverged,
+            "closedLoop": bool(loop_closers),
+            "loopJoints": loop_closers,
         },
         "followersDetail": followers_detail,
         "keyframes": keyframes[:8],
@@ -6594,6 +6628,7 @@ def op_simulate_physics(params: dict) -> dict:
             "the rigid-body solver did not simulate friction"
         )
 
+    loop_closers = _joint_loop_closers(scenario.get("joints") or [])
     metrics = {
         "maxPenetrationMm": round(abs(min(0.0, max_penetration)), 4),
         "settledPenetrationMm": round(abs(min(0.0, settled_penetration)), 4),
@@ -6605,6 +6640,8 @@ def op_simulate_physics(params: dict) -> dict:
         "jointToleranceMm": JOINT_TOLERANCE_MM,
         "contactsDisabled": contacts_disabled,
         "colliders": collider_kinds,
+        "closedLoop": bool(loop_closers),
+        "loopJoints": loop_closers,
         "notes": notes,
     }
     if hold_analysis:

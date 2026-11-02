@@ -916,6 +916,8 @@ export function registerCadTools(
       // scenario has no drive, instead of encoding "no crank" as a magic value.
       ...(report.metrics.maxSampleGapDeg === null ? {} : { maxSampleGapDeg: report.metrics.maxSampleGapDeg }),
       maxJointDriftMm: report.metrics.maxJointDriftMm,
+      closedLoop: report.metrics.closedLoop ?? false,
+      loopJoints: report.metrics.loopJoints ?? [],
       // Measured BEFORE stepping (assertAssembledAtStart). It used to be computed and
       // thrown away, so a scenario 1.9mm from assembled passed under a 2mm tolerance with
       // no trace of how close it was (2026-10-23 audit, FIX-B2).
@@ -2536,6 +2538,8 @@ export function registerCadTools(
         jointToleranceMm: svg.jointToleranceMm ?? 2,
         contactsDisabled: svg.contactsDisabled ?? [],
         colliders: svg.colliders ?? {},
+        closedLoop: svg.closedLoop ?? false,
+        loopJoints: svg.loopJoints ?? [],
         ...(svg.holdAnalysis ? { holdAnalysis: svg.holdAnalysis } : {}),
         notes: svg.notes,
         geometrySuspects: suspectLines,
@@ -2646,6 +2650,14 @@ export function registerCadTools(
           colliders: {
             type: 'object', required: true, additionalProperties: true,
             description: 'Collision shape per part: "hull" (convex) or "trimesh" (concave; exact, no phantom contact).',
+          },
+          closedLoop: {
+            type: 'boolean', required: true,
+            description: 'The kinematic graph contains a cycle. A FACT about the mechanism, not a verdict: a closed loop can pass. It is reported so a reader need not re-derive connectivity.',
+          },
+          loopJoints: {
+            type: 'array', required: true, items: { type: 'string' },
+            description: 'The joints that close a loop, in declaration order (empty for a tree).',
           },
           holdAnalysis: {
             type: 'array',
@@ -2948,6 +2960,14 @@ export function registerCadTools(
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
           deliverability: { type: 'string', description: 'Present only when blocking: why this mechanism is not deliverable and the two ways out.' },
           maxJointDriftMm: { type: 'number', required: true },
+          closedLoop: {
+            type: 'boolean', required: true,
+            description: 'The kinematic graph contains a cycle. A FACT about the mechanism, not a verdict: a closed loop can pass (the Roberval balance has two).',
+          },
+          loopJoints: {
+            type: 'array', required: true, items: { type: 'string' },
+            description: 'The joints that close a loop, in declaration order (empty for a tree).',
+          },
           geometrySuspects: {
             type: 'array', required: true, items: { type: 'string' },
             description: 'Parts that are far from everything BY THEIR OWN SIZE (gap ÷ bbox diagonal > 5) or are placeholder geometry (<= 24 triangles). A fact, not a verdict: status is unchanged. Each line carries the numbers behind it.',

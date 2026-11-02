@@ -5264,3 +5264,26 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 
 **影响：** `src/host/motion.ts`（`MotionJointInput` / `assertAssembledAtStart` / joint 构造 / 漂移检查）、`python/cad_worker/worker.py`（motion joint 构造）、`src/host/tools.ts`（`simulate_motion` 的 `axisA`/`axisB`/`axisWorld` 解析与 schema）、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md`、`examples/roberval-balance/README.md` §6.3/§10/§11、`scripts/accept-motion-axes.mjs`（新）。
 **行为变化：** 单 `axis` 在旋转件上仍按“同一局部向量”解释；跨朝向必须用 `axisWorld`/逐体轴，否则会得到错误运动而不是拒绝。
+
+## 2026-11-02（补二）：闭环是报告事实，罗伯威尔契约接入 motion-clearance
+
+**触发条件：** 第 1 条（用户拍板“做 1 + 2”）+ 第 4 条（跨 physics/motion 报告、assembly 契约、示例与验收）。
+
+**要解决的问题：** 旧 README 把“闭环”当成不可用的原因，报告里却没有任何字段说明一个机构是不是闭环；同时罗伯威尔的装配契约只有 6 个静态 coaxial 接口，没有 motion-clearance，`delivery_audit` 一直报 `contract-without-motion`。
+
+**决策内容：**
+
+- `simulate_physics` / `simulate_motion` 报告新增 `closedLoop`（bool）与 `loopJoints`（闭合边的关节名，按声明顺序），由关节图 union-find 计算；它是**事实**，不改变 pass/fail。
+- `examples/roberval-balance/assembly/assembly.json` 增加 I21–I26 六个 `motion-clearance` 接口，引用 **r042**（当前装配版本 v066/v049/v050/v051 的 motion run，`closedLoop=true`、漂移 0、24/24），而不是引用合并研究体的 r039（会被 stale 门禁拒绝）。
+
+**理由：** 闭环可以 pass（r042 就是），把它写成拒绝条件会掩盖真正的问题；但读者也不该自己从关节表重推连通性。motion-clearance 的两半（静态距离 + 运动证据）必须引用**同版本**的 run，否则证据过期。
+
+**依据：**
+
+- `accept-physics-contact` / `accept-motion-axes`：5 件 6 铰 → `closedLoop=true`、`loopJoints.length=2`；单铰控制 → false/[]。
+- r042：`pass`、`maxJointDriftMm=0`、`interferenceChecks=24`、`closedLoop=true`、`loopJoints=[bottom~linkL,bottom~linkR]`。
+- r043：`check_assembly` 26/26 pass、0 hard、0 skipped、0 undeclared；I21/I26 的 detail 写明 “motion evidenced by r042”。
+- 旧 r041 assembly-check 被 r043 自动 supersede；r039 若被引用会因 v056–v059 被合并体替换而判 stale。
+
+**影响：** `src/host/joint-graph.ts`（新）、`src/host/physics.ts` / `motion.ts`（字段与计算）、`python/cad_worker/worker.py`（同一 union-find）、`src/host/tools.ts`（输出/schema）、`docs/TOOL-CONTRACTS.md`、`DESIGN.md`、`docs/llm/engines.md`、`skills/cad-simulation/SKILL.md`、`examples/roberval-balance/assembly/assembly.json`、示例 README、两个 acceptance。
+**行为变化：** 新报告多两个字段；契约从 20 个接口变为 26 个，`contract-without-motion` 不再出现。

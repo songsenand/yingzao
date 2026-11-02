@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { parseBinaryStl, shellCount } from './mesh.ts';
 import { renderScadPng } from './compile.ts';
+import { jointLoopClosers } from './joint-graph.ts';
 
 export interface PhysicsPartInput {
   name: string;
@@ -126,6 +127,10 @@ export interface PhysicsReport {
     contactsDisabled?: string[];
     /** The collision shape each body actually got: "hull" or "trimesh". */
     colliders?: Record<string, 'hull' | 'trimesh'>;
+    /** The kinematic graph contains a cycle (a fact, not a verdict). */
+    closedLoop?: boolean;
+    /** The joints that close a loop, in declaration order. */
+    loopJoints?: string[];
     /** Honest-input notes: contact topology, hold-analysis caveats. */
     notes: string[];
   };
@@ -722,6 +727,7 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     );
   }
 
+  const loopJoints = jointLoopClosers(scenario.joints ?? []);
   return {
     metrics: {
       maxPenetrationMm: +Math.abs(Math.min(0, maxPenetration)).toFixed(4),
@@ -734,6 +740,8 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       jointToleranceMm: JOINT_TOLERANCE_MM,
       contactsDisabled,
       colliders: colliderKinds,
+      closedLoop: loopJoints.length > 0,
+      loopJoints,
       ...(holdAnalysis.length ? { holdAnalysis } : {}),
       notes,
     },

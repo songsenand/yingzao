@@ -20,6 +20,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - No gravity. A rack is driven by `pitchRadiusMm`, never a sinusoid; `phaseRad` offsets by `r × phaseRad`.
 - **A crank is not required.** `drive` is optional: when every mover is an `oscillator` (a guide/valve on a prescribed path) the time base is the oscillator period and the reply says `hasCrank: false`. Only "no drive AND no oscillator" is refused (nothing would move).
 - **Geometry sanity is a fact, not a verdict.** A part whose gap to the nearest part ÷ its own bbox diagonal > 5 is listed as 离群; ≤24 triangles is listed as 简单盒体. Neither changes pass/fail, but a non-empty `geometrySuspects` means "interference 0" may have proven nothing (two dummies parked 500mm away). The rule travels with the result as `geometrySuspectRule`.
+- **`closedLoop` is a fact, not a verdict.** `loopJoints` names the edges that close a cycle (union-find); a tree is false/[] and the Roberval balance is true/2. A closed loop can pass.
 
 ## Physics (`simulate_physics`)
 
@@ -31,6 +32,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - **t=0 is gated.** A joint anchor gap > 2mm is REFUSED with both world anchors (`initialJointGaps`), never warmed up. Same rule as motion.
 - **A joint between differently-oriented bodies needs per-body axes (and anchors).** `axis` is one local vector for both and is only correct for parallel frames; use `axisA`/`axisB`, or `axisWorld` (resolved to each body), and prefer `anchorWorld` over hand-converted local anchors. A bare `axis` on a [90,0,0]-rotated beam is how the Roberval frame got twisted.
 - **Topple is relative to the authored pose**, not world up: a beam authored at 90° is not "toppled" at t=0. 30° labels the event, 60° sets `fellOver`.
+- **`closedLoop` / `loopJoints`** are graph facts (union-find), not gates; a closed loop can pass.
 - No force/torque output.
 - **The same geometry-sanity rule runs here** (`geometrySuspects`): a body dropped 500mm from everything reports a penetration number that describes nothing. Same criterion, same "fact, not a gate".
 

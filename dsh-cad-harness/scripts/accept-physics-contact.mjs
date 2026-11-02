@@ -92,6 +92,7 @@ function assertReport(tag, report) {
   const worst = Math.max(...Object.keys(initial).map((n) => drift(report.finalPositions[n], initial[n])));
   check(worst < 1, `${tag}: the mechanism stays put (drift < 1mm)`, `worst ${worst.toFixed(3)}mm`);
   check(m.colliders.top_beam === 'trimesh', `${tag}: non-convex beam uses the exact mesh`, JSON.stringify(m.colliders));
+  check(m.closedLoop === true && m.loopJoints.length === 2, `${tag}: the graph is reported as a closed loop (2 closers)`, `${m.closedLoop} ${JSON.stringify(m.loopJoints)}`);
 }
 
 console.log('--- physics contact regression: r002 ---');
@@ -137,6 +138,7 @@ const authored = {
 };
 const tilt = await runPhysicsInTs(authored);
 check(tilt.metrics.fellOver.beam === false, 'authored 90° beam is not "toppled"', JSON.stringify(tilt.metrics.fellOver));
+check(tilt.metrics.closedLoop === false && tilt.metrics.loopJoints.length === 0, 'a single hinge is a tree, not a loop', `${tilt.metrics.closedLoop} ${JSON.stringify(tilt.metrics.loopJoints)}`);
 check(!tilt.trajectory.events.some((e) => /倾倒:beam/.test(e.label)), '  …and no topple event is logged', JSON.stringify(tilt.trajectory.events));
 
 resetPythonWorker();

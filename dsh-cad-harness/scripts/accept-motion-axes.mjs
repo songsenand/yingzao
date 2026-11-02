@@ -119,6 +119,7 @@ function assertMotion(tag, report) {
   check(report.metrics.jointViolations.length === 0, `${tag}: no joint violations`, report.metrics.jointViolations.join('; ') || 'none');
   check(report.metrics.interferenceChecks >= 24, `${tag}: 24+ sampled poses`, `${report.metrics.interferenceChecks}`);
   check(report.metrics.samplingSatisfied === true, `${tag}: coverage satisfied`, String(report.metrics.samplingSatisfied));
+  check(report.metrics.closedLoop === true && report.metrics.loopJoints.length === 2, `${tag}: the graph is reported as a closed loop (2 closers)`, `${report.metrics.closedLoop} ${JSON.stringify(report.metrics.loopJoints)}`);
 }
 
 console.log('--- motion axes regression: r001 ---');

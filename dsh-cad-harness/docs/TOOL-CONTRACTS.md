@@ -626,7 +626,7 @@ Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoi
 simulate_motion({ parts: [], joints: [] })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `closedLoop`, `loopJoints`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`
@@ -647,7 +647,7 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 simulate_physics({ parts: [] })
 ```
 
-returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `holdAnalysis`, `notes`, `keyframes`
+returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `closedLoop`, `loopJoints`, `holdAnalysis`, `notes`, `keyframes`
 
 
 ## `simulate_stress`

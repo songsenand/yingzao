@@ -64,6 +64,11 @@
 
 工具级复跑：`examples/roberval-balance` 已生成 **r038**（physics，pass，0mm 穿透/0 约束异常）与 **r039**（motion，pass，0mm 漂移/24 采样）；r001/r002 的 `supersededBy` 分别指向 r039/r038。
 
+### P1 补记：闭环事实与 motion-clearance
+
+- `closedLoop` / `loopJoints` 已加入 physics 与 motion 报告；r042（当前装配版本 v066/v049/v050/v051）是第一条带该字段的 motion run：`closedLoop=true`、`loopJoints=[bottom~linkL, bottom~linkR]`、漂移 0、24/24。
+- `assembly.json` 的 I21–I26 是 6 个 `motion-clearance` 接口，引用 r042；r043 的 `check_assembly` 为 26/26 pass、0 hard、0 skipped、0 undeclared。r039 用的是合并研究体，不能作为当前装配的证据（stale），所以契约引用 r042 而不是 r039。
+
 ## 分析
 
 - H1 成立：r002 的直接触发因素是凸包把真实 0 重叠变成 12L 穿模；`maxPenetrationMm=40.16` 与 12L 重叠的尺度一致。

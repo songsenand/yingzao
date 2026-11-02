@@ -506,6 +506,96 @@
           "min": 1.5,
           "max": 2.5
         }
+      },
+      {
+        "id": "I21",
+        "a": "base.bottom_axis",
+        "b": "bottom.center_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
+      },
+      {
+        "id": "I22",
+        "a": "base.top_axis",
+        "b": "top.center_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
+      },
+      {
+        "id": "I23",
+        "a": "top.left_axis",
+        "b": "linkL.top_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
+      },
+      {
+        "id": "I24",
+        "a": "top.right_axis",
+        "b": "linkR.top_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
+      },
+      {
+        "id": "I25",
+        "a": "bottom.left_axis",
+        "b": "linkL.bottom_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
+      },
+      {
+        "id": "I26",
+        "a": "bottom.right_axis",
+        "b": "linkR.bottom_axis",
+        "type": "转动副",
+        "check": "motion-clearance",
+        "severity": "hard",
+        "tolerance": {
+          "min": -0.25,
+          "max": 0.25
+        },
+        "params": {
+          "runId": "r042"
+        }
       }
     ]
   }

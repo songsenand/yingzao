@@ -397,6 +397,7 @@ interface PhysicsResult {
 - 碰撞体：静态/运动学用 `ColliderDesc.trimesh`；动态件先经 Manifold 凸性检测（体积差 <1% 走凸包，非凸才 trimesh），全开 CCD（毫米尺度隧穿）
 - 关节：`revolute` 用 `revoluteWithAxes(anchor1, anchor2, axis1, axis2)`，`prismatic` 用单轴；两端局部轴由 `axisA`/`axisB` 给出（或 `axisWorld` 由工具换算），建关节前若两端世界方向相反则翻转 B，避免 180° 框架扭转。关节两端接触默认关闭（`contactsDisabled` 回报）；`jointContacts: true` 才让关节对互撞。
 - t=0 装配门禁：每个关节的 anchor 间隙先量后跑，>2mm 直接拒绝并列出两侧世界坐标；不靠调大容差绕过。
+- 闭环事实：关节图 union-find 得 `closedLoop` / `loopJoints`，随报告返回；它是事实，不改变 pass/fail（罗伯威尔 5 件 6 铰 = true / 2 条闭合边）。
 - 仿真循环：`world.step()`
 - **关键帧选择（v2.9 更正，取代原文「每 10 步渲染一次」）**：**事件驱动 + 预算内均匀补位**——事件帧 = 碰撞开始（`接触:A↔B`）、倾倒转折（up 倾角首破 30°）、最大穿透步、`final`（不可裁）；预算 `keyframeCount` 默认 6，事件帧按 `minGap` 去重后仍不足则按 `keyframeEvery = steps/keyframeCount` 均匀补 `context` 帧；被选步的位姿取邻近轨迹帧（网格间距 ≈0.6%，标签保留真实步号）。**另有一条与关键帧分离的轨迹时间线**（`trajEvery = ceil(steps/160)`，循环内均匀采样 ≈160 帧，含 `events`），供面板回放与轨迹数据消费（v2.5）
 - 穿透检测：遍历接触对读 `contact.dist` 取最小值，**瞬态最大**与**稳态**（末 10% 步）双指标分开
@@ -1427,7 +1428,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 项 | 说明 | 状态 |
 |---|---|---|
 | 装配清单 v2：层级递归 + 端口语义 | 节点同构已在 schema 预留（`children`），需补：跨层变换合成、端口条目在父级解析、按「整体装拆」判据分层 | 待办 |
-| 装配清单 v2：L1 运动接口 | `转动副/滑动副` 走 `simulate_motion` 干涉时间线 + 行程核对；`spring` 类型参数（freeLength/stiffness/damping）→ **rapier 0.20 有原生 `JointData.spring(restLength, stiffness, damping, anchorA, anchorB)`**（v2.13 更正：早前"需自研每步施加 F=kΔx+cv 力模型"的说法有误），直接用原生关节 + 行为验收 | 待办 |
+| 装配清单 v2：L1 运动接口 | `转动副/滑动副` 走 `simulate_motion` 干涉时间线 + 行程核对；`spring` 类型参数（freeLength/stiffness/damping）→ **rapier 0.20 有原生 `JointData.spring(restLength, stiffness, damping, anchorA, anchorB)`**（v2.13 更正：早前"需自研每步施加 F=kΔx+cv 力模型"的说法有误，直接用原生关节 + 行为验收）。**罗伯威尔 6 铰已接入 `motion-clearance`（I21–I26 引用 r042，r043 判 26/26 pass）；通用 v2 仍待** | 部分完成 |
 | 装配清单 v2：介入分级 | `review: auto\|human` 字段（零件内变更自动、接口/端口变更必审），接版本 manifest status | 待办 |
 | 装配级版本图 | 装配 = 零件版本引用图（A@v3 + B@v7 → 装配 v12）；当前版本库仍是零件级。**拼接（按版本号布尔合成新件）依赖它** | 待办 |
 | 邻接/空间查询面 | 「谁碰到这个面」类查询 + 未声明接口发现已有雏形（`validate_assembly` 对账），需可查询化 | 部分 |
