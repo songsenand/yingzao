@@ -3057,9 +3057,9 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'project_info',
     description:
-      'Read-only: which CAD corpus THIS session writes to (boundRoot/boundAt), which marker it has, the live working directory, and where a first CAD call would bind. ' +
-      'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the binding — a bound session does not switch, so this is the moment to tell the user rather than silently write to the old project. ' +
-      'Call it before assuming a path is a project; a directory with no marker is NOT a new project when an ancestor has one.',
+      'Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. ' +
+      'There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). ' +
+      'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch.',
     parameters: {},
     output: {
       schema: {
@@ -3070,8 +3070,9 @@ export function registerCadTools(
           boundAt: { type: 'string' },
           marker: { type: 'string', description: '"project" | "legacy"; absent when unbound.' },
           liveCwd: { type: 'string' },
-          wouldBindTo: { type: 'string', required: true, description: 'Where a first CAD call would bind right now.' },
-          wouldBindMarker: { type: 'string', required: true, description: '"project" | "legacy" | "new".' },
+          selected: { type: 'boolean', required: true, description: 'True when this session has explicitly selected a project.' },
+          wouldBindTo: { type: 'string', description: 'The selected project root; absent when nothing is selected.' },
+          wouldBindMarker: { type: 'string', description: 'Marker kind at the selected root; absent when nothing is selected.' },
           mismatch: { type: 'boolean', required: true, description: 'True when liveCwd resolves to a different corpus than boundRoot.' },
           ambiguous: { type: 'boolean', required: true, description: 'True when an UNBOUND session is inside a project but not itself one — the first write is refused until init_project/bind_project.' },
           workspace: { type: 'boolean', required: true, description: 'True when the resolved root is a workspace (a container, never a write target).' },
@@ -3081,8 +3082,8 @@ export function registerCadTools(
       render: (_args: unknown, value: any) => [{
         type: 'text',
         text: `project_info — ${value.note}` +
-          `\n  bound: ${value.boundRoot ?? '(unbound)'}${value.boundAt ? ` @ ${value.boundAt}` : ''}` +
-          `\n  live cwd: ${value.liveCwd ?? '(none)'} → would bind ${value.wouldBindTo} (${value.wouldBindMarker})` +
+          `\n  selected: ${value.selected ? value.boundRoot : '(none)'}${value.boundAt ? ` @ ${value.boundAt}` : ''}` +
+          (value.selected ? `\n  live cwd: ${value.liveCwd ?? '(none)'} (selected project does not switch)` : '') +
           (value.mismatch ? '\n  MISMATCH: live cwd is a different corpus; a bound session will NOT switch.' : '') +
           (value.workspace ? '\n  WORKSPACE: this root is a container, not a project; writes are REFUSED. Choose a member project or init_project a subdirectory.' : '') +
           (value.ambiguous ? '\n  AMBIGUOUS: live cwd is inside a project but is not a project; writes are REFUSED. init_project or bind_project.' : ''),
@@ -3092,14 +3093,15 @@ export function registerCadTools(
     async execute(_args: unknown, exec: unknown) {
       const info = await projectInfoFor(exec);
       const out: Record<string, unknown> = {
-        wouldBindTo: info.wouldBindTo,
-        wouldBindMarker: info.wouldBindMarker,
+        selected: info.selected,
         mismatch: info.mismatch,
         ambiguous: info.ambiguous,
         workspace: info.workspace,
         note: info.note,
       };
       if (info.sessionId) out.sessionId = info.sessionId;
+      if (info.wouldBindTo) out.wouldBindTo = info.wouldBindTo;
+      if (info.wouldBindMarker) out.wouldBindMarker = info.wouldBindMarker;
       if (info.boundRoot) out.boundRoot = info.boundRoot;
       if (info.boundAt) out.boundAt = info.boundAt;
       if (info.marker) out.marker = info.marker;
@@ -3111,11 +3113,10 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'init_project',
     description:
-      'Create a CAD project marker (`cad-data/project.json`) in a directory, WITHOUT writing any version/part/run. ' +
-      'Use this BEFORE the first CAD call when a new example/subproject must not inherit an ancestor corpus: write the marker, then open a new session with cwd = that directory. ' +
-      'It does NOT rebind the calling session; if the session is already bound, the marker is for the next session. ' +
-      'Refuses nothing and creates nothing else; a directory with an existing marker is reported as created:false. ' +
-      'A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions, which is the intended nested-project behaviour.',
+      'Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. ' +
+      'If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. ' +
+      'Use bind_project({dir}) instead for an existing marker. A directory with an existing marker is reported as created:false. ' +
+      'A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.',
     parameters: {
       dir: { type: 'string', required: true, description: 'Directory to make a project (absolute, or relative to the session workspace). Created if missing.' },
       title: { type: 'string', description: 'Human title for project.json (default: the directory basename).' },
@@ -3127,6 +3128,7 @@ export function registerCadTools(
           root: { type: 'string', required: true },
           key: { type: 'string', required: true },
           created: { type: 'boolean', required: true, description: 'False when a marker already existed.' },
+          bound: { type: 'boolean', required: true, description: 'True when this call also selected the new project for the current session.' },
           inheritedFrom: { type: 'string', description: 'Ancestor project this marker shadows; absent when the directory was already outside one.' },
           note: { type: 'string', required: true },
         },
@@ -3142,12 +3144,24 @@ export function registerCadTools(
       const live = await liveCwdOf(exec);
       const dir = isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir);
       const made = await createProjectMarker(dir, a.title);
+      const before = await projectInfoFor(exec);
+      let bound = false;
+      if (!before.boundRoot && before.sessionId) {
+        await bindSessionToProject(exec, made.root);
+        bound = true;
+      }
+      const note = bound
+        ? `created ${made.root} and selected it for this session; CAD tools now use it.`
+        : before.boundRoot
+          ? `${made.note} This session remains selected on ${before.boundRoot}; the new marker is for a new session.`
+          : `${made.note} No session id was available to select it; open a session in that directory.`;
       return {
         root: made.root,
         key: made.key,
         created: made.created,
+        bound,
         ...(made.inheritedFrom ? { inheritedFrom: made.inheritedFrom } : {}),
-        note: made.note,
+        note,
       };
     },
   }));
@@ -3155,13 +3169,11 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'bind_project',
     description:
-      'Explicitly bind this session to an EXISTING project root before the first CAD write. ' +
-      'Use it when the session cwd is a subdirectory of the project (e.g. src/) and you really mean the ancestor corpus: ' +
-      'otherwise the first write is REFUSED when the cwd is inside a project but is not itself a project. ' +
-      'It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-bound session — ' +
+      'Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. ' +
+      'It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-selected session — ' +
       'a wrong target is fixed by a new session, not by moving data after the fact.',
     parameters: {
-      dir: { type: 'string', description: 'Existing project root (absolute or relative to the live cwd). Default: the live cwd.' },
+      dir: { type: 'string', required: true, description: 'Existing project root (absolute, or relative to the live cwd). Required: there is no default.' },
     },
     output: {
       schema: {
@@ -3178,10 +3190,9 @@ export function registerCadTools(
     timeoutMs: 15_000,
     async execute(args: unknown, exec: unknown) {
       const a = args as { dir?: string };
+      if (!a.dir?.trim()) throw new Error('dir is required: pass the project path explicitly (there is no default cwd/root)');
       const live = await liveCwdOf(exec);
-      const dir = a.dir?.trim()
-        ? (isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir))
-        : (live ?? process.cwd());
+      const dir = isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir);
       const bound = await bindSessionToProject(exec, dir);
       return {
         ...bound,

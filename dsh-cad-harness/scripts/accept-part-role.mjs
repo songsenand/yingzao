@@ -39,12 +39,15 @@ const ctx = {
   reflect: { get: () => undefined }, on: () => {},
 };
 registerCadTools(ctx);
-const exec = { agent: { session: { header: { cwd: workspace } } } };
+const exec = { agent: { session: { header: { id: 'part-role', cwd: workspace } } } };
 const call = async (name, args) => {
   const def = tools.get(name);
   if (!def) throw new Error(`tool ${name} not registered`);
   return { value: await def.execute(args, exec) };
 };
+
+// Explicit project selection is mandatory (no cwd default).
+await call('bind_project', { dir: workspace });
 
 // Corpus: two parts, one version each, NO runs — every part's newest version is
 // uncited, so the baseline must flag both.

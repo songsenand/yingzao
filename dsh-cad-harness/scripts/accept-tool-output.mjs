@@ -80,7 +80,8 @@ check(unshaped.length === 0, 'every tool declares an object output schema', unsh
 // ── 3. a real body value goes through the guard ────────────────────────────
 // create_part is hermetic: no OpenSCAD, no Python worker, just the part store.
 await mkdir(workspace, { recursive: true });
-const exec = { agent: { session: { header: { cwd: workspace } } } };
+const exec = { agent: { session: { header: { id: 'output-contract', cwd: workspace } } } };
+await tools.get('init_project').execute({ dir: workspace }, exec);
 const created = await rejects(() => tools.get('create_part').execute({ name: 'output-contract-probe' }, exec));
 check(created === null, 'a real tool call returns a value the guard accepts', created ?? '');
 check(tools.has('create_part'), 'create_part is part of the catalog');

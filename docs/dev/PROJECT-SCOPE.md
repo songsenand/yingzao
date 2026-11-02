@@ -22,7 +22,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 - 项目根 = 会话 cwd：`projectDataDir(cwd) = <cwd>/cad-data`（`src/host/project.ts:54`）。
 - 工具侧从 `exec.agent.session.header.cwd` 取项目（`src/host/project.ts:123`）；`00a6013` 起对 `delegationDepth > 0` 的会话改读 workingDirectory，这是过渡桥。
-- `cad-data/project.json` 由 `ensureProjectDir` 在**第一次写**时落盘，记录 `cwd` / `key` / `title` / `createdAt`（`src/host/project.ts:193`）。
+- `cad-data/project.json` 由 `init_project`（或迁移/建 marker）落盘，记录 `cwd` / `key` / `title` / `createdAt`；CAD 工具不会自动创建项目。
 - 面板在会话 cwd 下**两层**内找 `<dir>/cad-data`（`src/host/workspaces.ts` 的 `MAX_DEPTH = 2`）。
 
 这套模型把三件事绑在一个字段上：**进程在哪（working directory）**、**会话属于哪个 workspace（header.cwd）**、**语料属于哪个项目（project root）**。
@@ -55,7 +55,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 2. 选择项目仍然零配置：`cd` 到项目（或其子目录）就是选择它。
 3. 子智能体用 `subagent({cwd})` 指到项目根或子目录时，CAD 工具写到同一个项目，不需要符号链接。
 4. 嵌套项目（如 `examples/ball-and-stick/<molecule>`）可被面板发现，不受“两层”限制。
-5. 不静默跨项目写；第一次写要能看见解析出的项目根。
+5. 不静默跨项目写；未显式选择项目时直接报错，错误里给出 `bind_project` / `init_project`。
 6. 项目可整体拷走 / 归档；删目录即删项目。
 7. 目录移动 / 改名后的稳定身份是后续目标（C/D），B 不承诺。
 
@@ -65,11 +65,17 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 - **项目身份 = 最近的、包含 `cad-data/project.json` 的祖先目录**。标记的父目录就是项目根。
 - **cwd 只是选择器**：从 Agent 的当前工作目录开始向上找；第一个标记胜出。
-- **没有标记**：当前工作目录是“新项目候选”；第一次**写**才创建 `<cwd>/cad-data/` 和标记。读取不创建。
+- **没有标记**：当前工作目录只是“候选”；不会因为一次写就自动变成项目。项目必须由
+  `init_project({dir})` 显式创建 marker。
+- **必须显式选择**：所有需要语料的 CAD 工具在会话未选择项目时直接报错，提示
+  `bind_project({dir})`（已有 marker）或 `init_project({dir})`（新项目）。`dir` 必填，没有 cwd 默认；
+  `init_project` 在未选择时会顺带选中新项目，在已选择时不 rebind。`project_info` 报 `selected:false`。
 - **workspace 是容器**：目录里有 `cad-workspace.json`（且没有 `cad-data/project.json`）时，解析结果是
   **workspace**，不是项目；写路径在 workspace 根上直接拒绝。项目必须在其子目录里显式建 marker。
-- **写目标 fail-closed**：未绑定会话的 cwd 在祖先项目内、自己无 marker 时，首次 CAD 写被拒绝；
-  必须 `init_project` 或 `bind_project`。不再静默绑祖先，也不事后搬语料。
+- **读取不带副作用**：`projectCwdOf` 只解析、不写 binding；只有 `bind_project`/`init_project` 或
+  显式工具选择会写会话选择。
+- **无 session id 的 headless 调用**没有可选择的主体，保留 resolver 路径（脚本/维护用）；交互
+  LLM 调用始终带 session id，因此严格走“未选择即报错”。
 - **嵌套项目**：目录自己带标记就胜出；要建嵌套项目，必须显式创建标记，不能靠“碰巧在父项目里”。
 - **符号链接不再用于项目切换**；根 `cad-data` / `assembly` 别名已清理。
 
@@ -80,9 +86,10 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 1. `canonical = realpath(start)`（解析符号链接；失败则 `resolve(start)`）。
 2. 从 `canonical` 向上逐级：
    - `<dir>/cad-data/project.json` 存在 → 返回 `<dir>`（新式标记）。
-   - `<dir>/cad-data/` 存在但没有 `project.json` → 返回 `<dir>`，标记为 **legacy**；第一次写时补写 `project.json`。
+   - `<dir>/cad-data/` 存在但没有 `project.json` → 返回 `<dir>`，标记为 **legacy**；`bind_project` 可选中它（补 marker 由后续写/迁移负责）。
    - `<dir>/cad-workspace.json` 存在（且没有上面的 cad-data）→ 返回 `<dir>`，标记为 **workspace**；写路径拒绝。
-3. 到文件系统根都没有 → 返回 `canonical`，标记为 **new**；第一次写时创建 `cad-data/project.json`。
+3. 到文件系统根都没有 → 返回 `canonical`，标记为 **new**；只有 `init_project` 会创建
+   `cad-data/project.json`，CAD 工具本身不会自动创建项目。
 
 规则要点：
 
@@ -99,18 +106,18 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 | 顶层会话在项目根 | 项目根 |
 | 顶层 `cd` 进 `spec/` | 同一个项目（最近标记在父级） |
 | 顶层 `cd` 到兄弟项目 | 兄弟项目（它有自己的标记） |
-| 顶层 `cd` 到 `/tmp/new`（无标记） | `/tmp/new` 作为新项目候选；第一次写才创建 |
+| 顶层 `cd` 到 `/tmp/new`（无标记） | 不是可写目标；必须 `init_project({dir:"/tmp/new"})` 显式创建 |
 | 子智能体 `cwd` = 项目根 | 项目根 |
 | 子智能体 `cwd` = 项目子目录 | 同一个项目 |
 | 子智能体 `cwd` = 兄弟项目 | 兄弟项目 |
 | 父项目里显式建了嵌套标记 | 嵌套项目（最近优先） |
 | 父项目内的子目录，自己无标记 | **不是可写目标**：未绑定会话的首次 CAD 写被拒绝，要求 `init_project` 或 `bind_project` |
 | 根有 `cad-workspace.json` | **workspace**：容器，不是项目；写路径拒绝，项目在其子目录 |
-| 老语料只有 `cad-data/`、无标记 | 该项目根；第一次写补标记 |
+| 老语料只有 `cad-data/`、无标记 | 该项目根；`bind_project` 可选中，marker 兼容 |
 | 符号链接路径 | 先 realpath，再按真实路径找标记 |
 
-> C-lite（2026-10-28）在 B 之上加了会话绑定：第一次 CAD 调用后，上表的“切换”只对
-> 新会话/未绑定会话成立；已绑定会话 `cd` 不切换。
+> C-lite（2026-10-28，2026-11-02 改为显式选择）：CAD 工具不会从 cwd 自动选项目；
+> 必须先 `bind_project` 或 `init_project`。已选择会话 `cd` 不切换。
 >
 > **写目标 fail-closed（2026-11-01）**：未绑定会话的 cwd 在祖先项目内、自己却没有 marker 时，
 > 首次 CAD 写直接拒绝（不静默绑祖先、不事后搬家）。选择是显式的：`init_project` 把当前目录
@@ -130,8 +137,9 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 ### 4.1 API
 
 - 新增 `resolveProjectRoot(start): { root, marker: 'project' | 'legacy' | 'workspace' | 'new' }`；同步实现（`existsSync` + 缓存），放在 `project.ts`。
-- `projectStoresFor` 走 `resolveProjectCwd(exec, { requireExplicit: true })`：workspace / 未标记子目录直接拒绝；
-  `projectCwdOf` 保持宽松（读/测试）。`init_project` / `bind_project` 不走 `projectStoresFor`。
+- `projectStoresFor` 走 `resolveProjectCwd(exec, { requireSelection: true })`：未选择项目直接拒绝
+  （错误里给出 `bind_project` / `init_project` 两条显式路径）。`projectCwdOf` 用 `{bind:false}`，
+  只读、不写 binding。`init_project` / `bind_project` / `project_info` 不走 `projectStoresFor`。
 - `projectCwdOf(exec)` 改为：
   1. 取 Agent 的 **workingDirectory**（`agent.ctx.get('workingDirectory').get(agent.session)`）；没有 service 时回退 `session.header.cwd`；
   2. 对起点调用 `resolveProjectRoot`，返回 `root`。
@@ -143,7 +151,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 ### 4.2 兼容与迁移
 
 - 现有 6 个 example 已有 `project.json`（葡萄糖、果糖、toy-balance、toy-balance2、microscope5、multirotor-propeller）；其余老语料按 legacy 处理，**不需要搬数据**。
-- legacy 语料（只有 `cad-data/`）第一次写补标记；读取照常。
+- legacy 语料（只有 `cad-data/`）可被 `bind_project` 选中；读取照常，工具不会自动补 marker。
 - 根 `cad-data` / `assembly` 符号链接、`fructose-molecule` 根别名：**已在 2026-10-28 收尾时清理**；查看用 cwd 指向分子目录或 `?project=`。
 - **2026-11-01 收口**：根 `cad-data`（v001–v007 + frog 副本）与根 `assembly/` 已清理；校准/简易件归档到
   `docs/archive/cad-calibration-2026-11-01/`，frog 只保留 `examples/windup-frog/cad-data/`；根改为
@@ -153,7 +161,7 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 ### 4.3 面板
 
-- 只读扫描，不创建标记；新项目在第一次写之前不出现在面板（和现在“空语料”一致）。
+- 只读扫描，不创建标记；面板不默认选任何项目，空路径显示“未选择”。
 - 扫描顺序稳定（路径序）；同一项目只出现一次（realpath 去重）。
 - 目录数上限、`SKIP` 列表保留，防止把 `node_modules` 扫进来。
 
@@ -166,14 +174,14 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
   - 子智能体 `cwd` = 项目根 / 子目录 → 写同一个 `cad-data`；
   - 顶层 `cd` 进子目录 → 不新建语料；
   - `cd` 到兄弟项目 → 切换；
-  - 新目录第一次写 → 创建标记；
+  - 新目录 `init_project` → 创建标记；未选择时顺带选中；
   - 面板能发现第 3 层及更深的项目。
 - 回归：`accept-project-cwd` 改成 B 的语义；`accept-project-scope` 全过；`npm run accept` 全过。
 
 ## 5. 风险
 
 - **行为变化**：在项目子目录里调用工具，现在会归到父项目；这是 B 的目的，但会改变“子目录 = 新项目”的旧习惯。
-- **legacy 误判**：任何名为 `cad-data/` 的目录都会被当成项目标记；本仓库里这是约定，但外部目录可能误伤。用 `project.json` 优先、legacy 只做兼容，并在第一次写时补标记。
+- **legacy 误判**：任何名为 `cad-data/` 的目录都会被当成项目标记；本仓库里这是约定，但外部目录可能误伤。用 `project.json` 优先、legacy 只做兼容；显式 `init_project`/迁移补标记。
 - **向上越界**：cwd 在某个父项目内部时，会归到那个项目；这是“最近标记”的定义，不是 bug。
 - **符号链接 / 权限**：realpath 失败、目录不可读时回退到起点；需要测试。
 - **性能**：每次解析向上 `exists`；按 canonical 缓存，写入新标记时失效。
@@ -185,8 +193,9 @@ B 解决的是**准生产力工具**档：单用户、本地、项目数十个�
 
 **最终形态**：会话创建时确定 `projectId` / `projectRoot`；工具从绑定取项目，`cd` 只改工作目录；子智能体继承或显式 `project` 覆盖；需要切换时用显式命令/新会话。
 
-**C-lite（先落地，2026-10-28）**：不改 DSH 会话创建/UI，插件在**第一次 CAD 工具调用**时把 B 解析出的项目根写入
-`$DSH_HOME/cad/sessions/<sessionId>.json`，之后该会话固定用它。
+**C-lite（先落地，2026-10-28；2026-11-02 改为显式选择）**：不改 DSH 会话创建/UI，插件在
+`bind_project` / `init_project` 时把项目根写入 `$DSH_HOME/cad/sessions/<sessionId>.json`，之后该会话固定用它；
+CAD 工具本身不自动选项目。
 - 子智能体独立绑定：`cwd` 在父项目内 → B 找到父项目（等同继承）；`cwd` 指向别的项目 → 绑定那个项目（等同显式覆盖）。
 - 显式切换：新会话；创建时选项目的 UI 是后续层。
 - **写目标显式**：`init_project` 创建 marker；`bind_project` 显式选祖先；两者都不复制/移动语料。

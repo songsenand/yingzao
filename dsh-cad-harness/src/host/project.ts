@@ -310,6 +310,14 @@ export interface ResolveProjectOptions {
    * Reads (`projectCwdOf`) stay permissive.
    */
   requireExplicit?: boolean;
+  /**
+   * Write/read tools: a CAD project must have been SELECTED explicitly.
+   * There is no default from cwd/root. Unbound callers get an error telling
+   * them to call bind_project({dir}) or init_project({dir}).
+   */
+  requireSelection?: boolean;
+  /** Read-only resolution: compute the path but do NOT write a session binding. */
+  bind?: boolean;
 }
 
 /** Async resolver: binding → live working directory → session header → server cwd. */
@@ -319,6 +327,20 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
   })?.agent;
   const rawId = agent?.session?.header?.id;
   const sessionId = typeof rawId === 'string' && rawId.trim() ? rawId : undefined;
+  if (opts.requireSelection && sessionId) {
+    const selected = readSessionBinding(sessionId);
+    if (!selected) {
+      throw new Error(
+        'No CAD project is selected. There is no default cwd/root: pass an explicit path with ' +
+        'bind_project({dir:"..."}) (existing project marker) or init_project({dir:"..."}) (new project), then retry.',
+      );
+    }
+    return { cwd: selected, newlyBound: false };
+  }
+  // No session id is the headless/test path (scripts and maintenance calls have
+  // no DSH session to select for). Interactive LLM calls always carry one, so the
+  // explicit-selection rule is enforced where it matters and never becomes a
+  // silent default for a user session.
   if (sessionId) {
     const bound = readSessionBinding(sessionId);
     if (bound) return { cwd: bound, newlyBound: false };
@@ -361,7 +383,7 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
     );
   }
   let newlyBound = false;
-  if (sessionId) {
+  if (sessionId && opts.bind !== false) {
     newlyBound = readSessionBinding(sessionId) === undefined;
     writeSessionBinding(sessionId, root);
     if (newlyBound && sessionId) {
@@ -376,7 +398,10 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
 
 /** Compatibility wrapper: the resolved root only. */
 export async function projectCwdOf(exec: unknown): Promise<string> {
-  return (await resolveProjectCwd(exec)).cwd;
+  // A READ must not select a project as a side effect. The panel/route can ask
+  // where a cwd resolves; only bind_project/init_project (or an explicit tool
+  // call with requireSelection) may write the session choice.
+  return (await resolveProjectCwd(exec, { bind: false })).cwd;
 }
 
 // First-bind echo (G5). A binding written from a WRONG cwd is what made the
@@ -410,10 +435,12 @@ export interface ProjectInfo {
   marker: ProjectRootMarker | null;
   /** The live working directory the resolver would start from. */
   liveCwd: string | null;
-  /** Where a FIRST CAD call would bind right now. */
-  wouldBindTo: string;
-  /** Marker kind the resolver sees at wouldBindTo. */
-  wouldBindMarker: ProjectRootMarker;
+  /** True when this session has explicitly selected a project. */
+  selected: boolean;
+  /** The selected project root; absent/null when nothing has been selected. */
+  wouldBindTo: string | null;
+  /** Marker kind at the selected root; absent/null when nothing has been selected. */
+  wouldBindMarker: ProjectRootMarker | null;
   /** True when the live cwd resolves to a different corpus than the binding. */
   mismatch: boolean;
   /** True when an UNBOUND session's cwd is inside a project but is not one:
@@ -447,23 +474,24 @@ export async function projectInfoFor(exec: unknown): Promise<ProjectInfo> {
     !boundRoot && liveResolved && resolved.root !== liveResolved && markerAt(liveResolved) === null,
   );
   const workspaceRoot = !boundRoot && resolved.marker === 'workspace' ? resolved.root : null;
-  const wouldBindTo = boundRoot ?? resolved.root;
-  const note = workspaceRoot
-    ? `this session is NOT bound and ${workspaceRoot} is a WORKSPACE, not a project. A CAD write here is REFUSED: choose a member project, or init_project a subdirectory.`
-    : ambiguous
-    ? `this session is NOT bound and its cwd ${liveCwd} is inside project ${resolved.root} but is not itself a project. ` +
-      'A CAD write here is REFUSED: call init_project to make this directory a project, or bind_project to choose the ancestor explicitly.'
-    : boundRoot
-      ? `this session is BOUND to ${boundRoot}${mismatch ? `; its live cwd ${liveCwd} would resolve to ${resolved.root}, but a bound session does not switch` : ''}`
-      : `this session is not bound yet; its first CAD call will bind ${resolved.root} (${resolved.marker === 'new' ? 'a new project candidate' : `${resolved.marker} marker`})`;
+  const note = !boundRoot
+    ? `NO CAD project is selected for this session. There is no default cwd/root. ` +
+      `Call bind_project({dir:"..."}) for an existing project, or init_project({dir:"..."}) for a new one. ` +
+      (workspaceRoot
+        ? `${workspaceRoot} is a WORKSPACE (container), not a project.`
+        : ambiguous
+          ? `The live cwd ${liveCwd} is inside project ${resolved.root} but is not itself a project.`
+          : `The live cwd is ${liveCwd}.`)
+    : `this session is BOUND to ${boundRoot}${mismatch ? `; its live cwd ${liveCwd} resolves elsewhere (${resolved.root}), but a bound session does not switch` : ''}`;
   return {
     sessionId,
     boundRoot,
     boundAt: binding?.boundAt ?? null,
     marker,
     liveCwd,
-    wouldBindTo,
-    wouldBindMarker: boundRoot ? (marker ?? 'new') : resolved.marker,
+    selected: Boolean(boundRoot),
+    wouldBindTo: boundRoot,
+    wouldBindMarker: boundRoot ? marker : null,
     mismatch,
     ambiguous,
     workspace: Boolean(workspaceRoot),
@@ -585,7 +613,7 @@ export async function bindSessionToProject(
 
 /** Store root for a tool call, creating the project directory if needed. */
 export async function projectStoresFor(exec: unknown): Promise<ProjectStores> {
-  const { cwd } = await resolveProjectCwd(exec, { requireExplicit: true });
+  const { cwd } = await resolveProjectCwd(exec, { requireSelection: true });
   const project = projectStores(cwd);
   await ensureProjectDir(project);
   return project;

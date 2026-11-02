@@ -44,11 +44,11 @@ returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replace
 
 ## `bind_project`
 
-Explicitly bind this session to an EXISTING project root before the first CAD write. Use it when the session cwd is a subdirectory of the project (e.g. src/) and you really mean the ancestor corpus: otherwise the first write is REFUSED when the cwd is inside a project but is not itself a project. It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-bound session — a wrong target is fixed by a new session, not by moving data after the fact.
+Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-selected session — a wrong target is fixed by a new session, not by moving data after the fact.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `dir` | string | — | Existing project root (absolute or relative to the live cwd). Default: the live cwd. |
+| `dir` | string | **required** | Existing project root (absolute, or relative to the live cwd). Required: there is no default. |
 
 ```js
 bind_project({ dir: "…" })
@@ -218,7 +218,7 @@ returns: `versionId`, `part`, `format`, `solid`, `watertight`, `repaired`, `tria
 
 ## `init_project`
 
-Create a CAD project marker (`cad-data/project.json`) in a directory, WITHOUT writing any version/part/run. Use this BEFORE the first CAD call when a new example/subproject must not inherit an ancestor corpus: write the marker, then open a new session with cwd = that directory. It does NOT rebind the calling session; if the session is already bound, the marker is for the next session. Refuses nothing and creates nothing else; a directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions, which is the intended nested-project behaviour.
+Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. Use bind_project({dir}) instead for an existing marker. A directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -229,7 +229,7 @@ Create a CAD project marker (`cad-data/project.json`) in a directory, WITHOUT wr
 init_project({ dir: "…" })
 ```
 
-returns: `root`, `key`, `created`, `inheritedFrom`, `note`
+returns: `root`, `key`, `created`, `bound`, `inheritedFrom`, `note`
 
 
 ## `list_features`
@@ -402,7 +402,7 @@ returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summ
 
 ## `project_info`
 
-Read-only: which CAD corpus THIS session writes to (boundRoot/boundAt), which marker it has, the live working directory, and where a first CAD call would bind. Also reports `mismatch: true` when the live cwd resolves to a different corpus than the binding — a bound session does not switch, so this is the moment to tell the user rather than silently write to the old project. Call it before assuming a path is a project; a directory with no marker is NOT a new project when an ancestor has one.
+Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -411,7 +411,7 @@ Read-only: which CAD corpus THIS session writes to (boundRoot/boundAt), which ma
 project_info({  })
 ```
 
-returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
+returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `selected`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
 
 
 ## `python_runtime`

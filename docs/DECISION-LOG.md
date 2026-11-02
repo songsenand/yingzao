@@ -5164,3 +5164,44 @@ C-lite 的 resolver 静默绑定祖先。44 个版本写进根语料后，只能
 `src/host/tools.ts`（`bind_project` / `project_info.workspace` / `init_project` 不走 stores）、
 `docs/dev/PROJECT-SCOPE.md`、`DESIGN.md`、`examples/windup-frog/README.md`。
 C/D 的会话内切换/迁移/共享仍未实现；现在没有“搬语料”这条补救路径。
+
+## 2026-11-02：项目选择必须显式——路径为空即报错，没有默认 cwd/root
+
+**触发条件：** 第 1 条（用户明确纠正）：此前把「根目录和子目录同级」实现成了「面板/写入默认选根或
+会话目录，只在祖先子目录时拒绝」；用户要求的是**路径为空就报错，强制 LLM 指定路径**。
+
+**要解决的问题：** 只要还有“默认 cwd/根/第一个项目”，LLM 就可以不指定路径而写进一个它没有
+明确选择的项目；面板也会在未选择时读一个默认语料。这与“写入即终态”矛盾。
+
+**决策内容：**
+
+- **工具侧**：一切需要语料的 CAD 工具（除 `project_info` / `init_project` / `bind_project`）
+  在会话未选择项目时直接报错：`No CAD project is selected. There is no default cwd/root...`。
+  - `bind_project({dir})` 的 `dir` 改为**必填**；没有 live-cwd 默认。
+  - `init_project({dir})` 在未选择会话中创建 marker 后**顺带选中**；已选择时不 rebind。
+  - `project_info` 增加 `selected`；未选择时 `wouldBindTo` 缺失，不再报告“第一次调用会绑到哪”。
+  - `projectCwdOf` 改为只读（`{bind:false}`），读路径不再写会话选择。
+- **面板侧**：没有默认项目、没有“跟随会话”。下拉必须显式选择；空路径显示「未选择项目」，
+  不发 products 请求、不读 assembly/unregistered、不显示任何语料。本地 STL 导入/查看也指向
+  已选项目，而不是 session cwd。
+
+**理由：** 默认值会把“未选择”伪装成一个合法选择；报错才能让 LLM/人显式给出路径。根目录和普通
+子目录因此真正同级：它们都只是可被选中的 marker，没有被默认选中的特权。
+
+**依据：**
+
+- `accept-check-parts`：未选择时 `check_parts` 报 `No CAD project is selected`；`bind_project({})`
+  被 schema 拒绝；`init_project` 在未选择会话中 `bound:true` 并选中；已选择时 `bound:false`。
+- `accept-project-cwd`：`requireSelection` 未选择直接拒绝；`projectCwdOf` 不写 binding；显式
+  `bindSessionToProject` 后固定。
+- `accept-products-store`：无选择时 0 次请求；选择后恢复轮询。
+- `accept-project-scope`：客户端不再把 cwd 当项目；显式选择跨 session 保留；URL 只带显式项目。
+- `accept-tool-output`、`accept-set-datums-versioned`、`accept-generate-screen`、`accept-part-role`
+  均在调用前显式 `init_project`/`bind_project`，通过。
+
+**影响：** `src/host/project.ts`（`requireSelection`/`bind:false`/`ProjectInfo.selected`）、
+`src/host/tools.ts`（`project_info` / `init_project` / `bind_project`）、
+`src/client/project.ts`（`currentProject` 不再回退 cwd）、`src/client/products-store.ts`、
+`src/client/panel.ts`（无默认选择/空路径错误/导入指向已选项目）、`SKILL.md`、conventions、
+PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acceptance。
+**行为变化：** 旧会话若未写 binding，第一次 CAD 调用不再自动绑定，必须显式选择；这是有意的破坏性收紧。

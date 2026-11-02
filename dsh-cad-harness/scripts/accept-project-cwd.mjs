@@ -110,11 +110,17 @@ try {
   }
   clearSessionBindingCache();
 
-  // --- C-lite: the first CAD call binds the session; later cd does not switch.
+  // --- C-lite: an explicit first call binds; later cd does not switch.
+  // `projectCwdOf` is a READ and must NOT bind (no side-effect selection).
   useLiveCwd(join(parent, 'spec'));
-  check(await projectCwdOf(execOf({ id: 's1', cwd: parent })) === real(parent),
-    'the first CAD call binds the session to the nearest marker',
-    await projectCwdOf(execOf({ id: 's1', cwd: parent })));
+  check(await projectCwdOf(execOf({ id: 'read-only', cwd: parent })) === real(parent),
+    'the read path resolves the nearest marker without selecting it',
+    await projectCwdOf(execOf({ id: 'read-only', cwd: parent })));
+  check(!existsSync(join(home, 'cad', 'sessions', 'read-only.json')),
+    'projectCwdOf writes NO session binding');
+  const first = await resolveProjectCwd(execOf({ id: 's1', cwd: parent }));
+  check(first.cwd === real(parent) && first.newlyBound,
+    'the first explicit call binds the session to the nearest marker', `${first.cwd}`);
   check(existsSync(join(home, 'cad', 'sessions', 's1.json')), 'the binding is persisted');
   useLiveCwd(child);
   check(await projectCwdOf(execOf({ id: 's1', cwd: parent })) === real(parent),
@@ -124,12 +130,10 @@ try {
   check(await projectCwdOf(execOf({ id: 's1', cwd: parent })) === real(parent),
     'the binding survives an in-process cache clear',
     await projectCwdOf(execOf({ id: 's1', cwd: parent })));
-  check(await projectCwdOf(execOf({ id: 's2', cwd: parent })) === real(child),
-    'a new session binds its own working directory',
-    await projectCwdOf(execOf({ id: 's2', cwd: parent })));
-  check(await projectCwdOf(execOf({ id: 's3', cwd: parent, delegationDepth: 1 })) === real(child),
-    'a delegated session binds its own cwd',
-    await projectCwdOf(execOf({ id: 's3', cwd: parent, delegationDepth: 1 })));
+  check((await resolveProjectCwd(execOf({ id: 's2', cwd: parent }))).cwd === real(child),
+    'a new session binds its own working directory');
+  check((await resolveProjectCwd(execOf({ id: 's3', cwd: parent, delegationDepth: 1 }))).cwd === real(child),
+    'a delegated session binds its own cwd');
   useLiveCwd(parent);
   check(await projectCwdOf(execOf({ id: 's3', cwd: parent, delegationDepth: 1 })) === real(child),
     'a bound delegated session stays put',
@@ -150,8 +154,15 @@ try {
     check(!existsSync(join(home, 'cad', 'sessions', 'strict-refused.json')),
       'the refused call wrote NO binding');
     const ambInfo = await projectInfoFor(execOf({ id: 'strict-refused', cwd: parent }));
-    check(ambInfo.ambiguous === true && /REFUSED/.test(ambInfo.note),
-      'project_info warns that the write target is ambiguous', JSON.stringify(ambInfo));
+    check(ambInfo.selected === false && ambInfo.ambiguous === true && /NO CAD project is selected/.test(ambInfo.note),
+      'project_info says no project is selected and names the ambiguous cwd', JSON.stringify(ambInfo));
+
+    let noSelection = '';
+    try {
+      await resolveProjectCwd(execOf({ id: 'strict-refused', cwd: parent }), { requireSelection: true });
+    } catch (e) { noSelection = String(e); }
+    check(/No CAD project is selected/.test(noSelection),
+      'the write path refuses when no project has been selected', noSelection.slice(0, 120));
 
     // The sanctioned fix: make this directory a project, then the same session
     // can bind it on the next call.
@@ -216,21 +227,21 @@ try {
     // A session already bound to parent must NOT switch when the live cwd moves
     // into the new nested marker; project_info must say so.
     useLiveCwd(join(parent, 'spec'));
-    await projectCwdOf(execOf({ id: 'bound-parent', cwd: parent }));
+    await bindSessionToProject(execOf({ id: 'bound-parent', cwd: parent }), parent);
     useLiveCwd(nested);
     const info = await projectInfoFor(execOf({ id: 'bound-parent', cwd: parent }));
     check(info.boundRoot === real(parent) && info.mismatch === true,
       'project_info reports boundRoot + mismatch when live cwd is a different project',
       JSON.stringify(info));
     const freshInfo = await projectInfoFor(execOf({ id: 'fresh-nested', cwd: nested }));
-    check(freshInfo.boundRoot === null && freshInfo.wouldBindTo === real(nested),
-      'an unbound session would bind the nested marker', JSON.stringify(freshInfo));
+    check(freshInfo.boundRoot === null && freshInfo.selected === false && freshInfo.wouldBindTo === null,
+      'an unbound session has NO default project', JSON.stringify(freshInfo));
   }
 
   rmSync(parent, { recursive: true, force: true });
   useLiveCwd(child);
   check(await projectCwdOf(execOf({ id: 's1', cwd: parent })) === real(child),
-    'a deleted bound root falls back to the resolver and rebinds',
+    'a deleted bound root falls back to the read resolver (no side-effect binding)',
     await projectCwdOf(execOf({ id: 's1', cwd: parent })));
 } finally {
   configureWorkingDirectoryService(undefined);

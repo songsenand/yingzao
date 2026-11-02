@@ -77,6 +77,17 @@ export function tick(): Promise<void> {
   if (inflight) return inflight;
   if (!visible()) return Promise.resolve();
   const project = currentProject();
+  // No selection = no request. The panel shows an explicit "not selected"
+  // state; falling back to the session cwd here would make _cwd_ the default
+  // project, which is exactly the special treatment this UI must not have.
+  if (!project) {
+    snapshot = { data: null, error: null, at: 0 };
+    lastProject = null;
+    lastSeq = 0;
+    lastEtag = null;
+    emit();
+    return Promise.resolve();
+  }
   const sameProject = lastProject === project;
   const url = withProject(`/api/cad/products${sameProject && lastSeq > 0 ? `?since=${lastSeq}` : ''}`);
   const headers: Record<string, string> =

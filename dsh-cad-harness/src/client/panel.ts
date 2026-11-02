@@ -874,7 +874,7 @@ export function CadPanel(): React.ReactElement {
     : kind === 'unregistered' && fileSubject
       ? {
         key: `f:${fileSubject}`,
-        url: `/api/cad/file?project=${encodeURIComponent(sessionCwd())}&path=${encodeURIComponent(fileSubject)}`,
+        url: `/api/cad/file?project=${encodeURIComponent(workspaceCwd)}&path=${encodeURIComponent(fileSubject)}`,
         kind: 'file' as const,
         // An STL has no unit statement; STEP/3MF declare one and the worker folds it.
         unitsMm: fileExt !== '.stl',
@@ -950,6 +950,7 @@ export function CadPanel(): React.ReactElement {
   // what it is building. Read once per project; a missing manifest is a normal
   // state (a project may not have an assembly yet), not an error.
   useEffect(() => {
+    if (!workspaceCwd) { setMachine(null); return; }
     let dead = false;
     fetch(withProject('/api/cad/assembly/manifest'))
       .then((r) => (r.ok ? r.json() : null))
@@ -961,7 +962,8 @@ export function CadPanel(): React.ReactElement {
   // The 未登记 list is fetched on demand (entering the kind, or 刷新): the scan
   // hashes files, so it is deliberately not on the 3 s poll.
   const refreshUnregistered = () => {
-    const cwd = sessionCwd();
+    if (!workspaceCwd) return;
+    const cwd = workspaceCwd;
     setUnregError(null);
     fetch(`/api/cad/unregistered?project=${encodeURIComponent(cwd)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -1085,16 +1087,15 @@ export function CadPanel(): React.ReactElement {
     return () => { dead = true; };
   }, [scopeTick, sessionDir]);
 
-  // Pick a project when none is selected, and repair a stale selection when the
-  // selected project is no longer under this session's workspace. The session's
-  // own corpus is a PREFERENCE, not a special mode: it is an ordinary entry in
-  // the dropdown, and only used here to choose the initial value.
+  // Validate the explicit selection; NEVER pick a default. If the selected
+  // project disappears (session switch / deleted corpus), clear the view and
+  // show the "not selected" state. Root is not preferred, and neither is the
+  // session's own corpus: the human (or the LLM, on the tool side) must name a path.
   useEffect(() => {
-    if (workspaces.length === 0) return;
-    if (workspaceCwd && workspaces.some((w) => w.cwd === workspaceCwd)) return;
-    const preferred = workspaces.find((w) => w.cwd === sessionDir) ?? workspaces[0]!;
-    setWorkspaceCwd(preferred.cwd);
-    setProjectOverride(preferred.cwd);
+    if (!workspaceCwd) return;
+    if (workspaces.some((w) => w.cwd === workspaceCwd)) return;
+    setWorkspaceCwd('');
+    setProjectOverride(null);
     prevIdsRef.current = new Set();
     subjectRef.current = '';
     setParts([]);
@@ -1105,7 +1106,7 @@ export function CadPanel(): React.ReactElement {
     setUnregistered([]);
     setFileSubject('');
     setFileMeta(null);
-  }, [workspaces, sessionDir, workspaceCwd]);
+  }, [workspaces, workspaceCwd]);
 
   // (Re)build the Three.js scene whenever the selected *version* changes.
   // Run products render through their own view instead.
@@ -2797,8 +2798,9 @@ export function CadPanel(): React.ReactElement {
     setImportBusy(true);
     setImportMsg(null);
     try {
+      if (!workspaceCwd) { setImportMsg('未选择项目：请先选择项目路径'); setImportBusy(false); return; }
       const req = buildImportStlRequest({
-        project: sessionCwd(),
+        project: workspaceCwd,
         file: target,
         unit: importUnit,
         part: importPart.trim() || undefined,
@@ -2833,7 +2835,14 @@ export function CadPanel(): React.ReactElement {
         '测量 / 壁厚 / 装配 / 热力图不适用于它们（那些需要一个版本作为主语）。'),
       React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
         React.createElement('button', { type: 'button', onClick: refreshUnregistered, style: S.smallBtn }, '↻ 刷新'),
-        React.createElement('button', { type: 'button', onClick: () => setFileOpen(true), style: S.smallBtn }, '📂 按路径导入…'),
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => {
+            if (!workspaceCwd) { setError('未选择项目：请先在上方选择项目路径，再按路径导入。'); return; }
+            setFileOpen(true);
+          },
+          style: S.smallBtn,
+        }, '📂 按路径导入…'),
         React.createElement('span', { style: { fontSize: 11, color: T.muted } }, `${unregistered.length} 个文件`)),
     ];
     if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: T.danger } }, `扫描失败：${unregError}`));
@@ -3080,7 +3089,7 @@ export function CadPanel(): React.ReactElement {
    */
   const projectLabel = (() => {
     const cwd = currentProject();
-    if (!cwd) return '\n（项目：未识别 — 此会话未报告工作目录，面板读的是服务器自己的目录）';
+    if (!cwd) return '\n（项目：未选择 — 请在上方显式选择项目路径；没有默认根目录）';
     const name = cwd.replace(/\/+$/, '').split('/').pop() || cwd;
     return `\n（项目：${name}）`;
   })();
@@ -3563,32 +3572,19 @@ export function CadPanel(): React.ReactElement {
     ),
 
     // ── 本地 STL：看（不登记）或登记（成版本）──
-    // Writes deliberately target the SESSION cwd (`sessionDir`), never the
-    // pinned browse corpus: "look at one project, import into another" would
-    // make the version appear in a corpus the agent cannot see.
-    fileOpen && React.createElement(LocalFileDialog, {
+    // The write target is the project the human explicitly selected, NOT the
+    // session cwd. No selection = no import: "path is empty" is an error, not a
+    // hidden fallback to whatever directory the session happens to sit in.
+    fileOpen && workspaceCwd && React.createElement(LocalFileDialog, {
       open: true,
       onClose: () => setFileOpen(false),
-      project: sessionDir || sessionCwd(),
+      project: workspaceCwd,
       background: bg.hex,
       onImported: (versionId: string) => {
         pendingFocusRef.current = versionId;
         setFileOpen(false);
-        // An import lands in the SESSION corpus. Select that project (an ordinary
-        // project selection, not a "follow session" mode) so the new version is
-        // visible; the human just asked for exactly that.
-        if (workspaceCwd !== sessionDir) {
-          setWorkspaceCwd(sessionDir);
-          setProjectOverride(sessionDir || null);
-          prevIdsRef.current = new Set();
-          subjectRef.current = '';
-          setParts([]);
-          setScene([]);
-          setSubjectId('');
-          setRecordId(null);
-        }
-        // The 3 s poll is too slow for an act the human just committed: refresh
-        // now and let the pending id select it when the list lands.
+        // The version landed in the selected project; refresh and let the
+        // pending id select it when the list lands.
         refresh();
       },
     }),
@@ -3623,13 +3619,19 @@ export function CadPanel(): React.ReactElement {
             setFileSubject('');
             setFileMeta(null);
           },
-          title: '项目：面板查看哪份 CAD 语料（只读浏览）。\n根目录和子目录都是同级的独立项目；切换只改变查看目标，Agent 的写入仍属于会话所在项目。',
+          title: '项目：必须显式选择一份 CAD 语料（只读浏览）。\n没有默认根目录，也不跟随会话；根目录和子目录都是同级的独立项目。未选择时面板不读取任何语料。',
           'aria-label': '项目',
           style: { ...S.select, flex: 'none', maxWidth: 150 },
         },
+        React.createElement('option', { key: '', value: '', disabled: true }, '选择项目…'),
         workspaces.map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
           `${w.rel === '.' ? w.name : w.rel} · ${w.parts}零件/${w.versions}版`)),
       ),
+      !workspaceCwd && React.createElement('span', {
+        key: 'no-project',
+        style: { flex: 'none', color: '#b42318', fontSize: 11, whiteSpace: 'nowrap' },
+        title: '路径为空：面板不会回退到根目录或会话目录',
+      }, '未选择项目'),
       React.createElement('button', {
         type: 'button',
         onClick: () => { setNavQuery(''); setNavOpen(true); },

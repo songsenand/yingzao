@@ -136,7 +136,9 @@ const overhang = await saveVersion(project.store, {
 });
 await attachVersion(project.partStore, part.id, overhang);
 
-const exec = { agent: { session: { header: { cwd } } } };
+const exec = { agent: { session: { header: { id: 'check-parts-main', cwd } } } };
+// No default project: select explicitly before any CAD tool.
+await tools.get('bind_project').execute({ dir: cwd }, exec);
 const batch = await tools.get('check_parts').execute({
   versionIds: [thin, cube],
   profileIds: ['fdm-pla-0.4'],
@@ -241,20 +243,30 @@ check(generated.success === true && generated.views.includes('top') && generated
 check(generated.warnings.some((w) => /views: \[\] was overridden/.test(w)),
   'the override is said out loud in warnings', JSON.stringify(generated.warnings));
 
-// The C-lite lifecycle tools: read the binding, create a nested marker without
-// rebinding. (The function-level cases live in accept-project-cwd.mjs.)
+// The lifecycle tools: a project must be SELECTED explicitly; there is no cwd
+// default. (The function-level cases live in accept-project-cwd.mjs.)
 const info = await tools.get('project_info').execute({}, exec);
-check(info.wouldBindTo === cwd && info.mismatch === false,
-  'project_info reports where an unbound session would bind', JSON.stringify(info));
+check(info.selected === true && info.wouldBindTo === cwd && info.mismatch === false,
+  'project_info reports the explicitly selected project', JSON.stringify(info));
+const unboundExec = { agent: { session: { header: { id: 'unbound-info', cwd } } } };
+const unboundInfo = await tools.get('project_info').execute({}, unboundExec);
+check(unboundInfo.selected === false && unboundInfo.wouldBindTo === undefined,
+  'an unbound session has NO default project', JSON.stringify(unboundInfo));
+let noSelection = '';
+try {
+  await tools.get('check_parts').execute({ versionIds: [cube], checks: ['measure'] }, unboundExec);
+} catch (e) { noSelection = String(e); }
+check(/No CAD project is selected/.test(noSelection),
+  'a CAD tool refuses when no project has been selected', noSelection.slice(0, 120));
 const init = await tools.get('init_project').execute({ dir: 'nested-example', title: 'nested' }, exec);
-check(init.created === true && init.inheritedFrom === cwd,
-  'init_project creates a nested marker and names the ancestor it shadows', JSON.stringify(init));
+check(init.created === true && init.bound === false && init.inheritedFrom === cwd,
+  'init_project creates a nested marker but does NOT rebind a selected session', JSON.stringify(init));
 const infoAfter = await tools.get('project_info').execute({}, exec);
-check(infoAfter.wouldBindTo === cwd && infoAfter.boundRoot === undefined,
-  'init_project does NOT rebind the calling session', JSON.stringify(infoAfter));
+check(infoAfter.boundRoot === cwd && infoAfter.selected === true,
+  'the selected project is unchanged after creating a nested marker', JSON.stringify(infoAfter));
 
-// Fail closed: a CAD write from a subdirectory of a project, without its own
-// marker, must be refused instead of silently binding the ancestor.
+// A subdirectory with no marker is not a project; an unbound session gets the
+// no-selection error, not a silent ancestor bind.
 const subDir = join(cwd, 'sub');
 mkdirSync(subDir, { recursive: true });
 const subExec = { agent: { session: { header: { id: 'sub-session', cwd: subDir } } } };
@@ -262,16 +274,20 @@ let ambiguous = '';
 try {
   await tools.get('check_parts').execute({ versionIds: [cube], checks: ['measure'] }, subExec);
 } catch (e) { ambiguous = String(e); }
-check(/write target is ambiguous/.test(ambiguous),
-  'a CAD write from an unmarked subdirectory is REFUSED (no root write, no later move)',
+check(/No CAD project is selected/.test(ambiguous),
+  'a CAD write from an unbound subdirectory is REFUSED (no default ancestor)',
   ambiguous.slice(0, 120));
 const subInit = await tools.get('init_project').execute({ dir: '.', title: 'sub' }, subExec);
-check(subInit.created === true && subInit.root === subDir,
-  'init_project resolves "." against the live cwd, not the ancestor', JSON.stringify(subInit));
+check(subInit.created === true && subInit.bound === true && subInit.root === subDir,
+  'init_project resolves "." against the live cwd and selects it', JSON.stringify(subInit));
 const subInfo = await tools.get('project_info').execute({}, subExec);
-check(subInfo.ambiguous === false && subInfo.wouldBindTo === subDir,
-  'after init_project the subdirectory is the write target', JSON.stringify(subInfo));
+check(subInfo.selected === true && subInfo.wouldBindTo === subDir,
+  'after init_project the subdirectory is the selected project', JSON.stringify(subInfo));
 const bindExec = { agent: { session: { header: { id: 'bind-session', cwd: subDir } } } };
+let noPath = '';
+try { await tools.get('bind_project').execute({}, bindExec); } catch (e) { noPath = String(e); }
+check(/dir|missing required property/.test(noPath),
+  'bind_project refuses an empty path (no default cwd/root)', noPath.slice(0, 120));
 const bound = await tools.get('bind_project').execute({ dir: cwd }, bindExec);
 check(bound.root === cwd && bound.marker === 'project',
   'bind_project explicitly chooses the ancestor and returns the target', JSON.stringify(bound));

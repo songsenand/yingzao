@@ -31,9 +31,13 @@ let cwd = '';
  */
 let override: string | null = null;
 
-/** The project currently on stage ('' until a project is selected/resolved). */
+/**
+ * The explicitly selected project, or '' when the human has not chosen one.
+ * There is deliberately NO fallback to the session cwd/root: an empty path is a
+ * visible "not selected" state, not a hidden default.
+ */
 export function currentProject(): string {
-  return override ?? cwd;
+  return override ?? '';
 }
 
 /** The session's own working directory, ignoring any pinned view override. */
@@ -42,12 +46,11 @@ export function sessionCwd(): string {
 }
 
 /**
- * Pin the panel to another corpus (read-only browse); null falls back to the
- * session's corpus until the project list resolves.
+ * Select a project (read-only browse); null clears the selection.
  *
  * A selection is a PROJECT, not "this corpus in this session": it survives a
- * session switch. If the selected project is no longer under the new session's
- * workspace, the panel re-selects from the discovered list.
+ * session switch. If the selected project disappears, the panel goes back to
+ * the explicit "not selected" state — it never picks a default.
  */
 export function setProjectOverride(dir: string | null): void {
   override = dir && dir.trim() ? dir : null;
@@ -245,7 +248,7 @@ export function refreshProjectScope(): { cwd: string; switched: boolean } {
   // Deliberately do NOT clear `override`: the human selected a PROJECT, and a
   // session switch is not a reason to yank the view back to the session's corpus.
   // The panel validates the selection against the newly discovered projects and
-  // falls back only when the selected project is gone.
+  // clears it (no default) when the selected project is gone.
   return { cwd: next, switched };
 }
 

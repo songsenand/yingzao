@@ -3540,13 +3540,15 @@ overlay 的 `chrome` 槽，与「复原」同一坐标系。挂完**用 DOM 探�
    实现见 §13.13（`src/host/project.ts` + `scripts/accept-project-scope.mjs`）。
 6. **不按 delegationDepth 特判，不用符号链接切项目**：子智能体的 `cwd` 就是它的
    workingDirectory，resolver 统一处理；顶层 `cd` 进子目录不搬语料，进兄弟项目按标记切换。
-7. **C-lite（2026-10-28）**：会话第一次 CAD 工具调用把解析根写入
-   `$DSH_HOME/cad/sessions/<id>.json`；之后该会话固定用它，`cd` 不再切换。子智能体各自绑定；
-   显式切换靠新会话；项目移动/改名留给 D 的稳定 id。无 id 的调用保持 B 的纯 resolver 行为。
+7. **C-lite（2026-10-28；2026-11-02 改为显式选择）**：CAD 工具不会从 cwd 自动选项目。
+   会话必须用 `bind_project({dir})` 选已有 marker，或用 `init_project({dir})` 新建（未选择时顺带选中；
+   已选择时不 rebind）。选择写入 `$DSH_HOME/cad/sessions/<id>.json`，之后固定，`cd` 不再切换；
+   显式切换靠新会话；项目移动/改名留给 D 的稳定 id。未选择时工具直接报错，没有默认 cwd/root；
+   `projectCwdOf` 只读、不写 binding。面板同样没有“跟随会话”和默认根，空路径显示“未选择项目”。
    **准生产封版**：C 的创建/切换 UI 与 D 暂缓；缺口触发时提示用户，见 PROJECT-SCOPE §6.4。
-8. **写目标 fail-closed（2026-11-01）**：未绑定会话的 cwd 在祖先项目内、自己无 marker 时，
-   首次 CAD 写被拒绝；必须 `init_project`（当前目录成为项目）或 `bind_project`（显式选祖先）。
-   `project_info.ambiguous` 提前暴露该状态。目标是**写入即终态**：不静默写根，不事后复制/移动。
+8. **写目标 fail-closed（2026-11-01）**：未选择项目时 CAD 工具直接拒绝；workspace 根也不是目标。
+   必须 `init_project`（显式新建）或 `bind_project`（显式选已有）。目标是**写入即终态**：
+   不静默写根、不默认 cwd、不事后复制/移动。
 
 **30.14 两半作用域不一致时，面板必须说出来**：人的半边是全局的（路由、面板、遥测），模型的
 半边是按预设的（工具表、skill 目录），于是会出现静默失败——标准模式会话里面板一切正常、

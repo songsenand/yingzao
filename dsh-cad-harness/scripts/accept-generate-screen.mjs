@@ -56,7 +56,8 @@ registerCadTools(fakeCtx, { toolScope: 'preset', presets: ['cad'] });
 
 const cwd = join(process.env.DSH_HOME, 'proj');
 mkdirSync(cwd, { recursive: true });
-const exec = { agent: { session: { header: { cwd } } } };
+const exec = { agent: { session: { header: { id: 'generate-screen', cwd } } } };
+await tools.get('init_project').execute({ dir: cwd }, exec);
 const generate = tools.get('generate_part');
 
 const first = await generate.execute({

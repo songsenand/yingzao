@@ -258,14 +258,19 @@ section('client session lookups (the reader that silently returned undefined)');
   check(client.currentSessionPreset() === 'cad', 'the preset is read from the same snapshot');
   check(client.currentSessionBlank() === true, 'the blank bit is read from the same snapshot');
   const { switched } = client.refreshProjectScope();
-  check(switched && client.currentProject() === '/home/u/proj', 'the project scope picks the cwd up');
+  check(switched && client.currentProject() === '',
+    'refreshing the session scope does NOT select a project by default');
+  client.setProjectOverride('/home/u/proj');
+  check(client.currentProject() === '/home/u/proj', 'an explicit selection becomes the project scope');
   const url = client.withProject('/api/cad/products');
   check(url === `/api/cad/products?project=${encodeURIComponent('/home/u/proj')}`,
     'every CAD URL then carries the project', url);
   check(client.withProject('/api/cad/stl?v=v001').endsWith(`&project=${encodeURIComponent('/home/u/proj')}`),
     'an existing query string is appended to, not replaced');
-  // A store whose snapshot has no cwd must not invent one.
+  // A store whose snapshot has no cwd must not invent one; clearing the explicit
+  // selection is the only way back to the empty state.
   client.setProjectServices({ sessions: { list: { getSnapshot: () => ({ current: 's2', byId: { s2: {} } }) } } });
+  client.setProjectOverride(null);
   client.refreshProjectScope();
   check(client.currentProject() === '' && client.withProject('/api/cad/products') === '/api/cad/products',
     'an unknown cwd sends no project rather than a wrong one');
@@ -313,7 +318,7 @@ section('static invariants');
   const unscoped = blocks
     .filter((b) => /async execute\(args: unknown\)/.test(b))
     .map((b) => /name: '([^']+)'/.exec(b)?.[1] ?? '?');
-  const scopedExecutes = blocks.filter((b) => /async execute\(args: unknown, exec: unknown\)/.test(b)).length;
+  const scopedExecutes = blocks.filter((b) => /async execute\([^)]*exec: unknown\)/.test(b)).length;
   // Counted against the registration sites rather than a literal: adding a tool
   // must not be able to leave this check passing while a body silently loses its
   // execution context (the whole point of the invariant).
@@ -368,7 +373,7 @@ section('static invariants');
       if (/withProject/.test(line)) continue;
       // Only the two session-scoped URLs may build `project=` by hand, and only
       // from the session cwd — never a literal, never another route.
-      const explicitProject = /[?&]project=\$\{encodeURIComponent\((sessionCwd\(\)|cwd)\)\}/.test(line);
+      const explicitProject = /[?&]project=\$\{encodeURIComponent\((workspaceCwd|sessionCwd\(\)|cwd)\)\}/.test(line);
       if (explicitProject && (line.includes('/api/cad/file') || line.includes('/api/cad/unregistered'))) continue;
       if ([...globalUrls].some((u) => line.includes(u))) continue;
       stray.push(`${file}: ${line.trim()}`);
@@ -391,7 +396,7 @@ section('static invariants');
 {
   const {
     refreshProjectScope, currentSessionCwd, currentSessionPreset,
-    setProjectServices, withProject,
+    setProjectServices, withProject, currentProject, setProjectOverride,
   } = await import('../src/client/project.ts');
 
   const A = '/home/songsenand/Project/ToyMarker';
@@ -415,19 +420,25 @@ section('static invariants');
   refreshProjectScope();
   check(currentSessionCwd() === A, 'client (new shape): the bound+retained session is on stage', currentSessionCwd());
   check(currentSessionPreset() === 'cad', 'client (new shape): preset reads from the resolved id');
+  setProjectOverride(A);
   check(withProject('/api/cad/products') === `/api/cad/products?project=${encodeURIComponent(A)}`,
-    'client (new shape): requests carry ?project=<cwd>');
+    'client (new shape): requests carry the explicit ?project=<path>');
 
   setProjectServices({ sessions: newShapeStore('sB') });
   refreshProjectScope();
   check(currentSessionCwd() === B && refreshProjectScope().cwd === B,
-    'client (new shape): switching the binding switches the project', currentSessionCwd());
+    'client (new shape): switching the binding switches the SESSION', currentSessionCwd());
+  check(currentProject() === A && withProject('/api/cad/products') === `/api/cad/products?project=${encodeURIComponent(A)}`,
+    'client (new shape): the explicit project selection survives the session switch', currentProject());
   check(currentSessionPreset() === 'standard', 'client (new shape): preset follows the switch');
 
   setProjectServices({ sessions: newShapeStore(null) });
   refreshProjectScope();
-  check(currentSessionCwd() === '' && withProject('/api/cad/products') === '/api/cad/products',
-    'client (new shape): no bound session → bare URL (host-side fallback), never a stale project');
+  check(currentSessionCwd() === '' && currentProject() === A,
+    'client (new shape): no bound session does not clear the explicit project selection');
+  setProjectOverride(null);
+  check(withProject('/api/cad/products') === '/api/cad/products',
+    'client (new shape): with no selection the URL is bare, never a stale project');
 
   setProjectServices({
     sessions: { list: { getSnapshot: () => ({ current: 'sL', byId: { sL: { cwd: A } } }) } },

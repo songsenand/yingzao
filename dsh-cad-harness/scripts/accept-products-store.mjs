@@ -25,12 +25,20 @@ globalThis.fetch = async () => {
 };
 
 const { subscribeProducts, refreshProducts, productsSnapshot } = await import('../src/client/products-store.ts');
+const { setProjectOverride } = await import('../src/client/project.ts');
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
   if (!ok) failures++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
 };
+
+// The panel has no default project: an empty path must not fetch at all.
+setProjectOverride(null);
+await refreshProducts();
+check(calls === 0 && productsSnapshot().data === null,
+  'no project selected → no request (no cwd/root default)', `${calls} calls`);
+setProjectOverride('/tmp/cad-products-store-project');
 
 const seen = [];
 const offA = subscribeProducts((s) => seen.push(['a', s]));

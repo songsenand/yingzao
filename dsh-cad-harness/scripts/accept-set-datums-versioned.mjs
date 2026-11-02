@@ -35,12 +35,15 @@ const ctx = {
   reflect: { get: () => undefined }, on: () => {},
 };
 registerCadTools(ctx);
-const exec = { agent: { session: { header: { cwd: workspace } } } };
+const exec = { agent: { session: { header: { id: 'set-datums-main', cwd: workspace } } } };
 const call = async (name, args) => {
   const def = tools.get(name);
   if (!def) throw new Error(`tool ${name} not registered`);
   return { value: await def.execute(args, exec) };
 };
+
+// No default project: an explicit path is required before any CAD tool.
+await call('bind_project', { dir: workspace });
 
 // A saved version with a known byte pattern instead of a compiled mesh: set_datums copies
 // bytes and never parses them, and this test is about the STORE, not geometry.

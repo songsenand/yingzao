@@ -23,20 +23,29 @@ Thirty-six tools, but **three jobs first**. Pick the group, not the tool — the
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
 
-## Project boundary (C-lite, 2026-10-28)
+## Project selection (explicit; 2026-11-02)
 
-The first CAD call binds the session to its nearest `cad-data/project.json`; `cd` does not switch. **A directory with no marker is NOT a new project when an ancestor has one** — it inherits the ancestor. To create a separate example/subproject:
+**There is NO default project.** Every CAD tool that needs a corpus — everything except
+`project_info`, `init_project`, `bind_project` — refuses until this session has selected one:
 
-1. `init_project` (with `{dir}`) writes ONLY `cad-data/project.json` (no versions, no rebind);
-2. open a new session with `cwd = dir`; its first CAD call binds the new marker.
+```text
+No CAD project is selected. There is no default cwd/root:
+pass bind_project({dir:"..."}) or init_project({dir:"..."}), then retry.
+```
 
-**The write target fails closed.** If an UNBOUND session's cwd is inside an ancestor project but is
-not itself a project, the first CAD write is REFUSED — it does not silently bind the ancestor and it
-never requires a later move. Choose explicitly: `init_project` (make this directory a project) or
-`bind_project` (you really mean the ancestor), or `cd` to a project root.
+- `bind_project({dir})` selects an EXISTING project marker. `dir` is required; there is no
+  live-cwd default, and it does not copy or move anything.
+- `init_project({dir})` creates ONLY `cad-data/project.json`; if the session is unbound it also
+  selects the new project. If already selected, it does not rebind (create for a new session).
+- `cd` never switches; a selected project is fixed for the session. `project_info` reports
+  `selected`, `boundRoot`, `mismatch`, `ambiguous`, `workspace`.
+- A workspace root (`cad-workspace.json`) is a container, never a write target.
+- The panel has no "follow session" mode and no default root: the project path must be chosen
+  explicitly; an empty path shows "未选择项目" and reads nothing.
 
-`project_info` is read-only and says `boundRoot`, `liveCwd`, `mismatch`, `ambiguous`, and where a
-first call would bind — call it before assuming a path is a project. If a task needs to switch projects in one session, move/rename a project, share it between people, or write to two projects, **stop and tell the user this is the C/D gap** — do not fork a corpus or add symlinks. A copied corpus is still a fork even if it has its own `project.json`.
+If a task needs to switch projects in one session, move/rename a project, share it between people,
+or write to two projects, **stop and tell the user this is the C/D gap** — do not fork a corpus or
+add symlinks. A copied corpus is still a fork even if it has its own `project.json`.
 
 ## Reading errors
 
