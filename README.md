@@ -45,7 +45,7 @@ node scripts/sync-cad-preset.mjs
 | [docs/user/](docs/user/) | 用户指南：安装、流程、验证、边界、排错 |
 | [docs/llm/](docs/llm/) | Agent 参考：引擎边界、陷阱、交付纪律 |
 | [docs/dev/](docs/dev/) | 维护者入口：架构、设计、决策、计划、审计 |
-| [examples/](examples/) | 完整样例与题库 |
+| [examples/README.md](examples/README.md) | 样例索引：当前 / 历史 / 夹具 / 题库 / 沙箱 |
 | [HARNESS.md](HARNESS.md) | 它是什么、不是什么、边界与取舍原则 |
 | [DESIGN.md](DESIGN.md) | 当前设计：架构、模块、接口、环境变量全集 |
 
