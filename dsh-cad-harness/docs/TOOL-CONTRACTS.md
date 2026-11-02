@@ -57,6 +57,28 @@ bind_project({ dir: "…" })
 returns: `root`, `marker`, `boundAt`, `note`
 
 
+## `check_appearance`
+
+Appearance screen over a whole SET (assembly manifest), never a single part: proportion, alignment and repetition are relations, and a part-level report is mostly invalid because the assembly hides 29-39% of its sharp edges (measured). Read-only: it never changes geometry, never scores "beauty", and never claims a part is attractive — it reports WHERE a declared visual rule is violated and by how much. Three rules: visible convex sharp-edge LENGTH (not count: a fillet adds short segments, so the count rises while the length falls); TERMINATION (a flat cap at the end of a slender member whose boundary is all 90 degrees — the "just cut off" signature); and SILHOUETTE descriptors (width profile, waists, top-vs-base ratio, symmetry) which are ATTENTION ONLY. Visibility is sampled from N viewpoints; clusters seen from fewer than the threshold are counted, never silently dropped. Caps inside a declared axis/cylinder datum (datums.json) are functional openings and are exempted by name. Purchased/reference parts occlude but are never judged. VERDICT: without a declared budget (budgetPath) or a declared maxVisibleSharpMm the verdict is "check" and only the numbers are returned — running on an existing project without declaring one of them tells you how rough it is, never that it is acceptable. mm, z-up.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `manifestPath` | string | — | Assembly manifest, e.g. "assembly/assembly.json". A relative path resolves against the session workspace first, then the plugin data root. |
+| `mode` | string (judge \| scan \| both) | — | "judge" (default) returns the numbers + findings; "scan" returns only the attention layer (where to look, never a verdict); "both" returns the two halves separately. |
+| `maxVisibleSharpMm` | number | — | Declared budget for visible convex sharp-edge length, mm. Omit and the verdict is "check" — a missing threshold is not a pass. |
+| `cellMm` | number | — | Clustering cell for sharp edges, mm. Default 10. |
+| `views` | number | — | Visibility viewpoints. Default 12. |
+| `visibilityThreshold` | number | — | Fraction of views that must see a cluster for it to be reported. Default 0.25. |
+| `minFeatureMm` | number | — | Caps smaller than this in any direction are surface texture, not form ends. Default 1.5. |
+| `budgetPath` | string | — | Optional assembly/budget.json: per-group envelope {x,y,z:[lo,hi]}. A GROUP IS A PARTITION OF PARTS (the manifest `group` field), never a spatial region; its envelope is measured as the union of its members. At most one group per part, and a small part may have none. |
+
+```js
+check_appearance({ manifestPath: "…" })
+```
+
+returns: `scope`, `manifest`, `parts`, `verdict`, `judgement`, `attention`, `budget`, `note`
+
+
 ## `check_assembly`
 
 Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.

@@ -28,6 +28,7 @@ export const RUN_KIND_LABEL: Record<RunKind, string> = {
   printability: '制造筛查',
   stress: '应力分析',
   analyze: '风险图',
+  appearance: '外观检查',
 };
 
 /** The synthetic geometry name a fluid run stores for its pipe wall. */

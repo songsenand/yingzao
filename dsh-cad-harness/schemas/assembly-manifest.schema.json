@@ -94,6 +94,14 @@
         "kind": { "enum": ["assembly", "part"], "description": "THE node discriminator (not `type`)" },
         "version": { "type": "string", "pattern": "^v\\d{3,}$", "description": "part only: version id in the store" },
         "source": { "enum": ["generated", "imported", "stock"] },
+        "group": {
+          "type": "string",
+          "description": "Functional group (功能区) this part belongs to, e.g. \"底座组\". At most ONE group per part; a small part (screw, nut, pin) may have none. Groups are a PARTITION OF PARTS, not a spatial region: a group's envelope is computed as the union of its members' bounding boxes. Budgets attach to groups (see assembly/budget.json), never to parts."
+        },
+        "role": {
+          "enum": ["printed", "purchased", "reference"],
+          "description": "Appearance ownership. Default when omitted: source=stock -> purchased, otherwise printed. `reference` = vendor geometry kept for fit checking only: it occludes in the scene but is never judged, because you cannot change it."
+        },
         "material": { "type": "string" },
         "qty": { "type": "integer", "minimum": 1 },
         "stockRef": { "type": "string" },

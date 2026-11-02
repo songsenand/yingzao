@@ -3797,3 +3797,60 @@ npm run typecheck
 `attach_appearance` 的 GLB 校验与 `appearance.json` 记录仍由 `src/host/appearance.ts` 覆盖；
 `render_part` 的 OpenSCAD 单帧路径由既有验收覆盖。Blender/bpy 的历史决策见
 `docs/DECISION-LOG.md` 2026-10-24/25 与 2026-10-25 的“Blender 错配教训”。
+
+## 34. 外观检查：成套判定、规则分层与包络预算（2026-11-02）
+
+**定位**：`check_appearance` 回答"成套东西**哪里**不符合已声明的视觉规范、差多少"，
+**不回答**"好不好看"，也不给通过。它和 `scan_attention` 同属检测层：永不阻止交付，
+永不沉默。**作用域是成套**（assembly manifest），拒绝单件——外观是关系（比例、对齐、
+重复、对比），单件没有参照系。
+
+### 34.1 为什么作用域必须是成套
+
+实测 toy-balance2：13 个打印件里 **29–39% 的凸锐边从任何视角都看不见**（被装配遮住）。
+零件级报告有一半是无效的。判定在成套、修复回到零件，所以每条 finding 都带
+`part` + `version` + 坐标。
+
+### 34.2 三层结构
+
+| 层 | 内容 | 能否阻止 |
+|---|---|---|
+| 判决 | 包络预算（比例） | 能：超出声明包络 = `excluded` |
+| 注意力 | 可见锐边、平端面、剪影、对称、近共面 | 不能，只给"看这里" |
+| 参照 | 参考图 / 人评审 | 由 `deliver_audit` 的 review claim 承载 |
+
+没有声明预算或 `maxVisibleSharpMm` 时判决是 `check`：**缺一个阈值不等于通过**。
+
+### 34.3 五条规则（每条都有校准件）
+
+| 规则 | 量词 | 关键教训 |
+|---|---|---|
+| 锐边 | 可见凸边**长度** | 计数不可用：圆角让计数上升（732→836）而长度下降（2447→1004 mm） |
+| 收口 | 构件端部的 90° 平端面 | 需"半径 1.5×端面宽的管内"取长度；取全零件最远顶点会把刻度线判成构件 |
+| 比例 | 功能区的包络区间 | 区间不是高度：组件在 z 上重叠，相加没有意义 |
+| 对称 | 剪影失配**面积** | 必须扫方位：P1 在 0°/45°/90° 全对称，只有 30°/60°/135° 露馅 |
+| 近共面 | 跨零件、法向相对、1–20 mm、投影重叠 | 朴素数偏移量会被板厚和圆角细分淹没 |
+
+### 34.4 包络预算
+
+- **功能区 = 零件的划分**（manifest 的 `group` 字段）：一个零件最多一个组，小件可不分配；
+- 组的包络 = 成员包围盒的**并集**，x/y/z 三维区间，组间允许重叠；
+- 文件 `assembly/budget.json`（`envelope` + `groups[]` + `symmetry` + `overruns[]`）；
+- **超预算状态机**：`unjustified`（未声明理由）/ `pending`（有理由待批准）/ `accepted`
+  （有理由 + `acceptedBy`）。只有 accepted 放行；**批准由人在对话里给**，机器自己填等于自己批自己。
+
+### 34.5 性能边界
+
+686,730 三角面、17 件的 microscope2：剪影栅格化由逐三角形（30.2 s/视角）改为面积加权
+采样（0.49 s）；可见性改为逐零件投射 + AABB 粗筛，并有射线预算（超出只测最长簇，把
+"少测几个"写进报告——静默截断等于谎报）。整跑 74 s，工具上限 180 s。
+
+### 34.6 验收
+
+```bash
+npm run accept                                   # 20 组全过
+node scripts/smoke-check-appearance.mjs <corpus> assembly/assembly.json
+```
+
+夹具与结论：`examples/appearance-eval/`、`experiments/20261101_appearance_eval.md`、
+`experiments/20261101_appearance_examples.md`；决策见 `docs/DECISION-LOG.md` 2026-10-30/31。

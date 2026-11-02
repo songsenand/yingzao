@@ -24,7 +24,7 @@ export const CAD_TOOL_GROUPS: Record<CadToolGroup, readonly string[]> = {
     'generate_part', 'create_part', 'import_part', 'merge_parts', 'set_datums', 'validate_assembly',
     'render_part', 'measure_part', 'measure_gap', 'measure_thickness', 'list_features',
     'measure_section', 'measure_angle', 'check_parts', 'recall_reference_image', 'attach_appearance',
-    'set_part_role', 'project_info', 'init_project', 'bind_project', 'run_python', 'python_runtime',
+    'set_part_role', 'check_appearance', 'project_info', 'init_project', 'bind_project', 'run_python', 'python_runtime',
   ],
 };
 

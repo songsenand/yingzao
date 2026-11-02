@@ -20,7 +20,7 @@ export interface EchoResponse {
 // inside it; the record's own `type` decides how it is presented.
 // ---------------------------------------------------------------------------
 
-export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid' | 'printability' | 'stress' | 'analyze';
+export type RunKind = 'assembly' | 'assembly-check' | 'physics' | 'motion' | 'fluid' | 'printability' | 'stress' | 'analyze' | 'appearance';
 export type RunStatus = 'pass' | 'check' | 'fail';
 /**
  * The canonical judgement (src/shared/judgement.ts) as it travels on a run.

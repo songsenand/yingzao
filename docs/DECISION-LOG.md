@@ -4909,6 +4909,80 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 
 **影响：** `python/cad_worker/worker.py`（P2b seam）、`src/host/tools.ts`（`scan_attention` 描述/schema、`analyze` 描述/note）、`scripts/accept-analyze.mjs`、`scripts/scan-seam-selftest.py`、`docs/TOOL-CONTRACTS.md`、`experiments/20261029_contact_corner_attention.md`、`DESIGN.md`。
 
+## 2026-10-30：外观只按成套判，零件生成只继承默认值
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（跨 manifest schema / 新工具 / preflight / 交付审计）。
+
+**要解决的问题：** 单件生成流程里没有任何外观约束，整机"能用但丑"；逐件打磨是最贵的路径，
+而零件级判定有一半报的是装配后被遮挡、根本看不见的面。
+
+**决策内容：**
+
+- 外观判定的作用域 = **成套**（assembly manifest）；`check_appearance` 不接受 `versionId`。
+- 零件生成时**不判**外观，但**继承** `style.scad` 默认值（圆角基本体），零判断、零迭代。
+- 输出分两层：`judgement`（excluded / not-excluded，可门禁）/ `attention`（只看，不门禁，空列表 ≠ 安全）。
+- 规则四字段：`layer` / `scope` / `cost` / `owner`；`hard` 的判据是"默认值一轮内可满足"，不是重要性。
+- 可见性过滤：N 视角射线，得分 = 可见视角 / 总视角；<0.25 只计数，=0 排除但必须报数。
+
+**理由：** 外观是关系属性（比例、对齐、重复、对比），单件没有参照系；逐件判定的报告一半无效（遮挡）；
+只有成套判定才能按可见性分配预算。判定在成套、修复在零件，这个回路必须显式写进报告。
+
+**依据：**
+
+- toy-balance2：24 个 `model.scad` 里圆角/倒角/`offset`/`minkowski` 共 **0 处**。
+- v030 整机 **7593 条 >40° 锐边、总长 10.0 m**；13 个打印件 4263 条 >60° 凸边 → **455 个 8 mm 簇**。
+- 16 视角可见性：**82 完全不可见 / 271 ≥25% / 157 ≥50% / 35 ≥75%**——过滤掉 65%。
+- 剪影：腰 30 mm @z=70；峰 150 @z=17、178 @z=78；顶/底 = 1.18；对称 IoU 0.707。
+- 吊架三腿底面 3 个平端面共 27.4 mm²、全在 z=−33，端前 1 mm 无收分（"收口缺失"可测）。
+
+**影响：** 新增 `docs/APPEARANCE-PLAN.md`（接口草案）；后续涉及 `check_appearance`、
+manifest 的 `role` 字段、`delivery_audit` 的 appearance claim、`preflight`、`style.scad` 注入。
+**状态：方向已定，未施工。**
+
+## 2026-10-31：包络预算按功能区（零件分组），不按零件；区间三维且允许重叠
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（跨 manifest schema / check_appearance / 交付）。
+
+**要解决的问题：** 整机"能用但比例失调"——roberval 实际 247×165×259，而桌面天平的常识包络约
+H/W 0.6–0.9。没有任何一步要求"总高 259"被谁同意过，漂移是静默的。
+
+**决策内容：**
+
+- 预算的主体是**功能区**（功能区的集合是**零件的划分**），不是零件：**一个零件最多属于一个组**，
+  小件（螺钉/螺母/销）可以**不分配**。
+- 组的空间范围 = **成员包围盒的并集**，不是人画的盒子；因此"一个零件跨两个区"不再出现。
+- 区间是 **x/y/z 三个方向**，组之间**允许重叠**——相加没有意义（立柱、横梁、托盘在 z 上本来就是叠的）。
+- 落点：manifest 的零件节点加 `group` 字段；预算文件 `assembly/budget.json`（`envelope` + 各组 `envelope`）；
+  检查并入 `check_appearance({budgetPath})`——**比例本来就是外观第一条规则**，不新开工具。
+- 超包络 → `excluded`，但**超预算不是失败**：它是需要声明的决定（说明与审批流程尚未实现）。
+
+**理由：** 零件拿到预算会让设计呆板；功能区是稳定的（零件会拆会换）。用"并集"而非"画盒子"
+避免了空间归属判定与拆件压力。区间不用高度，是因为组件在空间上重叠，高度相加没有物理意义。
+
+**依据：**
+
+- roberval 七个组实测：底座组 z 上 +80、摆动组 +50、悬挂组 +75、承重组 +79、读数区 z 下 +40、
+  调零组 x 下/上 +5、z 下 +22；整机 z 超 +79（259 vs 190，+42%）；**x/y 三台全部合规**。
+- 读数区（指针 136–144 / 刻度板 40–85）在 z 上相差 58 mm——功能区预算顺带暴露的功能性问题，
+  干涉/壁厚/打印性检查永远不会报。
+
+**影响：** `schemas/assembly-manifest.schema.json`（`group`）、`src/host/manifest.ts`、
+`python/cad_worker/worker.py`（零件 bbox）、`src/host/tools.ts`（`budgetPath` + 报告）、
+`examples/roberval-balance/assembly/{assembly,budget}.json`、`docs/APPEARANCE-PLAN.md`。
+
+## 2026-10-31（补）：超预算状态机落地
+
+**触发条件：** 第 1 条（用户"先做 2"）。
+
+**决策内容：** `assembly/budget.json` 的 `overruns[]` 承载三态：未声明 / 待批准 / 已批准。
+只有"有理由 + status=accepted + acceptedBy"才放行；其余一律 `excluded`。
+理由必须具体（可引 run 或零件版本），`acceptedBy` 由人给——机器自己填写等于自己批自己。
+
+**依据：** roberval 实测三态各跑一遍：9 项未声明 → excluded；1 项 proposed → 该项待批准、仍 excluded；
+9 项 accepted → not-excluded。
+
+**影响：** `src/host/tools.ts`（overrun 状态机与渲染）、`docs/APPEARANCE-PLAN.md` §11。
+
 ## 2026-10-31：交付打印件必须逐版本视觉复核，视觉预算不许省
 
 **触发条件：** 第 1 条（用户拍板）+ 第 4 条（跨 `generate_part` / 新工具 / `delivery_audit` / 技能文档）。

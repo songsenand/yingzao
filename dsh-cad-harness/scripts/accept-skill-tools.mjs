@@ -46,7 +46,7 @@ const contract = new Map();
   }
 }
 const toolNames = new Set(contract.keys());
-check(toolNames.size === 35, 'the contract sheet lists 35 tools', String(toolNames.size));
+check(toolNames.size === 36, 'the contract sheet lists 36 tools', String(toolNames.size));
 
 // ── the map: the five skills ───────────────────────────────────────────────
 const skills = [];
@@ -67,8 +67,8 @@ check(unknown.length === 0, 'every tool the skills name is registered', unknown.
 
 // 2) the stated count matches the registry
 const toolbox = skills.find((s) => s.name === 'cad-toolbox').text;
-check(/Thirty-five tools/.test(toolbox) && toolNames.size === 35,
-  'cad-toolbox says "Thirty-five tools" and there are 35', `${toolNames.size}`);
+check(/Thirty-six tools/.test(toolbox) && toolNames.size === 36,
+  'cad-toolbox says "Thirty-six tools" and there are 36', `${toolNames.size}`);
 
 // 3) every registered tool reaches at least one skill
 const unreached = [...toolNames].filter((t) => !all.includes(`\`${t}\``));

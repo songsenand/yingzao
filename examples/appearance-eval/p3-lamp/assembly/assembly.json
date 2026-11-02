@@ -1,0 +1,31 @@
+{
+ "schemaVersion": 1,
+ "name": "P3 lamp",
+ "root": {
+  "kind": "assembly",
+  "id": "lamp",
+  "children": [
+   {
+    "id": "base",
+    "kind": "part",
+    "part": "灯座",
+    "version": "v006",
+    "group": "底座组"
+   },
+   {
+    "id": "rod",
+    "kind": "part",
+    "part": "灯杆",
+    "version": "v007",
+    "group": "立杆组"
+   },
+   {
+    "id": "shade",
+    "kind": "part",
+    "part": "灯罩",
+    "version": "v008",
+    "group": "灯罩组"
+   }
+  ]
+ }
+}

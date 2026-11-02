@@ -1,0 +1,563 @@
+{
+ "scope": "assembly",
+ "manifest": "/tmp/cad-app-work-mvEGkD/cad-data/assembly/assembly.json",
+ "parts": {
+  "analysed": 11,
+  "reference": 10,
+  "roleAssumed": 21
+ },
+ "verdict": "check",
+ "note": "没有声明 maxVisibleSharpMm —— 缺一个阈值不等于通过，这只是读数。",
+ "judgement": {
+  "visibleSharpMm": 7160.5,
+  "hiddenSharpMm": 2973.9,
+  "hiddenShare": 0.293,
+  "volumeMm3": 360440,
+  "areaMm2": 150027.2,
+  "visibleSharpPerKmm2": 47.73,
+  "exemptCaps": 0,
+  "findings": [
+   {
+    "part": "base",
+    "version": "v066",
+    "role": "printed",
+    "volumeMm3": 138007.4,
+    "areaMm2": 64582.2,
+    "sharpEdgesMm": 2985.5,
+    "visibleSharpMm": 2364.7,
+    "hiddenSharpMm": 620.9,
+    "clusters": 118,
+    "visibleClusters": 89,
+    "topVisible": [
+     {
+      "atMm": [
+       -86.5,
+       0,
+       19
+      ],
+      "lenMm": 152,
+      "visibility": 0.38
+     },
+     {
+      "atMm": [
+       0,
+       50,
+       19
+      ],
+      "lenMm": 152,
+      "visibility": 0.75
+     },
+     {
+      "atMm": [
+       0,
+       50,
+       4
+      ],
+      "lenMm": 152,
+      "visibility": 0.42
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "panL",
+    "version": "v077",
+    "role": "printed",
+    "volumeMm3": 28548.1,
+    "areaMm2": 23322.2,
+    "sharpEdgesMm": 2399.8,
+    "visibleSharpMm": 1881.4,
+    "hiddenSharpMm": 518.4,
+    "clusters": 120,
+    "visibleClusters": 91,
+    "topVisible": [
+     {
+      "atMm": [
+       -117,
+       -10.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       -117,
+       -5.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       -117,
+       5.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.42
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "panR",
+    "version": "v077",
+    "role": "printed",
+    "volumeMm3": 28548.1,
+    "areaMm2": 23322.2,
+    "sharpEdgesMm": 2399.8,
+    "visibleSharpMm": 1824.5,
+    "hiddenSharpMm": 575.3,
+    "clusters": 120,
+    "visibleClusters": 90,
+    "topVisible": [
+     {
+      "atMm": [
+       43,
+       -10.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       43,
+       10.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       117,
+       5.5,
+       88.2
+      ],
+      "lenMm": 57,
+      "visibility": 0.38
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "beam",
+    "version": "v050",
+    "role": "printed",
+    "volumeMm3": 35512.4,
+    "areaMm2": 12832.4,
+    "sharpEdgesMm": 1166,
+    "visibleSharpMm": 650.4,
+    "hiddenSharpMm": 515.6,
+    "clusters": 60,
+    "visibleClusters": 37,
+    "topVisible": [
+     {
+      "atMm": [
+       -41.1,
+       5,
+       138
+      ],
+      "lenMm": 67.5,
+      "visibility": 0.38
+     },
+     {
+      "atMm": [
+       -41.1,
+       -5,
+       138
+      ],
+      "lenMm": 67.5,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       41.1,
+       5,
+       138
+      ],
+      "lenMm": 67.5,
+      "visibility": 0.38
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "sliderR",
+    "version": "v052",
+    "role": "printed",
+    "volumeMm3": 2423.4,
+    "areaMm2": 1945.3,
+    "sharpEdgesMm": 341.3,
+    "visibleSharpMm": 202.6,
+    "hiddenSharpMm": 138.7,
+    "clusters": 15,
+    "visibleClusters": 11,
+    "topVisible": [
+     {
+      "atMm": [
+       28,
+       5,
+       154.5
+      ],
+      "lenMm": 33.3,
+      "visibility": 0.46
+     },
+     {
+      "atMm": [
+       52,
+       5,
+       154.5
+      ],
+      "lenMm": 33.3,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       40,
+       7.9,
+       162
+      ],
+      "lenMm": 24,
+      "visibility": 1
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "sliderL",
+    "version": "v052",
+    "role": "printed",
+    "volumeMm3": 2423.4,
+    "areaMm2": 1945.3,
+    "sharpEdgesMm": 341.3,
+    "visibleSharpMm": 202.6,
+    "hiddenSharpMm": 138.7,
+    "clusters": 15,
+    "visibleClusters": 11,
+    "topVisible": [
+     {
+      "atMm": [
+       -52,
+       5,
+       154.5
+      ],
+      "lenMm": 33.3,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       -28,
+       5,
+       154.5
+      ],
+      "lenMm": 33.3,
+      "visibility": 0.46
+     },
+     {
+      "atMm": [
+       -40,
+       7.9,
+       162
+      ],
+      "lenMm": 24,
+      "visibility": 1
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "w40",
+    "version": "v075",
+    "role": "printed",
+    "volumeMm3": 32252.5,
+    "areaMm2": 5713.4,
+    "sharpEdgesMm": 119.7,
+    "visibleSharpMm": 12.5,
+    "hiddenSharpMm": 107.2,
+    "clusters": 14,
+    "visibleClusters": 2,
+    "topVisible": [
+     {
+      "atMm": [
+       -54.8,
+       3.1,
+       7
+      ],
+      "lenMm": 10.6,
+      "visibility": 0.29
+     },
+     {
+      "atMm": [
+       -49.2,
+       -30.7,
+       7
+      ],
+      "lenMm": 1.9,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -70.8,
+       -30.7,
+       7
+      ],
+      "lenMm": 1.9,
+      "visibility": 0.17
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "w20",
+    "version": "v074",
+    "role": "printed",
+    "volumeMm3": 16126.1,
+    "areaMm2": 3599.2,
+    "sharpEdgesMm": 95,
+    "visibleSharpMm": 10.4,
+    "hiddenSharpMm": 84.6,
+    "clusters": 12,
+    "visibleClusters": 2,
+    "topVisible": [
+     {
+      "atMm": [
+       -27.1,
+       -0.9,
+       7
+      ],
+      "lenMm": 6.4,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -22,
+       -30.1,
+       7
+      ],
+      "lenMm": 4,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -36.8,
+       -15,
+       7
+      ],
+      "lenMm": 9.9,
+      "visibility": 0.08
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "w5",
+    "version": "v072",
+    "role": "printed",
+    "volumeMm3": 4031.5,
+    "areaMm2": 1428.3,
+    "sharpEdgesMm": 59.8,
+    "visibleSharpMm": 5.6,
+    "hiddenSharpMm": 54.2,
+    "clusters": 8,
+    "visibleClusters": 1,
+    "topVisible": [
+     {
+      "atMm": [
+       42.2,
+       -7.9,
+       7
+      ],
+      "lenMm": 5.6,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       28.9,
+       -21.3,
+       7
+      ],
+      "lenMm": 3.1,
+      "visibility": 0.17
+     },
+     {
+      "atMm": [
+       28.9,
+       -8.7,
+       7
+      ],
+      "lenMm": 3.1,
+      "visibility": 0.17
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "w80",
+    "version": "v071",
+    "role": "printed",
+    "volumeMm3": 64503.9,
+    "areaMm2": 9069.3,
+    "sharpEdgesMm": 150.8,
+    "visibleSharpMm": 3.9,
+    "hiddenSharpMm": 146.9,
+    "clusters": 20,
+    "visibleClusters": 1,
+    "topVisible": [
+     {
+      "atMm": [
+       68.4,
+       -21,
+       63.5
+      ],
+      "lenMm": 3.9,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       59,
+       -11.6,
+       63.5
+      ],
+      "lenMm": 3.9,
+      "visibility": 0.21
+     },
+     {
+      "atMm": [
+       56.7,
+       5,
+       63.5
+      ],
+      "lenMm": 10.2,
+      "visibility": 0.12
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "w10",
+    "version": "v076",
+    "role": "printed",
+    "volumeMm3": 8063.2,
+    "areaMm2": 2267.4,
+    "sharpEdgesMm": 75.4,
+    "visibleSharpMm": 2,
+    "hiddenSharpMm": 73.4,
+    "clusters": 10,
+    "visibleClusters": 1,
+    "topVisible": [
+     {
+      "atMm": [
+       20.5,
+       -9.2,
+       7
+      ],
+      "lenMm": 2,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -0.5,
+       -20.8,
+       7
+      ],
+      "lenMm": 2,
+      "visibility": 0.12
+     },
+     {
+      "atMm": [
+       -0.5,
+       -9.2,
+       7
+      ],
+      "lenMm": 2,
+      "visibility": 0.21
+     }
+    ],
+    "exemptCaps": 0
+   }
+  ]
+ },
+ "attention": {
+  "count": 3,
+  "items": [
+   {
+    "kind": "termination",
+    "part": "base",
+    "version": "v066",
+    "atMm": [
+     0,
+     7.3,
+     17.5
+    ],
+    "areaMm2": 17.1,
+    "memberLengthMm": 142.5,
+    "slender": 34.4,
+    "detail": "flat cap 17.1 mm2, slenderness 34.4, boundary all 90 deg"
+   },
+   {
+    "kind": "silhouette",
+    "view": "front",
+    "heightMm": 161.5,
+    "widthMaxMm": 244,
+    "maxWidthAtZMm": 71.5,
+    "baseWidthMm": 176,
+    "maxOverBase": 1.39,
+    "waists": [
+     {
+      "zMm": 51.5,
+      "widthMm": 20
+     },
+     {
+      "zMm": 135.5,
+      "widthMm": 175.5
+     }
+    ],
+    "peaks": [
+     {
+      "zMm": 11,
+      "widthMm": 176
+     },
+     {
+      "zMm": 73.5,
+      "widthMm": 241.8
+     },
+     {
+      "zMm": 143.5,
+      "widthMm": 190
+     }
+    ],
+    "symmetryMatch": 0.853
+   },
+   {
+    "kind": "silhouette",
+    "view": "side",
+    "heightMm": 161.5,
+    "widthMaxMm": 100,
+    "maxWidthAtZMm": 4,
+    "baseWidthMm": 100,
+    "maxOverBase": 1,
+    "waists": [
+     {
+      "zMm": 51.5,
+      "widthMm": 14
+     }
+    ],
+    "peaks": [
+     {
+      "zMm": 11,
+      "widthMm": 100
+     },
+     {
+      "zMm": 71.5,
+      "widthMm": 79.1
+     }
+    ],
+    "symmetryMatch": 0.831
+   }
+  ]
+ }
+}

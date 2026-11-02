@@ -1,16 +1,17 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the full 35-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the full 36-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Thirty-five tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
+Thirty-six tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
 | **交付** | 能不能交？ | **`preflight`** · `check_printability` · `check_assembly` · `check_parts` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
+| **检测** | 该往哪看？ | `analyze`（实验性，不可作交付依据） · `scan_attention` · `check_appearance`（成套外观：锐边/收口/对称/近共面/包络预算，只读） · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据 | 产**证据**，不自己判交付 |
 
 ## Six rules
@@ -60,6 +61,7 @@ first call would bind — call it before assuming a path is a project. If a task
 | "does the mechanism move correctly", "what's the stroke", "does it jam mid-travel" | `simulate_motion` | `simulate_physics` |
 | "how strong is it", "where does it break", "stress at this section" | `simulate_stress` | anything else — it is the only tool that reports a force |
 | **"where should I even look", "any sharp internal corner", "is this mesh clean"** | **`scan_attention`** | waiting for a render to reveal it |
+| "the whole set looks crude", "where are the razor edges / blunt ends", "is it the right proportion", "do the parts match / line up" | `check_appearance` (assembly manifest; add `budgetPath` for the declared envelope, symmetry and near-plane checks) | per-part renders, or calling a part "ugly" with no location |
 | "I need to deliver this printed part", "is the D hole really a D hole" | `review_visual` (top+iso, section when internal; writes the per-version record) | `generate_part({views:[]})`, or claiming "looks good" without an image |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
 | "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `simulate_lbm` | embedded solids (box walls only) |

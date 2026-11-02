@@ -49,7 +49,7 @@ const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: st
   motion: { kinds: ['motion', 'physics'], label: 'a fresh motion/physics run' },
   assembly: { kinds: ['assembly-check'], label: 'a fresh assembly check' },
   manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY printed part (stock/research roles are exempt by declaration)' },
-  appearance: { kinds: ['assembly'], label: 'a fresh assembly run carrying the renders' },
+  appearance: { kinds: ['appearance', 'assembly'], label: 'a fresh appearance run (check_appearance), or an assembly run carrying the renders' },
   review: { kinds: ['assembly'], label: 'a fresh assembly render to look at' },
 };
 

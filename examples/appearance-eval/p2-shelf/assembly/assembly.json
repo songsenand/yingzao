@@ -1,0 +1,45 @@
+{
+ "schemaVersion": 1,
+ "name": "P2 shelf",
+ "root": {
+  "kind": "assembly",
+  "id": "shelf",
+  "children": [
+   {
+    "id": "board",
+    "kind": "part",
+    "part": "搁板",
+    "version": "v005",
+    "group": "搁板组"
+   },
+   {
+    "id": "brkL",
+    "kind": "part",
+    "part": "搁板托",
+    "version": "v004",
+    "group": "支撑组",
+    "transform": {
+     "translate": [
+      -200,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "brkR",
+    "kind": "part",
+    "part": "搁板托",
+    "version": "v004",
+    "group": "支撑组",
+    "transform": {
+     "translate": [
+      200,
+      0,
+      -10
+     ]
+    }
+   }
+  ]
+ }
+}

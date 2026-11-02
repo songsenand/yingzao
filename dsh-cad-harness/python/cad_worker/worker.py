@@ -112,6 +112,7 @@ OPS = [
     "measure_part",
     "check_printability",
     "scan_attention",
+    "check_appearance",
     "stress_field",
     "mpm_create",
     "mpm_step",
@@ -6940,6 +6941,658 @@ def op_stress_field(params: dict) -> dict:
     return _load_stress_fem().run(params)
 
 
+def _app_rot(rx: float, ry: float, rz: float):
+    import numpy as np
+
+    rx, ry, rz = np.radians([rx, ry, rz])
+    Rx = np.array([[1, 0, 0], [0, np.cos(rx), -np.sin(rx)], [0, np.sin(rx), np.cos(rx)]])
+    Ry = np.array([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry), 0, np.cos(ry)]])
+    Rz = np.array([[np.cos(rz), -np.sin(rz), 0], [np.sin(rz), np.cos(rz), 0], [0, 0, 1]])
+    return Rz @ Ry @ Rx
+
+
+def _app_placed(mesh, transform: dict):
+    import numpy as np
+
+    m = mesh.copy()
+    m.merge_vertices()
+    t = transform or {}
+    R = _app_rot(*(t.get("rotate") or [0, 0, 0]))
+    p = np.array(t.get("translate") or [0, 0, 0], dtype=float)
+    m.vertices = m.vertices @ R.T + p
+    return m
+
+
+def _app_convex_edges(mesh, min_deg: float = 60.0):
+    """Convex edges sharper than min_deg: (midpoints, lengths)."""
+    import numpy as np
+
+    n, c = mesh.face_normals, mesh.triangles_center
+    fa = mesh.face_adjacency
+    ang = np.degrees(mesh.face_adjacency_angles)
+    edges = mesh.face_adjacency_edges
+    mid = (mesh.vertices[edges[:, 0]] + mesh.vertices[edges[:, 1]]) / 2
+    ln = np.linalg.norm(mesh.vertices[edges[:, 0]] - mesh.vertices[edges[:, 1]], axis=1)
+    d1 = np.einsum("ij,ij->i", n[fa[:, 0]], c[fa[:, 1]] - c[fa[:, 0]])
+    d2 = np.einsum("ij,ij->i", n[fa[:, 1]], c[fa[:, 0]] - c[fa[:, 1]])
+    keep = (ang > min_deg) & (d1 < 0) & (d2 < 0)
+    return mid[keep], ln[keep]
+
+
+def _app_clusters(points, cell: float):
+    import numpy as np
+
+    if len(points) == 0:
+        return np.zeros((0, 3)), np.zeros(0, dtype=int), np.zeros(0, dtype=int)
+    keys = np.floor(points / cell).astype(int)
+    uniq, inverse = np.unique(keys, axis=0, return_inverse=True)
+    cen = np.zeros((len(uniq), 3))
+    for i in range(len(uniq)):
+        cen[i] = points[inverse == i].mean(axis=0)
+    return cen, np.bincount(inverse, minlength=len(uniq)), inverse
+
+
+def _app_visibility(part_meshes, points, views):
+    """Fraction of viewpoints from which each point is unoccluded.
+
+    Cast against ONE PART AT A TIME, prefiltered by a ray-AABB slab test. The merged
+    scene is not used: a 17-part assembly is ~300k triangles, and casting every ray
+    against all of them is what made a real project time out (measured: microscope2
+    never finished inside the worker budget). The slab test rejects most (ray, part)
+    pairs before any triangle is touched.
+    """
+    import numpy as np
+
+    if len(points) == 0:
+        return np.zeros(0)
+    n = len(points)
+    score = np.zeros(n)
+    for vp in views:
+        d = points - vp
+        dist = np.linalg.norm(d, axis=1)
+        d = d / np.maximum(dist, 1e-9)[:, None]
+        nearest = np.full(n, np.inf)
+        for m in part_meshes:
+            lo, hi = m.bounds
+            t0 = (lo - vp) / np.where(np.abs(d) < 1e-12, 1e-12, d)
+            t1 = (hi - vp) / np.where(np.abs(d) < 1e-12, 1e-12, d)
+            tmin = np.minimum(t0, t1).max(1)
+            tmax = np.maximum(t0, t1).min(1)
+            cand = np.where((tmax >= np.maximum(tmin, 0.0)) & (tmin < dist) & (tmin < nearest))[0]
+            if len(cand) == 0:
+                continue
+            loc, ir, _ = m.ray.intersects_location(
+                np.repeat(vp[None, :], len(cand), 0), d[cand], multiple_hits=True
+            )
+            if len(ir) == 0:
+                continue
+            dd = np.linalg.norm(loc - vp, axis=1)
+            for j in np.unique(ir):
+                t = float(dd[ir == j].min())
+                gi = int(cand[j])
+                if t < nearest[gi]:
+                    nearest[gi] = t
+        score += (nearest > dist - 1.0)
+    return score / len(views)
+
+
+def _app_functional(version_dir: str, default_radius: float = 4.0):
+    """Functional features declared as axis/cylinder datums next to the STL."""
+    import json as _json
+    import os as _os
+
+    import numpy as np
+
+    path = _os.path.join(version_dir, "datums.json")
+    if not _os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            d = _json.load(fh)
+    except Exception:
+        return []
+    out = []
+    for a in d.get("axes", []):
+        out.append({"name": a.get("name", "axis"),
+                    "point": np.array(a["point"], dtype=float),
+                    "dir": np.array(a["dir"], dtype=float),
+                    "radius": float(default_radius)})
+    for c in d.get("cylinders", []):
+        out.append({"name": c.get("name", "cylinder"),
+                    "point": np.array(c["point"], dtype=float),
+                    "dir": np.array(c["dir"], dtype=float),
+                    "radius": float(c.get("radius", default_radius))})
+    return out
+
+
+def _app_exempt(cen, functional):
+    import numpy as np
+
+    for f in functional:
+        d = f["dir"] / max(np.linalg.norm(f["dir"]), 1e-9)
+        v = cen - f["point"]
+        perp = v - np.dot(v, d) * d
+        if np.linalg.norm(perp) < f["radius"]:
+            return f["name"]
+    return None
+
+
+def _app_blunt_caps(mesh, functional=(), min_feature_mm: float = 1.5,
+                    max_area: float = 40.0, normal_tol: float = 0.98,
+                    square_tol: float = 10.0):
+    """Flat caps whose whole boundary is a 90 deg corner, at the end of a member."""
+    import numpy as np
+
+    n, c, a = mesh.face_normals, mesh.triangles_center, mesh.area_faces
+    fa, ang = mesh.face_adjacency, np.degrees(mesh.face_adjacency_angles)
+    groups: dict = {}
+    for i in range(len(n)):
+        key = tuple(np.round(n[i], 2)) + (round(float(np.dot(n[i], c[i])), 2),)
+        groups.setdefault(key, []).append(i)
+    adj: dict = {}
+    for (f1, f2), ang_ in zip(fa, ang):
+        adj.setdefault(f1, []).append((f2, ang_))
+        adj.setdefault(f2, []).append((f1, ang_))
+    caps = []
+    for key, idx in groups.items():
+        total = float(a[idx].sum())
+        if total > max_area or total <= 0:
+            continue
+        normal = np.array(key[:3])
+        ax = int(np.argmax(np.abs(normal)))
+        if abs(normal[ax]) < normal_tol:
+            continue
+        idx_set = set(idx)
+        boundary, square = 0.0, 0.0
+        for f in idx:
+            for nb, ang_ in adj.get(f, []):
+                if nb in idx_set:
+                    continue
+                boundary += 1.0
+                if abs(ang_ - 90.0) <= square_tol:
+                    square += 1.0
+        if boundary == 0 or square / boundary < 0.9:
+            continue
+        cen = (c[idx] * a[idx, None]).sum(0) / total
+        # below the visual feature size: a 0.7 mm scale tick is texture, not a form end
+        cap_pts = np.unique(np.concatenate([mesh.faces[f] for f in idx]))
+        cap_v = mesh.vertices[cap_pts] - cen
+        u = np.cross(normal, [0.0, 0.0, 1.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(normal, [1.0, 0.0, 0.0])
+        u /= np.linalg.norm(u)
+        v = np.cross(normal, u)
+        if min(float(np.ptp(cap_v @ u)), float(np.ptp(cap_v @ v))) < min_feature_mm:
+            continue
+        # a member extends away inside a tube of 1.5x the cap width
+        width = np.sqrt(max(total, 1e-6))
+        rel = mesh.vertices - cen
+        lateral = rel - np.outer(rel @ normal, normal)
+        tube = np.linalg.norm(lateral, axis=1) < 1.5 * width
+        if not tube.any():
+            continue
+        proj = rel[tube] @ (-normal)
+        if float(proj.max()) < 3.0 * width:
+            continue
+        caps.append({"atMm": [round(float(x), 1) for x in cen],
+                     "areaMm2": round(total, 1),
+                     "memberLengthMm": round(float(proj.max()), 1),
+                     "slender": round(float(proj.max()) / width, 1),
+                     "normal": [round(float(x), 2) for x in normal],
+                     "exemptBy": _app_exempt(cen, functional)})
+    return caps
+
+
+def _app_mask(verts_2d, faces, origin, res: float = 0.5):
+    """Boolean occupancy of a 2D projection, on a caller-supplied grid."""
+    import numpy as np
+
+    lo = np.asarray(origin, dtype=float)
+    hi = verts_2d.max(0) + res
+    nx = int(np.ceil((hi[0] - lo[0]) / res)) + 1
+    ny = int(np.ceil((hi[1] - lo[1]) / res)) + 1
+    mask = np.zeros((ny, nx), bool)
+    for tri in verts_2d[faces]:
+        p = (tri - lo) / res
+        i0, j0 = np.floor(p.min(0)).astype(int)
+        i1, j1 = np.ceil(p.max(0)).astype(int)
+        i0, j0 = max(i0, 0), max(j0, 0)
+        i1, j1 = min(i1, nx - 1), min(j1, ny - 1)
+        if i1 < i0 or j1 < j0:
+            continue
+        xs, ys = np.meshgrid(np.arange(i0, i1 + 1), np.arange(j0, j1 + 1))
+        pts = np.stack([xs.ravel() + 0.5, ys.ravel() + 0.5], 1)
+        A, B, C = p[0], p[1], p[2]
+        v0, v1, v2 = C - A, B - A, pts - A
+        den = v0[0] * v1[1] - v1[0] * v0[1]
+        if abs(den) < 1e-12:
+            continue
+        u = (v2[:, 0] * v1[1] - v1[0] * v2[:, 1]) / den
+        v = (v0[0] * v2[:, 1] - v2[:, 0] * v0[1]) / den
+        inside = (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9)
+        if inside.any():
+            mask[ys.ravel()[inside], xs.ravel()[inside]] = True
+    return mask, lo
+
+
+def _app_mask_fast(verts2d, faces, origin, shape, res: float = 0.5, seed: int = 0):
+    """Filled occupancy mask by AREA-WEIGHTED SAMPLING, not per-triangle rasterising.
+
+    The per-triangle loop costs ~44 us per triangle: 30 s on a 686k-triangle real
+    assembly (microscope2) and the whole check timed out. Sampling costs one vectorised
+    pass: each triangle gets samples proportional to its projected area, then the
+    points are binned. Deterministic (seeded), and accurate to the grid cell.
+    """
+    import numpy as np
+
+    P = verts2d[faces]
+    e1 = P[:, 1] - P[:, 0]
+    e2 = P[:, 2] - P[:, 0]
+    area = np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]) * 0.5
+    per_cell = max(res * res * 0.25, 1e-6)
+    n = np.maximum(3, np.ceil(area / per_cell).astype(np.int64))
+    total = int(n.sum())
+    budget = 4_000_000
+    if total > budget:
+        n = np.maximum(1, (n * (budget / total)).astype(np.int64))
+        total = int(n.sum())
+    idx = np.repeat(np.arange(len(P)), n)
+    starts = np.cumsum(n) - n
+    k = np.arange(total) - np.repeat(starts, n)
+    rng = np.random.default_rng(seed)
+    u = rng.random(total)
+    v = rng.random(total)
+    flip = u + v > 1.0
+    u[flip] = 1.0 - u[flip]
+    v[flip] = 1.0 - v[flip]
+    w = 1.0 - u - v
+    pts = P[idx, 0] * w[:, None] + P[idx, 1] * u[:, None] + P[idx, 2] * v[:, None]
+    i = np.floor((pts[:, 0] - origin[0]) / res).astype(np.int64)
+    j = np.floor((pts[:, 1] - origin[1]) / res).astype(np.int64)
+    ok = (i >= 0) & (j >= 0) & (i < shape[0]) & (j < shape[1])
+    mask = np.zeros((shape[1], shape[0]), bool)
+    mask[j[ok], i[ok]] = True
+    from scipy.ndimage import binary_closing
+    return binary_closing(mask, np.ones((3, 3), bool))
+
+
+def _app_planes(mesh, min_area: float = 200.0):
+    """Axis-aligned flat faces, grouped into (axis, side, offset) planes.
+
+    A facet of a cylinder has siblings at ~11 deg; a genuinely flat face has neighbours
+    that are either coplanar (<0.5 deg) or a hard edge (>20 deg). Without that filter a
+    R6 fillet alone produces a dozen "planes" 5 mm apart (measured on the P4 stool).
+    """
+    import numpy as np
+
+    ang = np.degrees(mesh.face_adjacency_angles)
+    fa = mesh.face_adjacency
+    curved = np.zeros(len(mesh.faces), bool)
+    sel = (ang > 0.5) & (ang < 20.0)
+    curved[fa[sel, 0]] = True
+    curved[fa[sel, 1]] = True
+    n, c, a = mesh.face_normals, mesh.triangles_center, mesh.area_faces
+    idx = np.where((~curved) & (a >= min_area))[0]
+    if len(idx) == 0:
+        return []
+    ax = np.argmax(np.abs(n[idx]), axis=1)
+    absn = np.abs(n[idx])[np.arange(len(idx)), ax]
+    keep = absn >= 0.98
+    idx, ax = idx[keep], ax[keep]
+    if len(idx) == 0:
+        return []
+    sign = np.where(n[idx, ax] > 0, 1, -1)
+    off = np.round(np.einsum("ij,ij->i", n[idx], c[idx]), 1)
+    labels = np.stack([ax, sign, off], 1)
+    uniq, inv = np.unique(labels, axis=0, return_inverse=True)
+    # bbox from CENTROIDS via reduceat: ufunc.at over 686k rows costs tens of seconds on
+    # a real assembly (microscope2), and a plane's extent is a coarse overlap test anyway
+    order = np.argsort(inv, kind="stable")
+    inv_s = inv[order]
+    cen_s = c[idx][order]
+    starts = np.searchsorted(inv_s, np.arange(len(uniq)))
+    lo = np.minimum.reduceat(cen_s, starts, axis=0)
+    hi = np.maximum.reduceat(cen_s, starts, axis=0)
+    area = np.bincount(inv, weights=a[idx], minlength=len(uniq))
+    out = []
+    for i in range(len(uniq)):
+        out.append({"axis": int(uniq[i][0]), "sign": int(uniq[i][1]), "offset": float(uniq[i][2]),
+                    "area": float(area[i]), "lo": lo[i].copy(), "hi": hi[i].copy()})
+    return out
+
+
+def _app_near_planes(placed, gap_min: float = 1.0, gap_max: float = 20.0, overlap_min: float = 0.5):
+    """Two LARGE flat faces of DIFFERENT parts, facing each other, 1-20 mm apart, whose
+    projections overlap: "these should be flush but are 10 mm off".
+
+    Sorting every plane offset and taking close neighbours does NOT work: plate
+    thickness produces a pair on every part, and a fillet produces a dozen. The three
+    filters that make it usable are measured in experiments/20261101_appearance_eval.md:
+    cross-part, opposite normals, projection overlap.
+    """
+    import numpy as np
+
+    planes = []
+    for pid, m in placed:
+        for q in _app_planes(m):
+            planes.append((pid, q))
+    if not planes:
+        return []
+    pids = np.array([x[0] for x in planes], dtype=object)
+    axis = np.array([q["axis"] for _, q in planes])
+    sign = np.array([q["sign"] for _, q in planes])
+    off = np.array([q["offset"] for _, q in planes])
+    lo = np.array([q["lo"] for _, q in planes])
+    hi = np.array([q["hi"] for _, q in planes])
+    ar = np.array([q["area"] for _, q in planes])
+    hits = []
+    for ax in (0, 1, 2):
+        A = np.where((axis == ax) & (sign > 0))[0]
+        B = np.where((axis == ax) & (sign < 0))[0]
+        if len(A) == 0 or len(B) == 0:
+            continue
+        # the whole A x B gap matrix at once: a Python double loop over 17 parts was
+        # 100 s on microscope2, this is milliseconds
+        gap = np.abs(off[A][:, None] - off[B][None, :])
+        ok = (gap >= gap_min) & (gap <= gap_max) & (pids[A][:, None] != pids[B][None, :])
+        for a, b in zip(*np.where(ok)):
+            f, g = A[a], B[b]
+            ov = 1.0
+            for k in (0, 1, 2):
+                if k == ax:
+                    continue
+                inter = max(0.0, min(hi[f][k], hi[g][k]) - max(lo[f][k], lo[g][k]))
+                smaller = max(min(hi[f][k] - lo[f][k], hi[g][k] - lo[g][k]), 1e-6)
+                ov *= inter / smaller
+            if ov < overlap_min:
+                continue
+            mid = (np.maximum(lo[f], lo[g]) + np.minimum(hi[f], hi[g])) / 2
+            hits.append({"parts": [pids[f], pids[g]], "axis": "xyz"[ax],
+                         "gapMm": round(float(gap[a, b]), 1), "overlap": round(float(ov), 2),
+                         "atMm": [round(float(v), 1) for v in mid],
+                         "areaMm2": round(float(min(ar[f], ar[g])), 1)})
+    hits.sort(key=lambda h: -h["areaMm2"])
+    return hits[:8]
+
+
+def _app_silhouette(mesh, axes, res: float = 0.5):
+    """Rasterised orthographic silhouette: waists, peaks, top/base ratio, symmetry."""
+    import numpy as np
+    from scipy.ndimage import binary_dilation
+    from scipy.signal import find_peaks
+
+    V2 = mesh.vertices[:, axes]
+    lo = V2.min(0) - res
+    hi = V2.max(0) + res
+    shape = (int(np.ceil((hi[0] - lo[0]) / res)) + 1, int(np.ceil((hi[1] - lo[1]) / res)) + 1)
+    mask = _app_mask_fast(V2, mesh.faces, lo, shape, res)
+    mn = lo
+    rows = np.where(mask.any(1))[0]
+    if len(rows) == 0:
+        return {}
+    width = np.array([(np.where(mask[r])[0].max() - np.where(mask[r])[0].min() + 1) * res
+                      for r in range(rows.min(), rows.max() + 1)])
+    z = mn[1] + np.arange(rows.min(), rows.max() + 1) * res
+    ws = np.convolve(width, np.ones(9) / 9, mode="same")
+    waists, _ = find_peaks(-ws, prominence=5.0)
+    peaks, _ = find_peaks(ws, prominence=5.0)
+    cx = int(round((0 - mn[0]) / res))
+    left = mask[:, :cx][:, ::-1]
+    right = mask[:, cx:]
+    k = min(left.shape[1], right.shape[1])
+    L, R = left[:, :k], right[:, :k]
+    near = binary_dilation(R, np.ones((3, 3), bool))
+    near_l = binary_dilation(L, np.ones((3, 3), bool))
+    inter = (L & near).sum() + (R & near_l).sum()
+    union = max(int(L.sum() + R.sum()), 1)
+    base_w = float(width[: max(1, int(0.2 * len(width)))].max())
+    # An EDGE-ON view of a plate or a propeller is a thin bar: max/base explodes
+    # (measured 4.58 on the propeller's side view) and says nothing about proportion.
+    # An edge-on view of a plate or a propeller is a thin BAR: max/base explodes
+    # (measured 4.58 on the propeller's side view) and says nothing about proportion.
+    h = float(z[-1] - z[0])
+    aspect = float(width.max()) / max(h, 1e-6)
+    # A silhouette much wider than tall rests on a line, not a footprint: "top wider
+    # than base" is then a statement about a bar, not about proportion (propeller 4.58).
+    edge_on = aspect > 2.5
+    return {
+        "heightMm": round(float(z[-1] - z[0]), 1),
+        "widthMaxMm": round(float(width.max()), 1),
+        "maxWidthAtZMm": round(float(z[int(np.argmax(width))]), 1),
+        "baseWidthMm": round(base_w, 1),
+        "maxOverBase": None if edge_on else round(float(width.max() / max(base_w, 1e-6)), 2),
+        "edgeOnView": bool(edge_on),
+        "waists": [{"zMm": round(float(z[i]), 1), "widthMm": round(float(ws[i]), 1)} for i in waists],
+        "peaks": [{"zMm": round(float(z[i]), 1), "widthMm": round(float(ws[i]), 1)} for i in peaks],
+        "symmetryMatch": round(float(inter / union), 3),
+    }
+
+
+def _app_json_safe(o):
+    """Normalise -0.0 to 0.0. JSON.stringify(-0) is "0", so a -0.0 coordinate is not
+    a lossless round trip and the host's output contract rejects the whole value."""
+    if isinstance(o, float):
+        return 0.0 if o == 0 else o
+    if isinstance(o, dict):
+        return {k: _app_json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_app_json_safe(v) for v in o]
+    return o
+
+
+def _app_symmetry(scene, axis: int = 0, step_deg: int = 15, res: float = 0.5):
+    """VISUAL symmetry, not geometric: sweep azimuths, project the scene and its
+    mirror image, and measure the area where the two silhouettes disagree.
+
+    A single view is not enough. Measured on the P1 stool (one round leg among three
+    square ones): the front, 45 deg and side silhouettes are ALL perfectly symmetric —
+    the odd leg hides behind a square one — and only 30/60 deg expose it. A product
+    can also be symmetric in every view and still be built asymmetrically inside,
+    which is fine: this rule asks what a viewer sees, not how it is assembled.
+    """
+    import numpy as np
+
+    axes = (0, 2)
+    worst = None
+    per_view = []
+    for az in range(0, 360, max(1, step_deg)):
+        a = np.radians(az)
+        R = np.array([[np.cos(a), -np.sin(a), 0.0], [np.sin(a), np.cos(a), 0.0], [0.0, 0.0, 1.0]])
+        V = scene.vertices @ R.T
+        Vm = V.copy()
+        Vm[:, axis] *= -1.0
+        a2, b2 = V[:, axes], Vm[:, axes]
+        lo = np.minimum(a2.min(0), b2.min(0)) - res
+        hi = np.maximum(a2.max(0), b2.max(0)) + res
+        grid = (lo, np.ceil((hi - lo) / res).astype(int) + 1)
+        # same grid for both, or the two masks cannot be compared element-wise
+        from math import ceil
+        shape = (int(ceil((hi[0] - lo[0]) / res)) + 1, int(ceil((hi[1] - lo[1]) / res)) + 1)
+        A = _app_mask_fast(a2, scene.faces, lo, shape, res, seed=1)
+        B = _app_mask_fast(b2, scene.faces, lo, shape, res, seed=2)
+        diff = A ^ B
+        area = float(diff.sum()) * res * res
+        rec = {"azimuthDeg": az, "mismatchMm2": round(area, 1)}
+        if area > 0:
+            ys, xs = np.where(diff)
+            rec["mismatchBboxMm"] = [
+                [round(float(lo[0] + xs.min() * res), 1), round(float(lo[1] + ys.min() * res), 1)],
+                [round(float(lo[0] + xs.max() * res), 1), round(float(lo[1] + ys.max() * res), 1)],
+            ]
+        per_view.append(rec)
+        if worst is None or area > worst["mismatchMm2"]:
+            worst = rec
+    per_view.sort(key=lambda r: -r["mismatchMm2"])
+    return {"planeAxis": "xyz"[axis], "views": len(per_view),
+            "worst": worst, "top": per_view[:3],
+            "note": "area where a view and its mirror disagree; 0 in every view is not a proof of symmetry, it is the absence of evidence in those views"}
+
+
+def op_check_appearance(params: dict) -> dict:
+    """Appearance screen over a whole SET, never a single part.
+
+    WHY THE SCOPE IS THE SET. Appearance is a relation: proportion, alignment,
+    repetition, contrast. A single part has nothing to be "off" against, and a
+    part-level report is mostly invalid anyway — measured on toy-balance2, 29-39%
+    of its sharp edges are invisible from EVERY viewpoint because the assembly
+    hides them. The host resolves the manifest and hands every part here; this op
+    answers "where is it wrong, where, by how much", never "is it pretty".
+
+    THREE RULES (v1), each with a calibration pair behind it
+    (experiments/20261030_appearance_probe.md):
+
+      sharp-edge   visible convex edge LENGTH, not count: a fillet adds many short
+                   segments, so the count RISES as a part gets rounder (measured
+                   732 -> 836) while the length falls (2447 -> 1004 mm).
+      termination  a flat cap at the end of a slender member whose whole boundary
+                   is a 90 deg corner — the "just cut off" signature.
+      silhouette   width profile of the projected outline: waists, peaks, and
+                   whether the widest mass sits at the top. ATTENTION ONLY.
+
+    VISIBILITY. Rays from N viewpoints to each sharp-edge cluster; the score is
+    the fraction of views that see it. Below `visibilityThreshold` it is counted,
+    not reported; never-visible clusters are excluded and the COUNT is reported,
+    because a silent exclusion cannot be told from a missed one.
+
+    FUNCTIONAL EXEMPTION. A cap inside a declared axis/cylinder datum (datums.json
+    beside the STL) is a functional opening — a knife-edge groove must stay open —
+    and is exempted by NAME, never dropped.
+    """
+    import numpy as np
+    import trimesh
+
+    parts = params.get("parts") or []
+    if not isinstance(parts, list) or not parts:
+        raise ValueError("check_appearance needs `parts`: [{id, role, path, transform}]")
+    cell = float(params.get("cellMm") or 10.0)
+    n_views = max(4, int(params.get("views") or 12))
+    min_feature = float(params.get("minFeatureMm") or 1.5)
+    functional_radius = float(params.get("functionalRadiusMm") or 4.0)
+    vis_threshold = float(params.get("visibilityThreshold") or 0.25)
+
+    scene, analysed, reference = [], [], []
+    role_assumed = 0
+    for p in parts:
+        path = p.get("path")
+        if not path:
+            raise ValueError("each part needs `path` to its model.stl")
+        m = _app_placed(trimesh.load(path, force="mesh"), p.get("transform") or {})
+        scene.append(m)
+        role = p.get("role")
+        if role is None:
+            role = "purchased" if p.get("source") == "stock" else "printed"
+            role_assumed += 1
+        elif p.get("roleAssumed"):
+            role_assumed += 1
+        (reference if role != "printed" else analysed).append((p, m))
+
+    if not analysed:
+        raise ValueError("no printed parts to judge — every part is purchased/reference")
+
+    scene_mesh = trimesh.util.concatenate(scene)
+    lo, hi = scene_mesh.bounds
+    centre = np.array([0.0, 0.0, (lo[2] + hi[2]) / 2])
+    radius = max(float(np.linalg.norm(hi - lo)), 1.0) * 1.6
+    views = []
+    for az in range(0, 360, max(1, 360 // n_views)):
+        for el in (12, 55):
+            a_, e_ = np.radians(az), np.radians(el)
+            views.append(centre + radius * np.array([np.cos(e_) * np.cos(a_),
+                                                     np.cos(e_) * np.sin(a_),
+                                                     np.sin(e_)]))
+    views = np.array(views)
+
+    findings, attention = [], []
+    total_visible = total_hidden = 0.0
+    subsampled = 0
+    max_rays = int(params.get("maxRays") or 6000)
+    for p, m in analysed:
+        mid, length = _app_convex_edges(m)
+        cen, counts, inverse = _app_clusters(mid, cell)
+        cluster_len = np.zeros(len(cen))
+        for i in range(len(cen)):
+            cluster_len[i] = length[inverse == i].sum()
+        total_clusters = len(cen)
+        # ray budget: the longest clusters are the ones worth measuring; a silent
+        # truncation would look like "no sharp edges here", so the count rides along
+        if total_clusters * len(views) > max_rays and total_clusters > 0:
+            keep = max(20, int(max_rays) // max(1, len(views)))
+            sel = np.argsort(-cluster_len)[:keep]
+            cen, cluster_len = cen[sel], cluster_len[sel]
+            subsampled += total_clusters - len(sel)
+        score = _app_visibility(scene, cen, views)
+        vis = score >= vis_threshold
+        total_visible += float(cluster_len[vis].sum())
+        total_hidden += float(cluster_len[~vis].sum())
+        findings.append({
+            "part": p.get("id"), "version": p.get("version"),
+            "role": p.get("role") or ("purchased" if p.get("source") == "stock" else "printed"),
+            "volumeMm3": round(float(m.volume), 1),
+            "areaMm2": round(float(m.area), 1),
+            "bboxMm": [[round(float(x), 1) for x in m.bounds[0]],
+                       [round(float(x), 1) for x in m.bounds[1]]],
+            "sharpEdgesMm": round(float(length.sum()), 1),
+            "visibleSharpMm": round(float(cluster_len[vis].sum()), 1),
+            "hiddenSharpMm": round(float(cluster_len[~vis].sum()), 1),
+            "clusters": int(total_clusters),
+            "clustersMeasured": int(len(cen)),
+            "visibleClusters": int(vis.sum()),
+            "topVisible": [
+                {"atMm": [round(float(x), 1) for x in cen[i]],
+                 "lenMm": round(float(cluster_len[i]), 1),
+                 "visibility": round(float(score[i]), 2)}
+                for i in np.argsort(-cluster_len * vis)[:3]
+            ],
+        })
+        version_dir = os.path.dirname(str(p.get("path")))
+        functional = _app_functional(version_dir, functional_radius)
+        all_caps = _app_blunt_caps(m, functional, min_feature)
+        exempted = [c for c in all_caps if c["exemptBy"]]
+        findings[-1]["exemptCaps"] = len(exempted)
+        for cap in sorted([c for c in all_caps if not c["exemptBy"]],
+                          key=lambda c: -c["areaMm2"])[:3]:
+            attention.append({
+                "kind": "termination", "part": p.get("id"), "version": p.get("version"),
+                "atMm": cap["atMm"], "areaMm2": cap["areaMm2"],
+                "memberLengthMm": cap["memberLengthMm"], "slender": cap["slender"],
+                "detail": f"flat cap {cap['areaMm2']} mm2, slenderness {cap['slender']}, "
+                          f"boundary all 90 deg",
+            })
+
+    for hit in _app_near_planes([(p.get("id"), m) for p, m in analysed]):
+        attention.append({"kind": "near-plane", **hit})
+
+    for label, axes in (("front", (0, 2)), ("side", (1, 2))):
+        sil = _app_silhouette(scene_mesh, axes)
+        if sil:
+            attention.append({"kind": "silhouette", "view": label, **sil})
+
+    sym = params.get("symmetry") or {}
+    if sym.get("plane"):
+        axis = {"x": 0, "y": 1, "z": 2}.get(str(sym["plane"]).lower(), 0)
+        attention.append({"kind": "symmetry", **_app_symmetry(scene_mesh, axis,
+                         step_deg=int(sym.get("stepDeg") or 15))})
+
+    area_total = sum(f["areaMm2"] for f in findings)
+    result = {
+        "parts": {"analysed": len(analysed), "reference": len(reference),
+                  "roleAssumed": role_assumed},
+        "judgement": {
+            "visibleSharpMm": round(total_visible, 1),
+            "hiddenSharpMm": round(total_hidden, 1),
+            "hiddenShare": round(total_hidden / max(total_visible + total_hidden, 1e-6), 3),
+            "volumeMm3": round(sum(f["volumeMm3"] for f in findings), 1),
+            "areaMm2": round(area_total, 1),
+            "visibleSharpPerKmm2": round(total_visible / max(area_total / 1000, 1e-6), 2),
+            "exemptCaps": sum(f["exemptCaps"] for f in findings),
+            "clustersSubsampled": subsampled,
+            "findings": sorted(findings, key=lambda f: -f["visibleSharpMm"]),
+        },
+        "attention": {"count": len(attention), "items": attention},
+    }
+    return _app_json_safe(result)
+
+
 HANDLERS = {
     "ping": op_ping,
     "versions": op_versions,
@@ -6968,6 +7621,7 @@ HANDLERS = {
     "simulate_motion": op_simulate_motion,
     "measure_part": op_measure_part,
     "scan_attention": op_scan_attention,
+    "check_appearance": op_check_appearance,
     "stress_field": op_stress_field,
     "check_printability": op_check_printability,
     "mpm_create": op_mpm_create,

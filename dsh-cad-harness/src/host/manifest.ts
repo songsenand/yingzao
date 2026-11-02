@@ -90,6 +90,20 @@ export interface ManifestNode {
    * hole in the manifest. Anything without a `version` is what `stock` means.
    */
   source?: 'generated' | 'imported' | 'stock';
+  /**
+   * Appearance ownership (schema 2026-10-30). `purchased` and `reference` parts are
+   * never judged: you cannot change a bought screw, and vendor geometry kept for
+   * fit checking must still occlude. Omitted -> source=stock means purchased,
+   * anything else means printed (the checker reports `roleAssumed`).
+   */
+  role?: 'printed' | 'purchased' | 'reference';
+  /**
+   * Functional group (功能区). A PARTITION OF PARTS, not a spatial region: at most
+   * one group per part, and a small part may have none. A group's envelope is the
+   * union of its members' bboxes; budgets attach to groups (assembly/budget.json),
+   * never to parts — a per-part budget is what makes a design rigid.
+   */
+  group?: string;
   material?: string;
   qty?: number;
   stockRef?: string;                // source=stock: identification of the physical part

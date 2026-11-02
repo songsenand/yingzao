@@ -1,0 +1,763 @@
+{
+ "scope": "assembly",
+ "manifest": "/tmp/cad-app-work-lfRY5g/assembly/assembly.json",
+ "parts": {
+  "analysed": 13,
+  "reference": 0,
+  "roleAssumed": 13
+ },
+ "verdict": "check",
+ "note": "没有声明 maxVisibleSharpMm —— 缺一个阈值不等于通过，这只是读数。",
+ "judgement": {
+  "visibleSharpMm": 8763.8,
+  "hiddenSharpMm": 4851.5,
+  "hiddenShare": 0.356,
+  "volumeMm3": 779861.5,
+  "areaMm2": 231551.8,
+  "visibleSharpPerKmm2": 37.85,
+  "exemptCaps": 0,
+  "findings": [
+   {
+    "part": "base",
+    "version": "v066",
+    "role": "printed",
+    "volumeMm3": 472166,
+    "areaMm2": 99860,
+    "sharpEdgesMm": 3400,
+    "visibleSharpMm": 2772.2,
+    "hiddenSharpMm": 627.7,
+    "clusters": 101,
+    "visibleClusters": 65,
+    "topVisible": [
+     {
+      "atMm": [
+       0,
+       -70,
+       20
+      ],
+      "lenMm": 204,
+      "visibility": 0.58
+     },
+     {
+      "atMm": [
+       0,
+       70,
+       10
+      ],
+      "lenMm": 204,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       0,
+       70,
+       20
+      ],
+      "lenMm": 204,
+      "visibility": 0.75
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "panR",
+    "version": "v069",
+    "role": "printed",
+    "volumeMm3": 31747.5,
+    "areaMm2": 19528.1,
+    "sharpEdgesMm": 888.3,
+    "visibleSharpMm": 888.3,
+    "hiddenSharpMm": 0,
+    "clusters": 77,
+    "visibleClusters": 77,
+    "topVisible": [
+     {
+      "atMm": [
+       63.5,
+       27.9,
+       254.8
+      ],
+      "lenMm": 30.1,
+      "visibility": 0.33
+     },
+     {
+      "atMm": [
+       46.1,
+       -25.1,
+       269
+      ],
+      "lenMm": 25,
+      "visibility": 0.5
+     },
+     {
+      "atMm": [
+       46.1,
+       25.1,
+       269
+      ],
+      "lenMm": 25,
+      "visibility": 0.5
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "panL",
+    "version": "v069",
+    "role": "printed",
+    "volumeMm3": 31747.5,
+    "areaMm2": 19528.1,
+    "sharpEdgesMm": 888.3,
+    "visibleSharpMm": 849.3,
+    "hiddenSharpMm": 39,
+    "clusters": 77,
+    "visibleClusters": 75,
+    "topVisible": [
+     {
+      "atMm": [
+       -96.5,
+       27.9,
+       254.8
+      ],
+      "lenMm": 30.1,
+      "visibility": 0.38
+     },
+     {
+      "atMm": [
+       -113.9,
+       -25.1,
+       269
+      ],
+      "lenMm": 25,
+      "visibility": 0.5
+     },
+     {
+      "atMm": [
+       -113.9,
+       25.1,
+       269
+      ],
+      "lenMm": 25,
+      "visibility": 0.5
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "bottom",
+    "version": "v050",
+    "role": "printed",
+    "volumeMm3": 45817,
+    "areaMm2": 14806.7,
+    "sharpEdgesMm": 1182.5,
+    "visibleSharpMm": 683.2,
+    "hiddenSharpMm": 499.2,
+    "clusters": 44,
+    "visibleClusters": 28,
+    "topVisible": [
+     {
+      "atMm": [
+       1,
+       1.4,
+       160
+      ],
+      "lenMm": 182.5,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       1,
+       -1.4,
+       160
+      ],
+      "lenMm": 182.5,
+      "visibility": 0.33
+     },
+     {
+      "atMm": [
+       -90,
+       -6,
+       150
+      ],
+      "lenMm": 40,
+      "visibility": 0.42
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "pointer",
+    "version": "v063",
+    "role": "printed",
+    "volumeMm3": 33464.9,
+    "areaMm2": 14661.9,
+    "sharpEdgesMm": 1453.9,
+    "visibleSharpMm": 627.6,
+    "hiddenSharpMm": 826.3,
+    "clusters": 64,
+    "visibleClusters": 21,
+    "topVisible": [
+     {
+      "atMm": [
+       -26.5,
+       -4,
+       84.8
+      ],
+      "lenMm": 81,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -33.8,
+       4,
+       115
+      ],
+      "lenMm": 52.5,
+      "visibility": 0.54
+     },
+     {
+      "atMm": [
+       33.8,
+       4,
+       115
+      ],
+      "lenMm": 52.5,
+      "visibility": 0.54
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "carrierL",
+    "version": "v046",
+    "role": "printed",
+    "volumeMm3": 27473.7,
+    "areaMm2": 11212.3,
+    "sharpEdgesMm": 693,
+    "visibleSharpMm": 547.5,
+    "hiddenSharpMm": 145.5,
+    "clusters": 82,
+    "visibleClusters": 63,
+    "topVisible": [
+     {
+      "atMm": [
+       -75.9,
+       2,
+       245
+      ],
+      "lenMm": 24.4,
+      "visibility": 0.46
+     },
+     {
+      "atMm": [
+       -80,
+       -4.1,
+       245
+      ],
+      "lenMm": 16.2,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       -117.4,
+       5.6,
+       245
+      ],
+      "lenMm": 11.2,
+      "visibility": 0.42
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "carrierR",
+    "version": "v046",
+    "role": "printed",
+    "volumeMm3": 27473.7,
+    "areaMm2": 11212.3,
+    "sharpEdgesMm": 693,
+    "visibleSharpMm": 547.5,
+    "hiddenSharpMm": 145.5,
+    "clusters": 82,
+    "visibleClusters": 63,
+    "topVisible": [
+     {
+      "atMm": [
+       84.1,
+       2,
+       245
+      ],
+      "lenMm": 24.4,
+      "visibility": 0.33
+     },
+     {
+      "atMm": [
+       80,
+       -4.1,
+       245
+      ],
+      "lenMm": 16.2,
+      "visibility": 0.38
+     },
+     {
+      "atMm": [
+       42.6,
+       5.6,
+       245
+      ],
+      "lenMm": 11.2,
+      "visibility": 0.58
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "top",
+    "version": "v049",
+    "role": "printed",
+    "volumeMm3": 46279.4,
+    "areaMm2": 14308.9,
+    "sharpEdgesMm": 1128.1,
+    "visibleSharpMm": 400,
+    "hiddenSharpMm": 728,
+    "clusters": 32,
+    "visibleClusters": 10,
+    "topVisible": [
+     {
+      "atMm": [
+       1,
+       1.4,
+       225
+      ],
+      "lenMm": 182.5,
+      "visibility": 0.75
+     },
+     {
+      "atMm": [
+       1,
+       -1.4,
+       225
+      ],
+      "lenMm": 182.5,
+      "visibility": 0.67
+     },
+     {
+      "atMm": [
+       -69,
+       0,
+       225
+      ],
+      "lenMm": 9,
+      "visibility": 0.33
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "linkL",
+    "version": "v051",
+    "role": "printed",
+    "volumeMm3": 17509.6,
+    "areaMm2": 6657.7,
+    "sharpEdgesMm": 697.3,
+    "visibleSharpMm": 323.3,
+    "hiddenSharpMm": 374,
+    "clusters": 36,
+    "visibleClusters": 10,
+    "topVisible": [
+     {
+      "atMm": [
+       -88,
+       -4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.67
+     },
+     {
+      "atMm": [
+       -88,
+       4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.67
+     },
+     {
+      "atMm": [
+       -72,
+       4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.54
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "linkR",
+    "version": "v051",
+    "role": "printed",
+    "volumeMm3": 17509.6,
+    "areaMm2": 6657.7,
+    "sharpEdgesMm": 697.3,
+    "visibleSharpMm": 323.3,
+    "hiddenSharpMm": 374,
+    "clusters": 36,
+    "visibleClusters": 10,
+    "topVisible": [
+     {
+      "atMm": [
+       72,
+       -4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.58
+     },
+     {
+      "atMm": [
+       72,
+       4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.54
+     },
+     {
+      "atMm": [
+       88,
+       4,
+       182.5
+      ],
+      "lenMm": 65,
+      "visibility": 0.67
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "trimR",
+    "version": "v028",
+    "role": "printed",
+    "volumeMm3": 9816,
+    "areaMm2": 3664.9,
+    "sharpEdgesMm": 400.4,
+    "visibleSharpMm": 318.2,
+    "hiddenSharpMm": 82.2,
+    "clusters": 20,
+    "visibleClusters": 15,
+    "topVisible": [
+     {
+      "atMm": [
+       64.5,
+       3,
+       112.3
+      ],
+      "lenMm": 27.1,
+      "visibility": 0.29
+     },
+     {
+      "atMm": [
+       45,
+       -12,
+       110
+      ],
+      "lenMm": 24,
+      "visibility": 0.38
+     },
+     {
+      "atMm": [
+       45,
+       12,
+       110
+      ],
+      "lenMm": 24,
+      "visibility": 0.5
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "trimL",
+    "version": "v028",
+    "role": "printed",
+    "volumeMm3": 9816,
+    "areaMm2": 3664.9,
+    "sharpEdgesMm": 400.4,
+    "visibleSharpMm": 299.2,
+    "hiddenSharpMm": 101.2,
+    "clusters": 22,
+    "visibleClusters": 14,
+    "topVisible": [
+     {
+      "atMm": [
+       -65,
+       -12,
+       110
+      ],
+      "lenMm": 24,
+      "visibility": 0.58
+     },
+     {
+      "atMm": [
+       -65,
+       0,
+       98
+      ],
+      "lenMm": 24,
+      "visibility": 0.42
+     },
+     {
+      "atMm": [
+       -65,
+       0,
+       122
+      ],
+      "lenMm": 24,
+      "visibility": 0.67
+     }
+    ],
+    "exemptCaps": 0
+   },
+   {
+    "part": "scale",
+    "version": "v067",
+    "role": "printed",
+    "volumeMm3": 9040.6,
+    "areaMm2": 5788.3,
+    "sharpEdgesMm": 1092.8,
+    "visibleSharpMm": 184,
+    "hiddenSharpMm": 908.8,
+    "clusters": 24,
+    "visibleClusters": 3,
+    "topVisible": [
+     {
+      "atMm": [
+       -25,
+       -8,
+       62.5
+      ],
+      "lenMm": 90,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       25,
+       -8,
+       62.5
+      ],
+      "lenMm": 90,
+      "visibility": 0.25
+     },
+     {
+      "atMm": [
+       -25,
+       -8,
+       85
+      ],
+      "lenMm": 4,
+      "visibility": 0.25
+     }
+    ],
+    "exemptCaps": 0
+   }
+  ]
+ },
+ "attention": {
+  "count": 9,
+  "items": [
+   {
+    "kind": "termination",
+    "part": "scale",
+    "version": "v067",
+    "atMm": [
+     0,
+     -4,
+     44
+    ],
+    "areaMm2": 40,
+    "memberLengthMm": 23,
+    "slender": 3.6,
+    "detail": "flat cap 40.0 mm2, slenderness 3.6, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "scale",
+    "version": "v067",
+    "atMm": [
+     0,
+     -8,
+     70
+    ],
+    "areaMm2": 27.2,
+    "memberLengthMm": 27,
+    "slender": 5.2,
+    "detail": "flat cap 27.2 mm2, slenderness 5.2, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "scale",
+    "version": "v067",
+    "atMm": [
+     -23,
+     -4,
+     46.5
+    ],
+    "areaMm2": 20,
+    "memberLengthMm": 46,
+    "slender": 10.3,
+    "detail": "flat cap 20.0 mm2, slenderness 10.3, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "pointer",
+    "version": "v063",
+    "atMm": [
+     -53.5,
+     -3,
+     110
+    ],
+    "areaMm2": 20,
+    "memberLengthMm": 113.5,
+    "slender": 25.4,
+    "detail": "flat cap 20.0 mm2, slenderness 25.4, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "pointer",
+    "version": "v063",
+    "atMm": [
+     53.5,
+     -3,
+     110
+    ],
+    "areaMm2": 20,
+    "memberLengthMm": 113.5,
+    "slender": 25.4,
+    "detail": "flat cap 20.0 mm2, slenderness 25.4, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "linkL",
+    "version": "v051",
+    "atMm": [
+     -80,
+     0,
+     232
+    ],
+    "areaMm2": 11.4,
+    "memberLengthMm": 90,
+    "slender": 26.6,
+    "detail": "flat cap 11.4 mm2, slenderness 26.6, boundary all 90 deg"
+   },
+   {
+    "kind": "termination",
+    "part": "linkR",
+    "version": "v051",
+    "atMm": [
+     80,
+     0,
+     232
+    ],
+    "areaMm2": 11.4,
+    "memberLengthMm": 90,
+    "slender": 26.6,
+    "detail": "flat cap 11.4 mm2, slenderness 26.6, boundary all 90 deg"
+   },
+   {
+    "kind": "silhouette",
+    "view": "front",
+    "heightMm": 258.5,
+    "widthMaxMm": 247.5,
+    "maxWidthAtZMm": 253,
+    "baseWidthMm": 220,
+    "maxOverBase": 1.12,
+    "waists": [
+     {
+      "zMm": 27,
+      "widthMm": 44
+     },
+     {
+      "zMm": 126.5,
+      "widthMm": 32
+     },
+     {
+      "zMm": 248.5,
+      "widthMm": 217.5
+     }
+    ],
+    "peaks": [
+     {
+      "zMm": 14.5,
+      "widthMm": 220
+     },
+     {
+      "zMm": 109.5,
+      "widthMm": 130
+     },
+     {
+      "zMm": 241.5,
+      "widthMm": 236
+     },
+     {
+      "zMm": 260.5,
+      "widthMm": 247.5
+     }
+    ],
+    "symmetryMatch": 0.991
+   },
+   {
+    "kind": "silhouette",
+    "view": "side",
+    "heightMm": 258.5,
+    "widthMaxMm": 140,
+    "maxWidthAtZMm": 10,
+    "baseWidthMm": 140,
+    "maxOverBase": 1,
+    "waists": [
+     {
+      "zMm": 37.5,
+      "widthMm": 47.7
+     },
+     {
+      "zMm": 89.5,
+      "widthMm": 34
+     },
+     {
+      "zMm": 232,
+      "widthMm": 18.6
+     },
+     {
+      "zMm": 248.5,
+      "widthMm": 65
+     }
+    ],
+    "peaks": [
+     {
+      "zMm": 14.5,
+      "widthMm": 140
+     },
+     {
+      "zMm": 47,
+      "widthMm": 53.9
+     },
+     {
+      "zMm": 109.5,
+      "widthMm": 42
+     },
+     {
+      "zMm": 241.5,
+      "widthMm": 76
+     },
+     {
+      "zMm": 260.5,
+      "widthMm": 87
+     }
+    ],
+    "symmetryMatch": 0.515
+   }
+  ]
+ }
+}

@@ -21,7 +21,7 @@ import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
 // require (`additionalProperties: true` infers `Record<string, JsonValue>`); without it a
 // typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
 import type { Json } from './inspect.ts';
-import { resolveAssemblyManifestPath } from './manifest.ts';
+import { flattenParts, resolveAssemblyManifestPath } from './manifest.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
@@ -6554,6 +6554,346 @@ export function registerCadTools(
         bands: { wall: wallBand },
         note: `${out.peaks.length} peak(s) · ${suspects.length} geometry suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · strength ${stressLayer ? `${stressLayer.loadCase}（${stressLayer.runId}）` : `未映射（没有 stress run）`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
       } as never;
+    },
+  }));
+
+  // --- check_appearance: 成套外观检查（只读；不判美丑，只报违规）--------------
+  //
+  // 作用域是**成套**，不是零件：外观是关系（比例、对齐、重复、对比），单件没有
+  // 参照系。实测 toy-balance2 有 29–39% 的锐边从任何视角都看不见——零件级报告
+  // 一半是无效的。判定在成套，修复回到零件，所以每条 finding 都带 part/version/位置。
+  //
+  // 三条规则，各有校准件（experiments/20261030_appearance_probe.md）：
+  //   sharp-edge   可见凸锐边**长度**（不是计数：圆角会让计数上升）
+  //   termination  构件端部的平切面
+  //   silhouette   剪影宽度剖面（只进 attention，永不判决）
+  //
+  // 没有声明阈值时给 `check`，不是 `ok`：没被排除不等于好看。
+  registerTool(defineTool({
+    name: 'check_appearance',
+    description:
+      'Appearance screen over a whole SET (assembly manifest), never a single part: proportion, ' +
+      'alignment and repetition are relations, and a part-level report is mostly invalid because ' +
+      'the assembly hides 29-39% of its sharp edges (measured). Read-only: it never changes geometry, ' +
+      'never scores "beauty", and never claims a part is attractive — it reports WHERE a declared ' +
+      'visual rule is violated and by how much. Three rules: visible convex sharp-edge LENGTH (not ' +
+      'count: a fillet adds short segments, so the count rises while the length falls); TERMINATION ' +
+      '(a flat cap at the end of a slender member whose boundary is all 90 degrees — the "just cut ' +
+      'off" signature); and SILHOUETTE descriptors (width profile, waists, top-vs-base ratio, ' +
+      'symmetry) which are ATTENTION ONLY. Visibility is sampled from N viewpoints; clusters seen ' +
+      'from fewer than the threshold are counted, never silently dropped. Caps inside a declared ' +
+      'axis/cylinder datum (datums.json) are functional openings and are exempted by name. ' +
+      'Purchased/reference parts occlude but are never judged. VERDICT: without a declared budget ' +
+      '(budgetPath) or a declared maxVisibleSharpMm the verdict is "check" and only the numbers are ' +
+      'returned — running on an existing project without declaring one of them tells you how rough it ' +
+      'is, never that it is acceptable. mm, z-up.',
+    parameters: {
+      manifestPath: {
+        type: 'string',
+        description: 'Assembly manifest, e.g. "assembly/assembly.json". A relative path resolves against the session workspace first, then the plugin data root.',
+      },
+      mode: {
+        type: 'string',
+        enum: ['judge', 'scan', 'both'],
+        description: '"judge" (default) returns the numbers + findings; "scan" returns only the attention layer (where to look, never a verdict); "both" returns the two halves separately.',
+      },
+      maxVisibleSharpMm: {
+        type: 'number',
+        description: 'Declared budget for visible convex sharp-edge length, mm. Omit and the verdict is "check" — a missing threshold is not a pass.',
+      },
+      cellMm: { type: 'number', description: 'Clustering cell for sharp edges, mm. Default 10.' },
+      views: { type: 'number', description: 'Visibility viewpoints. Default 12.' },
+      visibilityThreshold: { type: 'number', description: 'Fraction of views that must see a cluster for it to be reported. Default 0.25.' },
+      minFeatureMm: { type: 'number', description: 'Caps smaller than this in any direction are surface texture, not form ends. Default 1.5.' },
+      budgetPath: {
+        type: 'string',
+        description: 'Optional assembly/budget.json: per-group envelope {x,y,z:[lo,hi]}. A GROUP IS A PARTITION OF PARTS (the manifest `group` field), never a spatial region; its envelope is measured as the union of its members. At most one group per part, and a small part may have none.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          scope: { type: 'string', required: true, description: 'Always "assembly".' },
+          manifest: { type: 'string', required: true, description: 'Absolute path of the manifest that was audited.' },
+          parts: { type: 'object', required: true, additionalProperties: true },
+          verdict: { type: 'string', required: true, description: '"excluded" | "not-excluded" | "check" — never "ok".' },
+          judgement: { type: 'object', additionalProperties: true },
+          attention: { type: 'object', additionalProperties: true },
+          budget: {
+            type: 'object', additionalProperties: true,
+            description: 'Only when budgetPath was given: per-group envelope vs measured union of its member parts.',
+          },
+          note: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: any) => {
+        const j = value?.judgement;
+        const lines = [
+          ...(j
+            ? [`check_appearance — ${value?.verdict} · 可见锐边 ${j.visibleSharpMm ?? '?'} mm ` +
+               `(${j.visibleSharpPerKmm2 ?? '?'} mm/1000mm²) · 不可见 ${Math.round((j.hiddenShare ?? 0) * 100)}%`]
+            : [`check_appearance — scan only · 注意力 ${value?.attention?.count ?? 0} 条（没有判决，这是规定）`]),
+          ...((j?.findings ?? []).slice(0, 5).map((f: any) =>
+            `  ${f.part} ${f.version} — 可见 ${f.visibleSharpMm} mm / 簇 ${f.visibleClusters}/${f.clusters}`)),
+          ...((value?.attention?.items ?? []).filter((i: any) => i.kind === 'termination').slice(0, 3).map((i: any) =>
+            `  [look] 平端面 ${i.part} @ ${JSON.stringify(i.atMm)} — ${i.detail}`)),
+          ...((value?.attention?.items ?? []).filter((i: any) => i.kind === 'symmetry').map((i: any) =>
+            `  [look] 对称/${i.planeAxis} · 最差 ${i.worst?.azimuthDeg}° — 失配 ${i.worst?.mismatchMm2} mm²` +
+            (i.worst?.mismatchBboxMm ? ` @ ${JSON.stringify(i.worst.mismatchBboxMm)}` : ''))),
+          ...((value?.attention?.items ?? []).filter((i: any) => i.kind === 'silhouette').map((i: any) =>
+            `  [look] 剪影/${i.view} — 腰 ${(i.waists ?? []).length} · ` +
+            `max/base ${i.edgeOnView ? '边视(不计)' : i.maxOverBase} · 对称 ${i.symmetryMatch}`)),
+          ...((value?.attention?.items ?? []).filter((i: any) => i.kind === 'near-plane').map((i: any) =>
+            `  [look] 近共面 ${i.parts.join(' / ')} · ${i.axis} 差 ${i.gapMm} mm · 重叠 ${i.overlap} @ ${JSON.stringify(i.atMm)}`)),
+          ...((value?.budget?.overruns ?? []).map((o: any) =>
+            `  [budget] ${o.group} ${o.axis}${o.direction === 'above' ? '上' : '下'}+${o.overMm} — ` +
+            (o.status === 'accepted' ? `已批准（${o.acceptedBy}）`
+              : o.status === 'pending' ? '待批准' : '未声明理由'))),
+        ];
+        return [{ type: 'text', text: lines.join('\n') }];
+      },
+    },
+    timeoutMs: 180_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        manifestPath: string;
+        mode?: 'judge' | 'scan' | 'both';
+        maxVisibleSharpMm?: number;
+        cellMm?: number;
+        views?: number;
+        visibilityThreshold?: number;
+        minFeatureMm?: number;
+        budgetPath?: string;
+      };
+      const project = await allStores(exec);
+      const { store, runStore, cwd } = project;
+      const resolved = await resolveAssemblyManifestPath(a.manifestPath, {
+        workspace: cwd,
+        dataRoot: store.root,
+      });
+      let manifest: { name?: string; root?: any };
+      try {
+        manifest = JSON.parse(await readFile(resolved.path, 'utf8'));
+      } catch (err) {
+        throw argError('check_appearance', 'manifestPath', 'manifest is not readable JSON',
+          'a JSON file matching schemas/assembly-manifest.schema.json', { received: String(err).slice(0, 160) });
+      }
+      const flat = flattenParts(manifest.root as any);
+      if (flat.length < 2) {
+        throw argError('check_appearance', 'manifestPath',
+          'a single part has no appearance to judge',
+          'a manifest with at least two parts; appearance is a relation (proportion, alignment, repetition)',
+          { received: flat.length });
+      }
+
+      const REFERENCE_HINTS = ['外购', '螺钉', '螺母', '螺栓', '销', 'M3', 'screw', 'nut', 'bolt'];
+      const roleOf = (node: any, id: string): 'printed' | 'purchased' | 'reference' => {
+        if (node?.role) return node.role;
+        if (node?.source === 'stock') return 'purchased';
+        const label = `${node?.name ?? ''} ${node?.part ?? ''} ${id}`;
+        return REFERENCE_HINTS.some((h) => label.includes(h)) ? 'purchased' : 'printed';
+      };
+
+      const parts: any[] = [];
+      for (const fp of flat) {
+        const version = fp.node.version;
+        if (!version) continue; // stock part: no geometry to judge, and it is not an endpoint here
+        const stl = join(store.root, 'versions', version, 'model.stl');
+        if (!existsSync(stl)) {
+          throw argError('check_appearance', 'manifestPath', 'a cited version has no model.stl',
+            'a manifest whose every version exists in the store', { received: `${version} (part ${fp.id})` });
+        }
+        parts.push({
+          id: fp.id, version, path: stl,
+          transform: fp.transform ?? {},
+          group: fp.node.group,
+          role: roleOf(fp.node, fp.id),
+          // a guessed role must stay legible in the report, or "13 printed parts"
+          // silently includes the screws the heuristic failed to catch
+          roleAssumed: !fp.node.role && fp.node.source !== 'stock',
+        });
+      }
+      if (parts.length < 2) {
+        throw argError('check_appearance', 'manifestPath', 'fewer than two parts carry geometry',
+          'a set, not a single part', { received: parts.length });
+      }
+
+      // The budget file is read first: `symmetry` is declared there and the worker
+      // needs it before it can sweep the silhouettes.
+      let budgetSpec: any = null;
+      let budgetAbs = '';
+      if (a.budgetPath) {
+        budgetAbs = isAbsolute(a.budgetPath) ? a.budgetPath : join(cwd, a.budgetPath);
+        try {
+          budgetSpec = JSON.parse(await readFile(budgetAbs, 'utf8'));
+        } catch (err) {
+          throw argError('check_appearance', 'budgetPath', 'budget file is not readable JSON',
+            'a JSON file like assembly/budget.json', { received: String(err).slice(0, 120) });
+        }
+      }
+
+      const worker = await ensurePythonWorker();
+      const raw = await worker.request<any>('check_appearance', {
+        parts,
+        cellMm: a.cellMm,
+        views: a.views,
+        visibilityThreshold: a.visibilityThreshold,
+        minFeatureMm: a.minFeatureMm,
+        symmetry: budgetSpec?.symmetry,
+      });
+
+      const j = raw.judgement ?? {};
+      let verdict: 'excluded' | 'not-excluded' | 'check' = 'check';
+      let note = '没有声明 maxVisibleSharpMm —— 缺一个阈值不等于通过，这只是读数。';
+
+      // ---- group envelopes (budget) ------------------------------------------
+      // A group is a set of PARTS; its envelope is the union of their bboxes. The
+      // budget is a claim about proportions, and a proportion that nothing measures
+      // is exactly how a 259 mm machine gets designed against a 190 mm intent.
+      let budget: any = null;
+      if (budgetSpec) {
+        const spec: any = budgetSpec;
+        const box = (b: any) => ({ x: [b?.x?.[0] ?? -Infinity, b?.x?.[1] ?? Infinity],
+                                   y: [b?.y?.[0] ?? -Infinity, b?.y?.[1] ?? Infinity],
+                                   z: [b?.z?.[0] ?? -Infinity, b?.z?.[1] ?? Infinity] });
+        const unionOf = (list: any[]) => {
+          const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+          for (const f of list) {
+            const bb = f.bboxMm;
+            if (!bb) continue;
+            for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], bb[0][k]); hi[k] = Math.max(hi[k], bb[1][k]); }
+          }
+          return [lo, hi];
+        };
+        const over = (env: any, act: number[][]) => {
+          const axes: any = {};
+          let any = false;
+          for (const [k, i] of [['x', 0], ['y', 1], ['z', 2]] as const) {
+            const loOver = Math.max(0, Math.round((env[k][0] - act[0][i]) * 10) / 10);
+            const hiOver = Math.max(0, Math.round((act[1][i] - env[k][1]) * 10) / 10);
+            axes[k] = [loOver, hiOver];
+            if (loOver > 0 || hiOver > 0) any = true;
+          }
+          return { overBy: axes, over: any };
+        };
+        const findings = j.findings ?? [];
+        const groups = (spec.groups ?? []).map((g: any) => {
+          const members = parts.filter((pt) => pt.group === g.id);
+          const memberFindings = findings.filter((f: any) => members.some((m) => m.id === f.part));
+          const act = unionOf(memberFindings);
+          if (!Number.isFinite(act[0][0])) {
+            return { id: g.id, parts: members.map((m) => m.id), measured: false,
+                     note: 'no judged member carried a bbox (purchased/reference members are not measured)' };
+          }
+          const env = box(g.envelope);
+          const res = over(env, act);
+          return { id: g.id, parts: members.map((m) => m.id), envelope: env,
+                   actual: { x: [act[0][0], act[1][0]], y: [act[0][1], act[1][1]], z: [act[0][2], act[1][2]] },
+                   overBy: res.overBy, verdict: res.over ? 'over' : 'within' };
+        });
+        const all = unionOf(findings);
+        const overall = Number.isFinite(all[0][0]) ? (() => {
+          const env = box(spec.envelope);
+          const res = over(env, all);
+          return { envelope: env, actual: { x: [all[0][0], all[1][0]], y: [all[0][1], all[1][1]], z: [all[0][2], all[1][2]] },
+                   overBy: res.overBy, verdict: res.over ? 'over' : 'within' };
+        })() : null;
+        const unassigned = parts.filter((pt) => !pt.group).map((pt) => pt.id);
+
+        // ---- overrun state machine ------------------------------------------
+        // within | unjustified | pending | accepted. An over-run is ALLOWED, but only
+        // once someone wrote down why (reason) and someone accepted it (acceptedBy).
+        // A declaration without a reason is not a justification, and a proposal the
+        // machine filed against itself is not an acceptance — that would make the
+        // budget a formality nobody reads.
+        const declared = Array.isArray(spec.overruns) ? spec.overruns : [];
+        const txt = (v: unknown) => String(v ?? '').trim();
+        const overruns: any[] = [];
+        const pushOver = (gid: string, axis: string, dir: 'above' | 'below', over: number,
+                          measured: number, limit: number) => {
+          const hit = declared.find((o: any) => txt(o.group) === gid && txt(o.axis) === axis && txt(o.direction) === dir);
+          const reason = hit ? txt(hit.reason) : '';
+          const status = !hit || !reason ? 'unjustified'
+            : (txt(hit.status) === 'accepted' && txt(hit.acceptedBy)) ? 'accepted' : 'pending';
+          overruns.push({
+            group: gid, axis, direction: dir, overMm: over, measuredMm: measured, budgetMm: limit,
+            status, reason: reason || null, evidence: hit?.evidence ?? [],
+            acceptedBy: hit ? (txt(hit.acceptedBy) || null) : null,
+          });
+        };
+        for (const g of groups) {
+          if (g.verdict !== 'over') continue;
+          for (const axis of ['x', 'y', 'z'] as const) {
+            const o = g.overBy?.[axis] ?? [0, 0];
+            if (o[0] > 0) pushOver(g.id, axis, 'below', o[0], g.actual[axis][0], g.envelope[axis][0]);
+            if (o[1] > 0) pushOver(g.id, axis, 'above', o[1], g.actual[axis][1], g.envelope[axis][1]);
+          }
+        }
+        if (overall?.verdict === 'over') {
+          for (const axis of ['x', 'y', 'z'] as const) {
+            const o = overall.overBy?.[axis] ?? [0, 0];
+            if (o[0] > 0) pushOver('整机', axis, 'below', o[0], overall.actual[axis][0], overall.envelope[axis][0]);
+            if (o[1] > 0) pushOver('整机', axis, 'above', o[1], overall.actual[axis][1], overall.envelope[axis][1]);
+          }
+        }
+        const blocking = overruns.filter((o) => o.status !== 'accepted');
+        budget = {
+          file: budgetAbs, product: overall, groups, unassigned, overruns,
+          blocking: blocking.length,
+          verdict: overruns.length ? 'over' : 'within',
+          note: 'a group is a set of parts; its envelope is the union of its members. An over-run is a decision, ' +
+                'not a failure: it needs a reason (overruns[].reason) and an acceptance (status:"accepted" + acceptedBy).',
+        };
+        if (blocking.length) {
+          const tally = { unjustified: 0, pending: 0 } as Record<string, number>;
+          for (const o of blocking) tally[o.status] = (tally[o.status] ?? 0) + 1;
+          verdict = 'excluded';
+          note = `包络超界 ${overruns.length} 项：未声明 ${tally.unjustified ?? 0}、待批准 ${tally.pending ?? 0}。` +
+            '超预算是允许的，但必须写明理由并由人批准（budget.json 的 overruns 数组）。';
+        } else if (overruns.length) {
+          verdict = 'not-excluded';
+          note = `${overruns.length} 项超界全部已批准。`;
+        } else {
+          verdict = 'not-excluded';
+          note = '所有组都在声明包络内。';
+        }
+      }
+
+      if (verdict === 'check' && typeof a.maxVisibleSharpMm === 'number') {
+        verdict = (j.visibleSharpMm ?? 0) > a.maxVisibleSharpMm ? 'excluded' : 'not-excluded';
+        note = `声明预算 ${a.maxVisibleSharpMm} mm，实测 ${j.visibleSharpMm} mm。`;
+      }
+      const value: any = {
+        scope: 'assembly',
+        manifest: resolved.path,
+        parts: raw.parts,
+        verdict,
+        note,
+      };
+      if (a.mode !== 'scan') value.judgement = raw.judgement;
+      if (a.mode !== 'judge') value.attention = raw.attention;
+      if (budget) value.budget = budget;
+
+      const run = await beginRun(runStore, {
+        kind: 'appearance',
+        title: `外观检查 · ${manifest.name ?? resolved.path}`,
+      });
+      await run.json('report.json', raw);
+      await run.commit({
+        sourceVersionIds: [...new Set(parts.map((p) => p.version))],
+        judgement: verdict === 'excluded' ? 'excluded' : verdict === 'not-excluded' ? 'not-excluded' : 'difficult',
+        status: verdict === 'excluded' ? 'fail' : verdict === 'not-excluded' ? 'pass' : 'check',
+        summary: `可见锐边 ${j.visibleSharpMm} mm · 密度 ${j.visibleSharpPerKmm2} · 平端面 ${(raw.attention?.items ?? []).filter((i: any) => i.kind === 'termination').length}` +
+          (budget
+            ? (budget.overruns ?? []).length
+              ? ` · 包络超 ${budget.overruns.length} 项` + (budget.blocking ? `（未批准 ${budget.blocking}）` : '（全部已批准）')
+              : ' · 包络合规'
+            : ''),
+        subject: `manifest:${relativeSubject(project, resolved.path)}`,
+      });
+
+      return value;
     },
   }));
 

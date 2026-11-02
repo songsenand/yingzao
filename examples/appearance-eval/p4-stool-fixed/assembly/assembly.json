@@ -1,0 +1,73 @@
+{
+ "schemaVersion": 1,
+ "name": "P4 stool fixed",
+ "root": {
+  "kind": "assembly",
+  "id": "stool",
+  "children": [
+   {
+    "id": "seat",
+    "kind": "part",
+    "part": "凳面-圆角",
+    "version": "v009",
+    "group": "座面组"
+   },
+   {
+    "id": "leg1",
+    "kind": "part",
+    "part": "凳腿-圆角",
+    "version": "v010",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      -120,
+      -120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg2",
+    "kind": "part",
+    "part": "凳腿-圆角",
+    "version": "v010",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      120,
+      -120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg3",
+    "kind": "part",
+    "part": "凳腿-圆角",
+    "version": "v010",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      -120,
+      120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg4",
+    "kind": "part",
+    "part": "凳腿-圆角",
+    "version": "v010",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      120,
+      120,
+      0
+     ]
+    }
+   }
+  ]
+ }
+}

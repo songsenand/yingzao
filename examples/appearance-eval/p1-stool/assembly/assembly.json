@@ -1,0 +1,73 @@
+{
+ "schemaVersion": 1,
+ "name": "P1 stool",
+ "root": {
+  "kind": "assembly",
+  "id": "stool",
+  "children": [
+   {
+    "id": "seat",
+    "kind": "part",
+    "part": "凳面",
+    "version": "v001",
+    "group": "座面组"
+   },
+   {
+    "id": "leg1",
+    "kind": "part",
+    "part": "方腿",
+    "version": "v002",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      -120,
+      -120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg2",
+    "kind": "part",
+    "part": "方腿",
+    "version": "v002",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      120,
+      -120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg3",
+    "kind": "part",
+    "part": "方腿",
+    "version": "v002",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      -120,
+      120,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg4",
+    "kind": "part",
+    "part": "圆腿",
+    "version": "v003",
+    "group": "腿组",
+    "transform": {
+     "translate": [
+      120,
+      120,
+      0
+     ]
+    }
+   }
+  ]
+ }
+}
