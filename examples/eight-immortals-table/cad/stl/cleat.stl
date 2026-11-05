@@ -1,0 +1,254 @@
+solid OpenSCAD_Model
+  facet normal 1 -0 0
+    outer loop
+      vertex 20 -363 778
+      vertex 20 363 752
+      vertex 20 363 778
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 20 363 752
+      vertex 20 -363 778
+      vertex 20 -363 752
+    endloop
+  endfacet
+  facet normal -0 0 1
+    outer loop
+      vertex -20 363 778
+      vertex -15.1186 -363 778
+      vertex -15.1186 363 778
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex -15.1186 -363 778
+      vertex -20 363 778
+      vertex -20 -363 778
+    endloop
+  endfacet
+  facet normal -0 0 1
+    outer loop
+      vertex 15.1186 363 778
+      vertex 20 -363 778
+      vertex 20 363 778
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 20 -363 778
+      vertex 15.1186 363 778
+      vertex 15.1186 -363 778
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex -20 -363 752
+      vertex 20 363 752
+      vertex 20 -363 752
+    endloop
+  endfacet
+  facet normal -0 0 -1
+    outer loop
+      vertex 20 363 752
+      vertex -20 -363 752
+      vertex -20 363 752
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex -20 -363 752
+      vertex -20 363 778
+      vertex -20 363 752
+    endloop
+  endfacet
+  facet normal -1 -0 0
+    outer loop
+      vertex -20 363 778
+      vertex -20 -363 752
+      vertex -20 -363 778
+    endloop
+  endfacet
+  facet normal 0 1 -0
+    outer loop
+      vertex 20 363 752
+      vertex 15.1186 363 778
+      vertex 20 363 778
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 15.1186 363 778
+      vertex 20 363 752
+      vertex -15.1186 363 778
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex -20 363 752
+      vertex -15.1186 363 778
+      vertex 20 363 752
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex -15.1186 363 778
+      vertex -20 363 752
+      vertex -20 363 778
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 15.1186 363 778
+      vertex 22 363 783.9
+      vertex 22 363 783.8
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 22 363 783.9
+      vertex 15.1186 363 778
+      vertex -22 363 783.9
+    endloop
+  endfacet
+  facet normal 0 1 -0
+    outer loop
+      vertex -15.1186 363 778
+      vertex -22 363 783.9
+      vertex 15.1186 363 778
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex -22 363 783.9
+      vertex -15.1186 363 778
+      vertex -22 363 783.8
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex -20 -363 752
+      vertex -15.1186 -363 778
+      vertex -20 -363 778
+    endloop
+  endfacet
+  facet normal 0 -1 -0
+    outer loop
+      vertex -15.1186 -363 778
+      vertex -20 -363 752
+      vertex 15.1186 -363 778
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 20 -363 752
+      vertex 15.1186 -363 778
+      vertex -20 -363 752
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 15.1186 -363 778
+      vertex 20 -363 752
+      vertex 20 -363 778
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex -15.1186 -363 778
+      vertex -22 -363 783.9
+      vertex -22 -363 783.8
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex -22 -363 783.9
+      vertex -15.1186 -363 778
+      vertex 22 -363 783.9
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 15.1186 -363 778
+      vertex 22 -363 783.9
+      vertex -15.1186 -363 778
+    endloop
+  endfacet
+  facet normal 0 -1 -0
+    outer loop
+      vertex 22 -363 783.9
+      vertex 15.1186 -363 778
+      vertex 22 -363 783.8
+    endloop
+  endfacet
+  facet normal 0.64447 0 -0.76463
+    outer loop
+      vertex 15.1186 -363 778
+      vertex 22 363 783.8
+      vertex 22 -363 783.8
+    endloop
+  endfacet
+  facet normal 0.64447 0 -0.76463
+    outer loop
+      vertex 22 363 783.8
+      vertex 15.1186 -363 778
+      vertex 15.1186 363 778
+    endloop
+  endfacet
+  facet normal -0 0 1
+    outer loop
+      vertex -22 363 783.9
+      vertex 22 -363 783.9
+      vertex 22 363 783.9
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 22 -363 783.9
+      vertex -22 363 783.9
+      vertex -22 -363 783.9
+    endloop
+  endfacet
+  facet normal 1 -0 0
+    outer loop
+      vertex 22 -363 783.9
+      vertex 22 363 783.8
+      vertex 22 363 783.9
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 22 363 783.8
+      vertex 22 -363 783.9
+      vertex 22 -363 783.8
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex -22 -363 783.8
+      vertex -22 363 783.9
+      vertex -22 363 783.8
+    endloop
+  endfacet
+  facet normal -1 -0 0
+    outer loop
+      vertex -22 363 783.9
+      vertex -22 -363 783.8
+      vertex -22 -363 783.9
+    endloop
+  endfacet
+  facet normal -0.64447 0 -0.76463
+    outer loop
+      vertex -22 -363 783.8
+      vertex -15.1186 363 778
+      vertex -15.1186 -363 778
+    endloop
+  endfacet
+  facet normal -0.64447 0 -0.76463
+    outer loop
+      vertex -15.1186 363 778
+      vertex -22 -363 783.8
+      vertex -22 363 783.8
+    endloop
+  endfacet
+endsolid OpenSCAD_Model

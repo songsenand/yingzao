@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "brief",
+  "version": "1.0.0",
+  "question": "需求是否已经变成可检查的约束？",
+  "exit": ["原料/工艺/禁项已声明", "验收判据可证伪"],
+  "not": ["不建模", "不判断装配"],
+  "templates": ["templates/standard.json"],
+  "budget": { "maxDistinctTools": 2, "maxCalls": 5, "maxCostSeconds": 60, "maxProbe": 1 },
+  "probe": { "required": false, "criteria": ["brief.constraints"], "allowed": ["brief-constraints"] }
+}

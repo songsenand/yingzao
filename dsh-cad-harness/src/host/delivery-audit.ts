@@ -11,7 +11,8 @@
 // any acceptance script share one implementation.
 
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { writeJsonAtomic } from './file-lock.ts';
 import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
 import { listParts, partRoleOf } from './parts.ts';
 import { listRuns, type RunEntry } from './runs.ts';
@@ -492,4 +493,21 @@ export async function auditDelivery(
     contract,
     unregistered: scan,
   };
+}
+
+/** Persist the audit as the deliver pearl's evidence; returns the artifact path. */
+export async function persistDeliveryAudit(
+  project: ProjectStores,
+  value: DeliveryAudit & { judgement?: string; summary?: string },
+  claims: DeliveryClaim[] = [],
+): Promise<string> {
+  const path = join(project.cwd, 'assembly/delivery-audit.json');
+  await writeJsonAtomic(path, {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    project: project.cwd,
+    claims,
+    ...value,
+  });
+  return path;
 }

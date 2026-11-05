@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "wood-furniture",
+  "version": "0.1.0",
+  "pearl": "fit",
+  "guide": "INTERFACE-GUIDE.md",
+  "thresholds": {
+    "clearanceThreshold": 0,
+    "interferenceEpsilonMm3": 1,
+    "adjacencyThresholdMm": 0.2
+  },
+  "requiredGroups": [
+    {
+      "id": "leg-rail",
+      "description": "腿与边框的贴合/榫肩",
+      "min": 8
+    },
+    {
+      "id": "leg-apron",
+      "description": "腿与牙板的抱肩",
+      "min": 8
+    },
+    {
+      "id": "rail-panel",
+      "description": "边框与面板/穿带",
+      "min": 1
+    }
+  ],
+  "undeclaredPolicy": "block",
+  "probes": [
+    "leg-fit"
+  ],
+  "make": {
+    "kind": "wood",
+    "stockMm": [
+      1000,
+      300,
+      300
+    ],
+    "cutlist": "assembly/cutlist.json"
+  }
+}

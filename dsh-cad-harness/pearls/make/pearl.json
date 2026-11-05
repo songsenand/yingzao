@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "make",
+  "version": "1.0.0",
+  "question": "做不做得出来？",
+  "exit": [
+    "原料/余量满足",
+    "关键工艺判据通过"
+  ],
+  "not": [
+    "不判断美观",
+    "不判断装配"
+  ],
+  "templates": [
+    "templates/wood.json",
+    "templates/fdm.json"
+  ],
+  "budget": {
+    "maxDistinctTools": 4,
+    "maxCalls": 20,
+    "maxCostSeconds": 600,
+    "maxProbe": 1
+  },
+  "probe": {
+    "required": false,
+    "criteria": [
+      "make.stock"
+    ],
+    "allowed": []
+  }
+}

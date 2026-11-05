@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "visual",
+  "pearl": "review",
+  "version": "1.0.0",
+  "when": "交付前看整机/关键件",
+  "steps": [
+    {
+      "id": "render",
+      "tool": "render_part",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    },
+    {
+      "id": "review",
+      "tool": "review_visual"
+    }
+  ],
+  "exit": "top+iso rendered and reviewed with a substantive note",
+  "on_fail": [
+    {
+      "when": "review.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

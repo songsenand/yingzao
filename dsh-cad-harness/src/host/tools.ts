@@ -15,6 +15,14 @@ import { revertVersion as revertVersionHelper } from './version.ts';
 import { enqueueReviews, readQueue, setReviewStatus } from './review-queue.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
+import { writeAssembly, type WriteAssemblyInput } from './write-assembly.ts';
+import { runPearl } from './pearls/run.ts';
+import { executeContractRound } from './pearls/execute.ts';
+import { executeTemplate, type StepDispatcher } from './pearls/execute-template.ts';
+import { loadProjectProfile } from './pearls/profile.ts';
+import { buildStepContext } from './pearls/context.ts';
+import { formatTemplateExecution } from './pearls/format.ts';
+import { persistDeliveryAudit } from './delivery-audit.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
 import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
 // `Json` gives an interface the index signature the output schema's free-form objects
@@ -439,6 +447,24 @@ function versionCacheKey(storeRoot: string, versionId: string): string {
   return `${storeRoot}::${versionId}`;
 }
 
+export const DEFAULT_TOOL_TIMEOUT_MS = 120_000;
+export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
+  create_part: 30_000,
+  request_review: 15_000,
+  set_datums: 60_000,
+  set_part_role: 15_000,
+  simulate_physics: 600_000,
+  simulate_motion: 600_000,
+  'gap-closest-points': 180_000,
+  list_features: 60_000,
+  measure_section: 60_000,
+  check_printability: 180_000,
+  simulate_stress: 600_000,
+  preflight: 600_000,
+  analyze: 300_000,
+  check_assembly: 300_000,
+};
+
 export function registerCadTools(
   ctx: Context,
   scope?: { toolScope?: string; presets?: readonly string[] },
@@ -453,10 +479,20 @@ export function registerCadTools(
    * disagreed with their own body while every acceptance stayed green (2026-10-23 audit,
    * FIX-A1). The guard lives in `tool-contract.ts` so it can be tested on its own.
    */
-  const registerTool = (definition: { name: string; execute?: unknown; output?: { schema?: unknown } }) => {
+  /**
+   * Every CAD tool gets a time limit. Most definitions carry their own
+   * `timeoutMs`; CAD_TOOL_TIMEOUTS covers the long/short ones that did not, and
+   * the default is deliberately conservative so a missing entry cannot hang a
+   * pearl forever. Per-tool timeouts are the lightweight step watchdog; the
+   * pearl itself has one total deadline.
+   */
+  const registerTool = (definition: { name: string; execute?: unknown; output?: { schema?: unknown }; timeoutMs?: number }) => {
     registered.push(definition.name);
     registeredCadTools.push(definition.name);
-    return ctx.tools.register(withOutputContract(definition) as never);
+    const withLimit = definition.timeoutMs === undefined
+      ? { ...definition, timeoutMs: CAD_TOOL_TIMEOUTS[definition.name] ?? DEFAULT_TOOL_TIMEOUT_MS }
+      : definition;
+    return ctx.tools.register(withOutputContract(withLimit) as never);
   };
 
   // Stores are resolved PER CALL, never captured here: the plugin is applied
@@ -2062,6 +2098,51 @@ export function registerCadTools(
         previousRole: previous,
         effect,
       };
+    },
+  }));
+
+  // --- write_assembly: typed assembly-manifest writer ---
+  registerTool(defineTool({
+    name: 'write_assembly',
+    description:
+      'Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version\'s datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit.',
+    parameters: {
+      manifestPath: { type: 'string', description: 'Workspace-relative manifest path; default assembly/assembly.json. Must stay inside the project workspace.' },
+      mode: { type: 'string', enum: ['create', 'merge', 'replace'], description: 'Default merge. merge/replace require expectedHash when the file exists.' },
+      expectedHash: { type: 'string', description: 'sha256:<hex> of the current file (or bare hex). Required for merge/replace when the file exists; prevents clobbering.' },
+      root: {
+        type: 'object', additionalProperties: true,
+        description: 'Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields.',
+      },
+      remove: {
+        type: 'object', additionalProperties: false,
+        description: 'Explicit root-level deletions; omitted ids are preserved, never deleted implicitly.',
+        properties: {
+          children: { type: 'array', items: { type: 'string' } },
+          interfaces: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          manifestPath: { type: 'string', required: true },
+          manifestHash: { type: 'string', required: true, description: 'sha256:<hex> of the written bytes.' },
+          mode: { type: 'string', required: true },
+          changed: { type: 'boolean', required: true },
+          counts: {
+            type: 'object', additionalProperties: false, required: true,
+            properties: { children: { type: 'integer', required: true }, interfaces: { type: 'integer', required: true } },
+          },
+          warnings: { type: 'array', required: true, items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 30_000,
+    async execute(args: unknown, exec: unknown) {
+      return writeAssembly(await allStores(exec), args as WriteAssemblyInput);
     },
   }));
 
@@ -6179,7 +6260,7 @@ export function registerCadTools(
       const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
       const warn = report.findings.filter((f) => f.severity === 'warn').length;
       const info = report.findings.filter((f) => f.severity === 'info').length;
-      return {
+      const value = {
         ...report,
         // The single key management and the delivery audit read (DESIGN §25.7). `verdict` is
         // kept because the panel and the skills display it; `judgement` is the canonical one.
@@ -6189,9 +6270,61 @@ export function registerCadTools(
           `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}` +
           (report.unregistered.files.length ? ` · unregistered files ${report.unregistered.files.length}` : ''),
       };
+      // Persist the audit as the deliver pearl's evidence. The observer reads this
+      // exact artifact; a report that only lives in the tool reply is unobserved.
+      await persistDeliveryAudit(project, value, a.claims ?? []);
+      return value;
     },
   }));
 
+
+  // --- pearl_run: read-only six-pearl gate ---
+  registerTool(defineTool({
+    name: 'pearl_run',
+    description:
+      'Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.',
+    parameters: {
+      execute: { type: 'boolean', description: 'true = dispatch the template steps; false/omitted = read-only gate.' },
+      inputs: { type: 'object', additionalProperties: true, description: 'Caller-provided values for step bindings (e.g. gap/motion/contract/versionId).' },
+      deadlineMs: { type: 'number', description: 'Whole-template step deadline; defaults to the profile maxCostSeconds.' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: true },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { steps?: unknown; status?: unknown; next?: unknown };
+        const text = Array.isArray(v.steps) && typeof v.status === 'string'
+          ? formatTemplateExecution(v as never)
+          : JSON.stringify(value);
+        return [{ type: 'text', text }];
+      },
+    },
+    timeoutMs: 900_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = (args ?? {}) as { execute?: boolean; inputs?: Record<string, unknown>; deadlineMs?: number };
+      const { cwd } = await allStores(exec);
+      if (!a.execute) return await runPearl(cwd) as never;
+      const profile = await loadProjectProfile(cwd);
+      const context = await buildStepContext(profile.projectRoot, a.inputs ?? {});
+      const outer = exec as { signal?: AbortSignal; agent?: unknown };
+      const dispatch: StepDispatcher = async (step, stepArgs, signal) => {
+        const t0 = Date.now();
+        try {
+          const result = await ctx.tools.execute({
+            callId: randomUUID() as never,
+            name: step.tool,
+            arguments: stepArgs as never,
+            ...(outer.agent ? { agent: outer.agent as never } : {}),
+            signal,
+          });
+          if (result.isError) return { ok: false, error: result.error.message, durationMs: Date.now() - t0, attempt: 1 };
+          return { ok: true, value: result.value, durationMs: Date.now() - t0, attempt: 1 };
+        } catch (e) {
+          return { ok: false, error: String((e as Error)?.message ?? e), durationMs: Date.now() - t0, attempt: 1 };
+        }
+      };
+      return await executeTemplate(profile.pearl, profile.template, context, dispatch, { deadlineMs: a.deadlineMs }) as never;
+    },
+  }));
 
   // Per-call usage telemetry (observer on llm/stream; never blocks anything).
   // Profile-wide on purpose: this observes every session at once, and the
@@ -6419,6 +6552,21 @@ export function registerCadTools(
         }
       }
 
+      // pearl gate: the necklace contract is read-only, but it must run before
+      // delivery. A blocked/unobserved pearl is a gate failure, not a hidden warning.
+      if (existsSync(join(project.cwd, 'pearl-profile.json'))) try {
+        const pearl = await executeContractRound(project.cwd, { round: 0 });
+        steps.push({
+          step: 'pearl',
+          ran: true,
+          judgement: pearl.status === 'blocked' || pearl.status === 'fail' ? 'excluded'
+            : pearl.status === 'pass' ? 'not-excluded' : 'difficult',
+          detail: `${pearl.status} · round ${pearl.round}/${pearl.maxRounds} · next ${pearl.next.join(',') || '-'} · failures ${pearl.failures.slice(0, 2).map((f) => f.code).join(',') || '-'}`,
+        });
+      } catch (e) {
+        steps.push({ step: 'pearl', ran: false, judgement: 'difficult', detail: `pearl gate failed: ${String((e as Error)?.message ?? e)}` });
+      }
+
       const rAudit = await withDeadline(
         auditDelivery(project, { claims: a.claims as never, scanPaths: a.scanPaths, exempt: a.exempt }),
         30_000,
@@ -6469,6 +6617,7 @@ export function registerCadTools(
       // permanent `difficult` (that is a constant, not a signal). They are named in
       // `coverage.notCovered` and repeated in every reply.
       const notCovered = [
+        ...(existsSync(join(project.cwd, 'pearl-profile.json')) ? [] : [{ step: 'pearl', why: 'no pearl-profile.json in this project; pearl gate not run' }]),
         { step: 'simulation-evidence', why: 'simulations need a declared case; they produce evidence, preflight only checks for it (via claims)' },
         { step: 'render', why: 'the assembly render is a HUMAN look: preflight can check freshness, not content' },
       ];

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "mechanism",
+  "version": "0.1.0",
+  "pearl": "fit",
+  "thresholds": {
+    "clearanceThreshold": 0,
+    "interferenceEpsilonMm3": 0.001,
+    "adjacencyThresholdMm": 0.5
+  },
+  "requiredGroups": [
+    { "id": "motion-joints", "description": "转动副/移动副/同轴接口", "min": 1 }
+  ],
+  "undeclaredPolicy": "warn",
+  "probes": []
+}

@@ -1,12 +1,12 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the full 36-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the 38-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Thirty-six tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
+Thirty-eight tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
@@ -17,11 +17,25 @@ Thirty-six tools, but **three jobs first**. Pick the group, not the tool — the
 ## Six rules
 
 1. **先结账，再交付**：任何“可以交了”之前，`check_printability`（每个零件）与 `check_assembly`（每份契约）都要跑过；最后 `delivery_audit`，并把你要主张的东西写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。
-2. **`not-excluded` 不是“ok”，更不是“安全”**：只表示“没找到反例”。`difficult` 表示余量落在仪器噪声内，**不许当过**。没有 “safe” 这个词可报。
+2. **`not-excluded` 不是“ok”，更不是“安全”**：只表示“没找到反例”。`difficult` 表示余量落在仪器噪声内，**不许当过**，而且必须用一句话解释你看到了什么、为什么接受/不接受。没有 “safe” 这个词可报。
 3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**每个交付打印件的最新版本必须先过 `review_visual`（top+iso，带 note）；没有 fresh 记录，`delivery_audit` 直接 blocked。`generate_part({views:[]})` 会被强制改成 top+iso，不要再靠“只登记不看图”省图。****外购件/研究体用 `set_part_role` 声明** `stock` / `research`（`merge_parts` 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
 4. **检测 ≠ 交付**：`attention` 里的位置是“去看这里”，不是判定证据；反过来，工具沉默是检测的失败，“检测到嫌疑”也不构成交付失败。
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
+
+## Pearl workflow (2026-11-04)
+
+A project may declare `pearl-profile.json`:
+
+```json
+{ "pearl": "fit", "template": "static", "rulePack": "../rulepacks/wood-furniture" }
+```
+
+- `pearl_run({})` is the read-only gate: plans the template against the profile budget and observes brief/model/fit/make/review/deliver.
+- `pearl_run({execute:true, inputs})` dispatches the template steps through the same registry; `inputs` fills `bind` values that cannot come from project artifacts (e.g. `gap`, `motion`, `contract`).
+- No profile → the gate is blocked; `preflight` lists the pearl step as `notCovered` instead of pretending it ran.
+- A tool returning successfully is not a geometric pass: `judgement=excluded` / `overallStatus=fail` is a step failure.
+- Repair is routed, not automatic: `on_fail` names the next pearl; the executor does not edit geometry. Full depth: `docs/llm/pearls.md`.
 
 ## Project selection (explicit; 2026-11-02)
 
@@ -83,6 +97,9 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_gap` with solid / sphere endpoints | `measure_gap` at a point you cannot name |
 | **"what angle is this", "are these faces parallel", "how far off axis is this bore"** | **`measure_angle`** | eyeballing a render; guessing 30°/150° |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
+| "is the six-pearl gate green?", "what is still unobserved?" | `pearl_run` (gate; no `execute`) | `delivery_audit` (claims only) |
+| "run the selected pearl template", "dispatch the fit steps" | `pearl_run({execute:true, inputs})` | `preflight` (it only runs the gate) |
+| "write/update the assembly contract", "add an interface" | `write_assembly` | generic write / `run_python` |
 | "can this actually be printed", "is this wall too thin", "will it need supports" | `check_printability` | looking at renders |
 | **"screen a family at once", "which of these parts is thin"** | **`check_parts`** | N single calls; it runs the same jobs and writes one run per part |
 | "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |

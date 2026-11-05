@@ -3858,3 +3858,87 @@ node scripts/smoke-check-appearance.mjs <corpus> assembly/assembly.json
 
 夹具与结论：`examples/appearance-eval/`、`experiments/20261101_appearance_eval.md`、
 `experiments/20261101_appearance_examples.md`；决策见 `docs/DECISION-LOG.md` 2026-10-30/31。
+
+## 35. 珍珠执行层：双契约、step 输入、dispatch 与 repair 边界（2026-11-04）
+
+**定位**：珍珠不是另一个工具清单，而是“每颗珍珠一个固定问题”的证据边界。执行层只负责
+把模板步骤串起来、解析输入、调工具、把失败路由回 owner；它不替设计做判断。
+
+### 35.1 两个契约
+
+| 契约 | 归属 | 内容 |
+|---|---|---|
+| `assembly/assembly.json` | `model` / `fit` | 几何、版本、datum、接口 |
+| `necklace-contract.json` | 整条项链 | 六颗珍珠的 status/evidence/failures、assembly hash、next |
+
+项链契约只存引用和摘要，不把几何塞进索引。读取时对照当前 assembly hash，不一致即
+`stale`；已有文件被改动时必须带 `expectedHash` 才能覆盖。
+
+### 35.2 依赖与执行
+
+```text
+brief → model → (fit | make | review) → deliver
+```
+
+`CONTRACT_STAGES` 只表达依赖，不是固定脚本。每个 step 有：
+
+- `args`：字面参数；
+- `bind`：从 `project` / `input` / `step` / `contract` / `failure` 解析；
+- `when`：简单的分支条件；
+- `parallel`：显式并行组。
+
+缺输入抛 `MissingStepInput`，不猜。工具返回 `judgement=excluded` 或
+`overallStatus=fail` 视为 step 失败——**工具调用成功不等于几何通过**。
+
+### 35.3 预算与 repair
+
+- 一个模板执行一个 `maxCostSeconds` deadline；
+- 每个工具保留自己的 `timeoutMs`（`CAD_TOOL_TIMEOUTS` 默认 120s）；
+- 慢但未超时只记录日志，不杀、不降级；
+- transient 重试最多 2 次，同参数；
+- repair 不按“失败单元 ×2”：同一 failure signature 再次出现即停，全局最多 4 轮；
+- executor 只返回 `on_fail` route，不自动改几何。
+
+### 35.4 输出与注意力
+
+输出不是“都差不多”，按状态分三档：
+
+| 状态 | 输出 | 目的 |
+|---|---|---|
+| `pass` | **一行**：`pearl: pass · N step(s)`；不列证据、不列通过项 | 正确时安静，省注意力 |
+| `warn` / `repair-needed` | 紧凑 `! code @ where` 列表 + `next` | 指出要看哪，不淹没 |
+| `difficult` | 不是 fail，但必须带 `⚠ explanation required: <step>: <attention>`；同时给 `what/where` | 引导 LLM 解释“哪里 difficult、为什么接受/不接受”；沉默不算通过 |
+| `fail` / `blocked` | 逐项 `what / why / where / next`，错误必须喧嚣 | 把注意力钉在失败处，不能藏在 JSON 里 |
+
+`difficult` 和 `fail` 都是注意力信号：前者要求解释，后者要求处理；两者都不能被当成
+“工具成功”或“默认通过”。
+
+### 35.5 repair 的含义（不是自动修几何）
+
+- `runTemplateRepairLoop` 只负责**重跑编排**：调用者提供 `repair(input): Promise<boolean>`；
+  返回 true 才重跑，false 停；每轮写 `assembly/pearl-repair-history.json`；same signature
+  停；总 deadline 覆盖所有轮。
+- executor **不会**移动零件、改尺寸、改 datum、求解干涉。所谓“自动修几何”在本设计中
+  **不存在**；要实现它必须另做求解器/优化器，明确变量、目标函数和约束，不能藏在
+  repair loop 里。
+- 因此 `repair-needed` 是“给 agent/人的路由”，不是“脚本会自己修好”。
+- **几何修复不是本插件的目标**：LLM/agent 决定改什么；插件负责发现、定位、给 witness、在改动后重验。把插件做成几何引擎会偏离“提高找出问题的能力”这个目标。
+
+### 35.6 当前边界
+
+- 能 dispatch `pearl_run({execute:true})`，已用三示例 static 副本实测；
+- repair loop/history 已有；几何自动修复没有，也不应假装有；
+- `delivery_audit` 写 `assembly/delivery-audit.json`，deliver observer 从该 artifact 读；
+- `fit.mechanism` 的 motion 输入尚未实测。
+
+### 35.7 验收
+
+```bash
+cd dsh-cad-harness
+npm run accept:m14
+npm run typecheck
+npm run build
+```
+
+实现：`src/host/pearls/{contract,execute,execute-template,inputs,context,repair,repair-loop,repair-history,format}.ts`；
+计划与缺口：`dsh-cad-harness/docs/PEARL-PLAN.md`。

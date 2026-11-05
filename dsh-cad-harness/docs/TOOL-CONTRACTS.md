@@ -382,6 +382,16 @@ merge_parts({ parts: [], userIntent: "…" })
 returns: `versionId`, `part`, `triangles`, `volumeMm3`, `sizeMm`, `shells`, `sources`, `warnings`, `durationMs`, `views`
 
 
+## `pearl_run`
+
+Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `execute` | boolean | — | true = dispatch the template steps; false/omitted = read-only gate. |
+| `inputs` | object | — | Caller-provided values for step bindings (e.g. gap/motion/contract/versionId). |
+| `deadlineMs` | number | — | Whole-template step deadline; defaults to the profile maxCostSeconds. |
+
 ## `preflight`
 
 Run the mandatory delivery sequence in one call: printability for every part (newest version, against the `profileIds` you declare), mesh health, support cost, the assembly contract and the corpus audit with your `claims`. `judgement` is the worst step that RAN; a step that was attempted and failed forces `difficult`, and it never averages away. Steps this cut does not orchestrate at all (simulation evidence, the assembly render) are listed in `coverage.notCovered` with a reason — they are named, not silently green, and they do not enter the judgement. Read `unevaluable` before claiming anything: not-excluded means "no counter-example", never "ok" and never "safe".
@@ -693,4 +703,23 @@ validate_assembly({ parts: [] })
 ```
 
 returns: `overallStatus`, `judgement`, `judgedBy`, `parts`, `pairs`
+
+
+## `write_assembly`
+
+Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `manifestPath` | string | — | Workspace-relative manifest path; default assembly/assembly.json. Must stay inside the project workspace. |
+| `mode` | string (create \| merge \| replace) | — | Default merge. merge/replace require expectedHash when the file exists. |
+| `expectedHash` | string | — | sha256:<hex> of the current file (or bare hex). Required for merge/replace when the file exists; prevents clobbering. |
+| `root` | object | — | Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields. |
+| `remove` | object | — | Explicit root-level deletions; omitted ids are preserved, never deleted implicitly. |
+
+```js
+write_assembly({ manifestPath: "…" })
+```
+
+returns: `manifestPath`, `manifestHash`, `mode`, `changed`, `counts`, `warnings`
 

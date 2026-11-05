@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "deliver",
+  "version": "1.0.0",
+  "question": "能不能交？证据是否新鲜？",
+  "exit": [
+    "audit 无 blocked",
+    "claim 有新鲜 witness"
+  ],
+  "not": [
+    "不重新设计",
+    "不替代人裁决"
+  ],
+  "templates": [
+    "templates/standard.json"
+  ],
+  "budget": {
+    "maxDistinctTools": 2,
+    "maxCalls": 10,
+    "maxCostSeconds": 300,
+    "maxProbe": 1
+  },
+  "probe": {
+    "required": false,
+    "criteria": [
+      "deliver.custom"
+    ],
+    "allowed": []
+  }
+}

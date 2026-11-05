@@ -5310,3 +5310,218 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 - 阶段 1 移走 77MB 缓存/临时目录，未删任何 `cad-data/`；`git status` 只含索引/标记/README 与两处 runId 变更。
 
 **影响：** `examples/README.md`、5 个 `ARCHIVED.md`、windup/toy 的 README 与 assembly、`tools.ts` 的 `trim`、`accept-p2/p3`、`skill`、实验报告。后续阶段 2 需要改 20+ 个 acceptance 的夹具路径。
+
+## 2026-11-03：核心 pearl 不得内置任务专用规则（fit 家具模板事故）
+
+**触发条件：** 第 1 条（用户拍板“立即修改”）+ 第 4 条（跨 `pearls/`、`examples/`、`src/host/pearls/`、验收与文档）。
+
+**要解决的问题：** 最近两次修正把“降摩擦”做过了头：
+
+- `pearls/fit/INTERFACE-GUIDE.md` 里写的是**八仙桌专用**接触组（腿↔边框、腿↔牙板、边框↔面板/穿带、管脚枨/木楔）；
+- `prompt.ts` 会把这份 guide 注入**每一个 `fit` 任务**，减速器、四连杆也会收到家具模板；
+- `fit/static`、`fit/mechanism` 硬编码 `interferenceEpsilonMm3:1`、`adjacencyThresholdMm:0.2`，这是从 A1–A3 调出来的阈值，可能吞掉别的任务里真实但小于 1 mm³ 的干涉；
+- `fit` 默认 `undeclaredPolicy:block`，把 `undeclared` 这个**发现列表**当成硬需求；guide 说“0 或逐条解释”，代码却没有 explanation 通道；
+- 同时存在三套 policy 来源：pearl `block`、CLI 默认 strict、`observeFit` API 默认 warn。
+
+**决策内容：**
+
+1. **核心 `pearls/fit` 只放机制**：datum/接口的通用写法、check/validate 流程、失败边；不写行业接触组、不写项目阈值。
+2. **任务专用规则移到 rule pack / examples**：家具接触组移到 `examples/pearls/fit/wood-furniture/`，由任务显式引用，核心不自动注入。
+3. **阈值归项目/rule pack**：`clearanceThreshold / interferenceEpsilonMm3 / adjacencyThresholdMm` 从 fit 模板移除；由项目 profile 或 assembly 策略声明。
+4. **strict 变 opt-in**：`fit` 默认 `undeclaredPolicy:warn`；`fit-observe` 默认 warn，`--strict` 才 block。
+5. **验收加防回归**：核心 fit guide 若出现“腿/边框/牙板/穿带/八仙桌”等家具词，验收直接失败；家具 rule pack 必须保留这些词。
+6. **样例 probe 移出核心**：`pearls/probes.json` 清空；`leg-fit` 样例放到 `examples/pearls/probes.json`，核心 fit 的 `probe.allowed` 为空。
+
+**理由：** HARNESS 的“场地不是产品”：核心给机制和槽位，领域规则由用户/示例带进来。把家具 SOP 放进核心，等于让所有 `fit` 任务都按八仙桌做接口；把家具阈值写进模板，等于用三个样本调参去判断别的几何。两者都会制造**假通过**，比没有模板更危险。
+
+**依据：**
+
+- `node scripts/pearl-prompt.mjs fit static` 曾输出“腿↔边框 8 条、牙板、穿带”，说明家具 SOP 确实进入了模型上下文。
+- A3 的 4 处面板拼缝微干涉 0.0274 mm³ 被 `epsilon=1` 忽略；同一 epsilon 也可能忽略别的任务 0.5 mm³ 的真实干涉。
+- E1（8 接口/73 未声明）被旧 strict 判 blocked，但 guide 说可“逐条解释”；代码没有解释通道，说明 strict 语义不完整。
+- E1–E6 全部是 A1/A2/A3 家具样本，不能证明该模板对减速器/四连杆成立。
+
+**影响：** `pearls/fit/INTERFACE-GUIDE.md`（改为通用）、`pearls/fit/pearl.json`（warn、空 probe、通用 exit）、`pearls/fit/templates/*`（移除硬编码阈值）、`scripts/fit-observe.mjs`（strict opt-in）、`scripts/accept-*`（防回归 + 样例 probe 路径）、`examples/pearls/fit/wood-furniture/`（新 rule pack）、`examples/pearls/probes.json`（新样例注册表）、`docs/PEARL-PLAN.md`。
+
+**行为变化：** `fit` 默认不再把 `undeclared` 当 hard block；家具规则不再自动注入；阈值不再由核心模板给。需要 strict 的任务显式开 `--strict` 或项目策略。
+
+## 2026-11-03：项目 profile 选 rule pack；model 拥有装配契约；三示例作为标准
+
+**触发条件：** 第 1 条（用户拍板“做项目 profile + model contract，三个示例作为检测标准”）+ 第 4 条（跨 profile/rulepack/model/fit/验收）。
+
+**要解决的问题：** `fit` 之前假设“契约已经存在”，但 `model` 只产出几何/BOM，没有谁对装配契约负责；同时领域规则虽然有了 rulepack，项目还没有正式入口选择它。结果是：`fit` 要么在空契约上假绿，要么把领域规则重新塞回核心。
+
+**决策内容：**
+
+- 新增 `pearl-profile.json`（schemaVersion 1）：项目选 `pearl`、`template`、`rulePack`，可覆盖 `undeclaredPolicy`；
+- 新增 `model/assembly` 模板：`set_datums` → 写契约 → `check_assembly`，失败回 `model`，`retry:2` 显式声明；
+- 三个示例成为标准矩阵：
+  - `roberval-balance`：26 接口 / 0 未声明 → pass；
+  - `windup-frog`：14 接口 / 9 未声明 → pass + warn；
+  - `eight-immortals-table`：0 接口 / 47 未声明 → blocked（负样本）。
+- 领域规则留在 `examples/rulepacks/`（wood-furniture / mechanism），项目 profile 显式引用。
+
+**理由：** 契约是模型的一部分，不是 fit 的隐含输入；否则“几何完成”与“契约完成”永远对不上。标准矩阵必须同时有全绿、部分、空契约三种，才能证明不是只会在八仙桌上通过。
+
+**依据：**
+
+- `node scripts/accept-project-standards.mjs` 三组全过（roberval 26/0、windup 14/9、table 0/47 blocked）。
+- `model/assembly` plan：3 步 / 3 tools / retry 2；self-goto 无 retry 被拒，有 retry 才允许。
+- `npm run accept:m4` 包含 rulepack + 三示例标准。
+
+**影响：** `src/host/pearls/profile.ts`（新）、`schemas/project-profile.schema.json`（新）、`pearls/model/templates/assembly.json`（新）、`pearls/model/ASSEMBLY-CONTRACT.md`（新）、三个 `examples/*/pearl-profile.json`、`scripts/accept-project-standards.mjs`、`scripts/project-check.mjs`、`package.json`。
+
+**行为变化：** `model` 现在有契约模板；`fit` 的 `contract exists` 有了上游；项目必须显式选 rule pack。**遗留：** `contract` 步骤暂用 `run_python` 作为写 manifest 的占位，还没有专用的 `write_assembly` 工具；`retry` 只是声明，runtime 未执行。
+
+## 2026-11-04：`write_assembly` 落地，model contract 不再用 `run_python`
+
+**触发条件：** 第 1 条（用户确认按“typed writer”思路实现）+ 第 4 条（跨 tools / manifest / model / 文档）。
+
+**要解决的问题：** `model.assembly` 之前用 `run_python` 写 manifest；它能写，但不校验 child version、datum 端点、直接 child 和并发 hash，失败还可能留下半截文件。装配契约是核心 artifact，不能靠任意脚本。
+
+**决策内容：**
+
+- 新增 `write_assembly`（instrument 组），只写 `assembly/assembly.json`：
+  - `create` / `merge` / `replace`；
+  - `merge` 按 id upsert，删除必须显式 `remove`；
+  - `merge`/`replace` 必须带 `expectedHash`；
+  - 校验 child version、datum 端点、直接 child、ID、schema；
+  - 原子写入；失败不改变原文件；
+  - 返回 `manifestHash` / `changed` / counts / warnings，不返回 pass/fail。
+- `model.assembly` 改为 `set_datums → write_assembly → check_assembly`。
+- `expected` 作为输入便利别名归一化为 `nominal`，并写 warning；manifest 本身只保留 schema 字段。
+
+**理由：** 契约写入需要“可校验的 mutator”，不是 checker，也不是通用文件 IO。`write_assembly` 写成功只说明契约结构合法，不说明 fit 通过；后者仍归 `check_assembly` / `validate_assembly`。
+
+**依据：**
+
+- `node scripts/accept-write-assembly.mjs`：create/merge/expectedHash mismatch/missing datum/path escape/atomic no-write/remove 全过。
+- `model/assembly` plan：3 tools（`set_datums` / `write_assembly` / `check_assembly`），`retry:2`。
+- `npm run accept:m5` = M4 + write_assembly acceptance。
+
+**影响：** `src/host/write-assembly.ts`（新）、`src/host/tools.ts`、`src/host/tool-groups.ts`、`pearls/model/templates/assembly.json`、`pearls/model/ASSEMBLY-CONTRACT.md`、`docs/TOOL-CONTRACTS.md`、`skills/cad-assembly/SKILL.md`、`scripts/accept-write-assembly.mjs`。
+
+**行为变化：** `model.assembly` 的 `contract` 步骤现在调用 typed writer；`run_python` 不再参与契约写入。**遗留：** `replace`/递归子装配未在三示例覆盖；`retry` 仍未接 runtime。
+
+## 2026-11-04：珍珠执行层：双契约、step bind、dispatch、单 deadline 与 no-progress repair
+
+**触发条件：** 第 1 条（用户逐项拍板“privacy/预算/repair/接入 dispatch”）+ 第 4 条（跨 pearls / contract / executor / tools / skills / docs）。
+
+**要解决的问题：** 六颗珍珠和 ledger 已能读，但“谁先谁后、失败回谁、step 输入从哪来、工具怎么真正调用、预算和 repair 怎么停”仍然分散；同时 `retry:2` 是按失败单元拍脑袋的上限，没有 no-progress 语义。
+
+**决策内容：**
+
+- **两个契约**：`assembly/assembly.json` 归 model/fit；`necklace-contract.json` 只做六珍珠的 thin index（status/evidence/failures/assembly hash/next），不把几何塞进索引。
+- **阶段依赖**：`brief → model → (fit | make | review) → deliver`；`CONTRACT_STAGES` 表达依赖，不表示固定串行脚本。
+- **契约读写**：`readNecklaceContract` 校验 schema、对照 assembly hash 判 stale；已有文件被改动时必须带 `expectedHash` 才能覆盖，同内容幂等。
+- **step 输入**：`args` + `bind`（project/input/step/contract/failure）；缺输入抛 `MissingStepInput`，不猜。`buildStepContext` 从 assembly 生成 `assembly.parts`/`assembly.path`。
+- **真正 dispatch**：`pearl_run({execute:true})` 通过 `ctx.tools.execute` 调 CAD 工具；`executeTemplate` 处理串行/声明并行、transient 重试和 `on_fail` route。
+- **语义失败**：工具 `isError=false` 但 `judgement=excluded` / `overallStatus=fail` 仍判 step fail；不再把“工具成功”当“几何通过”。
+- **预算**：一个模板执行一个 `maxCostSeconds` deadline；每个工具保留 `timeoutMs`（默认 120s，长工具单独覆盖）；慢但未超时只记日志，不杀、不降级；不建 soft 层。
+- **repair**：同一 failure signature 重复即 stop；全局最多 4 个 repair round；transient 同参数最多 2 次，单独计数。**executor 只返回 route，不自动改几何。**
+- **输出**：pass 一行；warn/repair-needed 紧凑 issue 列表；blocked/fail 逐项 what/why/where/next。
+
+**理由：** 契约是线，不是新的几何真相；装配契约必须保持单一归属。step 输入显式化后，dispatch 不需要猜参数。固定“每失败单元 2 次”会既浪费又空转；no-progress 才是可证伪的停止条件。单 deadline + 工具自身 timeout 比 soft/hard 双阈值轻，拆除成本低。
+
+**依据：**
+
+- `npm run accept:m13`、typecheck、build 全绿；覆盖 bind 解析、缺输入、parallel、semantic failure、on_fail、deadline、quiet/loud。
+- 三示例 static 副本真实 dispatch：windup 11.9s `interference` fail（22 too_tight）；roberval 10.3s fail（2 interference + 10 too_tight）；table 10.3s fail（8 interference + 55 too_tight）。
+- 实际踩到并修掉 bundled `PEARLS_ROOT`：esbuild 后 `lib/index.js` 的 `../../../pearls` 指向 `/Project/pearls`；现在候选路径探测 `fit/pearl.json`。
+
+**影响：** `src/host/pearls/{contract,execute,execute-template,inputs,context,repair,format}.ts`、`src/host/tools.ts`、`src/host/tool-groups.ts`、`pearls/*/templates/*.json`、`schemas/necklace-contract.schema.json`、`docs/PEARL-PLAN.md`、`DESIGN.md`、`skills/cad-toolbox/SKILL.md`、`skills/cad-assembly/SKILL.md`、`docs/TOOL-CONTRACTS.md`、`scripts/accept-*`。
+
+**行为变化：** `pearl_run` 不再只是只读 gate；`execute:true` 会真实调用工具。**遗留：** 自动 repair 只到 route；`fit.mechanism` 的 motion 输入未实测；deliver 仍 unobserved。
+
+## 2026-11-05：difficult 必须解释；repair 循环落历史；deliver 落 artifact
+
+**触发条件：** 第 1 条（用户明确“difficult 是要求 LLM 解释，是引导注意力”）+ 第 4 条（跨 executor / ledger / delivery / docs）。
+
+**要解决的问题：** `difficult` 之前被 step 执行器当成普通 pass，LLM 可以沉默通过；repair 只有单轮 route，没有跨轮历史/总 deadline；`delivery_audit` 返回报告但不落文件，deliver 永远 unobserved。
+
+**决策内容：**
+
+- `judgement=difficult` 不判 fail，但写入 `explanationRequired` / `attention`；输出显示 `⚠ explanation required`，LLM 必须解释。
+- `runTemplateRepairLoop`：调用者提供 `repair` 回调；只有回调返回 true 才重跑；每轮写 `assembly/pearl-repair-history.json`；same signature 停；总 deadline 覆盖所有轮。
+- `delivery_audit` 写 `assembly/delivery-audit.json`；`observeDeliver` 从该 artifact 读。
+- probe 模板只做 catalog，不默认挂载；由 profile/rule pack 显式选 id，仍受 `pearl.probe.allowed`、版本、负样本约束。
+
+**理由：** `difficult` 是注意力信号，不是通过信号；沉默会把“需要人判断”伪装成“没问题”。repair 必须有历史和总预算，否则“最多 4 轮”只是局部函数。deliver 没有 artifact 时，ledger 的 unobserved 是正确的，不能让工具回复代替证据。
+
+**依据：**
+
+- `npm run accept:m14` 全绿；覆盖 difficult explanation、repair loop/no-progress/history、delivery artifact -> observer pass。
+- `accept:skill-tools` 之前硬编码 36，实际 38；已修正并通过。
+
+**影响：** `src/host/pearls/{execute-template,format,repair-history,repair-loop}.ts`、`src/host/delivery-audit.ts`、`src/host/tools.ts`、`src/host/pearls/ledger.ts`、`docs/llm/pearls.md`、`DESIGN.md`、`skills/cad-toolbox/SKILL.md`、`docs/PEARL-PLAN.md`、acceptance。
+
+**行为变化：** difficult 不再安静通过；repair 循环有历史/总 deadline；delivery_audit 落 artifact。**遗留：** 几何自动修复仍需 agent/solver；fit.mechanism 实测仍缺 motion 输入；probe 模板目录尚未落地。
+
+## 2026-11-05：插件目标是发现/定位/重验，不是自动修几何
+
+**触发条件：** 第 1 条（用户明确“几何问题由 LLM 确定，插件不该指望几何引擎”）。
+
+**要解决的问题：** 前一轮把“自动修几何”写进 P0/路线图，偏离了插件目标；repair loop 容易被误解为会自己计算几何修改。
+
+**决策内容：**
+
+- 插件只负责发现、定位、witness、注意力分级、改动后重验；
+- 几何修改由 LLM/agent 决定；插件不移动零件、不改尺寸、不改 datum、不求解干涉；
+- `runTemplateRepairLoop` 仅编排“agent 改动后重跑”，不提供几何修改；
+- 不再把几何 solver 列为 P0/路线图；需要 solver 是另一个产品；
+- 后续优先级：`fit.mechanism` 的 motion 输入、真实 probe 模板目录、deliver 证据覆盖。
+
+**理由：** 插件的能力边界是“显著提升找出问题的能力”，不是替代设计决策。把资源投到几何引擎会偏离目标，也会让 repair 语义继续混淆。
+
+**依据：** 用户明确对齐；DESIGN §35.5 / `docs/llm/pearls.md` / `PEARL-PLAN` §24 已改为同一表述。
+
+**影响：** `DESIGN.md`、`docs/llm/pearls.md`、`dsh-cad-harness/docs/PEARL-PLAN.md`；代码不变。
+
+**行为变化：** 无运行时变化；文档不再承诺自动几何修复。
+
+## 2026-11-05：P0 发现能力：motion fixture、probe 模板、deliver artifact、witness
+
+**触发条件：** 第 1 条（用户要求继续做 P0，目标已对齐为发现/定位/重验）+ 第 4 条（跨 pearls / checker / delivery / docs）。
+
+**要解决的问题：** P0 里“机构只看静态”“probe 只有空槽”“deliver 永远 unobserved”“step 失败只有 overallStatus”四个缺口，直接限制发现能力。
+
+**决策内容：**
+
+- `examples/pearls/motion/windup-cam-slider.json`：windup 的 drum/cam/slider 可复现 motion 输入；`fit/mechanism` 用 `fit.clearanceThreshold=0` 覆盖 deliberate zero-clearance。
+- `pearls/probe-templates/fit-clearance/`：checker/v1 模板 + negative sample；`fit.probe.allowed=["fit-clearance"]`，但只有 profile 写 `probe` 才挂载；`probeConfig` 提供 constraints。
+- `delivery_audit` 写 `assembly/delivery-audit.json`；三示例已写 artifact，deliver 从 unobserved 变为 warn/fail/fail。
+- `semanticDetail` 从 `offenders` / `interferenceEvents` 提取首个 pair + 体积 + 时间，step error 不再是裸 `overallStatus=fail`。
+
+**理由：** 这些都属于“发现/定位/证据”，不是自动修几何。motion fixture 让机构珍珠真正有运动覆盖；probe 模板让空槽有可选的实现；deliver artifact 让证据链闭合；witness 让失败可操作。
+
+**依据：**
+
+- 真实 motion r073：49 checks、46 events、`cam↔slider 0.145mm³ @ t=0.042s`、`samplingSatisfied=true`、`maxJointDriftMm=0`。
+- `accept:probe`：mount + negative sample + profile selection + fail blocks gate。
+- `accept:m15` 全绿；三示例 ledger 的 deliver 已是 warn/fail/fail。
+
+**影响：** `examples/pearls/motion/`、`pearls/probe-templates/`、`pearls/probes.json`、`pearls/fit/pearl.json`、`src/host/pearls/{profile,run,execute-template}.ts`、`src/host/delivery-audit.ts`、schemas、scripts、docs。
+
+**行为变化：** `pearl_run` 会跑 profile 选择的 probe；motion step 失败带 witness；deliver artifact 可读。**遗留：** P0-5 跨域样本仍未加；probe 目前只有 1 个模板；自动修几何仍不是目标。
+
+## 2026-11-05：P1 explained undeclared：解释是证据，不是删除
+
+**触发条件：** 第 1 条（用户要求继续 P1）+ 第 4 条（rulepack / fit observer / docs）。
+
+**要解决的问题：** rulepack 有 `undeclaredPolicy:block`，但 `undeclared` 只是发现列表，没有“逐条解释”的通道；要么全 block，要么把真实接触当噪声。
+
+**决策内容：**
+
+- rulepack 增加 `undeclaredExplanations: [{a,b,reason}]`；
+- `fit` observer 从 `counts.undeclared` 扣除 explained pairs；
+- 保留 `explained-undeclared` info finding，带 reason；
+- `undeclaredPolicy:block` 只对 unexplained 生效；
+- witness 同时保留 explained/unexplained 数量。
+
+**理由：** 解释是证据，不是删除；静默忽略会让“未声明接触”重新变成噪声，无法区分真实关节和偶然靠近。
+
+**依据：** `accept:explained`：未解释 2 -> 2；解释 1 -> 1；info finding 可见。
+
+**影响：** `src/host/pearls/{rulepack,observe,ledger,run}.ts`、`schemas/rulepack.schema.json`、`scripts/accept-explained.mjs`、`PEARL-PLAN`、`docs/llm/pearls.md`。
+
+**行为变化：** 有解释的 pair 不再计入 block 条件，但仍出现在 info 里。**遗留：** requiredGroups 还没有映射到接口；make/review/brief 深度未动。

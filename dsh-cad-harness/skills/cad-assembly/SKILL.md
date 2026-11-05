@@ -16,9 +16,10 @@ A green assembly check means the declared interfaces were machine-checked agains
 - **No `tolerance` → `skipped`, never pass.** Read the `skipped` list before quoting a green verdict.
 - **Alignment uses `"check": "coaxial"` with `datum_axis` / `datum_cyl` endpoints.** Two well-chosen points can pass while a bore is tilted; that is not a coaxial check.
 - **A meshing angle is a `pose`, not a whole-part `rotate`.** `"transform": {"pose": {"datum": "<axis>", "angleDeg": -40.1}}` rotates about the part's own datum axis and the datums follow; a whole-part `rotate` swings the D-flat/keyway too.
+- **Write the manifest with `write_assembly`, not a generic write or `run_python`.** It validates child versions, datum endpoints, direct-child ownership and `expectedHash`; it does not compute distances or judge fit. `set_datums → write_assembly → check_assembly` is the contract path.
 - **`validate_assembly` measures; `check_assembly` judges.** `clearanceThreshold` (default 0.75mm) and `adjacencyThresholdMm` are choices — state them. `interferenceEpsilonMm3` (default 1e-3) separates discretisation residual from a clash.
 - **Imported parts have no datums until you declare them.** Use `import_part`'s `datums` or `set_datums` afterwards; `set_datums` in write mode creates a NEW version — point the manifest at the returned id. Stock parts without a version cannot be endpoints.
 - **Undeclared adjacency is a manifest gap, not noise.** Declare the interface or move the parts apart.
-- **`preflight` does not orchestrate this yet.** Run `check_assembly` and declare an `assembly` claim to `delivery_audit` / `preflight`; a claim with no fresh check comes back as `claim-without-evidence`.
+- **`preflight` runs the assembly job and, when `pearl-profile.json` exists, the six-pearl gate.** It still is not a substitute for a deliberate `check_assembly` when you are testing a BOM change; a claim with no fresh check comes back as `claim-without-evidence`.
 
 Full document shape, the five operators, threshold details and the traps: `docs/llm/assembly.md`.

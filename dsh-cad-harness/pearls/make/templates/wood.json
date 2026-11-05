@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "wood",
+  "pearl": "make",
+  "version": "1.0.0",
+  "when": "实木下料/榫卯家具",
+  "steps": [
+    {
+      "id": "measure",
+      "tool": "measure_part",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    },
+    {
+      "id": "section",
+      "tool": "measure_section",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    }
+  ],
+  "exit": "blank length/section fits the declared stock; probe covers stock rule",
+  "on_fail": [
+    {
+      "when": "measure.over",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "section.over",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

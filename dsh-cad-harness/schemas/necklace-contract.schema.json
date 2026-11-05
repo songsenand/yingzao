@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/cad/necklace-contract.schema.json",
+  "title": "Necklace contract (schemaVersion 1)",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "project",
+    "generatedAt",
+    "status",
+    "complete",
+    "sections",
+    "failures",
+    "next",
+    "repair"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "project": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "rulePack": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "template": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail",
+        "blocked",
+        "unobserved",
+        "not-applicable"
+      ]
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "assembly": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "counts": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "sections": {
+      "type": "object",
+      "required": [
+        "brief",
+        "model",
+        "fit",
+        "make",
+        "review",
+        "deliver"
+      ]
+    },
+    "failures": {
+      "type": "array"
+    },
+    "next": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "brief",
+          "model",
+          "fit",
+          "make",
+          "review",
+          "deliver"
+        ]
+      }
+    },
+    "repair": {
+      "type": "object",
+      "required": [
+        "round",
+        "maxRounds",
+        "action",
+        "signatures",
+        "reason"
+      ],
+      "properties": {
+        "round": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxRounds": {
+          "const": 4
+        },
+        "action": {
+          "enum": [
+            "continue",
+            "no-progress",
+            "exhausted"
+          ]
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

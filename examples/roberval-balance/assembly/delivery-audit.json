@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-05T11:19:21.550Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/roberval-balance",
+  "claims": [],
+  "verdict": "excluded",
+  "findings": [
+    {
+      "severity": "blocked",
+      "code": "visual-review-missing",
+      "detail": "9 delivered printed part(s) have NO visual review: 底座+立柱 v066, 刻度板 v067, 上横梁 v049, 下横梁 v050, 指针 v063, 右边杆 v051, 右托盘支架 v046, 右托盘 v069 … (+1) — call review_visual (top+iso, with a note) on the exact version before claiming delivery"
+    },
+    {
+      "severity": "info",
+      "code": "no-claims-declared",
+      "detail": "audited the CORPUS only: with no claims declared this audit cannot say whether a delivery claim is backed — declare `claims` to make it answer that question (a green corpus is not a delivered design)"
+    },
+    {
+      "severity": "warn",
+      "code": "versions-never-cited",
+      "detail": "39/69 versions were never used by any run: v062, v061, v060, v054, v053, v048, v045, v033, v032, v031, v030, v029 …"
+    },
+    {
+      "severity": "warn",
+      "code": "merged-stale",
+      "detail": "5 merged version(s) were built from versions a part has since replaced — the merged body describes an older design: v059 <- v052,v027; v058 <- v047; v057 <- v047; v056 <- v054; v055 <- v052,v027 — merge again from the current versions, or cite the stale inputs explicitly"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "10/43 runs cite geometry that has since been replaced — e.g. r015(printability, superseded v034), r012(printability, superseded v047), r005(assembly, superseded v047), r004(assembly-check, superseded v047), r003(assembly-check, superseded v047/v052/v065)"
+    },
+    {
+      "severity": "info",
+      "code": "duplicate-runs",
+      "detail": "2 group(s) repeat the same kind+geometry+outcome — 3 run(s) spent without new information"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "37 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 9,
+    "missing": [
+      {
+        "name": "底座+立柱",
+        "version": "v066"
+      },
+      {
+        "name": "刻度板",
+        "version": "v067"
+      },
+      {
+        "name": "上横梁",
+        "version": "v049"
+      },
+      {
+        "name": "下横梁",
+        "version": "v050"
+      },
+      {
+        "name": "指针",
+        "version": "v063"
+      },
+      {
+        "name": "右边杆",
+        "version": "v051"
+      },
+      {
+        "name": "右托盘支架",
+        "version": "v046"
+      },
+      {
+        "name": "右托盘",
+        "version": "v069"
+      },
+      {
+        "name": "右调零滑块",
+        "version": "v028"
+      }
+    ],
+    "stale": []
+  },
+  "versions": {
+    "total": 69,
+    "neverCited": [
+      "v062",
+      "v061",
+      "v060",
+      "v054",
+      "v053",
+      "v048",
+      "v045",
+      "v033",
+      "v032",
+      "v031",
+      "v030",
+      "v029",
+      "v027",
+      "v026",
+      "v025",
+      "v024",
+      "v023",
+      "v022",
+      "v021",
+      "v020",
+      "v019",
+      "v018",
+      "v017",
+      "v016",
+      "v015",
+      "v014",
+      "v013",
+      "v012",
+      "v011",
+      "v010",
+      "v009",
+      "v008",
+      "v007",
+      "v006",
+      "v005",
+      "v004",
+      "v003",
+      "v002",
+      "v001"
+    ],
+    "newest": "v069",
+    "newestTimestamp": "2026-10-28T14:41:02.204Z"
+  },
+  "parts": {
+    "total": 22,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 43,
+    "stale": [
+      {
+        "id": "r020",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v037"
+        ]
+      },
+      {
+        "id": "r019",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v068"
+        ]
+      },
+      {
+        "id": "r018",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v068"
+        ]
+      },
+      {
+        "id": "r017",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v036"
+        ]
+      },
+      {
+        "id": "r016",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v035"
+        ]
+      },
+      {
+        "id": "r015",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v034"
+        ]
+      },
+      {
+        "id": "r012",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v047"
+        ]
+      },
+      {
+        "id": "r005",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v047"
+        ]
+      },
+      {
+        "id": "r004",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v047"
+        ]
+      },
+      {
+        "id": "r003",
+        "kind": "assembly-check",
+        "status": "fail",
+        "superseded": [
+          "v047",
+          "v052",
+          "v065"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r003",
+        "kind": "assembly-check",
+        "summary": "20 接口 · 通过 19 · 硬冲突 1 · 未声明 0"
+      }
+    ],
+    "duplicateGroups": [
+      {
+        "signature": "assembly-check|v028+v046+v049+v050+v051+v063+v066+v067+v069|pass",
+        "count": 3
+      },
+      {
+        "signature": "motion|v049+v050+v051+v066|pass",
+        "count": 2
+      }
+    ],
+    "latestByKind": {
+      "assembly-check": {
+        "id": "r043",
+        "status": "pass",
+        "timestamp": "2026-11-02T09:45:09.895Z"
+      },
+      "motion": {
+        "id": "r042",
+        "status": "pass",
+        "timestamp": "2026-11-02T09:43:26.684Z"
+      },
+      "physics": {
+        "id": "r038",
+        "status": "pass",
+        "timestamp": "2026-11-02T09:09:22.168Z"
+      },
+      "assembly": {
+        "id": "r037",
+        "status": "pass",
+        "timestamp": "2026-10-28T14:50:26.561Z"
+      },
+      "printability": {
+        "id": "r036",
+        "status": "check",
+        "timestamp": "2026-10-28T14:49:07.645Z"
+      },
+      "stress": {
+        "id": "r024",
+        "status": "check",
+        "timestamp": "2026-10-28T14:47:21.707Z"
+      }
+    }
+  },
+  "contract": {
+    "name": "roberval-balance",
+    "interfaces": 26,
+    "byCheck": {
+      "coaxial": 10,
+      "distance": 10,
+      "motion-clearance": 6
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false
+  },
+  "unregistered": {
+    "scanned": 0,
+    "files": [],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "excluded"
+}

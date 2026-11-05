@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "scad",
+  "pearl": "model",
+  "version": "1.0.0",
+  "when": "从零写参数化 OpenSCAD",
+  "steps": [
+    {
+      "id": "generate",
+      "tool": "generate_part",
+      "bind": {
+        "scadCode": {
+          "from": "input",
+          "path": "generate.scadCode"
+        },
+        "userIntent": {
+          "from": "input",
+          "path": "generate.userIntent"
+        }
+      }
+    }
+  ],
+  "exit": "all parts compile and are versioned",
+  "on_fail": [
+    {
+      "when": "generate.compile-error",
+      "goto": "brief",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

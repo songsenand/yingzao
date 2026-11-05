@@ -20,6 +20,7 @@
 | `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 已有 |
 | `conventions.md` | mm/z-up、datum、manifest、judge/scan/both、run | 已有 |
 | `traps.md` | 长解释型陷阱（rack pitch、pivot、lattice units…） | 已有 |
+| `pearls.md` | 六珍珠 gate/execute、双契约、step bind、单 deadline、repair 边界 | 已有 |
 
 ## 写作规则
 

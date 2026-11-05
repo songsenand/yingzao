@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "standard",
+  "pearl": "deliver",
+  "version": "1.0.0",
+  "when": "所有交付物与证据就绪后",
+  "steps": [
+    {
+      "id": "preflight",
+      "tool": "preflight"
+    },
+    {
+      "id": "audit",
+      "tool": "delivery_audit",
+      "bind": {
+        "claims": {
+          "from": "input",
+          "path": "claims"
+        }
+      }
+    }
+  ],
+  "exit": "0 blocked; every claim cites a fresh run",
+  "on_fail": [
+    {
+      "when": "audit.blocked",
+      "goto": "fit",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

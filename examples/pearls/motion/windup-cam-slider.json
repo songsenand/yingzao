@@ -1,0 +1,17 @@
+{
+  "description": "Windup-frog cam/slider motion fixture: drum fixed, cam driven 2π rad/s, slider prescribed ±2mm sine. Parts are used at their authored world coordinates (position [0,0,0]); no geometry is moved.",
+  "parts": [
+    { "name": "drum", "versionId": "v043", "bodyType": "fixed", "position": [0, 0, 0], "rotation": [0, 0, 0] },
+    { "name": "cam", "versionId": "v049", "bodyType": "kinematic", "position": [0, 0, 0], "rotation": [0, 0, 0] },
+    { "name": "slider", "versionId": "v033", "bodyType": "kinematic", "position": [0, 0, 0], "rotation": [0, 0, 0] }
+  ],
+  "joints": [
+    { "type": "revolute", "bodyA": "drum", "bodyB": "cam", "anchorWorld": [4, 0, 4.6], "axisWorld": [0, 0, 1] },
+    { "type": "prismatic", "bodyA": "drum", "bodyB": "slider", "anchorWorld": [11.5, 0, 2], "axisWorld": [1, 0, 0] }
+  ],
+  "drive": { "body": "cam", "axis": [0, 0, 1], "omegaRadPerSec": 6.283185307179586 },
+  "oscillators": [
+    { "body": "slider", "axis": [1, 0, 0], "amplitudeMm": 2, "periodSec": 1, "phaseRad": -1.5707963267948966 }
+  ],
+  "cycles": 1
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "eight-immortals-table-fit",
+  "version": "0.1.0",
+  "pearl": "fit",
+  "template": "static",
+  "rulePack": "../rulepacks/wood-furniture",
+  "budget": {
+    "maxDistinctTools": 4,
+    "maxCalls": 20,
+    "maxCostSeconds": 900,
+    "maxProbe": 1
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/cad/rulepack.schema.json",
+  "title": "Rule pack (schemaVersion 1)",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "version"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "pearl": {
+      "enum": [
+        "brief",
+        "model",
+        "fit",
+        "make",
+        "review",
+        "deliver"
+      ]
+    },
+    "guide": {
+      "type": "string"
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "requiredGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "min": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "undeclaredPolicy": {
+      "enum": [
+        "warn",
+        "block"
+      ]
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "make": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "wood",
+            "fdm",
+            "generic"
+          ]
+        },
+        "stockMm": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "cutlist": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDistinctTools": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxCalls": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxCostSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxProbe": {
+          "const": 1
+        }
+      }
+    },
+    "undeclaredExplanations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "a",
+          "b",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "type": "string"
+          },
+          "b": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

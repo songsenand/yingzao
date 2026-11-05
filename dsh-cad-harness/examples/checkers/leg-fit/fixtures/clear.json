@@ -1,0 +1,12 @@
+{
+  "apiVersion": "checker/v1",
+  "run": { "pearl": "fit", "template": "fit.static@1.0.0" },
+  "project": { "units": "mm" },
+  "geometry": {
+    "parts": [
+      { "id": "leg", "aabb": { "min": [0, 0, 0], "max": [80, 80, 800] } },
+      { "id": "rail", "aabb": { "min": [80.2, 0, 740], "max": [900, 80, 790] } }
+    ]
+  },
+  "constraints": {}
+}

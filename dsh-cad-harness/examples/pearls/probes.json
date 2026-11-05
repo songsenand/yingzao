@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "probes": {
+    "leg-fit": {
+      "path": "../checkers/leg-fit",
+      "version": "0.1.0"
+    }
+  }
+}

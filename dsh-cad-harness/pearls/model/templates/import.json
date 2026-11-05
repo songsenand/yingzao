@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "import",
+  "pearl": "model",
+  "version": "1.0.0",
+  "when": "外部 STL/STEP 已是几何来源",
+  "steps": [
+    {
+      "id": "import",
+      "tool": "import_part",
+      "bind": {
+        "file": {
+          "from": "input",
+          "path": "import.file"
+        }
+      }
+    }
+  ],
+  "exit": "external geometry is imported as first-class versions",
+  "on_fail": [
+    {
+      "when": "import.invalid",
+      "goto": "brief",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

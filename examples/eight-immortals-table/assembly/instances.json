@@ -1,0 +1,394 @@
+[
+ {
+  "name": "leg_pp",
+  "part": "leg",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "leg_np",
+  "part": "leg",
+  "rotate": [
+   0,
+   0,
+   90
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "leg_nn",
+  "part": "leg",
+  "rotate": [
+   0,
+   0,
+   180
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "leg_pn",
+  "part": "leg",
+  "rotate": [
+   0,
+   0,
+   270
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "rail_pp",
+  "part": "rail",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "rail_np",
+  "part": "rail",
+  "rotate": [
+   0,
+   0,
+   90
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "rail_nn",
+  "part": "rail",
+  "rotate": [
+   0,
+   0,
+   180
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "rail_pn",
+  "part": "rail",
+  "rotate": [
+   0,
+   0,
+   270
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "apron_pp",
+  "part": "apron",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "apron_np",
+  "part": "apron",
+  "rotate": [
+   0,
+   0,
+   90
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "apron_nn",
+  "part": "apron",
+  "rotate": [
+   0,
+   0,
+   180
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "apron_pn",
+  "part": "apron",
+  "rotate": [
+   0,
+   0,
+   270
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "panel_outer_s",
+  "part": "panel_outer",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "panel_outer_n",
+  "part": "panel_outer",
+  "rotate": [
+   0,
+   0,
+   180
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "panel_middle",
+  "part": "panel_middle",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "cleat_0",
+  "part": "cleat",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   -244,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "cleat_1",
+  "part": "cleat",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "cleat_2",
+  "part": "cleat",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   244,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "spline_s",
+  "part": "spline",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   -121,
+   0
+  ]
+ },
+ {
+  "name": "spline_n",
+  "part": "spline",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   121,
+   0
+  ]
+ },
+ {
+  "name": "wedge_pp",
+  "part": "wedge",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "wedge_np",
+  "part": "wedge",
+  "rotate": [
+   0,
+   0,
+   90
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "wedge_nn",
+  "part": "wedge",
+  "rotate": [
+   0,
+   0,
+   180
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "wedge_pn",
+  "part": "wedge",
+  "rotate": [
+   0,
+   0,
+   270
+  ],
+  "translate": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "pin_pp",
+  "part": "pin",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   418,
+   384,
+   0
+  ]
+ },
+ {
+  "name": "pin_np",
+  "part": "pin",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   -384,
+   418,
+   0
+  ]
+ },
+ {
+  "name": "pin_nn",
+  "part": "pin",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   -418,
+   -384,
+   0
+  ]
+ },
+ {
+  "name": "pin_pn",
+  "part": "pin",
+  "rotate": [
+   0,
+   0,
+   0
+  ],
+  "translate": [
+   384,
+   -418,
+   0
+  ]
+ }
+]

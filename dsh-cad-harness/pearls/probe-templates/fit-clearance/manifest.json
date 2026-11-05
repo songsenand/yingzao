@@ -1,0 +1,12 @@
+{
+  "apiVersion": "checker/v1",
+  "id": "fit-clearance",
+  "version": "1.0.0",
+  "pearl": "fit",
+  "criteria": ["declared minimum clearance"],
+  "entry": ["node", "check.mjs"],
+  "permissions": ["read:constraints"],
+  "timeoutMs": 5000,
+  "negativeSamples": ["negative.json"],
+  "description": "Template probe: compare a declared measured clearance to a declared minimum. It is a catalog template, not mounted unless a profile selects it."
+}

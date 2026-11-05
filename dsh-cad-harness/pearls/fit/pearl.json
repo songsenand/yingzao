@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "fit",
+  "version": "1.0.0",
+  "question": "装得进去吗？",
+  "exit": [
+    "0 干涉",
+    "关键接口通过",
+    "未声明接触按项目策略处理"
+  ],
+  "not": [
+    "不修几何",
+    "不判断强度",
+    "不判断美观"
+  ],
+  "templates": [
+    "templates/static.json",
+    "templates/mechanism.json"
+  ],
+  "budget": {
+    "maxDistinctTools": 4,
+    "maxCalls": 30,
+    "maxCostSeconds": 600,
+    "maxProbe": 1
+  },
+  "probe": {
+    "required": false,
+    "criteria": [
+      "fit.custom"
+    ],
+    "allowed": [
+      "fit-clearance"
+    ]
+  },
+  "guide": "INTERFACE-GUIDE.md",
+  "undeclaredPolicy": "warn"
+}

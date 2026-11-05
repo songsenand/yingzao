@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "probes": {
+    "fit-clearance": {
+      "path": "probe-templates/fit-clearance",
+      "version": "1.0.0"
+    }
+  }
+}

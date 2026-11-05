@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "mechanism",
+  "pearl": "fit",
+  "version": "1.0.0",
+  "when": "有转动副/移动副的机构",
+  "steps": [
+    {
+      "id": "interference",
+      "tool": "validate_assembly",
+      "bind": {
+        "parts": {
+          "from": "project",
+          "path": "assembly.parts"
+        },
+        "clearanceThreshold": {
+          "from": "input",
+          "path": "fit.clearanceThreshold",
+          "optional": true
+        }
+      },
+      "args": {
+        "clearanceThreshold": 0.75
+      }
+    },
+    {
+      "id": "interfaces",
+      "tool": "check_assembly",
+      "when": "contract exists",
+      "bind": {
+        "manifestPath": {
+          "from": "project",
+          "path": "assembly.path"
+        }
+      }
+    },
+    {
+      "id": "motion",
+      "tool": "simulate_motion",
+      "bind": {
+        "parts": {
+          "from": "input",
+          "path": "motion.parts"
+        },
+        "joints": {
+          "from": "input",
+          "path": "motion.joints"
+        },
+        "drive": {
+          "from": "input",
+          "path": "motion.drive"
+        }
+      }
+    }
+  ],
+  "exit": "0 interference and 0 hard interface violations; coverage per project policy",
+  "on_fail": [
+    {
+      "when": "interference.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "interfaces.hard",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "motion.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

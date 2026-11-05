@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "assembly",
+  "pearl": "model",
+  "version": "1.0.0",
+  "when": "已有零件版本，需要声明装配契约",
+  "steps": [
+    {
+      "id": "datums",
+      "tool": "set_datums",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "datums.versionId"
+        },
+        "datums": {
+          "from": "input",
+          "path": "datums.datums"
+        }
+      }
+    },
+    {
+      "id": "contract",
+      "tool": "write_assembly",
+      "bind": {
+        "mode": {
+          "from": "input",
+          "path": "contract.mode"
+        },
+        "expectedHash": {
+          "from": "input",
+          "path": "contract.expectedHash"
+        },
+        "root": {
+          "from": "input",
+          "path": "contract.root"
+        }
+      }
+    },
+    {
+      "id": "check",
+      "tool": "check_assembly",
+      "when": "contract exists",
+      "bind": {
+        "manifestPath": {
+          "from": "project",
+          "path": "assembly.path"
+        }
+      }
+    }
+  ],
+  "exit": "contract exists, cites current versions, and check_assembly runs",
+  "retry": 4,
+  "on_fail": [
+    {
+      "when": "datums.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "contract.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "check.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

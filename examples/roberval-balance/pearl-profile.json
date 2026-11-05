@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "roberval-balance-fit",
+  "version": "0.1.0",
+  "pearl": "fit",
+  "template": "mechanism",
+  "rulePack": "../rulepacks/mechanism",
+  "budget": {
+    "maxDistinctTools": 4,
+    "maxCalls": 20,
+    "maxCostSeconds": 900,
+    "maxProbe": 1
+  }
+}

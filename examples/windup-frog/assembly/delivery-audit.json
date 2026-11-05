@@ -1,0 +1,664 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-05T11:19:21.545Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/windup-frog",
+  "claims": [],
+  "verdict": "difficult",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "no-claims-declared",
+      "detail": "audited the CORPUS only: with no claims declared this audit cannot say whether a delivery claim is backed — declare `claims` to make it answer that question (a green corpus is not a delivered design)"
+    },
+    {
+      "severity": "warn",
+      "code": "versions-never-cited",
+      "detail": "11/44 versions were never used by any run: v050, v039, v037, v031, v023, v021, v017, v014, v010, v009, v008"
+    },
+    {
+      "severity": "warn",
+      "code": "merged-stale",
+      "detail": "2 merged version(s) were built from versions a part has since replaced — the merged body describes an older design: v039 <- v028,v035,v024,v018,v038,v020,v029,v030; v037 <- v028,v035,v024,v018,v036,v020,v029,v030 — merge again from the current versions, or cite the stale inputs explicitly"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "43/64 runs cite geometry that has since been replaced — e.g. r010(printability, superseded v016), r009(printability, superseded v015), r008(printability, superseded v013), r007(printability, superseded v011), r006(assembly, superseded v011/v012/v013/v015/v016/v018/v019/v020/v022/v024/v025)"
+    },
+    {
+      "severity": "info",
+      "code": "role-exempt-parts",
+      "detail": "3 part(s) declared stock/research and exempt from the printability and newest-version-validated checks: 演示底板 (research), 整机研究体 (research), 发条 (stock) — if one of these IS delivered as a printed part, set its role back to printed"
+    },
+    {
+      "severity": "info",
+      "code": "duplicate-runs",
+      "detail": "13 group(s) repeat the same kind+geometry+outcome — 17 run(s) spent without new information"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "59 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 11,
+    "missing": [],
+    "stale": []
+  },
+  "versions": {
+    "total": 44,
+    "neverCited": [
+      "v050",
+      "v039",
+      "v037",
+      "v031",
+      "v023",
+      "v021",
+      "v017",
+      "v014",
+      "v010",
+      "v009",
+      "v008"
+    ],
+    "newest": "v051",
+    "newestTimestamp": "2026-10-31T13:36:45.691Z"
+  },
+  "parts": {
+    "total": 14,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 64,
+    "stale": [
+      {
+        "id": "r061",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v042"
+        ]
+      },
+      {
+        "id": "r050",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v041"
+        ]
+      },
+      {
+        "id": "r049",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v041",
+          "v042"
+        ]
+      },
+      {
+        "id": "r048",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v038"
+        ]
+      },
+      {
+        "id": "r047",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v038"
+        ]
+      },
+      {
+        "id": "r046",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v038"
+        ]
+      },
+      {
+        "id": "r045",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v038"
+        ]
+      },
+      {
+        "id": "r044",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v038"
+        ]
+      },
+      {
+        "id": "r043",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v030"
+        ]
+      },
+      {
+        "id": "r042",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v029"
+        ]
+      },
+      {
+        "id": "r041",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v020"
+        ]
+      },
+      {
+        "id": "r040",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v036"
+        ]
+      },
+      {
+        "id": "r038",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v018"
+        ]
+      },
+      {
+        "id": "r037",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v024"
+        ]
+      },
+      {
+        "id": "r036",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v035"
+        ]
+      },
+      {
+        "id": "r035",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r032",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v036"
+        ]
+      },
+      {
+        "id": "r031",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v018",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030",
+          "v035",
+          "v036"
+        ]
+      },
+      {
+        "id": "r030",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v016",
+          "v018",
+          "v019",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030"
+        ]
+      },
+      {
+        "id": "r029",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v018",
+          "v028"
+        ]
+      },
+      {
+        "id": "r028",
+        "kind": "motion",
+        "status": "fail",
+        "superseded": [
+          "v018"
+        ]
+      },
+      {
+        "id": "r027",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v011",
+          "v012",
+          "v013",
+          "v016",
+          "v018",
+          "v019",
+          "v020",
+          "v024",
+          "v028",
+          "v029",
+          "v030"
+        ]
+      },
+      {
+        "id": "r026",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v030"
+        ]
+      },
+      {
+        "id": "r025",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v029"
+        ]
+      },
+      {
+        "id": "r024",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r023",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v012"
+        ]
+      },
+      {
+        "id": "r022",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v020"
+        ]
+      },
+      {
+        "id": "r021",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v012"
+        ]
+      },
+      {
+        "id": "r020",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v029"
+        ]
+      },
+      {
+        "id": "r019",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v016"
+        ]
+      },
+      {
+        "id": "r018",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v019"
+        ]
+      },
+      {
+        "id": "r017",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v027"
+        ]
+      },
+      {
+        "id": "r016",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v022"
+        ]
+      },
+      {
+        "id": "r015",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v020"
+        ]
+      },
+      {
+        "id": "r014",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v019"
+        ]
+      },
+      {
+        "id": "r013",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v012"
+        ]
+      },
+      {
+        "id": "r012",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v018"
+        ]
+      },
+      {
+        "id": "r011",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v024"
+        ]
+      },
+      {
+        "id": "r010",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v016"
+        ]
+      },
+      {
+        "id": "r009",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v015"
+        ]
+      },
+      {
+        "id": "r008",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v013"
+        ]
+      },
+      {
+        "id": "r007",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v011"
+        ]
+      },
+      {
+        "id": "r006",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v011",
+          "v012",
+          "v013",
+          "v015",
+          "v016",
+          "v018",
+          "v019",
+          "v020",
+          "v022",
+          "v024",
+          "v025"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r065",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 采样 49/24 · 干涉 25 次 · 行程 4.0mm"
+      },
+      {
+        "id": "r063",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 49/24 · 干涉 48 次 · 行程 4.0mm"
+      },
+      {
+        "id": "r050",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 1 · 过紧 0"
+      },
+      {
+        "id": "r049",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 2 · 过紧 0"
+      },
+      {
+        "id": "r044",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 0 · 过紧 9"
+      },
+      {
+        "id": "r042",
+        "kind": "printability",
+        "summary": "打印悬垂 62.1mm² · 最薄 0.028mm · 可疑处 3"
+      },
+      {
+        "id": "r031",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 0 · 过紧 8"
+      },
+      {
+        "id": "r028",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 49/24 · 干涉 46 次 · 行程 4.0mm"
+      },
+      {
+        "id": "r027",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 0 · 过紧 11"
+      },
+      {
+        "id": "r025",
+        "kind": "printability",
+        "summary": "打印悬垂 62.1mm² · 最薄 0.028mm · 可疑处 3"
+      },
+      {
+        "id": "r020",
+        "kind": "printability",
+        "summary": "打印悬垂 62.1mm² · 最薄 0.028mm · 可疑处 3"
+      },
+      {
+        "id": "r017",
+        "kind": "printability",
+        "summary": "打印悬垂 0mm² · 最薄 0.1mm · 可疑处 1"
+      },
+      {
+        "id": "r016",
+        "kind": "printability",
+        "summary": "打印悬垂 62.1mm² · 最薄 0.063mm · 可疑处 3"
+      },
+      {
+        "id": "r009",
+        "kind": "printability",
+        "summary": "打印悬垂 17.9mm² · 最薄 0.1mm · 可疑处 3"
+      },
+      {
+        "id": "r006",
+        "kind": "assembly",
+        "summary": "66 对 · 干涉 1 · 过紧 11"
+      }
+    ],
+    "duplicateGroups": [
+      {
+        "signature": "assembly-check|v026+v032+v033+v034+v040+v043+v044+v045+v046+v047+v048+v049|check",
+        "count": 3
+      },
+      {
+        "signature": "printability|v029|fail",
+        "count": 3
+      },
+      {
+        "signature": "printability|v020|check",
+        "count": 3
+      },
+      {
+        "signature": "printability|v012|check",
+        "count": 3
+      },
+      {
+        "signature": "assembly|v026+v032+v033+v034+v040+v043+v044+v045+v046+v047+v048+v049|pass",
+        "count": 2
+      },
+      {
+        "signature": "motion|v033+v043+v049|pass",
+        "count": 2
+      },
+      {
+        "signature": "assembly-check|v018+v020+v024+v026+v028+v029+v030+v032+v033+v034+v035+v038|check",
+        "count": 2
+      },
+      {
+        "signature": "printability|v030|check",
+        "count": 2
+      },
+      {
+        "signature": "printability|v018|check",
+        "count": 2
+      },
+      {
+        "signature": "printability|v024|pass",
+        "count": 2
+      },
+      {
+        "signature": "printability|v028|check",
+        "count": 2
+      },
+      {
+        "signature": "printability|v016|check",
+        "count": 2
+      },
+      {
+        "signature": "printability|v019|check",
+        "count": 2
+      }
+    ],
+    "latestByKind": {
+      "assembly": {
+        "id": "r069",
+        "status": "pass",
+        "timestamp": "2026-11-02T12:17:20.634Z"
+      },
+      "assembly-check": {
+        "id": "r068",
+        "status": "check",
+        "timestamp": "2026-11-02T12:07:36.195Z"
+      },
+      "motion": {
+        "id": "r066",
+        "status": "pass",
+        "timestamp": "2026-11-02T12:00:04.337Z"
+      },
+      "printability": {
+        "id": "r059",
+        "status": "check",
+        "timestamp": "2026-10-31T13:16:14.752Z"
+      }
+    }
+  },
+  "contract": {
+    "name": "windup-frog-movement",
+    "interfaces": 14,
+    "byCheck": {
+      "coaxial": 9,
+      "distance": 4,
+      "motion-clearance": 1
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false
+  },
+  "unregistered": {
+    "scanned": 12,
+    "files": [],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "difficult"
+}

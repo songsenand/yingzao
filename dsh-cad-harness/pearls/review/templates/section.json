@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "section",
+  "pearl": "review",
+  "version": "1.0.0",
+  "when": "内部榫卯/配合需要剖面",
+  "steps": [
+    {
+      "id": "section",
+      "tool": "measure_section",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    },
+    {
+      "id": "review",
+      "tool": "review_visual"
+    }
+  ],
+  "exit": "section exists and the joint is readable in it",
+  "on_fail": [
+    {
+      "when": "section.missing",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

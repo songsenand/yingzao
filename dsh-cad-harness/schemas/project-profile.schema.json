@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/cad/project-profile.schema.json",
+  "title": "Project pearl profile (schemaVersion 1)",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "pearl",
+    "template",
+    "rulePack"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "project": {
+      "type": "string"
+    },
+    "pearl": {
+      "enum": [
+        "brief",
+        "model",
+        "fit",
+        "make",
+        "review",
+        "deliver"
+      ]
+    },
+    "template": {
+      "type": "string"
+    },
+    "rulePack": {
+      "type": "string"
+    },
+    "undeclaredPolicy": {
+      "enum": [
+        "warn",
+        "block"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDistinctTools": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxCalls": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxCostSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxProbe": {
+          "const": 1
+        }
+      }
+    },
+    "probe": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "probeConfig": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+{
+  "apiVersion": "checker/v1",
+  "id": "leg-fit",
+  "version": "0.1.0",
+  "pearl": "fit",
+  "criteria": ["fit.interference"],
+  "entry": ["python3", "checker.py"],
+  "permissions": ["read:geometry"],
+  "timeoutMs": 5000,
+  "description": "AABB interference probe for leg/rail; M1 sample.",
+  "negativeSamples": ["fixtures/overlap.json"]
+}

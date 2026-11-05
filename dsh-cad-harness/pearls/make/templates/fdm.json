@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "fdm",
+  "pearl": "make",
+  "version": "1.0.0",
+  "when": "FDM 打印件",
+  "steps": [
+    {
+      "id": "printability",
+      "tool": "check_printability",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    },
+    {
+      "id": "thickness",
+      "tool": "measure_thickness",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    },
+    {
+      "id": "appearance",
+      "tool": "check_appearance",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "versionId"
+        }
+      }
+    }
+  ],
+  "exit": "printability not excluded, min wall above profile, no appearance blockers",
+  "on_fail": [
+    {
+      "when": "printability.excluded",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "thickness.thin",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

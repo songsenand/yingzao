@@ -1,0 +1,396 @@
+{
+ "parts": [
+  {
+   "name": "leg_pp",
+   "versionId": "v001",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "leg_np",
+   "versionId": "v001",
+   "rotate": [
+    0,
+    0,
+    90
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "leg_nn",
+   "versionId": "v001",
+   "rotate": [
+    0,
+    0,
+    180
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "leg_pn",
+   "versionId": "v001",
+   "rotate": [
+    0,
+    0,
+    270
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "rail_pp",
+   "versionId": "v002",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "rail_np",
+   "versionId": "v002",
+   "rotate": [
+    0,
+    0,
+    90
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "rail_nn",
+   "versionId": "v002",
+   "rotate": [
+    0,
+    0,
+    180
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "rail_pn",
+   "versionId": "v002",
+   "rotate": [
+    0,
+    0,
+    270
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "apron_pp",
+   "versionId": "v003",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "apron_np",
+   "versionId": "v003",
+   "rotate": [
+    0,
+    0,
+    90
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "apron_nn",
+   "versionId": "v003",
+   "rotate": [
+    0,
+    0,
+    180
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "apron_pn",
+   "versionId": "v003",
+   "rotate": [
+    0,
+    0,
+    270
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "panel_outer_s",
+   "versionId": "v004",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "panel_outer_n",
+   "versionId": "v004",
+   "rotate": [
+    0,
+    0,
+    180
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "panel_middle",
+   "versionId": "v005",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "cleat_0",
+   "versionId": "v006",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    -246,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "cleat_1",
+   "versionId": "v006",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "cleat_2",
+   "versionId": "v006",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    246,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "spline_s",
+   "versionId": "v007",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    -123,
+    0
+   ]
+  },
+  {
+   "name": "spline_n",
+   "versionId": "v007",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    123,
+    0
+   ]
+  },
+  {
+   "name": "wedge_pp",
+   "versionId": "v008",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wedge_np",
+   "versionId": "v008",
+   "rotate": [
+    0,
+    0,
+    90
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wedge_nn",
+   "versionId": "v008",
+   "rotate": [
+    0,
+    0,
+    180
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wedge_pn",
+   "versionId": "v008",
+   "rotate": [
+    0,
+    0,
+    270
+   ],
+   "translate": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "pin_pp",
+   "versionId": "v009",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    418,
+    384,
+    0
+   ]
+  },
+  {
+   "name": "pin_np",
+   "versionId": "v009",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    -384,
+    418,
+    0
+   ]
+  },
+  {
+   "name": "pin_nn",
+   "versionId": "v009",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    -418,
+    -384,
+    0
+   ]
+  },
+  {
+   "name": "pin_pn",
+   "versionId": "v009",
+   "rotate": [
+    0,
+    0,
+    0
+   ],
+   "translate": [
+    384,
+    -418,
+    0
+   ]
+  }
+ ]
+}

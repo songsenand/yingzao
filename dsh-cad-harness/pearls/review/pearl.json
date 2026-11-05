@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "review",
+  "version": "1.0.0",
+  "question": "关键视图是否真的看过？",
+  "exit": [
+    "必需视图已渲染",
+    "每个视图有实质 note"
+  ],
+  "not": [
+    "不替代 audit",
+    "不修几何"
+  ],
+  "templates": [
+    "templates/visual.json",
+    "templates/section.json"
+  ],
+  "budget": {
+    "maxDistinctTools": 3,
+    "maxCalls": 20,
+    "maxCostSeconds": 600,
+    "maxProbe": 1
+  },
+  "probe": {
+    "required": false,
+    "criteria": [
+      "review.custom"
+    ],
+    "allowed": []
+  }
+}

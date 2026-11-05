@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "standard",
+  "pearl": "brief",
+  "version": "1.0.0",
+  "when": "任意新任务开始时，先把需求变成约束契约",
+  "steps": [
+    {
+      "id": "project",
+      "tool": "project_info"
+    },
+    {
+      "id": "init",
+      "tool": "init_project"
+    }
+  ],
+  "parallel": [],
+  "exit": "constraints declared; every exit criterion has a witness",
+  "on_fail": [
+    {
+      "when": "project.missing",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}

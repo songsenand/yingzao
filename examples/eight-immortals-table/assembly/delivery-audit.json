@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-05T11:19:21.560Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/eight-immortals-table",
+  "claims": [],
+  "verdict": "excluded",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "no-claims-declared",
+      "detail": "audited the CORPUS only: with no claims declared this audit cannot say whether a delivery claim is backed — declare `claims` to make it answer that question (a green corpus is not a delivered design)"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "2/4 runs cite geometry that has since been replaced — e.g. r002(assembly, superseded v002/v004/v005/v006/v007), r001(assembly, superseded v002/v004/v005/v006/v007)"
+    },
+    {
+      "severity": "blocked",
+      "code": "unregistered-geometry",
+      "detail": "3 mesh file(s) on disk have no version and are NEWER than the newest version: cad/stl/assembly.stl, cad/stl/panel_middle.stl, cad/stl/rail.stl — register them (import_part) so the panel can show them, or declare them exempt with a reason"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "4 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 9,
+    "missing": [],
+    "stale": []
+  },
+  "versions": {
+    "total": 14,
+    "neverCited": [],
+    "newest": "v014",
+    "newestTimestamp": "2026-11-02T12:21:39.101Z"
+  },
+  "parts": {
+    "total": 9,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 4,
+    "stale": [
+      {
+        "id": "r002",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v004",
+          "v005",
+          "v006",
+          "v007"
+        ]
+      },
+      {
+        "id": "r001",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v002",
+          "v004",
+          "v005",
+          "v006",
+          "v007"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r001",
+        "kind": "assembly",
+        "summary": "378 对 · 干涉 0 · 过紧 35"
+      }
+    ],
+    "duplicateGroups": [],
+    "latestByKind": {
+      "assembly-check": {
+        "id": "r004",
+        "status": "check",
+        "timestamp": "2026-11-02T12:28:46.993Z"
+      },
+      "assembly": {
+        "id": "r003",
+        "status": "pass",
+        "timestamp": "2026-11-02T12:21:55.983Z"
+      }
+    }
+  },
+  "contract": {
+    "name": "八仙桌 900×900×800",
+    "interfaces": 0,
+    "byCheck": {},
+    "staleNodes": [],
+    "geometryNewerThanCheck": false
+  },
+  "unregistered": {
+    "scanned": 10,
+    "files": [
+      {
+        "path": "cad/stl/assembly.stl",
+        "bytes": 298710,
+        "modified": "2026-11-02T12:32:18.998Z",
+        "severity": "blocked",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": "cad/stl/panel_middle.stl",
+        "bytes": 23502,
+        "modified": "2026-11-02T12:32:16.404Z",
+        "severity": "blocked",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": "cad/stl/rail.stl",
+        "bytes": 67795,
+        "modified": "2026-11-02T12:32:16.092Z",
+        "severity": "blocked",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      }
+    ],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "excluded"
+}

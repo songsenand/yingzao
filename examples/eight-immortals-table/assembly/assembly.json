@@ -1,0 +1,546 @@
+{
+ "schemaVersion": 1,
+ "name": "八仙桌 900×900×800",
+ "unit": "mm",
+ "up": "z",
+ "root": {
+  "id": "table",
+  "name": "八仙桌",
+  "kind": "assembly",
+  "children": [
+   {
+    "id": "leg_pp",
+    "name": "桌腿",
+    "kind": "part",
+    "version": "v001",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "leg_np",
+    "name": "桌腿",
+    "kind": "part",
+    "version": "v001",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      90
+     ]
+    }
+   },
+   {
+    "id": "leg_nn",
+    "name": "桌腿",
+    "kind": "part",
+    "version": "v001",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      180
+     ]
+    }
+   },
+   {
+    "id": "leg_pn",
+    "name": "桌腿",
+    "kind": "part",
+    "version": "v001",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      270
+     ]
+    }
+   },
+   {
+    "id": "rail_pp",
+    "name": "边框",
+    "kind": "part",
+    "version": "v010",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "rail_np",
+    "name": "边框",
+    "kind": "part",
+    "version": "v010",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      90
+     ]
+    }
+   },
+   {
+    "id": "rail_nn",
+    "name": "边框",
+    "kind": "part",
+    "version": "v010",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      180
+     ]
+    }
+   },
+   {
+    "id": "rail_pn",
+    "name": "边框",
+    "kind": "part",
+    "version": "v010",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      270
+     ]
+    }
+   },
+   {
+    "id": "apron_pp",
+    "name": "牙板",
+    "kind": "part",
+    "version": "v003",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "apron_np",
+    "name": "牙板",
+    "kind": "part",
+    "version": "v003",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      90
+     ]
+    }
+   },
+   {
+    "id": "apron_nn",
+    "name": "牙板",
+    "kind": "part",
+    "version": "v003",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      180
+     ]
+    }
+   },
+   {
+    "id": "apron_pn",
+    "name": "牙板",
+    "kind": "part",
+    "version": "v003",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      270
+     ]
+    }
+   },
+   {
+    "id": "panel_outer_s",
+    "name": "面板-边板",
+    "kind": "part",
+    "version": "v011",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "panel_outer_n",
+    "name": "面板-边板",
+    "kind": "part",
+    "version": "v011",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      180
+     ]
+    }
+   },
+   {
+    "id": "panel_middle",
+    "name": "面板-中板",
+    "kind": "part",
+    "version": "v012",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "cleat_0",
+    "name": "穿带",
+    "kind": "part",
+    "version": "v013",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      -244,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "cleat_1",
+    "name": "穿带",
+    "kind": "part",
+    "version": "v013",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "cleat_2",
+    "name": "穿带",
+    "kind": "part",
+    "version": "v013",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      244,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "spline_s",
+    "name": "穿簧",
+    "kind": "part",
+    "version": "v014",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      -121,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "spline_n",
+    "name": "穿簧",
+    "kind": "part",
+    "version": "v014",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      121,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "wedge_pp",
+    "name": "木楔",
+    "kind": "part",
+    "version": "v008",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "wedge_np",
+    "name": "木楔",
+    "kind": "part",
+    "version": "v008",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      90
+     ]
+    }
+   },
+   {
+    "id": "wedge_nn",
+    "name": "木楔",
+    "kind": "part",
+    "version": "v008",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      180
+     ]
+    }
+   },
+   {
+    "id": "wedge_pn",
+    "name": "木楔",
+    "kind": "part",
+    "version": "v008",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      0,
+      0,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      270
+     ]
+    }
+   },
+   {
+    "id": "pin_pp",
+    "name": "竹销",
+    "kind": "part",
+    "version": "v009",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      418,
+      384,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "pin_np",
+    "name": "竹销",
+    "kind": "part",
+    "version": "v009",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      -384,
+      418,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "pin_nn",
+    "name": "竹销",
+    "kind": "part",
+    "version": "v009",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      -418,
+      -384,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   },
+   {
+    "id": "pin_pn",
+    "name": "竹销",
+    "kind": "part",
+    "version": "v009",
+    "source": "imported",
+    "transform": {
+     "translate": [
+      384,
+      -418,
+      0
+     ],
+     "rotate": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  ],
+  "interfaces": []
+ }
+}

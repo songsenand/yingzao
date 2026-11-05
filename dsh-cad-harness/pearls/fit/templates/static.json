@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "static",
+  "pearl": "fit",
+  "version": "1.0.0",
+  "when": "静态榫卯/装配，无运动副",
+  "steps": [
+    {
+      "id": "interference",
+      "tool": "validate_assembly",
+      "bind": {
+        "parts": {
+          "from": "project",
+          "path": "assembly.parts"
+        },
+        "clearanceThreshold": {
+          "from": "input",
+          "path": "fit.clearanceThreshold",
+          "optional": true
+        }
+      },
+      "args": {
+        "clearanceThreshold": 0.75
+      }
+    },
+    {
+      "id": "interfaces",
+      "tool": "check_assembly",
+      "when": "contract exists",
+      "bind": {
+        "manifestPath": {
+          "from": "project",
+          "path": "assembly.path"
+        }
+      }
+    },
+    {
+      "id": "gaps",
+      "tool": "measure_gap",
+      "when": "interference.fail",
+      "bind": {
+        "versionId": {
+          "from": "input",
+          "path": "gap.versionId"
+        },
+        "aVersionId": {
+          "from": "input",
+          "path": "gap.aVersionId"
+        },
+        "bVersionId": {
+          "from": "input",
+          "path": "gap.bVersionId"
+        }
+      }
+    }
+  ],
+  "parallel": [
+    [
+      "interference",
+      "interfaces"
+    ]
+  ],
+  "exit": "0 interference and 0 hard interface violations; coverage per project policy",
+  "on_fail": [
+    {
+      "when": "interference.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "interfaces.hard",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    },
+    {
+      "when": "gaps.fail",
+      "goto": "model",
+      "with": "attention",
+      "kind": "repair"
+    }
+  ]
+}
