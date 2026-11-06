@@ -3861,6 +3861,10 @@ node scripts/smoke-check-appearance.mjs <corpus> assembly/assembly.json
 
 ## 35. 珍珠执行层：双契约、step 输入、dispatch 与 repair 边界（2026-11-04）
 
+> **2026-11-06 注记**：本节描述的珍珠执行层已降级；V1 证据验证取代其模型可见面。
+> 决策见 `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`；本节保留为历史设计记录，
+> 不再作为模型可见路径。
+
 **定位**：珍珠不是另一个工具清单，而是“每颗珍珠一个固定问题”的证据边界。执行层只负责
 把模板步骤串起来、解析输入、调工具、把失败路由回 owner；它不替设计做判断。
 

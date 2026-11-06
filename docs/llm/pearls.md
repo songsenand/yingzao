@@ -1,5 +1,9 @@
 # Pearls: gate, execute, and what "repair" may mean
 
+> **Historical (2026-11-06).** The pearl execution layer is demoted; V1 evidence verification
+> supersedes it on the model-facing surface. Decision:
+> `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`. Kept as an implementation record.
+
 A pearl answers one question. Six pearls: `brief`, `model`, `fit`, `make`, `review`,
 `deliver`. A template is the task-class implementation; a rule pack supplies domain
 rules; `pearl-profile.json` selects pearl + template + rule pack.
@@ -109,6 +113,18 @@ This is feasible, but:
 - one probe per pearl (`maxProbe: 1`);
 - a template without a negative sample is not mountable;
 - a prebuilt probe is not a substitute for the pearl's own evidence.
+
+## Simulation: two classes
+
+- **Consistency / feasibility**: no user target; default checks such as assembly interference,
+motion clearance, static stability, printability. These can be gates inside `fit`/`make`.
+- **Functional target**: requires a declared scenario and target (e.g. "5g at 100mm tips
+the balance by >=2 deg"). It is a `deliver` claim witness, not a default gate; without a
+scenario/target it is `unobserved`/`not-applicable`, never pass.
+
+`fit/mechanism` already uses `simulate_motion` for consistency. The missing pieces are a
+`brief` acceptance/scenario contract and a `deliver` functional template that runs
+`simulate_*` and compares the metric to the target.
 
 ## What this is not
 

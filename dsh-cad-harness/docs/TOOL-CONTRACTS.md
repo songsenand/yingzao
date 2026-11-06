@@ -384,7 +384,7 @@ returns: `versionId`, `part`, `triangles`, `volumeMm3`, `sizeMm`, `shells`, `sou
 
 ## `pearl_run`
 
-Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.
+DEPRECATED / experimental — the pearl execution layer is demoted; use the V1 `verify` evidence report or the atomic tools. Kept for the historical implementation. Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.
 
 | parameter | type | default | meaning |
 |---|---|---|---|

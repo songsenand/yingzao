@@ -6282,7 +6282,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'pearl_run',
     description:
-      'Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.',
+      'DEPRECATED / experimental — the pearl execution layer is demoted; use the V1 `verify` evidence report or the atomic tools. Kept for the historical implementation. Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.',
     parameters: {
       execute: { type: 'boolean', description: 'true = dispatch the template steps; false/omitted = read-only gate.' },
       inputs: { type: 'object', additionalProperties: true, description: 'Caller-provided values for step bindings (e.g. gap/motion/contract/versionId).' },
@@ -6552,8 +6552,9 @@ export function registerCadTools(
         }
       }
 
-      // pearl gate: the necklace contract is read-only, but it must run before
-      // delivery. A blocked/unobserved pearl is a gate failure, not a hidden warning.
+      // legacy pearl gate (deprecated; V1 evidence verification supersedes it): the
+      // necklace contract is read-only, but it must run before delivery. A blocked/
+      // unobserved pearl is a gate failure, not a hidden warning.
       if (existsSync(join(project.cwd, 'pearl-profile.json'))) try {
         const pearl = await executeContractRound(project.cwd, { round: 0 });
         steps.push({

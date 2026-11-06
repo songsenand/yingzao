@@ -1,5 +1,10 @@
 # 珍珠项链（M1–M14 执行记录）
 
+> **历史文档（2026-11-06 起）**：珍珠执行层已降级，V1 证据验证取代其模型可见面。
+> 决策见 `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`；本文只作为实现记录保留，不再更新。
+
+> 阶段报告：[PEARL-REPORT-2026-11-05](PEARL-REPORT-2026-11-05.md)
+
 > 状态：M1–M8 已落地（checker/planner/fit observe/rulepack/profile/model contract/write_assembly）；M6 加入 model observer；M7 加入六颗珍珠只读账本、失败定位与 wood/deliver observer；M8 加入 `pearl_run` gate、一个 deadline 预算、`on_fail.kind`、probe 空槽合法化；M9 加入项链契约（两契约、阶段、失败 owner、原子写入）；M10 固定 no-progress + 全局 4 轮 repair 策略；M11 加入 contract-round executor、preflight 集成和 round deadline；M12 加入 step bind/input 契约、quiet/loud 输出；M13 接入真正的 CAD tool dispatch；M14 补 difficult 解释语义、repair loop/history、delivery artifact；几何自动修复仍不存在（repair loop 只负责编排）。
 > 注意：M1 尚未接入 host 运行时；验收脚本直接 import TS 模块，现有工具/preset 行为不变。
 > 目标：不推翻现有工具/四组/preset；先证明“固定珍珠 + 模板 + probe 槽”可读、可校验、可预算。
@@ -894,3 +899,86 @@ P0-1 fit.mechanism motion
 ### 验收
 
 `npm run accept:m16`、typecheck、build 全绿。
+
+## 29. 仿真一分为二：一致性检查 vs 功能目标
+
+仿真不是一种珍珠，也不该被一句“场景驱动”排除。它分两类，接入点不同。
+
+### A. 一致性 / 可行性检查
+
+问题：**在基本物理/装配条件下，是否自洽？**
+
+例子：
+
+- 天平空载放在地面是否稳定；
+- 装配/运动过程中是否干涉、装不进去；
+- 机构是否有可行运动；
+- 打印件是否站得住、壁厚是否成立。
+
+特点：
+
+- 不需要用户给“功能目标”；
+- 默认应跑；
+- 可以成为 `fit` / `make` 的 gate 或 warn；
+- 失败是“设计不一致”，不是“没达到产品指标”。
+
+接入：
+
+```text
+fit/static      validate_assembly + check_assembly
+fit/mechanism   + simulate_motion
+make/fdm        check_printability
+```
+
+后续可加：
+
+```text
+fit/static      simulate_physics（空载重力/稳定性）
+make/*          支撑/落床可行性
+```
+
+### B. 功能目标
+
+问题：**在声明场景下，是否达到声明目标？**
+
+例子：
+
+- 天平放 5g 砝码是否向一侧倾斜 ≥2°；
+- 发条青蛙是否跳起 ≥X mm；
+- 流道是否在目标流量下无死区；
+- 机构是否完成规定行程。
+
+特点：
+
+- 必须有 **scenario + target + acceptance**；
+- 没有场景/目标 → `unobserved` 或 `not-applicable`，不是 pass；
+- 输出是 **claim 的 witness**，不是默认 gate；
+- 由 `brief` 声明，由 `deliver` 消费。
+
+接入：
+
+```text
+brief      acceptance/scenario contract
+deliver    functional template:
+             simulate_* (scenario input)
+             compare metric vs target
+             produce claim + fresh run
+             delivery_audit
+```
+
+### 为什么不是第七颗珍珠
+
+六颗珍珠是**固定决策边界**；仿真是**证据类型**。  
+“功能是否达到目标”可以归入 `deliver`（能不能交），一致性检查可以归入 `fit`/`make`。  
+如果单独做一颗 `simulate` 珍珠，它会：
+
+- 对大多数项目 `not-applicable`；
+- 或者强迫所有项目先声明场景；
+- 或者把“场景”藏进模板，制造假通过。
+
+### 当前缺口
+
+- `brief` 还没有 acceptance/scenario 解析；
+- `deliver` 还没有 claim-driven `simulate_*` 模板；
+- `fit.mechanism` 只有 motion，没有空载稳定性；
+- `simulate_stress/fluid/lbm/physics` 还没有接到 claim witness。

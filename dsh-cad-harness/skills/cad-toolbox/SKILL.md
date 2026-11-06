@@ -23,19 +23,24 @@ Thirty-eight tools, but **three jobs first**. Pick the group, not the tool — t
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `generate_part` / `import_part` 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`delivery_audit` 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`import_part({render:false})` 或 `generate_part({views: []})`。
 
-## Pearl workflow (2026-11-04)
+## Evidence verification (V1; 2026-11-06)
 
-A project may declare `pearl-profile.json`:
+The pearl execution layer is **demoted**; `pearl_run` is deprecated/experimental and is no
+longer the default path. Decision: `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`.
 
-```json
-{ "pearl": "fit", "template": "static", "rulePack": "../rulepacks/wood-furniture" }
-```
+V1 adds a read-only evidence report: `verify <project-dir>` returns six coverage rows
+(requirements/model/fit/make/review/delivery) with `pass|warn|fail|blocked|unobserved`,
+stale/missing evidence and claim witnesses. It does not run CAD, write runs, or judge design.
+The command lands in the next change; until then use `preflight`, `check_assembly`,
+`check_printability`, `review_visual` and `delivery_audit` directly.
 
-- `pearl_run({})` is the read-only gate: plans the template against the profile budget and observes brief/model/fit/make/review/deliver.
-- `pearl_run({execute:true, inputs})` dispatches the template steps through the same registry; `inputs` fills `bind` values that cannot come from project artifacts (e.g. `gap`, `motion`, `contract`).
-- No profile → the gate is blocked; `preflight` lists the pearl step as `notCovered` instead of pretending it ran.
-- A tool returning successfully is not a geometric pass: `judgement=excluded` / `overallStatus=fail` is a step failure.
-- Repair is routed, not automatic: `on_fail` names the next pearl; the executor does not edit geometry. Full depth: `docs/llm/pearls.md`.
+- `pearl_run({})` (deprecated): read-only six-pearl gate, kept only for the historical
+  implementation; do not start new work on it.
+- `pearl_run({execute:true, inputs})` (deprecated): template executor; removed after V1.
+- No profile → the gate is blocked; `preflight` lists the pearl step as `notCovered`.
+- A tool returning successfully is not a geometric pass: `judgement=excluded` /
+  `overallStatus=fail` is a step failure.
+- Full depth: `docs/llm/verify.md` (V1, next change).
 
 ## Project selection (explicit; 2026-11-02)
 
@@ -97,8 +102,8 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_gap` with solid / sphere endpoints | `measure_gap` at a point you cannot name |
 | **"what angle is this", "are these faces parallel", "how far off axis is this bore"** | **`measure_angle`** | eyeballing a render; guessing 30°/150° |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
-| "is the six-pearl gate green?", "what is still unobserved?" | `pearl_run` (gate; no `execute`) | `delivery_audit` (claims only) |
-| "run the selected pearl template", "dispatch the fit steps" | `pearl_run({execute:true, inputs})` | `preflight` (it only runs the gate) |
+| "is the evidence fresh?", "what is still unobserved?" | `verify` (V1; read-only; next change) | `delivery_audit` (claims only) |
+| "run the selected pearl template" (deprecated) | `pearl_run({execute:true, inputs})` — deprecated; use the atomic tools | `preflight` (it only runs the gate) |
 | "write/update the assembly contract", "add an interface" | `write_assembly` | generic write / `run_python` |
 | "can this actually be printed", "is this wall too thin", "will it need supports" | `check_printability` | looking at renders |
 | **"screen a family at once", "which of these parts is thin"** | **`check_parts`** | N single calls; it runs the same jobs and writes one run per part |
