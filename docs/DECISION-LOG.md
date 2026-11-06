@@ -5525,3 +5525,24 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** `src/host/pearls/{rulepack,observe,ledger,run}.ts`、`schemas/rulepack.schema.json`、`scripts/accept-explained.mjs`、`PEARL-PLAN`、`docs/llm/pearls.md`。
 
 **行为变化：** 有解释的 pair 不再计入 block 条件，但仍出现在 info 里。**遗留：** requiredGroups 还没有映射到接口；make/review/brief 深度未动。
+
+## 2026-11-06：珍珠链降级：只做 V1 证据验证，不回撤 38b2d45
+
+**触发条件：** 第 1 条（用户拍板 D 方案）+ 第 3/4 条（工具表面、文档、验收跨模块）。
+
+**要解决的问题：** 珍珠层没有减少模型可见表面，反而增加第二套分类、配置、契约和状态词；执行层半接线（repair/contract/execute 只被验收或 CLI 使用）；验收度量的是产品完成度而非场地可用性；r073 等验收主张无法用仓库证据复核。
+
+**决策内容：**
+
+- 工具表面按输出语义分组（交付/检测/仿真/仪器）；六问降为覆盖报告，不再作为工具分类。
+- 只做 V1 只读证据验证（CLI + 报告 + 退出码）；V2/V3/V4 暂缓，V5 不做。
+- 不回撤 `38b2d45`：前向降级（D），保留 observers/ledger/failure/write_assembly/checkers/examples/delivery-audit；执行器/契约/模板/repair 先降级、V1 绿后再删。
+- 不设 owner 角色：政策是用户声明；无政策 → advisory；`approvedBy` 是例外里的自由字段。
+
+**理由：** `38b2d45` 是 167 文件的混合大提交，回撤会删掉 V1 依赖的好资产；项目历史纪律是记录而非抹除；前向降级风险最低，V1 可立即在现有基座开工。
+
+**依据：** `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`（诊断、C1–C9、V1 契约、验收、迁移）；审计证据（31KB gate、2,343 行/52 类型、6+ 状态词、r073 不可复核、explained info→hard、semanticFailure 漏 verdict）。
+
+**影响：** 工具表面、skill、docs、验收；珍珠执行层降级/后续删除；V1 新增 `src/host/verify/`、`scripts/verify.mjs`、`scripts/accept-verify.mjs`。
+
+**未决/非目标：** V2 重算、V3 仿真、V4 CI、面板 V1.1；执行器删除在 V1 验收后；`pearl_run` 暂留并标 DEPRECATED。
