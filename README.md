@@ -37,6 +37,23 @@ node scripts/sync-cad-preset.mjs
 - 它现在做不到什么 → [边界](docs/user/limits.md)
 - 安装细节、首次准备、排错 → [安装](docs/user/install.md) / [故障排查](docs/user/troubleshooting.md)
 
+## 证据验证（V1）
+
+```bash
+cd dsh-cad-harness
+node scripts/verify.mjs /path/to/project --advisory
+node scripts/verify.mjs /path/to/project --block --strict
+```
+
+`verify` 只读：检查 `requirements / model / fit / make / review / delivery` 六行，报告
+缺失/过期的证据和 claim witness；不跑 CAD、不写 run、不判设计。
+
+- 默认 advisory（exit 0）；`--block` 时 pass 0 / warn 1 / blocked|fail 2 / 用法错误 3；
+  `--strict` 让 warn 也返回 2。
+- claims：`<project>/claims.json` 或 `--claims <file>`；policy：
+  `<project>/evidence-policy.json` 或 `--policy <file>`；没有 policy 就是 advisory。
+- 详见 [docs/llm/verify.md](docs/llm/verify.md)。
+
 ## 文档
 
 | 文档 | 讲什么 |

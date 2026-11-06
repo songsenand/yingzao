@@ -93,7 +93,9 @@
     "accept:probe": "node scripts/accept-probe.mjs",
     "accept:m15": "npm run accept:m14 && node scripts/accept-probe.mjs",
     "accept:explained": "node scripts/accept-explained.mjs",
-    "accept:m16": "npm run accept:m15 && node scripts/accept-explained.mjs"
+    "accept:m16": "npm run accept:m15 && node scripts/accept-explained.mjs",
+    "verify": "node scripts/verify.mjs",
+    "accept:verify": "node scripts/accept-verify.mjs"
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",

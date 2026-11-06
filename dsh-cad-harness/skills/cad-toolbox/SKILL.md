@@ -28,11 +28,10 @@ Thirty-eight tools, but **three jobs first**. Pick the group, not the tool — t
 The pearl execution layer is **demoted**; `pearl_run` is deprecated/experimental and is no
 longer the default path. Decision: `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`.
 
-V1 adds a read-only evidence report: `verify <project-dir>` returns six coverage rows
+Use `verify <project-dir>` (CLI, read-only) and read its six coverage rows
 (requirements/model/fit/make/review/delivery) with `pass|warn|fail|blocked|unobserved`,
 stale/missing evidence and claim witnesses. It does not run CAD, write runs, or judge design.
-The command lands in the next change; until then use `preflight`, `check_assembly`,
-`check_printability`, `review_visual` and `delivery_audit` directly.
+Depth: `docs/llm/verify.md`.
 
 - `pearl_run({})` (deprecated): read-only six-pearl gate, kept only for the historical
   implementation; do not start new work on it.
@@ -40,7 +39,7 @@ The command lands in the next change; until then use `preflight`, `check_assembl
 - No profile → the gate is blocked; `preflight` lists the pearl step as `notCovered`.
 - A tool returning successfully is not a geometric pass: `judgement=excluded` /
   `overallStatus=fail` is a step failure.
-- Full depth: `docs/llm/verify.md` (V1, next change).
+- Full depth: `docs/llm/verify.md`.
 
 ## Project selection (explicit; 2026-11-02)
 
@@ -102,7 +101,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_gap` with solid / sphere endpoints | `measure_gap` at a point you cannot name |
 | **"what angle is this", "are these faces parallel", "how far off axis is this bore"** | **`measure_angle`** | eyeballing a render; guessing 30°/150° |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
-| "is the evidence fresh?", "what is still unobserved?" | `verify` (V1; read-only; next change) | `delivery_audit` (claims only) |
+| "is the evidence fresh?", "what is still unobserved?" | `verify` (V1; read-only) | `delivery_audit` (claims only) |
 | "run the selected pearl template" (deprecated) | `pearl_run({execute:true, inputs})` — deprecated; use the atomic tools | `preflight` (it only runs the gate) |
 | "write/update the assembly contract", "add an interface" | `write_assembly` | generic write / `run_python` |
 | "can this actually be printed", "is this wall too thin", "will it need supports" | `check_printability` | looking at renders |

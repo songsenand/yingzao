@@ -62,7 +62,7 @@ function missing(code: string, what: string, why: string[]): PearlFailure {
   };
 }
 
-async function observeBrief(projectRoot: string): Promise<LedgerEntry> {
+export async function observeBrief(projectRoot: string): Promise<LedgerEntry> {
   const path = join(projectRoot, 'PROMPT.md');
   // We only check that the requirements artifact exists; its quality is human.
   try {
@@ -73,7 +73,7 @@ async function observeBrief(projectRoot: string): Promise<LedgerEntry> {
   }
 }
 
-async function observeMake(projectRoot: string, policy?: RulePackMake): Promise<LedgerEntry> {
+export async function observeMake(projectRoot: string, policy?: RulePackMake): Promise<LedgerEntry> {
   if (policy?.kind === 'wood') {
     const cutlistPath = join(projectRoot, policy.cutlist ?? 'assembly/cutlist.json');
     let cutlist: any;

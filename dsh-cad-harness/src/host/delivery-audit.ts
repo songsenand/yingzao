@@ -45,7 +45,7 @@ export interface DeliveryClaim {
 }
 
 /** What each claim kind needs, and how to say it in a finding. */
-const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: string }> = {
+export const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: string }> = {
   strength: { kinds: ['stress'], label: 'a fresh stress run citing the newest version' },
   motion: { kinds: ['motion', 'physics'], label: 'a fresh motion/physics run' },
   assembly: { kinds: ['assembly-check'], label: 'a fresh assembly check' },

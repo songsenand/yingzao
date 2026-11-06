@@ -20,7 +20,8 @@
 | `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 已有 |
 | `conventions.md` | mm/z-up、datum、manifest、judge/scan/both、run | 已有 |
 | `traps.md` | 长解释型陷阱（rack pitch、pivot、lattice units…） | 已有 |
-| `pearls.md` | 六珍珠 gate/execute、双契约、step bind、单 deadline、repair 边界 | 已有 |
+| `verify.md` | V1 证据验证：六行、状态、claims/新鲜度、policy、退出码 | 已有 |
+| `pearls.md` | 历史：六珍珠 gate/execute（已被 `verify` 取代，不再作为路径） | 历史 |
 
 ## 写作规则
 
