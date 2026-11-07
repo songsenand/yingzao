@@ -1,0 +1,6 @@
+{
+  "apiVersion": "checker/v1",
+  "constraints": {
+    "checkConfig": { "minClearanceMm": 1, "measuredMm": 0.2 }
+  }
+}

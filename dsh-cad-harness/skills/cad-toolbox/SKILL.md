@@ -39,6 +39,9 @@ Depth: `docs/llm/verify.md`.
 - No profile → the gate is blocked; `preflight` lists the pearl step as `notCovered`.
 - A tool returning successfully is not a geometric pass: `judgement=excluded` /
   `overallStatus=fail` is a step failure.
+- A project-specific target can be a claim + `checks/<id>/`; `verify --checks` mounts it
+  only after its negative sample rejects. Default `warn`; `--mount-checks` validates before
+  drawing. It is evidence, not a workflow step.
 - Full depth: `docs/llm/verify.md`.
 
 ## Project selection (explicit; 2026-11-02)

@@ -4,12 +4,15 @@
 // contract is written. The report is returned to the caller; the CLI decides
 // whether to print it / write it with --out.
 
+import { join, resolve } from 'node:path';
 import { auditDelivery, type DeliveryAudit } from '../delivery-audit.ts';
 import { loadVerifyProject } from './project.ts';
 import { loadClaims, toDeliveryClaims } from './claims.ts';
 import { applyExceptions, applyPolicy, exitCodeFor, loadExceptions, loadPolicy, resolveMode, statusOfOutcomes } from './policy.ts';
 import { evaluateRows } from './rows.ts';
 import { assembleReport } from './report.ts';
+import { checkClaimByCheck, checkFindingDrafts, checkSummary, loadChecks, runChecks } from './checks.ts';
+import { claimFindingDraft } from './findings.ts';
 import type { FindingDraft, VerifyOptions, VerifyReport } from './types.ts';
 
 export interface VerifyResult {
@@ -44,6 +47,75 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
     policyIssues: policy.issues,
     exceptionIssues: exceptions.issues,
   });
+
+  // Custom checks are opt-in: no directory is read unless asked for. A check
+  // that cannot pass its own negative sample is `invalid`, never silently green.
+  const checksEnabled = (options.checks === true || !!options.checksDir || options.mountChecks === true)
+    && options.noChecks !== true;
+  const checksRoot = checksEnabled
+    ? (options.checksDir ? resolve(options.checksDir) : join(project.root, 'checks'))
+    : null;
+  const loadedChecks = checksEnabled
+    ? await loadChecks(checksRoot, { explicit: !!options.checksDir })
+    : { root: null, checks: [], issues: [] };
+  const runs = checksEnabled
+    ? await runChecks(loadedChecks.checks, project, claims.claims, { mountOnly: options.mountChecks === true })
+    : [];
+  const blockCustom = (policy.policy?.blockOn ?? []).includes('custom-check');
+
+  for (const run of runs) {
+    const row = rows.find((r) => r.id === run.check.row);
+    if (!row) continue;
+    row.findings.push(...checkFindingDrafts(run, { block: blockCustom }));
+    if (run.status === 'pending') {
+      row.missing.push({
+        evidence: `check:${run.check.id}`,
+        why: options.mountChecks ? 'mounted; run verify after drawing' : 'awaiting geometry',
+        next: ['draw the geometry, then run verify'],
+      });
+    } else if (run.status === 'invalid') {
+      row.missing.push({
+        evidence: `check:${run.check.id}`,
+        why: run.check.error ?? 'not mountable',
+        next: ['fix the check manifest/entry/negative sample'],
+      });
+    } else {
+      row.checked.push({ kind: `check:${run.check.id}@${run.check.version}` });
+    }
+  }
+  for (const issue of loadedChecks.issues) {
+    const delivery = rows.find((r) => r.id === 'delivery');
+    if (!delivery) continue;
+    delivery.findings.push({
+      row: 'delivery',
+      code: 'check-root',
+      outcome: 'warn',
+      severity: 'warn',
+      what: issue,
+      why: ['the checks directory could not be fully loaded'],
+      where: { kind: 'manifest', note: checksRoot ?? 'checks' },
+      next: ['fix the checks path or the check manifests'],
+    });
+  }
+
+  // A claim with `checkId` is witnessed by that check, not by a run kind.
+  const deliveryRow = rows.find((r) => r.id === 'delivery');
+  for (const claim of claims.claims) {
+    if (!claim.checkId) continue;
+    const res = checkClaimByCheck(claim, runs, project.currentVersionSet);
+    if (res.ok) {
+      deliveryRow?.checked.push({ kind: `check:${claim.checkId}` });
+    } else {
+      deliveryRow?.findings.push(
+        claimFindingDraft(res.code ?? 'claim-check-missing', res.detail ?? 'check claim is not witnessed', claim),
+      );
+      deliveryRow?.missing.push({
+        evidence: `check:${claim.checkId}`,
+        why: res.detail ?? 'no check witness',
+        next: ['fix or run the check, then re-run verify --checks'],
+      });
+    }
+  }
 
   const drafts: FindingDraft[] = rows.flatMap((r) => r.findings);
   if (!project.hasCorpus) {
@@ -106,6 +178,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
     policy: policy.policy,
     ...(policy.hash ? { policyHash: policy.hash } : {}),
     exceptions: exceptionResult.applied,
+    checks: runs.map(checkSummary),
   });
 
   return { report, exitCode: exitCodeFor(report, mode, options.strict === true), mode };

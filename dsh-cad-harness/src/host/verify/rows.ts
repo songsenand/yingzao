@@ -266,6 +266,9 @@ export async function evaluateRows(
     if (audit) {
       const runList = project.stores ? await listRuns(project.stores.runStore) : [];
       for (const claim of claims.claims) {
+        // A check-backed claim is owned by the custom-check run; do not also
+        // judge it by run-kind.
+        if (claim.checkId) continue;
         const res = checkClaim(claim, runList, project.currentVersionSet, project.versionTimes);
         if (!res.checked) continue;
         if (res.ok) {

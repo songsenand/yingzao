@@ -3946,3 +3946,23 @@ npm run build
 
 实现：`src/host/pearls/{contract,execute,execute-template,inputs,context,repair,repair-loop,repair-history,format}.ts`；
 计划与缺口：`dsh-cad-harness/docs/PEARL-PLAN.md`。
+
+## 36. V1 证据验证与自定义检查（2026-11-07）
+
+> 取代 §35 的模型可见执行层；§35 保留为历史。V1 只读，不做 CAD、不写 run、不判设计。
+
+**V1（已实现）**：CLI `verify <project>`，六行覆盖率
+（`requirements/model/fit/make/review/delivery`），状态词
+`pass|warn|fail|blocked|unobserved`；claims + freshness；advisory/blocking；无 owner，
+policy 是用户声明；报告是派生快照，工具不回读。实现 `src/host/verify/`、
+`scripts/verify.mjs`，验收 `scripts/accept-verify.mjs`。
+
+**V1.1 自定义检查（已实现）**：项目可带 `<project>/checks/<id>/`（或 `--checks-dir`），
+显式 `--checks` 才读；复用 `checker/v1` 与 `checkers/runner`；清单可选 `row`/`config`，
+`pearl` 为兼容字段。负样本必须不 pass，否则 `check-invalid`；结果挂到声明的 row；
+默认 `warn`，policy `blockOn:["custom-check"]` 才 `blocked`；claim 可写 `checkId`；
+`--mount-checks` 只校验并报 `pending`，不是 pass。
+
+边界：Node only、拒绝 `write:artifacts`、`timeoutMs` ≤ 30s、只读项目、不是沙箱；
+没有 `on_fail`/template/profile/workflow。示例 `examples/checks/fit-clearance/`；
+协议与用法 `docs/llm/verify.md`；决策 `docs/DECISION-LOG.md` 2026-11-07。

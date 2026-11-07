@@ -5546,3 +5546,26 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** 工具表面、skill、docs、验收；珍珠执行层降级/后续删除；V1 新增 `src/host/verify/`、`scripts/verify.mjs`、`scripts/accept-verify.mjs`。
 
 **未决/非目标：** V2 重算、V3 仿真、V4 CI、面板 V1.1；执行器删除在 V1 验收后；`pearl_run` 暂留并标 DEPRECATED。
+
+## 2026-11-07：V1.1 自定义检查：场地挂载点，不恢复珍珠执行器
+
+**触发条件：** 第 1 条（用户拍板：坚守场地思维、先设计后代码、不要珍珠执行器）+ 第 3/4 条（代码执行边界、六行扩展）。
+
+**要解决的问题：** 内建检查无法表达项目特定判据（功能目标、项目阈值）；珍珠体系里“agent 画图前写验收代码并挂载”的想法有价值，但原实现绑在 `pearl-profile`/executor 上，属于第二套工作流，且 `probe` 只服务 `fit`。
+
+**决策内容：**
+
+- 自定义检查是 V1.1 的**证据插槽**：`<project>/checks/<id>/` 或 `--checks-dir`，显式 `--checks` 才启用；默认关闭。
+- 复用 `checker/v1` 与 `checkers/runner`；清单增加可选 `row`/`config`，`pearl` 降为兼容字段。
+- 负样本门：负样本必须不 pass，否则 `check-invalid`；不静默变绿。
+- 结果挂到六行之一；默认 `warn`；只有 policy `blockOn:["custom-check"]` 才 `blocked`。
+- claim 可写 `checkId`；`checkId` 优先于 `runId`；`--mount-checks` 只校验/挂载，报 `pending`，不是 pass。
+- 边界：Node only、拒绝 `write:artifacts`、`timeoutMs` ≤ 30s、只读项目、不是沙箱；没有 `on_fail`/template/profile/workflow。
+
+**理由：** 场地提供挂载点、信任门、报告；用户/agent 提供检查与判据。这样保留“验收先行”的价值，同时不把执行器/工作流请回来；功能目标 = claim + check，不需要第七行或 `function` 珍珠。
+
+**依据：** `scripts/accept-verify.mjs`：默认关闭、负样本 pass 被拒、pass/fail/error/timeout 映射、claim `checkId`、mount pending、policy block、样例通过；`docs/llm/verify.md`；设计讨论的六条场地测试。
+
+**影响：** `src/host/verify/checks.ts`、`checkers/{types,protocol}`、`schemas/checker-manifest.schema.json`、`scripts/verify.mjs`、`scripts/accept-verify.mjs`、`examples/checks/`、skill/README/DESIGN。
+
+**未决/非目标：** Python/其他语言、UI 面板/热力图、检查市场/仓库、沙箱化（共享/CI 另议）。

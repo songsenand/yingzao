@@ -43,6 +43,9 @@ export function validateClaims(value: unknown): string[] {
     if (c.runId !== undefined && (typeof c.runId !== 'string' || c.runId.length === 0)) {
       issues.push(`claims[${i}].runId must be a non-empty string when present`);
     }
+    if (c.checkId !== undefined && (typeof c.checkId !== 'string' || c.checkId.length === 0)) {
+      issues.push(`claims[${i}].checkId must be a non-empty string when present`);
+    }
     if (c.versionIds !== undefined) {
       if (!Array.isArray(c.versionIds) || c.versionIds.some((x) => typeof x !== 'string' || x.length === 0)) {
         issues.push(`claims[${i}].versionIds must be an array of version ids when present`);
@@ -85,6 +88,7 @@ export async function loadClaims(projectRoot: string, claimsPath?: string): Prom
     kind: c.kind as VerifyClaim['kind'],
     statement: String(c.statement),
     ...(typeof c.runId === 'string' ? { runId: c.runId } : {}),
+    ...(typeof c.checkId === 'string' ? { checkId: c.checkId } : {}),
     ...(Array.isArray(c.versionIds) ? { versionIds: [...c.versionIds] as string[] } : {}),
   })) as VerifyClaim[];
 
@@ -92,5 +96,8 @@ export async function loadClaims(projectRoot: string, claimsPath?: string): Prom
 }
 
 export function toDeliveryClaims(claims: readonly VerifyClaim[]): DeliveryClaim[] {
-  return claims.map((c) => ({ kind: c.kind, statement: c.statement }));
+  // A check-backed claim is owned by the custom-check run; the delivery audit
+  // must not also judge it by run-kind. Otherwise a check claim could pass or
+  // fail for the wrong reason.
+  return claims.filter((c) => !c.checkId).map((c) => ({ kind: c.kind, statement: c.statement }));
 }

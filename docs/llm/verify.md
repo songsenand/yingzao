@@ -10,6 +10,8 @@ Run it from the harness root:
 node scripts/verify.mjs /path/to/project --advisory
 node scripts/verify.mjs /path/to/project --block        # blocking mode
 node scripts/verify.mjs /path/to/project --json --out /tmp/evidence.json
+node scripts/verify.mjs /path/to/project --checks       # opt-in custom checks
+node scripts/verify.mjs /path/to/project --checks --mount-checks  # before drawing
 ```
 
 The command is also exposed as `npm run verify -- <project-dir> [flags]`.
@@ -105,6 +107,80 @@ Exceptions are user records, not approvals:
 A valid exception downgrades the finding to `warn` and records its id; an expired one
 leaves the finding blocked and reports `exception-expired`.
 
+## Custom checks (V1.1, opt-in)
+
+A project can bring its own `checker/v1` check for a criterion the built-in checks
+cannot express (a functional target, a project-specific threshold). A check is
+**evidence for one of the six rows**, not a workflow step. It is off unless
+`--checks` (or `--checks-dir`) is given.
+
+```text
+<project>/checks/<id>/
+  manifest.json
+  check.mjs
+  negative.json
+```
+
+```json
+{
+  "apiVersion": "checker/v1",
+  "id": "balance-tilt",
+  "version": "1.0.0",
+  "row": "delivery",
+  "criteria": ["5g at 100mm tilts >= 2deg"],
+  "entry": ["node", "check.mjs"],
+  "permissions": ["read:geometry", "read:constraints"],
+  "timeoutMs": 5000,
+  "negativeSamples": ["negative.json"],
+  "config": { "limitDeg": 2 }
+}
+```
+
+- `row` is one of `requirements/model/fit/make/review/delivery`; it defaults from
+  legacy `pearl`, then `delivery`.
+- `config` is opaque and reaches the check as `constraints.checkConfig`.
+- The runner passes `project.root`, `geometry.parts` (with STL paths), the current
+  `versionIds`, and the parsed `claims`.
+- The check reads one JSON document on stdin and writes one on stdout; the
+  `checker/v1` report shape is the same as the legacy checker protocol.
+
+**Trust gate.** Every mounted check must have at least one negative sample, and
+the negative sample must **not** return `pass`. A check that passes its own bad
+fixture is `invalid` and is not used as evidence. Missing fixture, timeout,
+malformed JSON or a non-zero exit is an error, never a pass.
+
+**Mapping.** A check's findings are attached to its `row`:
+
+| check result | default | with policy `blockOn: ["custom-check"]` |
+|---|---|---|
+| `pass` + complete coverage | `check-passed` info | still info (a pass is not promoted) |
+| `fail` | `check-failed` warn | blocked |
+| `blocked` / `error` | `check-blocked` / `check-error` warn | blocked |
+| incomplete coverage | `check-incomplete` warn | blocked |
+| invalid manifest/negative | `check-invalid` warn | blocked |
+
+The report adds `checks[]` (`id/version/hash/row/status/findingIds`) and
+`coverage.checked` gets `check:<id>@<version>`. `--mount-checks` validates and
+records the check but does not run geometry: `checks[].status = "pending"` and
+`coverage.missing` names it. Mount is **not** a pass.
+
+**Claim link.** A claim can name a check as its witness:
+
+```json
+{ "kind": "fit", "statement": "clearance >= 0.8 mm", "checkId": "fit-clearance" }
+```
+
+`checkId` wins over `runId`; the check must be mounted (`verify --checks`), pass,
+cover every criterion, and cite the current version set. A claim whose check is
+missing/pending/invalid/failed/error is blocked. The delivery audit does not also
+judge a `checkId` claim by run kind.
+
+**Boundaries.** V1.1 runs **Node** checks only, rejects `write:artifacts`, and
+caps `timeoutMs` at 30s. It is **not a sandbox**: the check runs with your
+privileges; the runner only bounds time/output/env (temp HOME/TMPDIR). Mounting a
+check means trusting its author. `examples/checks/fit-clearance/` is a working
+template.
+
 ## Exit codes
 
 | mode | codes |
@@ -118,6 +194,7 @@ leaves the finding blocked and reports `exception-expired`.
 - No CAD execution, no recompute, no run writes, no repair.
 - No design-quality judgment; thresholds are the project's declaration.
 - No CI service, no panel (V1.1), no profile/template DSL, no owner/SLA.
+- Custom checks are not a workflow: no `on_fail`, no step bindings, no orchestration.
 - The report is a **derived snapshot**; tools never read it back.
 
 ## Reading the output

@@ -7,7 +7,7 @@ import { writeJsonAtomic } from '../file-lock.ts';
 import { verdictOf, type AppliedException } from './policy.ts';
 import type { LoadedVerifyProject } from './project.ts';
 import type {
-  FindingDraft, RowDraft, VerifyFinding, VerifyPolicy, VerifyReport, VerifyRow,
+  FindingDraft, RowDraft, VerifyCheck, VerifyFinding, VerifyPolicy, VerifyReport, VerifyRow,
 } from './types.ts';
 
 type LoadedProject = LoadedVerifyProject;
@@ -24,6 +24,7 @@ export interface AssembleInput {
   policy: VerifyPolicy | null;
   policyHash?: string;
   exceptions: AppliedException[];
+  checks: VerifyCheck[];
 }
 
 export function toolVersions(): Record<string, string | null> {
@@ -45,6 +46,7 @@ function findingOf(draft: FindingDraft, id: string): VerifyFinding {
     next: draft.next,
     ...(draft.witness ? { witness: draft.witness } : {}),
     ...(draft.exceptionId ? { exceptionId: draft.exceptionId } : {}),
+    ...(draft.checkId ? { checkId: draft.checkId } : {}),
   };
 }
 
@@ -55,6 +57,7 @@ export function assembleReport(input: AssembleInput): VerifyReport {
     .filter((r): r is RowDraft => !!r);
 
   const findings: VerifyFinding[] = [];
+  const findingIdsByCheck = new Map<string, string[]>();
   const rows: VerifyRow[] = [];
   for (const row of rowsInOrder) {
     const drafts = [...row.findings].sort((a, b) => {
@@ -66,6 +69,11 @@ export function assembleReport(input: AssembleInput): VerifyReport {
       const id = `F${findings.length + 1}`;
       findings.push(findingOf(d, id));
       ids.push(id);
+      if (d.checkId) {
+        const arr = findingIdsByCheck.get(d.checkId) ?? [];
+        arr.push(id);
+        findingIdsByCheck.set(d.checkId, arr);
+      }
     }
     rows.push({
       id: row.id,
@@ -78,6 +86,9 @@ export function assembleReport(input: AssembleInput): VerifyReport {
     });
   }
 
+  const checks = input.checks
+    .map((c) => ({ ...c, findingIds: findingIdsByCheck.get(c.id) ?? [] }))
+    .sort((a, b) => a.id.localeCompare(b.id));
   const checked = [...new Set(rows.flatMap((r) => r.checked.map((c) => c.runId ?? c.kind)))].sort();
   const missing = [...new Set(rows.flatMap((r) => r.missing.map((m) => m.evidence)))].sort();
   const runIds = [...new Set(rows.flatMap((r) => r.checked.flatMap((c) => (c.runId ? [c.runId] : []))))].sort();
@@ -103,6 +114,7 @@ export function assembleReport(input: AssembleInput): VerifyReport {
     verdict: verdictOf(rows),
     rows,
     findings,
+    checks,
     coverage: { checked, missing },
     exceptions: [...input.exceptions].sort((a, b) => a.id.localeCompare(b.id)),
     provenance: { toolVersions: toolVersions(), runIds },
@@ -137,6 +149,10 @@ export function renderText(report: VerifyReport): string {
   const policy = report.policy.id ?? (report.policy.source === 'none' ? 'none' : report.policy.source);
   const lines = [`verify: ${report.verdict} (${mode}) · policy ${policy}`];
   for (const row of report.rows) lines.push(rowLine(row));
+  if (report.checks.length > 0) {
+    const shown = report.checks.slice(0, 6).map((c) => `${c.id} ${c.status} (${c.row})`);
+    lines.push(`checks: ${shown.join(' · ')}${report.checks.length > 6 ? ` · +${report.checks.length - 6}` : ''}`);
+  }
 
   const visible = report.findings
     .filter((f) => f.severity !== 'info')
@@ -161,6 +177,7 @@ export function canonicalJson(report: VerifyReport): string {
     inputs: { ...report.inputs, versions: [...report.inputs.versions].sort() },
     rows: [...report.rows].sort((a, b) => (ROW_RANK[a.id] ?? 9) - (ROW_RANK[b.id] ?? 9)),
     findings: [...report.findings].sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1))),
+    checks: [...report.checks].sort((a, b) => a.id.localeCompare(b.id)),
     coverage: { checked: [...report.coverage.checked].sort(), missing: [...report.coverage.missing].sort() },
     exceptions: [...report.exceptions].sort((a, b) => a.id.localeCompare(b.id)),
     provenance: { ...report.provenance, runIds: [...report.provenance.runIds].sort() },

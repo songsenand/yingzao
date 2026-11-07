@@ -18,11 +18,13 @@ export type FindingCategory =
   | 'difficult'
   | 'no-claims-declared'
   | 'exception-expired'
+  | 'custom-check'
   | 'other';
 
 export function categoryOf(code: string): FindingCategory {
   if (code === 'no-claims-declared') return 'no-claims-declared';
   if (code === 'exception-expired') return 'exception-expired';
+  if (code === 'check-root' || code.startsWith('check-') || code.startsWith('claim-check-')) return 'custom-check';
   if (
     code === 'claim-without-evidence' ||
     code === 'claim-run-missing' ||
@@ -143,6 +145,8 @@ export function applyPolicy(drafts: FindingDraft[], policy: VerifyPolicy | null)
   const block = new Set(policy.blockOn ?? []);
   const warn = new Set(policy.warnOn ?? []);
   for (const d of drafts) {
+    // A policy override must not turn a passing witness into a failure.
+    if (d.outcome === 'info') continue;
     const category = categoryOf(d.code);
     if (block.has(category)) {
       d.outcome = 'blocked';

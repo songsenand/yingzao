@@ -90,6 +90,41 @@ export function whyNext(code: string): WhyNext {
         why: ['the cited run kind does not produce the evidence the claim needs'],
         next: ['cite a run of the required kind'],
       };
+    case 'claim-check-missing':
+      return {
+        why: ['the claim cites a custom check that is not mounted'],
+        next: ['write checks/<id>/ and run verify --checks', 'or remove checkId from the claim'],
+      };
+    case 'claim-check-invalid':
+      return {
+        why: ['the cited custom check did not pass its own negative sample'],
+        next: ['fix the check manifest/entry/negative sample'],
+      };
+    case 'claim-check-pending':
+      return {
+        why: ['the check is mounted but has no geometry to run on'],
+        next: ['draw the geometry, then run verify without --mount-checks'],
+      };
+    case 'claim-check-failed':
+      return {
+        why: ['the custom check declared a criterion and it is not met'],
+        next: ['inspect the check witness', 'fix the design or the declared criterion'],
+      };
+    case 'claim-check-blocked':
+      return {
+        why: ['the custom check could not evaluate its criterion'],
+        next: ['inspect the check output and its inputs'],
+      };
+    case 'claim-check-error':
+      return {
+        why: ['the custom check crashed or returned an invalid report'],
+        next: ['fix the check code', 're-run verify --checks'],
+      };
+    case 'claim-check-stale':
+      return {
+        why: ['the claim cites versions that are not the current set'],
+        next: ['re-run the check on the current versions, or update the claim'],
+      };
     case 'interference':
       return {
         why: ['two solids overlap at the current placement', 'the pose is wrong, or the clearance is smaller than the mesh residual'],
@@ -268,7 +303,7 @@ export function briefFailureDraft(f: PearlFailure): FindingDraft {
 export function claimFindingDraft(
   code: string,
   detail: string,
-  claim: { statement: string; runId?: string; versionIds?: string[] },
+  claim: { statement: string; runId?: string; checkId?: string; versionIds?: string[] },
 ): FindingDraft {
   const meta = whyNext(code);
   return {
@@ -282,6 +317,7 @@ export function claimFindingDraft(
     next: meta.next,
     witness: {
       ...(claim.runId ? { runId: claim.runId } : {}),
+      ...(claim.checkId ? { checkId: claim.checkId } : {}),
       ...(claim.versionIds ? { versionIds: claim.versionIds } : {}),
     },
   };

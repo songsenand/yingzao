@@ -4,6 +4,7 @@
 //   verify <project-dir> [--claims <file>] [--policy <file>]
 //          [--json] [--out <file>] [--block | --advisory] [--strict]
 //          [--require-claims] [--rulepack <dir>]
+//          [--checks] [--checks-dir <dir>] [--mount-checks] [--no-checks]
 
 import { parseArgs } from 'node:util';
 import { verify } from '../src/host/verify/index.ts';
@@ -20,6 +21,10 @@ const USAGE = `usage: verify <project-dir> [options]
   --advisory           advisory mode (exit 0; still reports the verdict)
   --strict             blocking mode: warn also exits 2
   --require-claims     block when no claims are declared
+  --checks             enable custom checks (default: <project>/checks)
+  --checks-dir <dir>   use this checks directory (implies --checks)
+  --mount-checks       validate/mount checks only; no geometry run
+  --no-checks          explicitly disable custom checks
   -h, --help           show this help
 
 Exit: 0 pass (advisory always 0) · 1 warn (blocking) · 2 blocked/fail · 3 usage/error`;
@@ -39,6 +44,10 @@ async function main() {
         advisory: { type: 'boolean' },
         strict: { type: 'boolean' },
         'require-claims': { type: 'boolean' },
+        checks: { type: 'boolean' },
+        'checks-dir': { type: 'string' },
+        'mount-checks': { type: 'boolean' },
+        'no-checks': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
     });
@@ -71,6 +80,10 @@ async function main() {
       ...(values.advisory ? { advisory: true } : {}),
       ...(values.strict ? { strict: true } : {}),
       ...(values['require-claims'] ? { requireClaims: true } : {}),
+      ...(values.checks ? { checks: true } : {}),
+      ...(values['checks-dir'] ? { checksDir: values['checks-dir'] } : {}),
+      ...(values['mount-checks'] ? { mountChecks: true } : {}),
+      ...(values['no-checks'] ? { noChecks: true } : {}),
     });
 
     if (values.out) await writeReport(values.out, result.report);

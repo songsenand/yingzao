@@ -37,6 +37,9 @@ export async function mountProbe(
   if (checker.manifest.version !== entry.version) {
     throw new Error(`probe "${probeId}" version mismatch: registry ${entry.version}, manifest ${checker.manifest.version}`);
   }
+  if (!checker.manifest.pearl) {
+    throw new Error(`probe "${probeId}" does not declare a pearl; custom checks live under checks/, not probes.json`);
+  }
   if (checker.manifest.pearl !== pearl.id) {
     throw new Error(`probe "${probeId}" belongs to pearl "${checker.manifest.pearl}", not "${pearl.id}"`);
   }

@@ -32,6 +32,7 @@ export interface VerifyFinding {
   next: string[];
   witness?: Record<string, unknown>;
   exceptionId?: string;
+  checkId?: string;
 }
 
 export interface VerifyChecked {
@@ -60,8 +61,21 @@ export interface VerifyClaim {
   statement: string;
   /** Optional explicit witness. When omitted, the audit's kind-level check applies. */
   runId?: string;
+  /** Optional custom-check witness. When present, the check owns the witness. */
+  checkId?: string;
   /** Optional scope; defaults to the current assembly version set. */
   versionIds?: string[];
+}
+
+export type VerifyCheckStatus = 'pass' | 'fail' | 'blocked' | 'error' | 'pending' | 'invalid';
+
+export interface VerifyCheck {
+  id: string;
+  version: string;
+  hash: string;
+  row: VerifyRowId;
+  status: VerifyCheckStatus;
+  findingIds: string[];
 }
 
 export interface VerifyPolicy {
@@ -99,6 +113,7 @@ export interface VerifyReport {
   verdict: VerifyStatus;
   rows: VerifyRow[];
   findings: VerifyFinding[];
+  checks: VerifyCheck[];
   coverage: { checked: string[]; missing: string[] };
   exceptions: { id: string; finding: string; reason: string; expiresAt: string; approvedBy?: string }[];
   provenance: { toolVersions: Record<string, string | null>; runIds: string[] };
@@ -113,6 +128,14 @@ export interface VerifyOptions {
   advisory?: boolean;
   strict?: boolean;
   requireClaims?: boolean;
+  /** Enable custom checks (opt-in). */
+  checks?: boolean;
+  /** Explicit checks directory; implies `checks`. */
+  checksDir?: string;
+  /** Validate/mount only: no geometry run. */
+  mountChecks?: boolean;
+  /** Explicitly disable checks. */
+  noChecks?: boolean;
 }
 
 /** Internal draft before ids/rows are finalised. */
@@ -127,6 +150,7 @@ export interface FindingDraft {
   next: string[];
   witness?: Record<string, unknown>;
   exceptionId?: string;
+  checkId?: string;
 }
 
 export interface RowDraft {

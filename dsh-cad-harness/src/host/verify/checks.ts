@@ -1,0 +1,457 @@
+// Custom checks (V1.1): a project brings its own checker/v1 package; V1 mounts
+// it, proves it can fail (negative sample), runs it against the current geometry
+// and maps the result into the six rows.
+//
+// The site owns: discovery, manifest/self-test gates, the bounded runner, the
+// mapping and the report. The user/agent owns: the check code, the criterion and
+// the negative sample. There is no workflow here: a check is evidence, not a step.
+
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
+import { basename, isAbsolute, join, resolve } from 'node:path';
+import { loadChecker, verifyChecker, type CheckerSelfTest, type LoadedChecker } from '../checkers/registry.ts';
+import { runChecker } from '../checkers/runner.ts';
+import type { CheckerFinding, CheckerInput, CheckerManifest, CheckerReport } from '../checkers/types.ts';
+import { setEqual } from './freshness.ts';
+import type { LoadedVerifyProject } from './project.ts';
+import type {
+  FindingDraft, VerifyCheck, VerifyCheckStatus, VerifyClaim, VerifyOutcome,
+  VerifyRowId, VerifySeverity, VerifyWhere,
+} from './types.ts';
+
+/** Site cap: a custom check may not outlive this, whatever its manifest says. */
+export const CHECK_TIMEOUT_CAP_MS = 30_000;
+export const MAX_CHECKS = 32;
+
+const ROWS: VerifyRowId[] = ['requirements', 'model', 'fit', 'make', 'review', 'delivery'];
+const PEARL_TO_ROW: Record<string, VerifyRowId> = {
+  brief: 'requirements',
+  model: 'model',
+  fit: 'fit',
+  make: 'make',
+  review: 'review',
+  deliver: 'delivery',
+  delivery: 'delivery',
+};
+
+export interface LoadedCheck {
+  id: string;
+  version: string;
+  row: VerifyRowId;
+  dir: string;
+  hash: string;
+  manifest?: CheckerManifest;
+  error?: string;
+}
+
+export interface ChecksLoadResult {
+  root: string | null;
+  checks: LoadedCheck[];
+  issues: string[];
+}
+
+export interface CheckRun {
+  check: LoadedCheck;
+  status: VerifyCheckStatus;
+  report?: CheckerReport;
+  durationMs?: number;
+}
+
+export function rowOfManifest(manifest: CheckerManifest | undefined): VerifyRowId {
+  if (!manifest) return 'delivery';
+  if (manifest.row && ROWS.includes(manifest.row as VerifyRowId)) return manifest.row as VerifyRowId;
+  if (manifest.pearl && PEARL_TO_ROW[manifest.pearl]) return PEARL_TO_ROW[manifest.pearl];
+  return 'delivery';
+}
+
+function messageOf(e: unknown): string {
+  return String((e as Error)?.message ?? e);
+}
+
+function isInside(rel: string): boolean {
+  return !isAbsolute(rel) && !rel.split(/[\\/]/).includes('..');
+}
+
+async function hashCheck(checker: LoadedChecker): Promise<string> {
+  const h = createHash('sha256');
+  h.update(checker.hash);
+  for (const rel of checker.manifest.negativeSamples ?? []) {
+    h.update(rel);
+    try {
+      h.update(await readFile(join(checker.dir, rel)));
+    } catch {
+      h.update('missing');
+    }
+  }
+  return `sha256:${h.digest('hex')}`;
+}
+
+async function unsafeManifestPath(dir: string): Promise<string | null> {
+  try {
+    const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    const entry = Array.isArray(raw.entry) ? raw.entry.filter((x): x is string => typeof x === 'string') : [];
+    const negatives = Array.isArray(raw.negativeSamples)
+      ? raw.negativeSamples.filter((x): x is string => typeof x === 'string')
+      : [];
+    for (const rel of [...entry.slice(1), ...negatives]) {
+      if (!isInside(rel)) return rel;
+    }
+    return null;
+  } catch {
+    return null; // let loadChecker report the manifest error
+  }
+}
+
+async function loadOne(dir: string): Promise<LoadedCheck> {
+  const fallback: LoadedCheck = {
+    id: basename(dir), version: 'unknown', row: 'delivery', dir, hash: '',
+  };
+  // Refuse to hash or run paths outside the check dir before loadChecker reads them.
+  const unsafe = await unsafeManifestPath(dir);
+  if (unsafe) return { ...fallback, error: `path must stay inside the check dir: ${unsafe}` };
+
+  let checker: LoadedChecker;
+  try {
+    checker = await loadChecker(dir);
+  } catch (e) {
+    return { ...fallback, error: `manifest is invalid: ${messageOf(e)}` };
+  }
+
+  const manifest = checker.manifest;
+  const base: LoadedCheck = {
+    id: manifest.id,
+    version: manifest.version,
+    row: rowOfManifest(manifest),
+    dir,
+    hash: await hashCheck(checker),
+    manifest,
+  };
+
+  const errors: string[] = [];
+  if (!manifest.negativeSamples || manifest.negativeSamples.length === 0) {
+    errors.push('negativeSamples must contain at least one fixture');
+  }
+  for (const rel of manifest.negativeSamples ?? []) {
+    if (!isInside(rel)) errors.push(`negative sample must stay inside the check dir: ${rel}`);
+  }
+  if (manifest.timeoutMs > CHECK_TIMEOUT_CAP_MS) {
+    errors.push(`timeoutMs ${manifest.timeoutMs} exceeds the site cap ${CHECK_TIMEOUT_CAP_MS}`);
+  }
+  if (manifest.permissions.includes('write:artifacts')) {
+    errors.push('V1.1 is read-only: write:artifacts is not allowed');
+  }
+  const entry0 = manifest.entry[0] ?? '';
+  if (!(entry0 === 'node' || basename(entry0) === 'node')) {
+    errors.push('V1.1 runs Node checks only: entry[0] must be "node"');
+  }
+  for (const arg of manifest.entry.slice(1)) {
+    if (!isInside(arg)) errors.push(`entry must stay inside the check dir: ${arg}`);
+  }
+  if (errors.length > 0) return { ...base, error: errors.join('; ') };
+
+  let selfTest: CheckerSelfTest;
+  try {
+    selfTest = await verifyChecker(checker);
+  } catch (e) {
+    return { ...base, error: `self-test failed: ${messageOf(e)}` };
+  }
+  if (!selfTest.ok) {
+    const detail = selfTest.samples
+      .map((s) => `${s.fixture}: ${s.status} (${s.detail})`)
+      .join('; ');
+    return { ...base, error: `negative samples must not pass: ${detail}` };
+  }
+  return base;
+}
+
+/**
+ * Discover checks under `root`. Missing root is not an error unless it was
+ * explicitly requested; an invalid check is kept with `error`, never dropped.
+ */
+export async function loadChecks(
+  root: string | null,
+  options: { explicit?: boolean } = {},
+): Promise<ChecksLoadResult> {
+  if (!root) return { root: null, checks: [], issues: [] };
+  const dir = resolve(root);
+  if (!existsSync(dir)) {
+    return {
+      root: dir,
+      checks: [],
+      issues: options.explicit ? [`checks directory not found: ${dir}`] : [],
+    };
+  }
+
+  const entries = (await readdir(dir, { withFileTypes: true }))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  const issues: string[] = [];
+  if (entries.length > MAX_CHECKS) {
+    issues.push(`only the first ${MAX_CHECKS} checks are loaded (found ${entries.length})`);
+  }
+  const checks: LoadedCheck[] = [];
+  for (const name of entries.slice(0, MAX_CHECKS)) checks.push(await loadOne(join(dir, name)));
+  return { root: dir, checks, issues };
+}
+
+function buildInput(
+  project: LoadedVerifyProject,
+  claims: readonly VerifyClaim[],
+  manifest: CheckerManifest,
+): CheckerInput {
+  const parts = project.currentVersions.map((p) => {
+    const stl = join(project.root, 'cad-data', 'versions', p.version, 'model.stl');
+    return existsSync(stl) ? { id: p.id, stl } : { id: p.id };
+  });
+  return {
+    apiVersion: 'checker/v1',
+    project: { root: project.root, units: 'mm' },
+    geometry: { parts },
+    constraints: {
+      claims: claims.map((c) => ({ ...c })),
+      versionIds: [...project.currentVersionSet],
+      checkConfig: manifest.config ?? {},
+    },
+  };
+}
+
+/**
+ * Run every mountable check. Mount-only, or a project without geometry, yields
+ * `pending` — never `pass`.
+ */
+export async function runChecks(
+  checks: readonly LoadedCheck[],
+  project: LoadedVerifyProject,
+  claims: readonly VerifyClaim[],
+  options: { mountOnly?: boolean } = {},
+): Promise<CheckRun[]> {
+  const runs: CheckRun[] = [];
+  for (const check of checks) {
+    if (check.error) {
+      runs.push({ check, status: 'invalid' });
+      continue;
+    }
+    if (options.mountOnly) {
+      runs.push({ check, status: 'pending' });
+      continue;
+    }
+    if (project.currentVersionSet.length === 0) {
+      runs.push({ check, status: 'pending' });
+      continue;
+    }
+    try {
+      const result = await runChecker(check.manifest!, buildInput(project, claims, check.manifest!), {
+        cwd: check.dir,
+      });
+      runs.push({
+        check,
+        status: result.report.status,
+        report: result.report,
+        durationMs: result.durationMs,
+      });
+    } catch (e) {
+      runs.push({ check, status: 'error' });
+    }
+  }
+  return runs;
+}
+
+function messageOfFinding(f: CheckerFinding): string {
+  if (f.message) return f.message;
+  const bits = [f.criterion];
+  if (f.measured !== undefined) bits.push(`measured ${f.measured}${f.unit ?? ''}`);
+  if (f.limit !== undefined) bits.push(`limit ${f.limit}${f.unit ?? ''}`);
+  return bits.join(': ');
+}
+
+function whereOf(f: CheckerFinding): VerifyWhere {
+  const a = f.attention?.[0];
+  if (!a) return { kind: 'unknown', note: f.criterion };
+  if (a.kind === 'pair') {
+    return {
+      kind: 'pair',
+      ...(a.a && a.b ? { parts: [a.a, a.b] } : a.part ? { parts: [a.part] } : {}),
+      ...(a.where ? { center: [...a.where] } : {}),
+      ...(a.note ? { note: a.note } : {}),
+    };
+  }
+  if (a.kind === 'part') {
+    return {
+      kind: 'part',
+      ...(a.part ? { parts: [a.part] } : {}),
+      ...(a.where ? { point: [...a.where] } : {}),
+      ...(a.note ? { note: a.note } : {}),
+    };
+  }
+  return { kind: 'unknown', ...(a.note ? { note: a.note } : {}) };
+}
+
+/**
+ * Map a check run to V1 findings. Custom evidence is `warn` by default; only an
+ * explicit policy `blockOn: ["custom-check"]` promotes it to `blocked`.
+ */
+export function checkFindingDrafts(run: CheckRun, options: { block?: boolean } = {}): FindingDraft[] {
+  const { check, status, report } = run;
+  const outcome: VerifyOutcome = options.block ? 'blocked' : 'warn';
+  const severity: VerifySeverity = options.block ? 'blocked' : 'warn';
+  const baseWitness = { checkId: check.id, checkVersion: check.version, checkHash: check.hash };
+  const drafts: FindingDraft[] = [];
+
+  if (status === 'invalid') {
+    drafts.push({
+      row: check.row,
+      code: 'check-invalid',
+      outcome,
+      severity,
+      what: check.error ?? 'check is not mountable',
+      why: ['a check that cannot reject its own negative sample is not evidence'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['fix the manifest, entry or negative sample', 're-run verify --checks'],
+      checkId: check.id,
+      witness: baseWitness,
+    });
+    return drafts;
+  }
+  if (status === 'pending') return drafts;
+
+  const findings = report?.findings ?? [];
+  const nonPass = findings.filter((f) => f.verdict !== 'pass');
+
+  if (nonPass.length > 0) {
+    for (const f of nonPass) {
+      drafts.push({
+        row: check.row,
+        code: f.verdict === 'error' ? 'check-error' : f.verdict === 'blocked' ? 'check-blocked' : 'check-failed',
+        outcome,
+        severity,
+        what: messageOfFinding(f),
+        why: ['the check declared this criterion and it is not met'],
+        where: whereOf(f),
+        next: ['inspect the check witness', 'fix the design or the declared criterion'],
+        checkId: check.id,
+        witness: {
+          ...baseWitness,
+          criterion: f.criterion,
+          ...(f.measured !== undefined ? { measured: f.measured } : {}),
+          ...(f.limit !== undefined ? { limit: f.limit } : {}),
+          ...(f.unit ? { unit: f.unit } : {}),
+          ...(f.witness ?? {}),
+        },
+      });
+    }
+  } else if (status === 'pass') {
+    drafts.push({
+      row: check.row,
+      code: 'check-passed',
+      outcome: 'info',
+      severity: 'info',
+      what: `${check.id}: ${(check.manifest?.criteria ?? []).join('; ') || 'passed'}`,
+      why: ['the check declared this criterion and every finding is a witness'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: [],
+      checkId: check.id,
+      witness: baseWitness,
+    });
+  } else {
+    drafts.push({
+      row: check.row,
+      code: status === 'error' ? 'check-error' : status === 'blocked' ? 'check-blocked' : 'check-failed',
+      outcome,
+      severity,
+      what: report?.error?.message ?? `${check.id} returned ${status}`,
+      why: ['the check did not pass and produced no finding to explain it'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['inspect the check output and its inputs'],
+      checkId: check.id,
+      witness: baseWitness,
+    });
+  }
+
+  const incomplete = status !== 'error'
+    && (report?.coverage?.complete === false || (report?.coverage?.skipped?.length ?? 0) > 0);
+  if (incomplete) {
+    const skipped = (report?.coverage?.skipped ?? [])
+      .map((s) => `${s.criterion}: ${s.reason}`)
+      .join('; ');
+    drafts.push({
+      row: check.row,
+      code: 'check-incomplete',
+      outcome,
+      severity,
+      what: `${check.id} did not cover all criteria${skipped ? `: ${skipped}` : ''}`,
+      why: ['an incomplete check cannot certify a claim'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['extend the check to cover every declared criterion, or narrow the claim'],
+      checkId: check.id,
+      witness: baseWitness,
+    });
+  }
+
+  return drafts;
+}
+
+export function checkSummary(run: CheckRun): VerifyCheck {
+  return {
+    id: run.check.id,
+    version: run.check.version,
+    hash: run.check.hash,
+    row: run.check.row,
+    status: run.status,
+    findingIds: [],
+  };
+}
+
+export interface CheckClaimResult {
+  ok: boolean;
+  code?: string;
+  detail?: string;
+}
+
+/** A claim with `checkId` is witnessed by that check, not by a run kind. */
+export function checkClaimByCheck(
+  claim: VerifyClaim,
+  runs: readonly CheckRun[],
+  currentSet: readonly string[],
+): CheckClaimResult {
+  if (!claim.checkId) return { ok: false, code: 'claim-check-missing', detail: 'claim has no checkId' };
+  const run = runs.find((r) => r.check.id === claim.checkId);
+  if (!run) {
+    return { ok: false, code: 'claim-check-missing', detail: `check ${claim.checkId} is not mounted (run verify --checks)` };
+  }
+  if (run.status === 'invalid') {
+    return { ok: false, code: 'claim-check-invalid', detail: `check ${claim.checkId} is not mountable: ${run.check.error ?? 'invalid'}` };
+  }
+  if (run.status === 'pending') {
+    return { ok: false, code: 'claim-check-pending', detail: `check ${claim.checkId} is mounted but has not run (awaiting geometry)` };
+  }
+  if (run.status === 'pass') {
+    // checker/v1 requires coverage.complete=true for status=pass; an incomplete
+    // check reports blocked/fail and is handled below.
+    if (claim.versionIds?.length) {
+      const scope = run.check.row === 'make' || run.check.row === 'review' ? 'part' : 'assembly';
+      if (scope === 'assembly') {
+        if (!setEqual(claim.versionIds, currentSet)) {
+          return {
+            ok: false,
+            code: 'claim-check-stale',
+            detail: `claim cites ${claim.versionIds.join(',')} but the current set is ${currentSet.join(',')}`,
+          };
+        }
+      } else {
+        const missing = claim.versionIds.filter((v) => !currentSet.includes(v));
+        if (missing.length > 0) {
+          return { ok: false, code: 'claim-check-stale', detail: `claim cites versions not in the current set: ${missing.join(',')}` };
+        }
+      }
+    }
+    return { ok: true };
+  }
+  const code = run.status === 'error'
+    ? 'claim-check-error'
+    : run.status === 'blocked'
+      ? 'claim-check-blocked'
+      : 'claim-check-failed';
+  return { ok: false, code, detail: `check ${claim.checkId} returned ${run.status}` };
+}

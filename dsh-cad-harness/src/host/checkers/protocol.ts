@@ -12,6 +12,7 @@ import {
 const ID_RE = /^[a-z0-9][a-z0-9._-]*$/;
 const VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const PERMISSIONS = new Set(['read:geometry', 'read:constraints', 'write:artifacts']);
+const ROWS = new Set(['requirements', 'model', 'fit', 'make', 'review', 'delivery']);
 const STATUSES = new Set(['pass', 'fail', 'blocked', 'error']);
 const VERDICTS = new Set(['pass', 'fail', 'blocked', 'error']);
 
@@ -34,7 +35,13 @@ export function validateCheckerManifest(value: unknown): string[] {
   if (value.apiVersion !== CHECKER_API_VERSION) errors.push(`apiVersion must be "${CHECKER_API_VERSION}"`);
   if (!asString(value.id) || !ID_RE.test(value.id)) errors.push('id must match ^[a-z0-9][a-z0-9._-]*$');
   if (!asString(value.version) || !VERSION_RE.test(value.version)) errors.push('version must be semver (e.g. 1.0.0)');
-  if (!asString(value.pearl)) errors.push('pearl must be a non-empty string');
+  if (value.pearl !== undefined && !asString(value.pearl)) errors.push('pearl must be a non-empty string when present');
+  if (value.row !== undefined && !ROWS.has(value.row as string)) {
+    errors.push(`row must be one of: ${[...ROWS].join(', ')}`);
+  }
+  if (value.config !== undefined && (!isObject(value.config) || Array.isArray(value.config))) {
+    errors.push('config must be an object when present');
+  }
   if (!Array.isArray(value.criteria) || value.criteria.length === 0 || !value.criteria.every(asString)) {
     errors.push('criteria must be a non-empty array of strings');
   }

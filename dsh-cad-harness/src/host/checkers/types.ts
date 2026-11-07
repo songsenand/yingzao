@@ -7,18 +7,24 @@
 export const CHECKER_API_VERSION = 'checker/v1' as const;
 
 export type CheckerStatus = 'pass' | 'fail' | 'blocked' | 'error';
+export type CheckerRow = 'requirements' | 'model' | 'fit' | 'make' | 'review' | 'delivery';
 export type FindingVerdict = 'pass' | 'fail' | 'blocked' | 'error';
 
 export interface CheckerManifest {
   apiVersion: typeof CHECKER_API_VERSION;
   id: string;
   version: string;
-  pearl: string;
+  /** Legacy pearl slot. Kept for the deprecated probe path; custom checks use `row`. */
+  pearl?: string;
+  /** V1 coverage row. Defaults from `pearl`, then `delivery`. */
+  row?: CheckerRow;
   criteria: string[];
   entry: string[];
   permissions: CheckerPermission[];
   timeoutMs: number;
   negativeSamples?: string[];
+  /** Opaque, check-owned config; V1 passes it as constraints.checkConfig. */
+  config?: Record<string, unknown>;
   description?: string;
 }
 
