@@ -59,14 +59,14 @@
         "severity": { "enum": ["hard", "intent"], "description": "hard = engine error; intent = human flag" },
         "check": {
           "type": "string",
-          "description": "Explicit operator; overrides the one derived from type. Implemented: distance, diameter-match, coaxial, motion-clearance, spring-preload. An unknown operator is not a schema error — it comes back skipped with its name.",
-          "examples": ["distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload"]
+          "description": "Explicit operator; overrides the one derived from type. Implemented: distance, diameter-match, coaxial, motion-clearance, spring-preload, spring-behaviour. An unknown operator is not a schema error — it comes back skipped with its name.",
+          "examples": ["distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour"]
         },
         "nominal": {
           "type": "object",
           "required": ["quantity", "value"],
           "properties": {
-            "quantity": { "enum": ["距离", "直径", "同轴度", "角度", "预紧力"] },
+            "quantity": { "enum": ["距离", "直径", "同轴度", "角度", "预紧力", "弹簧力"] },
             "value": { "type": "number" }
           }
         },
@@ -78,8 +78,27 @@
         "layer": { "enum": ["L0", "L1", "L2"] },
         "params": {
           "type": "object",
-          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}",
+          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}; spring-behaviour: use the `elastic` object",
           "additionalProperties": true
+        },
+        "elastic": {
+          "type": "object",
+          "description": "General elastic-behaviour declaration; takes precedence over the legacy numeric `params` bag. spring-behaviour dispatches on behavior; unimplemented behaviors are skipped by name. Thresholds (forceBudgetN/requiredTravelMm) are USER-DECLARED acceptance criteria: the venue compares against them, it does not invent child/adult or product thresholds.",
+          "additionalProperties": false,
+          "properties": {
+            "behavior": { "enum": ["axial-spring", "torsion-spring", "flexure-beam", "snap-fit", "pad"], "description": "Default axial-spring when omitted." },
+            "direction": { "enum": ["compression", "tension"], "description": "Omitted = report the deflection sign, do not enforce." },
+            "freeLengthMm": { "type": "number", "exclusiveMinimum": 0, "description": "Free (unloaded) length along the a→b line, mm." },
+            "stiffnessNPerMm": { "type": "number", "exclusiveMinimum": 0, "description": "Axial rate, N/mm." },
+            "solidHeightMm": { "type": "number", "exclusiveMinimum": 0, "description": "Coils-touching height, mm. Omit if unknown." },
+            "outerDiameterMm": { "type": "number", "exclusiveMinimum": 0, "description": "Only for a slenderness ATTENTION, never a hard fail." },
+            "guided": { "type": "boolean", "description": "Guided compression spring: suppresses the slenderness attention." },
+            "forceBudgetN": { "type": "number", "exclusiveMinimum": 0, "description": "USER-DECLARED max absolute force, N. No value = no acceptance judgement." },
+            "requiredTravelMm": { "type": "number", "exclusiveMinimum": 0, "description": "USER-DECLARED travel requirement, mm." },
+            "maxTravelMm": { "type": "number", "exclusiveMinimum": 0, "description": "USER-DECLARED maximum travel, mm." },
+            "stiffnessTolerancePct": { "type": "number", "minimum": 0, "maximum": 100, "description": "Display-band half-width on k, percent; 0/absent = no k band." },
+            "source": { "enum": ["catalog", "measured", "estimated", "declared"], "description": "Where k came from; reported, not judged." }
+          }
         },
         "note": { "type": "string" }
       }

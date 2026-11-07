@@ -339,6 +339,34 @@ export interface InterfaceCheckResult {
   expected?: { quantity: string; nominal?: number; min?: number; max?: number };
   measured?: number;
   detail: string;
+  /** Structured half of `spring-behaviour`; optional so old report readers are untouched. */
+  elastic?: ElasticCheckResult;
+}
+
+/**
+ * The facts `spring-behaviour` reports. Thresholds are USER-DECLARED
+ * (`forceBudgetN`, `requiredTravelMm`, `tolerance`); the venue reports the
+ * comparison and the margin, it does not invent child/adult or product limits.
+ */
+export interface ElasticCheckResult {
+  behavior: string;
+  installedLengthMm: number;
+  freeLengthMm: number;
+  deflectionMm: number;
+  stiffnessNPerMm: number;
+  forceN: number;
+  /** k-tolerance band, when `stiffnessTolerancePct` is declared. */
+  forceBandN?: [number, number];
+  /** Order-of-magnitude display band, always present (e.g. 18.7 N -> [10, 100]). */
+  forceDecadeN: [number, number];
+  source: string;
+  checks: {
+    direction: 'ok' | 'violation' | 'unknown';
+    solidHeight: 'ok' | 'violation' | 'unknown';
+    travel: 'ok' | 'violation' | 'unknown';
+    forceBudget: 'ok' | 'violation' | 'unknown' | 'skipped';
+  };
+  notes: string[];
 }
 
 export interface UndeclaredPair {
@@ -424,7 +452,7 @@ const DEFAULT_DERIVED: Record<ManifestInterface['type'], { layer: 'L0' | 'L1' | 
  * (see the note on `motion-clearance` below for what "the check actually ran"
  * has to mean when the claim is about motion).
  */
-const IMPLEMENTED_CHECKS = new Set(['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload']);
+const IMPLEMENTED_CHECKS = new Set(['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour']);
 
 /**
  * Distance between two INFINITE axis lines (skew or parallel), mm. This is the
@@ -468,6 +496,197 @@ function numParam(iface: ManifestInterface, keys: string[]): number | null {
     if (typeof v === 'number' && Number.isFinite(v)) return v;
   }
   return null;
+}
+
+/** JS Math.round-based 4-decimal rounding — the parity contract. */
+const round4 = (v: number): number => Math.round(v * 1e4) / 1e4;
+
+/** Read a numeric elastic field from `elastic` first, then the legacy `params` bag. */
+function elasticNumber(iface: ManifestInterface, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    const fromElastic = (iface.elastic as unknown as Record<string, unknown> | undefined)?.[key];
+    if (typeof fromElastic === 'number' && Number.isFinite(fromElastic)) return fromElastic;
+    const fromParams = iface.params?.[key];
+    if (typeof fromParams === 'number' && Number.isFinite(fromParams)) return fromParams;
+  }
+  return null;
+}
+
+/**
+ * `spring-behaviour` for an axial spring. Geometry measures the installed length;
+ * the declared rate turns deflection into force. Everything the operator cannot
+ * know (solid height, travel, force budget, direction) is reported as `unknown`
+ * or `skipped` with the missing input named — never guessed, never a silent pass.
+ */
+function springBehaviour(
+  iface: ManifestInterface,
+  aFeature: unknown,
+  bFeature: unknown,
+): { verdict: InterfaceCheckResult['verdict']; measured: number; detail: string; elastic: ElasticCheckResult } {
+  const spec = iface.elastic ?? {};
+  const behavior = spec.behavior ?? 'axial-spring';
+  if (behavior !== 'axial-spring') {
+    throw new Error(`elastic behavior "${behavior}" is not implemented at S0 — only axial-spring is`);
+  }
+  const k = elasticNumber(iface, ['stiffnessNPerMm', 'springRateNPerMm', 'k']);
+  const free = elasticNumber(iface, ['freeLengthMm', 'freeLength']);
+  if (k === null || free === null) {
+    throw new Error('spring-behaviour needs freeLengthMm and stiffnessNPerMm (elastic or params), with a and b being the spring\'s own two ends');
+  }
+  const pa = pointOf(aFeature);
+  const pb = pointOf(bFeature);
+  const installed = round4(Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]));
+  const deflection = round4(free - installed);
+  const force = round4(k * deflection);
+  const decade = ((): [number, number] => {
+    const magnitude = Math.abs(force);
+    if (!(magnitude > 0)) return [0, 0];
+    const lo = Math.pow(10, Math.floor(Math.log10(magnitude)));
+    return [round4(lo), round4(lo * 10)];
+  })();
+  const direction = spec.direction ?? null;
+  const solid = elasticNumber(iface, ['solidHeightMm']);
+  const outerD = elasticNumber(iface, ['outerDiameterMm']);
+  const guided = spec.guided === true;
+  const budget = elasticNumber(iface, ['forceBudgetN']);
+  const requiredTravel = elasticNumber(iface, ['requiredTravelMm']);
+  const maxTravel = elasticNumber(iface, ['maxTravelMm']);
+  const tol = elasticNumber(iface, ['stiffnessTolerancePct']) ?? 0;
+  const source = spec.source ?? 'declared';
+  const notes: string[] = [];
+  let zeroMargin = false;
+
+  let directionCheck: ElasticCheckResult['checks']['direction'] = 'unknown';
+  if (direction) {
+    const ok = direction === 'compression' ? deflection >= 0 : deflection <= 0;
+    directionCheck = ok ? 'ok' : 'violation';
+    notes.push(ok ? `direction ${direction} OK (δ${deflection}mm)` : `direction ${direction} VIOLATED (δ${deflection}mm)`);
+  } else {
+    notes.push('direction not declared; sign reported but not enforced');
+  }
+
+  let solidCheck: ElasticCheckResult['checks']['solidHeight'] = 'unknown';
+  if (solid !== null) {
+    if (free <= solid) {
+      solidCheck = 'violation';
+      notes.push(`solidHeight ${solid}mm exceeds freeLength ${free}mm — not a valid spring`);
+    } else if (installed <= solid) {
+      solidCheck = 'violation';
+      notes.push(`installed ${installed}mm is below solidHeight ${solid}mm — coils clash`);
+    } else {
+      solidCheck = 'ok';
+      notes.push(`solidHeight margin ${round4(installed - solid)}mm`);
+    }
+  } else {
+    notes.push('solidHeightMm not declared; coil clash not checked');
+  }
+
+  let travelCheck: ElasticCheckResult['checks']['travel'] = 'unknown';
+  if (requiredTravel !== null) {
+    if (!direction) {
+      notes.push(`requiredTravel ${requiredTravel}mm declared but direction omitted; travel not checked`);
+    } else {
+      let available: number | null = null;
+      if (direction === 'compression') {
+        if (solid !== null) available = round4(installed - solid);
+      } else if (maxTravel !== null) {
+        available = round4(maxTravel - (installed - free));
+      }
+      if (available === null) {
+        notes.push(`requiredTravel ${requiredTravel}mm declared but available travel is unknown (need ${direction === 'compression' ? 'solidHeightMm' : 'maxTravelMm'})`);
+      } else if (requiredTravel > available) {
+        travelCheck = 'violation';
+        notes.push(`required travel ${requiredTravel}mm exceeds available ${available}mm`);
+      } else {
+        travelCheck = 'ok';
+        const margin = round4(available - requiredTravel);
+        if (margin === 0) zeroMargin = true;
+        notes.push(`travel margin ${margin}mm${margin === 0 ? ' (zero margin — difficult)' : ''}`);
+      }
+    }
+  } else {
+    notes.push('requiredTravelMm not declared; travel not judged');
+  }
+
+  let forceCheck: ElasticCheckResult['checks']['forceBudget'] = 'skipped';
+  if (budget !== null) {
+    forceCheck = Math.abs(force) <= budget ? 'ok' : 'violation';
+    const margin = round4(budget - Math.abs(force));
+    if (forceCheck === 'ok' && margin === 0) zeroMargin = true;
+    notes.push(forceCheck === 'ok'
+      ? `|force| ${Math.abs(force)}N within budget ${budget}N (margin ${margin}N${margin === 0 ? ' — zero margin, difficult' : ''})`
+      : `|force| ${Math.abs(force)}N exceeds budget ${budget}N`);
+  }
+  if (iface.tolerance) {
+    const inRange = force >= iface.tolerance.min && force <= iface.tolerance.max;
+    if (!inRange) forceCheck = 'violation';
+    else if (forceCheck === 'skipped') forceCheck = 'ok';
+    if (inRange && (force === iface.tolerance.min || force === iface.tolerance.max)) zeroMargin = true;
+    notes.push(`tolerance [${iface.tolerance.min},${iface.tolerance.max}]N ${inRange ? 'satisfied' : 'violated'}`);
+  }
+  if (budget === null && !iface.tolerance) {
+    notes.push('no forceBudgetN/tolerance declared; force is reported, not judged');
+  }
+
+  let forceBand: [number, number] | undefined;
+  if (tol > 0) {
+    const lo = Math.min(k * (1 - tol / 100) * deflection, k * (1 + tol / 100) * deflection);
+    const hi = Math.max(k * (1 - tol / 100) * deflection, k * (1 + tol / 100) * deflection);
+    forceBand = [round4(lo), round4(hi)];
+    notes.push(`force band ${forceBand[0]}–${forceBand[1]}N from k ±${tol}%`);
+  } else {
+    notes.push('no stiffnessTolerancePct; force is a point from the declared k');
+  }
+
+  if (outerD !== null && direction === 'compression') {
+    if (guided) {
+      notes.push('guided compression spring; slenderness attention suppressed');
+    } else {
+      const slenderness = round4(free / outerD);
+      notes.push(slenderness > 2.6
+        ? `slenderness free/D ${slenderness} > 2.6 — buckling ATTENTION (not a hard fail)`
+        : `slenderness free/D ${slenderness} within 2.6`);
+    }
+  }
+
+  const acceptance = budget !== null || iface.tolerance !== undefined || requiredTravel !== null;
+  const unknownIntrinsic = directionCheck === 'unknown' || solidCheck === 'unknown';
+  const hard = directionCheck === 'violation' || solidCheck === 'violation'
+    || (travelCheck === 'violation' && iface.severity === 'hard')
+    || (forceCheck === 'violation' && iface.severity === 'hard');
+  const intent = (travelCheck === 'violation' || forceCheck === 'violation') && iface.severity !== 'hard';
+  let verdict: InterfaceCheckResult['verdict'] = hard ? 'hard-violation' : intent ? 'intent-flag'
+    : !acceptance ? 'skipped' : (unknownIntrinsic || zeroMargin) ? 'intent-flag' : 'pass';
+  if (verdict === 'skipped') {
+    notes.push('intrinsic checks have no acceptance criterion; add forceBudgetN, tolerance, or requiredTravelMm for a verdict');
+  } else if (verdict === 'intent-flag' && !intent) {
+    if (unknownIntrinsic) notes.push('one or more intrinsic checks are unknown; verdict is an intent flag, not a pass');
+    if (zeroMargin) notes.push('zero or at-limit margin; verdict is an intent flag, not a pass');
+  }
+
+  const orderText = `order ${decade[0]}–${decade[1]}N`;
+  const forceText = forceBand
+    ? ` = ${force}N (band ${forceBand[0]}–${forceBand[1]}N; ${orderText})`
+    : ` = ${force}N (${orderText})`;
+  const detail = `installed ${installed}mm vs free ${free}mm → δ${deflection}mm × ${k}N/mm${forceText}; source ${source}; ${notes.join('; ')}`;
+  return {
+    verdict,
+    measured: force,
+    detail,
+    elastic: {
+      behavior,
+      installedLengthMm: installed,
+      freeLengthMm: round4(free),
+      deflectionMm: deflection,
+      stiffnessNPerMm: round4(k),
+      forceN: force,
+      ...(forceBand ? { forceBandN: forceBand } : {}),
+      forceDecadeN: decade,
+      source,
+      checks: { direction: directionCheck, solidHeight: solidCheck, travel: travelCheck, forceBudget: forceCheck },
+      notes,
+    },
+  };
 }
 
 /**
@@ -589,6 +808,13 @@ export async function runAssemblyCheckInTs(
         }
       }
       results.push({ ...r, ownerPath });
+    } else if (checkName === 'spring-behaviour') {
+      try {
+        const r = springBehaviour(iface, ra.feature, rb.feature);
+        results.push({ ...base, ...r, ownerPath } as InterfaceCheckResult);
+      } catch (err) {
+        results.push({ ...base, detail: err instanceof Error ? err.message : String(err) });
+      }
     } else if (checkName === 'spring-preload') {
       // A preload is a FORCE, and the engine has no contact model. What it does
       // have is geometry: if the two endpoints are the spring's two ends and the
@@ -724,7 +950,7 @@ export async function runAssemblyCheckInTs(
  * Evaluate the manifest's declared interfaces and its undeclared neighbours.
  *
  * THE SOLVE IS PYTHON'S (DECISION-LOG 2026-10-12): the layer/check derivation, the
- * five operators, the verdict-vs-tolerance rule, the adjacency discovery and the
+ * six operators, the verdict-vs-tolerance rule, the adjacency discovery and the
  * summary all happen in the worker's `assembly_contracts` op. What stays here is
  * everything that needs the STORE rather than the geometry — loading the manifest,
  * building each part's placed solid, resolving interface endpoints to world datum
@@ -781,6 +1007,7 @@ export async function runAssemblyCheck(
       nominal: iface.nominal,
       tolerance: iface.tolerance,
       params: iface.params,
+      elastic: iface.elastic,
     };
   });
 

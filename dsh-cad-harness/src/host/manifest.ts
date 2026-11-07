@@ -21,9 +21,47 @@ import { fileURLToPath } from 'node:url';
 // ---------- types ----------
 
 export type InterfaceType = '贴合' | '间隙' | '紧固' | '转动副' | '滑动副' | '弹簧' | '流道';
-export type Quantity = '距离' | '直径' | '同轴度' | '角度' | '预紧力';
+export type Quantity = '距离' | '直径' | '同轴度' | '角度' | '预紧力' | '弹簧力';
 export type Severity = 'hard' | 'intent';
 export type VerdictLayer = 'L0' | 'L1' | 'L2';
+
+/**
+ * The general elastic-behaviour declaration. Deliberately NOT a "spring product":
+ * the same envelope carries an axial spring, a torsion spring, a flexure, a snap
+ * fit or a pad; the operator dispatches on `behavior`. `params` stays the legacy
+ * numeric bag (`freeLengthMm`, `stiffnessNPerMm`, ...) so old manifests keep
+ * working; when both are present, `elastic` is authoritative.
+ */
+export type ElasticBehavior = 'axial-spring' | 'torsion-spring' | 'flexure-beam' | 'snap-fit' | 'pad';
+export type ElasticDirection = 'compression' | 'tension';
+export type ElasticSource = 'catalog' | 'measured' | 'estimated' | 'declared';
+
+export interface ElasticInterfaceSpec {
+  /** Default: axial-spring. Unimplemented behaviours are skipped by name, never guessed. */
+  behavior?: ElasticBehavior;
+  /** Compression vs tension. Omitted = the sign is reported but not enforced. */
+  direction?: ElasticDirection;
+  /** Free (unloaded) length along the a→b line, mm. */
+  freeLengthMm?: number;
+  /** Axial rate, N/mm. */
+  stiffnessNPerMm?: number;
+  /** Solid height (coils touching), mm. Omit if unknown — the check says so. */
+  solidHeightMm?: number;
+  /** Outer diameter, mm; only used for a slenderness ATTENTION, never a hard fail. */
+  outerDiameterMm?: number;
+  /** Guided compression spring: suppresses the slenderness attention. */
+  guided?: boolean;
+  /** User-declared acceptance threshold, N. The venue does not invent this. */
+  forceBudgetN?: number;
+  /** User-declared travel requirement, mm. */
+  requiredTravelMm?: number;
+  /** User-declared maximum travel, mm (tension springs have no solid height). */
+  maxTravelMm?: number;
+  /** Display-band half-width on k, percent. 0/absent = point force, no band. */
+  stiffnessTolerancePct?: number;
+  /** Where k came from; reported, not judged. */
+  source?: ElasticSource;
+}
 
 export interface ManifestInterface {
   id: string;                       // stable, unique within the manifest
@@ -35,7 +73,9 @@ export interface ManifestInterface {
   severity: Severity;               // hard = engine error; intent = flag for human
   layer?: VerdictLayer;             // defaults derived from type
   check?: string;                   // operator name; defaults derived from type
-  params?: Record<string, number>;  // spring: freeLength/stiffness/damping; flow: inlet/outlet
+  params?: Record<string, number>;  // legacy numeric bag: spring freeLength/stiffness; flow inlet/outlet
+  /** General elastic-behaviour declaration; takes precedence over `params`. */
+  elastic?: ElasticInterfaceSpec;
   note?: string;                    // design intent — human- and LLM-readable
 }
 
@@ -279,7 +319,7 @@ export const MANIFEST_EXAMPLE = {
   },
 };
 
-const OPERATORS = ['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload'];
+const OPERATORS = ['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour'];
 const IFACE_TYPES = ['贴合', '间隙', '紧固', '转动副', '滑动副', '弹簧', '流道'];
 const NODE_KINDS = ['assembly', 'part'];
 const DATUM_KINDS = ['point', 'axis', 'plane', 'cylinder'];
@@ -348,6 +388,67 @@ function checkTransform(t: unknown, ptr: string, issues: ManifestIssue[]): void 
     } else if (typeof pose.angleDeg !== 'number' || !Number.isFinite(pose.angleDeg)) {
       issues.push({ path: `${ptr}/pose/angleDeg`, expected: 'a finite number of degrees', got: got(pose.angleDeg) });
     }
+  }
+}
+
+const ELASTIC_BEHAVIORS = ['axial-spring', 'torsion-spring', 'flexure-beam', 'snap-fit', 'pad'] as const;
+const ELASTIC_DIRECTIONS = ['compression', 'tension'] as const;
+const ELASTIC_SOURCES = ['catalog', 'measured', 'estimated', 'declared'] as const;
+const ELASTIC_KEYS = new Set([
+  'behavior', 'direction', 'freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm',
+  'guided', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm', 'stiffnessTolerancePct', 'source',
+]);
+
+function checkElastic(value: unknown, ptr: string, issues: ManifestIssue[]): void {
+  if (value === undefined) return;
+  if (!isObj(value)) {
+    issues.push({ path: ptr, expected: 'an object with elastic fields (behavior, freeLengthMm, stiffnessNPerMm, ...)', got: got(value) });
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (!ELASTIC_KEYS.has(key)) {
+      issues.push({ path: `${ptr}/${key}`, expected: `one of ${[...ELASTIC_KEYS].join(', ')}`, got: got(value[key]), hint: 'unknown elastic keys are rejected so a typo cannot silently disable a check' });
+    }
+  }
+  const enumField = (key: string, allowed: readonly string[]) => {
+    const v = value[key];
+    if (v !== undefined && !allowed.includes(v as string)) {
+      issues.push({ path: `${ptr}/${key}`, expected: `one of ${allowed.join(' | ')}`, got: got(v) });
+    }
+  };
+  enumField('behavior', ELASTIC_BEHAVIORS);
+  enumField('direction', ELASTIC_DIRECTIONS);
+  enumField('source', ELASTIC_SOURCES);
+  if (value.guided !== undefined && typeof value.guided !== 'boolean') {
+    issues.push({ path: `${ptr}/guided`, expected: 'a boolean', got: got(value.guided) });
+  }
+  const positive = (key: string) => {
+    const v = value[key];
+    if (v === undefined) return;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+      issues.push({ path: `${ptr}/${key}`, expected: 'a positive finite number', got: got(v) });
+    }
+  };
+  for (const key of ['freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm']) {
+    positive(key);
+  }
+  const tol = value.stiffnessTolerancePct;
+  if (tol !== undefined && (typeof tol !== 'number' || !Number.isFinite(tol) || tol < 0 || tol > 100)) {
+    issues.push({ path: `${ptr}/stiffnessTolerancePct`, expected: 'a finite number in [0, 100]', got: got(tol) });
+  }
+  if (typeof value.freeLengthMm === 'number' && typeof value.solidHeightMm === 'number'
+    && value.solidHeightMm >= value.freeLengthMm) {
+    issues.push({
+      path: `${ptr}/solidHeightMm`, expected: '< freeLengthMm', got: got(value.solidHeightMm),
+      hint: 'a spring longer at solid height than free is not a spring; fix the numbers or drop solidHeightMm',
+    });
+  }
+  if (typeof value.requiredTravelMm === 'number' && typeof value.maxTravelMm === 'number'
+    && value.requiredTravelMm > value.maxTravelMm) {
+    issues.push({
+      path: `${ptr}/requiredTravelMm`, expected: '<= maxTravelMm', got: got(value.requiredTravelMm),
+      hint: 'the declared requirement exceeds the declared travel; one of them is wrong',
+    });
   }
 }
 
@@ -439,6 +540,7 @@ function checkInterfaces(node: Json, childIds: Map<string, Set<string>>, nodePtr
         issues.push({ path: `${ptr}/tolerance`, expected: 'an object {min: number, max: number}', got: got(tolerance) });
       }
     }
+    checkElastic(iface.elastic, `${ptr}/elastic`, issues);
   });
 }
 

@@ -49,7 +49,7 @@
   the same pinned environment and is the escape hatch for checks the CAD tools do
   not cover. `delivery_audit`, `create_part`, `set_datums`, `render_part`,
   `recall_reference_image` do not need it. **`check_assembly` does**: its contract
-  solver (distance / diameter-match / coaxial / motion-clearance / spring-preload)
+  solver (distance / diameter-match / coaxial / motion-clearance / spring-preload / spring-behaviour)
   runs in the worker; only the manifest read and the adjacency geometry are local.
 
 - **Installing a package is allowed — do it when the task needs it.** This is the

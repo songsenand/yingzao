@@ -42,7 +42,7 @@ drives:
     measure_section    one cross-section as polygons, rings, holes and walls
     measure_extent     axial min/max/centre and the extremal vertices, any axis
     measure_angle      angle + line distance between two named directions
-    assembly_contracts the contract half of check_assembly: five operators, undeclared neighbours
+    assembly_contracts the contract half of check_assembly: six operators, undeclared neighbours
     import_mesh     parse/scale/weld one STL/STEP/DXF into a storable mesh (import_part)
                     STEP via cascadio(OpenCASCADE)→GLB, DXF via ezdxf (2D profiles
                     extruded with depthMm through manifold3d, or 3D mesh entities)
@@ -1440,8 +1440,8 @@ def _min_distance_via_sampling(verts, faces, target_verts, target_faces, max_sam
 # ---------------------------------------------------------------------------
 # The CONTRACT half of `check_assembly` (moved here 2026-10-12, DECISION-LOG #2).
 #
-# What moved: the layer/check derivation, the five operators
-# (distance / motion-clearance / spring-preload / coaxial / diameter-match), the
+# What moved: the layer/check derivation, the six operators
+# (distance / motion-clearance / spring-preload / spring-behaviour / coaxial / diameter-match), the
 # verdict-vs-tolerance rule, the undeclared-adjacency discovery, and the summary.
 # What stayed in TS: manifest and store I/O, part world loading (STL path + datums +
 # pose), endpoint resolution, the motion-run records and their evidence staleness —
@@ -1463,7 +1463,7 @@ DEFAULT_DERIVED = {
 # Operators this engine can actually evaluate. Everything else is reported as
 # `skipped` — deliberately, because a green verdict on a check nobody ran is the most
 # expensive lie a validator can tell.
-IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload"}
+IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour"}
 
 
 def _js_num(value) -> str:
@@ -1486,6 +1486,205 @@ def _num_param(iface: dict, keys: list) -> float | None:
         if math.isfinite(float(value)):
             return float(value)
     return None
+
+
+def _elastic_num(iface: dict, keys: list) -> float | None:
+    """Read a numeric elastic field from `elastic` first, then the legacy `params` bag."""
+    spec = iface.get("elastic") or {}
+    for key in keys:
+        for source in (spec, iface.get("params") or {}):
+            value = source.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if math.isfinite(float(value)):
+                return float(value)
+    return None
+
+
+def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
+    """Mirror of `springBehaviour` in assembly-check.ts.
+
+    The venue reports the facts and compares against the USER-DECLARED thresholds
+    (forceBudgetN / tolerance / requiredTravelMm); it never invents child/adult or
+    product limits. Missing inputs are named, not guessed.
+    """
+    spec = iface.get("elastic") or {}
+    behavior = spec.get("behavior") or "axial-spring"
+    if behavior != "axial-spring":
+        return {"detail": f'elastic behavior "{behavior}" is not implemented at S0 — only axial-spring is'}
+    k = _elastic_num(iface, ["stiffnessNPerMm", "springRateNPerMm", "k"])
+    free = _elastic_num(iface, ["freeLengthMm", "freeLength"])
+    if k is None or free is None:
+        return {"detail": "spring-behaviour needs freeLengthMm and stiffnessNPerMm (elastic or params), with a and b being the spring's own two ends"}
+
+    installed = _round_js(float(math.dist(pa, pb)), 4)
+    deflection = _round_js(free - installed, 4)
+    force = _round_js(k * deflection, 4)
+    magnitude = abs(force)
+    if magnitude > 0:
+        decade_lo = 10 ** math.floor(math.log10(magnitude))
+        decade = [_round_js(decade_lo, 4), _round_js(decade_lo * 10, 4)]
+    else:
+        decade = [0.0, 0.0]
+    direction = spec.get("direction") or None
+    solid = _elastic_num(iface, ["solidHeightMm"])
+    outer_d = _elastic_num(iface, ["outerDiameterMm"])
+    guided = spec.get("guided") is True
+    budget = _elastic_num(iface, ["forceBudgetN"])
+    required_travel = _elastic_num(iface, ["requiredTravelMm"])
+    max_travel = _elastic_num(iface, ["maxTravelMm"])
+    tol = _elastic_num(iface, ["stiffnessTolerancePct"]) or 0.0
+    source = spec.get("source") or "declared"
+    notes: list[str] = []
+    zero_margin = False
+
+    direction_check = "unknown"
+    if direction:
+        ok = deflection >= 0 if direction == "compression" else deflection <= 0
+        direction_check = "ok" if ok else "violation"
+        notes.append(
+            f"direction {direction} OK (δ{_js_num(deflection)}mm)" if ok
+            else f"direction {direction} VIOLATED (δ{_js_num(deflection)}mm)"
+        )
+    else:
+        notes.append("direction not declared; sign reported but not enforced")
+
+    solid_check = "unknown"
+    if solid is not None:
+        if free <= solid:
+            solid_check = "violation"
+            notes.append(f"solidHeight {_js_num(solid)}mm exceeds freeLength {_js_num(free)}mm — not a valid spring")
+        elif installed <= solid:
+            solid_check = "violation"
+            notes.append(f"installed {_js_num(installed)}mm is below solidHeight {_js_num(solid)}mm — coils clash")
+        else:
+            solid_check = "ok"
+            notes.append(f"solidHeight margin {_js_num(_round_js(installed - solid, 4))}mm")
+    else:
+        notes.append("solidHeightMm not declared; coil clash not checked")
+
+    travel_check = "unknown"
+    if required_travel is not None:
+        if not direction:
+            notes.append(f"requiredTravel {_js_num(required_travel)}mm declared but direction omitted; travel not checked")
+        else:
+            available = None
+            if direction == "compression":
+                if solid is not None:
+                    available = _round_js(installed - solid, 4)
+            elif max_travel is not None:
+                available = _round_js(max_travel - (installed - free), 4)
+            if available is None:
+                need = "solidHeightMm" if direction == "compression" else "maxTravelMm"
+                notes.append(f"requiredTravel {_js_num(required_travel)}mm declared but available travel is unknown (need {need})")
+            elif required_travel > available:
+                travel_check = "violation"
+                notes.append(f"required travel {_js_num(required_travel)}mm exceeds available {_js_num(available)}mm")
+            else:
+                travel_check = "ok"
+                margin = _round_js(available - required_travel, 4)
+                if margin == 0:
+                    zero_margin = True
+                notes.append(f"travel margin {_js_num(margin)}mm" + (" (zero margin — difficult)" if margin == 0 else ""))
+    else:
+        notes.append("requiredTravelMm not declared; travel not judged")
+
+    force_check = "skipped"
+    if budget is not None:
+        force_check = "ok" if abs(force) <= budget else "violation"
+        margin = _round_js(budget - abs(force), 4)
+        if force_check == "ok" and margin == 0:
+            zero_margin = True
+        notes.append(
+            f"|force| {_js_num(abs(force))}N within budget {_js_num(budget)}N (margin {_js_num(margin)}N"
+            + (" — zero margin, difficult)" if margin == 0 else ")")
+            if force_check == "ok"
+            else f"|force| {_js_num(abs(force))}N exceeds budget {_js_num(budget)}N"
+        )
+    tolerance = iface.get("tolerance")
+    if tolerance is not None:
+        in_range = tolerance.get("min", 0) <= force <= tolerance.get("max", 0)
+        if not in_range:
+            force_check = "violation"
+        elif force_check == "skipped":
+            force_check = "ok"
+        if in_range and (force == tolerance.get("min", 0) or force == tolerance.get("max", 0)):
+            zero_margin = True
+        notes.append(
+            f"tolerance [{_js_num(tolerance.get('min', 0))},{_js_num(tolerance.get('max', 0))}]N "
+            f"{'satisfied' if in_range else 'violated'}"
+        )
+    if budget is None and tolerance is None:
+        notes.append("no forceBudgetN/tolerance declared; force is reported, not judged")
+
+    force_band = None
+    if tol > 0:
+        lo = min(k * (1 - tol / 100) * deflection, k * (1 + tol / 100) * deflection)
+        hi = max(k * (1 - tol / 100) * deflection, k * (1 + tol / 100) * deflection)
+        force_band = [_round_js(lo, 4), _round_js(hi, 4)]
+        notes.append(f"force band {_js_num(force_band[0])}–{_js_num(force_band[1])}N from k ±{_js_num(tol)}%")
+    else:
+        notes.append("no stiffnessTolerancePct; force is a point from the declared k")
+
+    if outer_d is not None and direction == "compression":
+        if guided:
+            notes.append("guided compression spring; slenderness attention suppressed")
+        else:
+            slenderness = _round_js(free / outer_d, 4)
+            notes.append(
+                f"slenderness free/D {_js_num(slenderness)} > 2.6 — buckling ATTENTION (not a hard fail)"
+                if slenderness > 2.6
+                else f"slenderness free/D {_js_num(slenderness)} within 2.6"
+            )
+
+    acceptance = budget is not None or tolerance is not None or required_travel is not None
+    unknown_intrinsic = direction_check == "unknown" or solid_check == "unknown"
+    hard = direction_check == "violation" or solid_check == "violation"
+    if iface.get("severity") == "hard":
+        hard = hard or travel_check == "violation" or force_check == "violation"
+    intent = (travel_check == "violation" or force_check == "violation") and iface.get("severity") != "hard"
+    verdict = "hard-violation" if hard else "intent-flag" if intent else "skipped" if not acceptance else "intent-flag" if (unknown_intrinsic or zero_margin) else "pass"
+    if verdict == "skipped":
+        notes.append("intrinsic checks have no acceptance criterion; add forceBudgetN, tolerance, or requiredTravelMm for a verdict")
+    elif verdict == "intent-flag" and not intent:
+        if unknown_intrinsic:
+            notes.append("one or more intrinsic checks are unknown; verdict is an intent flag, not a pass")
+        if zero_margin:
+            notes.append("zero or at-limit margin; verdict is an intent flag, not a pass")
+
+    order_text = f"order {_js_num(decade[0])}–{_js_num(decade[1])}N"
+    force_text = (
+        f" = {_js_num(force)}N (band {_js_num(force_band[0])}–{_js_num(force_band[1])}N; {order_text})"
+        if force_band else f" = {_js_num(force)}N ({order_text})"
+    )
+    detail = (
+        f"installed {_js_num(installed)}mm vs free {_js_num(free)}mm → δ{_js_num(deflection)}mm × "
+        f"{_js_num(k)}N/mm{force_text}; source {source}; " + "; ".join(notes)
+    )
+
+    return {
+        "verdict": verdict,
+        "measured": force,
+        "detail": detail,
+        "elastic": {
+            "behavior": behavior,
+            "installedLengthMm": installed,
+            "freeLengthMm": _round_js(free, 4),
+            "deflectionMm": deflection,
+            "stiffnessNPerMm": _round_js(k, 4),
+            "forceN": force,
+            **({"forceBandN": force_band} if force_band else {}),
+            "forceDecadeN": decade,
+            "source": source,
+            "checks": {
+                "direction": direction_check,
+                "solidHeight": solid_check,
+                "travel": travel_check,
+                "forceBudget": force_check,
+            },
+            "notes": notes,
+        },
+    }
 
 
 def _assembly_base(iface: dict) -> dict:
@@ -1691,6 +1890,8 @@ def op_assembly_contracts(params: dict) -> dict:
                 + (" (STRETCHED past free length — negative deflection)" if deflection < 0 else "")
             )
             results.append(_assembly_verdict(iface, force, detail))
+        elif check == "spring-behaviour":
+            results.append({**base, **_spring_behaviour(iface, pa, pb)})
         elif check == "coaxial":
             dir_a = ra.get("dir")
             dir_b = rb.get("dir")
