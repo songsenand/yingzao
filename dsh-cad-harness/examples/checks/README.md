@@ -1,7 +1,12 @@
 # Custom checks
 
-V1.1 runs opt-in `checker/v1` checks from `<project>/checks/` (or `--checks-dir`).
-A check is evidence for one of the six rows, not a workflow step.
+V1.2 runs opt-in `checker/v1` checks from `<project>/checks/` (or `--checks-dir`).
+A check is evidence for one of the six rows, not a workflow step. Register it
+before drawing:
+
+```bash
+node scripts/check-register.mjs <project> --id <id>
+```
 
 | Sample | Language | What it shows |
 |---|---|---|

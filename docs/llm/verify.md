@@ -12,6 +12,11 @@ node scripts/verify.mjs /path/to/project --block        # blocking mode
 node scripts/verify.mjs /path/to/project --json --out /tmp/evidence.json
 node scripts/verify.mjs /path/to/project --checks       # opt-in custom checks
 node scripts/verify.mjs /path/to/project --checks --mount-checks  # before drawing
+
+# register a check before drawing (the only writer of checks/registry.json)
+node scripts/check-register.mjs /path/to/project --id fit-clearance
+node scripts/check-register.mjs /path/to/project --all
+node scripts/check-register.mjs /path/to/project --unregister fit-clearance
 ```
 
 The command is also exposed as `npm run verify -- <project-dir> [flags]`.
@@ -107,7 +112,7 @@ Exceptions are user records, not approvals:
 A valid exception downgrades the finding to `warn` and records its id; an expired one
 leaves the finding blocked and reports `exception-expired`.
 
-## Custom checks (V1.1, opt-in)
+## Custom checks (V1.2, opt-in)
 
 A project can bring its own `checker/v1` check for a criterion the built-in checks
 cannot express (a functional target, a project-specific threshold). A check is
@@ -115,10 +120,12 @@ cannot express (a functional target, a project-specific threshold). A check is
 `--checks` (or `--checks-dir`) is given.
 
 ```text
-<project>/checks/<id>/
-  manifest.json
-  check.mjs
-  negative.json
+<project>/checks/
+  registry.json          <- registration record; verify reads it, never writes
+  <id>/
+    manifest.json
+    check.mjs
+    negative.json
 ```
 
 ```json
@@ -144,10 +151,42 @@ cannot express (a functional target, a project-specific threshold). A check is
 - The check reads one JSON document on stdin and writes one on stdout; the
   `checker/v1` report shape is the same as the legacy checker protocol.
 
-**Trust gate.** Every mounted check must have at least one negative sample, and
-the negative sample must **not** return `pass`. A check that passes its own bad
-fixture is `invalid` and is not used as evidence. Missing fixture, timeout,
-malformed JSON or a non-zero exit is an error, never a pass.
+**Pre-registration.** A check is evidence only after it is in
+`checks/registry.json`. Registration is an explicit act, not a discovery:
+
+```bash
+node scripts/check-register.mjs <project> --id <id>
+node scripts/check-register.mjs <project> --all
+node scripts/check-register.mjs <project> --unregister <id> [--reason <text>]
+```
+
+The command validates the manifest/permissions/entry, runs the negative sample,
+hashes the **whole check package** (manifest + code + fixtures + measurements),
+and writes `{id, version, hash, row, criteria, registeredAt}`. It refuses a
+package whose negative sample passes, and refuses to replace a different hash
+without `--supersede` (or a prior `--unregister`). `verify` is read-only.
+
+Registry state decides whether a check runs:
+
+| state | condition | behavior |
+|---|---|---|
+| `registered` | hash and version match | run |
+| `unregistered` | no active entry | **not executed**; `check-unregistered`; claim blocked |
+| `modified` | hash/version/row/criteria differ | **not executed**; `check-modified`; claim blocked |
+| `late` | `registeredAt` > latest current version | run, but **advisory only**; claim `claim-check-late` blocked |
+
+To fix a check after seeing the result: `--unregister`, edit, `--register`. The
+new registration is `late` for the current version, so it cannot witness a claim;
+to restore a valid witness, register the fix and then create a **new version**
+after it. Re-registering the same hash keeps its first `registeredAt`; it does not
+reset the clock. `--supersede` is the explicit one-step alternative to
+`--unregister` + `--register`; the old entry goes to `history`.
+
+**Trust gate.** Registration runs the negative sample; every check must have at
+least one, and it must **not** return `pass`. A package that passes its own bad
+fixture is refused. `verify` does not execute an unregistered or modified package
+at all. Missing fixture, timeout, malformed JSON or a non-zero exit is an error,
+never a pass.
 
 **Output contract.** One JSON document on stdout; logs go to stderr. The report
 must account for **every declared criterion**:
@@ -181,9 +220,11 @@ network outside the project are not prevented.
 | incomplete coverage | `check-incomplete` warn | blocked |
 | invalid manifest/negative | `check-invalid` warn | blocked |
 | writes the project | `check-mutated` warn | blocked |
+| unregistered / modified | `check-unregistered` / `check-modified` warn | blocked |
+| late registration | `check-late` info (result stays advisory) | info |
 
-The report adds `checks[]` (`id/version/hash/row/status/findingIds`) and
-`coverage.checked` gets `check:<id>@<version>`. `--mount-checks` validates and
+The report adds `checks[]` (`id/version/hash/row/status/findingIds`, plus
+`registeredAt`/`late`) and `coverage.checked` gets `check:<id>@<version>`. `--mount-checks` validates and
 records the check but does not run geometry: `checks[].status = "pending"` and
 `coverage.missing` names it. Mount is **not** a pass.
 
@@ -193,18 +234,22 @@ records the check but does not run geometry: `checks[].status = "pending"` and
 { "kind": "fit", "statement": "clearance >= 0.8 mm", "checkId": "fit-clearance" }
 ```
 
-`checkId` wins over `runId`; the check must be mounted (`verify --checks`), pass,
-cover every criterion, and cite the current version set. A claim whose check is
-missing/pending/invalid/failed/error is blocked. The delivery audit does not also
-judge a `checkId` claim by run kind.
+`checkId` wins over `runId`; the check must be **registered and not late**,
+mounted (`verify --checks`), pass, cover every criterion, and cite the current
+version set. A claim whose check is missing/unregistered/modified/pending/late/
+invalid/failed/error/mutated is blocked. The delivery audit does not also judge a
+`checkId` claim by run kind.
 
-**Boundaries.** V1.2a runs **Node** checks only, requires
+**Boundaries.** V1.2 runs **Node** checks only, requires
 `["node", "<file>.mjs"]`, rejects `write:artifacts` and non-empty `artifacts`,
-caps `timeoutMs` at 30s and `findings` at 50. It is **not a sandbox**: the check
-runs with your privileges; the runner bounds time/output/env (temp HOME/TMPDIR)
-and the project snapshot catches writes, but reads/network outside the project
-are not prevented. Mounting a check means trusting its author.
-`examples/checks/fit-clearance/` is a working template.
+caps `timeoutMs` at 30s, `findings` at 50, and the check package at 500 files /
+10 MB. It is **not a sandbox**: the check runs with your privileges; the runner
+bounds time/output/env (temp HOME/TMPDIR) and the project snapshot catches writes,
+but reads/network outside the project are not prevented. `registeredAt` is a
+declaration, not a notarised timestamp: the registry makes the normal path
+explicit and changes visible, but a determined editor can still forge it.
+Mounting a check means trusting its author. `examples/checks/fit-clearance/` is a
+working template; run `check-register` after copying it.
 
 ## Exit codes
 

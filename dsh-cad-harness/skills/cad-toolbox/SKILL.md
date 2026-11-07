@@ -44,6 +44,10 @@ Depth: `docs/llm/verify.md`.
   drawing. It is evidence, not a workflow step.
 - A check must account for every declared criterion, may not write the project, and runs
   from a temp copy; `check-mutated` discards its evidence. Entry is `node <file>.mjs` only.
+- Register a check before drawing: `node scripts/check-register.mjs <project> --id <id>`.
+  Unregistered/modified checks are not executed; a late registration is advisory only and
+  cannot witness a claim. To fix a check after drawing, unregister, register, then make a
+  new version (the fix must be registered before the version it witnesses).
 - Full depth: `docs/llm/verify.md`.
 
 ## Project selection (explicit; 2026-11-02)

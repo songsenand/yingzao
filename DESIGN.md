@@ -3971,4 +3971,11 @@ policy 是用户声明；报告是派生快照，工具不回读。实现 `src/h
 skipped；pass 要求每条都有 pass finding + 完整覆盖；blocked 必须有 blocked 或 skipped；
 skipped 必须是 `{criterion,reason}`）；`artifacts` 必须为空；`findings` ≤ 50；`entry`
 只允许 `["node","<file>.mjs"]`；检查在临时副本 cwd 运行，项目做前后 stat 快照，
-写入 → `check-mutated`，证据丢弃。V1.2b（注册簿/hash/迟到）待实现。
+写入 → `check-mutated`，证据丢弃。
+
+**V1.2b 注册制（已实现）**：`checks/registry.json` + `scripts/check-register.mjs`；
+注册时校验清单/权限/entry、跑负样本、hash 整个检查包（manifest + code + fixtures +
+measurements；上限 500 文件 / 10 MB），写 `{id,version,hash,row,criteria,registeredAt}`；
+未注册/被改不执行；晚注册（`registeredAt` > 当前版本）可跑但只 advisory，claim 引用则
+blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注册保留首次
+`registeredAt`；`--supersede` 是显式的一步替代。`verify` 只读注册簿，注册命令是唯一写者。

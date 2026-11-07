@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { verify } from '../src/host/verify/index.ts';
 import { canonicalJson } from '../src/host/verify/report.ts';
 import { validateCheckerReport } from '../src/host/checkers/protocol.ts';
+import { registerCheck, unregisterCheck } from '../src/host/verify/registry.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
@@ -87,6 +88,28 @@ async function writeCheck(root, options = {}) {
   }));
   await writeFile(join(dir, 'check.mjs'), CHECK_CODE);
   return dir;
+}
+
+
+const PRE_REGISTERED_AT = '2025-12-31T00:00:00.000Z';
+const LATE_REGISTERED_AT = '2026-06-01T00:00:00.000Z';
+
+async function registerCheckAt(root, id, at) {
+  const result = await registerCheck(join(root, 'checks'), join(root, 'checks', id), { supersede: true });
+  if (!result.ok) throw new Error(`register ${id} failed: ${result.errors.join('; ')}`);
+  if (at) {
+    const path = join(root, 'checks/registry.json');
+    const registry = JSON.parse(await readFile(path, 'utf8'));
+    const entry = registry.checks.find((c) => c.id === id);
+    if (entry) entry.registeredAt = at;
+    await writeFile(path, json(registry));
+  }
+  return result;
+}
+
+async function writeRegistered(root, options = {}) {
+  await writeCheck(root, options);
+  return registerCheckAt(root, 'test-check', PRE_REGISTERED_AT);
 }
 
 async function makePositiveProject() {
@@ -214,7 +237,7 @@ try {
     { kind: 'assembly', statement: 'the test criterion holds', checkId: 'test-check' },
   ] }));
 
-  await writeCheck(positive, { expect: 'pass' });
+  await writeRegistered(positive, { expect: 'pass' });
   const defaultOff = await verify({ projectRoot: positive, claimsPath: baseClaims });
   check(defaultOff.report.checks.length === 0, 'checks: default off', String(defaultOff.report.checks.length));
   check(defaultOff.report.verdict === 'pass', 'checks: default off keeps pass', defaultOff.report.verdict);
@@ -242,24 +265,24 @@ try {
   check(checkClaimMount.report.verdict === 'blocked', 'check claim mount: blocked', checkClaimMount.report.verdict);
   check(checkClaimMount.report.findings.some((f) => f.code === 'claim-check-pending'), 'check claim mount: code');
 
-  await writeCheck(positive, { expect: 'fail' });
+  await writeRegistered(positive, { expect: 'fail' });
   const checkFail = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
   check(checkFail.report.verdict === 'blocked', 'check fail: claim blocks', checkFail.report.verdict);
   check(checkFail.report.checks[0].status === 'fail', 'check fail: status', json(checkFail.report.checks));
   check(checkFail.report.findings.some((f) => f.code === 'check-failed' && f.severity === 'warn'), 'check fail: default warn');
   check(checkFail.report.findings.some((f) => f.code === 'claim-check-failed'), 'check fail: claim code');
 
-  await writeCheck(positive, { expect: 'error' });
+  await writeRegistered(positive, { expect: 'error' });
   const checkError = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
   check(checkError.report.checks[0].status === 'error', 'check error: status', json(checkError.report.checks));
   check(checkError.report.findings.some((f) => f.code === 'check-error'), 'check error: code');
   check(checkError.report.findings.some((f) => f.code === 'claim-check-error'), 'check error: claim code');
 
-  await writeCheck(positive, { expect: 'timeout', timeoutMs: 1000 });
+  await writeRegistered(positive, { expect: 'timeout', timeoutMs: 1000 });
   const checkTimeout = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
   check(checkTimeout.report.findings.some((f) => f.code === 'check-error' && f.what.includes('exceeded')), 'check timeout: not a pass');
 
-  await writeCheck(positive, { expect: 'incomplete' });
+  await writeRegistered(positive, { expect: 'incomplete' });
   const checkIncomplete = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
   check(checkIncomplete.report.checks[0].status === 'blocked', 'check incomplete: status blocked', json(checkIncomplete.report.checks));
   check(checkIncomplete.report.findings.some((f) => f.code === 'check-incomplete' && f.severity === 'warn'), 'check incomplete: warn');
@@ -270,15 +293,14 @@ try {
   await writeFile(staleCheckClaims, json({ schemaVersion: 1, claims: [
     { kind: 'assembly', statement: 'x', checkId: 'test-check', versionIds: ['v999'] },
   ] }));
-  await writeCheck(positive, { expect: 'pass' });
+  await writeRegistered(positive, { expect: 'pass' });
   const checkStale = await verify({ projectRoot: positive, claimsPath: staleCheckClaims, checks: true });
   check(checkStale.report.verdict === 'blocked', 'check stale claim: blocked', checkStale.report.verdict);
   check(checkStale.report.findings.some((f) => f.code === 'claim-check-stale'), 'check stale claim: code');
 
   await writeCheck(positive, { expect: 'pass', negativeExpect: 'pass' });
-  const checkInvalid = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
-  check(checkInvalid.report.checks[0].status === 'invalid', 'check invalid: status', json(checkInvalid.report.checks));
-  check(checkInvalid.report.findings.some((f) => f.code === 'check-invalid'), 'check invalid: code');
+  const refused = await registerCheck(join(positive, 'checks'), join(positive, 'checks/test-check'), { supersede: true });
+  check(!refused.ok && refused.errors.some((e) => e.includes('negative samples must not pass')), 'registration: negative sample must fail', refused.errors.join('; '));
 
   await writeCheck(positive, { expect: 'pass', permissions: ['read:constraints', 'write:artifacts'] });
   const checkWrite = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
@@ -287,12 +309,12 @@ try {
 
   const blockPolicy = join(tmp, 'policy-custom.json');
   await writeFile(blockPolicy, json({ schemaVersion: 1, mode: 'blocking', blockOn: ['custom-check'] }));
-  await writeCheck(positive, { expect: 'fail' });
+  await writeRegistered(positive, { expect: 'fail' });
   const checkBlocked = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true, policyPath: blockPolicy });
   check(checkBlocked.report.verdict === 'blocked', 'check policy: fail blocks', checkBlocked.report.verdict);
   check(checkBlocked.report.findings.some((f) => f.code === 'check-failed' && f.severity === 'blocked'), 'check policy: severity blocked');
 
-  await writeCheck(positive, { expect: 'pass' });
+  await writeRegistered(positive, { expect: 'pass' });
   const checkPassPolicy = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true, policyPath: blockPolicy });
   check(checkPassPolicy.report.verdict === 'pass', 'check policy: pass stays pass', checkPassPolicy.report.verdict);
   check(checkPassPolicy.report.findings.some((f) => f.code === 'check-passed' && f.severity === 'info'), 'check policy: pass stays info');
@@ -302,6 +324,7 @@ try {
   check(checkAgain.report.checks[0].hash === checkHashBefore, 'check: hash is stable');
 
   await cp(join(ROOT, 'examples/checks/fit-clearance'), join(positive, 'checks/fit-clearance'), { recursive: true });
+  await registerCheckAt(positive, 'fit-clearance', PRE_REGISTERED_AT);
   const sample = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
   check(sample.report.checks.some((c) => c.id === 'fit-clearance' && c.status === 'pass'), 'sample check: pass', json(sample.report.checks));
 
@@ -361,20 +384,20 @@ try {
   }), unitManifest, { maxFindings: 50 });
   check(capped.some((e) => e.includes('at most 50')), 'protocol: findings cap', capped.join('; '));
 
-  await writeCheck(positive, { expect: 'mutate' });
+  await writeRegistered(positive, { expect: 'mutate' });
   const mutated = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
   const mutatedCheck = mutated.report.checks.find((c) => c.id === 'test-check');
   check(mutatedCheck?.status === 'mutated', 'mutation guard: status mutated', json(mutated.report.checks));
   check(mutated.report.findings.some((f) => f.code === 'check-mutated'), 'mutation guard: finding');
   check(!mutated.report.findings.some((f) => f.code === 'check-passed' && f.checkId === 'test-check'), 'mutation guard: evidence discarded');
 
-  await writeCheck(positive, { expect: 'cwd' });
+  await writeRegistered(positive, { expect: 'cwd' });
   const scratch = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
   const scratchCheck = scratch.report.checks.find((c) => c.id === 'test-check');
   check(scratchCheck?.status === 'pass', 'temp cwd: scratch write allowed', json(scratch.report.checks));
   check(!scratch.report.findings.some((f) => f.code === 'check-mutated'), 'temp cwd: no project mutation');
 
-  await writeCheck(positive, { expect: 'artifact' });
+  await writeRegistered(positive, { expect: 'artifact' });
   const artifact = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
   const artifactCheck = artifact.report.checks.find((c) => c.id === 'test-check');
   check(artifactCheck?.status === 'error', 'artifact report: rejected', json(artifact.report.checks));
@@ -387,8 +410,40 @@ try {
   const badEntryCheck = badEntry.report.checks.find((c) => c.id === 'test-check');
   check(badEntryCheck?.status === 'invalid', 'entry: node -e rejected', json(badEntry.report.checks));
   check(badEntry.report.findings.some((f) => f.code === 'check-invalid' && f.what.includes('entry must be exactly')), 'entry: reason');
-  await writeCheck(positive, { expect: 'pass' });
+  await writeRegistered(positive, { expect: 'pass' });
 
+  // registration states ---------------------------------------------------
+  await writeCheck(positive, { expect: 'pass' });
+  await unregisterCheck(join(positive, 'checks'), 'test-check');
+  const unregistered = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
+  const unregisteredCheck = unregistered.report.checks.find((c) => c.id === 'test-check');
+  check(unregisteredCheck?.status === 'unregistered', 'registration: unregistered is not evidence', json(unregistered.report.checks));
+  check(unregistered.report.findings.some((f) => f.code === 'check-unregistered'), 'registration: unregistered finding');
+  check(unregistered.report.findings.some((f) => f.code === 'claim-check-unregistered'), 'registration: claim unregistered');
+
+  await writeRegistered(positive, { expect: 'pass' });
+  const codePath = join(positive, 'checks/test-check/check.mjs');
+  await writeFile(codePath, `${await readFile(codePath, 'utf8')}\n// edited after registration\n`);
+  const modified = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
+  const modifiedCheck = modified.report.checks.find((c) => c.id === 'test-check');
+  check(modifiedCheck?.status === 'modified', 'registration: modified is not evidence', json(modified.report.checks));
+  check(modified.report.findings.some((f) => f.code === 'check-modified'), 'registration: modified finding');
+  check(modified.report.findings.some((f) => f.code === 'claim-check-modified'), 'registration: claim modified');
+
+  await writeCheck(positive, { expect: 'pass' });
+  await registerCheckAt(positive, 'test-check', LATE_REGISTERED_AT);
+  const late = await verify({ projectRoot: positive, claimsPath: checkClaims, checks: true });
+  const lateCheck = late.report.checks.find((c) => c.id === 'test-check');
+  check(lateCheck?.status === 'pass' && lateCheck.late === true, 'registration: late check is advisory', json(late.report.checks));
+  check(late.report.findings.some((f) => f.code === 'check-late' && f.severity === 'info'), 'registration: late finding');
+  check(late.report.findings.some((f) => f.code === 'claim-check-late'), 'registration: claim late');
+  check(late.report.verdict === 'blocked', 'registration: late claim blocks', late.report.verdict);
+
+  await writeCheck(positive, { expect: 'pass' });
+  const cliRegister = spawnSync(process.execPath, [
+    join(ROOT, 'scripts/check-register.mjs'), positive, '--id', 'test-check', '--supersede', '--json',
+  ], { encoding: 'utf8' });
+  check(cliRegister.status === 0, 'check-register CLI registers', cliRegister.stderr.trim());
 
   // 3) explicit claim negatives ------------------------------------------
   const missingClaim = join(tmp, 'claims-missing.json');

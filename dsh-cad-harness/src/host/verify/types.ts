@@ -67,7 +67,7 @@ export interface VerifyClaim {
   versionIds?: string[];
 }
 
-export type VerifyCheckStatus = 'pass' | 'fail' | 'blocked' | 'error' | 'pending' | 'invalid' | 'mutated';
+export type VerifyCheckStatus = 'pass' | 'fail' | 'blocked' | 'error' | 'pending' | 'invalid' | 'mutated' | 'unregistered' | 'modified';
 
 export interface VerifyCheck {
   id: string;
@@ -76,6 +76,9 @@ export interface VerifyCheck {
   row: VerifyRowId;
   status: VerifyCheckStatus;
   findingIds: string[];
+  registeredAt?: string;
+  /** Registered after the current version: the result is advisory only. */
+  late?: boolean;
 }
 
 export interface VerifyPolicy {

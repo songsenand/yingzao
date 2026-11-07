@@ -6,7 +6,6 @@
 // mapping and the report. The user/agent owns: the check code, the criterion and
 // the negative sample. There is no workflow here: a check is evidence, not a step.
 
-import { createHash } from 'node:crypto';
 import { existsSync, type Dirent } from 'node:fs';
 import { cp, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +15,7 @@ import { runChecker } from '../checkers/runner.ts';
 import type { CheckerFinding, CheckerInput, CheckerManifest, CheckerReport, RunCheckerResult } from '../checkers/types.ts';
 import { setEqual } from './freshness.ts';
 import type { LoadedVerifyProject } from './project.ts';
+import { hashCheckDir, loadRegistry } from './registry.ts';
 import type {
   FindingDraft, VerifyCheck, VerifyCheckStatus, VerifyClaim, VerifyOutcome,
   VerifyRowId, VerifySeverity, VerifyWhere,
@@ -40,6 +40,8 @@ const PEARL_TO_ROW: Record<string, VerifyRowId> = {
   delivery: 'delivery',
 };
 
+export type CheckRegistration = 'registered' | 'unregistered' | 'modified';
+
 export interface LoadedCheck {
   id: string;
   version: string;
@@ -48,12 +50,15 @@ export interface LoadedCheck {
   hash: string;
   manifest?: CheckerManifest;
   error?: string;
+  registration?: CheckRegistration;
+  registeredAt?: string;
 }
 
 export interface ChecksLoadResult {
   root: string | null;
   checks: LoadedCheck[];
   issues: string[];
+  registryIssues: string[];
 }
 
 export interface CheckRun {
@@ -63,6 +68,9 @@ export interface CheckRun {
   durationMs?: number;
   /** Project paths the check changed, if the guard caught a write. */
   mutated?: string[];
+  /** Registered after the current version: the result is advisory only. */
+  late?: boolean;
+  lateReason?: string;
 }
 
 export function rowOfManifest(manifest: CheckerManifest | undefined): VerifyRowId {
@@ -78,20 +86,6 @@ function messageOf(e: unknown): string {
 
 function isInside(rel: string): boolean {
   return !isAbsolute(rel) && !rel.split(/[\\/]/).includes('..');
-}
-
-async function hashCheck(checker: LoadedChecker): Promise<string> {
-  const h = createHash('sha256');
-  h.update(checker.hash);
-  for (const rel of checker.manifest.negativeSamples ?? []) {
-    h.update(rel);
-    try {
-      h.update(await readFile(join(checker.dir, rel)));
-    } catch {
-      h.update('missing');
-    }
-  }
-  return `sha256:${h.digest('hex')}`;
 }
 
 async function unsafeManifestPath(dir: string): Promise<string | null> {
@@ -110,7 +104,14 @@ async function unsafeManifestPath(dir: string): Promise<string | null> {
   }
 }
 
-async function loadOne(dir: string): Promise<LoadedCheck> {
+/**
+ * Load and validate one check package. Does not touch the registry; the caller
+ * decides whether it is registered and whether to run the negative samples.
+ */
+export async function loadCheck(
+  dir: string,
+  options: { selfTest?: boolean } = {},
+): Promise<LoadedCheck> {
   const fallback: LoadedCheck = {
     id: basename(dir), version: 'unknown', row: 'delivery', dir, hash: '',
   };
@@ -131,9 +132,15 @@ async function loadOne(dir: string): Promise<LoadedCheck> {
     version: manifest.version,
     row: rowOfManifest(manifest),
     dir,
-    hash: await hashCheck(checker),
+    hash: '',
     manifest,
   };
+
+  try {
+    base.hash = (await hashCheckDir(dir)).hash;
+  } catch (e) {
+    return { ...base, error: `check package is not hashable: ${messageOf(e)}` };
+  }
 
   const errors: string[] = [];
   if (!manifest.negativeSamples || manifest.negativeSamples.length === 0) {
@@ -146,7 +153,7 @@ async function loadOne(dir: string): Promise<LoadedCheck> {
     errors.push(`timeoutMs ${manifest.timeoutMs} exceeds the site cap ${CHECK_TIMEOUT_CAP_MS}`);
   }
   if (manifest.permissions.includes('write:artifacts')) {
-    errors.push('V1.1 is read-only: write:artifacts is not allowed');
+    errors.push('V1.2 is read-only: write:artifacts is not allowed');
   }
   if (manifest.entry.length !== 2 || manifest.entry[0] !== 'node') {
     errors.push('entry must be exactly ["node", "<file>.mjs"]');
@@ -158,39 +165,45 @@ async function loadOne(dir: string): Promise<LoadedCheck> {
   }
   if (errors.length > 0) return { ...base, error: errors.join('; ') };
 
-  let selfTest: CheckerSelfTest;
-  try {
-    selfTest = await verifyChecker(checker);
-  } catch (e) {
-    return { ...base, error: `self-test failed: ${messageOf(e)}` };
-  }
-  if (!selfTest.ok) {
-    const detail = selfTest.samples
-      .map((s) => `${s.fixture}: ${s.status} (${s.detail})`)
-      .join('; ');
-    return { ...base, error: `negative samples must not pass: ${detail}` };
+  if (options.selfTest !== false) {
+    let selfTest: CheckerSelfTest;
+    try {
+      selfTest = await verifyChecker(checker);
+    } catch (e) {
+      return { ...base, error: `self-test failed: ${messageOf(e)}` };
+    }
+    if (!selfTest.ok) {
+      const detail = selfTest.samples
+        .map((s) => `${s.fixture}: ${s.status} (${s.detail})`)
+        .join('; ');
+      return { ...base, error: `negative samples must not pass: ${detail}` };
+    }
   }
   return base;
 }
 
 /**
- * Discover checks under `root`. Missing root is not an error unless it was
- * explicitly requested; an invalid check is kept with `error`, never dropped.
+ * Discover checks under `root` and annotate each with its registry state. An
+ * unregistered or modified check is never executed; an invalid package is kept
+ * with `error`, never dropped.
  */
 export async function loadChecks(
   root: string | null,
   options: { explicit?: boolean } = {},
 ): Promise<ChecksLoadResult> {
-  if (!root) return { root: null, checks: [], issues: [] };
+  if (!root) return { root: null, checks: [], issues: [], registryIssues: [] };
   const dir = resolve(root);
   if (!existsSync(dir)) {
     return {
       root: dir,
       checks: [],
       issues: options.explicit ? [`checks directory not found: ${dir}`] : [],
+      registryIssues: [],
     };
   }
 
+  const loadedRegistry = await loadRegistry(dir);
+  const registryIssues = [...loadedRegistry.issues];
   const entries = (await readdir(dir, { withFileTypes: true }))
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
@@ -199,9 +212,39 @@ export async function loadChecks(
   if (entries.length > MAX_CHECKS) {
     issues.push(`only the first ${MAX_CHECKS} checks are loaded (found ${entries.length})`);
   }
+
   const checks: LoadedCheck[] = [];
-  for (const name of entries.slice(0, MAX_CHECKS)) checks.push(await loadOne(join(dir, name)));
-  return { root: dir, checks, issues };
+  for (const name of entries.slice(0, MAX_CHECKS)) {
+    const check = await loadCheck(join(dir, name), { selfTest: false });
+    if (!check.error) {
+      const active = loadedRegistry.registry.checks.find((c) => c.id === check.id);
+      if (!active) {
+        check.registration = 'unregistered';
+      } else if (
+        active.hash !== check.hash
+        || active.version !== check.version
+        || active.row !== check.row
+        || active.criteria.length !== (check.manifest?.criteria.length ?? 0)
+        || !active.criteria.every((c, i) => c === check.manifest?.criteria[i])
+      ) {
+        check.registration = 'modified';
+      } else {
+        check.registration = 'registered';
+        check.registeredAt = active.registeredAt;
+        // The negative-sample gate runs at registration, not here: verify must
+        // not execute an unregistered/modified package, and the registry hash
+        // pins exactly the package that was tested there.
+      }
+    }
+    checks.push(check);
+  }
+  const loadedIds = new Set(checks.map((c) => c.id));
+  for (const active of loadedRegistry.registry.checks) {
+    if (!loadedIds.has(active.id)) {
+      registryIssues.push(`registered check "${active.id}" has no loadable directory under ${dir}`);
+    }
+  }
+  return { root: dir, checks, issues, registryIssues };
 }
 
 function buildInput(
@@ -278,9 +321,24 @@ function changedPaths(before: ProjectSnapshot, after: ProjectSnapshot): string[]
   return [...changed].sort().slice(0, 10);
 }
 
+function lateOf(check: LoadedCheck, project: LoadedVerifyProject): { late: boolean; reason?: string } {
+  if (project.currentVersionSet.length === 0) return { late: false };
+  const registered = Date.parse(check.registeredAt ?? '');
+  if (!Number.isFinite(registered)) return { late: true, reason: 'the registration timestamp is invalid' };
+  const times = project.currentVersionSet.map((v) => Date.parse(project.versionTimes.get(v) ?? ''));
+  if (times.some((t) => !Number.isFinite(t))) {
+    return { late: true, reason: 'a current version has no usable timestamp' };
+  }
+  const latest = Math.max(...times);
+  if (registered > latest) {
+    return { late: true, reason: `registered at ${check.registeredAt} after the latest current version` };
+  }
+  return { late: false };
+}
+
 /**
- * Run every mountable check. Mount-only, or a project without geometry, yields
- * `pending` — never `pass`.
+ * Run every mountable check. Unregistered/modified packages are not executed.
+ * Mount-only, or a project without geometry, yields `pending` — never `pass`.
  */
 export async function runChecks(
   checks: readonly LoadedCheck[],
@@ -292,6 +350,14 @@ export async function runChecks(
   for (const check of checks) {
     if (check.error) {
       runs.push({ check, status: 'invalid' });
+      continue;
+    }
+    if (check.registration === 'unregistered') {
+      runs.push({ check, status: 'unregistered' });
+      continue;
+    }
+    if (check.registration === 'modified') {
+      runs.push({ check, status: 'modified' });
       continue;
     }
     if (options.mountOnly) {
@@ -321,12 +387,14 @@ export async function runChecks(
         await rm(work, { recursive: true, force: true }).catch(() => {});
       }
       const mutated = changedPaths(before, await snapshotProject(project.root));
+      const late = lateOf(check, project);
       runs.push({
         check,
         status: mutated.length > 0 ? 'mutated' : result.report.status,
         report: result.report,
         durationMs: result.durationMs,
         ...(mutated.length > 0 ? { mutated } : {}),
+        ...(late.late ? { late: true, lateReason: late.reason } : {}),
       });
     } catch {
       runs.push({ check, status: 'error' });
@@ -388,6 +456,36 @@ export function checkFindingDrafts(run: CheckRun, options: { block?: boolean } =
       next: ['fix the manifest, entry or negative sample', 're-run verify --checks'],
       checkId: check.id,
       witness: baseWitness,
+    });
+    return drafts;
+  }
+  if (status === 'unregistered') {
+    drafts.push({
+      row: check.row,
+      code: 'check-unregistered',
+      outcome,
+      severity,
+      what: `${check.id} is not in checks/registry.json`,
+      why: ['a check must be pre-registered before it can be evidence'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['run node scripts/check-register.mjs <project> --id ' + check.id, 'or remove the check'],
+      checkId: check.id,
+      witness: baseWitness,
+    });
+    return drafts;
+  }
+  if (status === 'modified') {
+    drafts.push({
+      row: check.row,
+      code: 'check-modified',
+      outcome,
+      severity,
+      what: `${check.id} changed after it was registered (hash mismatch)`,
+      why: ['the registered hash pins the package; an edit voids the old evidence'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['review the change, then --unregister and register again'],
+      checkId: check.id,
+      witness: { ...baseWitness, registeredAt: check.registeredAt ?? null },
     });
     return drafts;
   }
@@ -482,6 +580,21 @@ export function checkFindingDrafts(run: CheckRun, options: { block?: boolean } =
     });
   }
 
+  if (run.late) {
+    drafts.push({
+      row: check.row,
+      code: 'check-late',
+      outcome: 'info',
+      severity: 'info',
+      what: `${check.id} is late (${run.lateReason ?? 'registered after the current version'}); result is advisory`,
+      why: ['a check registered after the geometry is not a pre-registered witness'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['register before the next version if you want it as a claim witness'],
+      checkId: check.id,
+      witness: { ...baseWitness, registeredAt: check.registeredAt ?? null },
+    });
+  }
+
   return drafts;
 }
 
@@ -493,6 +606,8 @@ export function checkSummary(run: CheckRun): VerifyCheck {
     row: run.check.row,
     status: run.status,
     findingIds: [],
+    ...(run.check.registeredAt ? { registeredAt: run.check.registeredAt } : {}),
+    ...(run.late ? { late: true } : {}),
   };
 }
 
@@ -516,6 +631,12 @@ export function checkClaimByCheck(
   if (run.status === 'invalid') {
     return { ok: false, code: 'claim-check-invalid', detail: `check ${claim.checkId} is not mountable: ${run.check.error ?? 'invalid'}` };
   }
+  if (run.status === 'unregistered') {
+    return { ok: false, code: 'claim-check-unregistered', detail: `check ${claim.checkId} is not registered (run check-register)` };
+  }
+  if (run.status === 'modified') {
+    return { ok: false, code: 'claim-check-modified', detail: `check ${claim.checkId} changed after registration; re-register it` };
+  }
   if (run.status === 'pending') {
     return { ok: false, code: 'claim-check-pending', detail: `check ${claim.checkId} is mounted but has not run (awaiting geometry)` };
   }
@@ -523,6 +644,9 @@ export function checkClaimByCheck(
     return { ok: false, code: 'claim-check-mutated', detail: `check ${claim.checkId} wrote to the project; evidence discarded` };
   }
   if (run.status === 'pass') {
+    if (run.late) {
+      return { ok: false, code: 'claim-check-late', detail: `check ${claim.checkId} was registered after the current version; it is advisory only` };
+    }
     // checker/v1 requires coverage.complete=true for status=pass; an incomplete
     // check reports blocked/fail and is handled below.
     if (claim.versionIds?.length) {

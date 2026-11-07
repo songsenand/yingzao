@@ -95,6 +95,7 @@
     "accept:explained": "node scripts/accept-explained.mjs",
     "accept:m16": "npm run accept:m15 && node scripts/accept-explained.mjs",
     "verify": "node scripts/verify.mjs",
+    "check-register": "node scripts/check-register.mjs",
     "accept:verify": "node scripts/accept-verify.mjs"
   },
   "dependencies": {

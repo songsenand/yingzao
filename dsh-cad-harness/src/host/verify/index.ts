@@ -57,7 +57,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
     : null;
   const loadedChecks = checksEnabled
     ? await loadChecks(checksRoot, { explicit: !!options.checksDir })
-    : { root: null, checks: [], issues: [] };
+    : { root: null, checks: [], issues: [], registryIssues: [] };
   const runs = checksEnabled
     ? await runChecks(loadedChecks.checks, project, claims.claims, { mountOnly: options.mountChecks === true })
     : [];
@@ -95,6 +95,20 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
       why: ['the checks directory could not be fully loaded'],
       where: { kind: 'manifest', note: checksRoot ?? 'checks' },
       next: ['fix the checks path or the check manifests'],
+    });
+  }
+  for (const issue of loadedChecks.registryIssues) {
+    const delivery = rows.find((r) => r.id === 'delivery');
+    if (!delivery) continue;
+    delivery.findings.push({
+      row: 'delivery',
+      code: 'check-registry',
+      outcome: 'warn',
+      severity: 'warn',
+      what: issue,
+      why: ['the checks registry could not be read; registered checks are treated as unregistered'],
+      where: { kind: 'manifest', note: 'checks/registry.json' },
+      next: ['fix registry.json, or run check-register'],
     });
   }
 

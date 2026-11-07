@@ -150,7 +150,7 @@ export function renderText(report: VerifyReport): string {
   const lines = [`verify: ${report.verdict} (${mode}) · policy ${policy}`];
   for (const row of report.rows) lines.push(rowLine(row));
   if (report.checks.length > 0) {
-    const shown = report.checks.slice(0, 6).map((c) => `${c.id} ${c.status} (${c.row})`);
+    const shown = report.checks.slice(0, 6).map((c) => `${c.id} ${c.status}${c.late ? ' late' : ''} (${c.row})`);
     lines.push(`checks: ${shown.join(' · ')}${report.checks.length > 6 ? ` · +${report.checks.length - 6}` : ''}`);
   }
 
