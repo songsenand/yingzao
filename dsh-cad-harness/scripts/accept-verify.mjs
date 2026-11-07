@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { verify } from '../src/host/verify/index.ts';
 import { canonicalJson } from '../src/host/verify/report.ts';
+import { validateCheckerReport } from '../src/host/checkers/protocol.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
@@ -28,20 +29,43 @@ const examples = {
 const json = (v) => JSON.stringify(v, null, 2);
 
 
-const CHECK_CODE = `let raw = '';
+const CHECK_CODE = `import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+let raw = '';
 process.stdin.on('data', (d) => { raw += d; });
 process.stdin.on('end', () => {
   const input = JSON.parse(raw || '{}');
   const expect = input.constraints?.checkConfig?.expect ?? 'pass';
   const base = { apiVersion: 'checker/v1', checker: { id: 'test-check', version: '1.0.0' }, artifacts: [] };
+  const out = (value) => process.stdout.write(JSON.stringify({ ...base, artifacts: [], ...value }));
+  const pass = (extra = {}) => out({ status: 'pass', findings: [{ criterion: 'test criterion', verdict: 'pass' }], coverage: { criteria: ['test criterion'], complete: true, skipped: [] }, ...extra });
+
   if (expect === 'fail') {
-    process.stdout.write(JSON.stringify({ ...base, status: 'fail', findings: [{ criterion: 'test criterion', verdict: 'fail', measured: 1, limit: 2, unit: 'mm', message: '1mm < 2mm', witness: { kind: 'test' }, attention: [{ kind: 'part', part: 'p1', where: [0, 0, 0], note: 'below target' }] }], coverage: { criteria: ['test criterion'], complete: true, skipped: [] } }));
+    out({ status: 'fail', findings: [{ criterion: 'test criterion', verdict: 'fail', measured: 1, limit: 2, unit: 'mm', message: '1mm < 2mm', witness: { kind: 'test' }, attention: [{ kind: 'part', part: 'p1', where: [0, 0, 0], note: 'below target' }] }], coverage: { criteria: ['test criterion'], complete: true, skipped: [] } });
     return;
   }
-  if (expect === 'incomplete') { process.stdout.write(JSON.stringify({ ...base, status: 'blocked', findings: [{ criterion: 'test criterion', verdict: 'blocked', measured: 0, limit: 0, unit: 'mm', witness: { kind: 'test' }, attention: [{ kind: 'part', part: 'p1', where: [0, 0, 0], note: 'not measured in this fixture' }], message: 'not measured in this fixture' }], coverage: { criteria: ['test criterion'], complete: false, skipped: [{ criterion: 'test criterion', reason: 'not measured in this fixture' }] } })); return; }
+  if (expect === 'incomplete') {
+    out({ status: 'blocked', findings: [{ criterion: 'test criterion', verdict: 'blocked', measured: 0, limit: 0, unit: 'mm', witness: { kind: 'test' }, attention: [{ kind: 'part', part: 'p1', where: [0, 0, 0], note: 'not measured' }], message: 'not measured in this fixture' }], coverage: { criteria: ['test criterion'], complete: false, skipped: [{ criterion: 'test criterion', reason: 'not measured in this fixture' }] } });
+    return;
+  }
   if (expect === 'error') { process.stdout.write('not json'); return; }
   if (expect === 'timeout') { setTimeout(() => process.exit(0), 5000); return; }
-  process.stdout.write(JSON.stringify({ ...base, status: 'pass', findings: [{ criterion: 'test criterion', verdict: 'pass' }], coverage: { criteria: ['test criterion'], complete: true, skipped: [] } }));
+  if (expect === 'mutate') {
+    writeFileSync(join(input.project.root, 'assembly', 'check-wrote-this.txt'), 'mutation');
+    pass();
+    return;
+  }
+  if (expect === 'cwd') {
+    writeFileSync(join(process.cwd(), 'local.txt'), 'ok');
+    pass();
+    return;
+  }
+  if (expect === 'artifact') {
+    out({ status: 'pass', findings: [{ criterion: 'test criterion', verdict: 'pass' }], coverage: { criteria: ['test criterion'], complete: true, skipped: [] }, artifacts: [{ kind: 'x', path: 'artifacts/x' }] });
+    return;
+  }
+  pass();
 });
 `;
 
@@ -280,6 +304,91 @@ try {
   await cp(join(ROOT, 'examples/checks/fit-clearance'), join(positive, 'checks/fit-clearance'), { recursive: true });
   const sample = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
   check(sample.report.checks.some((c) => c.id === 'fit-clearance' && c.status === 'pass'), 'sample check: pass', json(sample.report.checks));
+
+
+  // 2d) output contract (unit) and side-effect guard (runtime) ----------
+  const unitManifest = {
+    apiVersion: 'checker/v1', id: 'unit-check', version: '1.0.0', row: 'delivery',
+    criteria: ['a', 'b'], entry: ['node', 'check.mjs'],
+    permissions: ['read:constraints'], timeoutMs: 1000, negativeSamples: ['negative.json'],
+  };
+  const unitReport = (over = {}) => ({
+    apiVersion: 'checker/v1', checker: { id: 'unit-check', version: '1.0.0' },
+    status: 'pass', findings: [], coverage: { criteria: [], complete: true, skipped: [] }, artifacts: [],
+    ...over,
+  });
+  const complete = validateCheckerReport(unitReport({
+    findings: [{ criterion: 'a', verdict: 'pass' }, { criterion: 'b', verdict: 'pass' }],
+    coverage: { criteria: ['a', 'b'], complete: true, skipped: [] },
+  }), unitManifest);
+  check(complete.length === 0, 'protocol: complete pass accepted', complete.join('; '));
+
+  const partial = validateCheckerReport(unitReport({
+    findings: [{ criterion: 'a', verdict: 'pass' }],
+    coverage: { criteria: ['a'], complete: true, skipped: [] },
+  }), unitManifest);
+  check(partial.some((e) => e.includes('"b"')), 'protocol: partial coverage rejected', partial.join('; '));
+
+  const skippedPass = validateCheckerReport(unitReport({
+    findings: [{ criterion: 'a', verdict: 'pass' }],
+    coverage: { criteria: ['a'], complete: true, skipped: [{ criterion: 'b', reason: 'x' }] },
+  }), unitManifest);
+  check(skippedPass.some((e) => e.includes('skipped')), 'protocol: pass with skipped rejected', skippedPass.join('; '));
+
+  const noBlocked = validateCheckerReport(unitReport({
+    status: 'blocked',
+    findings: [{ criterion: 'a', verdict: 'pass' }],
+    coverage: { criteria: ['a', 'b'], complete: false, skipped: [] },
+  }), unitManifest);
+  check(noBlocked.some((e) => e.includes('blocked')), 'protocol: blocked without blocked evidence rejected', noBlocked.join('; '));
+
+  const badSkip = validateCheckerReport(unitReport({
+    status: 'blocked',
+    findings: [{ criterion: 'a', verdict: 'blocked', measured: 0, limit: 0, unit: 'mm', witness: { kind: 'x' }, attention: [{ kind: 'part', note: 'x' }] }],
+    coverage: { criteria: ['a'], complete: false, skipped: [{ criterion: 'b' }] },
+  }), unitManifest);
+  check(badSkip.some((e) => e.includes('reason')), 'protocol: skipped reason required', badSkip.join('; '));
+
+  const artifactReport = validateCheckerReport(unitReport({
+    artifacts: [{ kind: 'x', path: 'artifacts/x' }],
+  }), unitManifest, { artifacts: 'forbid' });
+  check(artifactReport.some((e) => e.includes('artifacts must be empty')), 'protocol: artifacts rejected', artifactReport.join('; '));
+
+  const manyFindings = Array.from({ length: 51 }, () => ({ criterion: 'a', verdict: 'pass' }));
+  const capped = validateCheckerReport(unitReport({
+    findings: manyFindings,
+    coverage: { criteria: ['a'], complete: true, skipped: [] },
+  }), unitManifest, { maxFindings: 50 });
+  check(capped.some((e) => e.includes('at most 50')), 'protocol: findings cap', capped.join('; '));
+
+  await writeCheck(positive, { expect: 'mutate' });
+  const mutated = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
+  const mutatedCheck = mutated.report.checks.find((c) => c.id === 'test-check');
+  check(mutatedCheck?.status === 'mutated', 'mutation guard: status mutated', json(mutated.report.checks));
+  check(mutated.report.findings.some((f) => f.code === 'check-mutated'), 'mutation guard: finding');
+  check(!mutated.report.findings.some((f) => f.code === 'check-passed' && f.checkId === 'test-check'), 'mutation guard: evidence discarded');
+
+  await writeCheck(positive, { expect: 'cwd' });
+  const scratch = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
+  const scratchCheck = scratch.report.checks.find((c) => c.id === 'test-check');
+  check(scratchCheck?.status === 'pass', 'temp cwd: scratch write allowed', json(scratch.report.checks));
+  check(!scratch.report.findings.some((f) => f.code === 'check-mutated'), 'temp cwd: no project mutation');
+
+  await writeCheck(positive, { expect: 'artifact' });
+  const artifact = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
+  const artifactCheck = artifact.report.checks.find((c) => c.id === 'test-check');
+  check(artifactCheck?.status === 'error', 'artifact report: rejected', json(artifact.report.checks));
+  check(artifact.report.findings.some((f) => f.code === 'check-error' && f.what.includes('artifacts must be empty')), 'artifact report: reason');
+
+  await writeCheck(positive, { expect: 'pass' });
+  const goodManifest = JSON.parse(await readFile(join(positive, 'checks/test-check/manifest.json'), 'utf8'));
+  await writeFile(join(positive, 'checks/test-check/manifest.json'), json({ ...goodManifest, entry: ['node', '-e', 'process.exit(0)'] }));
+  const badEntry = await verify({ projectRoot: positive, claimsPath: baseClaims, checks: true });
+  const badEntryCheck = badEntry.report.checks.find((c) => c.id === 'test-check');
+  check(badEntryCheck?.status === 'invalid', 'entry: node -e rejected', json(badEntry.report.checks));
+  check(badEntry.report.findings.some((f) => f.code === 'check-invalid' && f.what.includes('entry must be exactly')), 'entry: reason');
+  await writeCheck(positive, { expect: 'pass' });
+
 
   // 3) explicit claim negatives ------------------------------------------
   const missingClaim = join(tmp, 'claims-missing.json');

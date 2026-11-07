@@ -67,7 +67,7 @@ export interface VerifyClaim {
   versionIds?: string[];
 }
 
-export type VerifyCheckStatus = 'pass' | 'fail' | 'blocked' | 'error' | 'pending' | 'invalid';
+export type VerifyCheckStatus = 'pass' | 'fail' | 'blocked' | 'error' | 'pending' | 'invalid' | 'mutated';
 
 export interface VerifyCheck {
   id: string;

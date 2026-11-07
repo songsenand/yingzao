@@ -42,6 +42,8 @@ Depth: `docs/llm/verify.md`.
 - A project-specific target can be a claim + `checks/<id>/`; `verify --checks` mounts it
   only after its negative sample rejects. Default `warn`; `--mount-checks` validates before
   drawing. It is evidence, not a workflow step.
+- A check must account for every declared criterion, may not write the project, and runs
+  from a temp copy; `check-mutated` discards its evidence. Entry is `node <file>.mjs` only.
 - Full depth: `docs/llm/verify.md`.
 
 ## Project selection (explicit; 2026-11-02)

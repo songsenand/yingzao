@@ -3966,3 +3966,9 @@ policy 是用户声明；报告是派生快照，工具不回读。实现 `src/h
 边界：Node only、拒绝 `write:artifacts`、`timeoutMs` ≤ 30s、只读项目、不是沙箱；
 没有 `on_fail`/template/profile/workflow。示例 `examples/checks/fit-clearance/`；
 协议与用法 `docs/llm/verify.md`；决策 `docs/DECISION-LOG.md` 2026-11-07。
+
+**V1.2a 收紧（已实现）**：输出逐判据对账（每条 manifest 判据必须有 finding 或
+skipped；pass 要求每条都有 pass finding + 完整覆盖；blocked 必须有 blocked 或 skipped；
+skipped 必须是 `{criterion,reason}`）；`artifacts` 必须为空；`findings` ≤ 50；`entry`
+只允许 `["node","<file>.mjs"]`；检查在临时副本 cwd 运行，项目做前后 stat 快照，
+写入 → `check-mutated`，证据丢弃。V1.2b（注册簿/hash/迟到）待实现。

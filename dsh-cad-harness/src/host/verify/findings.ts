@@ -125,6 +125,11 @@ export function whyNext(code: string): WhyNext {
         why: ['the claim cites versions that are not the current set'],
         next: ['re-run the check on the current versions, or update the claim'],
       };
+    case 'claim-check-mutated':
+      return {
+        why: ['the check wrote to the project, so its evidence was discarded'],
+        next: ['remove the write (use a temp dir for outputs)', 're-run verify --checks'],
+      };
     case 'interference':
       return {
         why: ['two solids overlap at the current placement', 'the pose is wrong, or the clearance is smaller than the mesh residual'],

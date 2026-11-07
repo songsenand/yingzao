@@ -7,12 +7,13 @@
 // the negative sample. There is no workflow here: a check is evidence, not a step.
 
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { existsSync, type Dirent } from 'node:fs';
+import { cp, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { loadChecker, verifyChecker, type CheckerSelfTest, type LoadedChecker } from '../checkers/registry.ts';
 import { runChecker } from '../checkers/runner.ts';
-import type { CheckerFinding, CheckerInput, CheckerManifest, CheckerReport } from '../checkers/types.ts';
+import type { CheckerFinding, CheckerInput, CheckerManifest, CheckerReport, RunCheckerResult } from '../checkers/types.ts';
 import { setEqual } from './freshness.ts';
 import type { LoadedVerifyProject } from './project.ts';
 import type {
@@ -23,6 +24,10 @@ import type {
 /** Site cap: a custom check may not outlive this, whatever its manifest says. */
 export const CHECK_TIMEOUT_CAP_MS = 30_000;
 export const MAX_CHECKS = 32;
+/** Site cap: a custom check may not flood the report. */
+export const MAX_FINDINGS = 50;
+/** Best-effort mutation guard: snapshot at most this many files. */
+const SNAPSHOT_MAX_FILES = 5_000;
 
 const ROWS: VerifyRowId[] = ['requirements', 'model', 'fit', 'make', 'review', 'delivery'];
 const PEARL_TO_ROW: Record<string, VerifyRowId> = {
@@ -56,6 +61,8 @@ export interface CheckRun {
   status: VerifyCheckStatus;
   report?: CheckerReport;
   durationMs?: number;
+  /** Project paths the check changed, if the guard caught a write. */
+  mutated?: string[];
 }
 
 export function rowOfManifest(manifest: CheckerManifest | undefined): VerifyRowId {
@@ -141,12 +148,13 @@ async function loadOne(dir: string): Promise<LoadedCheck> {
   if (manifest.permissions.includes('write:artifacts')) {
     errors.push('V1.1 is read-only: write:artifacts is not allowed');
   }
-  const entry0 = manifest.entry[0] ?? '';
-  if (!(entry0 === 'node' || basename(entry0) === 'node')) {
-    errors.push('V1.1 runs Node checks only: entry[0] must be "node"');
-  }
-  for (const arg of manifest.entry.slice(1)) {
-    if (!isInside(arg)) errors.push(`entry must stay inside the check dir: ${arg}`);
+  if (manifest.entry.length !== 2 || manifest.entry[0] !== 'node') {
+    errors.push('entry must be exactly ["node", "<file>.mjs"]');
+  } else {
+    const file = manifest.entry[1]!;
+    if (!file.endsWith('.mjs')) errors.push(`entry[1] must be a .mjs file: ${file}`);
+    if (!isInside(file)) errors.push(`entry must stay inside the check dir: ${file}`);
+    else if (!existsSync(join(dir, file))) errors.push(`entry file not found: ${file}`);
   }
   if (errors.length > 0) return { ...base, error: errors.join('; ') };
 
@@ -217,6 +225,59 @@ function buildInput(
   };
 }
 
+
+interface FileStamp {
+  size: number;
+  mtimeMs: number;
+}
+
+type ProjectSnapshot = Map<string, FileStamp>;
+
+const SNAPSHOT_SKIP = new Set(['.git', 'node_modules', '.tmp']);
+
+async function walkSnapshot(
+  dir: string,
+  root: string,
+  out: ProjectSnapshot,
+  budget: { n: number },
+): Promise<void> {
+  if (budget.n >= SNAPSHOT_MAX_FILES) return;
+  const entries: Dirent[] = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (budget.n >= SNAPSHOT_MAX_FILES) return;
+    if (SNAPSHOT_SKIP.has(entry.name)) continue;
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkSnapshot(abs, root, out, budget);
+    } else if (entry.isFile()) {
+      try {
+        const st = await stat(abs);
+        out.set(relative(root, abs), { size: st.size, mtimeMs: st.mtimeMs });
+        budget.n++;
+      } catch {
+        // disappeared during the walk; the diff reports it if it mattered
+      }
+    }
+  }
+}
+
+/** Best-effort stat snapshot of the project; not a sandbox, but catches writes. */
+async function snapshotProject(projectRoot: string): Promise<ProjectSnapshot> {
+  const out: ProjectSnapshot = new Map();
+  await walkSnapshot(projectRoot, projectRoot, out, { n: 0 });
+  return out;
+}
+
+function changedPaths(before: ProjectSnapshot, after: ProjectSnapshot): string[] {
+  const changed = new Set<string>();
+  for (const [rel, stamp] of before) {
+    const next = after.get(rel);
+    if (!next || next.size !== stamp.size || next.mtimeMs !== stamp.mtimeMs) changed.add(rel);
+  }
+  for (const rel of after.keys()) if (!before.has(rel)) changed.add(rel);
+  return [...changed].sort().slice(0, 10);
+}
+
 /**
  * Run every mountable check. Mount-only, or a project without geometry, yields
  * `pending` — never `pass`.
@@ -242,16 +303,32 @@ export async function runChecks(
       continue;
     }
     try {
-      const result = await runChecker(check.manifest!, buildInput(project, claims, check.manifest!), {
-        cwd: check.dir,
-      });
+      const input = buildInput(project, claims, check.manifest!);
+      const before = await snapshotProject(project.root);
+      const work = await mkdtemp(join(tmpdir(), 'dsh-check-'));
+      let result: RunCheckerResult;
+      try {
+        await cp(check.dir, work, {
+          recursive: true,
+          filter: (src) => !/[\\/](node_modules|\.tmp)([\\/]|$)/.test(src),
+        });
+        result = await runChecker(check.manifest!, input, {
+          cwd: work,
+          artifacts: 'forbid',
+          maxFindings: MAX_FINDINGS,
+        });
+      } finally {
+        await rm(work, { recursive: true, force: true }).catch(() => {});
+      }
+      const mutated = changedPaths(before, await snapshotProject(project.root));
       runs.push({
         check,
-        status: result.report.status,
+        status: mutated.length > 0 ? 'mutated' : result.report.status,
         report: result.report,
         durationMs: result.durationMs,
+        ...(mutated.length > 0 ? { mutated } : {}),
       });
-    } catch (e) {
+    } catch {
       runs.push({ check, status: 'error' });
     }
   }
@@ -315,6 +392,22 @@ export function checkFindingDrafts(run: CheckRun, options: { block?: boolean } =
     return drafts;
   }
   if (status === 'pending') return drafts;
+
+  if (status === 'mutated') {
+    drafts.push({
+      row: check.row,
+      code: 'check-mutated',
+      outcome,
+      severity,
+      what: `${check.id} wrote to the project: ${(run.mutated ?? []).join(', ') || 'unknown path'}`,
+      why: ['a check may read the project but must not write it'],
+      where: { kind: 'manifest', note: `checks/${check.id}` },
+      next: ['write outputs to a temp dir instead', 're-run verify --checks'],
+      checkId: check.id,
+      witness: { ...baseWitness, mutated: run.mutated ?? [] },
+    });
+    return drafts;
+  }
 
   const findings = report?.findings ?? [];
   const nonPass = findings.filter((f) => f.verdict !== 'pass');
@@ -425,6 +518,9 @@ export function checkClaimByCheck(
   }
   if (run.status === 'pending') {
     return { ok: false, code: 'claim-check-pending', detail: `check ${claim.checkId} is mounted but has not run (awaiting geometry)` };
+  }
+  if (run.status === 'mutated') {
+    return { ok: false, code: 'claim-check-mutated', detail: `check ${claim.checkId} wrote to the project; evidence discarded` };
   }
   if (run.status === 'pass') {
     // checker/v1 requires coverage.complete=true for status=pass; an incomplete

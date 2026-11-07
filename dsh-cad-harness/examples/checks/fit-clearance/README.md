@@ -23,5 +23,7 @@ node scripts/verify.mjs <project> --checks --mount-checks   # before drawing
 { "kind": "fit", "statement": "clearance >= 0.8 mm", "checkId": "fit-clearance" }
 ```
 
-- V1.1 is read-only: `write:artifacts` is rejected, only Node checks run, the
-  runner bounds time/output/env. It is **not a sandbox**; the check is your code.
+- V1.2a is read-only: `write:artifacts` is rejected, `artifacts` must be empty,
+  every declared criterion needs a finding, and the check runs from a temp copy
+  of its directory. Only Node `.mjs` checks run; `findings` ≤ 50. It is **not a
+  sandbox**; the check is your code.

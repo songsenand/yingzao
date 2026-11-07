@@ -149,6 +149,28 @@ the negative sample must **not** return `pass`. A check that passes its own bad
 fixture is `invalid` and is not used as evidence. Missing fixture, timeout,
 malformed JSON or a non-zero exit is an error, never a pass.
 
+**Output contract.** One JSON document on stdout; logs go to stderr. The report
+must account for **every declared criterion**:
+
+- each `criteria[]` entry must appear in a `findings[].criterion` or a
+  `coverage.skipped[].criterion`;
+- `coverage.criteria` must be a subset of the declared criteria;
+- every finding criterion must be listed in `coverage.criteria`;
+- `status=pass` requires a **pass finding for every criterion**, `complete:true`,
+  and no skipped criteria;
+- `status=blocked` requires a blocked finding or a skipped criterion;
+- `status=fail` requires at least one fail finding;
+- every `skipped[]` item is `{criterion, reason}` with a non-empty reason;
+- `artifacts` must be empty; `findings` ≤ 50;
+- `entry` is exactly `["node", "<file>.mjs"]` — no `-e`, flags or shell.
+
+**Side-effect guard.** The check runs from a temporary copy of its directory.
+The project is stat-snapshotted before and after; a write to `assembly/`,
+`cad-data/`, `claims.json`, `checks/` or any other project file yields
+`check-mutated`, and the check's evidence is **discarded**. Scratch writes inside
+the temp cwd are allowed. This is a best-effort guard, not a sandbox: reads and
+network outside the project are not prevented.
+
 **Mapping.** A check's findings are attached to its `row`:
 
 | check result | default | with policy `blockOn: ["custom-check"]` |
@@ -158,6 +180,7 @@ malformed JSON or a non-zero exit is an error, never a pass.
 | `blocked` / `error` | `check-blocked` / `check-error` warn | blocked |
 | incomplete coverage | `check-incomplete` warn | blocked |
 | invalid manifest/negative | `check-invalid` warn | blocked |
+| writes the project | `check-mutated` warn | blocked |
 
 The report adds `checks[]` (`id/version/hash/row/status/findingIds`) and
 `coverage.checked` gets `check:<id>@<version>`. `--mount-checks` validates and
@@ -175,11 +198,13 @@ cover every criterion, and cite the current version set. A claim whose check is
 missing/pending/invalid/failed/error is blocked. The delivery audit does not also
 judge a `checkId` claim by run kind.
 
-**Boundaries.** V1.1 runs **Node** checks only, rejects `write:artifacts`, and
-caps `timeoutMs` at 30s. It is **not a sandbox**: the check runs with your
-privileges; the runner only bounds time/output/env (temp HOME/TMPDIR). Mounting a
-check means trusting its author. `examples/checks/fit-clearance/` is a working
-template.
+**Boundaries.** V1.2a runs **Node** checks only, requires
+`["node", "<file>.mjs"]`, rejects `write:artifacts` and non-empty `artifacts`,
+caps `timeoutMs` at 30s and `findings` at 50. It is **not a sandbox**: the check
+runs with your privileges; the runner bounds time/output/env (temp HOME/TMPDIR)
+and the project snapshot catches writes, but reads/network outside the project
+are not prevented. Mounting a check means trusting its author.
+`examples/checks/fit-clearance/` is a working template.
 
 ## Exit codes
 

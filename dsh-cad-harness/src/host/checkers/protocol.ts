@@ -62,8 +62,19 @@ export function validateCheckerManifest(value: unknown): string[] {
   return errors;
 }
 
+export interface ValidateReportOptions {
+  /** Custom checks must not write artifacts. */
+  artifacts?: 'allow' | 'forbid';
+  /** Reject a report with more findings than this. */
+  maxFindings?: number;
+}
+
 /** Validate a checker report against the protocol (and optionally its manifest). */
-export function validateCheckerReport(value: unknown, manifest?: CheckerManifest): string[] {
+export function validateCheckerReport(
+  value: unknown,
+  manifest?: CheckerManifest,
+  options: ValidateReportOptions = {},
+): string[] {
   const errors: string[] = [];
   if (!isObject(value)) return ['report must be an object'];
   if (value.apiVersion !== CHECKER_API_VERSION) errors.push(`apiVersion must be "${CHECKER_API_VERSION}"`);
@@ -83,6 +94,9 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
   if (!Array.isArray(findings)) {
     errors.push('findings must be an array');
   } else {
+    if (options.maxFindings !== undefined && findings.length > options.maxFindings) {
+      errors.push(`findings must be at most ${options.maxFindings} (got ${findings.length})`);
+    }
     findings.forEach((f, i) => {
       if (!isObject(f)) { errors.push(`findings[${i}] must be an object`); return; }
       if (!asString(f.criterion)) errors.push(`findings[${i}].criterion must be a non-empty string`);
@@ -104,6 +118,7 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
   }
 
   const coverage = value.coverage;
+  const skippedCriteria: string[] = [];
   if (!isObject(coverage)) {
     errors.push('coverage must be an object');
   } else {
@@ -113,8 +128,21 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
     if (typeof coverage.complete !== 'boolean') errors.push('coverage.complete must be boolean');
     if (!Array.isArray(coverage.skipped)) {
       errors.push('coverage.skipped must be an array');
-    } else if (coverage.skipped.length > 0 && coverage.complete === true) {
-      errors.push('coverage.complete cannot be true when skipped is non-empty');
+    } else {
+      if (coverage.skipped.length > 0 && coverage.complete === true) {
+        errors.push('coverage.complete cannot be true when skipped is non-empty');
+      }
+      const declared = new Set(manifest?.criteria ?? []);
+      coverage.skipped.forEach((s, i) => {
+        if (!isObject(s)) { errors.push(`coverage.skipped[${i}] must be an object`); return; }
+        if (!asString(s.criterion)) errors.push(`coverage.skipped[${i}].criterion must be a non-empty string`);
+        else if (manifest && !declared.has(s.criterion)) {
+          errors.push(`coverage.skipped[${i}].criterion "${s.criterion}" is not declared by manifest`);
+        } else {
+          skippedCriteria.push(s.criterion);
+        }
+        if (!asString(s.reason)) errors.push(`coverage.skipped[${i}].reason must be a non-empty string`);
+      });
     }
   }
 
@@ -122,6 +150,9 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
   if (!Array.isArray(artifacts)) {
     errors.push('artifacts must be an array');
   } else {
+    if (options.artifacts === 'forbid' && artifacts.length > 0) {
+      errors.push('artifacts must be empty for custom checks (read-only)');
+    }
     artifacts.forEach((a, i) => {
       if (!isObject(a) || !asString(a.kind) || !asString(a.path)) {
         errors.push(`artifacts[${i}] must be { kind, path }`);
@@ -133,18 +164,18 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
     });
   }
 
-  if (value.status === 'pass') {
-    if (isObject(coverage) && coverage.complete !== true) errors.push('status=pass requires coverage.complete=true');
-    if (Array.isArray(findings) && findings.some((f) => isObject(f) && f.verdict !== 'pass')) {
-      errors.push('status=pass cannot coexist with a non-pass finding');
-    }
-  }
-  if (value.status === 'fail' && Array.isArray(findings) && !findings.some((f) => isObject(f) && f.verdict === 'fail')) {
-    errors.push('status=fail requires at least one fail finding');
-  }
-  if (value.status === 'error' && !isObject(value.error)) {
-    errors.push('status=error requires an error object');
-  }
+  const declaredCriteria = manifest?.criteria ?? [];
+  const findingCriteria = new Set<string>(
+    Array.isArray(findings)
+      ? findings
+        .filter(isObject)
+        .map((f) => (asString(f.criterion) ? f.criterion : ''))
+        .filter((c) => c.length > 0)
+      : [],
+  );
+  const coverageCriteria = isObject(coverage) && Array.isArray(coverage.criteria)
+    ? coverage.criteria.filter(asString)
+    : [];
 
   if (manifest && Array.isArray(findings)) {
     const allowed = new Set(manifest.criteria);
@@ -153,7 +184,63 @@ export function validateCheckerReport(value: unknown, manifest?: CheckerManifest
         errors.push(`finding criterion "${f.criterion}" is not declared by manifest (allowed: ${manifest.criteria.join(', ')})`);
       }
     }
+    for (const c of coverageCriteria) {
+      if (!allowed.has(c)) errors.push(`coverage criterion "${c}" is not declared by manifest`);
+    }
+    for (const c of findingCriteria) {
+      if (!coverageCriteria.includes(c) && !skippedCriteria.includes(c)) {
+        errors.push(`finding criterion "${c}" is missing from coverage.criteria`);
+      }
+    }
   }
+
+  // A check that did not crash must account for every declared criterion, either
+  // with a finding or with an explicit skipped reason. Error reports are exempt:
+  // the check never got far enough to evaluate anything.
+  const status = value.status;
+  if (manifest && status !== 'error' && Array.isArray(findings)) {
+    const accounted = new Set([...findingCriteria, ...skippedCriteria]);
+    for (const c of declaredCriteria) {
+      if (!accounted.has(c)) {
+        errors.push(`manifest criterion "${c}" is not accounted for by a finding or skipped reason`);
+      }
+    }
+  }
+
+  if (status === 'pass') {
+    if (!isObject(coverage) || coverage.complete !== true) {
+      errors.push('status=pass requires coverage.complete=true');
+    }
+    if (isObject(coverage) && Array.isArray(coverage.skipped) && coverage.skipped.length > 0) {
+      errors.push('status=pass cannot coexist with skipped criteria');
+    }
+    if (Array.isArray(findings) && findings.some((f) => isObject(f) && f.verdict !== 'pass')) {
+      errors.push('status=pass cannot coexist with a non-pass finding');
+    }
+    for (const c of declaredCriteria) {
+      if (!Array.isArray(findings) || !findings.some((f) => isObject(f) && f.criterion === c && f.verdict === 'pass')) {
+        errors.push(`status=pass requires a pass finding for every declared criterion (missing "${c}")`);
+      }
+    }
+  }
+  if (status === 'fail' && Array.isArray(findings) && !findings.some((f) => isObject(f) && f.verdict === 'fail')) {
+    errors.push('status=fail requires at least one fail finding');
+  }
+  if (status === 'blocked') {
+    const hasBlocked = Array.isArray(findings) && findings.some((f) => isObject(f) && f.verdict === 'blocked');
+    if (!hasBlocked && skippedCriteria.length === 0) {
+      errors.push('status=blocked requires a blocked finding or a skipped criterion');
+    }
+  }
+  if (status === 'error') {
+    if (!isObject(value.error)) {
+      errors.push('status=error requires an error object');
+    } else {
+      if (!asString(value.error.code)) errors.push('status=error requires error.code');
+      if (!asString(value.error.message)) errors.push('status=error requires error.message');
+    }
+  }
+
   return errors;
 }
 

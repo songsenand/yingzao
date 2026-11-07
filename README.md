@@ -53,7 +53,7 @@ node scripts/verify.mjs /path/to/project --block --strict
 - claims：`<project>/claims.json` 或 `--claims <file>`；policy：
   `<project>/evidence-policy.json` 或 `--policy <file>`；没有 policy 就是 advisory。
 - 项目特定判据可写成 `<project>/checks/<id>/`，用 `--checks` 显式启用；负样本先过门，
-  默认 `warn`，`--mount-checks` 可在画图前只验证检查本身。
+  逐判据对账，写项目即作废；默认 `warn`，`--mount-checks` 可在画图前只验证检查本身。
 - 详见 [docs/llm/verify.md](docs/llm/verify.md)。
 
 ## 文档

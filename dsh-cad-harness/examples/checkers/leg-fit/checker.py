@@ -46,7 +46,14 @@ def main() -> int:
         "apiVersion": "checker/v1",
         "checker": {"id": "leg-fit", "version": "0.1.0"},
         "status": "pass" if volume == 0 else "fail",
-        "findings": [],
+        "findings": [] if volume > 0 else [{
+            "criterion": "fit.interference",
+            "verdict": "pass",
+            "measured": 0.0,
+            "limit": 0,
+            "unit": "mm3",
+            "witness": {"kind": "aabb-overlap", "parts": ["leg", "rail"], "volumeMm3": 0.0},
+        }],
         "coverage": {"criteria": ["fit.interference"], "complete": True, "skipped": []},
         "artifacts": [],
     }

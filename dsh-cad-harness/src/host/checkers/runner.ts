@@ -29,6 +29,10 @@ export interface RunCheckerOptions {
   cwd?: string;
   /** Extra environment variables (never inherited wholesale). */
   env?: Record<string, string>;
+  /** Custom checks: reject non-empty artifacts. */
+  artifacts?: 'allow' | 'forbid';
+  /** Custom checks: reject reports with more findings than this. */
+  maxFindings?: number;
 }
 
 function jsonError(manifest: CheckerManifest, code: string, message: string): CheckerReport {
@@ -129,7 +133,10 @@ export async function runChecker(
     };
   }
 
-  const errors = validateCheckerReport(parsed, manifest);
+  const errors = validateCheckerReport(parsed, manifest, {
+    ...(options.artifacts ? { artifacts: options.artifacts } : {}),
+    ...(options.maxFindings !== undefined ? { maxFindings: options.maxFindings } : {}),
+  });
   if (errors.length > 0) {
     return {
       report: jsonError(manifest, 'invalid-report', errors.join('; ')),

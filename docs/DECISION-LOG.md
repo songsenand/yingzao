@@ -5569,3 +5569,25 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** `src/host/verify/checks.ts`、`checkers/{types,protocol}`、`schemas/checker-manifest.schema.json`、`scripts/verify.mjs`、`scripts/accept-verify.mjs`、`examples/checks/`、skill/README/DESIGN。
 
 **未决/非目标：** Python/其他语言、UI 面板/热力图、检查市场/仓库、沙箱化（共享/CI 另议）。
+
+## 2026-11-07：自定义检查收紧：逐判据对账、副作用守卫、注册制（分两段）
+
+**触发条件：** 第 1 条（用户拍板 A–G、分 V1.2a/V1.2b 实施）+ 第 3/4 条（脚本契约、六行扩展）。
+
+**要解决的问题：** V1.1 的自定义检查仍像普通 agent 脚本：发现即用、可只报子集判据、可在项目里写文件、画图后补检查也能当 witness。它不是普通脚本，必须比普通脚本多一层限制。
+
+**决策内容：**
+
+- **逐判据对账（V1.2a）**：每条 manifest 判据必须有 `finding` 或 `skipped`；`coverage.criteria` ⊆ 声明判据；每个 finding 判据必须列入 coverage；`pass` 要求每条判据都有 pass finding + 完整覆盖；`blocked` 必须有 blocked finding 或 skipped；`skipped` 必须是 `{criterion, reason}`。
+- **输出收敛（V1.2a）**：`artifacts` 必须为空；`findings` ≤ 50；`entry` 只允许 `["node", "<file>.mjs"]`；stdout 只允许一个 JSON，日志走 stderr。
+- **副作用守卫（V1.2a）**：检查在临时副本 cwd 运行；项目做前后 stat 快照；写入项目 → `check-mutated`，证据丢弃；claim 引用则 blocked。
+- **注册制（V1.2b）**：`checks/registry.json` + `check-register` CLI；hash 固定；未注册/被改不跑；晚注册只 advisory；claim 引用则 blocked；`--unregister` 后再注册，旧 hash 进 history。
+- **裁决不变**：默认 `warn`；policy `blockOn:["custom-check"]` 才 block；不是沙箱。
+
+**理由：** 检查是证据生产者，不是普通脚本；接口必须固定、可对账、无副作用。注册制保护“验收先行”；逐判据对账杜绝空 pass；守卫让写入可见。分两段让摩擦可见、可评估。
+
+**依据：** `accept-verify` 新增协议单测（partial/skipped/blocked/artifacts/cap）与运行时用例（mutate/cwd/artifact/entry）；`accept-checker-protocol` 通过（`leg-fit` 补了显式 pass finding）；`accept:probe` 通过；`tsc` 0。
+
+**影响：** `checkers/{protocol,runner}`、`src/host/verify/checks.ts`、`examples/checkers/leg-fit`、`scripts/accept-verify.mjs`、`docs/llm/verify.md`、`DESIGN.md`。V1.2b 待实现：registry、hash、late、claim late。
+
+**未决/非目标：** 时间戳是声明不是证明；mutation guard 是 best-effort；不是沙箱；Python/依赖/写 artifact 暂不支持。
