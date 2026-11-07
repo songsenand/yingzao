@@ -248,8 +248,11 @@ bounds time/output/env (temp HOME/TMPDIR) and the project snapshot catches write
 but reads/network outside the project are not prevented. `registeredAt` is a
 declaration, not a notarised timestamp: the registry makes the normal path
 explicit and changes visible, but a determined editor can still forge it.
-Mounting a check means trusting its author. `examples/checks/fit-clearance/` is a
-working template; run `check-register` after copying it.
+`verify` trusts the registry entry: hand-editing `registry.json` bypasses the
+negative-sample gate. Always register with `check-register`; registration
+executes the negative sample, so run it only on code you trust. Mounting a check
+means trusting its author. `examples/checks/fit-clearance/` is a working
+template; run `check-register` after copying it.
 
 ## Exit codes
 
