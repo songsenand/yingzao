@@ -6,7 +6,8 @@
 // reporting a green check.
 
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { loadAssemblyManifest, flattenParts } from '../manifest.ts';
 import { interfaceLocation, manifestLocation, pairLocation, type PearlFailure, type SpatialLocation } from './failure.ts';
 
 interface RunEntry {
@@ -118,10 +119,41 @@ export interface ObserveFitOptions {
   template?: FitTemplate;
 }
 
+/**
+ * Versions intentionally left out of static assembly runs. A flexible part
+ * (leaf spring, flexure, snap) has no single static pose, so the assembly run
+ * omits it while the contract check may still declare its interface. The
+ * declaration lives in `assembly/static-scope.json`, next to the assembly.
+ */
+async function staticOmittedVersions(cadData: string): Promise<Set<string>> {
+  const projectRoot = dirname(cadData);
+  try {
+    const raw = JSON.parse(
+      await readFile(join(projectRoot, 'assembly/static-scope.json'), 'utf8'),
+    ) as { parts?: unknown; versions?: unknown };
+    const omitted = new Set<string>();
+    if (Array.isArray(raw.versions)) {
+      for (const v of raw.versions) if (typeof v === 'string' && v.length > 0) omitted.add(v);
+    }
+    const parts = Array.isArray(raw.parts) ? raw.parts.filter((x): x is string => typeof x === 'string') : [];
+    if (parts.length > 0) {
+      const manifest = await loadAssemblyManifest(join(projectRoot, 'assembly/assembly.json'));
+      const omittedNodes = new Set(parts);
+      for (const p of flattenParts(manifest.root)) {
+        if (omittedNodes.has(p.id) && typeof p.node.version === 'string') omitted.add(p.node.version);
+      }
+    }
+    return omitted;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function observeFit(cadData: string, options: ObserveFitOptions = {}): Promise<FitObservation> {
   const strictUndeclared = options.requireUndeclaredZero === true;
   const template = options.template ?? 'static';
   const explained = new Set((options.explainedUndeclared ?? []).map((e) => [e.a, e.b].sort().join('\u0000')));
+  const omittedVersions = await staticOmittedVersions(cadData);
   const manifest = await readJson<RunManifest>(join(cadData, 'runs/manifest.json'));
   const assembly = latest(manifest.runs, 'assembly');
   const contract = latest(manifest.runs, 'assembly-check');
@@ -185,9 +217,9 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
     counts.interfaces = interfaces;
     counts.undeclared = unexplained;
     counts.hard = hard;
-    const aVersions = assembly?.sourceVersionIds;
-    const cVersions = contract.sourceVersionIds;
-    if (aVersions?.length && cVersions?.length) {
+    const aVersions = (assembly?.sourceVersionIds ?? []).filter((v) => !omittedVersions.has(v));
+    const cVersions = (contract.sourceVersionIds ?? []).filter((v) => !omittedVersions.has(v));
+    if (aVersions.length && cVersions.length) {
       const a = [...aVersions].sort().join(',');
       const c = [...cVersions].sort().join(',');
       if (a !== c) {
@@ -195,8 +227,17 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
           code: 'stale-contract',
           severity: 'hard',
           message: `assembly-check ${contract.id} cites a different version set than assembly ${assembly?.id}; re-run the contract`,
-          witness: { assembly: assembly?.id, assemblyVersions: aVersions, contract: contract.id, contractVersions: cVersions },
-          attention: ['re-run check_assembly on the current assembly versions'],
+          witness: {
+            assembly: assembly?.id,
+            assemblyVersions: assembly?.sourceVersionIds,
+            contract: contract.id,
+            contractVersions: contract.sourceVersionIds,
+            omittedVersions: [...omittedVersions],
+          },
+          attention: [
+            're-run check_assembly on the current assembly versions',
+            'if a flexible part is intentionally omitted from static assembly, declare it in assembly/static-scope.json',
+          ],
         });
       }
     }

@@ -40,6 +40,38 @@ export function whyNext(code: string): WhyNext {
         why: ['a run cites a version that has since been replaced', 'the check was not re-run after the edit'],
         next: ['re-run the affected check on the current version'],
       };
+    case 'stale-contract':
+      return {
+        why: [
+          'the contract check and the assembly run cite different version sets',
+          'one side is stale, or a flexible part is intentionally omitted from static assembly',
+        ],
+        next: [
+          'reconcile the version sets and re-run check_assembly',
+          'or declare the omitted part in assembly/static-scope.json',
+        ],
+      };
+    case 'failing-printability':
+    case 'latest-printability-failing':
+      return {
+        why: ['the printability run failed; the current design has an unresolved blocker'],
+        next: ['inspect the min-wall/overhang location', 'fix it and re-run check_printability'],
+      };
+    case 'duplicate-runs':
+      return {
+        why: ['the same check ran on the same geometry with the same outcome'],
+        next: ['cite one run; spend the time on a different check'],
+      };
+    case 'overlay-backed-runs':
+      return {
+        why: ['the run used user-overlay packages; reproducibility depends on the same overlay'],
+        next: ['record or pin the overlay for CI'],
+      };
+    case 'role-exempt-parts':
+      return {
+        why: ['parts declared stock/research are exempt from printability and newest-version checks'],
+        next: ['keep the role current; set it back to printed if it is delivered printed'],
+      };
     case 'versions-never-cited':
       return {
         why: ['a version is not used by any run', 'it may be an experiment or a superseded draft'],

@@ -4,6 +4,9 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadAssemblyManifest, flattenParts } from '../manifest.ts';
+import { projectStores } from '../project.ts';
+import { listParts } from '../parts.ts';
+import { listVersions } from '../version.ts';
 import { manifestLocation, type PearlFailure } from './failure.ts';
 import { observeModel, type ModelObservation } from './model.ts';
 import { observeFit, type FitObservation, type FitTemplate } from './observe.ts';
@@ -50,6 +53,30 @@ async function currentVersions(projectRoot: string): Promise<{ id: string; versi
       .map((p) => ({ id: p.id, version: p.node.version!, name: p.node.name }));
   } catch {
     return [];
+  }
+}
+
+/**
+ * Assembly parts that are actually printed. Stock/research parts are declared
+ * in `cad-data/parts/manifest.json` (role), not in the assembly node; a project
+ * may also omit the assembly `source` field. The delivery audit already honors
+ * the role, so the make row must use the same rule or it asks for printability
+ * runs on purchased refills and springs.
+ */
+async function currentPrintedVersions(projectRoot: string): Promise<{ id: string; version: string; name: string }[]> {
+  const current = await currentVersions(projectRoot);
+  try {
+    const stores = projectStores(projectRoot);
+    const [parts, versions] = await Promise.all([listParts(stores.partStore), listVersions(stores.store)]);
+    const roleByPart = new Map(parts.map((p) => [p.id, p.role ?? 'printed']));
+    const partByVersion = new Map(versions.map((v) => [v.id, v.partId]));
+    return current.filter((p) => {
+      const partId = partByVersion.get(p.version);
+      if (!partId) return true;
+      return (roleByPart.get(partId) ?? 'printed') === 'printed';
+    });
+  } catch {
+    return current;
   }
 }
 
@@ -112,7 +139,7 @@ export async function observeMake(projectRoot: string, policy?: RulePackMake): P
   }
 
   const runs = await readRuns(projectRoot);
-  const current = [...new Map((await currentVersions(projectRoot)).map((p) => [p.version, p])).values()];
+  const current = [...new Map((await currentPrintedVersions(projectRoot)).map((p) => [p.version, p])).values()];
   const byVersion = new Map<string, RunEntry>();
   for (const r of runs.filter((x) => x.kind === 'printability')) {
     const v = r.sourceVersionIds?.[0];

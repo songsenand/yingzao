@@ -157,7 +157,16 @@ export async function evaluateRows(
         checked.push(...checkedOf([obs.sourceRuns.assembly], 'assembly'));
         checked.push(...checkedOf([obs.sourceRuns.contract], 'assembly-check'));
         if (!obs.coverage.interference) missing.push({ evidence: 'fresh validate_assembly run', why: 'interference evidence is missing', next: ['run validate_assembly'] });
-        if (!obs.coverage.interfaces) missing.push({ evidence: 'fresh check_assembly run with declared interfaces', why: 'interface evidence is missing', next: ['declare interfaces and run check_assembly'] });
+        if (!obs.coverage.interfaces) {
+          const stale = obs.findings.find((f) => f.code === 'stale-contract');
+          missing.push({
+            evidence: 'fresh check_assembly run with declared interfaces',
+            why: stale ? 'the latest check_assembly cites a different version set' : 'interface evidence is missing',
+            next: stale
+              ? ['reconcile the assembly/contract versions (declare static-omitted parts) and re-run check_assembly']
+              : ['declare interfaces and run check_assembly'],
+          });
+        }
         let status = findings.length ? statusFromDrafts(findings) : 'pass';
         if (obs.status === 'blocked' && !findings.some((d) => d.outcome === 'blocked')) status = 'blocked';
         if (obs.status === 'fail' && !findings.some((d) => d.outcome === 'fail')) status = 'fail';

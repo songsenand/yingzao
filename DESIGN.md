@@ -3979,3 +3979,10 @@ measurements；上限 500 文件 / 10 MB），写 `{id,version,hash,row,criteria
 未注册/被改不执行；晚注册（`registeredAt` > 当前版本）可跑但只 advisory，claim 引用则
 blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注册保留首次
 `registeredAt`；`--supersede` 是显式的一步替代。`verify` 只读注册簿，注册命令是唯一写者。
+
+**V1.2c 真实项目回归（已实现）**：`make` 行按 `parts/manifest.json` 的 `role` 过滤
+`stock`/`research`，与 `delivery-audit` 一致；`fit` 的 `stale-contract` 支持
+`assembly/static-scope.json` 的静态省略（柔性件），比较前从两侧版本集扣除；`why/next`
+补齐 `stale-contract`/`failing-printability`/`latest-printability-failing`/
+`duplicate-runs`/`overlay-backed-runs`/`role-exempt-parts`；motion 子系统 claim 用显式
+`versionIds`。回归验收 `scripts/accept-row-regressions.mjs`。

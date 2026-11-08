@@ -28,7 +28,7 @@ The command is also exposed as `npm run verify -- <project-dir> [flags]`.
 | `requirements` | claims/scenario declared and parseable; PROMPT present | `claims.json`, `PROMPT.md` |
 | `model` | assembly manifest valid; versions/BOM/datum endpoints resolve | `inspectAssemblyContract` |
 | `fit` | interference, interfaces, motion evidence | `observeFit` |
-| `make` | printability/thickness; wood cutlist/stock | `observeMake` |
+| `make` | printability/thickness; wood cutlist/stock; `stock`/`research` roles exempt | `observeMake` |
 | `review` | top+iso+note review for **printed** parts (role-aware) | `auditDelivery.visual` |
 | `delivery` | claims → witness; stale/missing evidence; unregistered geometry | `auditDelivery` + claim checks |
 
@@ -58,6 +58,11 @@ the statement. Default path: `<project>/claims.json`; or pass `--claims <file>`
 
 Kinds: `strength`, `motion`, `assembly`, `manufacturability`, `appearance`, `review`.
 
+For a subsystem run (`motion`/`physics`), set `versionIds` to that run's
+`sourceVersionIds`. Without it, the claim defaults to the current assembly set and a
+subsystem run (e.g. rotor + rear + cap + clip) is marked stale. `motion` still does
+not prove the functional claim by itself; a custom check should read its witness.
+
 - With `runId`: the run must exist, have the right kind, and be fresh for the claimed
   versions.
 - Without `runId`: V1 checks for a fresh run of the required kind; `manufacturability`
@@ -73,6 +78,18 @@ Kinds: `strength`, `motion`, `assembly`, `manufacturability`, `appearance`, `rev
 - Part-level run (`printability`): `sourceVersionIds` must contain the claimed version.
 - A run without `sourceVersionIds`, or a version without a timestamp, is **not fresh**
   (blocked; never a silent pass).
+
+**Static-omitted parts.** A flexible part (leaf spring, flexure, snap) has no single
+static pose, so the assembly run may omit it while the contract check still declares
+its interface. Declare it next to the assembly:
+
+```json
+{ "schemaVersion": 1, "parts": ["leaf"], "reason": "flexure; static pose differs per state" }
+```
+
+`assembly/static-scope.json` is subtracted from both version sets before the `fit`
+stale-contract comparison. It does **not** exempt the part from printability or
+review — only from the static assembly set equality.
 
 ## Policy and exceptions (no owner role)
 
