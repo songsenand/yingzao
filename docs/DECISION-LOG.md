@@ -5591,3 +5591,27 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** `checkers/{protocol,runner}`、`src/host/verify/checks.ts`、`examples/checkers/leg-fit`、`scripts/accept-verify.mjs`、`docs/llm/verify.md`、`DESIGN.md`。V1.2b 待实现：registry、hash、late、claim late。
 
 **未决/非目标：** 时间戳是声明不是证明；mutation guard 是 best-effort；不是沙箱；Python/依赖/写 artifact 暂不支持。
+
+## 2026-11-08：弹性件仿真范围锁定：标准件 + 易做族，非标交 agent
+
+**触发条件：** 第 1 条（用户拍板：贴着场地边界，先做标准件和容易做的，非标交 agent 定制）+ 第 4 条（影响 elastic 层、标准件表、check/skip 与文档）。
+
+**要解决的问题：** 前几轮从“自动 PRBM”滑向“大表/实测相关性/制造试样”，把场地职责和用户职责混在一起；需要明确弹性件仿真的产品边界和第一版范围。
+
+**决策内容：**
+
+- 场地只负责仿真：模型类别、求解、单位、几何/质量、力/位移、区间/不确定度、适用域、attention；不负责制造、打印、测试、校准。
+- 第一版只做两类：
+  1. **标准件**：外购压缩/拉伸弹簧、扭转弹簧、碟簧/球柱塞等，按标准件目录/参数表查；目录存 `k`、自由长、并圈高、最大行程、来源、公差。
+  2. **容易做的族**：S1 卡扣梁、living hinge 线性铰 `T=EIθ/L`、直板簧/悬臂主曲线、简单 `(x,F)`/`(θ,T)` 表；用无量纲族表 + 公式，不按零件枚举。
+- **非标**：复杂倒扣/自接触/多材料/大应变/异形 flexure → `check`/`skipped`，导出几何/材料/边界给 agent；agent 写自定义代码；场地只做单位/平衡/收敛/基准 QA，不背书模型。
+- 预测不依赖实物：用材料范围 + 几何公差 + 模型给区间；实测数据是可选输入，只更新 `confidence/calibration`，不是前置条件。
+- 不做“更大的零件表”：卡扣按钩型/无量纲参数做小表 + 修正因子；复杂几何不靠表。
+
+**理由：** 标准件和简单族覆盖大部分玩具机构；非标无法枚举，交 agent 是场地边界内的正解；把制造/测试留在用户侧，避免“要仿真先打印”的循环。
+
+**依据：** 本轮讨论；笔的按钮压簧/板簧/卡扣；球棍卡扣实跑；leaf probe（线性/边界敏感性）。
+
+**影响：** `simulate_physics` 的 `elastic` 层、标准件目录 schema、`check_assembly` 路由、`docs/llm/assembly.md`、skill、examples；不新增制造/测试服务。
+
+**未决/非目标：** 自动 PRBM、复杂接触/壳/实体 FE、大表、实测相关性服务；这些后续另议。
