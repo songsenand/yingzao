@@ -66,7 +66,7 @@ working, not an error.
 
 ## Facts that are not obvious from the tool descriptions
 
-- **`check_assembly` machine-checks six operators.** `distance` is datum-kind
+- **`check_assembly` machine-checks seven operators.** `distance` is datum-kind
   aware: **plane/plane → perpendicular plane distance** (lateral anchor offset is
   not a gap), **plane/point → point-to-plane**, anything else → point-to-point.
   `diameter-match` (`datum_cyl`) is pure geometry. `coaxial` measures the
@@ -88,9 +88,17 @@ working, not an error.
   `stiffnessTolerancePct` is declared. It compares against the **user-declared**
   `forceBudgetN` / `tolerance` / `requiredTravelMm`; with none of those it comes
   back `skipped`, not passed. It never invents child/adult or product thresholds.
-  Anything else is reported as `skipped` — and the skip text says what would make
-  it checkable. Do not read a green verdict as "everything in the manifest was
-  verified"; read the `skipped` list.
+  `snap-fit` is the **卡扣** operator: `lobeCount`, `lobeWidthMm`,
+  `lobeThicknessMm`, `leverArmMm`, `radialInterferenceMm`, `youngModulusMPa`,
+  optional `leadAngleDeg` / `frictionCoeff` / `retentionAngleDeg`, and the
+  user-declared `forceBudgetN` (insertion) / `maxStrainPct` / `retentionLoadN`.
+  It reports a beam-model radial force, wedge-model insertion force, root strain
+  and self-lock; its default output is one headline + worst + `nextLook`, with
+  the L2 utilization rows behind `detail: "checks"`. The beam model is an
+  upper-bound estimate, not a contact simulation; complex undercuts/self-contact
+  are outside its domain. Anything else is reported as `skipped` — and the skip
+  text says what would make it checkable. Do not read a green verdict as
+  "everything in the manifest was verified"; read the `skipped` list.
 - **A meshing angle is a `pose`, not a `transform`.** A part that must sit at a
   engagement/tooth phase (gear in its rack, cam on its lobe) gets
   `"transform": {"pose": {"datum": "<axis datum>", "angleDeg": -40.1}}` in the

@@ -62,7 +62,7 @@ function expectedToNominal(iface: ManifestInterface & { expected?: unknown }): s
   }
   const q: Quantity = iface.check === 'coaxial' ? '同轴度'
     : iface.check === 'diameter-match' ? '直径'
-      : iface.check === 'spring-preload' ? '预紧力' : iface.check === 'spring-behaviour' ? '弹簧力'
+      : iface.check === 'spring-preload' ? '预紧力' : iface.check === 'spring-behaviour' ? '弹簧力' : iface.check === 'snap-fit' ? '插入力'
         : '距离';
   iface.nominal = { quantity: q, value: iface.expected };
   delete iface.expected;

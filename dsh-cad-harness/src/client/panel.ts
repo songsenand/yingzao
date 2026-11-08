@@ -421,7 +421,7 @@ const reqText = (
   if (!e) return verdict === 'skipped' ? '未声明' : '未回传';
   const symmetric = e.min !== undefined && e.max !== undefined && Math.abs(e.min + e.max) < 1e-9;
   const range = symmetric ? `±${Math.abs(e.min as number)}` : `${e.min ?? '−∞'}–${e.max ?? '+∞'}`;
-  const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' || e.quantity === '弹簧力' ? 'N' : '';
+  const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' || e.quantity === '弹簧力' || e.quantity === '插入力' ? 'N' : '';
   const nominal = e.nominal === undefined ? '' : String(e.nominal);
   return `${nominal} ${range}${unit}`.trim();
 };
@@ -2184,7 +2184,7 @@ export function CadPanel(): React.ReactElement {
           : { label: '契约成立', color: T.ok };
     const opLabel: Record<string, string> = {
       coaxial: '同轴', distance: '距离', 'diameter-match': '直径',
-      'motion-clearance': '运动间隙', 'spring-preload': '预紧力', 'spring-behaviour': '弹簧行为',
+      'motion-clearance': '运动间隙', 'spring-preload': '预紧力', 'spring-behaviour': '弹簧行为', 'snap-fit': '卡扣',
     };
     const opCounts = rows.reduce<Record<string, number>>((acc, x) => {
       const k = x.check ?? '?';

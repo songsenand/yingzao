@@ -20,8 +20,8 @@ import { fileURLToPath } from 'node:url';
 
 // ---------- types ----------
 
-export type InterfaceType = '贴合' | '间隙' | '紧固' | '转动副' | '滑动副' | '弹簧' | '流道';
-export type Quantity = '距离' | '直径' | '同轴度' | '角度' | '预紧力' | '弹簧力';
+export type InterfaceType = '贴合' | '间隙' | '紧固' | '转动副' | '滑动副' | '弹簧' | '卡扣' | '流道';
+export type Quantity = '距离' | '直径' | '同轴度' | '角度' | '预紧力' | '弹簧力' | '插入力';
 export type Severity = 'hard' | 'intent';
 export type VerdictLayer = 'L0' | 'L1' | 'L2';
 
@@ -59,7 +59,29 @@ export interface ElasticInterfaceSpec {
   maxTravelMm?: number;
   /** Display-band half-width on k, percent. 0/absent = point force, no band. */
   stiffnessTolerancePct?: number;
-  /** Where k came from; reported, not judged. */
+  /** snap-fit: number of elastic lobes (1 = single cantilever). */
+  lobeCount?: number;
+  /** snap-fit: width of one lobe at its root, mm. */
+  lobeWidthMm?: number;
+  /** snap-fit: wall thickness of the lobe, mm. */
+  lobeThicknessMm?: number;
+  /** snap-fit: root-to-bead lever arm, mm. */
+  leverArmMm?: number;
+  /** snap-fit: radial interference at the bead/undercut, mm. */
+  radialInterferenceMm?: number;
+  /** snap-fit: Young's modulus, MPa (beam force; strain does not need it). */
+  youngModulusMPa?: number;
+  /** snap-fit: lead/insertion face angle from the insertion axis, degrees. */
+  leadAngleDeg?: number;
+  /** snap-fit: coefficient of friction on the lead face. */
+  frictionCoeff?: number;
+  /** snap-fit: same wedge model for the retention face; default = leadAngleDeg. */
+  retentionAngleDeg?: number;
+  /** snap-fit: user-declared allowable root strain, percent. */
+  maxStrainPct?: number;
+  /** snap-fit: user-declared required retention load, N. */
+  retentionLoadN?: number;
+  /** Where k / E came from; reported, not judged. */
   source?: ElasticSource;
 }
 
@@ -319,8 +341,8 @@ export const MANIFEST_EXAMPLE = {
   },
 };
 
-const OPERATORS = ['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour'];
-const IFACE_TYPES = ['贴合', '间隙', '紧固', '转动副', '滑动副', '弹簧', '流道'];
+const OPERATORS = ['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour', 'snap-fit'];
+const IFACE_TYPES = ['贴合', '间隙', '紧固', '转动副', '滑动副', '弹簧', '卡扣', '流道'];
 const NODE_KINDS = ['assembly', 'part'];
 const DATUM_KINDS = ['point', 'axis', 'plane', 'cylinder'];
 
@@ -397,6 +419,8 @@ const ELASTIC_SOURCES = ['catalog', 'measured', 'estimated', 'declared'] as cons
 const ELASTIC_KEYS = new Set([
   'behavior', 'direction', 'freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm',
   'guided', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm', 'stiffnessTolerancePct', 'source',
+  'lobeCount', 'lobeWidthMm', 'lobeThicknessMm', 'leverArmMm', 'radialInterferenceMm', 'youngModulusMPa',
+  'leadAngleDeg', 'frictionCoeff', 'retentionAngleDeg', 'maxStrainPct', 'retentionLoadN',
 ]);
 
 function checkElastic(value: unknown, ptr: string, issues: ManifestIssue[]): void {
@@ -429,12 +453,34 @@ function checkElastic(value: unknown, ptr: string, issues: ManifestIssue[]): voi
       issues.push({ path: `${ptr}/${key}`, expected: 'a positive finite number', got: got(v) });
     }
   };
-  for (const key of ['freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm']) {
+  for (const key of ['freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm', 'lobeWidthMm', 'lobeThicknessMm', 'leverArmMm', 'radialInterferenceMm', 'youngModulusMPa', 'maxStrainPct', 'retentionLoadN']) {
     positive(key);
   }
   const tol = value.stiffnessTolerancePct;
   if (tol !== undefined && (typeof tol !== 'number' || !Number.isFinite(tol) || tol < 0 || tol > 100)) {
     issues.push({ path: `${ptr}/stiffnessTolerancePct`, expected: 'a finite number in [0, 100]', got: got(tol) });
+  }
+  if (value.lobeCount !== undefined && (!Number.isInteger(value.lobeCount) || (value.lobeCount as number) < 1)) {
+    issues.push({ path: `${ptr}/lobeCount`, expected: 'a positive integer', got: got(value.lobeCount) });
+  }
+  for (const key of ['leadAngleDeg', 'retentionAngleDeg']) {
+    const v = value[key];
+    if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v >= 90)) {
+      issues.push({ path: `${ptr}/${key}`, expected: 'a finite number in [0, 90)', got: got(v) });
+    }
+  }
+  if (value.frictionCoeff !== undefined && (typeof value.frictionCoeff !== 'number' || !Number.isFinite(value.frictionCoeff) || value.frictionCoeff < 0)) {
+    issues.push({ path: `${ptr}/frictionCoeff`, expected: 'a non-negative finite number', got: got(value.frictionCoeff) });
+  }
+  // A declared snap-fit needs the beam geometry; missing inputs would otherwise
+  // silently become a skip (`unknown`) in the operator. The operator still
+  // reports missing inputs for legacy manifests that never declared a behavior.
+  if (value.behavior === 'snap-fit') {
+    for (const key of ['lobeCount', 'lobeWidthMm', 'lobeThicknessMm', 'leverArmMm', 'radialInterferenceMm', 'youngModulusMPa']) {
+      if (value[key] === undefined) {
+        issues.push({ path: `${ptr}/${key}`, expected: `required when behavior is "snap-fit"`, got: 'undefined (missing)' });
+      }
+    }
   }
   if (typeof value.freeLengthMm === 'number' && typeof value.solidHeightMm === 'number'
     && value.solidHeightMm >= value.freeLengthMm) {

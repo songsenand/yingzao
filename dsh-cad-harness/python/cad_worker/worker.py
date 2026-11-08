@@ -42,7 +42,7 @@ drives:
     measure_section    one cross-section as polygons, rings, holes and walls
     measure_extent     axial min/max/centre and the extremal vertices, any axis
     measure_angle      angle + line distance between two named directions
-    assembly_contracts the contract half of check_assembly: six operators, undeclared neighbours
+    assembly_contracts the contract half of check_assembly: seven operators, undeclared neighbours
     import_mesh     parse/scale/weld one STL/STEP/DXF into a storable mesh (import_part)
                     STEP via cascadio(OpenCASCADE)→GLB, DXF via ezdxf (2D profiles
                     extruded with depthMm through manifold3d, or 3D mesh entities)
@@ -1440,7 +1440,7 @@ def _min_distance_via_sampling(verts, faces, target_verts, target_faces, max_sam
 # ---------------------------------------------------------------------------
 # The CONTRACT half of `check_assembly` (moved here 2026-10-12, DECISION-LOG #2).
 #
-# What moved: the layer/check derivation, the six operators
+# What moved: the layer/check derivation, the seven operators
 # (distance / motion-clearance / spring-preload / spring-behaviour / coaxial / diameter-match), the
 # verdict-vs-tolerance rule, the undeclared-adjacency discovery, and the summary.
 # What stayed in TS: manifest and store I/O, part world loading (STL path + datums +
@@ -1457,13 +1457,14 @@ DEFAULT_DERIVED = {
     "转动副": ("L1", "motion-clearance"),
     "滑动副": ("L1", "motion-clearance"),
     "弹簧": ("L1", "spring-behaviour"),
+    "卡扣": ("L1", "snap-fit"),
     "流道": ("L2", "flow"),
 }
 
 # Operators this engine can actually evaluate. Everything else is reported as
 # `skipped` — deliberately, because a green verdict on a check nobody ran is the most
 # expensive lie a validator can tell.
-IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour"}
+IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour", "snap-fit"}
 
 
 def _js_num(value) -> str:
@@ -1687,6 +1688,193 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
     }
 
 
+def _snap_fit(iface: dict, pa: list, pb: list) -> dict:
+    """Mirror of `snapFit` in assembly-check.ts: a root-fixed cantilever per lobe.
+
+    The beam model is an UPPER-BOUND estimate; all thresholds are USER-DECLARED.
+    The L1 output is one headline + one worst + <=3 attention items + one nextLook;
+    the L2 checks and L3 inputs stay in the structured `snapFit` object.
+    """
+    spec = iface.get("elastic") or {}
+    behavior = spec.get("behavior") or "snap-fit"
+    if behavior != "snap-fit":
+        return {"detail": f'elastic behavior "{behavior}" is not snap-fit'}
+    lobe_count = _elastic_num(iface, ["lobeCount"])
+    w = _elastic_num(iface, ["lobeWidthMm"])
+    t = _elastic_num(iface, ["lobeThicknessMm"])
+    lever = _elastic_num(iface, ["leverArmMm"])
+    delta = _elastic_num(iface, ["radialInterferenceMm"])
+    young = _elastic_num(iface, ["youngModulusMPa"])
+    missing = []
+    for key, value in (("lobeCount", lobe_count), ("lobeWidthMm", w), ("lobeThicknessMm", t),
+                       ("leverArmMm", lever), ("radialInterferenceMm", delta), ("youngModulusMPa", young)):
+        if value is None:
+            missing.append(key)
+    if missing:
+        return {"detail": f"snap-fit needs {', '.join(missing)} (elastic); a beam model without the lobe geometry cannot be built"}
+    if (not float(lobe_count).is_integer() or int(lobe_count) < 1 or w <= 0 or t <= 0
+            or lever <= 0 or delta < 0 or young <= 0):
+        return {"detail": "snap-fit inputs are not physical: lobeCount must be a positive integer; w/t/L/E > 0; interference >= 0"}
+
+    lead = _elastic_num(iface, ["leadAngleDeg"])
+    mu = _elastic_num(iface, ["frictionCoeff"])
+    retention_angle = _elastic_num(iface, ["retentionAngleDeg"])
+    if retention_angle is None:
+        retention_angle = lead
+    budget = _elastic_num(iface, ["forceBudgetN"])
+    max_strain = _elastic_num(iface, ["maxStrainPct"])
+    retention_load = _elastic_num(iface, ["retentionLoadN"])
+
+    inertia = (w * t ** 3) / 12
+    k_lobe = (3 * young * inertia) / lever ** 3
+    f_lobe = k_lobe * delta
+    radial = f_lobe * lobe_count
+    strain_pct = (1.5 * t * delta / lever ** 2) * 100
+
+    def wedge(angle):
+        if angle is None or mu is None:
+            return None
+        tan_a = math.tan(math.radians(angle))
+        denom = 1 - mu * tan_a
+        if denom <= 1e-9:
+            return None
+        return (tan_a + mu) / denom
+
+    insert_wedge = wedge(lead)
+    retention_wedge = wedge(retention_angle)
+    insertion = None if insert_wedge is None else radial * insert_wedge
+    retention_capacity = None if retention_wedge is None else radial * retention_wedge
+    self_lock_u = None if lead is None or mu is None else mu * math.tan(math.radians(lead))
+    self_locking = self_lock_u is not None and self_lock_u >= 1
+
+    checks = []
+
+    def add(check, util, missing_why):
+        if util is None:
+            checks.append({"check": check, "verdict": "unknown", "note": missing_why})
+            return
+        u = _round_js(util, 4)
+        checks.append({"check": check, "utilization": u, "marginPct": _round_js((1 - u) * 100, 4),
+                       "verdict": "over" if u > 1 else "near" if u >= 0.8 else "ok"})
+
+    add("insertion",
+        None if budget is None or insertion is None else insertion / budget,
+        "no forceBudgetN declared" if budget is None else "declare leadAngleDeg + frictionCoeff (insertion is not the radial force)" if insertion is None else "")
+    add("retention",
+        None if retention_load is None or retention_capacity is None else retention_load / retention_capacity,
+        "no retentionLoadN declared" if retention_load is None else "declare retentionAngleDeg (or leadAngleDeg) + frictionCoeff" if retention_capacity is None else "")
+    add("strain",
+        None if max_strain is None else strain_pct / max_strain,
+        "no maxStrainPct declared" if max_strain is None else "")
+    add("selfLock", self_lock_u, "declare leadAngleDeg + frictionCoeff" if self_lock_u is None else "")
+
+    numeric = [c for c in checks if "utilization" in c]
+    worst = max(numeric, key=lambda c: c["utilization"]) if numeric else None
+    attention = []
+    for c in checks:
+        if c["verdict"] not in ("over", "near", "unknown"):
+            continue
+        if len(attention) >= 3:
+            break
+        verdict = c["verdict"]
+        if c["check"] == "insertion":
+            attention.append(
+                {"check": "insertion", "verdict": "unknown", "why": c.get("note") or "insertion cannot be judged",
+                 "next": "declare forceBudgetN + leadAngleDeg + frictionCoeff"}
+                if verdict == "unknown" else
+                {"check": "insertion", "verdict": verdict,
+                 "why": f"insertion {_js_num(_round_js(insertion, 4))}N / budget {_js_num(budget)}N = {_js_num(c['utilization'])}x",
+                 "next": "reduce bead/interference or increase the lead angle"}
+            )
+        elif c["check"] == "retention":
+            attention.append(
+                {"check": "retention", "verdict": "unknown", "why": c.get("note") or "retention cannot be judged",
+                 "next": "declare retentionLoadN + retentionAngleDeg/frictionCoeff"}
+                if verdict == "unknown" else
+                {"check": "retention", "verdict": verdict,
+                 "why": f"required {_js_num(retention_load)}N / capacity {_js_num(_round_js(retention_capacity, 4))}N = {_js_num(c['utilization'])}x",
+                 "next": "deepen the undercut or add a retention shoulder"}
+            )
+        elif c["check"] == "strain":
+            attention.append(
+                {"check": "strain", "verdict": "unknown", "why": c.get("note") or "strain cannot be judged",
+                 "next": "declare maxStrainPct"}
+                if verdict == "unknown" else
+                {"check": "strain", "verdict": verdict,
+                 "why": f"root strain {_js_num(_round_js(strain_pct, 4))}% / max {_js_num(max_strain)}% = {_js_num(c['utilization'])}x",
+                 "next": "reduce wall thickness or radial interference"}
+            )
+        else:
+            attention.append(
+                {"check": "selfLock", "verdict": "unknown", "why": c.get("note") or "self-lock cannot be judged",
+                 "next": "declare leadAngleDeg + frictionCoeff"}
+                if verdict == "unknown" else
+                {"check": "selfLock", "verdict": verdict,
+                 "why": f"mu*tan(lead) = {_js_num(_round_js(self_lock_u, 4))}",
+                 "next": "reduce lead angle or friction"}
+            )
+
+    at_mm = [_round_js((float(pa[0]) + float(pb[0])) / 2, 4),
+             _round_js((float(pa[1]) + float(pb[1])) / 2, 4),
+             _round_js((float(pa[2]) + float(pb[2])) / 2, 4)]
+    next_look = {"atMm": at_mm, "why": "snap-fit root/bead: section through this point"}
+
+    accepted = budget is not None or retention_load is not None or max_strain is not None or self_lock_u is not None
+    hard = any(c["verdict"] == "over" and (c["check"] != "selfLock" or self_locking) for c in checks) or (self_locking and any(c["check"] == "selfLock" and c["verdict"] == "over" for c in checks))
+    intent = (not hard) and accepted and any(c["verdict"] in ("near", "unknown") for c in checks)
+    verdict = "hard-violation" if hard else "skipped" if not accepted else "intent-flag" if intent else "pass"
+    measured = _round_js(insertion if insertion is not None else radial, 4)
+
+    unknown_checks = [c["check"] for c in checks if c["verdict"] == "unknown"]
+    if worst is not None:
+        u_text = f"{_js_num(worst['utilization'])}x ({worst['verdict']})"
+        if worst["check"] == "insertion":
+            worst_text = f"insertion {_js_num(_round_js(insertion, 4))}N / budget {_js_num(budget)}N = {u_text}"
+        elif worst["check"] == "retention":
+            worst_text = f"retention required {_js_num(retention_load)}N / capacity {_js_num(_round_js(retention_capacity, 4))}N = {u_text}"
+        elif worst["check"] == "strain":
+            worst_text = f"root strain {_js_num(_round_js(strain_pct, 4))}% / max {_js_num(max_strain)}% = {u_text}"
+        else:
+            worst_text = f"self-lock mu*tan(lead)={_js_num(_round_js(self_lock_u, 4))} ({worst['verdict']})"
+    else:
+        worst_text = ""
+    radial_text = f"radial {_js_num(_round_js(radial, 4))}N, strain {_js_num(_round_js(strain_pct, 4))}%"
+    if worst is not None and worst["verdict"] == "over":
+        headline = f"{worst_text}; {radial_text}" + (f"; also unknown: {', '.join(unknown_checks)}" if unknown_checks else "")
+    elif unknown_checks:
+        headline = f"cannot judge {', '.join(unknown_checks)}; {radial_text}" + (f"; {worst_text}" if worst_text else "")
+    elif worst is not None and worst["verdict"] == "near":
+        headline = f"near the limit: {worst_text}; {radial_text}"
+    elif worst_text:
+        headline = f"all declared criteria comfortable; {worst_text}"
+    else:
+        headline = "all declared criteria comfortable; no attention target"
+    action = f"; next: {attention[0]['next']}" if attention and attention[0].get("next") else ""
+    detail = f"{headline}{action}; nextLook [{', '.join(_js_num(x) for x in at_mm)}] — {next_look['why']}"
+
+    snap = {
+        "input": {
+            "lobeCount": int(lobe_count), "lobeWidthMm": w, "lobeThicknessMm": t,
+            "leverArmMm": lever, "radialInterferenceMm": delta, "youngModulusMPa": young,
+            **({"leadAngleDeg": lead} if lead is not None else {}),
+            **({"frictionCoeff": mu} if mu is not None else {}),
+            **({"retentionAngleDeg": retention_angle} if retention_angle is not None else {}),
+        },
+        "lobeStiffnessNPerMm": _round_js(k_lobe, 4),
+        "lobeForceN": _round_js(f_lobe, 4),
+        "radialForceN": _round_js(radial, 4),
+        **({"insertionForceN": _round_js(insertion, 4)} if insertion is not None else {}),
+        **({"retentionCapacityN": _round_js(retention_capacity, 4)} if retention_capacity is not None else {}),
+        "rootStrainPct": _round_js(strain_pct, 4),
+        "selfLocking": self_locking,
+        "checks": checks,
+        **({"worst": {"check": worst["check"], "utilization": worst["utilization"], "marginPct": worst["marginPct"]}} if worst is not None else {}),
+        "attention": attention,
+        "nextLook": next_look,
+    }
+    return {"verdict": verdict, "measured": measured, "detail": detail, "snapFit": snap}
+
+
 def _assembly_base(iface: dict) -> dict:
     layer, check = DEFAULT_DERIVED.get(iface.get("type"), ("L1", "unknown"))
     return {
@@ -1892,6 +2080,8 @@ def op_assembly_contracts(params: dict) -> dict:
             results.append(_assembly_verdict(iface, force, detail))
         elif check == "spring-behaviour":
             results.append({**base, **_spring_behaviour(iface, pa, pb)})
+        elif check == "snap-fit":
+            results.append({**base, **_snap_fit(iface, pa, pb)})
         elif check == "coaxial":
             dir_a = ra.get("dir")
             dir_b = rb.get("dir")

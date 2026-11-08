@@ -341,6 +341,55 @@ export interface InterfaceCheckResult {
   detail: string;
   /** Structured half of `spring-behaviour`; optional so old report readers are untouched. */
   elastic?: ElasticCheckResult;
+  /** Structured half of `snap-fit`; optional so old report readers are untouched. */
+  snapFit?: SnapFitCheckResult;
+}
+
+/** One L2 row: a normalized utilization, not a raw unit. */
+export interface SnapFitCheck {
+  check: 'insertion' | 'retention' | 'strain' | 'selfLock';
+  utilization?: number;
+  marginPct?: number;
+  verdict: 'ok' | 'near' | 'over' | 'unknown';
+  note?: string;
+}
+
+/** L1 attention item: only over / near / unknown survive. */
+export interface SnapFitAttention {
+  check: string;
+  verdict: 'over' | 'near' | 'unknown';
+  why: string;
+  next?: string;
+}
+
+/**
+ * `snap-fit` facts. The beam model is an UPPER-BOUND estimate, not a contact
+ * simulation: a root-fixed cantilever per lobe, load at the bead, no shell
+ * curvature, no self-contact, no shoulder shear. All thresholds are USER-DECLARED.
+ */
+export interface SnapFitCheckResult {
+  input: {
+    lobeCount: number;
+    lobeWidthMm: number;
+    lobeThicknessMm: number;
+    leverArmMm: number;
+    radialInterferenceMm: number;
+    youngModulusMPa: number;
+    leadAngleDeg?: number;
+    frictionCoeff?: number;
+    retentionAngleDeg?: number;
+  };
+  lobeStiffnessNPerMm: number;
+  lobeForceN: number;
+  radialForceN: number;
+  insertionForceN?: number;
+  retentionCapacityN?: number;
+  rootStrainPct: number;
+  selfLocking: boolean;
+  checks: SnapFitCheck[];
+  worst?: { check: string; utilization: number; marginPct: number };
+  attention: SnapFitAttention[];
+  nextLook: { atMm: number[]; why: string };
 }
 
 /**
@@ -367,6 +416,13 @@ export interface ElasticCheckResult {
     forceBudget: 'ok' | 'violation' | 'unknown' | 'skipped';
   };
   notes: string[];
+}
+
+/** L2 formatter: one compact line per snap-fit check, no raw unit sprawl. */
+export function formatSnapFitChecks(s: SnapFitCheckResult): string {
+  return s.checks
+    .map((c) => `${c.check} ${c.utilization === undefined ? '?' : `${c.utilization}x`}${c.marginPct === undefined ? '' : ` (margin ${c.marginPct}%)`} ${c.verdict}`)
+    .join('; ');
 }
 
 export interface UndeclaredPair {
@@ -441,6 +497,7 @@ const DEFAULT_DERIVED: Record<ManifestInterface['type'], { layer: 'L0' | 'L1' | 
   '转动副': { layer: 'L1', check: 'motion-clearance' },
   '滑动副': { layer: 'L1', check: 'motion-clearance' },
   '弹簧': { layer: 'L1', check: 'spring-behaviour' },
+  '卡扣': { layer: 'L1', check: 'snap-fit' },
   '流道': { layer: 'L2', check: 'flow' },
 };
 
@@ -452,7 +509,7 @@ const DEFAULT_DERIVED: Record<ManifestInterface['type'], { layer: 'L0' | 'L1' | 
  * (see the note on `motion-clearance` below for what "the check actually ran"
  * has to mean when the claim is about motion).
  */
-const IMPLEMENTED_CHECKS = new Set(['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour']);
+const IMPLEMENTED_CHECKS = new Set(['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour', 'snap-fit']);
 
 /**
  * Distance between two INFINITE axis lines (skew or parallel), mm. This is the
@@ -689,6 +746,181 @@ function springBehaviour(
   };
 }
 
+const snapFitVerdict = (u: number): SnapFitCheck['verdict'] => (u > 1 ? 'over' : u >= 0.8 ? 'near' : 'ok');
+
+function snapFit(
+  iface: ManifestInterface,
+  aFeature: unknown,
+  bFeature: unknown,
+): { verdict: InterfaceCheckResult['verdict']; measured: number; detail: string; snapFit: SnapFitCheckResult } {
+  const spec = iface.elastic ?? {};
+  const behavior = spec.behavior ?? 'snap-fit';
+  if (behavior !== 'snap-fit') {
+    throw new Error(`elastic behavior "${behavior}" is not snap-fit`);
+  }
+  const lobeCount = elasticNumber(iface, ['lobeCount']);
+  const w = elasticNumber(iface, ['lobeWidthMm']);
+  const t = elasticNumber(iface, ['lobeThicknessMm']);
+  const L = elasticNumber(iface, ['leverArmMm']);
+  const delta = elasticNumber(iface, ['radialInterferenceMm']);
+  const E = elasticNumber(iface, ['youngModulusMPa']);
+  const missing: string[] = [];
+  if (lobeCount === null) missing.push('lobeCount');
+  if (w === null) missing.push('lobeWidthMm');
+  if (t === null) missing.push('lobeThicknessMm');
+  if (L === null) missing.push('leverArmMm');
+  if (delta === null) missing.push('radialInterferenceMm');
+  if (E === null) missing.push('youngModulusMPa');
+  if (missing.length > 0) {
+    throw new Error(`snap-fit needs ${missing.join(', ')} (elastic); a beam model without the lobe geometry cannot be built`);
+  }
+  if (!Number.isInteger(lobeCount) || (lobeCount as number) < 1 || (w as number) <= 0 || (t as number) <= 0 || (L as number) <= 0 || (delta as number) < 0 || (E as number) <= 0) {
+    throw new Error('snap-fit inputs are not physical: lobeCount must be a positive integer; w/t/L/E > 0; interference >= 0');
+  }
+  const lead = elasticNumber(iface, ['leadAngleDeg']);
+  const mu = elasticNumber(iface, ['frictionCoeff']);
+  const retentionAngle = elasticNumber(iface, ['retentionAngleDeg']) ?? lead;
+  const budget = elasticNumber(iface, ['forceBudgetN']);
+  const maxStrain = elasticNumber(iface, ['maxStrainPct']);
+  const retentionLoad = elasticNumber(iface, ['retentionLoadN']);
+
+  const I = ((w as number) * (t as number) ** 3) / 12;
+  const kLobe = (3 * (E as number) * I) / (L as number) ** 3;
+  const fLobe = kLobe * (delta as number);
+  const radial = fLobe * (lobeCount as number);
+  const strainPct = (1.5 * (t as number) * (delta as number) / (L as number) ** 2) * 100;
+
+  const wedge = (angle: number | null): number | undefined => {
+    if (angle === null || mu === null) return undefined;
+    const tanA = Math.tan((angle * Math.PI) / 180);
+    const denom = 1 - (mu as number) * tanA;
+    if (denom <= 1e-9) return undefined;
+    return (tanA + (mu as number)) / denom;
+  };
+  const insertWedge = wedge(lead);
+  const retentionWedge = wedge(retentionAngle);
+  const insertion = insertWedge === undefined ? undefined : radial * insertWedge;
+  const retentionCapacity = retentionWedge === undefined ? undefined : radial * retentionWedge;
+  const selfLockU = lead !== null && mu !== null
+    ? (mu as number) * Math.tan((lead * Math.PI) / 180)
+    : undefined;
+  const selfLocking = selfLockU !== undefined && selfLockU >= 1;
+
+  const checks: SnapFitCheck[] = [];
+  const add = (check: SnapFitCheck['check'], util: number | undefined, missingWhy: string) => {
+    if (util === undefined) {
+      checks.push({ check, verdict: 'unknown', note: missingWhy });
+      return;
+    }
+    const u = round4(util);
+    checks.push({ check, utilization: u, marginPct: round4((1 - u) * 100), verdict: snapFitVerdict(u) });
+  };
+  add('insertion',
+    budget !== null && insertion !== undefined ? insertion / (budget as number) : undefined,
+    budget === null ? 'no forceBudgetN declared' : insertion === undefined ? 'declare leadAngleDeg + frictionCoeff (insertion is not the radial force)' : '');
+  add('retention',
+    retentionLoad !== null && retentionCapacity !== undefined ? (retentionLoad as number) / retentionCapacity : undefined,
+    retentionLoad === null ? 'no retentionLoadN declared' : retentionCapacity === undefined ? 'declare retentionAngleDeg (or leadAngleDeg) + frictionCoeff' : '');
+  add('strain',
+    maxStrain !== null ? strainPct / (maxStrain as number) : undefined,
+    maxStrain === null ? 'no maxStrainPct declared' : '');
+  add('selfLock',
+    selfLockU,
+    selfLockU === undefined ? 'declare leadAngleDeg + frictionCoeff' : '');
+
+  const numeric = checks.filter((c) => c.utilization !== undefined) as (SnapFitCheck & { utilization: number; marginPct: number })[];
+  const worst = numeric.length > 0
+    ? numeric.reduce((a, b) => (b.utilization > a.utilization ? b : a))
+    : undefined;
+  const attention: SnapFitAttention[] = checks
+    .filter((c) => c.verdict === 'over' || c.verdict === 'near' || c.verdict === 'unknown')
+    .slice(0, 3)
+    .map((c): SnapFitAttention => {
+      const verdict = c.verdict as 'over' | 'near' | 'unknown';
+      if (c.check === 'insertion') {
+        return verdict === 'unknown'
+          ? { check: c.check, verdict: 'unknown', why: c.note ?? 'insertion cannot be judged', next: 'declare forceBudgetN + leadAngleDeg + frictionCoeff' }
+          : { check: c.check, verdict, why: `insertion ${round4(insertion as number)}N / budget ${budget}N = ${c.utilization}x`, next: 'reduce bead/interference or increase the lead angle' };
+      }
+      if (c.check === 'retention') {
+        return verdict === 'unknown'
+          ? { check: c.check, verdict: 'unknown', why: c.note ?? 'retention cannot be judged', next: 'declare retentionLoadN + retentionAngleDeg/frictionCoeff' }
+          : { check: c.check, verdict, why: `required ${retentionLoad}N / capacity ${round4(retentionCapacity as number)}N = ${c.utilization}x`, next: 'deepen the undercut or add a retention shoulder' };
+      }
+      if (c.check === 'strain') {
+        return verdict === 'unknown'
+          ? { check: c.check, verdict: 'unknown', why: c.note ?? 'strain cannot be judged', next: 'declare maxStrainPct' }
+          : { check: c.check, verdict, why: `root strain ${round4(strainPct)}% / max ${maxStrain}% = ${c.utilization}x`, next: 'reduce wall thickness or radial interference' };
+      }
+      return verdict === 'unknown'
+        ? { check: c.check, verdict: 'unknown', why: c.note ?? 'self-lock cannot be judged', next: 'declare leadAngleDeg + frictionCoeff' }
+        : { check: c.check, verdict, why: `mu*tan(lead) = ${round4(selfLockU as number)}`, next: 'reduce lead angle or friction' };
+    });
+
+  const pa = pointOf(aFeature);
+  const pb = pointOf(bFeature);
+  const atMm = [round4((pa[0] + pb[0]) / 2), round4((pa[1] + pb[1]) / 2), round4((pa[2] + pb[2]) / 2)];
+  const nextLook = { atMm, why: 'snap-fit root/bead: section through this point' };
+
+  const accepted = budget !== null || retentionLoad !== null || maxStrain !== null || selfLockU !== undefined;
+  const hard = checks.some((c) => c.verdict === 'over' && (c.check !== 'selfLock' || selfLocking))
+    || (selfLocking && checks.some((c) => c.check === 'selfLock' && c.verdict === 'over'));
+  const intent = !hard && checks.some((c) => c.verdict === 'near' || c.verdict === 'unknown') && accepted;
+  const verdict: InterfaceCheckResult['verdict'] = hard ? 'hard-violation' : !accepted ? 'skipped' : intent ? 'intent-flag' : 'pass';
+  const measured = round4(insertion ?? radial);
+
+  const unknownChecks = checks.filter((c) => c.verdict === 'unknown').map((c) => c.check);
+  const worstText = (() => {
+    if (!worst) return '';
+    const u = `${worst.utilization}x (${worst.verdict})`;
+    if (worst.check === 'insertion') return `insertion ${round4(insertion as number)}N / budget ${budget}N = ${u}`;
+    if (worst.check === 'retention') return `retention required ${retentionLoad}N / capacity ${round4(retentionCapacity as number)}N = ${u}`;
+    if (worst.check === 'strain') return `root strain ${round4(strainPct)}% / max ${maxStrain}% = ${u}`;
+    return `self-lock mu*tan(lead)=${round4(selfLockU as number)} (${worst.verdict})`;
+  })();
+  const headline = worst && worst.verdict === 'over'
+    ? `${worstText}; radial ${round4(radial)}N, strain ${round4(strainPct)}%${unknownChecks.length > 0 ? `; also unknown: ${unknownChecks.join(', ')}` : ''}`
+    : unknownChecks.length > 0
+      ? `cannot judge ${unknownChecks.join(', ')}; radial ${round4(radial)}N, strain ${round4(strainPct)}%${worstText ? `; ${worstText}` : ''}`
+      : worst && worst.verdict === 'near'
+        ? `near the limit: ${worstText}; radial ${round4(radial)}N, strain ${round4(strainPct)}%`
+        : worstText
+          ? `all declared criteria comfortable; ${worstText}`
+          : 'all declared criteria comfortable; no attention target';
+  const action = attention[0]?.next ? `; next: ${attention[0].next}` : '';
+  const detail = `${headline}${action}; nextLook [${atMm.join(', ')}] — ${nextLook.why}`;
+
+  return {
+    verdict,
+    measured,
+    detail,
+    snapFit: {
+      input: {
+        lobeCount: lobeCount as number,
+        lobeWidthMm: w as number,
+        lobeThicknessMm: t as number,
+        leverArmMm: L as number,
+        radialInterferenceMm: delta as number,
+        youngModulusMPa: E as number,
+        ...(lead !== null ? { leadAngleDeg: lead } : {}),
+        ...(mu !== null ? { frictionCoeff: mu } : {}),
+        ...(retentionAngle !== null ? { retentionAngleDeg: retentionAngle } : {}),
+      },
+      lobeStiffnessNPerMm: round4(kLobe),
+      lobeForceN: round4(fLobe),
+      radialForceN: round4(radial),
+      ...(insertion !== undefined ? { insertionForceN: round4(insertion) } : {}),
+      ...(retentionCapacity !== undefined ? { retentionCapacityN: round4(retentionCapacity) } : {}),
+      rootStrainPct: round4(strainPct),
+      selfLocking,
+      checks,
+      ...(worst ? { worst: { check: worst.check, utilization: worst.utilization, marginPct: worst.marginPct } } : {}),
+      attention,
+      nextLook,
+    },
+  };
+}
+
 /**
  * PARITY ORACLE — the pre-migration TypeScript implementation. Do not wire new
  * callers to this: `runAssemblyCheck` below is what the tool and the HTTP path use,
@@ -811,6 +1043,13 @@ export async function runAssemblyCheckInTs(
     } else if (checkName === 'spring-behaviour') {
       try {
         const r = springBehaviour(iface, ra.feature, rb.feature);
+        results.push({ ...base, ...r, ownerPath } as InterfaceCheckResult);
+      } catch (err) {
+        results.push({ ...base, detail: err instanceof Error ? err.message : String(err) });
+      }
+    } else if (checkName === 'snap-fit') {
+      try {
+        const r = snapFit(iface, ra.feature, rb.feature);
         results.push({ ...base, ...r, ownerPath } as InterfaceCheckResult);
       } catch (err) {
         results.push({ ...base, detail: err instanceof Error ? err.message : String(err) });
@@ -950,7 +1189,7 @@ export async function runAssemblyCheckInTs(
  * Evaluate the manifest's declared interfaces and its undeclared neighbours.
  *
  * THE SOLVE IS PYTHON'S (DECISION-LOG 2026-10-12): the layer/check derivation, the
- * six operators, the verdict-vs-tolerance rule, the adjacency discovery and the
+ * seven operators, the verdict-vs-tolerance rule, the adjacency discovery and the
  * summary all happen in the worker's `assembly_contracts` op. What stays here is
  * everything that needs the STORE rather than the geometry — loading the manifest,
  * building each part's placed solid, resolving interface endpoints to world datum

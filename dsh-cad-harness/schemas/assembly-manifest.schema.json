@@ -53,20 +53,20 @@
         "a": { "type": "string", "pattern": "^[^.]+\\.[^.]+$", "description": "\"<direct child id>.<datum name>\"; a dot, not ':' or '/'" },
         "b": { "type": "string", "pattern": "^[^.]+\\.[^.]+$" },
         "type": {
-          "enum": ["贴合", "间隙", "紧固", "转动副", "滑动副", "弹簧", "流道"],
+          "enum": ["贴合", "间隙", "紧固", "转动副", "滑动副", "弹簧", "卡扣", "流道"],
           "description": "fit kind; drives the default operator/layer"
         },
         "severity": { "enum": ["hard", "intent"], "description": "hard = engine error; intent = human flag" },
         "check": {
           "type": "string",
-          "description": "Explicit operator; overrides the one derived from type. Implemented: distance, diameter-match, coaxial, motion-clearance, spring-preload, spring-behaviour. An unknown operator is not a schema error — it comes back skipped with its name.",
-          "examples": ["distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour"]
+          "description": "Explicit operator; overrides the one derived from type. Implemented: distance, diameter-match, coaxial, motion-clearance, spring-preload, spring-behaviour, snap-fit. An unknown operator is not a schema error — it comes back skipped with its name.",
+          "examples": ["distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour", "snap-fit"]
         },
         "nominal": {
           "type": "object",
           "required": ["quantity", "value"],
           "properties": {
-            "quantity": { "enum": ["距离", "直径", "同轴度", "角度", "预紧力", "弹簧力"] },
+            "quantity": { "enum": ["距离", "直径", "同轴度", "角度", "预紧力", "弹簧力", "插入力"] },
             "value": { "type": "number" }
           }
         },
@@ -78,7 +78,7 @@
         "layer": { "enum": ["L0", "L1", "L2"] },
         "params": {
           "type": "object",
-          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}; spring-behaviour: use the `elastic` object",
+          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}; spring-behaviour: use the `elastic` object; snap-fit: use the `elastic` snap-fit fields",
           "additionalProperties": true
         },
         "elastic": {
@@ -97,7 +97,18 @@
             "requiredTravelMm": { "type": "number", "exclusiveMinimum": 0, "description": "USER-DECLARED travel requirement, mm." },
             "maxTravelMm": { "type": "number", "exclusiveMinimum": 0, "description": "USER-DECLARED maximum travel, mm." },
             "stiffnessTolerancePct": { "type": "number", "minimum": 0, "maximum": 100, "description": "Display-band half-width on k, percent; 0/absent = no k band." },
-            "source": { "enum": ["catalog", "measured", "estimated", "declared"], "description": "Where k came from; reported, not judged." }
+            "lobeCount": { "type": "integer", "minimum": 1, "description": "snap-fit: number of elastic lobes (1 = single cantilever)." },
+            "lobeWidthMm": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: width of one lobe at its root, mm." },
+            "lobeThicknessMm": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: wall thickness of the lobe, mm." },
+            "leverArmMm": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: root-to-bead lever arm, mm." },
+            "radialInterferenceMm": { "type": "number", "minimum": 0, "description": "snap-fit: radial interference at the bead/undercut, mm." },
+            "youngModulusMPa": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: Young's modulus, MPa (beam force; strain does not need it)." },
+            "leadAngleDeg": { "type": "number", "minimum": 0, "exclusiveMaximum": 90, "description": "snap-fit: lead/insertion face angle from the insertion axis, degrees." },
+            "frictionCoeff": { "type": "number", "minimum": 0, "description": "snap-fit: coefficient of friction on the lead face." },
+            "retentionAngleDeg": { "type": "number", "minimum": 0, "exclusiveMaximum": 90, "description": "snap-fit: same wedge model for the retention face; default = leadAngleDeg." },
+            "maxStrainPct": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: USER-DECLARED allowable root strain, percent." },
+            "retentionLoadN": { "type": "number", "exclusiveMinimum": 0, "description": "snap-fit: USER-DECLARED required retention load, N." },
+            "source": { "enum": ["catalog", "measured", "estimated", "declared"], "description": "Where k / E came from; reported, not judged." }
           }
         },
         "note": { "type": "string" }

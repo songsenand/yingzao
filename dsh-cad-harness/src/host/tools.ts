@@ -24,7 +24,7 @@ import { buildStepContext } from './pearls/context.ts';
 import { formatTemplateExecution } from './pearls/format.ts';
 import { persistDeliveryAudit } from './delivery-audit.ts';
 import { assemblyFrameDir, renderAssemblyViews } from './assembly-render.ts';
-import { rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
+import { formatSnapFitChecks, rotateVec, type InterfaceCheckResult } from './assembly-check.ts';
 // `Json` gives an interface the index signature the output schema's free-form objects
 // require (`additionalProperties: true` infers `Record<string, JsonValue>`); without it a
 // typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
@@ -7325,7 +7325,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'check_assembly',
     description:
-      'Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, buckling attention, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
+      'Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, buckling attention, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
     parameters: {
       manifestPath: {
         type: 'string',
@@ -7340,6 +7340,14 @@ export function registerCadTools(
           'How close counts as "near" in the undeclared-adjacency discovery pass, mm. Default 0.75. ' +
           'Raise it (1.5–2) when the design keeps deliberate clearance gaps you want to see listed; ' +
           'a pair is reported when it interferes OR its gap is below this value.',
+      },
+      detail: {
+        type: 'string',
+        enum: ['summary', 'checks'],
+        description:
+          'Default summary: one headline + worst + nextLook per interface (the attention layer). ' +
+          'checks: append the L2 utilization rows (insertion/retention/strain/self-lock) for snap-fit. ' +
+          'Raw beam inputs/outputs stay in the run report.',
       },
     },
     output: {
@@ -7437,21 +7445,24 @@ export function registerCadTools(
       }],
     },
     async execute(args: unknown, exec: unknown) {
-      const a = args as { manifestPath?: string; adjacencyThresholdMm?: number };
+      const a = args as { manifestPath?: string; adjacencyThresholdMm?: number; detail?: 'summary' | 'checks' };
       const { report, manifestFile } = await runAssemblyCheckJob(a.manifestPath, await allStores(exec), {
         adjacencyThresholdMm: a.adjacencyThresholdMm,
       });
-      const trim = (r: InterfaceCheckResult) => ({
-        interfaceId: r.interfaceId, a: r.a, b: r.b,
-        verdict: r.verdict,
-        // A skipped interface may have no measurement (e.g. spring-preload
-        // without freeLength/stiffness). An `undefined` property is not
-        // lossless JSON and the output guard rejects the whole value — the run
-        // had already committed, so the caller lost both the value and the
-        // reason. Omit the key instead of writing `undefined`.
-        ...(Number.isFinite(r.measured) ? { measured: r.measured } : {}),
-        detail: r.detail,
-      });
+      const trim = (r: InterfaceCheckResult) => {
+        const l2 = a.detail === 'checks' && r.snapFit ? ` | checks: ${formatSnapFitChecks(r.snapFit)}` : '';
+        return {
+          interfaceId: r.interfaceId, a: r.a, b: r.b,
+          verdict: r.verdict,
+          // A skipped interface may have no measurement (e.g. spring-preload
+          // without freeLength/stiffness). An `undefined` property is not
+          // lossless JSON and the output guard rejects the whole value — the run
+          // had already committed, so the caller lost both the value and the
+          // reason. Omit the key instead of writing `undefined`.
+          ...(Number.isFinite(r.measured) ? { measured: r.measured } : {}),
+          detail: `${r.detail}${l2}`,
+        };
+      };
       return {
         overallStatus: report.overallStatus,
         // Which file was actually audited: the agent can no longer tell from the
