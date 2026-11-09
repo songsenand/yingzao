@@ -423,8 +423,12 @@ if (freeze) {
     }
   };
   // The panel mounts, fetches the STL, then renders — sample late enough.
-  setTimeout(freezeCanvas, 2900);
-  setTimeout(freezeCanvas, 3100);
+  // `?freezeat=<ms>` delays the capture (default 2.9 s) so a longer assertion
+  // (e.g. `assert=orbit`) can finish its drag before the canvas is frozen.
+  const freezeAtRaw = Number(q.get('freezeat'));
+  const freezeAt = Number.isFinite(freezeAtRaw) && freezeAtRaw > 0 ? freezeAtRaw : 2900;
+  setTimeout(freezeCanvas, freezeAt);
+  setTimeout(freezeCanvas, freezeAt + 200);
 }
 
 // ?fakerenderer=1 — this sandbox has no WebGL context (read-only /dev/shm), so
@@ -529,6 +533,194 @@ if (q.get('assert')) {
     pending = setTimeout(flush, 100);
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
   setTimeout(flush, 4600);
+}
+
+// ?assert=orbit — the viewport must be free to rotate past the poles.
+//
+// The regression this guards is OrbitControls' turntable clamp: a downward drag
+// from the default view stops with the camera directly above the target, so the
+// camera's y (relative to the target) never goes below 0. A free orbit keeps
+// going over the top; during the SAME drag its y crosses zero. Meant to run with
+// a version selected (`&record=v105&freeze=1&freezeat=6000&slow=9000`); the
+// delayed freeze leaves the canvas live while the probe drags. `&orbitreset=1`
+// also clicks 复原 afterwards and checks that position and camera.up return.
+if (q.get('assert') === 'orbit') {
+  const show = (lines: string[]) => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  };
+  const frame = () => new Promise<void>((res) => requestAnimationFrame(() => res()));
+  const pause = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+  const run = async () => {
+    let canvas: HTMLCanvasElement | null = null;
+    let host: (HTMLElement & { __camera?: any; __controls?: any }) | null = null;
+    for (let i = 0; i < 20; i++) {
+      canvas = document.querySelector('#root canvas') as HTMLCanvasElement | null;
+      host = (canvas?.parentElement ?? null) as typeof host;
+      if (canvas && host?.__camera && host.__controls) break;
+      await pause(250);
+    }
+    if (!canvas || !host?.__camera || !host.__controls) {
+      show([`free orbit (dock ${w}×${h})`, 'FAIL  no live camera/controls — load a version first (`&record=<version>&freeze=1&freezeat=6000&slow=9000`)']);
+      return;
+    }
+    const cam = host.__camera;
+    const ctl = host.__controls;
+    const target = ctl.target.clone();
+    const radius = cam.position.distanceTo(target);
+    const startPos = cam.position.clone();
+    const r = canvas.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    // Synthetic pointer events cannot create a real pointer capture; the
+    // controller calls setPointerCapture on pointerdown, so stub it for the probe.
+    const originalCapture = canvas.setPointerCapture;
+    const originalRelease = canvas.releasePointerCapture;
+    canvas.setPointerCapture = () => {};
+    canvas.releasePointerCapture = () => {};
+    const ev = (type: string, x: number, y: number) => canvas!.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse',
+      button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+    }));
+    const yRel = () => cam.position.y - target.y;
+    const startY = yRel();
+    let minY = startY;
+    let maxY = startY;
+    // Sampling the full orientation, not just position, catches the old
+    // "sudden mirror flip": at the pole lookAt used to jump the quaternion 180°.
+    const qStep = (a: any, b: any) =>
+      (2 * Math.acos(Math.min(1, Math.abs(a.dot(b)))) * 180) / Math.PI;
+    let prevQ = cam.quaternion.clone();
+    let maxStep = 0;
+    ev('pointerdown', cx, cy);
+    // Drag DOWN: a turntable climbs to the north pole and stops (y stays > 0);
+    // free orbit keeps going and the camera ends up below the target (y < 0).
+    const steps = 24;
+    const total = r.height * 2.4;
+    for (let i = 1; i <= steps; i++) {
+      ev('pointermove', cx, cy + (total * i) / steps);
+      await frame();
+      minY = Math.min(minY, yRel());
+      maxY = Math.max(maxY, yRel());
+      const q = cam.quaternion.clone();
+      maxStep = Math.max(maxStep, qStep(prevQ, q));
+      prevQ = q;
+    }
+    ev('pointerup', cx, cy + total);
+    canvas.setPointerCapture = originalCapture;
+    canvas.releasePointerCapture = originalRelease;
+    await pause(500); // let the damping settle before reporting
+    const crossed = minY < -0.05 * Math.max(radius, 1e-6);
+    const lines = [
+      `free orbit (dock ${w}×${h})`,
+      `${crossed ? 'PASS' : 'FAIL'}  one downward drag crosses the pole (min camera y relative to target < 0)`,
+      `camera y rel. target: start ${startY.toFixed(2)}, min ${minY.toFixed(2)}, max ${maxY.toFixed(2)}, radius ${radius.toFixed(2)}`,
+      `${maxStep < 90 ? 'PASS' : 'FAIL'}  no mirror flip while crossing (max orientation step ${maxStep.toFixed(1)}°)`,
+    ];
+    if (q.get('orbitreset') === '1') {
+      const resetBtn = Array.from(document.querySelectorAll('#root button'))
+        .find((b) => (b.textContent ?? '').includes('复原')) as HTMLButtonElement | undefined;
+      resetBtn?.click();
+      await pause(700);
+      const dist = cam.position.distanceTo(startPos);
+      const upOk = cam.up.y > 0.99;
+      lines.push(`${resetBtn ? 'PASS' : 'FAIL'}  复原 control is present`);
+      lines.push(`${dist < radius * 0.01 ? 'PASS' : 'FAIL'}  复原 returns the camera (off by ${dist.toFixed(3)}mm, radius ${radius.toFixed(2)}mm)`);
+      lines.push(`${upOk ? 'PASS' : 'FAIL'}  复原 restores camera.up (y=${cam.up.y.toFixed(3)})`);
+    }
+    show(lines);
+  };
+  void run();
+}
+
+// ?assert=orbit-drain — one 100 px move vs the same 100 px split into 20 events
+// inside ONE frame. With the per-pointer-event drain the sum of the per-event
+// rotation angles is the same; TrackballControls would only apply its last 5 px.
+if (q.get('assert') === 'orbit-drain') {
+  const show = (lines: string[]) => {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    pre.textContent = lines.join('\n');
+  };
+  const frame = () => new Promise<void>((res) => requestAnimationFrame(() => res()));
+  const pause = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+  const run = async () => {
+    let canvas: HTMLCanvasElement | null = null;
+    let host: (HTMLElement & { __camera?: any; __controls?: any }) | null = null;
+    for (let i = 0; i < 20; i++) {
+      canvas = document.querySelector('#root canvas') as HTMLCanvasElement | null;
+      host = (canvas?.parentElement ?? null) as typeof host;
+      if (canvas && host?.__camera && host.__controls) break;
+      await pause(250);
+    }
+    if (!canvas || !host?.__camera || !host.__controls) {
+      show([`orbit drain (dock ${w}×${h})`, 'FAIL  no live camera/controls — load a version first']);
+      return;
+    }
+    const cam = host.__camera;
+    const ctl = host.__controls;
+    const originalCapture = canvas.setPointerCapture;
+    const originalRelease = canvas.releasePointerCapture;
+    canvas.setPointerCapture = () => {};
+    canvas.releasePointerCapture = () => {};
+    const ev = (type: string, x: number, y: number) => canvas!.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse',
+      button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+    }));
+    const angleBetween = (a: any, b: any) =>
+      (2 * Math.acos(Math.min(1, Math.abs(a.dot(b)))) * 180) / Math.PI;
+    const homePos = cam.position.clone();
+    const homeUp = cam.up.clone();
+    const homeTarget = ctl.target.clone();
+    const reset = async () => {
+      cam.position.copy(homePos);
+      cam.up.copy(homeUp);
+      ctl.target.copy(homeTarget);
+      (ctl as unknown as { _lastAngle?: number })._lastAngle = 0;
+      ctl.update();
+      await pause(120);
+    };
+    const drag = async (splits: number): Promise<number> => {
+      await reset();
+      const rect = canvas!.getBoundingClientRect();
+      const y = rect.top + rect.height / 2;
+      const x0 = rect.left + rect.width / 2;
+      ev('pointerdown', x0, y);
+      let total = 0;
+      let prev = cam.quaternion.clone();
+      for (let i = 1; i <= splits; i++) {
+        ev('pointermove', x0 + (100 * i) / splits, y);
+        const now = cam.quaternion.clone();
+        total += angleBetween(prev, now);
+        prev = now;
+      }
+      // Let the RAF run too: without the drain this is where the last segment
+      // would be applied, so the probe measures the slow implementation fairly.
+      await frame();
+      const afterFrame = cam.quaternion.clone();
+      total += angleBetween(prev, afterFrame);
+      ev('pointerup', x0 + 100, y);
+      await pause(120);
+      return total;
+    };
+    await pause(2000); // let the panel's initial poll settle
+    const one = await drag(1);
+    const split = await drag(20);
+    canvas.setPointerCapture = originalCapture;
+    canvas.releasePointerCapture = originalRelease;
+    const ratio = one > 1e-6 ? split / one : 0;
+    show([
+      `orbit drain (dock ${w}×${h})`,
+      `${one > 10 && ratio > 0.8 ? 'PASS' : 'FAIL'}  a split drag keeps its movement (split/one ≥ 0.8)`,
+      `same 100px in one frame: 1 move ${one.toFixed(2)}°, 20 moves ${split.toFixed(2)}°, ratio ${ratio.toFixed(3)}`,
+    ]);
+  };
+  void run();
 }
 
 // ?assert=layout — the stability requirement, checked instead of eyeballed:
@@ -1186,7 +1378,7 @@ if (q.get('assert') === 'evidence') {
 // assertion's run (starts 1.78 s), so it used to wipe the report mid-run and
 // the screenshot showed the probe instead of the verdicts. An assert owns the
 // stage; the probe steps aside for it.
-if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost' && q.get('assert') !== 'deeplink' && q.get('assert') !== 'review') {
+if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !== 'evidence' && q.get('assert') !== 'recent' && q.get('assert') !== 'machine' && q.get('assert') !== 'history' && q.get('assert') !== 'ghost' && q.get('assert') !== 'deeplink' && q.get('assert') !== 'review' && q.get('assert') !== 'orbit' && q.get('assert') !== 'orbit-drain') {
   // Ground-truth layout probe, printed into the (visible) stage column.
   setTimeout(() => {
     const lines: string[] = [`dock ${w}×${h} dpr=${devicePixelRatio}`];

@@ -21,7 +21,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createFreeOrbit } from './free-orbit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { fitDistance } from './fit';
 import {
@@ -170,9 +170,14 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
     const camera = new THREE.PerspectiveCamera(45, (host.clientWidth || 480) / (host.clientHeight || 320), 0.1, 20000);
     attachStudioLights(scene, camera);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    // Free orbit, like the main preview: this dialog inspects a STL before
+    // import, so it must not stop at the poles either. min/max are replaced by
+    // frame() once the file has parsed.
+    const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
+      target: new THREE.Vector3(),
+      minDistance: 0,
+      maxDistance: Infinity,
+    });
 
     let mesh: THREE.Mesh | null = null;
     let radius = 50;
@@ -185,6 +190,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
       const size = box.getSize(new THREE.Vector3());
       radius = Math.max(size.length() / 2, 0.5);
       controls.target.copy(center);
+      camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(
         new THREE.Vector3(1.6, 1.2, 1.6).normalize(),
         fitDistance(camera, radius),
@@ -261,7 +267,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
       loadRef.current = null;
       cancelAnimationFrame(raf);
       ro.disconnect();
-      controls.dispose();
+      disposeControls();
       if (mesh) {
         mesh.geometry.dispose();
         (mesh.material as THREE.Material).dispose();

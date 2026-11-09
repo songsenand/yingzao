@@ -5615,3 +5615,110 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** `simulate_physics` 的 `elastic` 层、标准件目录 schema、`check_assembly` 路由、`docs/llm/assembly.md`、skill、examples；不新增制造/测试服务。
 
 **未决/非目标：** 自动 PRBM、复杂接触/壳/实体 FE、大表、实测相关性服务；这些后续另议。
+
+## 2026-11-08：CAD 3D 视口取消极角限位，改用自由轨道
+
+**触发条件：** 第 1 条（用户拍板：确认要取消竖直旋转的限位）+ 第 4 条（统一五个 3D 视口的导航前提，后续视口交互都以此为准）。
+
+**要解决的问题：** 用户反馈「在 CAD 预览的视口中拖动模型，发现有一个轴似乎有限位，拖到某个位置就不能再拖」。定位为 three.js `OrbitControls` 的默认极角夹紧：`minPolarAngle = 0`、`maxPolarAngle = π`。水平方向（方位角）无限，竖直方向到正上方/正下方就停住，相机不能越过极点。本项目没有额外写这个限制；缩放另有显式距离限制（主视口 `0.3R–10R`、回放 `0.2R–12R`、本地预览 `0.05R–60R`），平移无限制。
+
+**决策内容：** 五个 CAD 3D 视口（主视口、本地 STL 预览、motion / fluid / static 回放）统一从 `OrbitControls` 换成 `TrackballControls`（自由轨道）：
+
+- `camera.up` 随旋转一起转，因此可以越过极点；代价是模型可能倒置或侧倾。
+- `复原` / `refit()` / 新文件取景同时把 `camera.up` 复位为 `(0,1,0)`，并清掉 Trackball 的 `_lastAngle`，否则残余阻尼会把复位带偏。
+- 关闭 Trackball 的 A/S/D 键盘绑定（`keys = ['','','']`）；面板里有大量文本输入，不能把字母当成轨道修饰键。
+- 保留缩放距离限制；`zoomSpeed` 从默认 1.2 调到 0.12（实测约 3.5%/格，旧控件约 5%/格），否则滚轮一格会吃掉大半段距离。
+- 尺寸变化时调用 `handleResize()`；Trackball 缓存画布矩形，不刷新会让旋转/平移使用旧坐标。
+
+**理由：** 极角夹紧不是几何或渲染 bug，而是转盘式导航为保持世界“上”方向做的取舍；它不阻止看到上/下面（反向拖 180° 即可），只阻止连续翻过极点。用户要的是后者，所以必须放弃固定“上”。`TrackballControls` 是 three.js 自带、经过广泛使用的自由轨道实现，不需要引入新依赖；自己用球坐标强行越界会在极点遇到 `lookAt` 翻转/万向锁，成本更高。
+
+**依据：** 沙箱新增 `?assert=orbit`（合成 pointer 拖拽；`freeze=1&freezeat=6000&slow=9000&record=v105`）：
+
+- 自由轨道：一次向下拖拽，相机相对 target 的 y 从 `10.46` 降到 `-17.61`（半径 `22.33`）→ 越过极点，PASS。
+- 反证：临时把同一文件换回 `OrbitControls`，同一拖拽的 y 只到 `10.46…22.33`（停在上方）→ FAIL；证明这个探针确实能证伪。
+- `复原`：相机位置偏差 `0.000mm`，`camera.up.y = 1.000`。
+- `accept-ui layout` 380/320 全绿；`accept-ui playback` 4/4 全绿；`tsc --noEmit` 0。
+
+**影响：** `src/client/panel.ts`、`src/client/playback.ts`、`src/client/local-file.tsx`、`sandbox/preview/entry.tsx`（`?assert=orbit` + `freezeat`）、`DESIGN.md`、`docs/user/{README,what-is-toymarker}.md`。
+
+**未决 / 非目标：** Trackball 的滚转会在多次任意拖拽后累积（已知 twist），模型可能歪着；`复原` 是当前出口。若以后觉得歪得难受，可在「保留自由、但不累积滚转」的自定义控制器与「加六标准视图按钮」之间再决策；本轮不做。触摸手势（单指旋转、双指缩放/平移）沿用 Trackball 默认，未单独验收。
+
+## 2026-11-09：自由轨道补逐事件 drain——拖拽不跟手来自输入采样，不是渲染成本
+
+**触发条件：** 第 1 条（用户拍板：在 A/B/C/D 中选择 A）+ 第 4 条（`free-orbit.ts` 成为五个 3D 视口共用的导航配置）。
+
+**要解决的问题：** 2026-11-08 换成 TrackballControls 后，用户反馈「拖动不跟手，资源消耗似乎增加」。诊断结果：TrackballControls 的 `onMouseMove` 每帧把指针位置覆盖写进 `_movePrev`/`_moveCurr`，`update()` 只消费最后一段位移；同一 200px 拖拽，1 move/帧转 64.6°，4 moves/帧只剩 16.1°（1/4）。125–1000Hz 鼠标会让大部分拖拽被丢掉。控件 `update()` 本身不渲染时 Trackball `136ns` / Orbit `217ns`，渲染循环与场景未变，因此不是 GPU/渲染成本；阻尼残影（Trackball 0.959/帧 vs Orbit 0.92/帧）进一步放大了「还在飘」的感觉。
+
+**决策内容：** 保留自由轨道，新增 `src/client/free-orbit.ts` 作为五个视口（主视口、本地 STL 预览、motion/fluid/static 回放）的统一入口：
+
+- 拖拽期间在 `window` 冒泡阶段监听 `pointermove`，在 Trackball 自己的 handler 之后逐事件调用 `controls.update()`，每一段位移都被消费；`pointerup`/`pointercancel`/`blur` 结束。
+- `rotateSpeed = 2.2` 补偿虚拟球映射的转速差（旧 Orbit 约 0.72°/px，Trackball 约 0.32°/px）。
+- `dynamicDampingFactor = 0.15` 对齐 OrbitControls 的 0.92/帧衰减。
+- 保留 `zoomSpeed = 0.12`、关闭 A/S/D 键盘绑定、尺寸变化与 `pointerdown` 刷新画布矩形。
+
+**理由：** 这是最小改动：不动渲染链路、不引入新依赖、保留无极点自由旋转；用户选择 A 而非自写控制器。逐事件 `update()` 的成本约 136ns/事件，125Hz 下约 17µs/s，可忽略。
+
+**依据：** 沙箱新增 `?assert=orbit-drain`（同一 200px，1 move vs 20 moves 在同一帧内；关闭阻尼以只测拖拽本身）：
+
+- 修复后：`1 move 142.83° / 20 moves 142.83°`，比值 `1.000`，PASS。
+- 反证：临时移除逐事件 drain，`20 moves` 只剩 `7.14°`（比值 `0.050`，只消费最后 10px）→ FAIL。
+- `?assert=orbit` 仍 PASS（越过极点；复原位置偏差 `0.000mm`、`camera.up.y = 1.000`）；`accept-ui layout` 2/2、`playback` 4/4；`tsc` 0。
+
+**影响：** 新增 `src/client/free-orbit.ts`；`panel.ts`、`playback.ts`、`local-file.tsx` 改用 `createFreeOrbit`；`sandbox/preview/entry.tsx` 新增 `?assert=orbit-drain`；`DESIGN §6.9` 更新。
+
+**未决 / 非目标：** Trackball 的滚转累积（twist）仍在，`复原` 是出口；若仍嫌手感不够线性，下一步再决定是否写「不累积滚转」的自定义控制器（B 方案），本轮不做。触摸手势沿用 Trackball 默认，未单独验收。
+
+## 2026-11-09：线性自由轨道取代 Trackball——左键旋转/右键平移回到 OrbitControls 手感
+
+**触发条件：** 第 1 条（用户反馈：左键旋转仍慢、手感远不如原来，右键平移过快；明确“左键按住后转动、右键按住拖动”两个手势都要原来的手感）+ 第 4 条（五个 3D 视口统一控制器）。
+
+**要解决的问题：** 2026-11-09 的 Trackball + 逐事件 drain 解决了丢位移，但 Trackball 的虚拟球映射本身和 OrbitControls 不同：同一像素在画面中心/边缘转得不一样（用户描述的“揪住这个点、无论距离”正是 Orbit 的线性映射），右键 pan 也缺了 `tan(fov/2)`，所以显得过快。继续调 `rotateSpeed`/`panSpeed` 只是在补偿错误的映射，无法恢复原手感。
+
+**决策内容：** 自写 `src/client/free-orbit.ts` 的 `FreeOrbitControls`，完全替换 Trackball：
+
+- 左键：`yaw = 2π·dx/clientHeight·rotateSpeed`、`pitch = 2π·dy/clientHeight·rotateSpeed`，`rotateSpeed = 1`；只依赖像素增量，不看抓取点。
+- 右键：`pan = 2·delta·distance·tan(fov/2)/clientHeight·panSpeed`，`panSpeed = 1`，与 OrbitControls 的 perspective pan 公式逐项一致。
+- 滚轮：`distance *= 0.95^(−deltaY/100·zoomSpeed)`；距离仍夹在 min/max。
+- 竖直旋转的 pitch 轴在 pointerdown 时捕获、整次拖拽固定，并随 yaw 旋转；每帧重算 `worldUp × back` 会在极点翻号，相机停在极点。
+- 正常拖拽保持 `camera.up = (0,1,0)`，不产生 Trackball 式滚转；代价是正好过极点时屏幕翻 180°。
+- 无阻尼，指针事件逐条立即应用；`复原` 复位相机位置与 up。
+
+**理由：** 用户要的是“原来的手感”，而不是“自由轨道的另一种近似”。直接复刻 OrbitControls 的三条线性公式，再用四元数解决极角夹紧，是唯一能同时满足“左键跟手/右键不快/可越过极点”的方案；自写控制器也避免 Trackball 的虚拟球和逐帧采样问题。
+
+**依据：** 临时 Node 对照（同一相机、同一 20px 拖拽，脚本已删）：
+
+- 左键右拖/下拖：`FreeOrbitControls` 与 `OrbitControls` 的相机 `position`、`up` 逐位一致（如右拖 `0.720,1.000,1.217`，下拖 `0.793,1.320,0.793`）。
+- 右键右拖/下拖：`position` 与 `target` 逐位一致（如右拖 target `-0.041,0.000,0.041`，下拖 `-0.023,0.047,-0.023`）。
+- `?assert=orbit`：向下拖拽 y 从 `10.46` 到 `-21.99`（半径 `22.33`）→ 越过极点；复原 `0.000mm` / `up.y=1.000`。
+- `?assert=orbit-drain`：100px 拖拽，1 move / 20 moves 均 `137.40°`，比值 `1.000`。
+- `accept-ui layout` 2/2、`playback` 4/4；`tsc` 0。
+
+**影响：** 重写 `src/client/free-orbit.ts`；`panel.ts`、`playback.ts`、`local-file.tsx` 的控制器调用不变但行为换新；`sandbox/preview/entry.tsx` 的 `?assert=orbit-drain` 改为 100px；`DESIGN §6.9` 更新。TrackballControls 不再被 CAD 客户端使用。
+
+**未决 / 非目标：** 正好过极点时屏幕翻转 180°；正常角度不滚转，这是世界 up 与无夹紧的取舍。触摸双指手势是基本实现，未单独验收。若以后要求“极点也连续且不滚转”，需要更复杂的极点 roll 过渡，不在本轮。
+
+## 2026-11-09：极点改用连续 up 过渡，消除突然镜像翻转
+
+**触发条件：** 第 1 条（用户反馈：上下旋转超过某个位置后继续转，会突然翻成镜像）+ 第 4 条（同一 `free-orbit.ts` 的极点行为）。
+
+**要解决的问题：** 上一版为了让正常角度不滚转，竖直旋转时把 `camera.up` 固定为 `(0,1,0)`，只旋转相机位置。过极点时 `up` 与视线平行，`lookAt` 只能选一个 fallback 朝向，于是画面突然 180° 镜像翻转。这不是速度/增益问题，是世界 up 与无夹紧在极点的奇异性。
+
+**决策内容：** 在 `FreeOrbitControls.rotate` 中让 `up` 也随 yaw/pitch 转，再做“安全回投”：
+
+- 把 `up` 投影到 world-up 的垂直平面；离极点足够远时回投到该投影，正常角度因此保持不滚转。
+- 接近极点时投影长度收缩，按 `(len − 0.15)/0.2` 平滑降低回投权重；极点附近保留 pitch 转过的 `up`。
+- 回投前用 `projected.dot(up) < 0` 取同号方向，越过极点后仍与当前 up 连续，不会突然取反。
+- pitch 轴仍在 pointerdown 时固定、整次拖拽不变，保证轴不翻号。
+- 结果是连续滚转（模型可倒置），没有镜像翻转；正常角度与 OrbitControls 的相机位置/四元数逐位一致。
+
+**理由：** 镜像翻转是用户直接报告的可见缺陷；连续滚转是自由轨道在极点唯一不翻转的连续解。正常角度用手感对齐 Orbit（不回投会一路滚转），极点附近用连续过渡，两者兼顾。
+
+**依据：**
+
+- 临时 Node 对照（同一相机、同一 20px 拖拽，脚本已删）：左键右拖/下拖的 `position` 与 `quaternion` 逐位等于 `OrbitControls`；右键右拖/下拖的 `position`/`target` 也逐位相等。
+- `?assert=orbit` 新增逐帧四元数采样：向下拖拽越过极点（y `10.46 → −21.99`），最大单步 `36.0°`（低于 90° 阈值；旧版 fallback 会是 ~180°），PASS；复原 `0.000mm` / `up.y=1.000`。
+- `?assert=orbit-drain`：100px，1 vs 20 moves 均 `137.40°`；`accept-ui layout` 2/2、`playback` 4/4；`tsc` 0。
+
+**影响：** `src/client/free-orbit.ts` 的 `rotate`；`sandbox/preview/entry.tsx` 的 `?assert=orbit` 增加连续性断言；`DESIGN §6.9` 更新。五个视口的调用方式不变。
+
+**未决 / 非目标：** 极点附近有连续滚转，越过极点后模型可倒置；这是不翻转的代价。触摸双指手势仍是基本实现，未单独验收。

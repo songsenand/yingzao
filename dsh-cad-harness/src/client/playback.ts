@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
 import { ViewportOverlay, type OverlayScene } from './overlay';
 import { fitDistance } from './fit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
@@ -28,7 +28,7 @@ interface SceneHandle {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
-  controls: OrbitControls;
+  controls: FreeOrbitControls;
   fit: (center: THREE.Vector3, radius: number) => void;
   /** Re-apply the last fit (the "复原视图" control). */
   refit: () => void;
@@ -75,9 +75,15 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
   // angle too, and a world-fixed key left half of it in the dark.
   attachStudioLights(scene, camera);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  // Free orbit: same navigation and input drain as the version viewport (see
+  // panel.ts / free-orbit.ts). The replay views share this scene builder, so a
+  // run can be turned over too; refit() restores camera.up along with the
+  // camera position. min/max are replaced by fit() below.
+  const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
+    target: new THREE.Vector3(),
+    minDistance: 0,
+    maxDistance: Infinity,
+  });
 
   // Re-fit on resize while the camera is still ours: the viewport takes the
   // dock's leftover height, so opening a disclosure changes its shape.
@@ -114,6 +120,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     const r = Math.max(radius, 1);
     lastFit = { center: center.clone(), radius: r };
     controls.target.copy(center);
+    camera.up.set(0, 1, 0);
     camera.position.copy(center).addScaledVector(VIEW_DIR, fitDistance(camera, r));
     controls.minDistance = r * 0.2;
     controls.maxDistance = r * 12;
@@ -149,7 +156,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     dispose: () => {
       disposed = true;
       cancelAnimationFrame(raf);
-      controls.dispose();
+      disposeControls();
       ro.disconnect();
       window.removeEventListener('resize', onResize);
       renderer.dispose();

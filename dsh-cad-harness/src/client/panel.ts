@@ -8,7 +8,7 @@ import {
 } from './project';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, RunKeyframeStrip } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { downloadName } from '../shared/download-name';
@@ -1229,6 +1229,10 @@ export function CadPanel(): React.ReactElement {
 
         const VIEW_DIR = new THREE.Vector3(1.6, 1.2, 1.6).normalize();
         const applyFit = () => {
+          // Free orbit rotates `camera.up` with the model (that is what lets the
+          // camera cross the poles). A re-fit — initial frame or 复原 — must
+          // restore the world-up too, or the model comes back rolled.
+          camera.up.set(0, 1, 0);
           camera.position.copy(center).addScaledVector(VIEW_DIR, fitDistance(camera, radius));
         };
         applyFit();
@@ -1281,13 +1285,26 @@ export function CadPanel(): React.ReactElement {
           })();
         }
 
-        // Mouse interaction: wheel zoom, drag rotate (damped).
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.copy(center);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.minDistance = radius * 0.3;
-        controls.maxDistance = radius * 10;
+        // Mouse interaction: wheel zoom, drag rotate (free orbit), right-drag pan.
+        // `createFreeOrbit` is TrackballControls plus the per-pointer-event
+        // drain (fast mice lose most of a drag otherwise) and the orbit config
+        // shared by all CAD views. Trackball, not OrbitControls, because
+        // OrbitControls clamps the polar angle to [0, π]: a vertical drag stops
+        // at the north/south pole. Free orbit lets the camera continue over the
+        // pole; the price is that the model may end up tilted/upside down,
+        // which `复原` undoes (applyFit restores camera.up).
+        const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
+          target: center,
+          minDistance: radius * 0.3,
+          maxDistance: radius * 10,
+        });
+
+        // Debug hooks for the sandbox's `?assert=orbit` / `?assert=orbit-rate`
+        // probes (same shape as `__renderer`): a runner has to read the live
+        // camera to prove that a drag crossed the pole at the input rate it was
+        // given, not just at one move per frame.
+        (mount as unknown as { __camera?: THREE.PerspectiveCamera }).__camera = camera;
+        (mount as unknown as { __controls?: FreeOrbitControls }).__controls = controls;
 
         // Corner overlays read this live camera; 复原 returns to this framing
         // (recomputed, so it also repairs the frame after a dock resize).
@@ -1347,7 +1364,7 @@ export function CadPanel(): React.ReactElement {
 
         cleanupResize = () => {
           cancelAnimationFrame(raf);
-          controls.dispose();
+          disposeControls();
           resizeObserver.disconnect();
           window.removeEventListener('resize', onResize);
         };
@@ -3720,7 +3737,7 @@ export function CadPanel(): React.ReactElement {
       meshSource && React.createElement('div', {
         ref: mountRef,
         // Picking listens HERE, not on an overlay that swallows the pointer:
-        // with the old overlay, OrbitControls never saw the pointerdown, so
+        // with the old overlay, the camera controls never saw the pointerdown, so
         // orbit and zoom were dead the moment you entered 测量 or 壁厚.
         onPointerDown: (e: any) => {
           if (!annotateMode) clickStartRef.current = { x: e.clientX, y: e.clientY };
