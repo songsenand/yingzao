@@ -87,6 +87,7 @@
           "additionalProperties": false,
           "properties": {
             "behavior": { "enum": ["axial-spring", "torsion-spring", "flexure-beam", "snap-fit", "pad"], "description": "Default axial-spring when omitted." },
+            "standardId": { "type": "string", "minLength": 1, "description": "Optional seed-catalog id; fills only fields not declared explicitly. Unknown ids are a validation error. Currently axial-spring standard parts only." },
             "direction": { "enum": ["compression", "tension"], "description": "Omitted = report the deflection sign, do not enforce." },
             "freeLengthMm": { "type": "number", "exclusiveMinimum": 0, "description": "Free (unloaded) length along the a→b line, mm." },
             "stiffnessNPerMm": { "type": "number", "exclusiveMinimum": 0, "description": "Axial rate, N/mm." },

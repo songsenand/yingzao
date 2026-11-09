@@ -1466,6 +1466,25 @@ DEFAULT_DERIVED = {
 # expensive lie a validator can tell.
 IMPLEMENTED_CHECKS = {"distance", "diameter-match", "coaxial", "motion-clearance", "spring-preload", "spring-behaviour", "snap-fit"}
 
+# Seed standard-parts catalog (mirror of src/host/standard-parts.ts). Keep this
+# small: a standard part is data, not a solver. The first entry is the
+# two-color pen's assumed button spring.
+STANDARD_SPRINGS = {
+    "comp-od5.4-w0.6-l30": {
+        "id": "comp-od5.4-w0.6-l30",
+        "kind": "coil-compression",
+        "name": "Button compression spring (pen seed; assumed)",
+        "freeLengthMm": 30,
+        "stiffnessNPerMm": 0.5,
+        "solidHeightMm": 8,
+        "outerDiameterMm": 5.4,
+        "maxTravelMm": 20,
+        "source": "estimated",
+        "note": "Seed from the two-color pen BOM; generic PP spring, not measured.",
+    },
+}
+STANDARD_SPRING_IDS = sorted(STANDARD_SPRINGS)
+
 
 def _js_num(value) -> str:
     """A number as a JS template literal renders it: `6`, not `6.0`.
@@ -1502,6 +1521,28 @@ def _elastic_num(iface: dict, keys: list) -> float | None:
     return None
 
 
+def _resolve_standard_spring(iface: dict):
+    """Fill missing axial-spring fields from a standard-parts id.
+
+    Explicit manifest fields win, so an installation-specific override stays
+    visible. Unknown ids are returned as a detail, never guessed.
+    """
+    spec = iface.get("elastic") or {}
+    sid = spec.get("standardId")
+    if sid is None:
+        return iface, None, None
+    part = STANDARD_SPRINGS.get(sid) if isinstance(sid, str) else None
+    if part is None:
+        return iface, None, f'unknown standardId "{sid}"; the seed catalog has {", ".join(STANDARD_SPRING_IDS)}'
+    merged = dict(spec)
+    for key in ("freeLengthMm", "stiffnessNPerMm", "solidHeightMm", "outerDiameterMm", "maxTravelMm"):
+        if merged.get(key) is None and part.get(key) is not None:
+            merged[key] = part[key]
+    if merged.get("source") is None:
+        merged["source"] = part["source"]
+    return {**iface, "elastic": merged}, part, None
+
+
 def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
     """Mirror of `springBehaviour` in assembly-check.ts.
 
@@ -1509,6 +1550,9 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
     (forceBudgetN / tolerance / requiredTravelMm); it never invents child/adult or
     product limits. Missing inputs are named, not guessed.
     """
+    iface, standard, standard_error = _resolve_standard_spring(iface)
+    if standard_error:
+        return {"detail": standard_error}
     spec = iface.get("elastic") or {}
     behavior = spec.get("behavior") or "axial-spring"
     if behavior != "axial-spring":
@@ -1590,6 +1634,13 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
     else:
         notes.append("requiredTravelMm not declared; travel not judged")
 
+    # The installed force is the preload, not the force at the end of the
+    # stroke. When the endpoint is computable, check it too.
+    force_at_travel = None
+    if direction and required_travel is not None and travel_check != "violation":
+        end_installed = _round_js(installed - required_travel, 4) if direction == "compression" else _round_js(installed + required_travel, 4)
+        force_at_travel = _round_js(k * (free - end_installed), 4)
+
     force_check = "skipped"
     if budget is not None:
         force_check = "ok" if abs(force) <= budget else "violation"
@@ -1602,6 +1653,21 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
             if force_check == "ok"
             else f"|force| {_js_num(abs(force))}N exceeds budget {_js_num(budget)}N"
         )
+    if force_at_travel is not None and budget is not None:
+        end_abs = abs(force_at_travel)
+        if end_abs > budget:
+            force_check = "violation"
+            notes.append(f"|force at travel| {_js_num(end_abs)}N exceeds budget {_js_num(budget)}N")
+        else:
+            margin = _round_js(budget - end_abs, 4)
+            if margin == 0:
+                zero_margin = True
+            notes.append(
+                f"|force at travel| {_js_num(end_abs)}N within budget {_js_num(budget)}N (margin {_js_num(margin)}N"
+                + (" — zero margin, difficult)" if margin == 0 else ")")
+            )
+    elif force_at_travel is not None and budget is None and tolerance is None:
+        notes.append(f"|force at travel| {_js_num(abs(force_at_travel))}N (no budget declared)")
     tolerance = iface.get("tolerance")
     if tolerance is not None:
         in_range = tolerance.get("min", 0) <= force <= tolerance.get("max", 0)
@@ -1615,6 +1681,16 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
             f"tolerance [{_js_num(tolerance.get('min', 0))},{_js_num(tolerance.get('max', 0))}]N "
             f"{'satisfied' if in_range else 'violated'}"
         )
+        if force_at_travel is not None:
+            end_in_range = tolerance.get("min", 0) <= force_at_travel <= tolerance.get("max", 0)
+            if not end_in_range:
+                force_check = "violation"
+            if end_in_range and (force_at_travel == tolerance.get("min", 0) or force_at_travel == tolerance.get("max", 0)):
+                zero_margin = True
+            notes.append(
+                f"tolerance at travel [{_js_num(tolerance.get('min', 0))},{_js_num(tolerance.get('max', 0))}]N "
+                f"{'satisfied' if end_in_range else 'violated'}"
+            )
     if budget is None and tolerance is None:
         notes.append("no forceBudgetN/tolerance declared; force is reported, not judged")
 
@@ -1658,33 +1734,38 @@ def _spring_behaviour(iface: dict, pa: list, pb: list) -> dict:
         f" = {_js_num(force)}N (band {_js_num(force_band[0])}–{_js_num(force_band[1])}N; {order_text})"
         if force_band else f" = {_js_num(force)}N ({order_text})"
     )
+    standard_text = f"standard {standard['id']} ({standard['name']}); " if standard else ""
     detail = (
-        f"installed {_js_num(installed)}mm vs free {_js_num(free)}mm → δ{_js_num(deflection)}mm × "
+        f"{standard_text}installed {_js_num(installed)}mm vs free {_js_num(free)}mm → δ{_js_num(deflection)}mm × "
         f"{_js_num(k)}N/mm{force_text}; source {source}; " + "; ".join(notes)
     )
 
+    elastic = {
+        "behavior": behavior,
+        "installedLengthMm": installed,
+        "freeLengthMm": _round_js(free, 4),
+        "deflectionMm": deflection,
+        "stiffnessNPerMm": _round_js(k, 4),
+        "forceN": force,
+        **({"forceBandN": force_band} if force_band else {}),
+        **({"forceAtTravelN": force_at_travel} if force_at_travel is not None else {}),
+        "forceDecadeN": decade,
+        "source": source,
+        "checks": {
+            "direction": direction_check,
+            "solidHeight": solid_check,
+            "travel": travel_check,
+            "forceBudget": force_check,
+        },
+        "notes": notes,
+    }
+    if standard:
+        elastic["standardId"] = standard["id"]
     return {
         "verdict": verdict,
         "measured": force,
         "detail": detail,
-        "elastic": {
-            "behavior": behavior,
-            "installedLengthMm": installed,
-            "freeLengthMm": _round_js(free, 4),
-            "deflectionMm": deflection,
-            "stiffnessNPerMm": _round_js(k, 4),
-            "forceN": force,
-            **({"forceBandN": force_band} if force_band else {}),
-            "forceDecadeN": decade,
-            "source": source,
-            "checks": {
-                "direction": direction_check,
-                "solidHeight": solid_check,
-                "travel": travel_check,
-                "forceBudget": force_check,
-            },
-            "notes": notes,
-        },
+        "elastic": elastic,
     }
 
 

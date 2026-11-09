@@ -79,14 +79,16 @@ working, not an error.
   measured installed length), so it needs `params.freeLengthMm` and
   `params.stiffnessNPerMm` and the spring's **own two ends** as `a` and `b`.
   `spring-behaviour` is the richer axial-spring check: it measures the installed
-  length and reports deflection, force, direction, solid-height clash, travel and
-  a slenderness attention. Its `elastic` object is the general envelope
-  (`behavior`, `direction`, `freeLengthMm`, `stiffnessNPerMm`, `solidHeightMm`,
-  `outerDiameterMm`, `guided`, `forceBudgetN`, `requiredTravelMm`,
-  `stiffnessTolerancePct`, `source`). It always reports an order-of-magnitude
-  band (`forceDecadeN`, e.g. 18.7 N → `[10, 100]`), plus a k-tolerance band when
-  `stiffnessTolerancePct` is declared. It compares against the **user-declared**
-  `forceBudgetN` / `tolerance` / `requiredTravelMm`; with none of those it comes
+  length and reports deflection, force, direction, solid-height clash, travel,
+  and the force at the travel endpoint (not just the installed preload), plus a
+  slenderness attention. Its `elastic` object is the general envelope
+  (`behavior`, `standardId`, `direction`, `freeLengthMm`, `stiffnessNPerMm`,
+  `solidHeightMm`, `outerDiameterMm`, `guided`, `forceBudgetN`,
+  `requiredTravelMm`, `stiffnessTolerancePct`, `source`). `standardId` fills only
+  fields the manifest did not declare; explicit fields win. It always reports an
+  order-of-magnitude band (`forceDecadeN`, e.g. 18.7 N → `[10, 100]`), plus a
+  k-tolerance band when `stiffnessTolerancePct` is declared. It compares against
+  the **user-declared** `forceBudgetN` / `tolerance` / `requiredTravelMm`; with none of those it comes
   back `skipped`, not passed. It never invents child/adult or product thresholds.
   `snap-fit` is the **卡扣** operator: `lobeCount`, `lobeWidthMm`,
   `lobeThicknessMm`, `leverArmMm`, `radialInterferenceMm`, `youngModulusMPa`,

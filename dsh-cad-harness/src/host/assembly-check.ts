@@ -28,6 +28,7 @@ import {
 import type { VersionStore } from './version.ts';
 import { listVersions, readVersionDatums } from './version.ts';
 import { newestVersionPerPart, supersededVersionIds } from './latest.ts';
+import { standardSpring, STANDARD_SPRING_IDS, type StandardSpring } from './standard-parts.ts';
 import type { RunEntry } from './runs.ts';
 
 type Vec3 = [number, number, number];
@@ -408,7 +409,11 @@ export interface ElasticCheckResult {
   forceBandN?: [number, number];
   /** Order-of-magnitude display band, always present (e.g. 18.7 N -> [10, 100]). */
   forceDecadeN: [number, number];
+  /** Force at the declared travel endpoint, when direction + requiredTravel allow it. */
+  forceAtTravelN?: number;
   source: string;
+  /** Present when the spring fields came from a standard-parts catalog id. */
+  standardId?: string;
   checks: {
     direction: 'ok' | 'violation' | 'unknown';
     solidHeight: 'ok' | 'violation' | 'unknown';
@@ -570,6 +575,29 @@ function elasticNumber(iface: ManifestInterface, keys: readonly string[]): numbe
 }
 
 /**
+ * Resolve an optional `elastic.standardId` against the seed catalog. The catalog
+ * fills only fields the manifest did not declare, so an installation-specific
+ * override stays visible in the manifest. Unknown ids are an input error.
+ */
+export function resolveStandardSpring(
+  iface: ManifestInterface,
+): { iface: ManifestInterface; standard?: StandardSpring; error?: string } {
+  const spec = iface.elastic ?? {};
+  const id = spec.standardId;
+  if (id === undefined) return { iface };
+  const standard = standardSpring(id);
+  if (!standard) return { iface, error: `unknown standardId "${id}"; the seed catalog has ${STANDARD_SPRING_IDS.join(', ')}` };
+  const elastic = { ...spec };
+  if (elastic.freeLengthMm === undefined) elastic.freeLengthMm = standard.freeLengthMm;
+  if (elastic.stiffnessNPerMm === undefined) elastic.stiffnessNPerMm = standard.stiffnessNPerMm;
+  if (elastic.solidHeightMm === undefined && standard.solidHeightMm !== undefined) elastic.solidHeightMm = standard.solidHeightMm;
+  if (elastic.outerDiameterMm === undefined && standard.outerDiameterMm !== undefined) elastic.outerDiameterMm = standard.outerDiameterMm;
+  if (elastic.maxTravelMm === undefined && standard.maxTravelMm !== undefined) elastic.maxTravelMm = standard.maxTravelMm;
+  if (elastic.source === undefined) elastic.source = standard.source;
+  return { iface: { ...iface, elastic }, standard };
+}
+
+/**
  * `spring-behaviour` for an axial spring. Geometry measures the installed length;
  * the declared rate turns deflection into force. Everything the operator cannot
  * know (solid height, travel, force budget, direction) is reported as `unknown`
@@ -580,6 +608,10 @@ function springBehaviour(
   aFeature: unknown,
   bFeature: unknown,
 ): { verdict: InterfaceCheckResult['verdict']; measured: number; detail: string; elastic: ElasticCheckResult } {
+  const resolved = resolveStandardSpring(iface);
+  if (resolved.error) throw new Error(resolved.error);
+  const standard = resolved.standard;
+  iface = resolved.iface;
   const spec = iface.elastic ?? {};
   const behavior = spec.behavior ?? 'axial-spring';
   if (behavior !== 'axial-spring') {
@@ -665,6 +697,17 @@ function springBehaviour(
     notes.push('requiredTravelMm not declared; travel not judged');
   }
 
+  // The installed force is the preload, not the force the user feels at the
+  // end of the stroke. When the travel endpoint is computable, check it too —
+  // otherwise a spring can pass at 1 N and be 3 N at full press.
+  let forceAtTravel: number | null = null;
+  if (direction && requiredTravel !== null && travelCheck !== 'violation') {
+    const endInstalled = direction === 'compression'
+      ? round4(installed - requiredTravel)
+      : round4(installed + requiredTravel);
+    forceAtTravel = round4(k * (free - endInstalled));
+  }
+
   let forceCheck: ElasticCheckResult['checks']['forceBudget'] = 'skipped';
   if (budget !== null) {
     forceCheck = Math.abs(force) <= budget ? 'ok' : 'violation';
@@ -674,12 +717,31 @@ function springBehaviour(
       ? `|force| ${Math.abs(force)}N within budget ${budget}N (margin ${margin}N${margin === 0 ? ' — zero margin, difficult' : ''})`
       : `|force| ${Math.abs(force)}N exceeds budget ${budget}N`);
   }
+  if (forceAtTravel !== null && budget !== null) {
+    const endAbs = Math.abs(forceAtTravel);
+    if (endAbs > budget) {
+      forceCheck = 'violation';
+      notes.push(`|force at travel| ${endAbs}N exceeds budget ${budget}N`);
+    } else {
+      const margin = round4(budget - endAbs);
+      if (margin === 0) zeroMargin = true;
+      notes.push(`|force at travel| ${endAbs}N within budget ${budget}N (margin ${margin}N${margin === 0 ? ' — zero margin, difficult' : ''})`);
+    }
+  } else if (forceAtTravel !== null && budget === null && !iface.tolerance) {
+    notes.push(`|force at travel| ${Math.abs(forceAtTravel)}N (no budget declared)`);
+  }
   if (iface.tolerance) {
     const inRange = force >= iface.tolerance.min && force <= iface.tolerance.max;
     if (!inRange) forceCheck = 'violation';
     else if (forceCheck === 'skipped') forceCheck = 'ok';
     if (inRange && (force === iface.tolerance.min || force === iface.tolerance.max)) zeroMargin = true;
     notes.push(`tolerance [${iface.tolerance.min},${iface.tolerance.max}]N ${inRange ? 'satisfied' : 'violated'}`);
+    if (forceAtTravel !== null) {
+      const endInRange = forceAtTravel >= iface.tolerance.min && forceAtTravel <= iface.tolerance.max;
+      if (!endInRange) forceCheck = 'violation';
+      if (endInRange && (forceAtTravel === iface.tolerance.min || forceAtTravel === iface.tolerance.max)) zeroMargin = true;
+      notes.push(`tolerance at travel [${iface.tolerance.min},${iface.tolerance.max}]N ${endInRange ? 'satisfied' : 'violated'}`);
+    }
   }
   if (budget === null && !iface.tolerance) {
     notes.push('no forceBudgetN/tolerance declared; force is reported, not judged');
@@ -725,7 +787,8 @@ function springBehaviour(
   const forceText = forceBand
     ? ` = ${force}N (band ${forceBand[0]}–${forceBand[1]}N; ${orderText})`
     : ` = ${force}N (${orderText})`;
-  const detail = `installed ${installed}mm vs free ${free}mm → δ${deflection}mm × ${k}N/mm${forceText}; source ${source}; ${notes.join('; ')}`;
+  const standardText = standard ? `standard ${standard.id} (${standard.name}); ` : '';
+  const detail = `${standardText}installed ${installed}mm vs free ${free}mm → δ${deflection}mm × ${k}N/mm${forceText}; source ${source}; ${notes.join('; ')}`;
   return {
     verdict,
     measured: force,
@@ -738,8 +801,10 @@ function springBehaviour(
       stiffnessNPerMm: round4(k),
       forceN: force,
       ...(forceBand ? { forceBandN: forceBand } : {}),
+      ...(forceAtTravel !== null ? { forceAtTravelN: forceAtTravel } : {}),
       forceDecadeN: decade,
       source,
+      ...(standard ? { standardId: standard.id } : {}),
       checks: { direction: directionCheck, solidHeight: solidCheck, travel: travelCheck, forceBudget: forceCheck },
       notes,
     },

@@ -17,6 +17,7 @@ import { existsSync } from 'node:fs';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STANDARD_SPRINGS, STANDARD_SPRING_IDS } from './standard-parts.ts';
 
 // ---------- types ----------
 
@@ -39,6 +40,8 @@ export type ElasticSource = 'catalog' | 'measured' | 'estimated' | 'declared';
 export interface ElasticInterfaceSpec {
   /** Default: axial-spring. Unimplemented behaviours are skipped by name, never guessed. */
   behavior?: ElasticBehavior;
+  /** Optional seed-catalog id; fills only fields not declared explicitly. */
+  standardId?: string;
   /** Compression vs tension. Omitted = the sign is reported but not enforced. */
   direction?: ElasticDirection;
   /** Free (unloaded) length along the a→b line, mm. */
@@ -420,7 +423,7 @@ const ELASTIC_KEYS = new Set([
   'behavior', 'direction', 'freeLengthMm', 'stiffnessNPerMm', 'solidHeightMm', 'outerDiameterMm',
   'guided', 'forceBudgetN', 'requiredTravelMm', 'maxTravelMm', 'stiffnessTolerancePct', 'source',
   'lobeCount', 'lobeWidthMm', 'lobeThicknessMm', 'leverArmMm', 'radialInterferenceMm', 'youngModulusMPa',
-  'leadAngleDeg', 'frictionCoeff', 'retentionAngleDeg', 'maxStrainPct', 'retentionLoadN',
+  'leadAngleDeg', 'frictionCoeff', 'retentionAngleDeg', 'maxStrainPct', 'retentionLoadN', 'standardId',
 ]);
 
 function checkElastic(value: unknown, ptr: string, issues: ManifestIssue[]): void {
@@ -443,6 +446,20 @@ function checkElastic(value: unknown, ptr: string, issues: ManifestIssue[]): voi
   enumField('behavior', ELASTIC_BEHAVIORS);
   enumField('direction', ELASTIC_DIRECTIONS);
   enumField('source', ELASTIC_SOURCES);
+  if (value.standardId !== undefined) {
+    if (typeof value.standardId !== 'string' || !value.standardId) {
+      issues.push({ path: `${ptr}/standardId`, expected: 'a non-empty catalog id', got: got(value.standardId) });
+    } else if (!STANDARD_SPRINGS[value.standardId]) {
+      issues.push({
+        path: `${ptr}/standardId`,
+        expected: `one of ${STANDARD_SPRING_IDS.join(', ')}`,
+        got: got(value.standardId),
+        hint: 'the seed catalog is deliberately small; add a catalog entry or declare the spring fields explicitly',
+      });
+    } else if (value.behavior === 'snap-fit') {
+      issues.push({ path: `${ptr}/standardId`, expected: 'not used with behavior "snap-fit"', got: got(value.standardId) });
+    }
+  }
   if (value.guided !== undefined && typeof value.guided !== 'boolean') {
     issues.push({ path: `${ptr}/guided`, expected: 'a boolean', got: got(value.guided) });
   }

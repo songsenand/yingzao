@@ -76,6 +76,22 @@ const badLead = issuesOf({
 });
 check(hasPath(badLead, '/elastic/leadAngleDeg'), 'a 90-degree lead angle is rejected', JSON.stringify(badLead));
 
+const goodStandard = issuesOf({
+  behavior: 'axial-spring', standardId: 'comp-od5.4-w0.6-l30',
+  direction: 'compression', forceBudgetN: 2.5, requiredTravelMm: 4,
+});
+check(goodStandard.length === 0, 'a known standardId with installation criteria validates', JSON.stringify(goodStandard));
+
+const unknownStandard = issuesOf({ behavior: 'axial-spring', standardId: 'no-such-spring' });
+check(hasPath(unknownStandard, '/elastic/standardId'), 'an unknown standardId is rejected', JSON.stringify(unknownStandard));
+
+const snapWithStandard = issuesOf({
+  behavior: 'snap-fit', standardId: 'comp-od5.4-w0.6-l30',
+  lobeCount: 4, lobeWidthMm: 8.9, lobeThicknessMm: 0.8,
+  leverArmMm: 4, radialInterferenceMm: 0.125, youngModulusMPa: 3500,
+});
+check(hasPath(snapWithStandard, '/elastic/standardId'), 'standardId is rejected on a snap-fit', JSON.stringify(snapWithStandard));
+
 const l2 = formatSnapFitChecks({
   checks: [
     { check: 'insertion', utilization: 2.9, marginPct: -190, verdict: 'over' },
