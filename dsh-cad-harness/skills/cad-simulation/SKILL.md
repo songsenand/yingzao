@@ -33,7 +33,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - **A joint between differently-oriented bodies needs per-body axes (and anchors).** `axis` is one local vector for both and is only correct for parallel frames; use `axisA`/`axisB`, or `axisWorld` (resolved to each body), and prefer `anchorWorld` over hand-converted local anchors. A bare `axis` on a [90,0,0]-rotated beam is how the Roberval frame got twisted.
 - **Topple is relative to the authored pose**, not world up: a beam authored at 90° is not "toppled" at t=0. 30° labels the event, 60° sets `fellOver`.
 - **`closedLoop` / `loopJoints`** are graph facts (union-find), not gates; a closed loop can pass.
-- No force/torque output.
+- No force/torque output. For an axial spring's installed/travel-endpoint force, use `check_assembly`'s `spring-behaviour` (a static contract check, not physics).
 - **The same geometry-sanity rule runs here** (`geometrySuspects`): a body dropped 500mm from everything reports a penetration number that describes nothing. Same criterion, same "fact, not a gate".
 
 ## Fluid (`simulate_fluid`)

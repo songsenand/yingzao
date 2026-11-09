@@ -89,7 +89,16 @@ working, not an error.
   order-of-magnitude band (`forceDecadeN`, e.g. 18.7 N → `[10, 100]`), plus a
   k-tolerance band when `stiffnessTolerancePct` is declared. It compares against
   the **user-declared** `forceBudgetN` / `tolerance` / `requiredTravelMm`; with none of those it comes
-  back `skipped`, not passed. It never invents child/adult or product thresholds.
+  back `skipped`, not passed. When `direction` + `requiredTravelMm` allow it, it
+  reports `forceAtTravelN` and checks that endpoint force too — the installed
+  preload is not the force at full press. It never invents child/adult or product
+  thresholds.
+  `standardId` is a **curated seed catalog**, not a general parts library: the
+  seed is deliberately small (the pen spring is the first entry). An entry is
+  added only for a purchased, reused part with a source/tolerance; self-designed
+  flexures stay formula/family checks; a one-off stays `skipped` + agent.
+  Explicit manifest fields win; an unknown id is a validation error, never a
+  silent fallback.
   `snap-fit` is the **卡扣** operator: `lobeCount`, `lobeWidthMm`,
   `lobeThicknessMm`, `leverArmMm`, `radialInterferenceMm`, `youngModulusMPa`,
   optional `leadAngleDeg` / `frictionCoeff` / `retentionAngleDeg`, and the
