@@ -30,6 +30,7 @@ import { formatSnapFitChecks, rotateVec, type InterfaceCheckResult } from './ass
 // typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
 import type { Json } from './inspect.ts';
 import { flattenParts, resolveAssemblyManifestPath } from './manifest.ts';
+import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-export.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
@@ -8131,6 +8132,56 @@ export function registerCadTools(
           });
         } catch (e: any) {
           return new Response(`export failed: ${String(e?.message ?? e)}`, { status: 500 });
+        }
+      },
+    });
+
+    // Whole-project hand-off: the export above is one revision; this is the
+    // corpus. `zip` = parts/<name>_<version>.stl + assembly manifest + README
+    // (+ placed assembly.stl). `stl` = the assembly at its declared placements.
+    void connection.fetch.register({
+      path: '/api/cad/project/export',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const url = new URL(request.url);
+        const format = (url.searchParams.get('format') ?? 'zip').toLowerCase();
+        if (format !== 'zip' && format !== 'stl') {
+          return new Response(`unsupported project format: ${format} (use zip or stl)`, { status: 400 });
+        }
+        const stem = basename(project.cwd) || 'project';
+        try {
+          const plan = await planProjectExport(project);
+          if (plan.files.length === 0) {
+            return new Response('这个项目还没有可导出的零件版本', { status: 404 });
+          }
+          if (format === 'zip') {
+            const bytes = await buildProjectZip(plan);
+            return new Response(bytes as unknown as BodyInit, {
+              status: 200,
+              headers: {
+                'content-type': 'application/zip',
+                'content-disposition': contentDisposition(downloadName([stem, 'assembly'], 'zip')),
+                'x-cad-export-parts': String(plan.files.length),
+              },
+            });
+          }
+          const bytes = buildAssemblyStl(plan);
+          return new Response(bytes as unknown as BodyInit, {
+            status: 200,
+            headers: {
+              'content-type': 'model/stl',
+              'content-disposition': contentDisposition(downloadName([stem, 'assembly'], 'stl')),
+              'x-cad-export-parts': String(plan.instances.length),
+            },
+          });
+        } catch (e: any) {
+          // A missing manifest is the one expected refusal: it is a state of the
+          // project, not a server fault, and the message names the way out.
+          const message = String(e?.message ?? e);
+          const missingManifest = message.includes('assembly.json');
+          return new Response(`project export failed: ${message}`, { status: missingManifest ? 400 : 500 });
         }
       },
     });

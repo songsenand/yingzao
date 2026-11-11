@@ -209,9 +209,9 @@ external；**不引入 Vite**（Client 用自带 esbuild）。
   分组（交付 / 检测 / 仿真 / 仪器）在 `src/host/tool-groups.ts`。
 - **精确路由**：`connection.fetch.register({ path: '/api/cad/...' })`，`connection` 经
   `ctx.reflect.get('connection')` 取得（不声明 inject；headless 无该服务则整段跳过）。
-  当前 20 条，按用途分四类：
+  当前 21 条，按用途分五类：
   - **产物浏览**：`/products`、`/manifest`、`/run`、`/run/frame`、`/stl`、`/file`、`/unregistered`、`/projects`、`/attention`
-  - **导出与导入**：`/export`、`/import`
+  - **导出与导入**：`/export`（单版本）、`/project/export`（整项目：ZIP / 装配 STL）、`/import`
   - **人工发起**（三发起路径②）：`/physics/run`、`/motion/run`、`/fluid/run`、`/fluid/frame`、`/assembly/run`
   - **装配清单**：`/assembly/manifest`、`/assembly/check`（顺指针读运行，回报 `runId`）
   - **运维**：`/scope`（两半作用域的判据）、`/usage`（遥测）
@@ -1280,6 +1280,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 - **视角标签修正**：z-up 约定下 `front/top` 曾标反（`[0,0,0]` 是俯视），已修正。
 - **参数面板（Customizer）**：SCAD 中 `name = value; // PARAMS 描述` 即为可调参数；`GET /api/cad/params` 解析、`POST /api/cad/preview` 按覆盖值渲染；面板滑块 + 防抖预览。
 - **多格式导出（升级为必做）**：`GET /api/cad/export?v=&format=`，支持 STL/3MF/OFF/OBJ/WRL（AMF/PLY 该 snapshot 不支持），转换结果按版本缓存；面板收进「导出」折叠区（v2.13 前是常驻按钮行）。
+- **整项目导出（2026-11-11）**：`GET /api/cad/project/export?format=zip|stl`（`src/host/project-export.ts` + `src/host/zip.ts`）。`zip` 装 `parts/<零件>_<版本>.stl` + `assembly/assembly.json` + `README.txt`，有清单时另含 `assembly.stl`；`stl` 按清单 `translate/rotate/pose` 摆放后拼成一个多壳网格（不做布尔并集）。版本选择以 `assembly.json` 钉住的为准，清单未覆盖的零件取各自最新版；无清单时 ZIP 仍可用，整机 STL 明确拒绝而不是把零件叠在原点。面板：零件「导出」页沿用同一组按钮，整机视图新增「导出」标签。
 - **截图与标注（人审通道）**：面板「截图到会话」+「标注问题区域」（拖红框合成进截图），经剪贴板粘贴进会话；草稿服务链路已通，composer chip 渲染为遗留调查项。
 - **已知注意**：DeepSeek/GLM 图片仅限 user role 消息；compose 草稿栏对图片草稿的呈现依赖 ui-attachment 渲染路径。
 

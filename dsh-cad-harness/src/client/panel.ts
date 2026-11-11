@@ -2540,6 +2540,7 @@ export function CadPanel(): React.ReactElement {
       { id: 'overview', label: '概览' },
       { id: 'evidence', label: `证据${machineRuns.length ? ` ${machineRuns.length}` : ''}` },
       { id: 'nodes', label: `清单${machine ? ` ${machine.nodes.length}` : ''}` },
+      { id: 'export', label: '导出' },
       { id: 'help', label: '用法' },
     ]
     : version
@@ -2793,6 +2794,41 @@ export function CadPanel(): React.ReactElement {
     }),
   );
 
+  /**
+   * Whole-project downloads. They are deliberately separate from the per-version
+   * row above: one answers "give me this revision", these answer "give me the
+   * project". The ZIP carries every part STL + assembly/assembly.json + README
+   * (+ a placed assembly.stl); the single STL is the assembly at its declared
+   * placements, multi-shell on purpose (no boolean union).
+   */
+  const projectExportButtons = () => [
+    React.createElement('button', {
+      key: 'project-zip', type: 'button', style: S.smallBtn,
+      title: '整个项目打包：每个零件的 STL + 装配清单 + 说明（有清单时另含按位姿摆好的 assembly.stl）',
+      onClick: () => { window.location.href = withProject('/api/cad/project/export?format=zip'); },
+    }, '整机 ZIP (.zip)'),
+    React.createElement('button', {
+      key: 'project-stl', type: 'button',
+      style: machine ? S.smallBtn : { ...S.smallBtn, opacity: 0.45, cursor: 'not-allowed' },
+      disabled: !machine,
+      title: machine
+        ? '按 assembly.json 的 translate/rotate/pose 把各零件摆好后合并成一个多壳 STL（整机预览/报价用）'
+        : '没有 assembly/assembly.json，无法按装配位置合并；请先用 ZIP 导出逐零件 STL',
+      onClick: () => { if (machine) window.location.href = withProject('/api/cad/project/export?format=stl'); },
+    }, '整机 STL (.stl)'),
+    React.createElement('span', { key: 'project-hint', style: S.hint },
+      machine ? '整个项目：全部零件 + 装配清单' : '整个项目：全部零件（尚无装配清单）'),
+  ];
+
+  const projectExportRow = () => React.createElement(
+    'div',
+    { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+    React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
+      ...projectExportButtons()),
+    React.createElement('span', { style: S.hint },
+      '整机 STL 保留各零件自己的壳体，不做布尔并集；需要逐件打印或归档时用 ZIP。'),
+  );
+
   const exportRow = () => React.createElement(
     'div',
     { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
@@ -2802,6 +2838,9 @@ export function CadPanel(): React.ReactElement {
       onClick: () => { if (version) window.location.href = withProject(`/api/cad/export?v=${version.id}&format=${fmt}`); },
     }, fmt.toUpperCase())),
     React.createElement('span', { style: S.hint }, '下载当前版本的几何'),
+    React.createElement('div', { key: '__project-sep', style: { width: '100%', height: 0, borderTop: '1px solid #eef1f3', margin: '2px 0' } }),
+    React.createElement('span', { key: '__project-label', style: { ...S.hint, fontWeight: 600, color: T.soft } }, '整个项目'),
+    ...projectExportButtons(),
   );
 
   /**
@@ -2935,6 +2974,7 @@ export function CadPanel(): React.ReactElement {
     if (kind === 'machine' && id === 'overview') return machineOverview();
     if (kind === 'machine' && id === 'evidence') return evidenceBody('machine');
     if (kind === 'machine' && id === 'nodes') return machineNodes();
+    if (kind === 'machine' && id === 'export') return projectExportRow();
     if (id === 'tray') return trayBody();
     if (id === 'help') return helpBody();
     if (id === 'overview') {

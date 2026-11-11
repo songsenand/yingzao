@@ -5722,3 +5722,29 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** `src/client/free-orbit.ts` 的 `rotate`；`sandbox/preview/entry.tsx` 的 `?assert=orbit` 增加连续性断言；`DESIGN §6.9` 更新。五个视口的调用方式不变。
 
 **未决 / 非目标：** 极点附近有连续滚转，越过极点后模型可倒置；这是不翻转的代价。触摸双指手势仍是基本实现，未单独验收。
+
+## 2026-11-11：整项目导出——ZIP 交付 + 装配位姿合并 STL
+
+**触发条件：** 第 1 条（用户明确要求“用户通常想导出整个项目”）+ 第 4 条（新增一条导出路由、一个宿主模块和一个面板入口，版本选择规则会被后续交付流程引用）。
+
+**要解决的问题：** 面板只有 `GET /api/cad/export?v=&format=`，一次只能下载一个版本。用户真正要交给同事、归档或送进切片软件的是“整个项目”：所有零件 + 装配关系。逐件下载 N 次既丢装配清单，也让文件名看起来像互不相关的修订。
+
+**决策内容：**
+
+- 新增 `GET /api/cad/project/export?format=zip|stl`。
+- `zip`：`parts/<零件名>_<版本>.stl` + `assembly/assembly.json` + `README.txt`；有清单时另含按位姿摆好的 `assembly.stl`。没有清单也允许导出（逐零件最新版，互不定位）。
+- `stl`：按清单的 `translate/rotate/pose` 摆放后拼成一个**多壳网格**，不做布尔并集；没有清单时拒绝（400，消息给出改用 ZIP 的出路），而不是把零件叠在原点。
+- 版本规则：有 `assembly.json` 时以清单钉住的版本为准；清单未覆盖的零件取各自最新版。清单里的 `stock` 节点（无几何）跳过并在 README 的“未导出”里说明。
+- 面板：零件「导出」页保留单版本格式按钮，并在同页加入整项目按钮；整机视图新增「导出」标签。`assembly.json` 不存在时整机 STL 按钮禁用并说明原因。
+
+**理由：** ZIP 与合并 STL 回答不同问题，缺一个都会让用户回到“自己拼文件”。ZIP 是逐件打印/归档的正确形态（零件保持本地坐标系，装配位置由清单表达）；合并 STL 是整机预览/报价的最短路径。用多壳拼接而不是 Manifold 布尔并集，是因为整机导出面对的是“按装配关系摆好的一堆零件”，布尔并集既慢又会在零件本来分离时生成无意义的结果，还会掩盖间隙；多壳 STL 保留每个零件自己的壳体，切片软件仍能看到独立实体。
+
+**依据：**
+
+- `node scripts/accept-project-export.mjs`：16/16 PASS。覆盖版本钉住（有更新的 v003 但清单钉 v001 时不导出 v003）、同一版本被两个节点引用时只出一个文件、三个实例的 `translate` 与一个 90° 特征轴 `pose` 都进入合并网格（bbox `[-10,0,0]..[110,70,110]`）、ZIP 可用 `inflateRawSync` 逐项还原、README 写明 mm 与版本、无清单时 ZIP 仍导出且整机 STL 明确拒绝。
+- 真实语料 `examples/two-color-click-pen`：15 个零件文件 / 14 个装配实例（笔芯版本被黑白两处引用），`assembly.stl` 80,618 三角形、13 个壳，ZIP 3,478,452 字节；系统 `unzip -t` 报 “No errors detected”。
+- `tsc --noEmit` 0 错误；`node esbuild.mjs` 产出 `lib/index.js` + `lib/client.js`。
+
+**影响：** 新增 `src/host/project-export.ts`、`src/host/zip.ts`、`scripts/accept-project-export.mjs`；`src/host/tools.ts` 注册路由；`src/client/panel.ts` 增加整项目按钮与整机「导出」标签；`README.md`、`DESIGN.md §5.3/§6.2` 同步。单版本导出路径不变。
+
+**未决 / 非目标：** STEP 导出仍不在范围内（网格内核）；合并 STL 不做法线重算之外的网格修复，也不保证多壳之间不重叠。ZIP 在内存中构建，超大项目（数百 MB）需要改成流式写入，本轮未做。
