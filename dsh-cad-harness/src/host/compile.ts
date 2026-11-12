@@ -108,11 +108,14 @@ const IMG_SIZE = 512;
 // Prefer the modern snapshot (Manifold backend, much faster and more robust
 // than the 2021.01 CGAL default). Env override wins; bare 'openscad' is last.
 import { existsSync } from 'node:fs';
+import { readBackendConfig } from './backend.ts';
 
 const pluginRoot = join(new URL('../', import.meta.url).pathname);
 const snapshotLibDir = join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'lib');
+const BACKEND = readBackendConfig();
 const OPENSCAD_CANDIDATES = [
   process.env.CAD_OPENSCAD_BIN,
+  BACKEND.config.binaryPath,
   join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'),
   'openscad',
 ].filter(Boolean) as string[];
@@ -122,7 +125,14 @@ let backendArgs: string[] = [];
 let binaryEnv: NodeJS.ProcessEnv | undefined;
 
 /** Resolve binary once; enable the Manifold backend when supported. */
+export async function resolveOpenScadBinary(): Promise<{ bin: string; extra: string[] }> {
+  return await resolveBinary();
+}
+
 async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
+  if (BACKEND.requestedKernel !== 'openscad') {
+    throw new Error(`backend_not_available: kernel "${BACKEND.requestedKernel}" is not available in this build (only openscad)`);
+  }
   if (resolvedBin) return { bin: resolvedBin, extra: backendArgs };
   for (const candidate of OPENSCAD_CANDIDATES) {
     if (candidate !== 'openscad' && !existsSync(candidate)) continue;
@@ -136,10 +146,13 @@ async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
     });
     if (!probe) continue;
     resolvedBin = candidate;
-    // 2025.06+ ships the Manifold backend; enable it explicitly.
+    // 2025.06+ ships the Manifold backend; enable it explicitly unless the user
+    // selected a compile backend in $DSH_HOME/cad/backend.json.
     const year = Number(/20(\d{2})/.exec(probe)?.[1] ?? '0');
-    if (year >= 25) backendArgs = ['--backend=Manifold'];
-    else backendArgs = [];
+    const pref = BACKEND.config.compileBackend;
+    if (pref === 'cgal') backendArgs = [];
+    else if (pref === 'manifold') backendArgs = ['--backend=Manifold'];
+    else backendArgs = year >= 25 ? ['--backend=Manifold'] : [];
     // Extracted AppImages need their bundled libs on the loader path.
     if (candidate.includes('squashfs-root') && existsSync(snapshotLibDir)) {
       binaryEnv = { ...process.env, LD_LIBRARY_PATH: `${snapshotLibDir}${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}` };
@@ -364,7 +377,16 @@ const VIEWS: Record<string, [number, number, number]> = {
  * Compile SCAD to STL and render four fixed-view PNGs.
  * Renders are skipped when compilation fails.
  */
+/** The kernel-neutral entry point: resolve the adapter, then compile. */
 export async function compileAndRender(scadCode: string): Promise<CompileResult> {
+  const { backendAdapter } = await import('./backends/index.ts');
+  const adapter = backendAdapter('openscad');
+  if (!adapter.compile) throw new Error('backend_not_available: adapter has no compile()');
+  return await adapter.compile(scadCode);
+}
+
+/** OpenSCAD implementation behind the adapter (not a second public entry point). */
+export async function compileAndRenderOpenScad(scadCode: string): Promise<CompileResult> {
   const started = Date.now();
   const dir = await mkdtemp(join(tmpdir(), 'cad-harness-'));
   try {

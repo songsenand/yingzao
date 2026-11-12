@@ -39,7 +39,32 @@
     "schemas/",
     "pearls/",
     "examples/checkers/",
-    "examples/pearls/"
+    "examples/pearls/",
+    "scripts/accept-jobs.mjs",
+    "scripts/setup.mjs",
+    "scripts/preset-lib.mjs",
+    "scripts/accept-setup.mjs",
+    "README.md",
+    "docs/",
+    "scripts/doctor.mjs",
+    "scripts/accept-doctor.mjs",
+    "scripts/backend.mjs",
+    "scripts/accept-backend.mjs",
+    "scripts/verify-cli.mjs",
+    "scripts/accept-verify-cli.mjs",
+    "scripts/accept-export-gate.mjs",
+    "scripts/accept-python-failure.mjs",
+    "scripts/accept-export-http.mjs",
+    "scripts/accept-bundle-load.mjs",
+    "scripts/accept-export-dialog.mjs",
+    "scripts/accept-plugin-add.mjs",
+    "scripts/accept-license.mjs",
+    "scripts/clean.mjs",
+    "scripts/accept-clean.mjs",
+    "scripts/accept-scope.mjs",
+    "scripts/accept-error-envelope.mjs",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -97,7 +122,31 @@
     "verify": "node scripts/verify.mjs",
     "check-register": "node scripts/check-register.mjs",
     "accept:verify": "node scripts/accept-verify.mjs",
-    "accept:row-regressions": "node scripts/accept-row-regressions.mjs"
+    "accept:row-regressions": "node scripts/accept-row-regressions.mjs",
+    "prepack": "node scripts/prepack.mjs",
+    "postpack": "node scripts/postpack.mjs",
+    "setup": "node scripts/setup.mjs",
+    "setup:check": "node scripts/setup.mjs --check",
+    "doctor": "node scripts/doctor.mjs",
+    "backend": "node scripts/backend.mjs",
+    "clean": "node scripts/clean.mjs",
+    "accept:setup": "node scripts/accept-setup.mjs",
+    "accept:doctor": "node scripts/accept-doctor.mjs",
+    "accept:backend": "node scripts/accept-backend.mjs",
+    "accept:verify-cli": "node scripts/accept-verify-cli.mjs",
+    "accept:python-failure": "node scripts/accept-python-failure.mjs",
+    "accept:export-gate": "node scripts/accept-export-gate.mjs",
+    "accept:export-http": "node scripts/accept-export-http.mjs",
+    "accept:export-dialog": "node scripts/accept-export-dialog.mjs",
+    "accept:bundle-load": "node scripts/accept-bundle-load.mjs",
+    "accept:plugin-add": "node scripts/accept-plugin-add.mjs",
+    "accept:license": "node scripts/accept-license.mjs",
+    "accept:clean": "node scripts/accept-clean.mjs",
+    "accept:scope": "node scripts/accept-scope.mjs",
+    "accept:error-envelope": "node scripts/accept-error-envelope.mjs",
+    "accept:jobs": "node scripts/accept-jobs.mjs",
+    "rehearse:preview": "node scripts/rehearse-preview.mjs",
+    "accept:preview": "npm run accept:setup && npm run accept:export-gate && npm run accept:export-http && npm run accept:export-dialog && npm run accept:backend && npm run accept:bundle-load && npm run accept:plugin-add && npm run accept:license && npm run accept:clean && npm run accept:scope && npm run accept:error-envelope && npm run accept:jobs && npm run accept:doctor && npm run accept:verify-cli && npm run accept:python-failure"
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",
@@ -119,5 +168,18 @@
     "typescript": "^5.6.0"
   },
   "license": "Apache-2.0",
-  "author": "songsenand <songsenand@163.com>"
+  "author": "songsenand <songsenand@163.com>",
+  "bin": {
+    "dsh-cad-setup": "./scripts/setup.mjs",
+    "dsh-cad-doctor": "./scripts/doctor.mjs",
+    "dsh-cad-backend": "./scripts/backend.mjs",
+    "dsh-cad-verify": "./scripts/verify-cli.mjs",
+    "dsh-cad-clean": "./scripts/clean.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "cad": {
+    "dshRuntime": ">=0.2.1-rc.2 <0.3.0"
+  }
 }

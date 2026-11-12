@@ -167,6 +167,10 @@ export interface CadScope {
   presets: string[];
   /** Preset id → display name, when the host could resolve the roster. */
   names?: Record<string, string>;
+  /** Python provisioning state, so the panel can explain a slow first run. */
+  runtime?: { state: string; mode?: string; error?: string | null };
+  /** Selected geometry kernel / OpenSCAD compile backend. */
+  backend?: { kernel: string; compileBackend: string };
 }
 
 /**
@@ -235,6 +239,37 @@ export function cadMissingToolsNotice(
     return `预设没生效：本会话以「${label(preset)}」开始，已锁定 · 新建会话，或在设置里把「${wanted}」设为默认预设`;
   }
   return `此会话没有 CAD 工具（预设「${label(preset)}」不在开放列表里） · 新建会话并选「${wanted}」`;
+}
+
+/**
+ * The banner for "the environment is not ready", or null.
+ *
+ * A blank part list has several different causes; saying only "还没有零件" makes
+ * a missing runtime look like a modelling failure. This function names the
+ * cause and the next action, and is deliberately independent of the tool-scope
+ * banner (a session can have both problems at once).
+ */
+export function environmentNotice(scope: CadScope | null): string | null {
+  if (!scope) return null;
+  const backend = scope.backend;
+  if (backend && backend.kernel !== 'openscad') {
+    return `几何内核「${backend.kernel}」在这个版本不可用 · 运行 npx dsh-cad-backend --kernel openscad，然后重启 dsh`;
+  }
+  const runtime = scope.runtime;
+  if (!runtime) return null;
+  if (runtime.state === 'failed') {
+    return `Python 运行时失败：${runtime.error ?? '未知错误'} · 运行 python_runtime action=repair；仍失败就附上 dsh-cad-doctor --json`;
+  }
+  if (runtime.state === 'disabled') {
+    return 'Python 运行时被禁用（DSH_CAD_PYTHON=off）— 几何分析、物理与流体不可用 · unset DSH_CAD_PYTHON 后重启';
+  }
+  if (runtime.state === 'unsupported') {
+    return `Python 运行时在这个平台不可用（${backend?.kernel ?? 'openscad'}）— 分析/仿真会拒绝运行 · 这不是建模失败`;
+  }
+  if (runtime.state === 'absent') {
+    return 'Python 运行时未就绪：首次分析/仿真会下载约 400 MB · 可让 Agent 先跑 python_runtime action=provision，或设置 DSH_CAD_PYTHON=eager';
+  }
+  return null;
 }
 
 /**

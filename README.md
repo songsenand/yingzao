@@ -23,11 +23,13 @@
 # 1. 安装（本地路径；分发方式待定）
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm run build
-node scripts/sync-cad-preset.mjs
+npm run setup          # 写入“造物模式”预设在本机的 skill 路径
+npx dsh-cad-doctor     # 环境自检；kind=ok 才算装好
 ```
 
-2. 新建会话时选预设 **「造物模式」**（普通会话看不到 CAD 工具，这是有意的）。
-3. 直接描述需求：
+2. 预览版说明与已知边界 → [0.1.0 预览版说明](docs/user/preview.md)。
+3. 新建会话时选预设 **「造物模式」**（普通会话看不到 CAD 工具，这是有意的）。
+4. 直接描述需求：
 
 > 做一个 60×40×8 的安装板，四角 M3 沉头孔，中心一个 20mm 通孔。
 

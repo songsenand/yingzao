@@ -28,6 +28,7 @@
 // registered tool (a silently-not-applied wrapper would reproduce the original bug).
 
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
+import { classifyError } from '../shared/error-envelope.ts';
 
 /** Attached to a wrapped execute so `accept-tool-output.mjs` can see the guard is live. */
 export const OUTPUT_CHECKED = Symbol.for('dsh-cad-harness.outputChecked');
@@ -51,15 +52,28 @@ export function withOutputContract<T extends ContractDefinition>(definition: T):
   if (typeof execute !== 'function' || !schema) return definition;
 
   const guarded = async (args: unknown, exec: unknown): Promise<unknown> => {
-    const value = await (execute as (a: unknown, e: unknown) => Promise<unknown>)(args, exec);
-    const violations = validateJsonSchemaValue(schema as never, value, 'value');
-    if (violations.length > 0) {
-      throw new Error(
-        `${definition.name}: the body's value does not match its declared output schema ` +
-        `(the runtime would reject it before the model sees it):\n  - ${violations.join('\n  - ')}`,
-      );
+    try {
+      const value = await (execute as (a: unknown, e: unknown) => Promise<unknown>)(args, exec);
+      const violations = validateJsonSchemaValue(schema as never, value, 'value');
+      if (violations.length > 0) {
+        throw new Error(
+          `${definition.name}: the body's value does not match its declared output schema ` +
+          `(the runtime would reject it before the model sees it):\n  - ${violations.join('\n  - ')}`,
+        );
+      }
+      return value;
+    } catch (error) {
+      // Keep the message unchanged (tests and users read it); attach the
+      // machine-readable classification for logs, panels and future job APIs.
+      const envelope = classifyError(error, definition.name);
+      if (error instanceof Error) {
+        Object.assign(error, envelope);
+        throw error;
+      }
+      const wrapped = new Error(envelope.cause);
+      Object.assign(wrapped, envelope);
+      throw wrapped;
     }
-    return value;
   };
   Object.defineProperty(guarded, OUTPUT_CHECKED, { value: true });
   return { ...definition, execute: guarded };

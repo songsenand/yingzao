@@ -19,6 +19,18 @@ const host = await esbuild.context({
   sourcemap: true,
 });
 
+// Packaged evidence CLI: a clean install runs `dsh-cad-verify` without src/.
+const verifyCli = await esbuild.context({
+  entryPoints: ['src/host/verify/cli.ts'],
+  outfile: 'lib/verify.js',
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node20',
+  external: ['@deepseek-ai/*', '@deepseek-ai/cordis', 'schemastery', 'manifold-3d'],
+  sourcemap: true,
+});
+
 // Client half: CJS factory registered via window.__ModuleLoader__.load(),
 // mirroring the first-party bundle shape exactly. react/jsx-runtime are
 // baseline platform modules resolved from the module table.
@@ -49,10 +61,10 @@ const client = await esbuild.context({
 });
 
 if (watch) {
-  await Promise.all([host.watch(), client.watch()]);
+  await Promise.all([host.watch(), client.watch(), verifyCli.watch()]);
   console.log('[cad-harness] watching…');
 } else {
-  await Promise.all([host.rebuild(), client.rebuild()]);
-  await Promise.all([host.dispose(), client.dispose()]);
-  console.log('[cad-harness] built lib/index.js + lib/client.js');
+  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild()]);
+  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose()]);
+  console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js');
 }

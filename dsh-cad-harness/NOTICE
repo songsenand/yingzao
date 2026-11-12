@@ -1,0 +1,18 @@
+ToyMarker · dsh-cad-harness
+Copyright 2026 songsenand <songsenand@163.com> and other contributors
+
+本产品以 Apache License 2.0 发布（全文见 LICENSE）。
+
+本项目**不分发**任何第三方代码或素材
+--------------------------------------
+以下组件均由使用者自行获取，均不入库（.gitignore：lib/ bin/ cad-data/）：
+
+- BOSL2 —— BSD 2-Clause License，Copyright (c) 2015-2024 Revar Desmera
+  https://github.com/BelfrySCAD/BOSL2 · 本地放在 lib/BOSL2/（仓库内**没有**它，
+  校验入口：dsh-cad-harness/scripts/accept-bosl2.mjs）
+- OpenSCAD（GPL-2.0）—— 以**独立程序**调用（进程边界，非链接）；也可用插件自带的快照
+- Python 运行时与科学计算包 —— 由 python_runtime 在用户机器上下载安装（见 README「一次性准备」）
+- 题库第三方素材（Pixabay 等）—— **物化使用、不入库**；逐项授权登记见
+  examples/bench/ATTRIBUTION.md 与 docs/THIRD-PARTY-AUDIT.md
+
+本项目自身不包含任何 GPL/AGPL/LGPL 代码。

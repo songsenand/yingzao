@@ -6,8 +6,9 @@
 # (src/host/tool-scope.ts decides; package.json applies this file after
 # cordis.patch.yml).
 #
-# Regenerate after a dsh upgrade:  node scripts/sync-cad-preset.mjs
-# Source: /home/songsenand/.local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml
+# Regenerate:  npx dsh-cad-setup        (installed package)
+#              node scripts/sync-cad-preset.mjs  (checkout)
+# Source: standard.patch.yml (installed dsh)
 #
 - insert:
     - id: preset-cad
@@ -147,9 +148,9 @@
           # A SECOND discovery provider, not an edit of any row above: skill
           # discovery is layered per preset, so the CAD skill is invisible to
           # every session that does not name this preset — which is what lets
-          # NOTE: the directory below is the path on the machine that RAN this
-          # it be as detailed as the work needs. Re-run this script after
-          # cloning/moving the plugin, or the skills silently stop being found
+          # NOTE: the directory below is written by `dsh-cad-setup` (or
+          # `node scripts/sync-cad-preset.mjs` in a checkout) because an
+          # absolute path from another machine is a silent skill loss.
           - id: cad-skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:

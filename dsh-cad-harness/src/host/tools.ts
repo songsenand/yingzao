@@ -55,9 +55,13 @@ import { auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
 import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } from './visual-review.ts';
 import { asJudgement } from '../shared/judgement.ts';
+import { classifyError } from '../shared/error-envelope.ts';
 import { runSubject } from '../shared/labels.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
 import { buildDeliveryPlan } from './deliver-plan.ts';
+import {
+  annotateDownloadName, auditExport, buildExportManifest, buildUnverifiedReadme, newExportId, writeExportRecord,
+} from './export-gate.ts';
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
 import { withOutputContract } from './tool-contract.ts';
@@ -66,6 +70,9 @@ import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
+import { pythonRuntimeStatus } from './python-runtime.ts';
+import { readBackendConfig } from './backend.ts';
+import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jobs.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { buildMeshBvh } from './measure.ts';
@@ -8496,11 +8503,86 @@ export function registerCadTools(
             if (presets.includes(preset?.id) && typeof preset?.name === 'string') names[preset.id] = preset.name;
           }
         } catch { /* ids alone still identify the situation */ }
+        const runtime = await pythonRuntimeStatus();
+        const backend = readBackendConfig();
         return new Response(JSON.stringify({
           toolScope: scope?.toolScope === 'preset' ? 'preset' : 'global',
           presets,
           names,
+          runtime: { state: runtime.state, mode: runtime.mode, error: runtime.error },
+          backend: { kernel: backend.config.kernel, compileBackend: backend.config.compileBackend },
         }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+
+    void connection.fetch.register({
+      path: '/api/cad/jobs',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        return new Response(JSON.stringify({ jobs: listJobs(openJobStore(project.root)) }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    void connection.fetch.register({
+      path: '/api/cad/jobs/compile',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        try {
+          const project = requestStores(request);
+          const body = await request.json().catch(() => ({})) as { versionId?: string; timeoutMs?: number };
+          if (!body.versionId) {
+            return new Response(JSON.stringify({ error: classifyError(new Error('versionId is required'), 'job') }), {
+              status: 400, headers: { 'content-type': 'application/json' },
+            });
+          }
+          const job = await startCompileJob({
+            store: openJobStore(project.root), versions: project.store,
+            project: project.cwd, versionId: body.versionId, timeoutMs: body.timeoutMs,
+          });
+          return new Response(JSON.stringify({ job }), { status: 202, headers: { 'content-type': 'application/json' } });
+        } catch (error) {
+          return new Response(JSON.stringify({ error: classifyError(error, 'job') }), {
+            status: 400, headers: { 'content-type': 'application/json' },
+          });
+        }
+      },
+    });
+
+    void connection.fetch.register({
+      path: '/api/cad/jobs/cancel',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const body = await request.json().catch(() => ({})) as { id?: string };
+        if (!body.id) {
+          return new Response(JSON.stringify({ error: classifyError(new Error('id is required'), 'job') }), {
+            status: 400, headers: { 'content-type': 'application/json' },
+          });
+        }
+        const job = await cancelJob(openJobStore(project.root), body.id);
+        return new Response(JSON.stringify({ job }), {
+          status: job ? 200 : 404, headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    void connection.fetch.register({
+      path: '/api/cad/jobs/one',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        const id = new URL(request.url).searchParams.get('id') ?? '';
+        const job = getJob(openJobStore(project.root), id);
+        return new Response(JSON.stringify({ job }), {
+          status: job ? 200 : 404, headers: { 'content-type': 'application/json' },
+        });
       },
     });
 
@@ -8929,6 +9011,24 @@ export function registerCadTools(
         const format = (url.searchParams.get('format') ?? 'stl').toLowerCase();
         if (!v) return new Response('missing v', { status: 400 });
         if (!EXPORT_FORMATS[format]) return new Response(`unsupported format: ${format}`, { status: 400 });
+
+        const gate = await auditExport(project);
+        const confirmed = url.searchParams.get('confirm') === '1';
+        const reason = (url.searchParams.get('reason') ?? '').trim();
+        if (gate.verdict === 'blocked' && !confirmed) {
+          return new Response(JSON.stringify({
+            kind: 'export-blocked',
+            verdict: gate.verdict,
+            message: '交付审计未通过；确认后文件名会带 _UNVERIFIED，并留下导出记录。',
+            findings: gate.findings,
+            nextLook: gate.nextLook,
+            confirm: { required: true, reason: true },
+          }, null, 2), { status: 409, headers: { 'content-type': 'application/json' } });
+        }
+        if (gate.verdict === 'blocked' && !reason) {
+          return new Response('confirm=1 requires a non-empty reason', { status: 400 });
+        }
+
         // The saved file must name the part, not just `model_v031`: a download is
         // read out of context, and `v031` alone does not say "碳原子 C".
         const resolved = await storeFor(project).resolve(v);
@@ -8959,15 +9059,37 @@ export function registerCadTools(
               bytes = await exportScad(source, cached, format);
             }
           }
+
+          const exportId = newExportId();
+          const rawName = downloadName([partName, v], format, `model_${v}`);
+          const name = gate.verdict === 'blocked' ? annotateDownloadName(rawName) : rawName;
+          const manifest = buildExportManifest({
+            exportId,
+            project,
+            format,
+            gate,
+            files: [{ path: name, bytes }],
+            versions: [v],
+            override: gate.verdict === 'blocked' ? { reason, surface: 'web' } : undefined,
+          });
+          if (gate.verdict !== 'pass') {
+            await writeExportRecord(project, manifest, gate.verdict === 'blocked' ? buildUnverifiedReadme(manifest) : undefined);
+          }
           return new Response(bytes as unknown as BodyInit, {
             status: 200,
             headers: {
               'content-type': EXPORT_FORMATS[format]!,
-              'content-disposition': contentDisposition(downloadName([partName, v], format, `model_${v}`)),
+              'content-disposition': contentDisposition(name),
+              'x-cad-verdict': gate.verdict,
+              'x-cad-export-id': exportId,
             },
           });
         } catch (e: any) {
-          return new Response(`export failed: ${String(e?.message ?? e)}`, { status: 500 });
+          const error = classifyError(e, 'export');
+          return new Response(JSON.stringify({ kind: 'export-error', error }, null, 2), {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          });
         }
       },
     });
@@ -8986,30 +9108,88 @@ export function registerCadTools(
         if (format !== 'zip' && format !== 'stl') {
           return new Response(`unsupported project format: ${format} (use zip or stl)`, { status: 400 });
         }
+
+        const gate = await auditExport(project);
+        const confirmed = url.searchParams.get('confirm') === '1';
+        const reason = (url.searchParams.get('reason') ?? '').trim();
+        if (gate.verdict === 'blocked' && !confirmed) {
+          return new Response(JSON.stringify({
+            kind: 'export-blocked',
+            verdict: gate.verdict,
+            message: '交付审计未通过；确认后文件名会带 _UNVERIFIED，并留下导出记录。',
+            findings: gate.findings,
+            nextLook: gate.nextLook,
+            confirm: { required: true, reason: true },
+          }, null, 2), { status: 409, headers: { 'content-type': 'application/json' } });
+        }
+        if (gate.verdict === 'blocked' && !reason) {
+          return new Response('confirm=1 requires a non-empty reason', { status: 400 });
+        }
+
         const stem = basename(project.cwd) || 'project';
         try {
           const plan = await planProjectExport(project);
           if (plan.files.length === 0) {
             return new Response('这个项目还没有可导出的零件版本', { status: 404 });
           }
+          const exportId = newExportId();
           if (format === 'zip') {
-            const bytes = await buildProjectZip(plan);
+            const rawName = downloadName([stem, 'assembly'], 'zip');
+            const name = gate.verdict === 'blocked' ? annotateDownloadName(rawName) : rawName;
+            const manifest = buildExportManifest({
+              exportId,
+              project,
+              format,
+              gate,
+              files: plan.files.map((file) => ({ path: `parts/${file.stem}.stl`, bytes: file.stl })),
+              versions: [...new Set(plan.files.map((file) => file.versionId))],
+              override: gate.verdict === 'blocked' ? { reason, surface: 'web' } : undefined,
+            });
+            const extras = gate.verdict === 'blocked'
+              ? [
+                  { name: 'export-manifest.json', data: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) },
+                  { name: 'UNVERIFIED.md', data: new TextEncoder().encode(buildUnverifiedReadme(manifest)) },
+                ]
+              : [];
+            const bytes = await buildProjectZip(plan, extras);
+            if (gate.verdict !== 'pass') {
+              await writeExportRecord(project, manifest, gate.verdict === 'blocked' ? buildUnverifiedReadme(manifest) : undefined);
+            }
             return new Response(bytes as unknown as BodyInit, {
               status: 200,
               headers: {
                 'content-type': 'application/zip',
-                'content-disposition': contentDisposition(downloadName([stem, 'assembly'], 'zip')),
+                'content-disposition': contentDisposition(name),
                 'x-cad-export-parts': String(plan.files.length),
+                'x-cad-verdict': gate.verdict,
+                'x-cad-export-id': exportId,
               },
             });
           }
+
+          const rawName = downloadName([stem, 'assembly'], 'stl');
+          const name = gate.verdict === 'blocked' ? annotateDownloadName(rawName) : rawName;
           const bytes = buildAssemblyStl(plan);
+          const manifest = buildExportManifest({
+            exportId,
+            project,
+            format,
+            gate,
+            files: [{ path: name, bytes }],
+            versions: [...new Set(plan.instances.map((instance) => instance.versionId))],
+            override: gate.verdict === 'blocked' ? { reason, surface: 'web' } : undefined,
+          });
+          if (gate.verdict !== 'pass') {
+            await writeExportRecord(project, manifest, gate.verdict === 'blocked' ? buildUnverifiedReadme(manifest) : undefined);
+          }
           return new Response(bytes as unknown as BodyInit, {
             status: 200,
             headers: {
               'content-type': 'model/stl',
-              'content-disposition': contentDisposition(downloadName([stem, 'assembly'], 'stl')),
+              'content-disposition': contentDisposition(name),
               'x-cad-export-parts': String(plan.instances.length),
+              'x-cad-verdict': gate.verdict,
+              'x-cad-export-id': exportId,
             },
           });
         } catch (e: any) {
@@ -9017,7 +9197,12 @@ export function registerCadTools(
           // project, not a server fault, and the message names the way out.
           const message = String(e?.message ?? e);
           const missingManifest = message.includes('assembly.json');
-          return new Response(`project export failed: ${message}`, { status: missingManifest ? 400 : 500 });
+          if (missingManifest) return new Response(`project export failed: ${message}`, { status: 400 });
+          const error = classifyError(e, 'export');
+          return new Response(JSON.stringify({ kind: 'export-error', error }, null, 2), {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          });
         }
       },
     });

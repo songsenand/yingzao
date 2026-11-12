@@ -1,0 +1,79 @@
+name: preview
+
+on:
+  push:
+    tags: ['v0.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: build + accept (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: dsh-cad-harness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build host + client + verify CLI
+        run: npm run build
+      - name: Install dsh (preset source + doctor compatibility check)
+        run: npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+      - name: Accept A2 (preset path) / C1 (export gate) / A3 (backend) / C2 (verify CLI)
+        run: |
+          npm run accept:setup
+          npm run accept:plugin-add -- --require
+          npm run accept:export-gate
+          npm run accept:backend
+          npm run accept:verify-cli
+      - name: Install OpenSCAD (ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y openscad
+      - name: Install OpenSCAD (macOS)
+        if: runner.os == 'macOS'
+        run: brew install openscad
+      - name: Full preview acceptance (P0 + P1 suites)
+        run: npm run accept:preview
+
+      - name: Doctor (fail only on kind=fail)
+        run: |
+          node scripts/doctor.mjs --json > doctor.json
+          node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); if(r.kind==="fail") process.exit(1)'
+      - name: Pack the preview tarball
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p artifacts
+          npm pack --pack-destination artifacts
+      - name: Clean install smoke (setup on the extracted tarball)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cad-smoke && tar -xzf artifacts/*.tgz -C /tmp/cad-smoke
+          STD="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml"
+          test -f "$STD"
+          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD"
+          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD" --check
+          tar -xOzf artifacts/*.tgz package/presets/cad/preset.patch.yml > /tmp/preset-packed.yml
+          if grep -q '/home/' /tmp/preset-packed.yml; then echo "packed preset leaked an absolute path"; exit 1; fi
+          node /tmp/cad-smoke/package/scripts/doctor.mjs --root /tmp/cad-smoke/package --json > /tmp/doctor-packed.json || true
+          node -e 'const r=require("/tmp/doctor-packed.json"); console.log("packed doctor:", r.kind); if(r.kind==="fail") process.exit(1)'
+      - name: Upload tarball
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-cad-harness-preview
+          path: dsh-cad-harness/artifacts/*.tgz

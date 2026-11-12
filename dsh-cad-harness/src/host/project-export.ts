@@ -365,7 +365,7 @@ export function projectExportReadme(plan: ProjectExportPlan): string {
 }
 
 /** The ZIP a human downloads: parts + manifest + README (+ placed assembly). */
-export async function buildProjectZip(plan: ProjectExportPlan): Promise<Uint8Array> {
+export async function buildProjectZip(plan: ProjectExportPlan, extras: readonly ZipEntry[] = []): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const entries: ZipEntry[] = plan.files.map((file) => ({
     name: `parts/${file.stem}.stl`,
@@ -381,5 +381,6 @@ export async function buildProjectZip(plan: ProjectExportPlan): Promise<Uint8Arr
     }
   }
   entries.push({ name: 'README.txt', data: encoder.encode(projectExportReadme(plan)) });
+  entries.push(...extras);
   return buildZip(entries);
 }

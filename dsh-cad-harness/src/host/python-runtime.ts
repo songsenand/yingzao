@@ -949,13 +949,38 @@ async function prepareVenv(
   };
 }
 
+/**
+ * Stable failure codes for the first-run path. "network" is the common one; the
+ * point is that the user gets a named cause and a next step, not a stack trace.
+ */
+export function classifyProvisionFailure(error: unknown): { code: string; message: string; hint: string } {
+  const message = String((error as Error)?.message ?? error);
+  if (/ENOSPC|no space left on device/i.test(message)) {
+    return { code: 'disk-full', message, hint: 'free disk space under $DSH_HOME/cad/runtime (about 400 MB) and retry action=provision' };
+  }
+  if (/EACCES|EPERM|permission denied|read-only file system|EROFS/i.test(message)) {
+    return { code: 'permission', message, hint: 'make $DSH_HOME/cad writable; do not run provisioning from a read-only install' };
+  }
+  if (/sha256|checksum|integrity|digest mismatch/i.test(message)) {
+    return { code: 'integrity', message, hint: 'the download is corrupt; retry action=provision (the archive cache is re-fetched)' };
+  }
+  if (/ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNREFUSED|ECONNRESET|network|timed out|TLS|SSL|certificate/i.test(message)) {
+    return { code: 'network', message, hint: 'check the network/proxy, or set DSH_CAD_PYTHON_MIRROR / DSH_CAD_PYTHON_INDEX_URL, then retry action=provision' };
+  }
+  if (/\b404\b|\b403\b|not found|forbidden/i.test(message)) {
+    return { code: 'mirror', message, hint: 'the mirror has no artifact for this platform; try the default mirror or DSH_CAD_PYTHON=system' };
+  }
+  return { code: 'provision-failed', message, hint: 'run python_runtime action=repair; if it repeats, include this message and `doctor --json` in the report' };
+}
+
 /** Record a provisioning failure so the next status call can explain it. */
 export async function recordRuntimeFailure(error: unknown, options: ProvisionOptions = {}): Promise<string> {
   const root = pythonRuntimeRoot();
-  const message = String((error as Error)?.message ?? error);
-  await writeState(root, { phase: null, error: message });
-  options.onProgress?.(`python runtime provisioning failed: ${message}`);
-  return message;
+  const failure = classifyProvisionFailure(error);
+  const stored = `[${failure.code}] ${failure.message}\nHint: ${failure.hint}`;
+  await writeState(root, { phase: null, error: stored });
+  options.onProgress?.(`python runtime provisioning failed (${failure.code}): ${failure.message}`);
+  return stored;
 }
 
 /** Drop the venv (keeps the interpreter and the archive cache) so the next call rebuilds it. */

@@ -5768,6 +5768,47 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 
 **影响：** `src/host/process-catalog.ts`、`schemas/examples/*.json`、`docs/llm/processes.md`、`deliver-plan.ts` 的 `[supported|partial|planned]` 标签与 `process-planned` 缺口；后续 `check_sheet2d` 与非圆槽/车削/EDM 评估器。
 
+## 2026-11-12：0.1.0-preview 的外壳策略：风险标注导出 + 可选后端
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响导出路由、面板交互、后端解析与安装流程）。
+
+**要解决的问题：** 预览版要回答两个“能不能被陌生人用”的问题：① 被门拦住的版本，是硬禁止导出，还是允许带风险导出；② OpenSCAD 是唯一后端，还是默认后端。当前实现两头都不成立：导出路由不审计（`deliver` 只读，`verify --block` 是独立 CLI）；OpenSCAD 路径与版本写死在 `compile.ts`；预设 skill 目录硬编码本机绝对路径。
+
+**决策内容：**
+
+- **C1 风险标注导出**：`blocked` 时允许导出，但必须弹窗确认（列出 findings / 未检查项 / next look，勾选“我已阅读风险”）并在文件名加 `_UNVERIFIED`；ZIP 内放 `UNVERIFIED.md` + `export-manifest.json`，项目 `exports/<exportId>/manifest.json` 留审计。`pass` 正常导出；`difficult` 只警告，不改名。无 confirm 的 HTTP 调用返回 409，不写文件。
+- **A3 后端策略**：OpenSCAD 是**默认**后端，不是唯一后端。产品层只暴露一个选择：`kernel`；`compileBackend`（`auto/manifold/cgal`）只是 OpenSCAD 适配器内部的高级选项，不是第二层产品概念。安装时 `dsh-cad-setup` 探测/下载并选择；运行时可切换。预览版只交付 OpenSCAD 适配器，其他几何内核登记为 `planned`，不可选、不静默回退；新版本记录 `{kernel, options, version}`，旧版本不重写。
+- **A2 安装时预设**：包内只带模板，`dsh-cad-setup` 在安装时写入本机 skill 绝对路径；`prepack`/CI 拒绝包内出现 `/home/` 或未替换占位符。
+
+**理由：** 硬禁止导出会把“证据不足”变成“用户绕过工具手工拼文件”，反而失去提示；弹窗 + 文件名 + manifest 三层提示，让风险可见但不剥夺用户选择。后端选择则是把“OpenSCAD 只是第一个实现”的定位写进安装与运行路径，避免未来换内核时推翻工具面。
+
+**依据：**
+
+- 用户 2026-11-12 的明确要求（“blocked 时允许导出，但必须弹窗 + 文件名双重保证”“OpenSCAD 只是默认后端，安装时允许选择，安装后允许切换”）。
+- `src/host/project-export.ts` 与单版本导出路由均未调用 `auditDelivery`/`verify`；`src/host/tools.ts` 的 `deliver` 自述为 read-only plan。
+- `presets/cad/preset.patch.yml` 的 `customSkillDirs` 是 `/home/songsenand/...` 绝对路径；`src/host/compile.ts` 的二进制解析链写死仓库布局，无 backend 抽象。
+- 预览版的 P0/P1 索引、C1/A3/A2 设计与排期见 `docs/dev/RELEASE-0.1.0-PREVIEW.md`；全部事项的中远期排序见 `docs/dev/TODO.md`，其中“第二内核”列为中远期第一项（L1）。
+
+**影响：** `src/host/project-export.ts`、单版本导出路由、`src/client/panel.ts` 的导出确认与文件名、`src/host/compile.ts` 的后端解析、`presets/cad/preset.patch.yml` 的生成方式、`scripts/sync-cad-preset.mjs`、安装/doctor 文档。需要新增导出 manifest schema 与 `exports/` 审计目录。
+
+**未决 / 非目标：** 第二个几何内核（CadQuery/FreeCAD）是否在 preview 内交付；发布形态是 GitHub tarball 还是 npm；OpenSCAD 最低版本（2025.06 Manifold 或允许 2021.01 CGAL）。本轮不实现新内核，不做硬阻断，不做“本次不再提示”。
+
+**实施（同日）：** `verify` 增加 per-interface 账本：L0 证据由最新 fresh `assembly-check` 的逐条结果**派生**（无需声明），
+`evidence.runId` 是一等字段、只承载引擎判不了的那一半（motion/spring），`params.runId` 保持兼容，
+两者由一个 `citedRunId()` 读取。文本增加 `interfaces … · parts … · rNNN fresh (manifest versions)`，
+并列出 fail/flagged/unproven 的接口 id；隐藏 finding 由"只报数量"改为按 code 列名。
+账本只读、不改 verdict。第二轮密封探针（同协议，3 例）Q1 74.0→80.7、Q2 81.3→72.7、Q3 60.7→59.3；
+三个会话都把"还有 5 条 finding + 3 条 info 未显示"列为主要缺口，故单独的证据链接不足，
+第三轮用新版文本重跑（隐藏项已列 code）：Q1 85.7、Q2 80.0、Q3 62.3。
+Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三个会话的第一优先级都要
+"17 对是哪 17 对 / r056 是哪个零件 / 47 对接触清单"——下一个瓶颈是逐项 witness，
+不是第四根链接。同日补上 witness：`failing-printability` 带零件/版本（实测 r056 → rotor v088），
+`interference` 带前 3 对（`base↔column 0.00mm`），`undeclared-adjacency` 带前 3 对；
+`--json` 仍保留全量列表。
+第四轮（witness 进文本）Q1 83.0 / Q2 77.3 / Q3 61.7：Q3 仍不动。m2 拿到 `base↔column 0.00mm`
+后反过来质疑"这是真过紧还是判据错配"——贴合接口 nominal=0，而 `validate_assembly` 用全局最小间隙阈值，
+两把尺的关系没人说明。下一个决策点是**阈值的归属**（从接口来，还是全局默认），不是再加字段。
+
 ## 2026-11-12：工艺目录达到 0 planned；K 因子/展开图保留为显式 handoff
 
 **触发条件：** 第 1 条（用户要求常见工艺都要有验证方法）+ 第 4 条（收束 process-catalog 与 docs 的“planned”状态）。

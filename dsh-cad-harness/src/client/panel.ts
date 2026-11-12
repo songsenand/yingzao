@@ -1,8 +1,9 @@
 /** React panel: product browser (versions + runs) with a preview-first Three.js viewport. */
 import React, { useEffect, useRef, useState } from 'react';
 import { browseCategories } from './browse';
+import { downloadExport } from './export-gate';
 import {
-  currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice,
+  currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice, environmentNotice,
   refreshProjectScope, withProject, setProjectOverride, sessionCwd,
   type CadScope,
 } from './project';
@@ -1066,7 +1067,7 @@ export function CadPanel(): React.ReactElement {
     // The tool-scope decision is profile-wide and static, so it is fetched once.
     fetch('/api/cad/scope')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setCadScope({ toolScope: d.toolScope, presets: d.presets ?? [] }); })
+      .then((d) => { if (d) setCadScope({ toolScope: d.toolScope, presets: d.presets ?? [], runtime: d.runtime, backend: d.backend }); })
       .catch(() => { /* an older host without the route: stay silent */ });
     return off;
   }, []);
@@ -2805,7 +2806,7 @@ export function CadPanel(): React.ReactElement {
     React.createElement('button', {
       key: 'project-zip', type: 'button', style: S.smallBtn,
       title: '整个项目打包：每个零件的 STL + 装配清单 + 说明（有清单时另含按位姿摆好的 assembly.stl）',
-      onClick: () => { window.location.href = withProject('/api/cad/project/export?format=zip'); },
+      onClick: () => { void downloadExport(withProject('/api/cad/project/export?format=zip')); },
     }, '整机 ZIP (.zip)'),
     React.createElement('button', {
       key: 'project-stl', type: 'button',
@@ -2814,7 +2815,7 @@ export function CadPanel(): React.ReactElement {
       title: machine
         ? '按 assembly.json 的 translate/rotate/pose 把各零件摆好后合并成一个多壳 STL（整机预览/报价用）'
         : '没有 assembly/assembly.json，无法按装配位置合并；请先用 ZIP 导出逐零件 STL',
-      onClick: () => { if (machine) window.location.href = withProject('/api/cad/project/export?format=stl'); },
+      onClick: () => { if (machine) void downloadExport(withProject('/api/cad/project/export?format=stl')); },
     }, '整机 STL (.stl)'),
     React.createElement('span', { key: 'project-hint', style: S.hint },
       machine ? '整个项目：全部零件 + 装配清单' : '整个项目：全部零件（尚无装配清单）'),
@@ -2835,7 +2836,7 @@ export function CadPanel(): React.ReactElement {
     ...['stl', '3mf', 'obj', 'off', 'wrl'].map((fmt) => React.createElement('button', {
       key: fmt, type: 'button', style: S.smallBtn,
       title: version ? `下载 ${currentPart?.name ?? 'model'}_${version.id}.${fmt}` : '下载当前版本的几何',
-      onClick: () => { if (version) window.location.href = withProject(`/api/cad/export?v=${version.id}&format=${fmt}`); },
+      onClick: () => { if (version) void downloadExport(withProject(`/api/cad/export?v=${version.id}&format=${fmt}`)); },
     }, fmt.toUpperCase())),
     React.createElement('span', { style: S.hint }, '下载当前版本的几何'),
     React.createElement('div', { key: '__project-sep', style: { width: '100%', height: 0, borderTop: '1px solid #eef1f3', margin: '2px 0' } }),
@@ -3136,6 +3137,7 @@ export function CadPanel(): React.ReactElement {
   // Recomputed every render (the panel re-renders each poll), so a preset that
   // lands late — or a session switch — updates the banner without extra wiring.
   const notice = cadMissingToolsNotice(cadScope, currentSessionPreset(), currentSessionBlank());
+  const envNotice = environmentNotice(cadScope);
 
   /**
    * Which project the empty state is empty IN.
@@ -3553,6 +3555,13 @@ export function CadPanel(): React.ReactElement {
           + '要让它必然生效，在 设置 → Agent 预设 里把「造物模式」设为默认预设，再新建会话。',
       },
         notice),
+
+    envNotice &&
+      React.createElement('div', {
+        style: S.notice,
+        title: '环境未就绪不是建模失败：这条信息说明缺什么、下一步做什么。',
+      },
+        envNotice),
 
     error && React.createElement('div', { style: S.error }, error),
 

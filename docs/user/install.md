@@ -19,10 +19,24 @@ dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 # 修改插件源码后需重新构建并重启 dsh（宿主部分不热重载）
 cd /path/to/dsh-cad-harness && pnpm run build
 
-# 预设里的 skill 目录是“生成时这台机器”的绝对路径：
+# 预设里的 skill 目录是“安装时这台机器”的绝对路径：
 # 换机器/换克隆位置后跑一次，否则 CAD 会话有工具但没有 skill
-cd /path/to/dsh-cad-harness && node scripts/sync-cad-preset.mjs
+cd /path/to/dsh-cad-harness && npm run setup
 ```
+
+`npm run setup`（安装包内是 `npx dsh-cad-setup`）会重新生成
+`presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径；`npm run setup:check`
+只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
+
+再跑一次环境自检：
+
+```bash
+npx dsh-cad-doctor          # kind=ok 才算装好；degraded 也有 fix 行
+npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
+```
+
+`dsh-cad-backend` 是内核/编译后端的选择入口。预览版只有 OpenSCAD 可用；
+`cadquery`/`freecad` 显示为 planned，不可选。
 
 > 具体命令以所用 dsh 版本的 `dsh plugin --help` 为准。
 
