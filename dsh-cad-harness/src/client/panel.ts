@@ -3552,7 +3552,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('div', {
         style: S.notice,
         title: '本插件的工具表按「预设」开放：只有选了 CAD 预设的会话才有 CAD 工具。'
-          + '要让它必然生效，在 设置 → Agent 预设 里把「造物模式」设为默认预设，再新建会话。',
+          + '要让它必然生效，在 设置 → Agent 预设 里把「营造模式」设为默认预设，再新建会话。',
       },
         notice),
 

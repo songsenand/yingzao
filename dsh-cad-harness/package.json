@@ -1,6 +1,6 @@
 {
   "name": "dsh-cad-harness",
-  "description": "CAD harness: LLM-driven part and assembly design with a verification loop (OpenSCAD + Manifold compile/render; layered validation: geometry / rigid body / mechanism / MPM fluid), version store and human review channel",
+  "description": "营造（Yingzao）：LLM-driven part and assembly design with a verification loop (OpenSCAD + Manifold compile/render; layered validation: geometry / rigid body / mechanism / MPM fluid), version store and human review channel",
   "version": "0.1.0",
   "private": true,
   "type": "module",

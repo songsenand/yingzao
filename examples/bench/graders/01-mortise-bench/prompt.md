@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `examples/bench/subjects/01-mortise-bench/` |
-| 预设 | 造物模式（**先设为默认预设再新建会话**） |
+| 预设 | 营造模式（**先设为默认预设再新建会话**） |
 | 附件 | 无 |
 | 素材 | 无（考卷自带全部尺寸） |
 | 记录 | commit、`SKILL.md` sha256、**`TASK.md` sha256**（见 README §二） |

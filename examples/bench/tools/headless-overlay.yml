@@ -1,4 +1,4 @@
-# Headless 评测 overlay —— 把 headless 补成"功能等价于造物模式"
+# Headless 评测 overlay —— 把 headless 补成"功能等价于营造模式"
 #
 # 为什么需要它（2026-10-05 实测）：
 #   headless profile 组出了 CAD 的**工具**，但**没有** CAD 的**手册**。
@@ -14,7 +14,7 @@
 #                   pending (waiting for service: agentPresets)   （预设没激活）
 #
 #   而不补手册的后果很重：`S`（skill 生效度）与 `S0` 失去意义，headless 的分数
-#   也不能与 GUI/造物模式的分数直接比——那是**另一个被测系统**。
+#   也不能与 GUI/营造模式的分数直接比——那是**另一个被测系统**。
 #
 # 这个 overlay 在 PROFILE 平面上把手册根接回去，于是 headless 会话看到的是
 # **同一套工具 + 同一本手册**。
@@ -25,9 +25,9 @@
 #       --patch <run-root>/model-overlay.yml \
 #       --json --session-id <id> < <run-root>/TASK.md > <run-root>/events.jsonl
 #
-# 与造物模式的**残留差异**：会话仍不命名预设（少掉预设那一层 composition）。
+# 与营造模式的**残留差异**：会话仍不命名预设（少掉预设那一层 composition）。
 # 工具与手册都在，功能等价；但严格说不是同一个 SUT，所以基准里要单列一档，
-# 不要与 GUI/造物模式的分数混算。见 `graders/README.md` §二·五。
+# 不要与 GUI/营造模式的分数混算。见 `graders/README.md` §二·五。
 
 # 1) 把 CAD 手册根接到顶层（照抄 preset-cad 里那一行的配置，保持只有 CAD 手册）
 # 1) 手册根**不再写在这里**。

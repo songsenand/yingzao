@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `examples/bench/subjects/06-measure/`（run root 由 `bench-run.mjs` 复制出去，**绝不在仓库内开会话**） |
-| 预设 | 造物模式（**先设为默认预设再新建会话**） |
+| 预设 | 营造模式（**先设为默认预设再新建会话**） |
 | 附件 | 无 —— 两个 STL 走工作区文件，不走对话附件 |
 | 素材 | `subjects/06-measure/part.stl` 与 `part-b.stl`（**生成物，入库**；生成脚本与源码在评分方一侧） |
 | 记录 | commit、`SKILL.md` sha256、**`TASK.md` sha256**、两个 STL 的 sha256（见 README §二） |

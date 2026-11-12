@@ -221,7 +221,7 @@ const fixture = [
     'a standard-mode session is NEVER proactively pruned (the fairness the user asked for)');
 
   // microscope5's real shape: the session was BORN standard and then switched to
-  // 造物模式 while blank (the log has agent-preset/selected + 228 CAD tool
+  // 营造模式 while blank (the log has agent-preset/selected + 228 CAD tool
   // calls). The live projection says cad; the frozen header still says standard.
   // Reading the header disabled the window for exactly the sessions it exists
   // for — so the reader must be the projection (§13.14's rule, repeated).
@@ -324,7 +324,7 @@ const fixture = [
   const outcomes = recs.map((r) => r.outcome);
   check(outcomes.includes('applied'), 'an over-window cad session is recorded as applied', JSON.stringify(outcomes));
   check(outcomes.includes('preset-not-cad'),
-    'a session that is NOT 造物模式 is recorded as preset-not-cad (the microscope5 case)', JSON.stringify(outcomes));
+    'a session that is NOT 营造模式 is recorded as preset-not-cad (the microscope5 case)', JSON.stringify(outcomes));
   check(outcomes.includes('under-window'), 'an under-window cad session is recorded as under-window');
   check(outcomes.includes('aux-purpose') && outcomes.includes('no-session'),
     'auxiliary calls and session-less calls are recorded with their reasons', JSON.stringify(outcomes));

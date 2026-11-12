@@ -30,7 +30,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `examples/bench/subjects/03-microscope/` |
-| 预设 | 造物模式（**先设为默认预设再新建会话**） |
+| 预设 | 营造模式（**先设为默认预设再新建会话**） |
 | 附件 | **`graders/03-microscope/参考图.png`，随 A 段一起发** |
 | 素材 | 无 —— 考生目录只有两份考卷 |
 | 记录 | commit、`SKILL.md` sha256、**两份 `TASK*.md` 的 sha256**（见根 README §2） |

@@ -65,7 +65,7 @@ for (const { file, session, workspace } of files) {
       // rewritten — a session switched to another preset still reads its birth
       // value there. The switch is recorded as an `agent-preset/selected` event,
       // and that is what the session actually runs. Reporting the header alone
-      // would call a live 造物模式 session "standard" (it did, once).
+      // would call a live 营造模式 session "standard" (it did, once).
       if (e?.type === 'agent-preset/selected' && typeof e.data?.agentPreset === 'string') switched = e.data.agentPreset;
       if (e?.type === 'request/header') last = e;
     } catch { /* skip a torn line */ }

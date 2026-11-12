@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `examples/bench/subjects/02-steam-engine/` |
-| 预设 | 造物模式（**先设为默认预设再新建会话**） |
+| 预设 | 营造模式（**先设为默认预设再新建会话**） |
 | 附件 | 无（导入件走工作区文件，不走对话附件） |
 | 素材 | `subjects/02-steam-engine/assets/608.stl` —— **运行前生成一次** |
 | 记录 | commit、`SKILL.md` sha256、**`TASK.md` sha256**（见 README §二） |

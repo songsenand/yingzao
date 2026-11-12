@@ -79,7 +79,7 @@ const LEVELS = {
         // 塞进消息的通道。但这一档不能丢——它覆盖 recall_reference_image。
         blocked: '这一档靠"参考图作为对话附件"发出，而 headless 没有附图通道'
           + '（dsh-headless 的 Config = { task, sessionId, json }）。'
-          + '\n  要跑这一档：按根 README §5–§7 走 GUI/造物模式手工跑。'
+          + '\n  要跑这一档：按根 README §5–§7 走 GUI/营造模式手工跑。'
           + '\n  它的价值是覆盖 recall_reference_image 这条插件能力，别丢。',
       },
     },
@@ -329,7 +329,7 @@ for (let r = 1; r <= args.repeat; r++) {
   if (!provider || !model) die('--model 需为 <provider>/<model>');
   const modelOverlay = join(runRoot, 'model-overlay.yml');
   // README §5.3：同一模型、同一 reasoning 档位，并记进分数文件。不指定时沿用 profile
-  // 默认——那样两臂虽可比，却与 GUI/造物模式档（web profile 里显式写着 reasoningEffort）
+  // 默认——那样两臂虽可比，却与 GUI/营造模式档（web profile 里显式写着 reasoningEffort）
   // 不是一个档位，A/B 结论不能跨档引用。
   await writeFile(modelOverlay,
     `- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n`
@@ -406,5 +406,5 @@ if (!args.dryRun) {
   await writeFile(index, JSON.stringify({ level, variant: variantName, model: args.model, repeat: args.repeat, records }, null, 2) + '\n', 'utf8');
   console.log(`\n索引 → ${index}`);
   console.log('下一步：node examples/bench/tools/bench-score.mjs --run <run-root>（机检六列，能自动判的会判，其余列 UNKNOWN）。');
-  console.log(`档位：${records[0]?.tier}${names.length > 1 ? ` · 变体 ${variantName}` : ''}——分数不要与 GUI/造物模式档混算。`);
+  console.log(`档位：${records[0]?.tier}${names.length > 1 ? ` · 变体 ${variantName}` : ''}——分数不要与 GUI/营造模式档混算。`);
 }

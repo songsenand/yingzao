@@ -2,7 +2,7 @@
 // `@deepseek-ai/dsh-compaction-image-offload`, which cordis.patch.yml disables).
 //
 // THE RULE (user decision, DESIGN §16–17): standard-mode sessions behave as
-// UNMODIFIED dsh; only 造物模式 (cad) sessions get image economy. Concretely:
+// UNMODIFIED dsh; only 营造模式 (cad) sessions get image economy. Concretely:
 //
 //   * error-waterfall offloads (IMAGE_OFFLOAD_REQUIRED): a cad session never
 //     selects user-message TOP-LEVEL images — the reference image that stock
@@ -31,7 +31,7 @@ const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED';
  * The preset a session EFFECTIVELY runs.
  *
  * `session.header.agentPreset` is a creation fact and stays frozen, so a session
- * born 标准模式 and then switched to 造物模式 (allowed while blank) forever reads
+ * born 标准模式 and then switched to 营造模式 (allowed while blank) forever reads
  * "standard" in its header. Reading the header therefore disabled the cad image
  * window for exactly the sessions it was written for — microscope5's session
  * switched to cad (228 CAD tool calls prove it) yet the window never fired,
@@ -78,7 +78,7 @@ function resolvePresetOfSession(session: any, projectionService?: any): string |
  * The preset an image decision should use. Differs from `resolvePresetOfSession`
  * only when `DSH_CAD_IMAGE_WINDOW` is set AND the session names no preset at all
  * — a real `standard` session stays `standard`, so the override cannot widen the
- * window for sessions that deliberately run without 造物模式.
+ * window for sessions that deliberately run without 营造模式.
  */
 export function presetOfSession(session: any, projectionService?: any): string | null {
   const resolved = resolvePresetOfSession(session, projectionService);
@@ -90,7 +90,7 @@ import { DEEPSEEK_KEEP_IMAGES } from './image-budget.ts';
 import { recordImageWindow } from './usage.ts';
 
 /**
- * Images a 造物模式 (cad) session keeps in vision — the per-SESSION window
+ * Images a 营造模式 (cad) session keeps in vision — the per-SESSION window
  * enforced here (DESIGN §16.4), mirroring the DeepSeek route's count budget.
  * Standard-mode sessions are NEVER proactively pruned: the only image loss
  * there is the route's pathological-attachment fallback (`PI_AI_KEEP_BYTES`),
@@ -231,7 +231,7 @@ export const imageOffloadProjection = {
 
 /**
  * Record one offload decision on the session and report whether any prunable
- * occurrence remained. Dispatches by the session's preset: cad (造物模式)
+ * occurrence remained. Dispatches by the session's preset: cad (营造模式)
  * protects user-message top-level images; every other preset gets EXACTLY the
  * stock selection (oldest-first, no exemption) — standard mode behaves as
  * unmodified dsh. `true` means a decision was appended and the request should
@@ -308,7 +308,7 @@ export function applyProtectedImageOffload(ctx: any): void {
   });
 
   // Per-preset image window (DESIGN §16.4): every request carries its
-  // sessionId; a 造物模式 session over the window gets a proactive offload
+  // sessionId; a 营造模式 session over the window gets a proactive offload
   // decision so the NEXT request fits. Standard-mode sessions are exempt —
   // that is the whole point of doing this here instead of in the route config.
   //
@@ -403,7 +403,7 @@ export function decideSessionWindow(
   const session = sessions.get(sessionId);
   if (!session) return { outcome: 'no-session', preset: null, retained: 0, excess: 0 };
   // The EFFECTIVE preset (live projection, header fallback) — never the header
-  // alone: a blank session may have switched to 造物模式 after creation.
+  // alone: a blank session may have switched to 营造模式 after creation.
   const preset = readPreset(session);
   const retained = countRetainedImages(options?.messages);
   const excess = retained - CAD_IMAGE_WINDOW;

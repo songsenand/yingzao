@@ -2,7 +2,7 @@
 //
 // POLICY (user decision, 2026-10-03): standard-mode sessions run on dsh
 // FACTORY DEFAULTS — no route-level budget is patched or written by this
-// plugin. The only active budget is the per-SESSION window for 造物模式 (cad)
+// plugin. The only active budget is the per-SESSION window for 营造模式 (cad)
 // sessions, enforced by the protected offload executor (image-offload.ts):
 // 24 retained images, user-message top-level images exempt. The deepseek
 // constants below therefore describe the cad WINDOW (and the adapter knobs
@@ -12,7 +12,7 @@
 // (2.5 MiB, then 256 KiB) and claimed a `maxRequestImages` knob that never
 // existed in any installed dsh — both removed. See DESIGN §14–§16.
 
-/** Retained images for a 造物模式 session; mirrors the deepseek count budget. */
+/** Retained images for a 营造模式 session; mirrors the deepseek count budget. */
 export const DEEPSEEK_KEEP_IMAGES = 24;
 /** Removal step; mirrors `imageOffloadCountQuantum` (2 render rounds of 4 views). */
 export const DEEPSEEK_COUNT_QUANTUM = 8;

@@ -124,7 +124,7 @@ const fakeCtx = {
   on: () => {},
   effect: (fn) => { const d = fn(); return d; },
   reflect: {
-    get: (key) => (key === 'agentPresets' ? { list: async () => [{ id: 'cad', name: '造物模式' }, { id: 'standard', name: '标准模式' }] } : key === 'connection' ? {
+    get: (key) => (key === 'agentPresets' ? { list: async () => [{ id: 'cad', name: '营造模式' }, { id: 'standard', name: '标准模式' }] } : key === 'connection' ? {
       fetch: { register: (route) => { routes.set(route.path, route); return () => {}; } },
       rpc: { intercept: () => () => {} },
     } : undefined),
@@ -213,7 +213,7 @@ section('tool-scope reporting (the trap that produced a skill error)');
       && Array.isArray(scopeWire?.presets) && scopeWire.presets.includes('cad'),
     'the host reports its tool scope and the presets that open the tools',
     JSON.stringify(scopeWire));
-  check(scopeWire?.names?.cad === '造物模式',
+  check(scopeWire?.names?.cad === '营造模式',
     'the host resolves preset display names from the roster', JSON.stringify(scopeWire?.names));
   // The client predicate mirrors src/host/tool-scope.ts (minus delegation).
   const s = { toolScope: 'preset', presets: ['cad'] };
@@ -227,7 +227,7 @@ section('tool-scope reporting (the trap that produced a skill error)');
   // The banner must name the situation, because the two are not the same thing:
   // a blank session can still be switched, a started one cannot. Reporting the
   // wrong one sends the human down a path that cannot work.
-  const noTools = { toolScope: 'preset', presets: ['cad'], names: { cad: '造物模式', standard: '标准模式' } };
+  const noTools = { toolScope: 'preset', presets: ['cad'], names: { cad: '营造模式', standard: '标准模式' } };
   check(cadMissingToolsNotice(noTools, 'cad', false) === null, 'CAD preset: no banner');
   const blankNotice = cadMissingToolsNotice(noTools, 'standard', true);
   const lockedNotice = cadMissingToolsNotice(noTools, 'standard', false);
@@ -236,7 +236,7 @@ section('tool-scope reporting (the trap that produced a skill error)');
     'blank session: the banner says the choice is still recoverable', blankNotice);
   check(lockedNotice !== null && /锁定|默认预设/.test(lockedNotice),
     'started session: the banner offers a new session or a new default', lockedNotice);
-  check(/造物模式/.test(lockedNotice) && !/「cad」/.test(lockedNotice),
+  check(/营造模式/.test(lockedNotice) && !/「cad」/.test(lockedNotice),
     'the banner names the preset the way the human sees it');
   check(unknownNotice !== null && unknownNotice !== lockedNotice,
     'unknown blank state: the banner makes no claim it cannot back', unknownNotice);

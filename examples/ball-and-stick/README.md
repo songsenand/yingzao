@@ -19,7 +19,7 @@ examples/ball-and-stick/
 
 ```bash
 cd examples/ball-and-stick/glucose-molecule
-# 新建「造物模式」会话，cwd 指向这个目录
+# 新建「营造模式」会话，cwd 指向这个目录
 ```
 
 面板的工作目录下拉是**只读浏览**：从 `examples/` 或 `examples/ball-and-stick/` 开会话时，它能列出深度 ≤2 的语料，`glucose-molecule` 和将来的 `fructose-molecule` 会并排出现。但**写入永远落在会话 cwd 的 `cad-data/`**——所以真正画分子时，会话 cwd 要指向具体的分子目录，不要停在容器目录。

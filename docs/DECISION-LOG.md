@@ -5879,3 +5879,26 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `python/cad_worker/worker.py` 的 draft 块、`src/host/tools.ts` 的 marginal 文案与 `DraftSolve.proven`。密网格零件（k>400）的“拔模不满足”今后是 `difficult` 而非 `excluded`。
 
 **非目标 / 后续：** 不改拔模定义、不降低要求角度。要把密网格也升级成证明，需要半空间/线性规划求交，而不是继续加法线；本轮不做。
+
+
+## 2026-11-12：项目品牌名定为「营造（Yingzao）」
+
+**触发条件：** 第 1 条（用户拍板）。
+
+**要解决的问题：** `ToyMarker` 是出身名，作为准生产工具过于儿戏；但品牌改名不能连带改技术契约，否则旧 profile、旧项目和脚本会一起失效。
+
+**决策内容：**
+
+- 品牌/项目名：**营造（Yingzao）**；英文用拼音，不翻译。
+- 预设显示名：`造物模式` → `营造模式`；preset id 仍为 `cad`。
+- 技术 id 冻结：npm 包 `dsh-cad-harness`、插件 id `cad-harness-host`、CLI `dsh-cad-*`、数据目录 `cad-data/` 与 `$DSH_HOME/cad/`、HTTP 路径 `/api/cad/*`。
+- GitHub 仓库名可与包名不同；仓库可叫 `yingzao-cad`，不影响 `dsh plugin add -w`。
+- 历史记录（DECISION-LOG 旧条目、archive、experiments、历史评测分数）保留旧名，不回改。
+
+**理由：** 品牌层可以改，契约层不能混；现在改品牌成本低，发布后再改 id 会让旧 profile/项目失效。
+
+**依据：** 用户 2026-11-12 确认；`preset id` 与插件 id 被 `cordis.patch.yml` / profile 引用；`npm run accept:preview` 232/232 作为改名后回归。
+
+**影响：** README、docs/user、`presets/cad/preset.yml` 显示名、NOTICE、HARNESS、dsh README、examples 当前说明；技术 id 不变。
+
+**非目标：** 不重命名 GitHub 仓库（等网络）、不改包名/插件 id/CLI/数据目录、不改历史记录。

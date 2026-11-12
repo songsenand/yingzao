@@ -18,7 +18,7 @@
 //
 // This is the bug that cost a real run. `session.header.agentPreset` is a
 // creation fact and is deep-frozen, so a session that started as 标准模式 and
-// then switched to 造物模式 (allowed while blank) still reads "standard" in its
+// then switched to 营造模式 (allowed while blank) still reads "standard" in its
 // header forever. Reading the header therefore hid the CAD tools from a session
 // that had correctly selected the CAD preset — the switch succeeded, the log
 // recorded it, and the model still received 27 tools with zero CAD ones.

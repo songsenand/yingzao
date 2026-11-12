@@ -401,11 +401,11 @@
       ],
       "referenceImage": "attachment：操作者把 graders/03-microscope/参考图.png 作为对话附件随 A 段发出；考生目录保持不放图",
       "probeMeaning": "p-reference-recall = 附件被裁剪后，下结论前必须调用 recall_reference_image（**考插件的回收机制**）",
-      "howToRun": "GUI/造物模式手工跑（根 README §5–§7）；headless 没有附图通道，跑不了这一档",
+      "howToRun": "GUI/营造模式手工跑（根 README §5–§7）；headless 没有附图通道，跑不了这一档",
       "coversTools": [
         "recall_reference_image"
       ],
-      "tier": "GUI / 造物模式"
+      "tier": "GUI / 营造模式"
     },
     "headless": {
       "taskFiles": [

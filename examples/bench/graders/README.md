@@ -27,13 +27,13 @@
 | 编号 | 预设 | 会话 cwd（考生侧） | 考生题面 | 附件 / 素材 | 判据 | 答案 |
 |---|---|---|---|---|---|---|
 | `00-smoke` | **不适用**（无会话） | **没有考场**（无考生，故 `subjects/` 下无此目录） | `graders/00-smoke/prompt.md`（配方） | — | `rubric.json` | 无（rubric 即规格） |
-| `01-mortise-bench` | 造物模式 | `subjects/01-mortise-bench/` | `subjects/01-mortise-bench/TASK.md` | — | `rubric.json` | `key.md` |
-| `01b-diagnosis` | 造物模式 | `subjects/01b-diagnosis/` | `subjects/01b-diagnosis/TASK.md` | `dossier/`（69 个 run 的 JSON 证据） | `rubric.json` | `key.md` |
-| `02-steam-engine` | 造物模式 | `subjects/02-steam-engine/` | `subjects/02-steam-engine/TASK.md` | `assets/608.stl`（运行前生成） | `rubric.json` | `key.md` |
-| `03-microscope` **GUI 档** | 造物模式 | `subjects/03-microscope/` | **两段**：`TASK.md` → `TASK-2.md` | `参考图.png`（随 A 段走**对话附件**） | `rubric.json`（`variants.gui`）+ `landmarks.json` | `key.md` |
+| `01-mortise-bench` | 营造模式 | `subjects/01-mortise-bench/` | `subjects/01-mortise-bench/TASK.md` | — | `rubric.json` | `key.md` |
+| `01b-diagnosis` | 营造模式 | `subjects/01b-diagnosis/` | `subjects/01b-diagnosis/TASK.md` | `dossier/`（69 个 run 的 JSON 证据） | `rubric.json` | `key.md` |
+| `02-steam-engine` | 营造模式 | `subjects/02-steam-engine/` | `subjects/02-steam-engine/TASK.md` | `assets/608.stl`（运行前生成） | `rubric.json` | `key.md` |
+| `03-microscope` **GUI 档** | 营造模式 | `subjects/03-microscope/` | **两段**：`TASK.md` → `TASK-2.md` | `参考图.png`（随 A 段走**对话附件**） | `rubric.json`（`variants.gui`）+ `landmarks.json` | `key.md` |
 | `03-microscope` **headless 档** | headless（不命名预设） | run root | **两段**：`TASK.headless.md` → `TASK-2.md` | `参考图.png`（`bench-run` **复制进 run root**） | `rubric.json`（`variants.headless`）+ `landmarks.json` | `key.md` |
-| `04-rack-connector` | 造物模式 | `subjects/04-rack-connector/`（run root） | `subjects/04-rack-connector/TASK.md` | `mainRail.stl` + `rackJoiner.stl`（**prep 现场物化**） | `rubric.json` | `key.md` |
-| `05-rack-assembly` | 造物模式 | `subjects/05-rack-assembly/`（run root） | `subjects/05-rack-assembly/TASK.md` | `xBar.stl` + `yBar.stl`（**prep 现场物化**） | `rubric.json` | `key.md` |
+| `04-rack-connector` | 营造模式 | `subjects/04-rack-connector/`（run root） | `subjects/04-rack-connector/TASK.md` | `mainRail.stl` + `rackJoiner.stl`（**prep 现场物化**） | `rubric.json` | `key.md` |
+| `05-rack-assembly` | 营造模式 | `subjects/05-rack-assembly/`（run root） | `subjects/05-rack-assembly/TASK.md` | `xBar.stl` + `yBar.stl`（**prep 现场物化**） | `rubric.json` | `key.md` |
 
 **手册（`SKILL.md`）不入表**：它是被测系统的一部分，由 SUT 自己决定加不加载——
 我们不人为塞进消息、也不人为抠掉。它有没有被加载，记在 `S0`。
@@ -95,12 +95,12 @@ microscope 语料是**历史语料**，保留查证，不再当评测基线—�
 **以后 `SKILL.md` 的每一次改动，都拿基准版当对照跑一遍 `01b`**：改前是基准，
 改后是候选，差值就是这次改动的净效应。见 `01b-diagnosis/prompt.md`。
 
-### 二·五、两个基准档位：GUI/造物模式 与 headless
+### 二·五、两个基准档位：GUI/营造模式 与 headless
 
 跑法有手工与自动化两条（根 [`README.md`](../README.md) §5–§9 是手工，
 §12 是 `dsh --profile headless`）。**它们不是同一个 SUT，分数不可混算。**
 
-| | GUI / 造物模式 | headless + overlay |
+| | GUI / 营造模式 | headless + overlay |
 |---|---|---|
 | CAD 工具 | 在 | 在 |
 | `cad-toolbox` 手册 | 在 | 在（靠 overlay 补） |
@@ -119,7 +119,7 @@ microscope 语料是**历史语料**，保留查证，不再当评测基线—�
 ——工具与手册都在，但预设本身没激活。所以：
 
 - **headless 的分数单列一档**，标题写清"headless，不命名预设"；
-- **不与 GUI/造物模式的分数合并、不做跨档排名**；
+- **不与 GUI/营造模式的分数合并、不做跨档排名**；
 - `S` / `S0` 在两档都有意义（手册都在），但两档之间仍不可直接比。
 
 **附图那条差异的后果**：`03` 因此**有两个档位**，A 段考卷只差两行
@@ -140,15 +140,15 @@ headless 没有附图通道，那条能力在自动化下永远不会被触发�
 | 编号 | 题目 | 车道数 | 主要压测 | 预设 |
 |---|---|---|---|---|
 | `00-smoke` | 工具链冒烟自检 | 全部工具各一次 | **仪器校准**：工具本身还能不能跑 | 不适用（脚本驱动，无会话） |
-| `01-mortise-bench` | 榫卯木长凳 | 1 | L0 几何 / datum / 装配契约 / 木工配合语义 | 造物模式 |
-| `01b-diagnosis` | 诊断已交付语料 | — | 审计与证据链；**skill 改动的 A/B 试验台** | 造物模式 |
-| `02-steam-engine` | 往复式蒸汽机 | 3 | L1 运动 + L1 刚体 + L2 流体（+ `import_part`） | 造物模式 |
-| `03-microscope` | 单目复式显微镜 | 6 | L0 + L1 运动 + L1 刚体 + 可打印性 + 外观还原 + 长程记忆 | 造物模式 |
-| `06-measure` | 量一个你没画过的零件 | 1 | **测量问答**：特征识别 → 测厚 / 剖面 / 夹角 / 按轴起止；证据链（E/H） | 造物模式 |
-| `04-rack-connector` | 补一件机架接头 | 2 | **逆向 + 补全 + 装配验证**（第三方 OpenSCAD 语料，钉 commit 物化） | 造物模式 |
-| `05-rack-assembly` | 把机架的一角装起来 | 2 | **装配**：配合关系推理 → 位姿 → 干涉/连通体/包络验证 | 造物模式 |
+| `01-mortise-bench` | 榫卯木长凳 | 1 | L0 几何 / datum / 装配契约 / 木工配合语义 | 营造模式 |
+| `01b-diagnosis` | 诊断已交付语料 | — | 审计与证据链；**skill 改动的 A/B 试验台** | 营造模式 |
+| `02-steam-engine` | 往复式蒸汽机 | 3 | L1 运动 + L1 刚体 + L2 流体（+ `import_part`） | 营造模式 |
+| `03-microscope` | 单目复式显微镜 | 6 | L0 + L1 运动 + L1 刚体 + 可打印性 + 外观还原 + 长程记忆 | 营造模式 |
+| `06-measure` | 量一个你没画过的零件 | 1 | **测量问答**：特征识别 → 测厚 / 剖面 / 夹角 / 按轴起止；证据链（E/H） | 营造模式 |
+| `04-rack-connector` | 补一件机架接头 | 2 | **逆向 + 补全 + 装配验证**（第三方 OpenSCAD 语料，钉 commit 物化） | 营造模式 |
+| `05-rack-assembly` | 把机架的一角装起来 | 2 | **装配**：配合关系推理 → 位姿 → 干涉/连通体/包络验证 | 营造模式 |
 
-**所有 LLM 题统一在造物模式跑**——因为 SUT 就是造物模式下的那套东西，换预设
+**所有 LLM 题统一在营造模式跑**——因为 SUT 就是营造模式下的那套东西，换预设
 等于换了一个我们并不发布的产品。手册出不出现在上下文里，由 SUT 自己的加载
 逻辑决定，**我们不人为干预**；它加载与否本身就是 `S0` 这一项要记录的事实。
 

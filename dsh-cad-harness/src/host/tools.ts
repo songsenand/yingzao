@@ -8566,7 +8566,7 @@ export function registerCadTools(
       requestBody: 'buffered',
       fetch: async () => {
         const presets = [...(scope?.presets ?? [])];
-        // Display names, so the panel can say 「造物模式」而不是「cad」. Read
+        // Display names, so the panel can say 「营造模式」而不是「cad」. Read
         // through reflect (no inject requirement): the roster service may not be
         // active when this plugin applies, but it is by the time anyone asks.
         const names: Record<string, string> = {};

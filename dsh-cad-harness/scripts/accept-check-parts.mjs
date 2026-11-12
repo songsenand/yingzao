@@ -108,7 +108,7 @@ const fakeCtx = {
   },
   reflect: {
     get: (k) => (k === 'agentPresets'
-      ? { list: async () => [{ id: 'cad', name: '造物模式' }] }
+      ? { list: async () => [{ id: 'cad', name: '营造模式' }] }
       : k === 'connection'
         ? { fetch: { register: () => () => {} }, rpc: { intercept: () => () => {} } }
         : undefined),

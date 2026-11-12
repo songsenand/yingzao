@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `subjects/05-rack-assembly/`（run root 由 `bench-run.mjs` 复制出去，**绝不在仓库内开会话**） |
-| 预设 | 造物模式 |
+| 预设 | 营造模式 |
 | 附件 | 无（两件 STL 走工作区文件） |
 | 素材 | `xBar.stl` + `yBar.stl` —— **由 `bench-run` 的 `prep` 现场物化**（第三方几何不入库） |
 | 记录 | commit、`SKILL.md` sha256、`TASK.md` sha256、两件 STL 的 sha256（`MATERIALIZED.json`） |

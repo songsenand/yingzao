@@ -1,11 +1,11 @@
-# ToyMarker · dsh-cad-harness
+# 营造（Yingzao） · dsh-cad-harness
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/user/limits.md)
 [![Status](https://img.shields.io/badge/status-0.1.0%20%E5%AE%9E%E9%AA%8C%E6%80%A7-orange.svg)](docs/user/limits.md)
 
-> **用自然语言描述零件，得到经过验证、可直接打印的模型。**
+> **营造（Yingzao）——用自然语言描述零件，得到经过验证、可直接打印的模型。**
 
 本插件不是建模界面。几何生成已不是瓶颈，瓶颈在于**确认结果是否正确**：能生成但无法验证的系统只能产出“看起来对”的结果。本插件把「生成 → 验证 → 迭代 → 交付」做成闭环，需要判断的环节保留给人。
 
@@ -23,12 +23,12 @@
 # 1. 安装（本地路径；分发方式待定）
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm run build
-npm run setup          # 写入“造物模式”预设在本机的 skill 路径
+npm run setup          # 写入“营造模式”预设在本机的 skill 路径
 npx dsh-cad-doctor     # 环境自检；kind=ok 才算装好
 ```
 
 2. 预览版说明与已知边界 → [0.1.0 预览版说明](docs/user/preview.md)。
-3. 新建会话时选预设 **「造物模式」**（普通会话看不到 CAD 工具，这是有意的）。
+3. 新建会话时选预设 **「营造模式」**（普通会话看不到 CAD 工具，这是有意的）。
 4. 直接描述需求：
 
 > 做一个 60×40×8 的安装板，四角 M3 沉头孔，中心一个 20mm 通孔。

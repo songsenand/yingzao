@@ -214,7 +214,7 @@ export function imageWindowReport(): Record<string, unknown> {
     records: windowRecent.length,
     byOutcome,
     lastApplied: applied.slice(-3),
-    note: 'applied = the cad window pruned; preset-not-cad = the session is not 造物模式 (the microscope5 case)',
+    note: 'applied = the cad window pruned; preset-not-cad = the session is not 营造模式 (the microscope5 case)',
   };
 }
 

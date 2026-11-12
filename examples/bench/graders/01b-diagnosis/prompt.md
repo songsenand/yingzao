@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `examples/bench/subjects/01b-diagnosis/` |
-| 预设 | 造物模式（**先设为默认预设再新建会话**）——与其余各题同一个 SUT |
+| 预设 | 营造模式（**先设为默认预设再新建会话**）——与其余各题同一个 SUT |
 | 附件 | 无 |
 | 素材 | `subjects/01b-diagnosis/dossier/`（69 个 run 的 JSON 证据，已入库） |
 | 记录 | commit、`SKILL.md` sha256、**`TASK.md` sha256**（见 README §二） |
@@ -45,7 +45,7 @@ node examples/bench/tools/materialize-01b.mjs corpus
 
 ### 基准期（只有一版手册）
 
-单臂：造物模式 + `subjects/01b-diagnosis/TASK.md` 原文。约 15 分钟。记下 `S0` 与 `S`。
+单臂：营造模式 + `subjects/01b-diagnosis/TASK.md` 原文。约 15 分钟。记下 `S0` 与 `S`。
 
 ### 手册改动期（有两版手册）
 

@@ -1,6 +1,6 @@
 # dsh-cad-harness
 
-Installable half of **ToyMarker**: an LLM-driven CAD harness with a verification
+Installable half of **营造（Yingzao）**: an LLM-driven CAD harness with a verification
 loop (OpenSCAD/Manifold compile + render, layered geometry/assembly/physics/
 fluid/process checks, immutable versions, and an evidence policy).
 
@@ -12,7 +12,7 @@ library.
 ```bash
 dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 npx dsh-cad-setup          # writes this machine's skill path into the preset
-# restart dsh; then choose the 「造物模式」 preset for a new session
+# restart dsh; then choose the 「营造模式」 preset for a new session
 ```
 
 `npx dsh-cad-setup --check` reports whether the preset is stale. The package

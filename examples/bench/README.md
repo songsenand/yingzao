@@ -126,10 +126,10 @@ python3 examples/bench/tools/make-reference-figure.py --check             # 只�
 | 编号 | cwd（= 场地） | 考生题面 | 附件 | 素材 | 预设 | 预算（调用/墙钟/图片） |
 |---|---|---|---|---|---|---|
 | `00-smoke` | **无**（无会话） | 无 | — | — | — | 60 / 30min / 48 |
-| `01-mortise-bench` | `subjects/01-mortise-bench/` | `TASK.md` | — | — | 造物模式 | 60 / 45min / 40 |
-| `01b-diagnosis` | `subjects/01b-diagnosis/` | `TASK.md` | — | `dossier/` | 造物模式 | 12 / 15min / 4 |
-| `02-steam-engine` | `subjects/02-steam-engine/` | `TASK.md` | — | `assets/608.stl` | 造物模式 | 120 / 120min / 70 |
-| `03-microscope`（**GUI 档**） | `subjects/03-microscope/` | **两段**：`TASK.md` → `TASK-2.md` | `参考图.png`（对话附件） | — | 造物模式 | 150 / 150min / 80 |
+| `01-mortise-bench` | `subjects/01-mortise-bench/` | `TASK.md` | — | — | 营造模式 | 60 / 45min / 40 |
+| `01b-diagnosis` | `subjects/01b-diagnosis/` | `TASK.md` | — | `dossier/` | 营造模式 | 12 / 15min / 4 |
+| `02-steam-engine` | `subjects/02-steam-engine/` | `TASK.md` | — | `assets/608.stl` | 营造模式 | 120 / 120min / 70 |
+| `03-microscope`（**GUI 档**） | `subjects/03-microscope/` | **两段**：`TASK.md` → `TASK-2.md` | `参考图.png`（对话附件） | — | 营造模式 | 150 / 150min / 80 |
 | `03-microscope`（**headless 档**） | run root | **两段**：`TASK.headless.md` → `TASK-2.md` | runner 复制进 run root | 同上 | headless | 同上 |
 
 **题面一律逐字发出，不加、不改、不解释、不补充。**
@@ -143,7 +143,7 @@ python3 examples/bench/tools/make-reference-figure.py --check             # 只�
 
 1. **新会话 + 空语料**：语料落在 `<cwd>/cad-data/`，所以每题天然一份独立语料。
    要重跑就删掉该目录。
-2. **预设 = 造物模式**。**先把它设为默认预设再新建会话**——面板上的选择只作用于
+2. **预设 = 营造模式**。**先把它设为默认预设再新建会话**——面板上的选择只作用于
    "当前那个空白会话"，不会继承给之后新建的会话。
 3. **模型与路由**：同一模型、同一 reasoning 档位，记进分数文件。
 4. **重复**：每个（模型 × 题目）跑 **N ≥ 3** 轮，报**中位数与离散度**。
@@ -440,7 +440,7 @@ preset-cad (@deepseek-ai/dsh-agent-preset): pending (waiting for service: agentP
 ### 12.6 三条纪律
 
 1. **headless 是"功能等价近似"，不是同一个 SUT。** 它少了"会话命名预设"那一层
-   composition。所以它在基准里**单列一档**，分数**不与 GUI/造物模式混算**。
+   composition。所以它在基准里**单列一档**，分数**不与 GUI/营造模式混算**。
 2. **`03` 有两个档位，别混算。** headless 档走 `--variant headless`（参考图由 runner
    复制进 run root）；GUI 档保留**附件**语义，走手工（§5–§7）。
    headless **没有附图通道**——`dsh-headless` 的配置 schema 就是

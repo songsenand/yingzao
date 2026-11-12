@@ -208,7 +208,7 @@ function checkPatchComposition() {
       encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 180_000,
     });
     // The composed tree must carry OUR declaration row — that is what makes
-    // 造物模式 selectable. (The old roster-row assertions were removed upstream.)
+    // 营造模式 selectable. (The old roster-row assertions were removed upstream.)
     const at = out.indexOf('- id: preset-cad');
     const block = at < 0 ? '' : out.slice(at, at + 8000);
     check(at >= 0, 'the composed tree carries the cad preset declaration',

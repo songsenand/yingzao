@@ -38,7 +38,7 @@
 # always the oldest — is pruned first (measured on microscope3, DESIGN §15.1).
 # The plugin's executor (src/host/image-offload.ts) ports the stock behavior
 # and dispatches by the session's preset:
-#   * cad (造物模式): 24-image retention window + user-message top-level images
+#   * cad (营造模式): 24-image retention window + user-message top-level images
 #     are never selected;
 #   * every other preset: EXACTLY the stock selection (oldest-first, no
 #     exemption) — standard mode behaves as unmodified dsh.

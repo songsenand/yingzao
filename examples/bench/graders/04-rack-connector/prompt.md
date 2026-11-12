@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | cwd | `subjects/04-rack-connector/`（run root 由 `bench-run.mjs` 复制出去，**绝不在仓库内开会话**） |
-| 预设 | 造物模式（**先设为默认预设再新建会话**） |
+| 预设 | 营造模式（**先设为默认预设再新建会话**） |
 | 附件 | 无（两件 STL 走工作区文件） |
 | 素材 | `mainRail.stl` + `rackJoiner.stl` —— **由 `bench-run` 的 `prep` 现场物化**（第三方几何不入库） |
 | 记录 | commit、`SKILL.md` sha256、**`TASK.md` sha256**、两件 STL 的 sha256（`MATERIALIZED.json` 里有） |
