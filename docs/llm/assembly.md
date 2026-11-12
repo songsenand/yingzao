@@ -44,7 +44,6 @@ Four facts the shape does not make obvious:
 - `tolerance: {min,max}` is the pass/fail criterion — **no tolerance means skipped, never pass**;
 - a part node names its version with `version` (e.g. `"v003"`), or `source: "stock"` if it has no
   geometry.
-
 - `process` on a part (or on the assembly root as the default) is
   `{id, source: "user" | "policy" | "agent", rationale?, confirmedBy?, confirmedAt?}`. The usual
   path is `source: "policy"`: the project has a top-level
@@ -59,6 +58,12 @@ Four facts the shape does not make obvious:
   every part. The id vocabulary and the **supported / partial / planned** status live in
   [`processes.md`](processes.md): `allowed` is the decision space, an evaluator is a separate fact,
   and a planned process is recorded but reported `unobserved`, never a pass.
+
+**Part datums: the version store is the authority.** For a `kind: "part"` endpoint, `a`/`b` resolve
+against the datums the version declared (points/axes/planes/cylinders). A node's inline `datums`
+array is an optional human hint and is often shorter — do **not** conclude an endpoint is dangling
+from the inline list alone. When an endpoint resolves only against the version, `verify` reports
+`model.datum-list-drift` as `info`; the model row stays `pass`.
 
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 
@@ -88,9 +93,9 @@ working, not an error.
   offset between two axis datums (line-to-line) and flags non-parallel axes —
   the operator for "these two bores line up". `motion-clearance`
   evaluates the static distance AND records whether motion was evidenced, so
-  cite the run that proved it: `"params": {"runId": "r020"}` — a cited run that
-  is missing, not a motion run, or not passing turns the interface into a
-  hard-violation. `spring-preload` computes force = stiffness × (free length −
+  cite the run that proved it: `"evidence": {"runId": "r020"}` (legacy
+  `"params": {"runId": "r020"}` is still accepted). A cited run that is missing,
+  not a motion run, or not passing turns the interface into a hard-violation. `spring-preload` computes force = stiffness × (free length −
   measured installed length), so it needs `params.freeLengthMm` and
   `params.stiffnessNPerMm` and the spring's **own two ends** as `a` and `b`.
   `spring-behaviour` is the richer axial-spring check: it measures the installed

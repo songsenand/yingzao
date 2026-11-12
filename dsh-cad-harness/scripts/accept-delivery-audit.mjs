@@ -21,6 +21,23 @@ const check = (ok, label, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
 };
 
+// ── 0. "move the contract to the newest version" must not be a dead end ──────
+// A stale node whose newest version declares no datums cannot be an endpoint;
+// the finding has to say so (rotor v088 in the click pen lost axis/top/seat).
+const pen = resolve(import.meta.dirname, '..', '..', 'examples', 'two-color-click-pen');
+if (existsSync(join(pen, 'cad-data', 'runs', 'manifest.json'))) {
+  const penReport = await auditDelivery(projectStores(pen));
+  const stale = penReport.findings.find((f) => f.code === 'contract-stale-nodes');
+  const noAnchor = penReport.contract.staleNodes.filter((n) => n.newestDatums === 0);
+  check(noAnchor.length > 0, 'the audit marks a stale node whose newest version has no datums',
+    JSON.stringify(penReport.contract.staleNodes));
+  const staleText = stale?.detail ?? stale?.what ?? '';
+  check(!noAnchor.length || /declares no datums/.test(staleText),
+    'and the finding warns that moving the contract there would fail', staleText || '(no finding)');
+} else {
+  console.log('SKIP  click-pen corpus not found');
+}
+
 // ── 1. the real microscope5 corpus ───────────────────────────────────────────
 const m5 = resolve(process.argv[2] ?? join(import.meta.dirname, '..', '..', 'examples', 'microscope5'));
 if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {

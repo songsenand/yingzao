@@ -10,6 +10,7 @@ import { loadVerifyProject } from './project.ts';
 import { loadClaims, toDeliveryClaims } from './claims.ts';
 import { applyExceptions, applyPolicy, exitCodeFor, loadExceptions, loadPolicy, resolveMode, statusOfOutcomes } from './policy.ts';
 import { evaluateRows } from './rows.ts';
+import { ledgerForProject } from './interfaces.ts';
 import { assembleReport } from './report.ts';
 import { checkClaimByCheck, checkFindingDrafts, checkSummary, loadChecks, runChecks } from './checks.ts';
 import { claimFindingDraft } from './findings.ts';
@@ -194,6 +195,8 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
     exceptions: exceptionResult.applied,
     checks: runs.map(checkSummary),
   });
+
+  report.interfaces = (await ledgerForProject(project)) ?? undefined;
 
   return { report, exitCode: exitCodeFor(report, mode, options.strict === true), mode };
 }

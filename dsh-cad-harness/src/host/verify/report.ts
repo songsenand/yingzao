@@ -149,6 +149,22 @@ export function renderText(report: VerifyReport): string {
   const policy = report.policy.id ?? (report.policy.source === 'none' ? 'none' : report.policy.source);
   const lines = [`verify: ${report.verdict} (${mode}) · policy ${policy}`];
   for (const row of report.rows) lines.push(rowLine(row));
+  if (report.interfaces) {
+    const i = report.interfaces;
+    const bits = (['pass', 'fail', 'flagged', 'skipped', 'unproven'] as const)
+      .filter((k) => i.counts[k] > 0 || k === 'unproven')
+      .map((k) => `${k} ${i.counts[k]}`);
+    const source = i.runId ? `${i.runId}${i.fresh ? ' fresh (manifest versions)' : ' STALE'}` : 'no run';
+    lines.push(`interfaces  ${i.total} · parts ${i.parts} · ${bits.join(' · ')} · ${source}${i.orphans ? ` · ${i.orphans} orphan` : ''}`);
+    const attention = i.items
+      .filter((x) => x.status === 'fail' || x.status === 'flagged' || x.status === 'unproven')
+      .slice(0, 6)
+      .map((x) => `${x.id} ${x.status}`);
+    if (attention.length) {
+      const more = i.counts.fail + i.counts.flagged + i.counts.unproven - attention.length;
+      lines.push(`  interface issues: ${attention.join(', ')}${more > 0 ? ` (+${more})` : ''}`);
+    }
+  }
   if (report.checks.length > 0) {
     const shown = report.checks.slice(0, 6).map((c) => `${c.id} ${c.status}${c.late ? ' late' : ''} (${c.row})`);
     lines.push(`checks: ${shown.join(' · ')}${report.checks.length > 6 ? ` · +${report.checks.length - 6}` : ''}`);
@@ -161,7 +177,12 @@ export function renderText(report: VerifyReport): string {
   for (const f of visible.slice(0, 8)) {
     lines.push(`! ${f.code} @ ${whereText(f.where)} — ${f.what}${f.exceptionId ? ` [exception ${f.exceptionId}]` : ''}`);
   }
-  if (visible.length > 8) lines.push(`  … ${visible.length - 8} more finding(s)`);
+  if (visible.length > 8) {
+    // A count alone tells the reader something is hidden but not what. Codes
+    // keep the line cheap and let a new session ask the right next question.
+    const hidden = [...new Set(visible.slice(8).map((f) => f.code))];
+    lines.push(`  … ${visible.length - 8} more: ${hidden.slice(0, 8).join(', ')}${hidden.length > 8 ? ', …' : ''} (full list: --json)`);
+  }
   if (infoCount) lines.push(`  ${infoCount} info finding(s)`);
 
   const next = [...new Set(visible.flatMap((f) => f.next))].slice(0, 5);

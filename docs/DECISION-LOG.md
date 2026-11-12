@@ -5768,6 +5768,32 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 
 **影响：** `src/host/process-catalog.ts`、`schemas/examples/*.json`、`docs/llm/processes.md`、`deliver-plan.ts` 的 `[supported|partial|planned]` 标签与 `process-planned` 缺口；后续 `check_sheet2d` 与非圆槽/车削/EDM 评估器。
 
+## 2026-11-12：核心派生义务，不派生动作（脊柱探针）
+
+**触发条件：** 第 1 条（用户拍板"核心是必要的"）+ 第 2 条（6 次密封探针的定量结果）。
+
+**要解决的问题：** 项目反复感觉"缺一根脊柱"；上一次尝试（珍珠链）把核心做成了六阶段 workflow，结果变成第二真相并降级。BOM + 可执行 ICD 被怀疑是雏形，但"缺什么"此前只有判断，没有证据。
+
+**决策内容：**
+
+- **核心是装配契约上的追溯链 `requirement → interface → part → check → evidence`**，不是 workflow、不是 DSL、不是第二套状态词。
+- 核心**只派生义务**（哪些关系必须成立、哪些证据过期、哪些端点解析不了），**不派生动作**（先做哪件）；路由仍由人/agent 按当前目标决定。
+- **不新建一层。** 只补三根链接：① 自述头（`name / purpose / counts / schema`）；② 证据指针（把引擎已在消费的 `params.runId` 提升为一等字段，覆盖全部接口）；③ 需求引用（稳定 id，`note` 保留为理由）。
+- 验收沿用同一密封协议：新会话只给核心 + 至多一次查询，要求 Q2 ≥ 80 且额外文件 = 0，Q3 ≥ 70。
+
+**理由：** 探针显示结构层已经在承重——零证据零历史的新会话能从契约里找出真实缺陷（空契约、零件无固定接口、接口自指、两端同属一个零件）；再给一次 `verify` 查询只把 Q2 从 71.7 提到 81.3，Q3 从 55.3 提到 60.7，六格无一超过 66。继续往"让核心规定下一步"走，就是重演珍珠链：动作顺序依赖当前目标，不可能从工件里唯一导出。
+
+**依据：**
+
+- `experiments/20261112_core_spine_probe.md`：三案例 ×（core / core+query）六格，密封目录、只读自报。
+- 全仓 191 条接口：`tolerance` 190、`check` 191、`note` 113；**第一等证据指针 0**；临时 `params.runId` 16（仅运动/弹簧）；requirement 引用 0。9 个示例只有 1 个有 `claims.json`。
+- 顺带修掉两处接缝：`pearls/observe.ts` 只认 `too-tight`（连字符）而生产端写 `too_tight`（下划线），`verify` 对 r037 报"过紧 0"而 run 摘要说 17，已改为同时接受三种拼写；manifest 的 inline `datums` 是版本库的子集，导致"悬空端点"误判，已在 `inspectAssemblyContract` 产出 `model.datum-list-drift`（info，不改变 model 行状态）。
+- `accept-verify` / `accept-fit-observer` / `accept-project-standards` / `accept-write-assembly` / `accept-row-regressions` 全过；`tsc --noEmit` 仅剩与本决策无关的 `deliver-plan.ts` / `process-catalog.ts` 两处既存错误。
+
+**影响：** `src/host/pearls/observe.ts`、`src/host/write-assembly.ts`、`src/host/pearls/model.ts`、`src/host/verify/rows.ts`、`docs/llm/assembly.md`；后续改 `schemas/assembly-manifest.schema.json` 与 `verify` 的 model 行。`DESIGN.md §31` 在三根链接落地后再同步，本轮只记录方向。
+
+**非目标：** 不恢复珍珠执行层，不做自动修复/迭代，不设 owner/SLA，不把 `note` 升级成结构化需求树。
+
 ## 2026-11-12：0.1.0-preview 的外壳策略：风险标注导出 + 可选后端
 
 **触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响导出路由、面板交互、后端解析与安装流程）。
@@ -5826,3 +5852,30 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** `accept-sheet2d` 16/16、`accept-turning` 10/10、`accept-cnc-access` 8/8、`accept-edm-access` 6/6、`accept-process-profiles` 全过；`accept-tool-contracts`/`accept-skill-tools`/`accept-tool-groups`/`accept-tool-output`/`accept-verify`/`accept-row-regressions`/`accept-preflight` 全过；`tsc` 0；`build` 成功；目录扫描 `planned: (none)`。
 
 **影响：** `process-catalog.ts`、`schemas/examples/*.json`、`docs/llm/processes.md`、`deliver-plan.ts`、`skills/cad-toolbox`。若以后要做真实展开图，需要引入折弯角/厚度/中性层模型或原始平板 DXF，另立评估器，不在本轮冒充。
+
+## 2026-11-12：draft 空锥只在“可负担”时穷尽证明，密网格降级为采样估计
+
+**触发条件：** 第 4 条（改变证据语义：什么算“排除”），并影响注塑 profile 的可用范围。
+
+**要解决的问题：** 插芯方向的可行锥求解器为了**证明空锥**，枚举“法线中心 + 两两圆交点”，复杂度 O(k²)（k=不同法线数）。click-pen 转子有 1529 个不同法线，k²≈4.7M，45s 都跑不完——注塑 profile 一开 draft 就让整个 `check_printability` 超时，密网格零件永远拿不到拔模结论。
+
+**决策内容：**
+
+- 分三段：
+  1. **法线中心**（精确、便宜）：任一条中心方向满足所有面即锥非空；
+  2. **穷尽枚举**（仅当 k ≤ 400）：保留“中心 + 两两圆交点”，空锥可被**证明**；
+  3. **采样球面**（8000 方向）：找不到可行方向时报“采样的抽芯方向里没有一条满足”，并带 `proven:false`。
+- 语义：`coneEmpty=true` 只可能出现在**穷尽**分支（`proven=true`）；采样分支永远不产生硬排除，只把 verdict 降为 `difficult`。
+- 工具文本明确区分“余量过小（已证明）”与“采样未找到（估计）”。
+
+**理由：** 排除需要证明，估计只能降级——这是仓库一贯的“proof for exclusion, estimate for the positive side”。不这样做，要么密网格永远超时，要么把“没找到”冒充“不存在”。
+
+**依据：**
+
+- `accept-p3` 全过，包括 45° draft cube 仍被排除（`excluded`，witness 34.89°/45°）、1° 不排除、0.39° 余量记 `difficult`。
+- 同一 rotor v089：修复前 47s 且 draft 超时；修复后 **3.1s**，输出“最好方向最差面拔模 0.49°，要求 1°，差 0.508°”并给出收紧面坐标。
+- cap v083：2.6s → 0.32s。
+
+**影响：** `python/cad_worker/worker.py` 的 draft 块、`src/host/tools.ts` 的 marginal 文案与 `DraftSolve.proven`。密网格零件（k>400）的“拔模不满足”今后是 `difficult` 而非 `excluded`。
+
+**非目标 / 后续：** 不改拔模定义、不降低要求角度。要把密网格也升级成证明，需要半空间/线性规划求交，而不是继续加法线；本轮不做。

@@ -5321,7 +5321,11 @@ def op_check_printability(params: dict) -> dict:
     import trimesh
 
     wall_min_mm = float(params.get("wallMinMm") or 1.2)
-    overhang_deg = float(params.get("overhangDeg") or 45)
+    # A declared null means "this process has no overhang limit" (molding). It is
+    # different from "use the default": judging a molded part by an FDM support
+    # angle is a wrong ruler, not a conservative one.
+    overhang_off = "overhangDeg" in params and params.get("overhangDeg") is None
+    overhang_deg = 45.0 if overhang_off else float(params.get("overhangDeg") or 45)
     target_samples = max(100, min(int(params.get("samples") or 600), 4000))
 
     vertices, faces, _degenerate = _weld_raw(_parse_stl_raw(params["path"]))
@@ -5343,7 +5347,8 @@ def op_check_printability(params: dict) -> dict:
     z_floor = float(points[:, 2].min())
 
     # down-facing overhang: normal points below horizontal by overhangDeg
-    overhang_sin = math.sin(overhang_deg * math.pi / 180)
+    # +2 > 1 makes the mask impossible: no face is 'steeper than 2'.
+    overhang_sin = 2.0 if overhang_off else math.sin(overhang_deg * math.pi / 180)
     # 阈值余量：正好 45° 的面（数学上恰在界上）在 float32/float64 之间只差 1 ULP，
     # 严格 `<` 会让它们的归属由浮点噪声决定——实测 toy-balance v069：8 个 45° 面
     # 合计 50.1mm²（占悬垂面积 3.4%）在两种实现间翻来覆去。界上的面按"可桥接"处理，
@@ -5708,42 +5713,65 @@ def op_check_printability(params: dict) -> dict:
             rho = math.radians(cap_radius)
             cos_rho, sin_rho = math.cos(rho), math.sin(rho)
             centres = np.vstack([dirs_f, -dirs_f])
-            candidates = [c for c in centres]
             k2 = len(centres)
-            for a in range(k2):
-                for b in range(a + 1, k2):
-                    u, v = centres[a], centres[b]
-                    gamma = math.acos(max(-1.0, min(1.0, float(u @ v))))
-                    if gamma > 2.0 * rho + 1e-12:
-                        continue
-                    e = v - float(v @ u) * u
-                    ne = float(np.linalg.norm(e))
-                    if ne < 1e-12 or abs(sin_rho) < 1e-12:
-                        continue
-                    e = e / ne
-                    w = np.cross(u, e)
-                    cos_t = (cos_rho - cos_rho * float(u @ v)) / (sin_rho * float(e @ v))
-                    if abs(cos_t) > 1.0 + 1e-9:
-                        continue
-                    t = math.acos(max(-1.0, min(1.0, cos_t)))
-                    for sgn in (1.0, -1.0):
-                        candidates.append(cos_rho * u + sin_rho * (math.cos(t * sgn) * e + math.sin(t * sgn) * w))
-
-            cone_empty = True
+            candidates_checked = k2
+            cone_empty = False
+            proven = False
             best_cand = None
-            for cand in candidates:
-                nlen = float(np.linalg.norm(cand))
-                if nlen < 1e-12:
-                    continue
-                unit = cand / nlen
-                margin_c = float((np.degrees(np.arcsin(np.clip(np.abs(dirs_f @ unit), 0.0, 1.0))) - delta_deg).min())
-                if best_cand is None or margin_c > best_cand[0]:
-                    best_cand = (margin_c, unit)
-                if margin_c >= -1e-9:
-                    cone_empty = False
-                    break
 
-            N = 20000                                    # Fibonacci sphere
+            # PHASE 1 (exact, cheap): a cap centre that meets every face is a
+            # feasible direction — one witness direction proves the cone non-empty.
+            centre_margins = np.degrees(np.arcsin(np.clip(np.abs(centres @ dirs_f.T), 0.0, 1.0))) - delta_deg
+            centre_worst = centre_margins.min(axis=1)
+            if float(centre_worst.max()) >= -1e-9:
+                k = int(np.argmax(centre_worst))
+                best_cand = (float(centre_worst[k]), centres[k])
+
+            # PHASE 2 (exact, bounded): enumerate cap centres + pairwise circle
+            # intersections, which decides emptiness exactly. The count is O(k^2),
+            # so it is only affordable for a small number of distinct normals.
+            # At delta=1 deg the caps are 89 deg wide and this set explodes; the
+            # sampled phase below is what keeps a dense part from timing out.
+            if best_cand is None and k2 <= 400:
+                cap_radius = 90.0 - delta_deg
+                rho = math.radians(cap_radius)
+                cos_rho, sin_rho = math.cos(rho), math.sin(rho)
+                candidates = [c for c in centres]
+                for a in range(k2):
+                    for b in range(a + 1, k2):
+                        u, v = centres[a], centres[b]
+                        gamma = math.acos(max(-1.0, min(1.0, float(u @ v))))
+                        if gamma > 2.0 * rho + 1e-12:
+                            continue
+                        e = v - float(v @ u) * u
+                        ne = float(np.linalg.norm(e))
+                        if ne < 1e-12 or abs(sin_rho) < 1e-12:
+                            continue
+                        e = e / ne
+                        w = np.cross(u, e)
+                        cos_t = (cos_rho - cos_rho * float(u @ v)) / (sin_rho * float(e @ v))
+                        if abs(cos_t) > 1.0 + 1e-9:
+                            continue
+                        t = math.acos(max(-1.0, min(1.0, cos_t)))
+                        for sgn in (1.0, -1.0):
+                            candidates.append(cos_rho * u + sin_rho * (math.cos(t * sgn) * e + math.sin(t * sgn) * w))
+                candidates_checked = len(candidates)
+                cone_empty = True
+                proven = True
+                for cand in candidates:
+                    nlen = float(np.linalg.norm(cand))
+                    if nlen < 1e-12:
+                        continue
+                    unit = cand / nlen
+                    margin_c = float((np.degrees(np.arcsin(np.clip(np.abs(dirs_f @ unit), 0.0, 1.0))) - delta_deg).min())
+                    if best_cand is None or margin_c > best_cand[0]:
+                        best_cand = (margin_c, unit)
+                    if margin_c >= -1e-9:
+                        cone_empty = False
+                        best_cand = (margin_c, unit)
+                        break
+
+            N = 8000 if nf > 600 else 20000              # Fibonacci sphere
             kk = np.arange(N) + 0.5
             zz = 1.0 - 2.0 * kk / N
             rr = np.sqrt(np.maximum(0.0, 1.0 - zz * zz))
@@ -5770,7 +5798,8 @@ def op_check_printability(params: dict) -> dict:
                 "requiredDraftDeg": delta_deg,
                 "distinctOrientations": nf,
                 "coneEmpty": cone_empty,
-                "candidatesChecked": len(candidates),
+                "proven": proven,
+                "candidatesChecked": candidates_checked,
                 "bestCandidateMarginDeg": round(float(best_cand[0]), 3) if best_cand else None,
                 "bestCandidateDirectionMm": [round(float(x), 4) for x in best_cand[1]] if best_cand else None,
                 "feasiblePct": round(float(feasible.mean() * 100.0), 3),
@@ -5782,8 +5811,10 @@ def op_check_printability(params: dict) -> dict:
                 "bestMarginDeg": round(float(worst[best_k]), 3),
                 "constrainingFaces": constraining,
                 "directionsSampled": N,
-                "note": ("feasiblePct is a SAMPLED estimate of the cone; infeasibility is "
-                         "proved separately by the pairwise contradiction test"),
+                "note": ("feasiblePct is a SAMPLED estimate of the cone. coneEmpty is only "
+                         "set when the exhaustive candidate set was affordable (proven=true); "
+                         "on a dense part the answer is 'no sampled direction meets draft', "
+                         "which is not a proof"),
             }
 
     findings = []
@@ -5806,7 +5837,7 @@ def op_check_printability(params: dict) -> dict:
             " — 薄**壳**（两自由面近似平行、成片）会断或翘；实心件收敛到棱线的**薄边**"
             "（翼型前后缘那种）不属此列，用薄区面积占比区分"
         )
-    if overhang_area > 20:
+    if overhang_area > 20 and not overhang_off:
         findings.append(
             f"{_js_to_fixed(overhang_area, 0)}mm² 朝下悬垂面比 {overhang_deg}° 更平"
             f"（z ∈ [{_js_to_fixed(overhang_z_min, 0)}, {_js_to_fixed(overhang_z_max, 0)}]）"

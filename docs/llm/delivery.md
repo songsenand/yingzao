@@ -46,6 +46,13 @@
    (motion-clearance, yes, yes) is unverified no matter what the report says —
    "N interfaces, 0 hard violations" cannot speak about a mechanism the contract
    cannot fail on.
+
+   A motion run now stores its **input** beside the result: `runs/<id>/motion-spec.json`
+   holds parts (version or inline code), placement, joints, drive and cycles. Replay it on
+   newer versions with `node scripts/replay-motion.mjs <project> <runId> --set part=vNNN`;
+   that is a normal `simulate_motion` call and writes a new run. Runs older than this have
+   no spec and `verify` reports them as `motion-not-replayable` — for those, re-running
+   still means rebuilding the mechanism by hand.
 7. **Run `delivery_audit` before any delivery claim, and answer its findings.**
    It reads the corpus (not your memory) and returns: failing runs that are
    still newest of their kind, stale evidence (`stale-evidence`), versions nobody

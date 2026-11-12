@@ -99,6 +99,11 @@ export interface ManifestInterface {
   layer?: VerdictLayer;             // defaults derived from type
   check?: string;                   // operator name; defaults derived from type
   params?: Record<string, number>;  // legacy numeric bag: spring freeLength/stiffness; flow inlet/outlet
+  /**
+   * Declared external evidence: the run that proved the half this engine cannot
+   * decide (motion travel, spring behaviour). `params.runId` is the legacy alias.
+   */
+  evidence?: { runId: string; note?: string };
   /** General elastic-behaviour declaration; takes precedence over `params`. */
   elastic?: ElasticInterfaceSpec;
   note?: string;                    // design intent — human- and LLM-readable

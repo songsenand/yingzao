@@ -116,7 +116,11 @@ function countNodes(node: ManifestNode): { children: number; interfaces: number 
   return { children, interfaces };
 }
 
-export async function validateEndpoints(project: ProjectStores, root: ManifestNode): Promise<string[]> {
+export async function validateEndpoints(
+  project: ProjectStores,
+  root: ManifestNode,
+  warnings: string[] = [],
+): Promise<string[]> {
   const errors: string[] = [];
   const datumCache = new Map<string, Awaited<ReturnType<typeof readVersionDatums>>>();
   const namesOf = async (version: string) => {
@@ -165,6 +169,13 @@ export async function validateEndpoints(project: ProjectStores, root: ManifestNo
         if (!names.includes(datum)) {
           errors.push(`${path.join('/')} ${iface.id}: datum "${datum}" not found in ${childId} ${child.version}` +
             (names.length ? ` (available: ${names.slice(0, 12).join(', ')}${names.length > 12 ? ', …' : ''})` : ' (version declares no datums)'));
+        } else if ((child.datums ?? []).length > 0 && !(child.datums ?? []).some((d) => d.name === datum)) {
+          // The version store is authoritative for part datums; the node's
+          // inline `datums` array is an optional human hint. When an endpoint
+          // resolves only against the version, say so — otherwise a reader
+          // takes the shorter inline list for the complete one.
+          warnings.push(`${path.join('/')} ${iface.id}: "${address}" resolves against ${child.version}'s datums, ` +
+            `but ${childId}'s inline datums omit "${datum}" (the version store is authoritative)`);
         }
       }
     }
@@ -183,6 +194,8 @@ export interface AssemblyContractInspection {
   manifestPath: string;
   counts: { children: number; interfaces: number } | null;
   issues: string[];
+  /** Non-blocking: the manifest's inline datum list is narrower than the version store. */
+  warnings: string[];
 }
 
 /** Read-only validation used by the model pearl; never writes. */
@@ -193,19 +206,21 @@ export async function inspectAssemblyContract(
   const target = isAbsolute(manifestPath) ? manifestPath : join(project.cwd, manifestPath);
   const rel = relative(project.cwd, target);
   if (rel.startsWith('..') || isAbsolute(rel)) {
-    return { manifestPath: target, counts: null, issues: [`manifestPath escapes the project workspace: ${manifestPath}`] };
+    return { manifestPath: target, counts: null, issues: [`manifestPath escapes the project workspace: ${manifestPath}`], warnings: [] };
   }
   let manifest: AssemblyManifest;
   try {
     manifest = await loadAssemblyManifest(target);
   } catch (e) {
-    return { manifestPath: target, counts: null, issues: [String(e)] };
+    return { manifestPath: target, counts: null, issues: [String(e)], warnings: [] };
   }
-  const endpointErrors = await validateEndpoints(project, manifest.root);
+  const warnings: string[] = [];
+  const endpointErrors = await validateEndpoints(project, manifest.root, warnings);
   return {
     manifestPath: target,
     counts: countNodes(manifest.root),
     issues: endpointErrors,
+    warnings,
   };
 }
 
@@ -276,7 +291,7 @@ export async function writeAssembly(project: ProjectStores, input: WriteAssembly
   if (issues.length) {
     throw new Error(`schema validation failed:\n${issues.map((i) => `- ${i.path}: expected ${i.expected}, got ${i.got}`).join('\n')}`);
   }
-  const endpointErrors = await validateEndpoints(project, root);
+  const endpointErrors = await validateEndpoints(project, root, warnings);
   if (endpointErrors.length) throw new Error(`endpoint validation failed:\n${endpointErrors.map((e) => `- ${e}`).join('\n')}`);
 
   const text = textOf(next);

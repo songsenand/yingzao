@@ -16,7 +16,7 @@ import { writeJsonAtomic } from './file-lock.ts';
 import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
 import { listParts, partRoleOf } from './parts.ts';
 import { listRuns, type RunEntry } from './runs.ts';
-import { listVersions, type VersionManifestEntry } from './version.ts';
+import { datumNames, listVersions, readVersionDatums, type VersionManifestEntry } from './version.ts';
 import { mergedInputVersionIds, newestVersionPerPart, supersededVersionIds } from './latest.ts';
 // The unregistered-geometry scan lives in its own module because the panel's
 // 未登记 category consumes the SAME list: two implementations would drift and
@@ -80,7 +80,7 @@ export interface DeliveryAudit {
     interfaces: number;
     byCheck: Record<string, number>;
     /** Manifest part nodes pointing at a version that is no longer the newest. */
-    staleNodes: { name: string; version: string; newest: string }[];
+    staleNodes: { name: string; version: string; newest: string; newestDatums?: number }[];
     /** True when the newest version is POSTERIOR to the newest contract check. */
     geometryNewerThanCheck: boolean;
   };
@@ -149,7 +149,21 @@ export async function auditDelivery(
     .filter((r) => r.superseded.length > 0);
   const failing = runs
     .filter((r) => r.status === 'fail')
-    .map((r) => ({ id: r.id, kind: r.kind, summary: r.summary }));
+    .map((r) => ({ id: r.id, kind: r.kind, summary: r.summary, sourceVersionIds: r.sourceVersionIds ?? [] }));
+
+  // A part-scope failure is only actionable with its subject. The run entry
+  // carries the version ids; the version index carries the part id; the parts
+  // index carries the human name. Join them once, here.
+  const partScope = new Set(['printability', 'sheet2d', 'turning']);
+  const subjectOf = (run: { kind: string; sourceVersionIds?: string[] }): string => {
+    if (!partScope.has(run.kind)) return '';
+    const names = (run.sourceVersionIds ?? []).map((vid) => {
+      const pid = versionById.get(vid)?.partId;
+      const name = pid ? parts.find((x) => x.id === pid)?.name : undefined;
+      return name ? `${name} ${vid}` : vid;
+    });
+    return names.length ? `on ${names.slice(0, 3).join(', ')}` : '';
+  };
 
   // Duplicate work: same kind, same cited geometry, same outcome.
   const groups = new Map<string, RunEntry[]>();
@@ -204,6 +218,18 @@ export async function auditDelivery(
       for (const child of node?.children ?? []) walk(child);
     };
     walk(root);
+
+    // "Update to the newest version" is only safe when the newest version can
+    // still be an endpoint. A regeneration that dropped its datum() calls cannot
+    // (rotor v088), and saying so here is the difference between a contract fix
+    // and a dead end.
+    for (const node of contract.staleNodes) {
+      try {
+        node.newestDatums = datumNames(await readVersionDatums(project.store, node.newest)).length;
+      } catch {
+        node.newestDatums = undefined;
+      }
+    }
 
     const newestCheck = newestOf(runs.filter((r) => r.kind === 'assembly-check'));
     const newestVersion = newestOf(versionList);
@@ -367,14 +393,17 @@ export async function auditDelivery(
 
   for (const [kind, latest] of Object.entries(latestByKind)) {
     if (latest.status === 'fail') {
+      const subject = subjectOf(runs.find((x) => x.id === latest.id) ?? { kind, sourceVersionIds: [] });
       push('blocked', `latest-${kind}-failing`,
-        `the newest ${kind} run (${latest.id}) is RED — the current design has an unresolved blocking result`);
+        `the newest ${kind} run (${latest.id})${subject ? ` ${subject}` : ''} is RED` +
+        ' — the current design has an unresolved blocking result');
     }
   }
   for (const r of failing) {
     const isLatest = latestByKind[r.kind]?.id === r.id;
     if (!isLatest) continue;
-    push('blocked', `failing-${r.kind}`, `${r.id} (${r.kind}) failed: ${r.summary}`);
+    const subject = subjectOf(r);
+    push('blocked', `failing-${r.kind}`, `${r.id} (${r.kind}) failed: ${r.summary}${subject ? ` — ${subject}` : ''}`);
   }
   if (newestNeverValidated.length > 0) {
     push('blocked', 'newest-version-unvalidated',
@@ -400,6 +429,16 @@ export async function auditDelivery(
     push('warn', 'stale-evidence',
       `${staleRuns.length}/${runs.length} runs cite geometry that has since been replaced — e.g. ${sample.join(', ')}`);
   }
+  // A motion run without its input is result-only: you can read what happened,
+  // but you cannot re-run it on a new version without rebuilding the mechanism.
+  const motionRuns = runs.filter((r) => r.kind === 'motion');
+  const nonReplayable = motionRuns.filter((r) => !existsSync(join(project.runStore.root, r.id, 'motion-spec.json')));
+  if (nonReplayable.length > 0) {
+    push('info', 'motion-not-replayable',
+      `${nonReplayable.length}/${motionRuns.length} motion run(s) predate motion-spec.json and cannot be replayed: ` +
+      nonReplayable.slice(0, 5).map((r) => r.id).join(', ') + (nonReplayable.length > 5 ? ' …' : '') +
+      ' — re-running them means rebuilding the joints/drive by hand');
+  }
   if (contract.interfaces > 0 && !contract.byCheck['motion-clearance'] && parts.length > 1) {
     push('warn', 'contract-without-motion',
       'the contract declares interfaces but NO motion-clearance one: the mechanism is not part of the contract, ' +
@@ -412,7 +451,8 @@ export async function auditDelivery(
   if (contract.staleNodes.length > 0) {
     push('warn', 'contract-stale-nodes',
       `${contract.staleNodes.length} manifest node(s) point at a replaced version: ` +
-      contract.staleNodes.map((n) => `${n.name} ${n.version}→${n.newest}`).join(', '));
+      contract.staleNodes.map((n) => `${n.name} ${n.version}→${n.newest}` +
+        (n.newestDatums === 0 ? ' (newest declares no datums — declare anchors before moving the contract)' : '')).join(', '));
   }
   const nameList = (list: UnregisteredFile[]): string =>
     `${list.slice(0, 5).map((f) => f.path).join(', ')}${list.length > 5 ? ` … (+${list.length - 5})` : ''}`;

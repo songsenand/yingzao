@@ -9,7 +9,7 @@
 // Hermetic, and needs NO Python/OpenSCAD: it stores bytes directly through saveVersion.
 //
 //   node scripts/accept-set-datums-versioned.mjs
-import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,7 +19,7 @@ process.env.DSH_HOME = home;
 await mkdir(join(workspace, 'cad-data'), { recursive: true });
 
 const { registerCadTools } = await import('../src/host/tools.ts');
-const { openVersionStore, saveVersion, readVersionDatums, listVersions } = await import('../src/host/version.ts');
+const { datumDriftForPart, datumNames, openVersionStore, saveVersion, readVersionDatums, listVersions } = await import('../src/host/version.ts');
 const { openPartStore, ensurePart, attachVersion, listParts } = await import('../src/host/parts.ts');
 
 let failures = 0;
@@ -72,6 +72,16 @@ check(setNames(await readVersionDatums(store, v1)).length === 0, 'the old versio
 check(setNames(await readVersionDatums(store, v2)).join(',') === '顶面', 'the new version carries the anchor',
   setNames(await readVersionDatums(store, v2)).join(','));
 
+// A regeneration that forgets its datum() calls must not be silent: the helper
+// names what would disappear, so generate_part can warn before the save.
+const driftDrop = await datumDriftForPart(store, part.id, []);
+check(driftDrop?.versionId === v2 && driftDrop.missing.includes('point:顶面'),
+  'dropping every anchor names the last version that had them and what is missing',
+  JSON.stringify(driftDrop));
+const driftKeep = await datumDriftForPart(store, part.id, ['point:顶面']);
+check(driftKeep === null, 'keeping the anchor reports no drift', JSON.stringify(driftKeep));
+check(datumNames(await readVersionDatums(store, v2)).includes('point:顶面'), 'the comparison uses the same name form');
+
 // The mesh is copied byte-for-byte: geometry is unchanged, so every measurement past the
 // anchors still means the same thing.
 const a = new Uint8Array(await readFile(join(workspace, 'cad-data', 'versions', v1, 'model.stl')));
@@ -105,9 +115,19 @@ const v3Datums = setNames(await readVersionDatums(store, v3)).sort().join(',');
 check(v3Datums === '底面,顶面', 'the third version has both anchors', v3Datums);
 check(setNames(await readVersionDatums(store, v2)).length === 1, 'and the second still has only its own');
 
+// ── a metadata repair says what it just invalidated ───────────────────────
+await writeFile(join(workspace, 'cad-data', 'versions', v3, 'visual-review.json'),
+  JSON.stringify({ views: ['top', 'iso'], reviewedAt: new Date().toISOString() }));
+const afterReview = await call('set_datums', {
+  versionId: v3, datums: [{ name: '侧面', kind: 'point', point: [5, 0, 0] }],
+});
+const v4 = afterReview.value.versionId;
+const reviewWarn = afterReview.value.warnings.find((w) => /visual review/.test(w)) ?? '';
+check(/has none/.test(reviewWarn), 'an anchor edit warns that the old visual review does not carry over', reviewWarn);
+
 // ── nothing was left in a scratch state ───────────────────────────────────
 const verDirs = (await readdir(join(workspace, 'cad-data', 'versions'))).sort();
-check(verDirs.join(',') === [v1, v2, v3].sort().join(','), 'exactly three version directories exist', verDirs.join(','));
+check(verDirs.join(',') === [v1, v2, v3, v4].sort().join(','), 'exactly four version directories exist', verDirs.join(','));
 check((await stat(join(workspace, 'cad-data', 'versions', v3, 'model.stl'))).size === STL.length,
   'the third version has its mesh on disk');
 

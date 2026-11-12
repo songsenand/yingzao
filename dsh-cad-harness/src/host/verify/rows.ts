@@ -124,6 +124,18 @@ export async function evaluateRows(
         if (obs.issues.length > 0 && obs.failures.length === 0) {
           findings.push(evidenceMissingDraft('model', 'model.contract-invalid', obs.issues.join('; ')));
         }
+        // Reader-facing drift only: the endpoint resolved against the version
+        // store, but the node's inline datum list is shorter. Info, never warn:
+        // the contract is valid, the surface is just misleading.
+        for (const warning of obs.warnings) {
+          findings.push({
+            row: 'model', code: 'model.datum-list-drift', outcome: 'info', severity: 'info',
+            what: warning,
+            why: ['part datums are authoritative in the version store', 'the node datums array is an optional human hint'],
+            where: { kind: 'manifest', note: 'assembly.json' },
+            next: ['read datums from the version, or update the node list so it matches'],
+          });
+        }
       } catch (e) {
         findings.push(evidenceMissingDraft('model', 'model.contract-invalid', `model check failed: ${String((e as Error)?.message ?? e)}`));
       }

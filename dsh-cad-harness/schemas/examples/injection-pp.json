@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "id": "injection-pp",
+  "process": "injection",
+  "material": "PP",
+  "machine": "generic small-part injection tool (not a specific press)",
+  "description": "Injection molding, polypropylene, small precision parts (click pens, cases). The additive rules are turned OFF rather than set to zero: overhang and bridging are not manufacturing limits when the melt fills a closed cavity. Draft, wall and hole aspect are the governing geometry; fill/pack, sink, warp and gate location remain handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.8,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "PP nominal wall ~0.8-3mm; below 0.8 is a local feature that needs fill analysis"
+      },
+      "detail": "Small parts can run 0.6mm locally, but that is a decision backed by a fill study, not a default."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "steel-safe minimum for small PP parts"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "below ~0.3 the shut-off flashes; it is a tooling feature, not a part feature"
+      },
+      "detail": "A declared zero-gap fit is not judged by this rule (the contract tolerance is the ruler)."
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No support concept: the melt fills a closed cavity, so a down-facing face is not a manufacturing limit. Judging a molded part by an FDM overhang rule was a wrong ruler, not a conservative one."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "A bridge is an unsupported span in additive; in a mold the cavity supports the melt."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 4,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "core-pin L/D; long small cores deflect and wear"
+      }
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1,
+      "direction": "min",
+      "source": {
+        "kind": "literature",
+        "ref": "typical 1-2 deg per side for PP; textured faces need more"
+      },
+      "detail": "Evaluated by the best-pull-direction draft solver; undercuts that cannot be pulled are reported separately. Dense meshes can exceed the solver budget; that is reported as undetermined, never as a pass."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Venting is a tooling detail (parting-line vents, ejector-pin vents); trapped gas is a fill/pack handoff, not a part-geometry rule."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "PP shrinkage 1.5-2%; achievable tolerance depends on dimension and tool"
+      },
+      "detail": "A capability, not a geometric fact: excluding on it needs a requirement declared elsewhere."
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 1.6,
+      "direction": "max",
+      "source": {
+        "kind": "literature",
+        "ref": "polished PP tool; texture is a tool decision"
+      },
+      "detail": "Reported for information only. Never used to exclude."
+    }
+  },
+  "notes": "The click-pen rotor was excluded by fdm-pla-0.4 for a 217.8mm2 overhang that injection molding does not have. This profile replaces that ruler, not the measurement: the 0.36mm wall is still below 0.8 and still fails, which is a real design question rather than a process mismatch."
+}

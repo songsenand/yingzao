@@ -15,6 +15,7 @@
 // mm / z-up. Datums are part-local; transforms are applied here (rotate about
 // X then Y then Z in degrees, matching Manifold rotate, then translate).
 
+import { citedRunId } from './evidence-pointer.ts';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -1077,14 +1078,14 @@ export async function runAssemblyCheckInTs(
         // second half is decided by `simulate_motion`; an interface that names
         // the run which proved it gets the two halves tied together here
         // instead of being reported as an unimplemented check forever.
-        const cited = typeof iface.params?.runId === 'string' ? String(iface.params.runId) : null;
+        const cited = citedRunId(iface);
         if (!cited) {
-          r.detail += ' — motion half NOT evidenced: run simulate_motion over the travel and cite it with params.runId';
+          r.detail += ' — motion half NOT evidenced: run simulate_motion over the travel and cite it with evidence.runId';
         } else {
           const run = opts.runs?.find((x) => x.id === cited);
           if (!run) {
             r.verdict = 'hard-violation';
-            r.detail += ` — params.runId "${cited}" names no run in this project`;
+            r.detail += ` — cited run "${cited}" names no run in this project`;
           } else if (run.kind !== 'motion') {
             r.verdict = 'hard-violation';
             r.detail += ` — run ${cited} is a ${run.kind} run, not a motion run`;

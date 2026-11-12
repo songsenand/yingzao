@@ -46,6 +46,14 @@ async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
 
+// A count tells the reader something is wrong; the names tell them where.
+// Three is enough to start looking and short enough to stay on one line.
+function pairHint(list: any[]): string {
+  return list.slice(0, 3)
+    .map((p) => `${p.partA}↔${p.partB}${p.minDistance === undefined ? '' : ` ${Number(p.minDistance).toFixed(2)}mm`}`)
+    .join(', ');
+}
+
 function latest(runs: RunEntry[], kind: string): RunEntry | undefined {
   return runs
     .filter((r) => r.kind === kind)
@@ -164,6 +172,37 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
   let contractReport: any = null;
 
   let interferenceOk = false;
+  if (contract) {
+    try {
+      contractReport = await readJson<any>(join(cadData, 'runs', contract.id, 'report.json'));
+    } catch {
+      contractReport = null;
+    }
+  }
+
+  // A declared interface is the design's own clearance statement. When a
+  // too-tight pair IS that interface and the measured distance sits inside its
+  // tolerance, the global minimum-clearance threshold is the wrong ruler for
+  // it. Undeclared pairs keep the global threshold.
+  const declaredTolerances = new Map<string, { min: number; max: number }[]>();
+  for (const r of Array.isArray(contractReport?.results) ? contractReport.results : []) {
+    const a = String(r?.a ?? '').split('.')[0];
+    const b = String(r?.b ?? '').split('.')[0];
+    const tol = r?.expected ?? r?.tolerance;
+    if (!a || !b || a === b) continue;
+    if (typeof tol?.min !== 'number' || typeof tol?.max !== 'number') continue;
+    const key = [a, b].sort().join('\u0000');
+    const list = declaredTolerances.get(key) ?? [];
+    list.push({ min: tol.min, max: tol.max });
+    declaredTolerances.set(key, list);
+  }
+  const coveredByContract = (p: any): boolean => {
+    const list = declaredTolerances.get([String(p.partA), String(p.partB)].sort().join('\u0000'));
+    if (!list) return false;
+    const d = Number(p.minDistance ?? 0);
+    return list.some((t) => d >= t.min - 1e-9 && d <= t.max + 1e-9);
+  };
+
   if (!assembly) {
     findings.push({
       code: 'missing-assembly',
@@ -179,18 +218,47 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
     const epsilon = Number(report.interferenceEpsilonMm3 ?? 0);
     const offenders = pairs.filter((p) => Number(p.intersectionVolume ?? 0) > epsilon).slice(0, 10)
       .map((p) => ({ partA: p.partA, partB: p.partB, intersectionVolume: p.intersectionVolume, minDistance: p.minDistance }));
-    const tightPairs = pairs.filter((p) => p.status === 'too-tight' || p.status === 'tight').slice(0, 10)
+    // Canonical pair status is `too_tight` (assembly.ts). Older reports/tools
+    // also wrote `too-tight` / `tight`; matching only one spelling silently
+    // reports "too-tight=0" while the run itself says 17.
+    const isTight = (p: any) => p.status === 'too_tight' || p.status === 'too-tight' || p.status === 'tight';
+    const tightAll = pairs.filter(isTight);
+    const tightCovered = tightAll.filter(coveredByContract);
+    const tightUncovered = tightAll.filter((p) => !tightCovered.includes(p));
+    const tightPairs = tightUncovered.slice(0, 10)
       .map((p) => ({ partA: p.partA, partB: p.partB, minDistance: p.minDistance, status: p.status }));
     const interference = pairs.filter((p) => Number(p.intersectionVolume ?? 0) > epsilon).length;
-    const tight = pairs.filter((p) => p.status === 'too-tight' || p.status === 'tight').length;
-    interferenceOk = report.overallStatus === 'pass' && interference === 0 && tight === 0;
+    const tight = tightUncovered.length;
+    // `overallStatus` is the raw tool verdict; a declared fit inside tolerance
+    // explains a too-tight pair without overriding the measurement.
+    const watertight = (Array.isArray(report.parts) ? report.parts : []).every((p: any) => p.watertight !== false);
+    const declaredExplains = tightAll.length > 0 && tightUncovered.length === 0 && interference === 0 && watertight;
+    interferenceOk = (report.overallStatus === 'pass' && interference === 0 && tight === 0) || declaredExplains;
+    const split = tightAll.length ? ` (${tightCovered.length} declared fit(s), ${tightUncovered.length} undeclared)` : '';
     if (!interferenceOk) {
       findings.push({
         code: 'interference',
         severity: 'hard',
-        message: `assembly ${assembly.id}: overall=${String(report.overallStatus)} interference=${interference} too-tight=${tight}`,
-        witness: { run: assembly.id, overallStatus: report.overallStatus, interference, tight, pairCount: pairs.length, offenders, tightPairs, epsilonMm3: epsilon },
+        message: `assembly ${assembly.id}: overall=${String(report.overallStatus)} interference=${interference} too-tight=${tightAll.length}${split}` +
+          (offenders.length ? ` — e.g. ${pairHint(offenders)}` : tightPairs.length ? ` — e.g. ${pairHint(tightPairs)}` : ''),
+        witness: {
+          run: assembly.id, overallStatus: report.overallStatus, interference, tight,
+          tightDeclared: tightCovered.length, tightUndeclared: tightUncovered.length,
+          pairCount: pairs.length, offenders, tightPairs, epsilonMm3: epsilon,
+        },
         attention: ['inspect the pair list in the run report'],
+      });
+    } else if (tightCovered.length > 0) {
+      findings.push({
+        code: 'declared-fit',
+        severity: 'info',
+        message: `assembly ${assembly.id}: ${tightCovered.length} too-tight pair(s) are declared fits inside their tolerance — ` +
+          'the global clearance threshold does not apply to them',
+        witness: {
+          run: assembly.id,
+          pairs: tightCovered.slice(0, 10).map((p) => ({ partA: p.partA, partB: p.partB, minDistance: p.minDistance })),
+        },
+        attention: ['no action while the declared tolerance is the intended fit'],
       });
     }
   }
@@ -205,7 +273,7 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
     });
   } else {
     sourceRuns.contract = contract.id;
-    const report = await readJson<any>(join(cadData, 'runs', contract.id, 'report.json'));
+    const report = contractReport ?? await readJson<any>(join(cadData, 'runs', contract.id, 'report.json'));
     contractReport = report;
     const summary = report.summary ?? {};
     const interfaces = Number(summary.interfaces ?? 0);
@@ -213,6 +281,7 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
     const undeclared = Number(summary.undeclared ?? 0);
     const undeclaredPairs = Array.isArray(report.undeclared) ? report.undeclared as any[] : [];
     const explainedPairs = undeclaredPairs.filter((p) => explained.has([String(p.partA), String(p.partB)].sort().join('\u0000')));
+    const unexplainedPairs = undeclaredPairs.filter((p) => !explained.has([String(p.partA), String(p.partB)].sort().join('\u0000')));
     const unexplained = Math.max(0, undeclared - explainedPairs.length);
     counts.interfaces = interfaces;
     counts.undeclared = unexplained;
@@ -254,9 +323,10 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
       findings.push({
         code: 'undeclared-adjacency',
         severity: strictUndeclared && interfaces > 0 ? 'hard' : 'warn',
-        message: interfaces > 0
+        message: (interfaces > 0
           ? `assembly-check ${contract.id}: ${interfaces} declared interfaces pass, but ${unexplained} contact pairs are still undeclared`
-          : `assembly-check ${contract.id}: no declared interfaces, and ${unexplained} contact pairs are undiscovered/uncontracted`,
+          : `assembly-check ${contract.id}: no declared interfaces, and ${unexplained} contact pairs are undiscovered/uncontracted`) +
+          (unexplainedPairs.length ? ` — e.g. ${pairHint(unexplainedPairs)}` : ''),
         witness: { run: contract.id, interfaces, hard, undeclared, explained: explainedPairs.length, unexplained, undeclaredPairs: undeclaredPairs.slice(0, 10) },
         attention: ['review undeclared pairs; declare the ones that are structural joints'],
       });
@@ -267,7 +337,8 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
       findings.push({
         code: 'no-declared-interfaces',
         severity: 'hard',
-        message: `assembly-check ${contract.id} has 0 declared interfaces (${undeclared} undeclared adjacencies); "0 hard violations" is vacuous`,
+        message: `assembly-check ${contract.id} has 0 declared interfaces (${undeclared} undeclared adjacencies); "0 hard violations" is vacuous` +
+          (undeclaredPairs.length ? ` — e.g. ${pairHint(undeclaredPairs)}` : ''),
         witness: { run: contract.id, interfaces, hard, undeclared },
         attention: ['declare interfaces in the assembly manifest', 'then re-run check_assembly'],
       });
@@ -275,7 +346,14 @@ export async function observeFit(cadData: string, options: ObserveFitOptions = {
       findings.push({
         code: 'hard-interface',
         severity: 'hard',
-        message: `assembly-check ${contract.id}: ${hard} hard violation(s)`,
+        message: `assembly-check ${contract.id}: ${hard} hard violation(s)` +
+          (() => {
+            const ids = (Array.isArray(report.results) ? report.results : [])
+              .filter((r: any) => r?.verdict === 'hard-violation')
+              .slice(0, 3)
+              .map((r: any) => String(r.interfaceId ?? ''));
+            return ids.length ? ` — ${ids.join(', ')}` : '';
+          })(),
         witness: { run: contract.id, interfaces, hard, undeclared, violations: (report.hardViolations ?? []).slice(0, 10) },
         attention: ['open the failing interface rows'],
       });

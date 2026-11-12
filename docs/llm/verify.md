@@ -34,11 +34,73 @@ The command is also exposed as `npm run verify -- <project-dir> [flags]`.
 
 Status is one vocabulary: `pass | warn | fail | blocked | unobserved`.
 
+The text report shows the first 8 non-info findings and then names the rest by
+code (`… 5 more: make.printability, stale-evidence, …`); `--json` has every
+finding. A count without a code was the old behaviour and invited guessing.
+
+Findings carry their witness, not just a count:
+
+- a failed **part-scope** run names its subject — `r056 (printability) failed: … — on rotor v088`;
+- a failed **assembly** run names the first three offending pairs with distance —
+  `too-tight=17 — e.g. base↔column 0.00mm, …`;
+- undeclared contacts and hard violations name their pairs / interface ids.
+
+`--json` keeps the full lists (`witness.tightPairs`, `witness.undeclaredPairs`,
+`witness.violations`); the text is the first three so one line stays readable.
+
+A motion run without `motion-spec.json` is result-only: it can be read but not replayed
+on a new version. `verify` reports those as `motion-not-replayable` (info, with run ids),
+so "re-run the motion on the new geometry" is an honest instruction only where it is possible.
+
 - `blocked`: evidence missing, stale, or inconsistent.
 - `fail`: a design/declared threshold is violated (e.g. printability excluded).
 - `warn`: weak evidence, `difficult`, or an explained/exception item.
 - `unobserved`: nothing to check, or not run. **Never a pass.**
 - A `not-applicable` case is `unobserved` with a reason; it is not a sixth status.
+
+## Per-interface ledger
+
+Below the six rows, `verify` joins the manifest with the newest **fresh**
+`assembly-check` run and prints one line:
+
+```text
+interfaces  32 · parts 17 · pass 30 · skipped 2 · unproven 0 · r036 fresh (manifest versions)
+```
+
+- `pass / fail / flagged / skipped` mirror the run's per-interface verdicts.
+- `unproven` means the interface has no result in the fresh run (it is new or
+  changed) — or there is no fresh run at all. It is never a pass.
+- A **stale** run proves nothing: its verdicts were computed on another version
+  set, so every interface stays `unproven` and the line says `STALE`.
+- `orphans` counts results in the run that no manifest interface names.
+- When anything is not `pass`, a second line lists up to six ids
+  (`interface issues: I10 flagged`).
+
+In `--json`, the same data is `interfaces.items[]`
+(`id, ownerPath, severity, check, declaredRunId?, status, verdict?, runId?, reason?`).
+Evidence here is **derived**, not declared: the check run already carries one
+result per interface, so no field is required for L0. `params.runId` (motion /
+spring) is surfaced as `declaredRunId` and does not by itself prove anything.
+
+"Fresh" means the run cites exactly the manifest's version set. It does **not**
+mean the manifest cites the newest geometry — that gap is `contract-stale-nodes`.
+
+## Two rulers: contract tolerance vs global clearance
+
+`validate_assembly` flags **any** pair closer than its threshold as `too_tight`, regardless of
+intent. A declared zero-gap fit therefore looks like a failure until someone reads the contract.
+
+`verify` splits the count:
+
+- a `too_tight` pair that **is** a declared interface and whose measured distance is inside that
+  interface's tolerance is explained (`declared-fit`, info) — the contract is the ruler for it;
+- an **undeclared** `too_tight` pair keeps the global clearance threshold and still fails;
+- if every `too_tight` pair is a declared fit inside tolerance and all parts are watertight,
+  `fit` passes with the `declared-fit` info instead of a silent green.
+
+The message carries the split (`too-tight=17 (9 declared fit(s), 8 undeclared)`) and the witness
+carries `tightDeclared` / `tightUndeclared`. This is evidence interpretation, not re-measurement:
+an out-of-tolerance declared fit is still caught by `check_assembly`'s `hard-interface`.
 
 ## Claims
 

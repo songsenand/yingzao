@@ -34,7 +34,8 @@ export interface MeasureReport {
 export interface PrintabilityOptions {
   versionId: string;
   wallMinMm?: number;
-  overhangDeg?: number;
+  /** `null` = this process has no overhang limit (molding); not the same as the default. */
+  overhangDeg?: number | null;
   samples?: number;
   /**
    * G6 (2026-10-29): the PRINT orientation as Rz·Ry·Rx degrees, applied before the
@@ -231,7 +232,8 @@ function withVersionInAttention(attention: AttentionField, versionId: string): A
  */
 export async function checkPrintabilityInTs(store: VersionStore, options: PrintabilityOptions): Promise<PrintabilityReport> {
       const wallMinMm = options.wallMinMm ?? 1.2;
-      const overhangDeg = options.overhangDeg ?? 45;
+      const overhangOff = options.overhangDeg === null;
+      const overhangDeg = overhangOff ? 45 : (options.overhangDeg ?? 45);
       const targetSamples = Math.max(100, Math.min(options.samples ?? 600, 4000));
 
       const bytes = new Uint8Array(await readFile(join(store.root, 'versions', options.versionId, 'model.stl')));
@@ -284,7 +286,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       // implementations. A face ON the limit is bridge-able, so it is not an overhang;
       // the 1e-9 slack is 7 orders above the noise and 7 below any meaningful angle.
       const OVERHANG_SIN_SLACK = 1e-9;
-      const overhangSin = Math.sin((overhangDeg * Math.PI) / 180) + OVERHANG_SIN_SLACK;
+      const overhangSin = overhangOff ? 2 : Math.sin((overhangDeg * Math.PI) / 180) + OVERHANG_SIN_SLACK;
       // The overhang half is arithmetic, so it runs over EVERY triangle: summing only
       // the sampled 1/step of them measures a fraction of the true area and reports it
       // as mm². The wall half stays sampled — it is the expensive ray cast.
@@ -590,7 +592,7 @@ export async function checkPrintability(store: VersionStore, options: Printabili
   const solved = await worker.request<PrintabilitySolve & { field?: AttentionFieldSamples }>('check_printability', {
     path,
     wallMinMm: options.wallMinMm ?? 1.2,
-    overhangDeg: options.overhangDeg ?? 45,
+    overhangDeg: options.overhangDeg === null ? null : (options.overhangDeg ?? 45),
     samples: Math.max(100, Math.min(options.samples ?? 600, 4000)),
     ...(options.printOrientationDeg ? { printOrientationDeg: options.printOrientationDeg } : {}),
     ...(options.withSampleField ? { withSampleField: true } : {}),

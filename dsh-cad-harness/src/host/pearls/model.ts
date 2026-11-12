@@ -13,6 +13,8 @@ export interface ModelObservation {
   manifestPath: string;
   counts: { children: number; interfaces: number } | null;
   issues: string[];
+  /** Reader-facing drift; never blocks. The version store is authoritative. */
+  warnings: string[];
   failures: PearlFailure[];
 }
 
@@ -34,6 +36,7 @@ export async function observeModel(projectRoot: string): Promise<ModelObservatio
     manifestPath: inspection.manifestPath,
     counts: inspection.counts,
     issues: inspection.issues,
+    warnings: inspection.warnings ?? [],
     failures,
   };
 }

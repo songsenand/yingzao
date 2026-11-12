@@ -10,7 +10,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
 const check = (ok, label, detail = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`); };
 
-async function project({ assembly = true, contract = true, interference = 0, interfaces = 3, hard = 0, undeclared = 1, assemblyVersions = ['v1'], contractVersions = ['v1'] } = {}) {
+async function project({ assembly = true, contract = true, interference = 0, tight = 0, declaredTight = 0, tightMin = 0, tightMax = 0.2, interfaces = 3, hard = 0, undeclared = 1, assemblyVersions = ['v1'], contractVersions = ['v1'] } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'fit-observe-'));
   const runs = join(dir, 'runs');
   await mkdir(runs, { recursive: true });
@@ -19,7 +19,7 @@ async function project({ assembly = true, contract = true, interference = 0, int
     entries.push({ id: 'r001', kind: 'assembly', timestamp: '2026-11-03T00:00:00Z', sourceVersionIds: assemblyVersions });
     await mkdir(join(runs, 'r001'), { recursive: true });
     await writeFile(join(runs, 'r001/report.json'), JSON.stringify({
-      overallStatus: interference > 0 ? 'fail' : 'pass',
+      overallStatus: interference > 0 || tight > 0 ? 'fail' : 'pass',
       interferenceEpsilonMm3: 1,
       parts: Array.from({ length: 10 }, (_, i) => ({
         name: `a${i}`, boundingBox: { min: [0, 0, 0], max: [10, 10, 10] },
@@ -29,14 +29,24 @@ async function project({ assembly = true, contract = true, interference = 0, int
       pairs: Array.from({ length: 10 }, (_, i) => ({
         partA: `a${i}`, partB: `b${i}`,
         intersectionVolume: i < interference ? 2 : 0,
-        status: i < interference ? 'fail' : 'ok',
+        minDistance: i < interference ? 0 : i < interference + tight ? 0 : 1,
+        status: i < interference ? 'hit' : i < interference + tight ? 'too_tight' : 'ok',
       })),
     }));
   }
   if (contract) {
     entries.push({ id: 'r002', kind: 'assembly-check', timestamp: '2026-11-03T00:00:01Z', sourceVersionIds: contractVersions });
     await mkdir(join(runs, 'r002'), { recursive: true });
+    const results = Array.from({ length: declaredTight }, (_, k) => {
+      const i = interference + k;
+      return {
+        interfaceId: `I${i}`, a: `a${i}.p`, b: `b${i}.p`,
+        expected: { quantity: '距离', min: tightMin, max: tightMax },
+        measured: 0, verdict: 'pass',
+      };
+    });
     await writeFile(join(runs, 'r002/report.json'), JSON.stringify({
+      results,
       summary: { interfaces, hardViolations: hard, undeclared },
     }));
   }
@@ -73,8 +83,27 @@ const noContract = await project({ contract: false });
 const noContractObs = await observeFit(noContract);
 check(noContractObs.status === 'blocked' && noContractObs.findings.some((f) => f.code === 'missing-contract'), 'missing contract is blocked', noContractObs.findings.map((f) => f.code).join(','));
 
+// A declared fit inside its tolerance is not a clearance failure: the global
+// threshold is the ruler for undeclared pairs, the contract is the ruler for
+// declared ones.
+const declaredFit = await project({ tight: 3, declaredTight: 3, tightMin: 0, tightMax: 0.2 });
+const declaredObs = await observeFit(declaredFit);
+check(declaredObs.status === 'pass', 'all too-tight pairs declared inside tolerance -> pass', declaredObs.status);
+check(declaredObs.findings.some((f) => f.code === 'declared-fit'), 'the pass is explained, not silent',
+  declaredObs.findings.map((f) => f.code).join(','));
+
+const mixedFit = await project({ tight: 3, declaredTight: 1 });
+const mixedObs = await observeFit(mixedFit);
+check(mixedObs.status === 'fail', 'an undeclared too-tight pair still fails', mixedObs.status);
+const mixed = mixedObs.findings.find((f) => f.code === 'interference');
+check(/1 declared fit\(s\), 2 undeclared/.test(mixed?.message ?? ''), 'the count is split, not lumped', mixed?.message);
+
+const outOfTolerance = await project({ tight: 2, declaredTight: 2, tightMin: 0.5, tightMax: 1 });
+const outObs = await observeFit(outOfTolerance);
+check(outObs.status === 'fail', 'a declared fit outside its tolerance is NOT covered', outObs.status);
+
 check(goodObs.budgetUsed.distinctTools === 2 && goodObs.budgetUsed.calls === 2, 'budgetUsed reflects the two observed runs');
 
-await Promise.all([good, clean, vacuous, hit, stale, noContract].map((d) => rm(d, { recursive: true, force: true })));
+await Promise.all([good, clean, vacuous, hit, stale, noContract, declaredFit, mixedFit, outOfTolerance].map((d) => rm(d, { recursive: true, force: true })));
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);

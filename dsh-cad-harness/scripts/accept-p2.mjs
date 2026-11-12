@@ -217,6 +217,17 @@ check('citing a run that does not exist is a hard-violation, not a pass',
   bogus.value.overallStatus === 'fail' && /names no run/.test(bogus.value.hardViolations[0]?.detail ?? ''),
   bogus.value.hardViolations[0]?.detail ?? '');
 
+// (b2) same bogus cite through the first-class `evidence` pointer
+await manifestWith([{
+  id: 'if-motion', a: 'lower.顶面', b: 'upper.底面', type: '转动副', layer: 'L0', check: 'motion-clearance',
+  nominal: { quantity: '距离', value: 10 }, tolerance: { min: 9.9, max: 10.1 }, severity: 'hard',
+  evidence: { runId: 'r999' },
+}], children);
+const bogusEvidence = await call('check_assembly', {});
+check('evidence.runId naming no run is a hard-violation too',
+  bogusEvidence.value.overallStatus === 'fail' && /names no run/.test(bogusEvidence.value.hardViolations[0]?.detail ?? ''),
+  bogusEvidence.value.hardViolations[0]?.detail ?? '');
+
 // (c) cite the real motion run
 await manifestWith([{
   id: 'if-motion', a: 'lower.顶面', b: 'upper.底面', type: '转动副', layer: 'L0', check: 'motion-clearance',
@@ -227,6 +238,17 @@ const evidenced = await call('check_assembly', {});
 check(`citing the real motion run ${citedRun} passes and says so`,
   evidenced.value.overallStatus !== 'fail' && noEv.summary.pass === 1,
   `status=${evidenced.value.overallStatus}`);
+
+// (c2) the first-class pointer proves the real run just like the legacy bag
+await manifestWith([{
+  id: 'if-motion', a: 'lower.顶面', b: 'upper.底面', type: '转动副', layer: 'L0', check: 'motion-clearance',
+  nominal: { quantity: '距离', value: 10 }, tolerance: { min: 9.9, max: 10.1 }, severity: 'hard',
+  evidence: { runId: citedRun },
+}], children);
+const evidencedPointer = await call('check_assembly', {});
+check(`evidence.runId ${citedRun} passes where the legacy params.runId passes`,
+  evidencedPointer.value.overallStatus !== 'fail',
+  `status=${evidencedPointer.value.overallStatus}`);
 
 // (d) spring-preload from a MEASURED installed length
 await manifestWith([{

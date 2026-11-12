@@ -6,6 +6,7 @@
 // the adapters, not re-exported.
 
 import type { DeliveryClaim } from '../delivery-audit.ts';
+import type { InterfaceLedger } from './interfaces.ts';
 
 export type VerifyStatus = 'pass' | 'warn' | 'fail' | 'blocked' | 'unobserved';
 export type VerifyRowId = 'requirements' | 'model' | 'fit' | 'make' | 'review' | 'delivery';
@@ -120,6 +121,8 @@ export interface VerifyReport {
   coverage: { checked: string[]; missing: string[] };
   exceptions: { id: string; finding: string; reason: string; expiresAt: string; approvedBy?: string }[];
   provenance: { toolVersions: Record<string, string | null>; runIds: string[] };
+  /** Derived per-interface proof; absent when there is no manifest. */
+  interfaces?: InterfaceLedger;
 }
 
 export interface VerifyOptions {

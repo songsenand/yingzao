@@ -784,6 +784,76 @@
       "userIntent": "垫圈 (故意不声明接口, 测试邻接发现)",
       "parentVersion": null,
       "status": "draft"
+    },
+    {
+      "id": "v106",
+      "timestamp": "2026-11-12T05:14:47.429Z",
+      "userIntent": "显微镜镜架: 底座+双导轨+轴承墙+止挡墙",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v107",
+      "timestamp": "2026-11-12T05:14:47.467Z",
+      "userIntent": "调焦滑座: 跨在双导轨上, 底面与轨顶留 0.2 间隙",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v108",
+      "timestamp": "2026-11-12T05:14:47.498Z",
+      "userIntent": "调焦轴 Ø8 (r4.0)",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v109",
+      "timestamp": "2026-11-12T05:14:47.526Z",
+      "userIntent": "负样本: 轴 Ø9.2 (r4.6), 装不进 Ø8.4 孔",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v110",
+      "timestamp": "2026-11-12T05:14:47.593Z",
+      "userIntent": "垫圈 (故意不声明接口, 测试邻接发现)",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v111",
+      "timestamp": "2026-11-12T05:16:29.261Z",
+      "userIntent": "显微镜镜架: 底座+双导轨+轴承墙+止挡墙",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v112",
+      "timestamp": "2026-11-12T05:16:29.306Z",
+      "userIntent": "调焦滑座: 跨在双导轨上, 底面与轨顶留 0.2 间隙",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v113",
+      "timestamp": "2026-11-12T05:16:29.339Z",
+      "userIntent": "调焦轴 Ø8 (r4.0)",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v114",
+      "timestamp": "2026-11-12T05:16:29.374Z",
+      "userIntent": "负样本: 轴 Ø9.2 (r4.6), 装不进 Ø8.4 孔",
+      "parentVersion": null,
+      "status": "draft"
+    },
+    {
+      "id": "v115",
+      "timestamp": "2026-11-12T05:16:29.461Z",
+      "userIntent": "垫圈 (故意不声明接口, 测试邻接发现)",
+      "parentVersion": null,
+      "status": "draft"
     }
   ]
 }

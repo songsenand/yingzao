@@ -3,7 +3,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import { compileAndRender, compileStlOnly, renderScadPng } from './compile.ts';
-import { datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
+import { datumDriftForPart, datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
 import {
   attachVersion, createUniquePart, derivePartName, ensurePart, findPartById, findPartByName,
   listParts, partRoleOf, setPartRole, PART_ROLES, type PartEntry, type PartRole,
@@ -655,6 +655,30 @@ export function registerCadTools(
 
   // Shared by the simulate_motion tool (LLM-initiated) and the manual
   // POST /api/cad/motion/run route — identical report shape either way.
+  /** The full input of one motion run, stored beside its report so a later
+   *  version can be replayed instead of reconstructed from memory. */
+  function motionSpecOf(a: Parameters<typeof runMotionJob>[0], sourceVersionIds: string[]) {
+    return {
+      schemaVersion: 1,
+      tool: 'simulate_motion',
+      createdAt: new Date().toISOString(),
+      cycles: a.cycles ?? null,
+      parts: a.parts.map((p) => ({
+        name: p.name,
+        bodyType: p.bodyType,
+        position: p.position,
+        ...(p.rotation ? { rotation: p.rotation } : {}),
+        ...(p.pivot ? { pivot: p.pivot } : {}),
+        ...(p.versionId ? { versionId: p.versionId } : {}),
+        ...(p.scadCode ? { scadCode: p.scadCode } : {}),
+      })),
+      joints: a.joints ?? [],
+      drive: a.drive ?? null,
+      oscillators: a.oscillators ?? [],
+      sourceVersionIds,
+    };
+  }
+
   async function runMotionJob(a: {
     parts: { name: string; scadCode?: string; versionId?: string; bodyType: string; position: number[]; rotation?: number[]; pivot?: number[] }[];
     joints?: {
@@ -885,6 +909,11 @@ export function registerCadTools(
     report.metrics.geometrySuspectRule = SUSPECT_RULE;
     report.metrics.geometrySuspectWarn = warnCount;
     await run.json('report.json', report);
+    // Without this file a motion run is result-only: the joints/drive/placement
+    // that produced it exist nowhere, so "re-run on the new version" means
+    // reconstructing the mechanism by hand (this is exactly what blocked the
+    // click-pen rotor refresh). Store the input as evidence too.
+    await run.json('motion-spec.json', motionSpecOf(a, sourceVersionIds));
     await run.json('trajectory.json', { kind: 'motion', durationSec: report.durationSec, trajectory: report.trajectory });
     const { frames, warnings: renderWarnings } = await renderKeyframes(report as unknown as PhysicsReport, stlFiles, join(run.dir, 'frames'));
     // A render that emits WARNING/ERROR is not a render you may trust (see
@@ -1069,6 +1098,17 @@ export function registerCadTools(
           errors: result.errors, warnings: result.warnings,
           durationMs: result.durationMs, views: [],
         };
+      }
+      // Anchors are part of what a version means: dropping them makes every
+      // interface that names one stop resolving. Saving is still allowed (a
+      // deliberate rename must be possible), but it cannot be silent.
+      const incomingAnchors = result.datumSet ? datumNames(result.datumSet) : [];
+      const drift = await datumDriftForPart(store, part.id, incomingAnchors);
+      if (drift) {
+        result.warnings.push(
+          `anchors missing: ${drift.missing.join(', ')} — last declared on ${drift.versionId}. ` +
+          'Interfaces naming them will stop resolving; add datum(...) to the source or call set_datums afterwards.',
+        );
       }
       const versionId = await saveVersion(store, {
         scadCode: a.scadCode,
@@ -1965,7 +2005,7 @@ export function registerCadTools(
     },
     async execute(args: unknown, exec: unknown) {
       const a = args as SetDatumsArgs;
-      const { store, partStore } = await allStores(exec);
+      const { store, partStore, runStore } = await allStores(exec);
       const entry = await readVersionEntry(store, a.versionId);
       // The index is not the artifact: a version directory can exist without a
       // manifest row (hand-copied or older corpora). Refuse only when there is
@@ -2048,6 +2088,20 @@ export function registerCadTools(
       warnings.push(
         `${a.versionId} still declares its previous anchors; interfaces pointing at it must be re-pointed to ${newId}.`,
       );
+      // A metadata repair still costs a version, and evidence does not follow it.
+      // Say what just went stale at the place that caused it, not three tools later.
+      const citing = (await listRuns(runStore)).filter((r) => (r.sourceVersionIds ?? []).includes(a.versionId));
+      if (citing.length > 0) {
+        warnings.push(
+          `${citing.length} run(s) cite ${a.versionId}; they describe the previous anchors, not ${newId} — ` +
+          `re-run what the contract still depends on (e.g. ${citing.slice(0, 5).map((r) => r.id).join(', ')}).`,
+        );
+      }
+      if (existsSync(join(store.root, 'versions', a.versionId, 'visual-review.json'))) {
+        warnings.push(
+          `${a.versionId} had a visual review; ${newId} has none — review the new version before delivery.`,
+        );
+      }
       return {
         versionId: newId,
         previousVersionId: a.versionId,
@@ -5611,6 +5665,8 @@ export function registerCadTools(
     // voids and bores above it is fetched INSIDE the loop.
     type DraftSolve = {
       coneEmpty: boolean;
+      /** true = emptiness was decided exhaustively (small normal count); false = sampled. */
+      proven?: boolean;
       candidatesChecked: number;
       bestMarginDeg: number;
       bestWorstDraftDeg: number;
@@ -5682,6 +5738,8 @@ export function registerCadTools(
       const rules = evaluableRules(profile);
       const wall = rules.find((r) => r.rule === 'wallMinMm');
       const overhang = rules.find((r) => r.rule === 'overhangDeg');
+      // applies=false must reach the measurement as `null`, not as "use 45".
+      const overhangOff = profile.rules.overhangDeg?.applies === false;
       // `withSampleField` is what makes the heatmap POSSIBLE: the tool persists a run
       // carrying the per-sample values, and the panel draws those. Without it the
       // panel's /api/cad/attention finds no field and the 🔥 button does nothing —
@@ -5690,7 +5748,7 @@ export function registerCadTools(
       const screen = await checkPrintability(store, {
         versionId: a.versionId,
         wallMinMm: wall?.value ?? a.wallMinMm,
-        overhangDeg: overhang?.value ?? a.overhangDeg,
+        overhangDeg: overhang ? overhang.value : (overhangOff ? null : a.overhangDeg),
         samples: a.samples,
         ...(a.printOrientationDeg ? { printOrientationDeg: a.printOrientationDeg } : {}),
         withSampleField: true,
@@ -5834,10 +5892,21 @@ export function registerCadTools(
       if (draftRule?.applies === true && draftRule.decidable === 'geometry' && typeof draftRule.value === 'number') {
         const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
         if (existsSync(modelPath)) {
-          const solved = await (await ensurePythonWorker()).request<{ draft?: DraftSolve }>('check_printability', {
-            path: modelPath, samples: a.samples, draftMinDeg: draftRule.value,
-          });
-          const dr = solved.draft;
+          // Draft is a global optimisation over faces and directions; a dense
+          // mesh can exceed the worker budget. That is UNDETERMINED, never a pass
+          // — and it must not take the wall/feature results down with it.
+          let solved: { draft?: DraftSolve } | null = null;
+          try {
+            solved = await (await ensurePythonWorker()).request<{ draft?: DraftSolve }>('check_printability', {
+              path: modelPath, samples: a.samples, draftMinDeg: draftRule.value,
+            }, { timeoutMs: 45_000 });
+          } catch (e) {
+            undeterminedNotes.push(
+              `拔模/倒扣**未判定**：draft 求解器在 45s 内没有返回（网格较密）——这不是通过；` +
+              `需要更快的求解器或人工核对抽芯方向。${String((e as Error)?.message ?? e).slice(0, 120)}`,
+            );
+          }
+          const dr = solved?.draft;
           if (dr) {
             if (dr.coneEmpty) {
               // EXACT: no draw direction satisfies every face. The measured value is
@@ -5854,8 +5923,12 @@ export function registerCadTools(
               // NOT a pass. Zero/near-zero margin is recorded as difficult
               // (DECISION-LOG 2026-10-11): the 0.5 deg band is the normal-bucketing
               // resolution, not an invented shop constant.
+              // `proven === false` means a dense mesh: no sampled draw direction met
+              // draft, but that is an estimate, not the exhaustive proof.
               marginalNotes.push(
-                `拔模余量过小（记为困难，不是通过）：最佳抽芯方向下的最差面拔模 ${dr.bestWorstDraftDeg}°，` +
+                (dr.proven === false
+                  ? `拔模：采样的抽芯方向里没有一条满足要求（记为困难，不是通过）：最好的方向最差面拔模 ${dr.bestWorstDraftDeg}°，`
+                  : `拔模余量过小（记为困难，不是通过）：最佳抽芯方向下的最差面拔模 ${dr.bestWorstDraftDeg}°，`) +
                 `要求 ${draftRule.value}°，余量 ${dr.bestMarginDeg}°（≤ 0.5° = 法线分桶分辨率）。` +
                 (dr.constrainingFaces?.length
                   ? `收紧它的面在 ${JSON.stringify(dr.constrainingFaces[0].atMm)}（该面拔模 ${dr.constrainingFaces[0].draftAtBestDeg}°，` +

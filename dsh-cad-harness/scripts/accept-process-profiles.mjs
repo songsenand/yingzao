@@ -51,6 +51,21 @@ if (cnc.ok) {
     cnc.profile.rules.overhangDeg?.applies === false);
 }
 
+// ── 1b2. the shipped injection profile turns the additive rulers OFF ─────────
+const injPath = join(REPO, 'schemas', 'examples', 'injection-pp.json');
+const inj = validateProfile(JSON.parse(readFileSync(injPath, 'utf8')));
+check('the shipped injection-pp example validates', inj.ok, inj.ok ? '' : inj.errors.join(' | '));
+if (inj.ok) {
+  check('injection-pp declares process injection',
+    inj.profile.process === 'injection', inj.profile.process);
+  check('injection-pp turns overhang OFF (a molded part has no support concept)',
+    inj.profile.rules.overhangDeg?.applies === false && /support concept|cavity/.test(inj.profile.rules.overhangDeg?.reason ?? ''));
+  check('injection-pp keeps draft as a geometric min rule',
+    inj.profile.rules.draftMinDeg?.applies === true && inj.profile.rules.draftMinDeg.decidable === 'geometry');
+  check('injection-pp keeps wall as a geometric min rule',
+    inj.profile.rules.wallMinMm?.applies === true && typeof inj.profile.rules.wallMinMm.value === 'number');
+}
+
 // ── 1c. every shipped profile validates and declares every named rule ────────
 for (const file of readdirSync(join(REPO, 'schemas', 'examples')).filter((f) => f.endsWith('.json')).sort()) {
   const parsed = validateProfile(JSON.parse(readFileSync(join(REPO, 'schemas', 'examples', file), 'utf8')));
