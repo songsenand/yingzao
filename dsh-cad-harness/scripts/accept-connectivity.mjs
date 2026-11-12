@@ -111,7 +111,7 @@ function cubeTris(x0, y0, z0, s) {
     'tool: a single cube reports single-body', JSON.stringify({ bodyVerdict: single.bodyVerdict, bodies: single.bodies }));
 
   let refused = false;
-  try { await tool.execute({ versionId: 'vXXX' }, exec); } catch (e) { refused = String(e.message).includes('no model.stl'); }
+  try { await tool.execute({ versionId: 'vXXX' }, exec); } catch (e) { refused = /no model\.stl|unknown version/.test(String(e.message)); }
   check(refused, 'missing version refuses with an actionable error');
 
   rmSync(home, { recursive: true, force: true });

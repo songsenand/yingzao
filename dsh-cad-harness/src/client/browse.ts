@@ -63,6 +63,6 @@ export function browseCategories(
     sim: all.filter((r) => r.kind === 'motion' || r.kind === 'physics' || r.kind === 'fluid'),
     assembly: all.filter((r) => r.kind === 'assembly'),
     contract: all.filter((r) => r.kind === 'assembly-check'),
-    check: all.filter((r) => r.kind === 'printability' || r.kind === 'stress' || r.kind === 'analyze'),
+    check: all.filter((r) => r.kind === 'printability' || r.kind === 'sheet2d' || r.kind === 'turning' || r.kind === 'machinability' || r.kind === 'edm' || r.kind === 'stress' || r.kind === 'analyze'),
   };
 }

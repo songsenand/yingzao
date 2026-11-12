@@ -1,22 +1,22 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the 38-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the 43-tool map, conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Thirty-eight tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
+Forty-three tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
-| **交付** | 能不能交？ | **`preflight`** · `check_printability` · `check_assembly` · `check_parts` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
+| **交付** | 能不能交？ | **`deliver`**（只读计划） · **`preflight`** · `check_printability` · `check_sheet2d` · `check_turning` · `check_cnc_access` · `check_edm_access` · `check_assembly` · `check_parts` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
 | **检测** | 该往哪看？ | `analyze`（实验性，不可作交付依据） · `scan_attention` · `check_appearance`（成套外观：锐边/收口/对称/近共面/包络预算，只读） · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据 | 产**证据**，不自己判交付 |
 
 ## Six rules
 
-1. **先结账，再交付**：任何“可以交了”之前，`check_printability`（每个零件）与 `check_assembly`（每份契约）都要跑过；最后 `delivery_audit`，并把你要主张的东西写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。
+1. **先结账，再交付**：任何“可以交了”之前，先 `deliver` 看只读计划（它从 BOM/ICD/claims/run 图派生每行，并给出该跑的原子工具；**它不跑 CAD，也不是闸门**）；按 `next` 跑完缺失项，再 `check_printability`（每个打印件）与 `check_assembly`（每份契约），最后 `delivery_audit` 并把主张写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。**`deliver` 的 plan pass 不是 claim。** BOM 顶层的 `manufacturing` 策略是**一次用户决定**（`allowed` + `approvedBy`；用户可以说“我只有 FDM”），agent 在允许集合内给每个零件分配 `source:"policy"`；**不要逐件问用户**。`M:mix` 让用户确认一次配比（例如 10×injection-pp）；只有集合外的零件才问一次例外。总计 0–3 次关键选择，不是 N 次零件确认。未批准的策略/推荐一律 `unobserved`。工艺 id 的能力分级（`supported` / `partial` / `planned`；车削、EDM、激光/水刀/钣金切割/挤出、CNC/压铸/砂铸/真空/模锻/SLA/SLS 都已 **partial**；CNC 用 `check_printability`（圆孔/壁）+ `check_cnc_access`（六方向可达 + 装夹数）；剩下的是斜装夹/刀具长度/夹具、钣金展开图/K 因子/让位槽几何、EDM 电极形状/侧蚀的 handoff）见 `docs/llm/processes.md`；不要拿打印性 profile 冒充新工艺的检查。
 2. **`not-excluded` 不是“ok”，更不是“安全”**：只表示“没找到反例”。`difficult` 表示余量落在仪器噪声内，**不许当过**，而且必须用一句话解释你看到了什么、为什么接受/不接受。没有 “safe” 这个词可报。
 3. **交付要主张，主张要证据**：`delivery_audit({claims})` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**每个交付打印件的最新版本必须先过 `review_visual`（top+iso，带 note）；没有 fresh 记录，`delivery_audit` 直接 blocked。`generate_part({views:[]})` 会被强制改成 top+iso，不要再靠“只登记不看图”省图。****外购件/研究体用 `set_part_role` 声明** `stock` / `research`（`merge_parts` 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
 4. **检测 ≠ 交付**：`attention` 里的位置是“去看这里”，不是判定证据；反过来，工具沉默是检测的失败，“检测到嫌疑”也不构成交付失败。
@@ -114,6 +114,10 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "run the selected pearl template" (deprecated) | `pearl_run({execute:true, inputs})` — deprecated; use the atomic tools | `preflight` (it only runs the gate) |
 | "write/update the assembly contract", "add an interface" | `write_assembly` | generic write / `run_python` |
 | "can this actually be printed", "is this wall too thin", "will it need supports" | `check_printability` | looking at renders |
+| "laser/waterjet cut: is this hole too small, wall too thin, holes too close after kerf" | `check_sheet2d` (section of a flat part; declared kerf/limits) | 3D printability |
+| "can this be turned from bar stock; does it fit the L/D/symmetry" | `check_turning` (bar Ø / L/D / rotational symmetry) | printability profile |
+| "can a 3-axis mill reach this pocket/undercut; how many setups" | `check_cnc_access` (six principal directions + setup count) | CAM/toolpath |
+| "can a sinker EDM electrode reach this cavity along one axis" | `check_edm_access` (single burn axis line of sight) | electrode shape/undercut |
 | **"screen a family at once", "which of these parts is thin"** | **`check_parts`** | N single calls; it runs the same jobs and writes one run per part |
 | "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
@@ -121,7 +125,8 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "give this version a color/material design" | `attach_appearance` (GLB sidecar; no render path) | treating STL as a color carrier |
 | "the reference image is gone from my context" | `recall_reference_image` | describing the image from memory |
 | "the user is only *talking* about a part", no geometry yet | `create_part` | `generate_part` (it would invent a shape) |
-| "before I claim this is delivered" | `delivery_audit` | re-reading your own notes |
+| "before I claim this is delivered" | `deliver`（只读计划）→ 按每行 `next` 跑原子工具 → `delivery_audit` | re-reading your own notes; `deliver` alone is not a claim |
+| "what is missing / what should I run next?", "show me the whole delivery board" | **`deliver`** (read-only plan derived from BOM/ICD/claims/run graph; each row names its atomic tool) | guessing which check applies, or running `preflight` blind |
 | "the human should look at this", "ask them to review", "propose a rollback" | `request_review` | moving their viewport or opening a modal |
 | "what did v030 look like", "how did this change" | the panel's version gate + compare (the human opens it); or `request_review({items:[{target:"v030"}]})` | re-running old tool calls to "show" it |
 | "a check no CAD tool covers" (FEM, optimisation, a custom metric) | `run_python` | shelling out to the system python |

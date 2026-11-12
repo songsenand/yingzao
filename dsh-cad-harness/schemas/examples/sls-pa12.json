@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "id": "sls-pa12",
+  "process": "SLS",
+  "material": "PA12",
+  "machine": "SLS/MJF template",
+  "description": "Partial SLS/MJF screen: wall/feature/gap + escape-passage (powder removal) reachability. Powder cleaning/nesting/warp are handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.8,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.6,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "The powder bed supports overhangs; overhang is not the governing rule."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "The powder bed supports spans."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    },
+    "draftMinDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No mold release."
+    },
+    "escapePassageMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS powder-removal template"
+      }
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.3,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 12,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLS PA12 template"
+      }
+    }
+  },
+  "notes": "The escape rule is reachability of enclosed voids, not a cleaning test; overhang is off because the powder bed supports the part."
+}

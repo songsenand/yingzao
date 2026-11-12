@@ -31,7 +31,7 @@ export const RULE_NAMES = [
 ] as const;
 export type RuleName = (typeof RULE_NAMES)[number];
 
-const PROCESSES = ['FDM', 'SLA', 'SLS', 'MJF', 'injection', 'CNC-3axis', 'CNC-4axis', 'CNC-5axis', 'casting'] as const;
+const PROCESSES = ['FDM', 'SLA', 'SLS', 'MJF', 'injection', 'CNC-3axis', 'CNC-4axis', 'CNC-5axis', 'casting', 'die-casting', 'vacuum-forming', 'forging', 'turning', 'EDM', 'laser', 'waterjet', 'sheet-metal', 'extrusion'] as const;
 const PROVENANCE_KINDS: ProvenanceKind[] = ['vendor-spec', 'standard', 'measured', 'literature', 'rule-of-thumb', 'assumed'];
 
 export interface Provenance {

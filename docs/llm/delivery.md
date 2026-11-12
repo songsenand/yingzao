@@ -57,4 +57,22 @@
    verdict of `excluded` (or any `blocked`-severity finding) means the corpus
    contradicts the claim — fix it, or state the exception explicitly to the user. Citing a green number that the audit
    flags as stale is exactly the failure this step exists to prevent.
+8. **Start the delivery round with the read-only plan, not with a tool hunt.**
+   `deliver` derives a plan from the BOM/ICD, parts roles, claims and the run
+   graph. Each row names the target, the check, the witness (run/check), where to
+   look and the atomic tool call that would fill a gap. It runs no CAD and writes
+   no run. `planVerdict` is scoped to the process you pass (or the per-part
+   `process`); `corpusVerdict` is the audit. When they differ, the plan says so —
+   usually the audit is counting a run under a process the plan does not claim.
+   Missing process/profile/run is `unobserved` with the declaration or call that
+   fills it, never a pass. **Process is decided in at most three key-node choices,
+   not per part:** (1) the BOM `manufacturing` policy — a user-approved allowed
+   set (`allowed` + `approvedBy`), (2) the `M:mix` summary of the printed parts
+   (confirm the mix once, then record `mixApprovedBy`), (3) exceptions for parts
+   outside the set. The agent
+   assigns each part from the allowed set (`source: "policy"`); only an outside
+   choice needs one user decision. A per-part confirmation loop is a design
+   failure, not a rigorous workflow. An unconfirmed policy/recommendation is
+   `unobserved`, and the plan asks **once**. **A plan pass is not a claim:** run
+   the named tools, then `verify` / `delivery_audit`.
 

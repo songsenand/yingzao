@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "id": "sand-casting",
+  "process": "casting",
+  "material": "A356",
+  "machine": "sand casting template",
+  "description": "Partial sand-casting screen: wall/feature/gap + draft via the draft solver. Shrinkage/porosity/sand defects/machining allowance are handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Sand casting has no support overhang."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span is created."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand core template"
+      }
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder/resin."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 12,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sand casting template"
+      }
+    }
+  },
+  "notes": "The profile screens geometry only; a casting engineer still owns gating/risering and shrinkage allowance."
+}

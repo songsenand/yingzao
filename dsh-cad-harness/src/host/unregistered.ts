@@ -39,7 +39,11 @@ export const IMPORTABLE_EXTENSIONS = new Set(['.stl', '.step', '.stp', '.3mf', '
 export const PREVIEWABLE_EXTENSIONS = new Set(['.stl', '.step', '.stp', '.3mf']);
 
 /** Directories that are never "the design's own output" (deps, VCS, build, other stores). */
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.pnpm-store', '.local-archive', 'bin', '__pycache__', '.venv', 'venv', 'versions']);
+// `checks/` holds checker/v1 packages, including negative-sample meshes. Those are
+// evidence tooling, not delivered geometry: a check fixture must be allowed to be a
+// mesh without being imported as a version (otherwise every check adds a blocked
+// `unregistered-geometry` finding). Surfaced by the pen-cam-timing trial, 2026-11-11.
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.pnpm-store', '.local-archive', 'bin', '__pycache__', '.venv', 'venv', 'versions', 'checks']);
 /** Walk budget, exported so a caller's message cannot drift from the real limit. */
 export const SCAN_BUDGET = { maxVisitedEntries: 20_000, maxMeshFiles: 500 } as const;
 const MAX_HASH_CACHE = 4_000;

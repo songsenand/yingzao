@@ -26,7 +26,7 @@ const ck = run('audit-tool-contracts.mjs', '--check');
 check(ck.status === 0, 'the generated contract sheet documents all of them', (ck.stdout ?? '').trim().split('\n').pop());
 
 const sheet = await readFile(join(ROOT, 'docs', 'TOOL-CONTRACTS.md'), 'utf8');
-const headers = [...sheet.matchAll(/^## `([a-z_]+)`$/gm)].map((x) => x[1]);
+const headers = [...sheet.matchAll(/^## `([a-z0-9_]+)`$/gm)].map((x) => x[1]);
 check(headers.length === count, 'the sheet has one section per tool', `${headers.length} vs ${count}`);
 check(/^```js\n[a-z_]+\(\{/m.test(sheet), 'and every section carries a runnable minimal call');
 

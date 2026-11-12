@@ -170,6 +170,19 @@ export interface ManifestNode {
    */
   group?: string;
   material?: string;
+  /**
+   * Manufacturing process for this part, or the default for an assembly's children.
+   * `source: user` is a settled decision; `source: agent` is a recommendation that
+   * still needs user confirmation. The delivery plan treats an unconfirmed agent
+   * recommendation as unobserved — it never becomes the process behind a verdict.
+   */
+  process?: {
+    id: string;
+    source: 'user' | 'policy' | 'agent';
+    rationale?: string;
+    confirmedBy?: string;
+    confirmedAt?: string;
+  };
   qty?: number;
   stockRef?: string;                // source=stock: identification of the physical part
   transform?: PartTransform;        // placement in the parent frame (v1: parts only)
@@ -178,12 +191,29 @@ export interface ManifestNode {
   interfaces?: ManifestInterface[];
 }
 
+export interface ManufacturingPolicy {
+  /** User-approved set of available/acceptable processes. */
+  allowed: { id: string; note?: string; minQty?: number }[];
+  /** Who approved the set (a name or a document like PROMPT.md). */
+  approvedBy?: string;
+  approvedAt?: string;
+  /** Who approved the per-part assignment summary (the M:mix row). */
+  mixApprovedBy?: string;
+  mixApprovedAt?: string;
+  /** Preferred order; advisory. */
+  preference?: string[];
+  /** Default true: the agent may assign a part's process from `allowed`. */
+  delegate?: boolean;
+}
+
 export interface AssemblyManifest {
   schemaVersion: 1;
   name: string;
   unit: 'mm';
   up: 'z';
   root: ManifestNode;
+  /** Project-level manufacturing policy (one user decision, N delegated parts). */
+  manufacturing?: ManufacturingPolicy;
   /**
    * Content hash of the file this document was parsed from (8 hex chars).
    *

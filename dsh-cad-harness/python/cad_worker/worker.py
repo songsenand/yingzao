@@ -2116,12 +2116,12 @@ def op_assembly_contracts(params: dict) -> dict:
                 raw = (iface.get("params") or {}).get("runId")
                 cited = str(raw) if isinstance(raw, str) else None
                 if not cited:
-                    verdict["detail"] += " — motion half NOT evidenced: run simulate_motion over the travel and cite it with params.runId"
+                    verdict["detail"] += " — motion half NOT evidenced: run simulate_motion over the travel and cite it with evidence.runId"
                 else:
                     run = runs.get(cited)
                     if not run:
                         verdict["verdict"] = "hard-violation"
-                        verdict["detail"] += f' — params.runId "{cited}" names no run in this project'
+                        verdict["detail"] += f' — cited run "{cited}" names no run in this project'
                     elif run.get("kind") != "motion":
                         verdict["verdict"] = "hard-violation"
                         verdict["detail"] += f' — run {cited} is a {run.get("kind")} run, not a motion run'

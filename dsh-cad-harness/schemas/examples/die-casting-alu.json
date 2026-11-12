@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "die-casting-alu",
+  "process": "die-casting",
+  "material": "ADC12 / AL 380",
+  "machine": "die casting, 1.5 deg draft template",
+  "description": "Partial die-casting screen: wall/feature/gap + draft/undercut via the best-pull-direction draft solver. Fill/porosity/thermal cracking/gates are handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      },
+      "detail": "Thin walls run cold; 1.5mm is conservative for ADC12."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Die casting has no support overhang."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span is created."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "cast core pin template"
+      }
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      },
+      "detail": "Per-face draft; the solver searches a pull direction."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder/resin."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 3.2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "die casting template"
+      }
+    }
+  },
+  "notes": "Every number is a template. The draft solver reports a feasible pull direction and the worst face margin; it does not model metal flow or die thermal behavior."
+}

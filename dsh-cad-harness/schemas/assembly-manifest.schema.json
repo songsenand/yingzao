@@ -10,7 +10,34 @@
     "name": { "type": "string" },
     "unit": { "const": "mm" },
     "up": { "const": "z" },
-    "root": { "$ref": "#/$defs/node" }
+    "root": { "$ref": "#/$defs/node" },
+    "manufacturing": {
+      "type": "object",
+      "description": "Project-level manufacturing policy: the user-approved set of available/acceptable processes. The agent assigns each part a process from `allowed` (delegated); per-part confirmation is not required. One policy decision replaces N part questions.",
+      "required": ["allowed"],
+      "properties": {
+        "approvedBy": { "type": "string", "description": "User/human who approved this option set (a name or a document like PROMPT.md)." },
+        "approvedAt": { "type": "string" },
+        "mixApprovedBy": { "type": "string", "description": "User/human who approved the process mix (the per-part assignment summary); absent = the mix is still a proposal." },
+        "mixApprovedAt": { "type": "string" },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "note": { "type": "string" },
+              "minQty": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "preference": { "type": "array", "items": { "type": "string" } },
+        "delegate": { "type": "boolean", "description": "Default true: the agent may choose a part's process from `allowed` without asking per part." }
+      },
+      "additionalProperties": false
+    }
   },
   "$defs": {
     "vec3": {
@@ -78,8 +105,18 @@
         "layer": { "enum": ["L0", "L1", "L2"] },
         "params": {
           "type": "object",
-          "description": "distance: {distanceMm}; motion-clearance: {runId}; spring-preload: {freeLengthMm, stiffnessNPerMm}; spring-behaviour: use the `elastic` object; snap-fit: use the `elastic` snap-fit fields",
+          "description": "Legacy numeric bag. distance: {distanceMm}; spring-preload: {freeLengthMm, stiffnessNPerMm}; spring-behaviour/snap-fit: use `elastic`. For the run that proves a motion/spring interface, prefer `evidence.runId`; `params.runId` remains accepted.",
           "additionalProperties": true
+        },
+        "evidence": {
+          "type": "object",
+          "description": "External evidence for the half this engine cannot decide (motion travel, spring behaviour): the run that proved it. Motion-clearance turns a missing/unresolvable/cross-version cite into a hard violation, never a silent pass.",
+          "required": ["runId"],
+          "properties": {
+            "runId": { "type": "string", "minLength": 1 },
+            "note": { "type": "string" }
+          },
+          "additionalProperties": false
         },
         "elastic": {
           "type": "object",
@@ -136,6 +173,19 @@
         "material": { "type": "string" },
         "qty": { "type": "integer", "minimum": 1 },
         "stockRef": { "type": "string" },
+        "process": {
+          "type": "object",
+          "description": "Manufacturing process for this part (or the default for an assembly's children). source=user is a confirmed decision; source=agent is a recommendation awaiting user confirmation. The delivery plan reports an unconfirmed recommendation as unobserved, never as a settled process.",
+          "required": ["id", "source"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "description": "Process/profile id, e.g. injection-pp, fdm-pla-0.4, cnc-alu." },
+            "source": { "enum": ["user", "policy", "agent"], "description": "Who decided: the user (explicit), a user-approved manufacturing policy (agent delegated within allowed), or the agent's recommendation (needs confirmation)." },
+            "rationale": { "type": "string", "description": "Why this process: geometry/quantity/tolerance/available equipment. Advisory, not a verdict." },
+            "confirmedBy": { "type": "string", "description": "User/human who confirmed an agent recommendation (a name or a document like PROMPT.md)." },
+            "confirmedAt": { "type": "string", "description": "ISO timestamp of the confirmation; with confirmedBy it makes an agent recommendation settled." }
+          },
+          "additionalProperties": false
+        },
         "transform": { "$ref": "#/$defs/transform" },
         "datums": { "type": "array", "items": { "$ref": "#/$defs/datumDecl" } },
         "children": {

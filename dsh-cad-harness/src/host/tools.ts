@@ -35,6 +35,10 @@ import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
 import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
+import { analyzeSheet2d, type SheetSection } from './sheet2d.ts';
+import { analyzeTurning } from './turning.ts';
+import { analyzeCncAccess } from './cnc-access.ts';
+import { analyzeEdmAccess } from './edm-access.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
 import { resolveWorkspaceFile } from './unregistered.ts';
 import {
@@ -53,6 +57,7 @@ import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } fro
 import { asJudgement } from '../shared/judgement.ts';
 import { runSubject } from '../shared/labels.ts';
 import { preflightSummary, type PreflightStep } from './preflight.ts';
+import { buildDeliveryPlan } from './deliver-plan.ts';
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
 import { withOutputContract } from './tool-contract.ts';
@@ -462,6 +467,7 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
   check_printability: 180_000,
   simulate_stress: 600_000,
   preflight: 600_000,
+  deliver: 120_000,
   analyze: 300_000,
   check_assembly: 300_000,
 };
@@ -4651,6 +4657,719 @@ export function registerCadTools(
   }));
 
 
+  // --- check_sheet2d: the 2D cut screen for flat sheet/plate parts ---
+  //
+  // Subject: a SECTION of a flat part. `measure_section` already returns exact
+  // holes, wall-to-outside distances and hole-to-hole clearances, so this tool
+  // does not parse DXF or re-implement the section. It applies the declared kerf
+  // and limits; it never averages or scores.
+  registerTool(defineTool({
+    name: 'check_sheet2d',
+    description:
+      '2D CUT SCREEN for a flat sheet/plate part: section it at mid-thickness (axis/fraction) and check ' +
+      'round-hole diameter, hole-to-outside wall and hole-to-hole spacing AFTER the kerf. Inputs are declared: ' +
+      'kerfMm, minHoleMm, minFeatureMm, minSpacingMm — no silent defaults. It does NOT check non-circular hole ' +
+      'width, outer tabs, flat pattern/K-factor, heat-affected zone or taper. With bendLines it also checks ' +
+      'hole-to-bend distance, min flange and a bend-relief heuristic; flat pattern/K-factor remain handoffs. ' +
+      'A `not-excluded` result is a section-level screen, not a cut certificate.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved flat version to section, e.g. "v012".' },
+      axis: { type: 'string', description: 'Plane normal: x | y | z (leading "-" flips it). Default z.' },
+      fraction: { type: 'number', description: 'Where to cut across the axis, 0..1. Default 0.5 (mid-thickness for a plate).' },
+      atMm: { type: 'number', description: 'Explicit cut position in mm; wins over fraction.' },
+      kerfMm: { type: 'number', required: true, description: 'Cut kerf to subtract from every measured hole/feature, mm.' },
+      minHoleMm: { type: 'number', required: true, description: 'Smallest acceptable round-hole diameter after kerf, mm.' },
+      minFeatureMm: { type: 'number', required: true, description: 'Smallest acceptable hole-to-outside wall after kerf, mm.' },
+      minSpacingMm: { type: 'number', required: true, description: 'Smallest acceptable hole-to-hole clearance after kerf, mm.' },
+      bendLines: {
+        type: 'array',
+        description: 'Optional bend lines in the section u/v frame: [{from:[u,v], to:[u,v]}]. Enables bend checks.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            from: { type: 'array', required: true, items: { type: 'number' }, description: 'Start [u,v] in the section frame.' },
+            to: { type: 'array', required: true, items: { type: 'number' }, description: 'End [u,v] in the section frame.' },
+          },
+        },
+      },
+      minHoleToBendMm: { type: 'number', description: 'Minimum hole-centre to bend-line distance, mm (needs bendLines).' },
+      minFlangeMm: { type: 'number', description: 'Minimum flange from the bend line to a free edge, mm (needs bendLines).' },
+      minBendReliefMm: { type: 'number', description: 'Max distance from a bend-line end to a free edge/hole before it counts as "no relief", mm (needs bendLines).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          axisMm: { type: 'array', required: true, items: { type: 'number' } },
+          atMm: { type: 'number', required: true },
+          uAxisMm: { type: 'array', required: true, items: { type: 'number' }, description: 'In-plane +u direction; bendLines use this frame.' },
+          vAxisMm: { type: 'array', required: true, items: { type: 'number' }, description: 'In-plane +v direction; bendLines use this frame.' },
+          verdict: { type: 'string', required: true, description: '"excluded" (a witness) or "not-excluded" (no counter-example in this section).' },
+          witnesses: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                rule: { type: 'string', required: true },
+                measured: { type: 'number', required: true },
+                required: { type: 'number', required: true },
+                unit: { type: 'string', required: true },
+                locationMm: { type: 'array', items: { type: 'number' } },
+                note: { type: 'string' },
+              },
+            },
+          },
+          findings: { type: 'array', required: true, items: { type: 'string' } },
+          unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          metrics: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              holes: { type: 'number', required: true },
+              roundHoles: { type: 'number', required: true },
+              nonCircularHoles: { type: 'number', required: true },
+              minHoleEffectiveMm: { type: 'number' },
+              minFeatureEffectiveMm: { type: 'number' },
+              minSpacingEffectiveMm: { type: 'number' },
+              kerfMm: { type: 'number', required: true },
+              bendLines: { type: 'number', required: true },
+              minHoleToBendMm: { type: 'number' },
+              minFlangeMm: { type: 'number' },
+              minBendReliefMm: { type: 'number' },
+            },
+          },
+          params: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              kerfMm: { type: 'number', required: true },
+              minHoleMm: { type: 'number', required: true },
+              minFeatureMm: { type: 'number', required: true },
+              minSpacingMm: { type: 'number', required: true },
+              bendLines: {
+                type: 'array',
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    from: { type: 'array', required: true, items: { type: 'number' } },
+                    to: { type: 'array', required: true, items: { type: 'number' } },
+                  },
+                },
+              },
+              minHoleToBendMm: { type: 'number' },
+              minFlangeMm: { type: 'number' },
+              minBendReliefMm: { type: 'number' },
+            },
+          },
+          section: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              polygons: { type: 'number', required: true },
+              holes: { type: 'number', required: true },
+              roundHoles: { type: 'number', required: true },
+              nonCircularHoles: { type: 'number', required: true },
+            },
+          },
+          runId: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { verdict: string; witnesses: { rule: string; measured: number; required: number }[]; metrics: { holes: number; roundHoles: number; nonCircularHoles: number } };
+        const lines = [`2D 切割筛查 → ${v.verdict}`, `孔 ${v.metrics.holes}（圆孔 ${v.metrics.roundHoles}，非圆 ${v.metrics.nonCircularHoles}）`];
+        for (const w of v.witnesses.slice(0, 8)) lines.push(`  ${w.rule}: ${w.measured} < ${w.required}`);
+        return [{ type: 'text', text: lines.join('\n') }];
+      },
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; axis?: string; fraction?: number; atMm?: number;
+        kerfMm: number; minHoleMm: number; minFeatureMm: number; minSpacingMm: number;
+        bendLines?: { from: [number, number]; to: [number, number] }[];
+        minHoleToBendMm?: number; minFlangeMm?: number; minBendReliefMm?: number;
+      };
+      if (typeof a.kerfMm !== 'number' || !Number.isFinite(a.kerfMm) || a.kerfMm < 0) {
+        throw argError('check_sheet2d', 'kerfMm', 'must be a finite number >= 0', 'declare the cut kerf explicitly; there is no silent default', { received: a.kerfMm });
+      }
+      if (typeof a.minHoleMm !== 'number' || !Number.isFinite(a.minHoleMm) || a.minHoleMm < 0) {
+        throw argError('check_sheet2d', 'minHoleMm', 'must be a finite number >= 0', 'declare the smallest acceptable hole diameter after kerf', { received: a.minHoleMm });
+      }
+      if (typeof a.minFeatureMm !== 'number' || !Number.isFinite(a.minFeatureMm) || a.minFeatureMm < 0) {
+        throw argError('check_sheet2d', 'minFeatureMm', 'must be a finite number >= 0', 'declare the smallest acceptable wall after kerf', { received: a.minFeatureMm });
+      }
+      if (typeof a.minSpacingMm !== 'number' || !Number.isFinite(a.minSpacingMm) || a.minSpacingMm < 0) {
+        throw argError('check_sheet2d', 'minSpacingMm', 'must be a finite number >= 0', 'declare the smallest acceptable hole-to-hole clearance after kerf', { received: a.minSpacingMm });
+      }
+      if (a.bendLines !== undefined) {
+        if (!Array.isArray(a.bendLines)) {
+          throw argError('check_sheet2d', 'bendLines', 'must be an array of {from:[u,v], to:[u,v]}', 'omit it for cut-only checks, or pass bend lines in the section u/v frame', { received: a.bendLines });
+        }
+        for (const line of a.bendLines) {
+          const ok = line && Array.isArray(line.from) && line.from.length === 2 && Array.isArray(line.to) && line.to.length === 2
+            && line.from.every((x) => typeof x === 'number' && Number.isFinite(x))
+            && line.to.every((x) => typeof x === 'number' && Number.isFinite(x));
+          if (!ok) {
+            throw argError('check_sheet2d', 'bendLines', 'contains a malformed line', 'each line needs from:[u,v] and to:[u,v] with finite numbers', { received: line });
+          }
+        }
+      }
+      const { store, runStore } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
+      const out = await (await ensurePythonWorker()).request<MeasureSectionSolve>('measure_section', {
+        path,
+        axis: a.axis ?? 'z',
+        atMm: a.atMm,
+        fraction: a.fraction,
+      });
+      const analysis = analyzeSheet2d(out as unknown as SheetSection, {
+        kerfMm: a.kerfMm, minHoleMm: a.minHoleMm, minFeatureMm: a.minFeatureMm, minSpacingMm: a.minSpacingMm,
+        ...(a.bendLines !== undefined ? { bendLines: a.bendLines } : {}),
+        ...(a.minHoleToBendMm !== undefined ? { minHoleToBendMm: a.minHoleToBendMm } : {}),
+        ...(a.minFlangeMm !== undefined ? { minFlangeMm: a.minFlangeMm } : {}),
+        ...(a.minBendReliefMm !== undefined ? { minBendReliefMm: a.minBendReliefMm } : {}),
+      });
+      const run = await beginRun(runStore, {
+        kind: 'sheet2d',
+        title: `2D 切割筛查 · ${a.versionId} · ${analysis.verdict}`,
+      });
+      const report = {
+        versionId: a.versionId,
+        axisMm: out.axisMm,
+        atMm: out.atMm,
+        uAxisMm: out.uAxisMm,
+        vAxisMm: out.vAxisMm,
+        ...analysis,
+        params: {
+          kerfMm: a.kerfMm, minHoleMm: a.minHoleMm, minFeatureMm: a.minFeatureMm, minSpacingMm: a.minSpacingMm,
+          ...(a.bendLines !== undefined ? { bendLines: a.bendLines } : {}),
+          ...(a.minHoleToBendMm !== undefined ? { minHoleToBendMm: a.minHoleToBendMm } : {}),
+          ...(a.minFlangeMm !== undefined ? { minFlangeMm: a.minFlangeMm } : {}),
+          ...(a.minBendReliefMm !== undefined ? { minBendReliefMm: a.minBendReliefMm } : {}),
+        },
+      };
+      await run.json('report.json', report);
+      const status: RunStatus = analysis.witnesses.length > 0 ? 'fail' : (analysis.unevaluable.length > 0 ? 'check' : 'pass');
+      await run.commit({
+        status,
+        judgement: analysis.verdict,
+        title: `2D 切割筛查 · ${a.versionId} · ${analysis.verdict}`,
+        summary: analysis.findings[0] ?? analysis.verdict,
+        sourceVersionIds: [a.versionId],
+      });
+      return {
+        ...report,
+        section: {
+          polygons: out.polygons.length,
+          holes: out.holeCount,
+          roundHoles: analysis.metrics.roundHoles,
+          nonCircularHoles: analysis.metrics.nonCircularHoles,
+        },
+        runId: run.id,
+      };
+    },
+  }));
+
+  // --- check_turning: bar stock / L/D / rotational symmetry ---
+  //
+  // Turning is not a printability profile: the process question is "does this fit
+  // the bar and can a single spindle produce it?" — so this tool measures the mesh,
+  // not a section. Undercut/tool access along the profile are handoffs.
+  registerTool(defineTool({
+    name: 'check_turning',
+    description:
+      'TURNING SCREEN: fit the declared bar stock diameter, check length/diameter against a declared L/D limit, and ' +
+      'measure rotational-symmetry deviation about the declared spindle axis (axes through the bbox centre). ' +
+      'No silent defaults: barDiameterMm, maxLdRatio and symmetryToleranceMm are required. It does NOT measure ' +
+      'undercut/tool access along the profile, chatter, surface finish or bar-feeder limits — those are handoffs. ' +
+      'A non-symmetric part is a warning (secondary milling/mill-turn), not automatically excluded unless ' +
+      'requireSymmetry is true.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to screen, e.g. "v012".' },
+      spindleAxis: { type: 'string', description: 'Spindle axis: x | y | z. Default z.' },
+      barDiameterMm: { type: 'number', required: true, description: 'Declared bar-stock diameter, mm.' },
+      maxLdRatio: { type: 'number', required: true, description: 'Declared maximum length / diameter (L/D).' },
+      symmetryToleranceMm: { type: 'number', required: true, description: 'Allowed rotational-symmetry deviation, mm.' },
+      requireSymmetry: { type: 'boolean', description: 'true = symmetry deviation is a witness (excluded); false = warning only. Default false.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          spindleAxis: { type: 'string', required: true },
+          verdict: { type: 'string', required: true, description: '"excluded" (a witness) or "not-excluded".' },
+          witnesses: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                rule: { type: 'string', required: true },
+                measured: { type: 'number', required: true },
+                required: { type: 'number', required: true },
+                unit: { type: 'string', required: true },
+                note: { type: 'string' },
+              },
+            },
+          },
+          findings: { type: 'array', required: true, items: { type: 'string' } },
+          unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          metrics: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              maxDiameterMm: { type: 'number', required: true },
+              lengthMm: { type: 'number', required: true },
+              ldRatio: { type: 'number', required: true },
+              symmetryMaxDeviationMm: { type: 'number', required: true },
+              sampled: { type: 'number', required: true },
+              watertight: { type: 'boolean', required: true },
+            },
+          },
+          params: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              barDiameterMm: { type: 'number', required: true },
+              maxLdRatio: { type: 'number', required: true },
+              symmetryToleranceMm: { type: 'number', required: true },
+              requireSymmetry: { type: 'boolean', required: true },
+            },
+          },
+          runId: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { verdict: string; metrics: { maxDiameterMm: number; ldRatio: number; symmetryMaxDeviationMm: number }; witnesses: { rule: string }[] };
+        return [{ type: 'text', text: `车削筛查 → ${v.verdict}\n  Ø${v.metrics.maxDiameterMm} · L/D ${v.metrics.ldRatio} · 回转偏差 ${v.metrics.symmetryMaxDeviationMm}mm` }];
+      },
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string; spindleAxis?: string; barDiameterMm: number; maxLdRatio: number;
+        symmetryToleranceMm: number; requireSymmetry?: boolean;
+      };
+      if (typeof a.barDiameterMm !== 'number' || !Number.isFinite(a.barDiameterMm) || a.barDiameterMm <= 0) {
+        throw argError('check_turning', 'barDiameterMm', 'must be a finite number > 0', 'declare the bar-stock diameter you can actually load', { received: a.barDiameterMm });
+      }
+      if (typeof a.maxLdRatio !== 'number' || !Number.isFinite(a.maxLdRatio) || a.maxLdRatio <= 0) {
+        throw argError('check_turning', 'maxLdRatio', 'must be a finite number > 0', 'declare the L/D limit for your bar/chuck', { received: a.maxLdRatio });
+      }
+      if (typeof a.symmetryToleranceMm !== 'number' || !Number.isFinite(a.symmetryToleranceMm) || a.symmetryToleranceMm < 0) {
+        throw argError('check_turning', 'symmetryToleranceMm', 'must be a finite number >= 0', 'declare the symmetry deviation you accept, mm', { received: a.symmetryToleranceMm });
+      }
+      const axisName = a.spindleAxis ?? 'z';
+      if (!['x', 'y', 'z'].includes(axisName)) {
+        throw argError('check_turning', 'spindleAxis', 'must be x, y or z', 'use a principal axis for the spindle', { received: axisName });
+      }
+      const { store, runStore } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
+      const mesh = parseBinaryStl(new Uint8Array(await readFile(path)));
+      const bb = boundingBoxOf(mesh);
+      const centre = new Vector3(
+        (bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2,
+      );
+      const axisVec = axisName === 'x' ? new Vector3(1, 0, 0) : axisName === 'y' ? new Vector3(0, 1, 0) : new Vector3(0, 0, 1);
+      const axialOf = (v: Vector3) => (axisName === 'x' ? v.x : axisName === 'y' ? v.y : v.z);
+      const radialOf = (v: Vector3) => (axisName === 'x' ? Math.hypot(v.y, v.z) : axisName === 'y' ? Math.hypot(v.x, v.z) : Math.hypot(v.x, v.y));
+      const verts = mesh.vertProperties;
+      const count = verts.length / 3;
+      let maxRadius = 0;
+      for (let i = 0; i < count; i++) {
+        const v = new Vector3(verts[i * 3]!, verts[i * 3 + 1]!, verts[i * 3 + 2]!);
+        maxRadius = Math.max(maxRadius, radialOf(v));
+      }
+      const lengthMm = axialOf(new Vector3(bb.max[0], bb.max[1], bb.max[2])) - axialOf(new Vector3(bb.min[0], bb.min[1], bb.min[2]));
+      const bvh = buildMeshBvh({ vertProperties: mesh.vertProperties, triVerts: mesh.triVerts.slice() });
+      const step = Math.max(1, Math.floor(count / 800));
+      let sampled = 0;
+      let symmetryMaxDeviationMm = 0;
+      for (let i = 0; i < count; i += step) {
+        const p = new Vector3(verts[i * 3]!, verts[i * 3 + 1]!, verts[i * 3 + 2]!);
+        if (radialOf(p) < 1e-6) continue;
+        for (const deg of [90, 180, 270]) {
+          const r = p.clone().sub(centre).applyAxisAngle(axisVec, (deg * Math.PI) / 180).add(centre);
+          const hit = bvh.closestPointToPoint(r);
+          if (hit) symmetryMaxDeviationMm = Math.max(symmetryMaxDeviationMm, hit.distance);
+        }
+        sampled++;
+      }
+      const metrics = {
+        maxDiameterMm: 2 * maxRadius,
+        lengthMm,
+        ldRatio: maxRadius > 0 ? lengthMm / (2 * maxRadius) : 0,
+        symmetryMaxDeviationMm,
+        sampled,
+        watertight: isWatertight(mesh).watertight,
+      };
+      const analysis = analyzeTurning(metrics, {
+        barDiameterMm: a.barDiameterMm,
+        maxLdRatio: a.maxLdRatio,
+        symmetryToleranceMm: a.symmetryToleranceMm,
+        requireSymmetry: a.requireSymmetry === true,
+      });
+      const run = await beginRun(runStore, {
+        kind: 'turning',
+        title: `车削筛查 · ${a.versionId} · ${analysis.verdict}`,
+      });
+      const report = {
+        versionId: a.versionId,
+        spindleAxis: axisName,
+        ...analysis,
+        params: {
+          barDiameterMm: a.barDiameterMm, maxLdRatio: a.maxLdRatio,
+          symmetryToleranceMm: a.symmetryToleranceMm, requireSymmetry: a.requireSymmetry === true,
+        },
+      };
+      await run.json('report.json', report);
+      const warn = metrics.symmetryMaxDeviationMm > a.symmetryToleranceMm && a.requireSymmetry !== true;
+      const status: RunStatus = analysis.witnesses.length > 0 ? 'fail' : warn ? 'check' : 'pass';
+      await run.commit({
+        status,
+        judgement: analysis.verdict,
+        title: `车削筛查 · ${a.versionId} · ${analysis.verdict}`,
+        summary: analysis.findings[0] ?? analysis.verdict,
+        sourceVersionIds: [a.versionId],
+      });
+      return { ...report, runId: run.id };
+    },
+  }));
+
+  // --- check_cnc_access: six-direction visibility + setup count ---
+  //
+  // The CNC profile (`check_printability`) covers circular bores and wall. This
+  // tool covers the other half: which sampled faces are reachable from the six
+  // principal directions, and how many principal setups a 3-axis machine needs.
+  registerTool(defineTool({
+    name: 'check_cnc_access',
+    description:
+      'CNC 3-AXIS ACCESS SCREEN: sample the mesh and test visibility from ±X/±Y/±Z; report the area reachable from ' +
+      'no principal direction and the minimum number of principal setups (greedy cover), against a declared ' +
+      'maxSetups. Inaccessible area is a warning unless requireAllAccessible is true. It does NOT model oblique ' +
+      'setups, tool length/diameter, collision, fixture rigidity or chatter — those are handoffs. Use together ' +
+      'with the cnc-3axis printability profile (wall + circular bores).',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to screen, e.g. "v012".' },
+      maxSetups: { type: 'integer', required: true, description: 'Declared maximum number of principal setups (e.g. 2 for top+bottom).' },
+      requireAllAccessible: { type: 'boolean', description: 'true = any inaccessible area is a witness; false = warning. Default false.' },
+      sampleLimit: { type: 'integer', description: 'Max sampled triangles; default 300, capped at 600 (each sample is 6 ray casts).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          verdict: { type: 'string', required: true },
+          witnesses: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                rule: { type: 'string', required: true },
+                measured: { type: 'number', required: true },
+                required: { type: 'number', required: true },
+                unit: { type: 'string', required: true },
+                note: { type: 'string' },
+              },
+            },
+          },
+          findings: { type: 'array', required: true, items: { type: 'string' } },
+          unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          metrics: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              sampled: { type: 'number', required: true },
+              areaMm2: { type: 'number', required: true },
+              accessiblePct: { type: 'number', required: true },
+              topAccessiblePct: { type: 'number', required: true },
+              inaccessiblePct: { type: 'number', required: true },
+              setupsNeeded: { type: 'number', required: true },
+              setupDirs: { type: 'array', required: true, items: { type: 'string' } },
+              directionAreaMm2: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    direction: { type: 'string', required: true },
+                    areaMm2: { type: 'number', required: true },
+                  },
+                },
+              },
+            },
+          },
+          params: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              maxSetups: { type: 'number', required: true },
+              requireAllAccessible: { type: 'boolean', required: true },
+            },
+          },
+          runId: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { verdict: string; metrics: { setupsNeeded: number; inaccessiblePct: number; accessiblePct: number } };
+        return [{ type: 'text', text: `CNC 可达性 → ${v.verdict}\n  装夹 ${v.metrics.setupsNeeded} · 可达 ${v.metrics.accessiblePct}% · 不可达 ${v.metrics.inaccessiblePct}%` }];
+      },
+    },
+    timeoutMs: 180_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string; maxSetups: number; requireAllAccessible?: boolean; sampleLimit?: number };
+      if (typeof a.maxSetups !== 'number' || !Number.isInteger(a.maxSetups) || a.maxSetups <= 0) {
+        throw argError('check_cnc_access', 'maxSetups', 'must be a positive integer', 'declare how many principal setups your 3-axis workflow allows', { received: a.maxSetups });
+      }
+      const sampleLimit = a.sampleLimit ?? 300;
+      if (!Number.isInteger(sampleLimit) || sampleLimit < 100 || sampleLimit > 600) {
+        throw argError('check_cnc_access', 'sampleLimit', 'must be an integer between 100 and 600', 'use 100..600; default 300', { received: sampleLimit });
+      }
+      const { store, runStore } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
+      const mesh = parseBinaryStl(new Uint8Array(await readFile(path)));
+      const bb = boundingBoxOf(mesh);
+      const diag = Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) || 1;
+      const far = diag * 2 + 10;
+      const bvh = buildMeshBvh({ vertProperties: mesh.vertProperties, triVerts: mesh.triVerts.slice() });
+      const dirs = [
+        { name: '+x', v: new Vector3(1, 0, 0) }, { name: '-x', v: new Vector3(-1, 0, 0) },
+        { name: '+y', v: new Vector3(0, 1, 0) }, { name: '-y', v: new Vector3(0, -1, 0) },
+        { name: '+z', v: new Vector3(0, 0, 1) }, { name: '-z', v: new Vector3(0, 0, -1) },
+      ];
+      const triCount = mesh.triVerts.length / 3;
+      const step = Math.max(1, Math.floor(triCount / sampleLimit));
+      let sampled = 0;
+      let areaMm2 = 0;
+      let topArea = 0;
+      let inaccessibleArea = 0;
+      const directionAreaMm2: Record<string, number> = {};
+      for (const d of dirs) directionAreaMm2[d.name] = 0;
+      const masks: { mask: number; area: number }[] = [];
+      for (let t = 0; t < triCount; t += step) {
+        const ia = mesh.triVerts[t * 3]!, ib = mesh.triVerts[t * 3 + 1]!, ic = mesh.triVerts[t * 3 + 2]!;
+        const va = new Vector3(mesh.vertProperties[ia * 3]!, mesh.vertProperties[ia * 3 + 1]!, mesh.vertProperties[ia * 3 + 2]!);
+        const vb = new Vector3(mesh.vertProperties[ib * 3]!, mesh.vertProperties[ib * 3 + 1]!, mesh.vertProperties[ib * 3 + 2]!);
+        const vc = new Vector3(mesh.vertProperties[ic * 3]!, mesh.vertProperties[ic * 3 + 1]!, mesh.vertProperties[ic * 3 + 2]!);
+        const normal = vb.clone().sub(va).cross(vc.clone().sub(va));
+        const area = normal.length() / 2;
+        if (!(area > 0)) continue;
+        normal.normalize();
+        const centroid = va.clone().add(vb).add(vc).multiplyScalar(1 / 3);
+        let mask = 0;
+        let top = false;
+        for (let di = 0; di < dirs.length; di++) {
+          const d = dirs[di]!;
+          if (normal.dot(d.v) <= 1e-3) continue;
+          const ray = new Ray(centroid.clone().addScaledVector(d.v, far), d.v.clone().negate());
+          let occluded = true;
+          try {
+            // Nearest hit only: no hit list to sort. On a real part the sorted
+            // raycast cost ~33ms/ray; raycastFirst removes that.
+            const hit = bvh.raycastFirst(ray, DoubleSide) as { distance: number } | null;
+            occluded = !hit || hit.distance < far - 1;
+          } catch { occluded = true; }
+          if (!occluded) {
+            mask |= 1 << di;
+            directionAreaMm2[d.name] = (directionAreaMm2[d.name] ?? 0) + area;
+            if (d.name === '+z') top = true;
+          }
+        }
+        sampled++;
+        areaMm2 += area;
+        if (top) topArea += area;
+        if (mask === 0) inaccessibleArea += area;
+        masks.push({ mask, area });
+      }
+      // Greedy set cover over accessible samples only.
+      let uncovered = masks.filter((m) => m.mask !== 0);
+      const setupDirs: string[] = [];
+      while (uncovered.length > 0) {
+        let bestDir = -1;
+        let bestArea = -1;
+        for (let di = 0; di < dirs.length; di++) {
+          const area = uncovered.filter((m) => (m.mask & (1 << di)) !== 0).reduce((s, m) => s + m.area, 0);
+          if (area > bestArea) { bestArea = area; bestDir = di; }
+        }
+        if (bestDir < 0 || bestArea <= 0) break;
+        setupDirs.push(dirs[bestDir]!.name);
+        uncovered = uncovered.filter((m) => (m.mask & (1 << bestDir)) === 0);
+      }
+      const pct = (x: number) => (areaMm2 > 0 ? (x / areaMm2) * 100 : 0);
+      const metrics = {
+        sampled,
+        areaMm2,
+        accessiblePct: areaMm2 > 0 ? pct(areaMm2 - inaccessibleArea) : 0,
+        topAccessiblePct: pct(topArea),
+        inaccessiblePct: pct(inaccessibleArea),
+        setupsNeeded: setupDirs.length,
+        setupDirs,
+        directionAreaMm2: dirs.map((d) => ({ direction: d.name, areaMm2: directionAreaMm2[d.name] ?? 0 })),
+      };
+      const analysis = analyzeCncAccess(metrics, {
+        maxSetups: a.maxSetups,
+        requireAllAccessible: a.requireAllAccessible === true,
+      });
+      const run = await beginRun(runStore, {
+        kind: 'machinability',
+        title: `CNC 可达性 · ${a.versionId} · ${analysis.verdict}`,
+      });
+      const report = {
+        versionId: a.versionId,
+        ...analysis,
+        params: { maxSetups: a.maxSetups, requireAllAccessible: a.requireAllAccessible === true },
+      };
+      await run.json('report.json', report);
+      const warn = metrics.inaccessiblePct > 0 && a.requireAllAccessible !== true;
+      const status: RunStatus = analysis.witnesses.length > 0 ? 'fail' : warn ? 'check' : 'pass';
+      await run.commit({
+        status,
+        judgement: analysis.verdict,
+        title: `CNC 可达性 · ${a.versionId} · ${analysis.verdict}`,
+        summary: analysis.findings[0] ?? analysis.verdict,
+        sourceVersionIds: [a.versionId],
+      });
+      return { ...report, runId: run.id };
+    },
+  }));
+
+  // --- check_edm_access: single-axis electrode line of sight ---
+  //
+  // Sinker EDM is one-axis. Do not reuse the six-direction CNC screen: it would
+  // claim a side setup that a sinker does not have.
+  registerTool(defineTool({
+    name: 'check_edm_access',
+    description:
+      'EDM SINKER ELECTRODE ACCESS: sample the mesh and test the line of sight along ONE burn axis (x|y|z, ' +
+      'leading "-" flips it). Reports the area whose first surface hit is itself (reachable) vs occluded ' +
+      '(inaccessible). Inaccessible area is a warning unless requireAllReachable is true. It does NOT model ' +
+      'electrode shape/side-burn/undercut, wear, minimum feature or surface finish — those are handoffs.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version to screen, e.g. "v012".' },
+      burnAxis: { type: 'string', description: 'Burn axis: x | y | z, optional leading "-" (e.g. "-z"). Default z.' },
+      requireAllReachable: { type: 'boolean', description: 'true = any occluded area is a witness; false = warning. Default false.' },
+      sampleLimit: { type: 'integer', description: 'Max sampled triangles; default 300, capped at 1000.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          burnAxis: { type: 'string', required: true },
+          verdict: { type: 'string', required: true },
+          witnesses: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                rule: { type: 'string', required: true },
+                measured: { type: 'number', required: true },
+                required: { type: 'number', required: true },
+                unit: { type: 'string', required: true },
+                note: { type: 'string' },
+              },
+            },
+          },
+          findings: { type: 'array', required: true, items: { type: 'string' } },
+          unevaluable: { type: 'array', required: true, items: { type: 'string' } },
+          metrics: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              sampled: { type: 'number', required: true },
+              areaMm2: { type: 'number', required: true },
+              reachablePct: { type: 'number', required: true },
+              inaccessiblePct: { type: 'number', required: true },
+              burnAxis: { type: 'string', required: true },
+            },
+          },
+          params: {
+            type: 'object', required: true, additionalProperties: false,
+            properties: {
+              burnAxis: { type: 'string', required: true },
+              requireAllReachable: { type: 'boolean', required: true },
+              sampleLimit: { type: 'number', required: true },
+            },
+          },
+          runId: { type: 'string' },
+        },
+      },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { verdict: string; metrics: { burnAxis: string; reachablePct: number; inaccessiblePct: number } };
+        return [{ type: 'text', text: `EDM 单轴可达 ${v.metrics.burnAxis} → ${v.verdict}\n  可达 ${v.metrics.reachablePct}% · 不可达 ${v.metrics.inaccessiblePct}%` }];
+      },
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { versionId: string; burnAxis?: string; requireAllReachable?: boolean; sampleLimit?: number };
+      const axisName = a.burnAxis ?? 'z';
+      if (!/^-?[xyz]$/.test(axisName)) {
+        throw argError('check_edm_access', 'burnAxis', 'must be x, y or z, optionally with a leading "-"', 'use a principal burn axis such as z or -z', { received: axisName });
+      }
+      const sampleLimit = a.sampleLimit ?? 300;
+      if (!Number.isInteger(sampleLimit) || sampleLimit < 100 || sampleLimit > 1000) {
+        throw argError('check_edm_access', 'sampleLimit', 'must be an integer between 100 and 1000', 'use 100..1000; default 300', { received: sampleLimit });
+      }
+      const { store, runStore } = await allStores(exec);
+      const path = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(path)) throw new Error(await versionNotFound(store, a.versionId));
+      const mesh = parseBinaryStl(new Uint8Array(await readFile(path)));
+      const bb = boundingBoxOf(mesh);
+      const diag = Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) || 1;
+      const far = diag * 2 + 10;
+      const sign = axisName.startsWith('-') ? -1 : 1;
+      const base = axisName.replace(/^-/, '');
+      const axis = base === 'x' ? new Vector3(sign, 0, 0) : base === 'y' ? new Vector3(0, sign, 0) : new Vector3(0, 0, sign);
+      const bvh = buildMeshBvh({ vertProperties: mesh.vertProperties, triVerts: mesh.triVerts.slice() });
+      const triCount = mesh.triVerts.length / 3;
+      const step = Math.max(1, Math.floor(triCount / sampleLimit));
+      let sampled = 0;
+      let areaMm2 = 0;
+      let reachableArea = 0;
+      for (let t = 0; t < triCount; t += step) {
+        const ia = mesh.triVerts[t * 3]!, ib = mesh.triVerts[t * 3 + 1]!, ic = mesh.triVerts[t * 3 + 2]!;
+        const va = new Vector3(mesh.vertProperties[ia * 3]!, mesh.vertProperties[ia * 3 + 1]!, mesh.vertProperties[ia * 3 + 2]!);
+        const vb = new Vector3(mesh.vertProperties[ib * 3]!, mesh.vertProperties[ib * 3 + 1]!, mesh.vertProperties[ib * 3 + 2]!);
+        const vc = new Vector3(mesh.vertProperties[ic * 3]!, mesh.vertProperties[ic * 3 + 1]!, mesh.vertProperties[ic * 3 + 2]!);
+        const area = vb.clone().sub(va).cross(vc.clone().sub(va)).length() / 2;
+        if (!(area > 0)) continue;
+        const centroid = va.clone().add(vb).add(vc).multiplyScalar(1 / 3);
+        const ray = new Ray(centroid.clone().addScaledVector(axis, far), axis.clone().negate());
+        let reachable = false;
+        try {
+          const hit = bvh.raycastFirst(ray, DoubleSide) as { distance: number } | null;
+          reachable = !!hit && hit.distance >= far - 1;
+        } catch { reachable = false; }
+        sampled++;
+        areaMm2 += area;
+        if (reachable) reachableArea += area;
+      }
+      const inaccessiblePct = areaMm2 > 0 ? ((areaMm2 - reachableArea) / areaMm2) * 100 : 0;
+      const metrics = {
+        sampled,
+        areaMm2,
+        reachablePct: areaMm2 > 0 ? (reachableArea / areaMm2) * 100 : 0,
+        inaccessiblePct,
+        burnAxis: axisName,
+      };
+      const analysis = analyzeEdmAccess(metrics, { requireAllReachable: a.requireAllReachable === true });
+      const run = await beginRun(runStore, { kind: 'edm', title: `EDM 单轴可达 · ${a.versionId} · ${analysis.verdict}` });
+      const report = {
+        versionId: a.versionId,
+        burnAxis: axisName,
+        ...analysis,
+        params: { burnAxis: axisName, requireAllReachable: a.requireAllReachable === true, sampleLimit },
+      };
+      await run.json('report.json', report);
+      const warn = metrics.inaccessiblePct > 0 && a.requireAllReachable !== true;
+      const status: RunStatus = analysis.witnesses.length > 0 ? 'fail' : warn ? 'check' : 'pass';
+      await run.commit({
+        status,
+        judgement: analysis.verdict,
+        title: `EDM 单轴可达 · ${a.versionId} · ${analysis.verdict}`,
+        summary: analysis.findings[0] ?? analysis.verdict,
+        sourceVersionIds: [a.versionId],
+      });
+      return { ...report, runId: run.id };
+    },
+  }));
+
   // --- measure_angle: the angle between two things, with the convention stated ---
   //
   // "Angle" is the measurement most likely to produce a "your number does not match
@@ -6637,6 +7356,122 @@ export function registerCadTools(
     },
   }));
 
+
+  // --- deliver: the derived delivery plan (read-only; not a gate) -----------
+  //
+  // WHY: the agent should not have to remember 37 tools and which run is fresh.
+  // The plan is DERIVED from the BOM/ICD, the claims and the run graph; it names
+  // what is fresh, what is missing, where to look and which atomic tool to run.
+  // It never runs CAD and never writes a run. `planVerdict` is process-scoped;
+  // `corpusVerdict` is the audit, and a difference is reported instead of hidden.
+  registerTool(defineTool({
+    name: 'deliver',
+    description:
+      'Read-only delivery PLAN derived from the BOM/ICD, parts roles, claims and the run graph. ' +
+      'Returns per-target rows (part printability/review, interface contract/joint, assembly interference, claims): ' +
+      'status, witness run/check, where to look, and the atomic tool call that would fill a gap. ' +
+      '`planVerdict` is scoped to the BOM\'s process (`source:user`, or an agent recommendation the user confirmed) ' +
+      'or the argument; `corpusVerdict` is the corpus audit — when they differ, the plan names it ' +
+      '(usually the audit is counting a run under another process). ' +
+      'Process decisions are BATCHED, not per part: the BOM `manufacturing` policy (a user-approved allowed set) ' +
+      'plus one `M:mix` summary cover every part; the agent assigns each part from the allowed set. Only a part ' +
+      'outside the set becomes one exception question. An unconfirmed policy/recommendation is `unobserved` — ' +
+      'the plan asks once, never N times. Allowed ids come from the process catalog: each is tagged ' +
+      '[supported|partial|planned]; a planned process (e.g. laser-cut-sheet, die-casting) has a defined ' +
+      'method/criteria/inputs but no evaluator yet — its parts are `unobserved` with that method, never checked ' +
+      'with a printability profile. ' +
+      'This tool DOES NOT run CAD, write runs or decide delivery: a plan pass is not a claim. ' +
+      'A missing process/profile/run is `unobserved` with the declaration or call that would fill it — never a silent pass. ' +
+      'Use it before delivery to see the whole board, then run the named tools; use `verify`/`delivery_audit` for the gate.',
+    parameters: {
+      process: {
+        type: 'string',
+        description: 'User-confirmed process/profile override for printed parts (e.g. injection-pp, fdm-pla-0.4). ' +
+          'The BOM\'s per-part or root `process` is preferred; omit this unless you are confirming on the user\'s behalf.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          planVerdict: { type: 'string', required: true, description: 'Process-scoped plan verdict: excluded | blocked | difficult | not-excluded.' },
+          corpusVerdict: { type: 'string', required: true, description: 'Corpus audit verdict (verify); may differ from planVerdict.' },
+          process: { type: 'string', description: 'The process this plan used, if declared.' },
+          processSource: { type: 'string', description: 'Who owns the process decision: user | agent, when known.' },
+          summary: { type: 'object', required: true, additionalProperties: true },
+          rows: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          gaps: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          next: { type: 'array', required: true, items: { type: 'string' }, description: 'Top next actions (atomic tool calls), deduplicated.' },
+          verification: { type: 'object', required: true, additionalProperties: true, description: 'The read-only verify report summary (six rows, findings, checks).' },
+        },
+      },
+      render: (_a, v) => {
+        const out = v as unknown as {
+          planVerdict: string;
+          corpusVerdict: string;
+          process?: string;
+          processSource?: string;
+          summary: Record<string, number>;
+          rows: { id: string; target: string; check: string; status: string; why: string; next?: string }[];
+          gaps: { code: string; what: string; why: string; next: string }[];
+          next: string[];
+          verification: { rows: { id: string; status: string }[] };
+        };
+        const order: Record<string, number> = { fail: 0, blocked: 1, unobserved: 2, warn: 3, pass: 4, exempt: 5 };
+        const rows = [...(out.rows ?? [])].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+        const attention = rows.filter((r) => r.status !== 'pass' && r.status !== 'exempt');
+        const lines = [
+          `deliver → plan ${out.planVerdict} (corpus ${out.corpusVerdict})`,
+          `process: ${out.process ?? '(undeclared)'}${out.processSource ? ` (${out.processSource})` : ''}`,
+          `plan: ${out.summary?.total ?? rows.length} rows · pass ${out.summary?.pass ?? 0} · warn ${out.summary?.warn ?? 0} · ` +
+            `fail ${out.summary?.fail ?? 0} · unobserved ${out.summary?.unobserved ?? 0} · exempt ${out.summary?.exempt ?? 0}`,
+        ];
+        if (attention.length) {
+          lines.push('attention:');
+          for (const r of attention.slice(0, 12)) {
+            lines.push(`  - [${r.status}] ${r.id} ${r.check} — ${r.why}`);
+            if (r.next) lines.push(`    next: ${r.next}`);
+          }
+          if (attention.length > 12) lines.push(`  … ${attention.length - 12} more; read rows`);
+        }
+        if (out.gaps?.length) {
+          lines.push('declared gaps:');
+          for (const g of out.gaps) lines.push(`  - ${g.code}: ${g.what} — ${g.next}`);
+        }
+        if (out.next?.length) {
+          lines.push('next actions:');
+          for (const n of out.next.slice(0, 8)) lines.push(`  - ${n}`);
+        }
+        lines.push('verify rows: ' + (out.verification?.rows ?? []).map((r) => `${r.id}=${r.status}`).join(' · '));
+        lines.push('a plan pass is not a claim: run the named tools, then verify/delivery_audit');
+        return [{ type: 'text', text: lines.join('\n') }] as never;
+      },
+    },
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { process?: string };
+      const project = await allStores(exec);
+      const plan = await buildDeliveryPlan(project.cwd, {
+        ...(a.process ? { process: a.process } : {}),
+        checks: true,
+      });
+      const next = [...new Set([
+        ...plan.rows.filter((r) => r.next).map((r) => r.next as string),
+        ...plan.gaps.map((g) => g.next),
+      ])].slice(0, 10);
+      return {
+        planVerdict: plan.planVerdict,
+        corpusVerdict: plan.verdict,
+        ...(plan.process ? { process: plan.process } : {}),
+        ...(plan.processSource ? { processSource: plan.processSource } : {}),
+        summary: plan.summary,
+        rows: plan.rows,
+        gaps: plan.gaps,
+        next,
+        verification: plan.verification,
+      } as never;
+    },
+  }));
+
   // --- analyze: the risk map (detection only; never gates) ------------------
   registerTool(defineTool({
     name: 'analyze',
@@ -7555,6 +8390,7 @@ export function registerCadTools(
           mediaType: { type: 'string', required: true },
           bytes: { type: 'integer', required: true },
           attached: { type: 'boolean', required: true, description: 'Whether an image block rides on this result.' },
+          recallToken: { type: 'string', description: 'Internal token consumed by finalizeContent; stripped from the rendered JSON.' },
         },
       },
       render: (_args: unknown, value: unknown) => [{

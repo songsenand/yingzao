@@ -45,6 +45,21 @@ Four facts the shape does not make obvious:
 - a part node names its version with `version` (e.g. `"v003"`), or `source: "stock"` if it has no
   geometry.
 
+- `process` on a part (or on the assembly root as the default) is
+  `{id, source: "user" | "policy" | "agent", rationale?, confirmedBy?, confirmedAt?}`. The usual
+  path is `source: "policy"`: the project has a top-level
+  `manufacturing: {allowed: [{id}], approvedBy, mixApprovedBy?, preference?, delegate?}` — **one
+  user decision on the allowed process set**, after which the agent assigns each part from that
+  set; `mixApprovedBy` records the second decision (the `M:mix` summary). That is the 0–3 key-node
+  model (policy, mix, exceptions), not a per-part confirmation loop. `source: "user"`
+  is an explicit per-part decision; `source: "agent"` is a recommendation that needs confirmation
+  unless an approved `delegate` policy covers it. An unconfirmed policy/recommendation is
+  `unobserved` in `deliver`; it never runs a printability verdict on it. This is the field that
+  lets "the user only has an FDM printer" narrow the allowed set once, instead of being asked at
+  every part. The id vocabulary and the **supported / partial / planned** status live in
+  [`processes.md`](processes.md): `allowed` is the decision space, an evaluator is a separate fact,
+  and a planned process is recorded but reported `unobserved`, never a pass.
+
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 
 `check_assembly` is a **delivery tool**: `validate_assembly` measures, this one judges against

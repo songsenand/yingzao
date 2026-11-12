@@ -8,7 +8,7 @@
 //
 //   node scripts/accept-process-profiles.mjs
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -36,6 +36,30 @@ if (!shipped.ok) { console.log('\ncannot continue without a valid shipped profil
 const missing = RULE_NAMES.filter((r) => shipped.profile.rules[r] === undefined);
 check('the shipped example declares every named rule', missing.length === 0, missing.join(', ') || `${RULE_NAMES.length} rules`);
 
+// ── 1b. the shipped CNC-3axis example is valid and declares its cutting rules ──
+const cncPath = join(REPO, 'schemas', 'examples', 'cnc-3axis.json');
+const cnc = validateProfile(JSON.parse(readFileSync(cncPath, 'utf8')));
+check('the shipped CNC-3axis example validates', cnc.ok, cnc.ok ? '' : cnc.errors.join(' | '));
+if (cnc.ok) {
+  const cncMissing = RULE_NAMES.filter((r) => cnc.profile.rules[r] === undefined);
+  check('the CNC example declares every named rule', cncMissing.length === 0, cncMissing.join(', ') || `${RULE_NAMES.length} rules`);
+  check('CNC declares toolRadiusMm as a geometric min rule',
+    cnc.profile.rules.toolRadiusMm?.applies === true && cnc.profile.rules.toolRadiusMm.decidable === 'geometry');
+  check('CNC declares holeAspectMax as a geometric max rule',
+    cnc.profile.rules.holeAspectMax?.applies === true && cnc.profile.rules.holeAspectMax.decidable === 'geometry');
+  check('CNC turns off additive-only rules (overhang)',
+    cnc.profile.rules.overhangDeg?.applies === false);
+}
+
+// ── 1c. every shipped profile validates and declares every named rule ────────
+for (const file of readdirSync(join(REPO, 'schemas', 'examples')).filter((f) => f.endsWith('.json')).sort()) {
+  const parsed = validateProfile(JSON.parse(readFileSync(join(REPO, 'schemas', 'examples', file), 'utf8')));
+  check(`shipped profile ${file} validates`, parsed.ok, parsed.ok ? '' : parsed.errors.join(' | '));
+  if (!parsed.ok) continue;
+  const absent = RULE_NAMES.filter((r) => parsed.profile.rules[r] === undefined);
+  check(`${file} declares every named rule`, absent.length === 0, absent.join(', ') || `${RULE_NAMES.length} rules`);
+}
+
 // ── 2. negative controls: each of these MUST be refused ───────────────────────
 const base = () => JSON.parse(JSON.stringify(shippedRaw));
 const refused = (label, mutate) => {
@@ -51,7 +75,7 @@ refused('applies=false without a reason', (p) => { delete p.rules.draftMinDeg.re
 refused('an unknown rule name (a typo, not a new rule)', (p) => { p.rules.wallMinimum = { applies: true, decidable: 'geometry', value: 1, direction: 'min', source: { kind: 'assumed' } }; });
 refused('an unknown top-level key', (p) => { p.recommendedProcess = 'SLS'; });
 refused('a bad id', (p) => { p.id = 'FDM PLA'; });
-refused('an unknown process', (p) => { p.process = 'forging'; });
+refused('an unknown process', (p) => { p.process = 'CNC-9axis'; });
 refused('schemaVersion 2', (p) => { p.schemaVersion = 2; });
 refused('an invalid decidable value', (p) => { p.rules.wallMinMm.decidable = 'maybe'; });
 refused('an invalid source.kind', (p) => { p.rules.wallMinMm.source.kind = 'vibes'; });

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "cnc-3axis",
+  "process": "CNC-3axis",
+  "material": "AL 6061-T6",
+  "machine": "desktop 3-axis, Ø6 mm flat end mill (template; edit for your machine)",
+  "description": "Partial CNC-3axis screen. It evaluates wall/feature/gap, circular-bore tool radius (a cutter of radius r cannot enter a bore narrower than 2r) and hole aspect (depth/diameter). It does NOT evaluate non-circular pockets/slots (needs a voxel reachability sweep), undercuts, minimum internal radius, setups/fixturing, chatter or cost. This is a screen, not a machinability certificate.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": { "kind": "rule-of-thumb", "ref": "template for 6061-T6; calibrate on your machine" },
+      "detail": "Thin walls deflect during milling; 1.0mm is a conservative starting point for a desktop machine."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": { "kind": "rule-of-thumb", "ref": "template; small pins/bosses break or deflect" }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.5,
+      "direction": "min",
+      "source": { "kind": "rule-of-thumb", "ref": "template; smaller slots need a smaller cutter" }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "CNC removes material; there is no support overhang."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span is created by material removal."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 4,
+      "direction": "max",
+      "source": { "kind": "rule-of-thumb", "ref": "HSS drill 4:1 conservative; carbide/peck drilling can go deeper" },
+      "detail": "Depth / diameter. Applies to circular bores only."
+    },
+    "draftMinDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No mold release; draft does not govern machining."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder/resin to evacuate."
+    },
+    "toolRadiusMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": { "kind": "rule-of-thumb", "ref": "Ø6 mm cutter template" },
+      "detail": "Circular bores only: a bore radius below the cutter radius cannot be entered. Non-circular pockets/slots are NOT covered."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.1,
+      "direction": "max",
+      "source": { "kind": "rule-of-thumb", "ref": "desktop 3-axis template" },
+      "detail": "A capability; excluding on it needs a declared tolerance requirement."
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 3.2,
+      "direction": "max",
+      "source": { "kind": "rule-of-thumb", "ref": "template; tool marks dominate" },
+      "detail": "Reported for information only; never used to exclude."
+    }
+  },
+  "notes": "Every number is a template (`rule-of-thumb`), not a calibration. The honest verdict is partial: circular bores, wall/feature/gap are screened; non-circular pockets, undercuts, min internal radius, setups, chatter and cost are handoffs."
+}

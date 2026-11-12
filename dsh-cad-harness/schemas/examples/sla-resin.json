@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "id": "sla-resin",
+  "process": "SLA",
+  "material": "standard resin",
+  "machine": "SLA/DLP template",
+  "description": "Partial SLA screen: wall/feature/gap + overhang/support + escape-passage (drainage) reachability. Cup suction/shrink/post-cure are handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.6,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.4,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "overhangDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 30,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      },
+      "detail": "Supports are still needed below this angle."
+    },
+    "bridgeMaxMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 10,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "draftMinDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No mold release."
+    },
+    "escapePassageMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA drainage template"
+      }
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.1,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 1.6,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "SLA resin template"
+      }
+    }
+  },
+  "notes": "The escape rule checks enclosed voids and hole diameters; it is reachability, not a drainage-flow test."
+}

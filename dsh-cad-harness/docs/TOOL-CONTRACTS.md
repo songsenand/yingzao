@@ -96,6 +96,42 @@ check_assembly({ manifestPath: "…" })
 returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
+## `check_cnc_access`
+
+CNC 3-AXIS ACCESS SCREEN: sample the mesh and test visibility from ±X/±Y/±Z; report the area reachable from no principal direction and the minimum number of principal setups (greedy cover), against a declared maxSetups. Inaccessible area is a warning unless requireAllAccessible is true. It does NOT model oblique setups, tool length/diameter, collision, fixture rigidity or chatter — those are handoffs. Use together with the cnc-3axis printability profile (wall + circular bores).
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved version to screen, e.g. "v012". |
+| `maxSetups` | integer | **required** | Declared maximum number of principal setups (e.g. 2 for top+bottom). |
+| `requireAllAccessible` | boolean | — | true = any inaccessible area is a witness; false = warning. Default false. |
+| `sampleLimit` | integer | — | Max sampled triangles; default 300, capped at 600 (each sample is 6 ray casts). |
+
+```js
+check_cnc_access({ versionId: "…", maxSetups: 0 })
+```
+
+returns: `versionId`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
+
+
+## `check_edm_access`
+
+EDM SINKER ELECTRODE ACCESS: sample the mesh and test the line of sight along ONE burn axis (x|y|z, leading "-" flips it). Reports the area whose first surface hit is itself (reachable) vs occluded (inaccessible). Inaccessible area is a warning unless requireAllReachable is true. It does NOT model electrode shape/side-burn/undercut, wear, minimum feature or surface finish — those are handoffs.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved version to screen, e.g. "v012". |
+| `burnAxis` | string | — | Burn axis: x \| y \| z, optional leading "-" (e.g. "-z"). Default z. |
+| `requireAllReachable` | boolean | — | true = any occluded area is a witness; false = warning. Default false. |
+| `sampleLimit` | integer | — | Max sampled triangles; default 300, capped at 1000. |
+
+```js
+check_edm_access({ versionId: "…" })
+```
+
+returns: `versionId`, `burnAxis`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
+
+
 ## `check_parts`
 
 Screen up to 12 saved versions in ONE call: per version, the measure half (watertight / bodies / volume / bbox) and the SAME profile-aware printability job as check_printability. The printability half writes one printability run per version and returns its runId, so the rows can back a delivery claim; there is no second implementation. Use it to screen a family (which of these 7 is thin?) instead of N single calls; for one part the single tool is equivalent. `checks` defaults to both halves. The reply is deliberately compact — run the single-part tool when you need the full findings/attention for one part.
@@ -138,6 +174,52 @@ check_printability({ versionId: "…" })
 returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `printOrientationDeg`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
+## `check_sheet2d`
+
+2D CUT SCREEN for a flat sheet/plate part: section it at mid-thickness (axis/fraction) and check round-hole diameter, hole-to-outside wall and hole-to-hole spacing AFTER the kerf. Inputs are declared: kerfMm, minHoleMm, minFeatureMm, minSpacingMm — no silent defaults. It does NOT check non-circular hole width, outer tabs, flat pattern/K-factor, heat-affected zone or taper. With bendLines it also checks hole-to-bend distance, min flange and a bend-relief heuristic; flat pattern/K-factor remain handoffs. A `not-excluded` result is a section-level screen, not a cut certificate.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved flat version to section, e.g. "v012". |
+| `axis` | string | — | Plane normal: x \| y \| z (leading "-" flips it). Default z. |
+| `fraction` | number | — | Where to cut across the axis, 0..1. Default 0.5 (mid-thickness for a plate). |
+| `atMm` | number | — | Explicit cut position in mm; wins over fraction. |
+| `kerfMm` | number | **required** | Cut kerf to subtract from every measured hole/feature, mm. |
+| `minHoleMm` | number | **required** | Smallest acceptable round-hole diameter after kerf, mm. |
+| `minFeatureMm` | number | **required** | Smallest acceptable hole-to-outside wall after kerf, mm. |
+| `minSpacingMm` | number | **required** | Smallest acceptable hole-to-hole clearance after kerf, mm. |
+| `bendLines` | array | — | Optional bend lines in the section u/v frame: [{from:[u,v], to:[u,v]}]. Enables bend checks. |
+| `minHoleToBendMm` | number | — | Minimum hole-centre to bend-line distance, mm (needs bendLines). |
+| `minFlangeMm` | number | — | Minimum flange from the bend line to a free edge, mm (needs bendLines). |
+| `minBendReliefMm` | number | — | Max distance from a bend-line end to a free edge/hole before it counts as "no relief", mm (needs bendLines). |
+
+```js
+check_sheet2d({ versionId: "…", kerfMm: 0, minHoleMm: 0, minFeatureMm: 0, minSpacingMm: 0 })
+```
+
+returns: `versionId`, `axisMm`, `atMm`, `uAxisMm`, `vAxisMm`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `section`, `runId`
+
+
+## `check_turning`
+
+TURNING SCREEN: fit the declared bar stock diameter, check length/diameter against a declared L/D limit, and measure rotational-symmetry deviation about the declared spindle axis (axes through the bbox centre). No silent defaults: barDiameterMm, maxLdRatio and symmetryToleranceMm are required. It does NOT measure undercut/tool access along the profile, chatter, surface finish or bar-feeder limits — those are handoffs. A non-symmetric part is a warning (secondary milling/mill-turn), not automatically excluded unless requireSymmetry is true.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved version to screen, e.g. "v012". |
+| `spindleAxis` | string | — | Spindle axis: x \| y \| z. Default z. |
+| `barDiameterMm` | number | **required** | Declared bar-stock diameter, mm. |
+| `maxLdRatio` | number | **required** | Declared maximum length / diameter (L/D). |
+| `symmetryToleranceMm` | number | **required** | Allowed rotational-symmetry deviation, mm. |
+| `requireSymmetry` | boolean | — | true = symmetry deviation is a witness (excluded); false = warning only. Default false. |
+
+```js
+check_turning({ versionId: "…", barDiameterMm: 0, maxLdRatio: 0, symmetryToleranceMm: 0 })
+```
+
+returns: `versionId`, `spindleAxis`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
+
+
 ## `create_part`
 
 Name a part before any geometry exists; idempotent. generate_part creates a part automatically, so call this only to open a subject the user has merely talked about.
@@ -151,6 +233,21 @@ create_part({ name: "…" })
 ```
 
 returns: `partId`, `name`, `created`
+
+
+## `deliver`
+
+Read-only delivery PLAN derived from the BOM/ICD, parts roles, claims and the run graph. Returns per-target rows (part printability/review, interface contract/joint, assembly interference, claims): status, witness run/check, where to look, and the atomic tool call that would fill a gap. `planVerdict` is scoped to the BOM's process (`source:user`, or an agent recommendation the user confirmed) or the argument; `corpusVerdict` is the corpus audit — when they differ, the plan names it (usually the audit is counting a run under another process). Process decisions are BATCHED, not per part: the BOM `manufacturing` policy (a user-approved allowed set) plus one `M:mix` summary cover every part; the agent assigns each part from the allowed set. Only a part outside the set becomes one exception question. An unconfirmed policy/recommendation is `unobserved` — the plan asks once, never N times. Allowed ids come from the process catalog: each is tagged [supported|partial|planned]; a planned process (e.g. laser-cut-sheet, die-casting) has a defined method/criteria/inputs but no evaluator yet — its parts are `unobserved` with that method, never checked with a printability profile. This tool DOES NOT run CAD, write runs or decide delivery: a plan pass is not a claim. A missing process/profile/run is `unobserved` with the declaration or call that would fill it — never a silent pass. Use it before delivery to see the whole board, then run the named tools; use `verify`/`delivery_audit` for the gate.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `process` | string | — | User-confirmed process/profile override for printed parts (e.g. injection-pp, fdm-pla-0.4). The BOM's per-part or root `process` is preferred; omit this unless you are confirming on the user's behalf. |
+
+```js
+deliver({ process: "…" })
+```
+
+returns: `planVerdict`, `corpusVerdict`, `process`, `processSource`, `summary`, `rows`, `gaps`, `next`, `verification`
 
 
 ## `delivery_audit`
@@ -457,7 +554,7 @@ Re-attach a user-uploaded reference image (or any earlier attachment) as a fresh
 recall_reference_image({ path: "…" })
 ```
 
-returns: `recalled`, `source`, `mediaType`, `bytes`, `attached`
+returns: `recalled`, `source`, `mediaType`, `bytes`, `attached`, `recallToken`
 
 
 ## `render_part`

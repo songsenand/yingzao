@@ -57,7 +57,7 @@ check(commitAt > 0 && pointerAt > commitAt, 'the pointer is written after the co
 check(/assembly-check-pointer\/v1/.test(tools), 'the GET route recognises the pointer');
 check(/report\.json/.test(tools.slice(pointerAt)), 'and reads the run report through the run id');
 const p3 = await readFile(join(ROOT, 'scripts', 'accept-p3.mjs'), 'utf8');
-check(/reportPointer\.runId/.test(p3), 'accept-p3 follows the pointer instead of parsing the file as a report');
+check(/pointer\.runId/.test(p3), 'accept-p3 follows the pointer instead of parsing the file as a report');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);

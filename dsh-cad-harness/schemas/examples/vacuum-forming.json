@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "id": "vacuum-forming",
+  "process": "vacuum-forming",
+  "material": "PETG 1.5 mm",
+  "machine": "vacuum former template",
+  "description": "Partial vacuum-forming screen: wall/feature/gap + draft via the draft solver. Draw-ratio/thinning/webbing are handoffs.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      },
+      "detail": "Nominal wall; actual wall thins with draw."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Vacuum forming is not additive; overhang is not the governing rule."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span is created."
+    },
+    "holeAspectMax": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Holes are trimmed after forming, not formed by the tool."
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      },
+      "detail": "Release from the male/female tool."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Air is evacuated through the tool, not a printed passage."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 1.6,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "vacuum forming template"
+      }
+    }
+  },
+  "notes": "Holes are usually trimmed after forming, so holeAspectMax is off. The wall rule flags nominal walls, not the thinned wall after draw."
+}

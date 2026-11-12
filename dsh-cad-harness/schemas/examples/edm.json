@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "edm",
+  "process": "EDM",
+  "material": "tool steel",
+  "machine": "wire/sink EDM template, Ø2 mm wire/electrode",
+  "description": "Partial EDM screen: wall/feature/gap + circular-bore electrode/wire radius + hole aspect. It does NOT evaluate non-circular pockets/electrode access, electrode wear, surface finish or burn time.",
+  "rules": {
+    "wallMinMm": { "applies": true, "decidable": "geometry", "value": 0.5, "direction": "min", "source": { "kind": "rule-of-thumb", "ref": "EDM template" } },
+    "featureMinMm": { "applies": true, "decidable": "geometry", "value": 0.3, "direction": "min", "source": { "kind": "rule-of-thumb", "ref": "EDM template" } },
+    "gapMinMm": { "applies": true, "decidable": "geometry", "value": 0.2, "direction": "min", "source": { "kind": "rule-of-thumb", "ref": "EDM template" } },
+    "overhangDeg": { "applies": false, "decidable": "geometry", "reason": "EDM removes material; no support overhang." },
+    "bridgeMaxMm": { "applies": false, "decidable": "geometry", "reason": "No unsupported span is created." },
+    "holeAspectMax": { "applies": true, "decidable": "geometry", "value": 10, "direction": "max", "source": { "kind": "rule-of-thumb", "ref": "EDM can go deeper than drilling; still a template" } },
+    "draftMinDeg": { "applies": false, "decidable": "geometry", "reason": "No mold release." },
+    "escapePassageMinMm": { "applies": false, "decidable": "geometry", "reason": "No trapped powder/resin." },
+    "toolRadiusMm": { "applies": true, "decidable": "geometry", "value": 1, "direction": "min", "source": { "kind": "rule-of-thumb", "ref": "Ø2 mm wire/electrode template" }, "detail": "Circular bores only; non-circular pockets are not covered." },
+    "tolMm": { "applies": true, "decidable": "declared-requirement", "value": 0.05, "direction": "max", "source": { "kind": "rule-of-thumb", "ref": "EDM template" } },
+    "surfaceRaUm": { "applies": true, "decidable": "not-decidable", "value": 1.6, "direction": "max", "source": { "kind": "rule-of-thumb", "ref": "EDM template" } }
+  },
+  "notes": "Every number is a template. The screen covers circular bores + wall/feature/gap; non-circular pockets, electrode wear, surface and burn time are handoffs."
+}

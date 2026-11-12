@@ -19,7 +19,7 @@ export interface FreshnessResult {
 }
 
 export function scopeOfKind(kind: string): RunScope {
-  return kind === 'printability' ? 'part' : 'assembly';
+  return kind === 'printability' || kind === 'sheet2d' || kind === 'turning' || kind === 'machinability' || kind === 'edm' ? 'part' : 'assembly';
 }
 
 export function setEqual(a: readonly string[], b: readonly string[]): boolean {

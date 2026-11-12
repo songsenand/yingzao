@@ -16,6 +16,7 @@
 | `engines.md` | 运动/物理/流体/LBM/应力的模型边界，以及它们不能回答什么 | 已有 |
 | `assembly.md` | 装配清单形状、七个 operator、pose、阈值、导入件/stock | 已有 |
 | `manufacturing.md` | 可打印性清单、工艺档案、信任阶梯、校准、封闭腔/刀具可达 | 已有 |
+| `processes.md` | 工艺目录：`allowed` 决策空间 vs `support` 评估器；planned/partial 的分级与 handoff | 已有 |
 | `modeling.md` | 导入格式/单位、merge/genus、OpenSCAD 度数/radian、twist、参考图 | 已有 |
 | `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 已有 |
 | `conventions.md` | mm/z-up、datum、manifest、judge/scan/both、run | 已有 |

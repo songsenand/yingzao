@@ -5748,3 +5748,40 @@ PROJECT-SCOPE、DESIGN、limits、`examples/windup-frog/README.md`、相关 acce
 **影响：** 新增 `src/host/project-export.ts`、`src/host/zip.ts`、`scripts/accept-project-export.mjs`；`src/host/tools.ts` 注册路由；`src/client/panel.ts` 增加整项目按钮与整机「导出」标签；`README.md`、`DESIGN.md §5.3/§6.2` 同步。单版本导出路径不变。
 
 **未决 / 非目标：** STEP 导出仍不在范围内（网格内核）；合并 STL 不做法线重算之外的网格修复，也不保证多壳之间不重叠。ZIP 在内存中构建，超大项目（数百 MB）需要改成流式写入，本轮未做。
+
+## 2026-11-12：工艺验证先走“档案 + 共享评估器”，不为每种工艺造一个工具
+
+**触发条件：** 第 1 条（用户明确要求常见工艺都要有验证方法）+ 第 4 条（影响 process catalog、deliver 计划、process profiles 与后续 2D/减材评估器）。
+
+**要解决的问题：** 15 种常见工艺若各造一个检查工具，会重复壁厚/特征/间隙/拔模的几何代码，且每个工具都要自己的 run kind、UI、契约；同时“目录里有 id”容易被读成“能验”。
+
+**决策内容：**
+
+- `manufacturing.allowed` 只表达用户可获得的工艺集；`ProcessCapability.verification` 单独描述 method/evaluator/built/criteria/inputs/handoff，状态分 `supported` / `partial` / `planned`。
+- 成型/铸造/增材优先复用 `check_printability`：壁厚/特征/间隙 + `draftMinDeg` 的拔模/倒扣求解 + `escapePassageMinMm` 的封闭腔可达性；已发布 `cnc-3axis`、`die-casting-alu`、`vacuum-forming`、`sand-casting`、`forging`、`sla-resin`、`sls-pa12` 七个档案（加 FDM 共 8 个）。
+- 2D 切割/钣金/挤出需要 `check_sheet2d`，车削/EDM 需要轴/电极可达性；在评估器落地前保持 `planned`，`deliver` 给 method/inputs 并标 `unobserved`，不拿 3D 打印性 profile 冒充。
+- 不另造 `check_moldability`：draft 求解器已覆盖同一族几何，档案只是把工艺规则数据化。
+
+**理由：** 复用已验证的几何路径，避免第二个引擎与第二套 run/UI；工艺差异放在 profile 数据里，评估器差异只在真正不同的几何（2D、回转、电极）时才新增。`planned` 是诚实的“方法已定义、评估器未实现”，不是 pass。
+
+**依据：** `accept-process-profiles` 校验 8 个 shipped profile（每个 11 条规则）；`accept-tool-contracts` / `accept-skill-tools` / `accept-tool-groups` / `accept-tool-output` / `accept-verify` / `accept-row-regressions` / `accept-preflight` 全过；`deliver` 对 `die-casting-alu`/`cnc-3axis` 零件给出 `check_printability(versionId, profileIds:[...])`；`accept-p3` 因 bundled Python runtime `state: absent` 未复跑，未生成真实 run。
+
+**影响：** `src/host/process-catalog.ts`、`schemas/examples/*.json`、`docs/llm/processes.md`、`deliver-plan.ts` 的 `[supported|partial|planned]` 标签与 `process-planned` 缺口；后续 `check_sheet2d` 与非圆槽/车削/EDM 评估器。
+
+## 2026-11-12：工艺目录达到 0 planned；K 因子/展开图保留为显式 handoff
+
+**触发条件：** 第 1 条（用户要求常见工艺都要有验证方法）+ 第 4 条（收束 process-catalog 与 docs 的“planned”状态）。
+
+**要解决的问题：** 目录里 15 种常见工艺都已有方法，但钣金折弯的 K 因子/展开图无法由一个 2D 截面决定：它需要折弯角、厚度、K 因子与展开模型；把一个“声明值代公式”的计算器包装成检查，会制造假绿。
+
+**决策内容：**
+
+- `check_sheet2d` 覆盖 2D 切割 + 可选折弯检查（孔到折弯、最小翻边、折弯让位启发式）；K 因子/展开图明确列为 handoff，不再作为 planned 评估器。
+- `cnc-turning`、`edm`（圆孔 profile + 线切割 `check_sheet2d` + 沉模 `check_edm_access`）、`cnc-3axis`（profile + `check_cnc_access` 六方向可达/装夹）均已落地；目录 1 supported / 14 partial / 0 planned。
+- 每一类未覆盖的判据（充填/气孔/缩水/翘曲、电极形状/侧蚀、斜装夹/刀具长度/夹具、K 因子/展开图、非圆孔宽度）都写在 `handoff`/`unevaluable`，不冒充通过。
+
+**理由：** 场地的职责是把几何能回答的问题回答完，把不能回答的边界写清；一个“K 因子计算器”不是验证器，无法从成型件反推出展开长度。显式 handoff 比假检查更接近“有办法验证”。
+
+**依据：** `accept-sheet2d` 16/16、`accept-turning` 10/10、`accept-cnc-access` 8/8、`accept-edm-access` 6/6、`accept-process-profiles` 全过；`accept-tool-contracts`/`accept-skill-tools`/`accept-tool-groups`/`accept-tool-output`/`accept-verify`/`accept-row-regressions`/`accept-preflight` 全过；`tsc` 0；`build` 成功；目录扫描 `planned: (none)`。
+
+**影响：** `process-catalog.ts`、`schemas/examples/*.json`、`docs/llm/processes.md`、`deliver-plan.ts`、`skills/cad-toolbox`。若以后要做真实展开图，需要引入折弯角/厚度/中性层模型或原始平板 DXF，另立评估器，不在本轮冒充。

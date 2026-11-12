@@ -14,7 +14,7 @@
       "description": "Stable identifier, e.g. \"fdm-pla-0.4\". Recorded in every run so a verdict is interpretable later."
     },
     "process": {
-      "enum": ["FDM", "SLA", "SLS", "MJF", "injection", "CNC-3axis", "CNC-4axis", "CNC-5axis", "casting"],
+      "enum": ["FDM", "SLA", "SLS", "MJF", "injection", "CNC-3axis", "CNC-4axis", "CNC-5axis", "casting", "die-casting", "vacuum-forming", "forging", "turning", "EDM", "laser", "waterjet", "sheet-metal", "extrusion"],
       "description": "The process family. Determines which rules are applicable at all - e.g. overhang is meaningless for powder-bed and for machining, draft is mandatory only for molding."
     },
     "material": { "type": "string", "description": "e.g. \"PLA\", \"PA12\", \"ABS\", \"6061-T6\"." },
