@@ -3,14 +3,15 @@ Copyright 2026 songsenand <songsenand@163.com> and other contributors
 
 本产品以 Apache License 2.0 发布（全文见 LICENSE）。
 
-本项目**不分发**任何第三方代码或素材
---------------------------------------
-以下组件均由使用者自行获取，均不入库（.gitignore：lib/ bin/ cad-data/）：
+本项目的 **npm 包不包含**第三方代码或素材；OpenSCAD 由 provisioner 在用户机器上下载，
+项目镜像只托管官方二进制。以下组件均不入库（.gitignore：lib/ bin/ cad-data/）：
 
 - BOSL2 —— BSD 2-Clause License，Copyright (c) 2015-2024 Revar Desmera
   https://github.com/BelfrySCAD/BOSL2 · 本地放在 lib/BOSL2/（仓库内**没有**它，
   校验入口：dsh-cad-harness/scripts/accept-bosl2.mjs）
-- OpenSCAD（GPL-2.0）—— 以**独立程序**调用（进程边界，非链接）；由用户自行安装/指定，插件不随包分发二进制
+- OpenSCAD（GPL-2.0）—— 以**独立程序**调用（进程边界，非链接）。provisioner 从官方快照
+  （https://files.openscad.org/snapshots/）或项目 OSS 镜像下载官方二进制；对应源码与许可证：
+  https://github.com/openscad/openscad（GPL-2.0）。npm 包本身不包含该二进制。
 - Python 运行时与科学计算包 —— 由 python_runtime 在用户机器上下载安装（见 README「一次性准备」）
 - 题库第三方素材（Pixabay 等）—— **物化使用、不入库**；逐项授权登记见
   examples/bench/ATTRIBUTION.md 与 docs/THIRD-PARTY-AUDIT.md

@@ -27,7 +27,7 @@ npx dsh-cad-verify <project> --advisory
 # restart dsh
 ```
 
-OpenSCAD is installed by you: 2021.01 works but `doctor` reports `degraded`; 2025.06+ is recommended for Manifold. The plugin does not ship OpenSCAD, and OpenSCAD is the default kernel, not the only possible one. The preview ships only the OpenSCAD adapter; CadQuery/FreeCAD are listed as `planned`, cannot be selected, and are never silently substituted.
+OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or too slow. 2021.01 works but `doctor` reports `degraded`. The plugin does not ship OpenSCAD, and OpenSCAD is the default kernel, not the only possible one. The preview ships only the OpenSCAD adapter; CadQuery/FreeCAD are listed as `planned`, cannot be selected, and are never silently substituted.
 
 ## Known limits
 

@@ -100,7 +100,9 @@ export const OPENSCAD_BACKEND: CadBackend = {
   status: 'available',
   async detect() {
     const { execFile } = await import('node:child_process');
-    const bin = process.env.CAD_OPENSCAD_BIN?.trim() || 'openscad';
+    const bin = process.env.CAD_OPENSCAD_BIN?.trim()
+      || readBackendConfig().config.binaryPath
+      || 'openscad';
     return await new Promise((resolve) => {
       execFile(bin, ['--version'], { timeout: 8000 }, (error, stdout, stderr) => {
         const output = `${stdout ?? ''}${stderr ?? ''}`.trim();

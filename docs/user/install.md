@@ -8,7 +8,7 @@
 |---|---|
 | **dsh**（含 Web GUI） | 插件挂在 dsh 上；预览版以 tarball 或本地路径安装 |
 | **Node ≥ 20 + pnpm** | 安装/运行插件；tarball 用户不需要 build，DSH 内部仍会用 pnpm |
-| **OpenSCAD** | **用户自行安装**。2021.01 可跑但 `doctor` 报 degraded；推荐 2025.06+（Manifold）。也可用 `CAD_OPENSCAD_BIN` 指定 |
+| **OpenSCAD** | `setup --openscad=auto` 自动准备；已有 2025.06+ 系统版本则直接用。官方快照优先，官方不可达/持续低于 256 KB/s 才切 OSS。也可用 `CAD_OPENSCAD_BIN` 指定现有二进制 |
 | **BOSL2** | 可选标准件库（齿轮/螺纹/螺丝/壁）。从上游自行下载到 `lib/BOSL2/`，包内不包含 |
 | **Python** | **不随包分发**；首次分析/仿真时下载约 400MB 到 `$DSH_HOME/cad/runtime/` |
 
@@ -20,7 +20,7 @@
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
-npx dsh-cad-setup
+npx dsh-cad-setup --openscad=auto
 npx dsh-cad-doctor
 npx dsh-cad-backend --show
 ```
@@ -30,15 +30,16 @@ npx dsh-cad-backend --show
 ```bash
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
-npm run setup
+node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```
 
 改动 Host 代码后需重新 `pnpm run build` 并重启 dsh（宿主 bundle 不热重载）。tarball 用户不需要这一步。
 
-`npx dsh-cad-setup`（源码目录里的 `npm run setup` 等价）会重新生成
-`presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径；`npm run setup:check`
-只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
+`npx dsh-cad-setup --openscad=auto`（源码目录里的 `node scripts/setup.mjs --openscad=auto` 等价）会重新生成
+`presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径，并准备 OpenSCAD。
+`--openscad=off` 只写预设、不下载；`--openscad=official` / `mirror` 可强制单源。
+`npm run setup:check` 只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
 
 再跑一次环境自检：
 

@@ -29,7 +29,8 @@ npx dsh-cad-verify <project> --advisory  # 六行证据报告（只读）
 # 重启 dsh
 ```
 
-OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推荐 2025.06+（Manifold）。插件不随包分发 OpenSCAD，
+OpenSCAD 由 `setup --openscad=auto` 自动准备：已有 2025.06+ 系统版本就直接用；否则官方快照优先，
+官方不可达或持续过慢才切 OSS 镜像。2021.01 可跑但 `doctor` 报 degraded。插件不随包分发 OpenSCAD，
 也不要求它必须是唯一后端——预览版只实现了 OpenSCAD 适配器，CadQuery/FreeCAD 在菜单里
 显示为 `planned`，不可选、不静默替代。
 

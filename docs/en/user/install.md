@@ -8,11 +8,11 @@
 |---|---|
 | **dsh** (with the Web GUI) | The plugin is installed into a dsh profile |
 | **Node ≥ 20 + pnpm** | For install/runtime; tarball users do not build, but dsh still uses pnpm internally |
-| **OpenSCAD** | **Installed by you.** 2021.01 works but `doctor` reports `degraded`; 2025.06+ is recommended (Manifold). You can point `CAD_OPENSCAD_BIN` at a specific binary |
+| **OpenSCAD** | Prepared by `setup --openscad=auto`; an existing 2025.06+ system install is used as-is. Official snapshot first; the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s. You can also point `CAD_OPENSCAD_BIN` at a binary |
 | **BOSL2** | Optional standard-parts library (gears/threads/screws/walls). Download it yourself into `lib/BOSL2/`; it is not shipped |
 | **Python** | **Not shipped.** The first analysis/simulation downloads about 400 MB into `$DSH_HOME/cad/runtime/` |
 
-The preview does **not** bundle OpenSCAD, BOSL2 or the Python runtime. The plugin call the user's OpenSCAD through a process boundary.
+The preview does **not** bundle OpenSCAD, BOSL2 or the Python runtime. OpenSCAD is provisioned as a portable download (official first, OSS mirror fallback) or reused from the system; the plugin calls it through a process boundary.
 
 ## Install
 
@@ -22,7 +22,7 @@ The preview does **not** bundle OpenSCAD, BOSL2 or the Python runtime. The plugi
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
-npx dsh-cad-setup
+npx dsh-cad-setup --openscad=auto
 npx dsh-cad-doctor
 npx dsh-cad-backend --show
 ```
@@ -38,7 +38,7 @@ npx dsh-cad-doctor
 
 After changing host code you must rebuild `lib/` and restart dsh (the host bundle is not hot-reloaded). Tarball users do not need this.
 
-`npx dsh-cad-setup` (or `npm run setup` in a checkout) rewrites `presets/cad/preset.patch.yml` with **this machine's** `skills/` path. `npx dsh-cad-setup --check` writes nothing and exits 1 when the path is stale or a skill directory is missing. Restart dsh afterwards.
+`npx dsh-cad-setup --openscad=auto` (or `node scripts/setup.mjs --openscad=auto` in a checkout) rewrites `presets/cad/preset.patch.yml` with **this machine's** `skills/` path and provisions OpenSCAD. `--openscad=off` writes the preset only; `--openscad=official` / `mirror` force one source. `npx dsh-cad-setup --check` writes nothing and exits 1 when the path is stale or a skill directory is missing. Restart dsh afterwards.
 
 Then check the environment:
 

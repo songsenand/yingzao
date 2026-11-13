@@ -108,11 +108,15 @@ add('bundle-lib', existsSync(join(ROOT, 'lib/index.js')) ? 'pass' : 'fail',
   existsSync(join(ROOT, 'lib/index.js')) ? undefined : 'reinstall the built tarball, or run `npm run build` in a checkout');
 
 // --- OpenSCAD --------------------------------------------------------------
+const backendFile = join(CAD_HOME, 'backend.json');
+let backendConfig = { kernel: 'openscad', compileBackend: 'auto', binaryPath: null };
+try { backendConfig = { ...backendConfig, ...JSON.parse(readFileSync(backendFile, 'utf8')) }; } catch { /* defaults */ }
 const repoSandbox = join(ROOT, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad');
 const candidates = explicitOpenScad
   ? [explicitOpenScad]
   : [
       process.env.CAD_OPENSCAD_BIN,
+      backendConfig.binaryPath,
       onPath('openscad'),
       existsSync(repoSandbox) ? repoSandbox : null,
     ].filter(Boolean);
@@ -127,7 +131,7 @@ for (const candidate of candidates) {
   }
 }
 if (!openscad) {
-  add('openscad', 'fail', 'OpenSCAD not found', 'install OpenSCAD 2025.06+ and put it on PATH, or set CAD_OPENSCAD_BIN');
+  add('openscad', 'fail', 'OpenSCAD not found', 'run `npx dsh-cad-provision`, or install OpenSCAD 2025.06+ on PATH / set CAD_OPENSCAD_BIN');
 } else {
   const year = Number(/20(\d{2})/.exec(openscadVersion ?? '')?.[1] ?? 0);
   add('openscad', 'pass', `${openscad} — ${openscadVersion}`, undefined);
@@ -148,9 +152,6 @@ add('bosl2', bosl2 ? 'pass' : 'warn', bosl2 ? `BOSL2 at ${bosl2}` : 'BOSL2 not f
   bosl2 ? undefined : 'download BOSL2 into lib/BOSL2 and set OPENSCADPATH to the directory that CONTAINS BOSL2');
 
 // --- backend selection -----------------------------------------------------
-const backendFile = join(CAD_HOME, 'backend.json');
-let backendConfig = { kernel: 'openscad', compileBackend: 'auto', binaryPath: null };
-try { backendConfig = { ...backendConfig, ...JSON.parse(readFileSync(backendFile, 'utf8')) }; } catch { /* defaults */ }
 add('backend', backendConfig.kernel === 'openscad' ? 'pass' : 'fail',
   `kernel=${backendConfig.kernel} compileBackend=${backendConfig.compileBackend}`,
   backendConfig.kernel === 'openscad' ? undefined : 'run `npx dsh-cad-backend --kernel openscad` (only OpenSCAD ships in this preview)');

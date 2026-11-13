@@ -103,11 +103,12 @@
 
 ## 快速开始
 
-先安装 OpenSCAD（2021.01 可运行但 `doctor` 会报 degraded；推荐 2025.06+，Manifold 后端）。
+`setup --openscad=auto` 会准备 OpenSCAD（2021.01 可运行但 `doctor` 报 degraded；
+推荐 2025.06+ / Manifold）：已有 2025.06+ 系统版本就直接用；没有则从**官方快照优先**下载，
+官方不可达或持续低于 256 KB/s 时才切到 OSS 镜像。也可以用 `--openscad=off` 手动准备，
+或用 `CAD_OPENSCAD_BIN` 指定已有二进制。
 
-> **自动下载的不是 OpenSCAD。** 首次用到计算功能时，插件会自动下载约 400MB 的 Python 运行时；
-> OpenSCAD 是系统级几何内核，预览版**不随包分发、也不替用户下载**。缺它时 `doctor` 会直接报
-> `OpenSCAD not found`，并给出安装或 `CAD_OPENSCAD_BIN` 的下一步。
+> 自动准备的是 OpenSCAD 便携版和约 400MB 的 Python 运行时；两者都不随 tarball 分发。
 
 **方式 A：tarball（预览版，不需要构建）**
 
@@ -115,7 +116,7 @@
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
-npx dsh-cad-setup          # 写入“营造模式”预设在本机的 skill 路径
+npx dsh-cad-setup --openscad=auto   # 预设 + 自动准备 OpenSCAD
 npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 ```
 
@@ -124,7 +125,7 @@ npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 ```bash
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
-npm run setup
+node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```
 

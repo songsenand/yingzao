@@ -43,6 +43,7 @@
 | `npm run accept:i18n` | 17/17（zh/en key、英文无 CJK、通知/弹窗、locale 注册、英文 user+llm 文档齐全/链接可解析） |
 | `npm run accept:run-facts` | 11/11（motion/fluid/assembly 的英文 headline/label/summary） |
 | `npm run accept:ui-i18n` | 1/1（client 字符串字面量除术语外无中文，汉字只在 i18n.ts） |
+| `npm run accept:provision` | 16/16（官方慢/404/哈希错→镜像；官方快→不碰镜像；双失败报两源；doctor 读 binaryPath） |
 | `npm run accept:i18n` | 17/17 |
 | `npm run accept:run-facts` | 11/11 |
 | `npm run accept:ui-i18n` | 1/1 |

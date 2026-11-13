@@ -15,6 +15,7 @@
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildPreset, listSkillFiles } from './preset-lib.mjs';
@@ -23,6 +24,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 
 function argValue(name) {
+  const eq = process.argv.find((a) => a.startsWith(`${name}=`));
+  if (eq) return eq.slice(name.length + 1);
   const i = process.argv.indexOf(name);
   if (i < 0) return undefined;
   const value = process.argv[i + 1];
@@ -42,6 +45,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   --skill-dir <dir>    skill directory (default: <root>/skills)
   --standard <file>    explicit standard.patch.yml (default: find installed dsh)
   --out <file>         write here instead of <root>/presets/cad/preset.patch.yml
+  --openscad <mode>    auto|official|mirror|off (default off): provision OpenSCAD too
 
 Exit: 0 ok · 1 stale/missing skills · 2 cannot write / no dsh`);
   process.exit(0);
@@ -53,6 +57,23 @@ const root = resolve(argValue('--root') ?? ROOT);
 const skillDir = resolve(argValue('--skill-dir') ?? join(root, 'skills'));
 const file = resolve(argValue('--out') ?? join(root, 'presets', 'cad', 'preset.patch.yml'));
 const standard = argValue('--standard');
+const openscadMode = argValue('--openscad') ?? 'off';
+
+if (!['off', 'auto', 'official', 'mirror'].includes(openscadMode)) {
+  console.error(`dsh-cad-setup: unknown --openscad ${openscadMode}`);
+  process.exit(2);
+}
+
+if (!check && openscadMode !== 'off') {
+  const provision = spawnSync(process.execPath, [join(HERE, 'provision-openscad.mjs'), '--source', openscadMode], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+    env: process.env,
+  });
+  if (provision.status !== 0) {
+    console.error('dsh-cad-setup: OpenSCAD provisioning failed; preset was not changed');
+    process.exit(1);
+  }
+}
 
 function status(ok, extra = {}) {
   const payload = {

@@ -21,7 +21,7 @@ This is not a modelling UI. Geometry generation is no longer the bottleneck; **k
 
 ## Quick start
 
-Install OpenSCAD first. 2021.01 works but `doctor` reports `degraded`; 2025.06+ is recommended for the Manifold backend.
+`setup --openscad=auto` prepares OpenSCAD: an existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or too slow. 2021.01 works but `doctor` reports `degraded`; 2025.06+ is recommended for Manifold.
 
 **A. Tarball (preview release; no build)**
 
@@ -29,7 +29,7 @@ Install OpenSCAD first. 2021.01 works but `doctor` reports `degraded`; 2025.06+ 
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
-npx dsh-cad-setup          # writes this machine's skill path into the preset
+npx dsh-cad-setup --openscad=auto   # preset + OpenSCAD
 npx dsh-cad-doctor         # kind=ok, or an explained degraded
 ```
 
@@ -38,7 +38,7 @@ npx dsh-cad-doctor         # kind=ok, or an explained degraded
 ```bash
 dsh plugin --profile <your-profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
-npm run setup
+node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```
 
