@@ -52,7 +52,11 @@ jobs:
           npm run accept:preview 2>&1 | tee /tmp/accept.log
       - name: Publish acceptance failure summary
         if: failure()
-        run: tail -200 /tmp/accept.log >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          tail -200 /tmp/accept.log >> "$GITHUB_STEP_SUMMARY"
+          tail -40 /tmp/accept.log | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
 
       - name: Upload acceptance log
         if: always()
