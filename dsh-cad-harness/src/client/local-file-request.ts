@@ -1,3 +1,4 @@
+import { t as tr } from './i18n.ts';
 // Pure request/data helpers for the panel's local-STL dialog.
 //
 // Separate from local-file.tsx so they can be imported by a Node acceptance
@@ -8,10 +9,10 @@ export type ImportUnit = 'mm' | 'cm' | 'm' | 'inch';
 
 /** STL carries no unit, so this is a DECLARATION the human makes, not an inference. */
 export const IMPORT_UNITS: { id: ImportUnit; label: string }[] = [
-  { id: 'mm', label: 'mm（毫米，默认）' },
-  { id: 'cm', label: 'cm（厘米）' },
-  { id: 'm', label: 'm（米）' },
-  { id: 'inch', label: 'inch（英寸）' },
+  { id: 'mm', label: tr('ui.unit.mm') },
+  { id: 'cm', label: tr('ui.unit.cm') },
+  { id: 'm', label: tr('ui.unit.m') },
+  { id: 'inch', label: tr('ui.unit.inch') },
 ];
 
 export interface ImportStlRequestInput {
@@ -57,5 +58,5 @@ export function buildImportStlRequest(input: ImportStlRequestInput): ImportStlRe
 /** The name the part gets unless the human overrides it (matches import_part). */
 export function partNameFromPath(path: string): string {
   const base = path.trim().split(/[\\/]/).pop() ?? '';
-  return base.replace(/\.[^.]+$/, '') || '导入件';
+  return base.replace(/\.[^.]+$/, '') || tr('ui.import.defaultName');
 }

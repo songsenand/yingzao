@@ -1,3 +1,4 @@
+import { t as tr } from './i18n.ts';
 // Captions for panel screenshots: the text that rides with the image.
 //
 // Two subjects, one rule — the caption must name what the picture IS, because
@@ -59,10 +60,10 @@ const MAX_EVENT_CHARS = 40;
  * is posed per frame, and the only bbox in reach belonged to another view.
  */
 export function runShotCaption(run: CaptionRun, label: string, frame?: ShotFrame): string {
-  const head = `${run.id}「${run.title}」· ${label}`;
+  const head = tr('ui.caption.runHead', { id: run.id, title: run.title, label });
   const facts: string[] = [];
   if (frame) {
-    facts.push(`帧 ${frame.index}/${frame.total}`);
+    facts.push(tr('ui.caption.frame', { index: frame.index, total: frame.total }));
     // An event is cited ONLY when it happened on this frame: a neighbouring
     // collision is not what the picture shows, and the label can be long.
     const tol = frame.stepSec !== undefined ? Math.max(frame.stepSec / 2, EVENT_EPS_SEC) : EVENT_EPS_SEC;
@@ -70,13 +71,13 @@ export function runShotCaption(run: CaptionRun, label: string, frame?: ShotFrame
       .filter((ev) => Math.abs(ev.timeSec - frame.timeSec) <= tol + EVENT_EPS_SEC)
       .slice(0, MAX_EVENTS);
     if (near.length) {
-      facts.push(`事件 ${near.map((ev) => `${secText(ev.timeSec)}s ${clip(ev.label)}`).join(' / ')}`);
+      facts.push(tr('ui.caption.event', { events: near.map((ev) => `${secText(ev.timeSec)}s ${clip(ev.label)}`).join(' / ') }));
     }
   }
   const versions = [...new Set(run.sourceVersionIds.filter(Boolean))];
-  if (versions.length) facts.push(`几何来自 ${versions.join(' + ')}`);
-  if (run.staleVersionIds?.length) facts.push('源版本已过期');
-  return `CAD 视口截图 — ${head}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
+  if (versions.length) facts.push(tr('ui.caption.geometry', { versions: versions.join(' + ') }));
+  if (run.staleVersionIds?.length) facts.push(tr('ui.caption.sourceStale'));
+  return tr('ui.caption.head', { head }) + (facts.length ? `\n${facts.join(' · ')}` : '');
 }
 
 /** Event times are exact floats; print 0.5, not 0.5000000000000001. */
@@ -119,31 +120,31 @@ export interface PartShotFacts {
 /** Two lines: who this is (`part · revision · action`), then the pixel facts. */
 export function partShotCaption(f: PartShotFacts): string {
   const head: string[] = [];
-  if (f.partName) head.push(`零件「${f.partName}」`);
+  if (f.partName) head.push(tr('ui.caption.part', { name: f.partName }));
   if (f.versionId) {
     // An old revision must not read like the current one: the picture cannot
     // show that a newer version exists.
     const stale = f.latestVersionId && f.versionId !== f.latestVersionId
-      ? `（旧版·最新 ${f.latestVersionId}）`
+      ? tr('ui.caption.oldVersion', { latest: f.latestVersionId })
       : '';
-    head.push(`版本 ${f.versionId}${stale}`);
+    head.push(tr('ui.caption.version', { version: f.versionId, stale }));
   }
   head.push(f.label);
   const facts: string[] = [];
-  if (f.bboxMm) facts.push(`包围盒 ${f.bboxMm.map(round3).join(' × ')} mm`);
+  if (f.bboxMm) facts.push(tr('ui.caption.bbox', { values: f.bboxMm.map(round3).join(' × ') }));
   if (f.section) {
-    facts.push(`剖视：沿 ${f.section.axis} 轴、保留 ${Math.round(f.section.keepPct * 100)}% 侧（测量点已约束在该剖切面内）`);
+    facts.push(tr('ui.caption.section', { axis: f.section.axis, keep: Math.round(f.section.keepPct * 100) }));
   }
   if (f.measureMm) {
-    facts.push(`两点测量 ${f.measureMm.dist.toFixed(2)} mm（自 [${f.measureMm.a.map((n) => n.toFixed(1)).join(', ')}] 至 [${f.measureMm.b.map((n) => n.toFixed(1)).join(', ')}]）`);
+    facts.push(tr('ui.caption.measure', { dist: f.measureMm.dist.toFixed(2), a: f.measureMm.a.map((n) => n.toFixed(1)).join(', '), b: f.measureMm.b.map((n) => n.toFixed(1)).join(', ') }));
   }
-  if (f.thicknessMm !== undefined) facts.push(`壁厚 ${f.thicknessMm.toFixed(2)} mm`);
-  if (f.annotations) facts.push(`${f.annotations} 处标注框`);
-  if (f.heatLegend) facts.push(`热力图：${f.heatLegend}`);
+  if (f.thicknessMm !== undefined) facts.push(tr('ui.caption.thickness', { value: f.thicknessMm.toFixed(2) }));
+  if (f.annotations) facts.push(tr('ui.caption.annotations', { count: f.annotations }));
+  if (f.heatLegend) facts.push(tr('ui.caption.heat', { legend: f.heatLegend }));
   if (f.compare) {
-    facts.push(`副视口：蓝 = ${f.compare.blue.role} ${f.compare.blue.id} · 橙 = ${f.compare.orange.role} ${f.compare.orange.id}`);
+    facts.push(tr('ui.caption.compare', { blue: f.compare.blue.role, blueId: f.compare.blue.id, orange: f.compare.orange.role, orangeId: f.compare.orange.id }));
   }
-  return `CAD 视口截图 — ${head.join(' · ')}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
+  return tr('ui.caption.head', { head: head.join(' · ') }) + (facts.length ? `\n${facts.join(' · ')}` : '');
 }
 
 function round3(v: number): number {

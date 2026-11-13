@@ -16,6 +16,7 @@
 // Newest first, so "land on the first entry" means "land on the latest result".
 
 import type { PartProduct, RunProduct } from '../shared/types.ts';
+import { t as tr } from './i18n.ts';
 
 /** A run plus the part it is being shown under (scene entries say so). */
 export interface BrowseRun extends RunProduct {
@@ -46,7 +47,7 @@ const newestFirst = (runs: BrowseRun[]): BrowseRun[] =>
 /** One entry per run id: the scene bucket wins (it carries the cross-part label). */
 export function flattenRuns(parts: readonly PartProduct[], scene: readonly RunProduct[]): BrowseRun[] {
   const byId = new Map<string, BrowseRun>();
-  for (const r of scene) if (!byId.has(r.id)) byId.set(r.id, { ...r, owner: '跨零件场景' });
+  for (const r of scene) if (!byId.has(r.id)) byId.set(r.id, { ...r, owner: tr('ui.owner.crossPart') });
   for (const p of parts) {
     for (const r of p.runs) if (!byId.has(r.id)) byId.set(r.id, { ...r, owner: p.name });
   }

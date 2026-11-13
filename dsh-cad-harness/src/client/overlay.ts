@@ -9,6 +9,7 @@
 // `--screenshot` captures, so a DOM overlay is the only version of this that can
 // be verified in the sandbox harness.
 import React, { useEffect, useRef } from 'react';
+import { t as tr } from './i18n.ts';
 import * as THREE from 'three';
 
 export interface OverlayScene {
@@ -268,7 +269,7 @@ export function ViewportOverlay(props: {
     props.onReset
       ? React.createElement('button', {
         type: 'button',
-        title: '复原视图：回到默认取景',
+        title: tr('ui.view.restoreTitle'),
         onClick: () => resetRef.current?.(),
         style: {
           position: 'absolute', right: 8, top: 8, pointerEvents: 'auto',
@@ -276,7 +277,7 @@ export function ViewportOverlay(props: {
           fontSize: 11, lineHeight: '16px',
           border: '1px solid #d5d9dd', background: 'rgba(255,255,255,0.86)', color: '#26303a',
         },
-      }, '⤾ 复原')
+      }, tr('ui.view.restore'))
       : null,
 
     // caller-supplied chrome (the ground picker)

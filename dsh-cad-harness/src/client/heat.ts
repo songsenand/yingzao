@@ -11,6 +11,7 @@
 // The colour scale is the layer's OWN declared normalization, never a prettier one:
 // a heatmap whose legend does not match the threshold that produced it is decoration.
 import type { BufferGeometry } from 'three';
+import { t as tr } from './i18n.ts';
 
 export interface AttentionSample {
   /** Position in the part's own frame, mm. */
@@ -59,7 +60,7 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     return {
       id: 'fused',
       samples: fused,
-      legend: `风险 |u|（距各自舒适带）：红 ≥ 0.5（过半）· 蓝 = 舒适区 · 采样 ${fused.length} 点 · 读数=最坏那一路`,
+      legend: tr('ui.heat.risk', { count: fused.length }),
       score: (v) => Math.min(1, Math.max(0, v)),
     };
   }
@@ -72,7 +73,7 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     return {
       id: 'wall',
       samples: wall,
-      legend: `壁厚 mm：红 ≤ ${bad.toFixed(2)}（坏）· 蓝 ≥ ${warn.toFixed(2)}（阈值）· 采样 ${wall.length} 点`,
+      legend: tr('ui.heat.wall', { bad: bad.toFixed(2), warn: warn.toFixed(2), count: wall.length }),
       score: (v) => Math.min(1, Math.max(0, (warn - v) / span)),
     };
   }
@@ -81,7 +82,7 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     return {
       id: 'overhang',
       samples: overhang,
-      legend: `朝下悬垂面积 mm²：红 ≥ ${warn}（阈值，越大越要支撑）· 采样 ${overhang.length} 面`,
+      legend: tr('ui.heat.overhang', { warn, count: overhang.length }),
       score: (v) => Math.min(1, Math.max(0, v / warn)),
     };
   }
@@ -99,7 +100,7 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     return {
       id: 'von-mises',
       samples: stress,
-      legend: `von Mises 应力 MPa：红 ≥ ${bad}（阈值，越大越坏）· 蓝 ≤ ${warn} · 采样 ${stress.length} 点`,
+      legend: tr('ui.heat.stress', { bad, warn, count: stress.length }),
       score: (v) => Math.min(1, Math.max(0, (v - warn) / span)),
     };
   }

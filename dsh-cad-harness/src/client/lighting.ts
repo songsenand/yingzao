@@ -23,6 +23,7 @@
 // frames parts wherever they were authored).
 
 import * as THREE from 'three';
+import { t as tr } from './i18n.ts';
 
 /** The rig, exposed for tuning and for the structural acceptance test. */
 export interface StudioLights {
@@ -114,10 +115,10 @@ export interface ViewportBackground {
 }
 
 export const VIEWPORT_BACKGROUNDS: readonly ViewportBackground[] = [
-  { id: 'paper', label: '纸白', hex: '#f2f3f5', ink: 'dark' },
-  { id: 'warm', label: '暖灰', hex: '#e6e0d6', ink: 'dark' },
-  { id: 'graphite', label: '石墨', hex: '#39424d', ink: 'light' },
-  { id: 'midnight', label: '深蓝', hex: '#1c2733', ink: 'light' },
+  { id: 'paper', label: tr('ui.bg.paper'), hex: '#f2f3f5', ink: 'dark' },
+  { id: 'warm', label: tr('ui.bg.warm'), hex: '#e6e0d6', ink: 'dark' },
+  { id: 'graphite', label: tr('ui.bg.graphite'), hex: '#39424d', ink: 'light' },
+  { id: 'midnight', label: tr('ui.bg.midnight'), hex: '#1c2733', ink: 'light' },
 ];
 
 export const DEFAULT_BACKGROUND_ID = 'paper';

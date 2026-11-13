@@ -12,6 +12,7 @@
  * than inventing one.
  */
 import React from 'react';
+import { t as tr } from './i18n.ts';
 import { T } from './tokens';
 
 export interface ChartSeries {
@@ -76,7 +77,7 @@ export function buildRunChart(kind: string, report: any): RunChartData | null {
       .filter((e) => Number.isFinite(e?.timeSec))
       .map((e) => ({
         timeSec: e.timeSec as number,
-        label: `干涉 ${e.partA ?? '?'} ↔ ${e.partB ?? '?'}`,
+        label: tr('ui.chart.interference', { a: e.partA ?? '?', b: e.partB ?? '?' }),
         tone: 'bad' as const,
       }));
     return {
@@ -85,8 +86,8 @@ export function buildRunChart(kind: string, report: any): RunChartData | null {
       events,
       keyframes,
       unit: 'mm',
-      title: '行程 vs 时间',
-      note: '相对起点，沿报告为该零件选定的轴；红色刻度是干涉事件。',
+      title: tr('ui.chart.travelTitle'),
+      note: tr('ui.chart.travelNote'),
     };
   }
 
@@ -116,8 +117,8 @@ export function buildRunChart(kind: string, report: any): RunChartData | null {
       events,
       keyframes,
       unit: 'mm',
-      title: '位移 vs 时间',
-      note: '相对起点的位移模长；倾倒/穿透事件在时间线上标出。',
+      title: tr('ui.chart.displacementTitle'),
+      note: tr('ui.chart.displacementNote'),
     };
   }
 

@@ -156,7 +156,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
       confirm.style.opacity = ack.checked ? '1' : '.45';
     });
     confirm.addEventListener('click', () => {
-      if (ack.checked) close(reason.value.trim() || '用户确认导出（未填原因）');
+      if (ack.checked) close(reason.value.trim() || t('ui.export.defaultReason'));
     });
   });
 }

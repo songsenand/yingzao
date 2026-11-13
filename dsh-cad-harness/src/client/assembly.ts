@@ -1,3 +1,4 @@
+import { t as tr } from './i18n.ts';
 // The MACHINE as a browsing object: what an assembly manifest says the project
 // IS, reduced to the two facts the navigator needs.
 //
@@ -84,7 +85,7 @@ export function parseMachine(raw: unknown): Machine | null {
   if (nodes.length === 0) return null;
 
   const name = [doc.name, root.name, root.id]
-    .find((x): x is string => typeof x === 'string' && x.trim().length > 0) ?? '整机';
+    .find((x): x is string => typeof x === 'string' && x.trim().length > 0) ?? tr('ui.machine.name');
 
   // Interfaces live on the node that owns the pair they connect, so they are
   // counted during the same walk (a nested assembly contributes its own).
