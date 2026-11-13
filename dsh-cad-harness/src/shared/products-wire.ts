@@ -9,7 +9,7 @@
 // Shared (no node: imports) because the client inflates exactly what the host
 // serialised, and the sandbox serves the same wire.
 
-import type { PartProduct, ProductsResponse, RunProduct, VersionProduct } from './types.ts';
+import type { CadActivity, PartProduct, ProductsResponse, RunProduct, VersionProduct } from './types.ts';
 
 /** A part on the wire: its versions plus the ids of the runs that belong to it. */
 export interface PartWire {
@@ -28,6 +28,8 @@ export interface ProductsWire {
   runs: RunProduct[];
   /** Runs that belong to no single part (0 owners, or ≥2): the cross-part bucket. */
   sceneRunIds: string[];
+  /** Newest commit + writer; absent on an empty corpus or an older host. */
+  activity?: CadActivity;
   /** Session cwd this tree was read from; echoed for project-switch guards. */
   project?: string;
 }
@@ -52,7 +54,12 @@ export function inflateProducts(wire: ProductsWire): ProductsResponse {
     runs: take(p.runIds),
   }));
   const scene = take(wire.sceneRunIds);
-  return wire.project === undefined ? { parts, scene } : { parts, scene, project: wire.project };
+  return {
+    parts,
+    scene,
+    ...(wire.activity ? { activity: wire.activity } : {}),
+    ...(wire.project === undefined ? {} : { project: wire.project }),
+  };
 }
 
 /**

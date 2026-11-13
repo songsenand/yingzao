@@ -22,12 +22,19 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readPythonOverlay } from './python-runtime.ts';
 import { readCounter, withFileLock, writeCounter, writeJsonAtomic } from './file-lock.ts';
+import { originSessionId } from './provenance.ts';
 import type { RunJudgement, RunKind, RunProduct, RunStatus } from '../shared/types.ts';
 
 export type { RunKind, RunStatus } from '../shared/types.ts';
 
 /** One run as the store persists it: the product record plus its artifact names. */
-export type RunEntry = Omit<RunProduct, 'type'>;
+export type RunEntry = Omit<RunProduct, 'type'> & {
+  /**
+   * The conversation whose tool call committed this run, when there was one.
+   * Absent for HTTP-route or script writes, and for rows older than provenance.
+   */
+  originSessionId?: string;
+};
 
 export interface RunManifest {
   schemaVersion: 1;
@@ -325,12 +332,14 @@ export async function beginRun(
             superseded.push(older.id);
           }
         }
+        const origin = originSessionId();
         const entry: RunEntry = {
           id,
           kind: init.kind,
           timestamp: init.timestamp ?? new Date().toISOString(),
           title: final.title ?? init.title,
           status: final.status,
+          ...(origin ? { originSessionId: origin } : {}),
           // Absent stays absent: "this run did not judge anything" is information the panel
           // needs, and defaulting it to 'not-excluded' would manufacture a clean bill.
           ...(final.judgement ? { judgement: final.judgement } : {}),

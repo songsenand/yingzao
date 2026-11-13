@@ -14,7 +14,7 @@
 //     It is `inflateProducts(buildProductsWire(...))`, so the grouping rule still
 //     lives in exactly one place.
 
-import type { PartProduct, ProductsResponse, RunProduct, VersionProduct } from '../shared/types.ts';
+import type { CadActivity, PartProduct, ProductsResponse, RunProduct, VersionProduct } from '../shared/types.ts';
 import type { PartEntry } from './parts.ts';
 import type { RunEntry } from './runs.ts';
 import type { VersionManifestEntry } from './version.ts';
@@ -87,8 +87,11 @@ export function buildProductsWire(
     // Title as a human reads it: the parts it is about, not the version ids it
     // cited. Only fills `displayTitle`; the committed `title` is never rewritten.
     const subject = runSubject(r.kind, r.parts, r.sourceVersionIds);
+    // Provenance is activity metadata, not part of the browsable product: the
+    // newest row rides in `activity` instead of repeating on every run.
+    const { originSessionId: _origin, ...publicRun } = r;
     runProducts.push({
-      type: 'run', ...r,
+      type: 'run', ...publicRun,
       ...(subject ? { displayTitle: subject } : {}),
       ...(stale.length ? { staleVersionIds: stale } : {}),
     });
@@ -139,7 +142,44 @@ export function buildProductsWire(
   }
 
   entries.sort((a, b) => (a.lastActiveAt < b.lastActiveAt ? 1 : a.lastActiveAt > b.lastActiveAt ? -1 : 0));
-  return { parts: entries, runs: newestFirst(runProducts), sceneRunIds: newestIdOrder(sceneRunIds) };
+
+  // The newest commit in the corpus, with its writer. One scan over the rows we
+  // already hold; no extra file read and no per-record field on the wire.
+  const activity = newestActivity(versions, runs);
+  return {
+    parts: entries,
+    runs: newestFirst(runProducts),
+    sceneRunIds: newestIdOrder(sceneRunIds),
+    ...(activity ? { activity } : {}),
+  };
+}
+
+/** The newest version or run, carrying the conversation that produced it. */
+function newestActivity(
+  versions: VersionManifestEntry[],
+  runs: RunEntry[],
+): CadActivity | undefined {
+  let best: CadActivity | undefined;
+  const consider = (candidate: CadActivity): void => {
+    if (best === undefined || candidate.at > best.at) best = candidate;
+  };
+  for (const v of versions) {
+    consider({
+      at: v.timestamp,
+      kind: 'version',
+      id: v.id,
+      ...(v.originSessionId ? { sessionId: v.originSessionId } : {}),
+    });
+  }
+  for (const r of runs) {
+    consider({
+      at: r.timestamp,
+      kind: 'run',
+      id: r.id,
+      ...(r.originSessionId ? { sessionId: r.originSessionId } : {}),
+    });
+  }
+  return best;
 }
 
 /** The inflated tree (`part.runs` are full objects) — the shape older callers read. */

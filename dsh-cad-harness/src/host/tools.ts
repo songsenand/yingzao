@@ -32,7 +32,7 @@ import type { Json } from './inspect.ts';
 import { flattenParts, resolveAssemblyManifestPath } from './manifest.ts';
 import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-export.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
-import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, type ProjectStores } from './project.ts';
+import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
 import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { analyzeSheet2d, type SheetSection } from './sheet2d.ts';
@@ -65,6 +65,7 @@ import {
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
 import { withOutputContract } from './tool-contract.ts';
+import { withOriginSession } from './provenance.ts';
 import { nextLookFor } from './next-look.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
@@ -506,7 +507,20 @@ export function registerCadTools(
     const withLimit = definition.timeoutMs === undefined
       ? { ...definition, timeoutMs: CAD_TOOL_TIMEOUTS[definition.name] ?? DEFAULT_TOOL_TIMEOUT_MS }
       : definition;
-    return ctx.tools.register(withOutputContract(withLimit) as never);
+    // Stamp the calling conversation onto every version/run this body writes.
+    // The stores are several layers below `exec`; AsyncLocalStorage carries the
+    // id without threading a session argument through each call. The wrapper
+    // sits INSIDE the output contract so schema validation still runs outside
+    // (and sees exactly the value the runtime would validate).
+    const execute = withLimit.execute;
+    const scoped = typeof execute === 'function'
+      ? {
+        ...withLimit,
+        execute: (args: unknown, exec: unknown) =>
+          withOriginSession(sessionIdOf(exec), () => (execute as (a: unknown, e: unknown) => unknown)(args, exec)),
+      }
+      : withLimit;
+    return ctx.tools.register(withOutputContract(scoped) as never);
   };
 
   // Stores are resolved PER CALL, never captured here: the plugin is applied

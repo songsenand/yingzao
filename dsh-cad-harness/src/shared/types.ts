@@ -144,10 +144,25 @@ export interface ProductsResponse {
   /** Runs about 0 parts (inline SCAD) or ≥2 parts — the cross-part bucket. */
   scene: RunProduct[];
   /**
+   * The newest version or run in this tree, with the conversation that wrote it
+   * (when the writer had one). The panel opens its tab on new CAD activity only
+   * when this names the conversation on screen.
+   */
+  activity?: CadActivity;
+  /**
    * The project (session cwd) this tree was read from. Echoed so a panel that
    * has since switched projects can discard the slower reply it left behind.
    */
   project?: string;
+}
+
+/** The newest committed CAD artifact, and who produced it. */
+export interface CadActivity {
+  at: string;
+  kind: 'version' | 'run';
+  id: string;
+  /** Absent for HTTP-route writes, scripts, and rows predating provenance. */
+  sessionId?: string;
 }
 
 /**

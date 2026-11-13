@@ -46,6 +46,18 @@ export function projectsHome(): string {
 }
 
 /**
+ * The calling session's id from a tool `exec`, or undefined when there is none.
+ *
+ * One reader for every consumer: project binding, write provenance and the
+ * model-side tool wrapper must agree on what "the same conversation" means.
+ * HTTP routes have no `exec`; maintenance scripts deliberately have no session.
+ */
+export function sessionIdOf(exec: unknown): string | undefined {
+  const raw = (exec as { agent?: { session?: { header?: { id?: unknown } } } })?.agent?.session?.header?.id;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+}
+
+/**
  * Per-project data lives INSIDE the project: `<cwd>/cad-data/` (DESIGN §19).
  *
  * The 2026-10-03 user decision: artifacts belong to the project folder, so

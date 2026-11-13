@@ -7,8 +7,9 @@
 
 import React from 'react';
 import { CadPanel, setClientServices } from './panel';
-import { refreshProjectScope, setProjectServices } from './project';
+import { currentSessionId, refreshProjectScope, setProjectServices } from './project';
 import { subscribeProducts } from './products-store';
+import { decideActivityOpen } from './activity';
 import { installCadLocale, t } from './i18n.ts';
 
 /** Required services (cordis fiber inject). */
@@ -59,6 +60,8 @@ export function apply(ctx: any) {
   ctx.effect(() => {
     let disposed = false;
     let lastSeen: number | null = null;
+    /** Session the baseline belongs to; a conversation switch re-baselines. */
+    let lastSession = '';
 
     const openTab = (reason: string) => {
       let attempts = 0;
@@ -80,13 +83,21 @@ export function apply(ctx: any) {
     // project with no parts at all is perfectly normal. A project switch
     // re-baselines: what was "new" in the previous project says nothing here.
     //
-    // The tree comes from the SHARED poller (`products-store`) — the panel
-    // subscribes to the same request, so watching for activity costs no second
-    // fetch and stops while the tab is hidden.
+    // It is also per CONVERSATION. The tab is per session while the corpus is
+    // shared, so another running conversation writing to the same project used
+    // to pop this panel open with content this conversation never asked for.
+    // The host stamps `originSessionId` on each version/run and echoes the
+    // newest one as `activity`; only that conversation may auto-open it.
+    // Unknown provenance (older rows, HTTP imports) stays closed: the safe
+    // failure is "the user clicks the tab", not "an unrelated panel appears".
     const off = subscribeProducts(({ data }) => {
       if (disposed || !data) return;
       const { switched } = refreshProjectScope();
-      if (switched) lastSeen = null;
+      const sessionId = currentSessionId();
+      if (switched || sessionId !== lastSession) {
+        lastSession = sessionId;
+        lastSeen = null;
+      }
       // The whole tree, not just versions: a finished validation run is CAD
       // activity too, and it is exactly what the human wants to look at next.
       const newest = (data.parts ?? []).reduce((m, p) => {
@@ -94,8 +105,18 @@ export function apply(ctx: any) {
           .reduce((n, r) => Math.max(n, Date.parse(r.timestamp ?? '') || 0), 0);
         return Math.max(m, own);
       }, (data.scene ?? []).reduce((m, r) => Math.max(m, Date.parse(r.timestamp ?? '') || 0), 0));
-      if (lastSeen === null) { lastSeen = newest; return; } // baseline: no popup
-      if (newest > lastSeen) { lastSeen = newest; openTab('CAD activity'); }
+      const decision = decideActivityOpen({
+        activity: data.activity,
+        newestAt: newest,
+        lastSeen,
+        sessionId,
+      });
+      lastSeen = decision.lastSeen;
+      if (decision.open) {
+        openTab('CAD activity in this conversation');
+      } else if (decision.reason === 'other-session') {
+        console.info('[cad-harness] CAD activity belongs to another conversation; not opening the tab');
+      }
     });
 
     return () => { disposed = true; off(); };

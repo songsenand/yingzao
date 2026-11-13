@@ -5987,3 +5987,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/client/free-orbit.ts`、`panel.ts`、`playback.ts`、`local-file.tsx`、sandbox 预览探针/README；旧 2026-11-09 两条“自由轨道/连续 up 过渡”决策被取代。
 
 **非目标：** 不恢复越极点连续滚转；不为触摸双指新增自定义手势。
+
+## 2026-11-13：CAD 活动只在当前对话自动唤起右栏
+
+**触发条件：** 第 1 条（用户明确要求“检测是否是当前对话，仅仅在当前对话才允许拉起侧边工具”）+ 第 4 条（跨 Host/Client 契约）。
+
+**要解决的问题：** 右栏 Tab 是 per-session，但语料和 products 轮询是共享的；另一个正在跑的对话在同一项目写入新版本/运行，会触发本对话的 watcher 自动 `openTab`，展示与本次对话无关的内容。
+
+**决策内容：** 工具注册包装器用 AsyncLocalStorage 把调用会话 id 带进整个 execute；`saveVersion` / `beginRun` 在 manifest 行上写 `originSessionId`；`/api/cad/products` 的 wire 回显最新记录为 `activity`；客户端 `decideActivityOpen` 仅在 `activity.sessionId === currentSessionId()` 时 `openTab`；无归属、无法判定当前会话、首次观察、会话切换一律不弹，只更新基线。
+
+**理由：** 不能靠“当前会话是否在跑”判断——两个对话可能同时运行；也不能把项目共享当成对话共享。行级归属是唯一能回答“这次写入属谁”的事实，且对旧数据自然缺省（缺省即不弹，安全失败）。
+
+**依据：** `scripts/accept-cad-activity.mjs`（纯决策 + 两个并发工具调用各自归属 + run/activity wire）；`accept-products-store` 增加项目切换在途请求不阻塞且旧回复被丢弃；`tsc` / `build` 通过。
+
+**影响：** `src/host/provenance.ts`（新）、`tools.ts`、`version.ts`、`runs.ts`、`products.ts`、`shared/{types,products-wire}.ts`、`client/{index,activity}.ts`；旧版本/运行无 `originSessionId`，保持不自动弹。
+
+**非目标：** 不改变手动点击右栏/表头按钮；不把 provenance 写入交付导出包。
