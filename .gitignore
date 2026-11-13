@@ -83,3 +83,6 @@ __pycache__/
 /.research/
 /pypi_report.json
 /assembly/
+
+# ---- 本地项目：第三方模型版权未查清，整目录不入库（含 source/ 解包的 3MF）----
+examples/rocket-3part/
