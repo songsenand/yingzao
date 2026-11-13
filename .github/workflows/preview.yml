@@ -47,7 +47,10 @@ jobs:
         if: runner.os == 'macOS'
         run: node scripts/provision-openscad.mjs --source official
       - name: Setup checkout preset for this runner
-        run: node scripts/setup.mjs --openscad=off
+        run: |
+          STD="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml"
+          test -f "$STD"
+          node scripts/setup.mjs --openscad=off --standard "$STD"
 
       - name: Full preview acceptance (P0 + P1 suites)
         run: |
