@@ -2337,9 +2337,9 @@ export function CadPanel(): React.ReactElement {
         factsHeader(r),
         React.createElement(RunKeyframeStrip, { runId: r.id, keyframes: rep.keyframes ?? [] }),
         chart ? React.createElement('div', { style: { margin: '2px 0 6px' } }, React.createElement(RunChart, { data: chart, height: 150 })) : null,
-        line(`稳态穿透 ${rep.metrics?.settledPenetrationMm ?? '—'}mm · 最大 ${rep.metrics?.maxPenetrationMm ?? '—'}mm`),
-        line(`时长 ${rep.durationSec ?? '—'}s · 关键帧 ${(rep.keyframes ?? []).length}`),
-        ...fell.map(([name, over]) => line(`${name}: ${over ? '倒下' : '保持直立'}`, over ? T.warn : T.ok)),
+        line(t('ui.report.settled', { value: rep.metrics?.settledPenetrationMm ?? '—', max: rep.metrics?.maxPenetrationMm ?? '—' })),
+        line(t('ui.report.duration', { duration: rep.durationSec ?? '—', frames: (rep.keyframes ?? []).length })),
+        ...fell.map(([name, over]) => line(t(over ? 'ui.report.fell' : 'ui.report.standing', { name }), over ? T.warn : T.ok)),
         ...(rep.metrics?.jointViolations ?? []).map((v: string, i: number) => line(v, T.danger)),
       );
     }
@@ -2351,19 +2351,21 @@ export function CadPanel(): React.ReactElement {
         React.createElement(RunKeyframeStrip, { runId: r.id, keyframes: rep.keyframes ?? [] }),
         chart ? React.createElement('div', { style: { margin: '2px 0 6px' } }, React.createElement(RunChart, { data: chart, height: 150 })) : null,
         ...followers.map(([name, f]) => line(
-          `${name}: 行程 ${f.travelMm?.toFixed?.(2) ?? '—'}mm` + (f.periodSec ? ` · 周期 ${f.periodSec.toFixed(2)}s` : ''))),
+          f.periodSec
+            ? t('ui.report.period', { name, travel: f.travelMm?.toFixed?.(2) ?? '—', period: f.periodSec.toFixed(2) })
+            : t('ui.report.travel', { name, travel: f.travelMm?.toFixed?.(2) ?? '—' }))),
         ...((rep.metrics?.interferenceEvents ?? []) as { timeSec: number; label: string }[])
           .slice(0, 20).map((e: any, i: number) => line(
-            `t=${Number(e.timeSec).toFixed(3)}s  ${e.partA ?? '?'} ↔ ${e.partB ?? '?'}` +
+            t('ui.report.event', { time: Number(e.timeSec).toFixed(3), a: e.partA ?? '?', b: e.partB ?? '?' }) +
             `${Number.isFinite(e.volumeMm3) ? `  ${Number(e.volumeMm3).toFixed(2)}mm³` : ''}`, T.danger)),
       );
     }
     if (r.kind === 'fluid') {
       return React.createElement('div', null,
         factsHeader(r),
-        line(`到达率 ${rep.metrics?.outletArrivalRatio ?? '—'} · 穿透 ${rep.metrics?.penetrationCount ?? '—'}`),
-        line(`粒子 ${rep.metrics?.particleCount0 ?? '—'} · 逃逸 ${rep.metrics?.escaped ?? '—'} · 活动 ${rep.metrics?.active ?? '—'}`),
-        line(`状态 ${rep.overallStatus ?? '—'}`),
+        line(t('ui.report.arrival', { arrival: rep.metrics?.outletArrivalRatio ?? '—', penetration: rep.metrics?.penetrationCount ?? '—' })),
+        line(t('ui.report.particles', { particles: rep.metrics?.particleCount0 ?? '—', escaped: rep.metrics?.escaped ?? '—', active: rep.metrics?.active ?? '—' })),
+        line(t('ui.report.statusLine', { status: rep.overallStatus ?? '—' })),
       );
     }
     if (r.kind === 'assembly-check') {
@@ -2385,21 +2387,19 @@ export function CadPanel(): React.ReactElement {
         // "the panel is broken"; say what the run actually found instead.
         const undeclared = (rep.undeclared ?? []) as unknown[];
         return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-          line(`清单「${rep.manifestName ?? '—'}」没有声明任何接口`),
-          line(`这次检查只看相邻关系：${undeclared.length} 对相邻零件被报为「未声明」（未声明的邻接不算通过）。`, T.warn),
-          line('给装配清单补上 interfaces 之后重跑，报告才会逐条列出接口 × 要求 × 实测 × 判定。', T.muted),
+          line(t('ui.report.noInterfaces', { name: rep.manifestName ?? '—' })),
+          line(t('ui.report.adjacencyOnly', { count: undeclared.length }), T.warn),
+          line(t('ui.report.addInterfaces'), T.muted),
         );
       }
       const undeclared = (rep.undeclared ?? []) as { partA: string; partB: string; minDistance: number; intersectionVolume: number }[];
       const scopeText = `${rep.manifestName ?? ''} ${rep.manifestPath ?? ''}`;
       const subassembly = /子装配|subassembly|assembly_ring|ring/i.test(scopeText);
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-        ...(subassembly ? [line('检查范围：子装配（不是整机）——整机结论需要另跑 assembly.json。', T.warn)] : []),
+        ...(subassembly ? [line(t('ui.report.scopeSub'), T.warn)] : []),
         // `@hash` is the ICD's revision identity: this report audited THAT contract,
         // not "whatever was at that path when it ran".
-        line(`清单「${rep.manifestName ?? '—'}」${(rep as any).manifestHash ? `@${(rep as any).manifestHash}` : ''}` +
-             ` · ${rep.results?.length ?? rows.length} 个接口 · ` +
-             `通过 ${(rep.results ?? []).filter((x: any) => x.verdict === 'pass').length}`),
+        line(t('ui.report.manifest', { name: rep.manifestName ?? '—', hash: (rep as any).manifestHash ? `@${(rep as any).manifestHash}` : '', interfaces: rep.results?.length ?? rows.length, passed: (rep.results ?? []).filter((x: any) => x.verdict === 'pass').length })),
         React.createElement('div', { style: { overflowX: 'auto' } },
         React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 4 } },
           React.createElement('thead', null, React.createElement('tr', {},
@@ -2418,7 +2418,7 @@ export function CadPanel(): React.ReactElement {
         // run when the table had rows — so the panel showed the COUNT and nothing
         // else, exactly where the action is.
         ...(undeclared.length ? [
-          line(`清单不完整：${undeclared.length} 对相邻零件没有声明关系（阈值 ${(rep as any).adjacencyThresholdMm ?? 0.75}mm）`, T.warn),
+          line(t('ui.report.undeclared', { count: undeclared.length, threshold: (rep as any).adjacencyThresholdMm ?? 0.75 }), T.warn),
           ...undeclared.map((u, i) => line(`  ${u.partA} ↔ ${u.partB}   ${gapText(u)}`, T.soft)),
         ] : []),
         ...((rep.partWarnings ?? []) as { partId: string; messages: string[] }[]).map((w, i) =>
@@ -2428,12 +2428,12 @@ export function CadPanel(): React.ReactElement {
     if (r.kind === 'assembly') {
       return React.createElement('div', null,
         ...((rep.parts ?? []) as { name: string; watertight: boolean; volume: number }[]).map((p, i) =>
-          line(`${p.name}: ${p.watertight ? '水密' : '非水密'} · ${p.volume?.toFixed?.(0) ?? '—'}mm³`, p.watertight ? '#374151' : T.danger)),
+          line(t(p.watertight ? 'ui.report.watertight' : 'ui.report.nonWatertight', { name: p.name, volume: p.volume?.toFixed?.(0) ?? '—' }), p.watertight ? '#374151' : T.danger)),
         ...((rep.pairs ?? []) as { partA: string; partB: string; intersectionVolume: number; minDistance: number; status: string }[])
           .map((p, i) => line(
-            `${p.partA} ↔ ${p.partB}: ` + (p.status === 'interference'
-              ? `干涉体积 ${p.intersectionVolume.toFixed(1)}mm³`
-              : `间隙 ${p.minDistance.toFixed(2)}mm (${p.status === 'too_tight' ? '过紧' : '正常'})`),
+            p.status === 'interference'
+              ? t('ui.report.interferenceVolume', { a: p.partA, b: p.partB, volume: p.intersectionVolume.toFixed(1) })
+              : t('ui.report.gap', { a: p.partA, b: p.partB, gap: p.minDistance.toFixed(2), kind: t(p.status === 'too_tight' ? 'ui.report.tight' : 'ui.report.normal') }),
             p.status === 'interference' ? T.danger : p.status === 'too_tight' ? T.warn : T.ok)),
       );
     }
@@ -2445,19 +2445,19 @@ export function CadPanel(): React.ReactElement {
   const sourceVersionChips = (r: RunProduct) => React.createElement(
     'div',
     { style: { ...S.row, flexWrap: 'wrap', paddingBottom: 4 } },
-    React.createElement('span', { style: { fontSize: 11, color: T.muted, flex: 'none' } }, '来源:'),
+    React.createElement('span', { style: { fontSize: 11, color: T.muted, flex: 'none' } }, t('ui.report.source')),
     r.sourceVersionIds.length === 0
       ? React.createElement('span', { style: { fontSize: 11, color: T.muted } },
-        '内联 SCAD 场景 — 这次运行不基于任何已存版本')
+        t('ui.report.inline'))
       : r.sourceVersionIds.map((vid) => {
         const owner = ownerPartOf(vid);
         return React.createElement('button', {
           key: vid,
           type: 'button',
           onClick: () => { setSubjectId(owner?.id ?? SCENE); setRecordId(vid); },
-          title: owner ? `打开零件「${owner.name}」的 ${vid}` : `打开 ${vid}`,
+          title: owner ? t('ui.report.openPart', { name: owner.name, version: vid }) : t('ui.report.openVersion', { version: vid }),
           style: S.smallBtn,
-        }, `${owner?.name ?? '未归类'} · ${vid}`);
+        }, `${owner?.name ?? t('ui.report.uncategorized')} · ${vid}`);
       }),
   );
 
