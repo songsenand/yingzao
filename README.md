@@ -108,7 +108,7 @@
 官方不可达或持续低于 256 KB/s 时才切到 OSS 镜像。也可以用 `--openscad=off` 手动准备，
 或用 `CAD_OPENSCAD_BIN` 指定已有二进制。
 
-> 自动准备的是 OpenSCAD 便携版和约 400MB 的 Python 运行时；两者都不随 tarball 分发。
+> OpenSCAD 在 `setup` 时准备；约 400MB 的 Python 运行时装在首次计算时准备。两者都不随 tarball 分发。
 
 **方式 A：tarball（预览版，不需要构建）**
 
