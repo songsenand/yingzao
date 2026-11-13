@@ -170,9 +170,8 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
     const camera = new THREE.PerspectiveCamera(45, (host.clientWidth || 480) / (host.clientHeight || 320), 0.1, 20000);
     attachStudioLights(scene, camera);
 
-    // Free orbit, like the main preview: this dialog inspects a STL before
-    // import, so it must not stop at the poles either. min/max are replaced by
-    // frame() once the file has parsed.
+    // Stock orbit, like the main preview: this dialog inspects an STL before
+    // import. min/max are replaced by frame() once the file has parsed.
     const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
       target: new THREE.Vector3(),
       minDistance: 0,

@@ -666,30 +666,37 @@ profile 层（不属于任何项目）：
 
 **已知缺口**：角标不显示单位制切换（全站 mm）；比例尺按轨道焦点深度换算，模型沿视线方向很厚时远端会有偏差；坐标系只画世界轴，不显示装配体的局部基准。
 
-#### 2026-11-08 视口导航：线性自由轨道，取消极角限位
+#### 2026-11-13 视口导航：恢复 three.js 默认 OrbitControls
 
-> **来源**：「在 CAD 预览的视口中拖动模型，发现有一个轴似乎有限位，拖到某个位置就不能再拖；是必要的么？能否取消？」
+> **来源**：「在视口中，如果模型先上下翻转 180 度，再左右翻转，则模型旋转和鼠标滑动的方向是反的」→
+> 用户随后的裁决：「我们还是还原用 threejs 的默认翻转模式吧，我们手写的出的问题太多了」。
+> 本节取代 2026-11-08 的「线性自由轨道、取消极角限位」及其后续连续 up 过渡决策。
 
-**病灶**：`OrbitControls` 的极角默认夹在 `[0, π]`（`maxPolarAngle = π`）：水平环绕无限，竖直拖到正上方/正下方就停住，相机不能越过极点。这不是本项目的几何/渲染 bug；它不阻止看到上下两面（反向拖 180° 也能看到），只阻止连续翻过去。缩放另有 `0.3R–10R`（主视口）的显式距离限制，平移无限制。
+**病灶**：手写 `FreeOrbitControls` 为了越过极点，让 `camera.up` 随模型一起转。上下翻 180° 后屏幕
+基向量倒置，再左右拖拽时模型转向与鼠标方向相反；极点附近的连续滚转、pinch 到单指切换、pitch 轴
+固定等分支也各自产生边界问题。
 
-**改法**：五个 3D 视口（主视口、本地 STL 预览、motion/fluid/static 回放）统一使用 `src/client/free-orbit.ts` 的 `FreeOrbitControls`。它不是 TrackballControls：Trackball 的虚拟球让同一像素在画面中心/边缘转得不一样，右键平移增益也不同；用户要的是原 OrbitControls 的“揪住点、按像素线性转”手感。控制器复刻 OrbitControls 的公式，再用四元数越过极点：
+**改法**：五个 3D 视口（主视口、本地 STL 预览、motion/fluid/static 回放）重新统一到
+`src/client/free-orbit.ts` 的薄适配器，内部直接构造 three.js `OrbitControls`：
 
-- 左键：`yaw = 2π·dx/clientHeight·rotateSpeed`、`pitch = 2π·dy/clientHeight·rotateSpeed`，`rotateSpeed = 1`。只依赖拖拽增量，不看抓取点；这就是“无论距离”的线性手感。
-- 右键：`pan = 2·delta·distance·tan(fov/2)/clientHeight·panSpeed`，`panSpeed = 1`。之前右键“太快”的根因就是漏了 `tan(fov/2)`（45° 时差 2.4 倍）。
-- 滚轮：`distance *= 0.95^(−deltaY/100·zoomSpeed)`；距离仍夹在 `minDistance`/`maxDistance`。
-- 竖直旋转的 pitch 轴在 **pointerdown 时捕获、整次拖拽固定**，并在 yaw 时跟着转。若每帧用 `worldUp × back` 重算，过极点时轴会翻号，相机停在极点来回摆；固定轴才能连续翻过去。
-- 正常拖拽把 `up` 回投到 world-up 的垂直平面，所以不会像 Trackball 那样一路滚转；接近极点时投影收缩，保留 pitch 转过的 `up`，并按“与当前 `up` 同号”平滑回投。越过极点因此是连续滚转，而不是突然镜像翻转。
-- `复原` / `refit()` / 新文件取景复位 `camera.up` 与相机位置；没有阻尼，拖拽立即跟手。
+- `camera.up` 始终是世界 +Y，控制器从方位角/极角推导相机位姿，屏幕右向量不会倒置；因此
+  “先翻转再横拖”的方向反转前提不存在。
+- 左键旋转、右键平移、滚轮缩放沿用 OrbitControls 默认映射；`target`、`minDistance`/`maxDistance`
+  与 `rotateSpeed`/`panSpeed`/`zoomSpeed` 由 CAD 视口传入。阻尼保持默认关闭，拖拽确定性跟手。
+- 竖直旋转在极点夹紧，不再允许相机滚到模型下方后倒置；上下两面仍可通过反向拖动看到。
+- `复原` / `refit()` / 新文件取景仍显式把 `camera.up` 设回 +Y 并复位相机位置。
 
 **验收**：
 
-- 与 `OrbitControls` 的逐项数值对照（同一相机、同一 20px 拖拽，临时 Node 脚本，已删）：左键右拖/下拖的相机 `position` 与 `quaternion` 逐位一致；右键右拖/下拖的 `position` 与 `target` 逐位一致。正常角度的手感就是原控件。
-- `?assert=orbit`：一次向下拖拽，相机相对 target 的 y 从 `10.46` 到 `-21.99`（半径 `22.33`）→ 越过极点；逐帧采样相机四元数，最大一步 `36.0°`（没有镜像翻转）→ PASS；`复原` 位置偏差 `0.000mm`、`camera.up.y = 1.000`。
-- `?assert=orbit-drain`：同一 100px 拖拽，1 move / 20 moves 都是 `137.40°`，比值 `1.000` → 输入采样率无关。
-- `assert=layout` 380/320 全绿；`accept-ui playback` 4/4 全绿；`tsc` 0。
-- 控制器没有每帧额外计算；`update()` 只做 `lookAt`，渲染循环/场景未变。
+- `scripts/accept-viewport-orbit.mjs`：视口适配器确实 `new OrbitControls(...)`、手写控制器类已删除；
+  target/距离/速度被应用；长篇竖直扫描 + 水平转向后 `camera.up` 仍为 `(0,1,0)`。
+- sandbox `?assert=orbit`：向下长拖后相机停在极角上限（相对 target 的 y 不越到下方）、`camera.up.y > 0.99`、
+  逐帧四元数最大步长 < 90°（无镜像翻转）；`&orbitreset=1` 仍验证 `复原`。
+- `?assert=orbit-drain`：同一 100px 拖拽拆成 1 move / 20 moves 后落点一致（OrbitControls 累积每个 pointermove）。
+- `npm run typecheck`、`npm run build` 通过。
 
-**取舍 / 未决**：正常角度不滚转；接近极点时有一段连续滚转（这是避免镜像翻转的代价），越过极点后模型可以处于倒置姿态。若希望极点附近也完全不滚转，只能在极点翻转或重新引入夹紧；当前选连续滚转。触摸双指手势是基本实现，未单独验收。
+**取舍 / 未决**：放弃“连续越过极点”的能力，换取默认控件稳定、可预测的方向手感。若将来确实需要
+从正上方连续翻到背面，应重新提出并单独设计，而不是在现有控制器上继续打补丁。
 
 #### v2.13d 测量：探针像素恒定、壁厚一点测、截图有回声（2026-09-30）
 

@@ -76,10 +76,9 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
   // angle too, and a world-fixed key left half of it in the dark.
   attachStudioLights(scene, camera);
 
-  // Free orbit: same navigation and input drain as the version viewport (see
-  // panel.ts / free-orbit.ts). The replay views share this scene builder, so a
-  // run can be turned over too; refit() restores camera.up along with the
-  // camera position. min/max are replaced by fit() below.
+  // Stock orbit: same navigation as the version viewport (see panel.ts /
+  // free-orbit.ts). The replay views share this scene builder, so a run can be
+  // turned over too; fit() restores the world-up along with the camera position.
   const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
     target: new THREE.Vector3(),
     minDistance: 0,

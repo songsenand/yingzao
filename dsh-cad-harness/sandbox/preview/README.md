@@ -50,8 +50,8 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `reset` | click `复原` after the wheel, to prove the camera returns to its initial framing |
 | `freeze=0` | disable the WebGL→`<img>` freeze |
 | `freezeat` | delay the freeze (ms; default 2900) — lets a longer assertion finish before the canvas is replaced |
-| `assert=orbit` | drag with synthetic pointer events and assert the camera crosses the pole without a mirror flip (max quaternion step < 90°; `record=v105&freeze=1&freezeat=6000&slow=9000`); add `orbitreset=1` to also prove 复原 restores position and `camera.up` |
-| `assert=orbit-drain` | the same 100px drag as 1 move vs 20 moves inside one frame; asserts the custom controller applies every pointermove (`record=v105&freeze=1&freezeat=9000&slow=11000`) |
+| `assert=orbit` | drag with synthetic pointer events and assert the default OrbitControls contract: the polar clamp stops above the target, `camera.up` stays world up, no mirror flip (max quaternion step < 90°; `record=v105&freeze=1&freezeat=6000&slow=9000`); add `orbitreset=1` to also prove 复原 restores position and `camera.up` |
+| `assert=orbit-drain` | the same 100px drag as 1 move vs 20 moves inside one frame; asserts OrbitControls applies every pointermove (`record=v105&freeze=1&freezeat=9000&slow=11000`) |
 | `debug=0` | disable the layout probe printed into the empty left column |
 | `fakerenderer=1` | stand a 2D canvas in as `mount.__renderer`, so the **capture plumbing** (📸截图 → tray → badge → hint) can be reviewed without WebGL. It draws an obvious placeholder — **those pixels are not 3D** and must never be presented as a model render |
 | `bg` | pre-seed the viewport ground preset (`paper` / `warm` / `graphite` / `midnight`) into the same localStorage key the panel reads, so a capture can show any of them without clicking |
@@ -148,9 +148,9 @@ usable while it is open).
 | `tabs-tray-sheet.png` | 📸截图 opens the tray in the overlay automatically (the old "nothing happened" complaint) |
 | `tabs-overview.png` | 概览: intent + `尺寸 115.0 × 115.0 × 48.0 mm · 2192 面` + a "这些按钮怎么用？" link |
 | `viewtools.png` | the five tool chips live **inside the viewport**, top-left column, in the same visual language as `⤾ 复原` (which owns top-right) |
-| `orbit-verified.png` | `?assert=orbit&record=v105&freeze=1&freezeat=6000&slow=9000`: one downward drag crosses the pole (camera y goes negative; the old OrbitControls stopped at the top) |
+| `orbit-verified.png` | `?assert=orbit&record=v105&freeze=1&freezeat=6000&slow=9000`: one downward drag hits the default polar clamp, `camera.up` stays (0,1,0), and no orientation step exceeds 90° |
 | `orbit-final.png` | the same probe with `orbitreset=1`: 复原 restores the camera (0.000mm off) and `camera.up` (y=1.000) |
-| `orbit-drain.png` | `?assert=orbit-drain`: 1 move 137.40° vs 20 moves 137.40° (ratio 1.000) — the linear controller applies every pointermove |
+| `orbit-drain.png` | `?assert=orbit-drain`: the same 100px drag as 1 move vs 20 moves ends at the same pose (ratio ≈ 1) |
 | `details-scroll-params.png` | before: `client=190 scroll=497 (+307px hidden, 2.6x)` |
 
 ## Layout stability is asserted, not eyeballed (`layout-*.png`)

@@ -1228,9 +1228,10 @@ export function CadPanel(): React.ReactElement {
 
         const VIEW_DIR = new THREE.Vector3(1.6, 1.2, 1.6).normalize();
         const applyFit = () => {
-          // Free orbit rotates `camera.up` with the model (that is what lets the
-          // camera cross the poles). A re-fit — initial frame or 复原 — must
-          // restore the world-up too, or the model comes back rolled.
+          // OrbitControls derives the pose from world up and never rolls the
+          // camera, so a re-fit only has to restore the up vector it expects and
+          // the starting position. Keeping this explicit also repairs a camera
+          // left over from the old free-orbit implementation.
           camera.up.set(0, 1, 0);
           camera.position.copy(center).addScaledVector(VIEW_DIR, fitDistance(camera, radius));
         };
@@ -1284,24 +1285,17 @@ export function CadPanel(): React.ReactElement {
           })();
         }
 
-        // Mouse interaction: wheel zoom, drag rotate (free orbit), right-drag pan.
-        // `createFreeOrbit` is TrackballControls plus the per-pointer-event
-        // drain (fast mice lose most of a drag otherwise) and the orbit config
-        // shared by all CAD views. Trackball, not OrbitControls, because
-        // OrbitControls clamps the polar angle to [0, π]: a vertical drag stops
-        // at the north/south pole. Free orbit lets the camera continue over the
-        // pole; the price is that the model may end up tilted/upside down,
-        // which `复原` undoes (applyFit restores camera.up).
+        // Mouse interaction: wheel zoom, left-drag orbit, right-drag pan — the
+        // stock three.js mapping, shared by every CAD viewport.
         const { controls, dispose: disposeControls } = createFreeOrbit(camera, renderer.domElement, {
           target: center,
           minDistance: radius * 0.3,
           maxDistance: radius * 10,
         });
 
-        // Debug hooks for the sandbox's `?assert=orbit` / `?assert=orbit-rate`
-        // probes (same shape as `__renderer`): a runner has to read the live
-        // camera to prove that a drag crossed the pole at the input rate it was
-        // given, not just at one move per frame.
+        // Debug hooks for the sandbox's `?assert=orbit` probes (same shape as
+        // `__renderer`): a runner reads the live camera to prove the default
+        // mapping holds (up stays world up, no mirror flip).
         (mount as unknown as { __camera?: THREE.PerspectiveCamera }).__camera = camera;
         (mount as unknown as { __controls?: FreeOrbitControls }).__controls = controls;
 

@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { t as tr } from './i18n.ts';
-import { T } from './tokens';
+import { T } from './tokens.ts';
 
 export interface ChartSeries {
   name: string;
@@ -46,9 +46,9 @@ const finiteSeries = (values: number[]): boolean => values.every((v) => Number.i
 
 /** Build the chart from the run's own trajectory; null when there is nothing honest to plot. */
 export function buildRunChart(kind: string, report: any): RunChartData | null {
-  const tr = report?.trajectory;
-  const times: number[] = Array.isArray(tr?.times) ? tr.times.filter((t: unknown) => typeof t === 'number') : [];
-  const parts: any[] = Array.isArray(tr?.parts) ? tr.parts : [];
+  const trajectory = report?.trajectory;
+  const times: number[] = Array.isArray(trajectory?.times) ? trajectory.times.filter((t: unknown) => typeof t === 'number') : [];
+  const parts: any[] = Array.isArray(trajectory?.parts) ? trajectory.parts : [];
   if (times.length < 2 || parts.length === 0) return null;
 
   const keyframes = (Array.isArray(report?.keyframes) ? report.keyframes : [])
@@ -107,7 +107,7 @@ export function buildRunChart(kind: string, report: any): RunChartData | null {
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.range - a.range);
     const chosen = candidates.slice(0, 3);
-    const events: ChartEvent[] = ((tr?.events ?? []) as any[])
+    const events: ChartEvent[] = ((trajectory?.events ?? []) as any[])
       .filter((e) => Number.isFinite(e?.timeSec))
       .filter((e) => !/^(start|final|context|crank\d+)/i.test(String(e.label ?? '')))
       .map((e) => ({ timeSec: e.timeSec as number, label: String(e.label), tone: 'warn' as const }));

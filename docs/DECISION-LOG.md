@@ -5971,3 +5971,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `scripts/setup.mjs`、`scripts/provision-{lib,openscad}.mjs`、`backend.json`、README/install/preview、CI smoke；**取代** 2026-11-12 A3 决策里“用户自行安装/不替用户下载”的默认路径。
 
 **非目标：** 不把 OpenSCAD 放进 tarball；不改变“OpenSCAD 只是默认内核，其他内核 planned”的定位；不在 setup 阶段自动下载 Python 运行时。
+
+## 2026-11-13：视口恢复 three.js 默认 OrbitControls（取代自由轨道）
+
+**触发条件：** 第 1 条（用户明确要求“还原用 threejs 的默认翻转模式”）。
+
+**要解决的问题：** 手写 `FreeOrbitControls` 允许相机越过极点；上下翻转 180° 后 `camera.up` 随模型倒置，再左右拖拽时模型转向与鼠标方向相反，极点附近滚转、双指切换等边界也反复出问题。
+
+**决策内容：** `src/client/free-orbit.ts` 退回为 OrbitControls 的薄适配器；五个 3D 视口共用 target / min/max distance / speed 配置；`camera.up` 始终为世界 +Y，竖直旋转在极点夹紧，不再滚转或倒置。删除手写四元数、固定 pitch 轴和 pinch 接管。
+
+**理由：** 用户已明确不再为“越过极点”承担手写控制器的维护成本；默认控件不会改变 `camera.up`，方向反转的前提（屏幕基向量倒置）不存在。代价是竖直拖到极点会停住，但上下两面仍可通过反向拖动看到。
+
+**依据：** `scripts/accept-viewport-orbit.mjs` 断言确实构造 OrbitControls、无手写类、长篇竖直+水平驱动后 `camera.up` 仍为 `(0,1,0)`；`npm run typecheck`、`npm run build` 通过；sandbox `?assert=orbit` 改为检查极角夹紧、up 稳定、无镜像翻转。
+
+**影响：** `src/client/free-orbit.ts`、`panel.ts`、`playback.ts`、`local-file.tsx`、sandbox 预览探针/README；旧 2026-11-09 两条“自由轨道/连续 up 过渡”决策被取代。
+
+**非目标：** 不恢复越极点连续滚转；不为触摸双指新增自定义手势。

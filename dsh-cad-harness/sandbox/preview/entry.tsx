@@ -535,14 +535,14 @@ if (q.get('assert')) {
   setTimeout(flush, 4600);
 }
 
-// ?assert=orbit — the viewport must be free to rotate past the poles.
+// ?assert=orbit — the viewport uses three.js OrbitControls' default behaviour.
 //
-// The regression this guards is OrbitControls' turntable clamp: a downward drag
-// from the default view stops with the camera directly above the target, so the
-// camera's y (relative to the target) never goes below 0. A free orbit keeps
-// going over the top; during the SAME drag its y crosses zero. Meant to run with
-// a version selected (`&record=v105&freeze=1&freezeat=6000&slow=9000`); the
-// delayed freeze leaves the canvas live while the probe drags. `&orbitreset=1`
+// The regression this guards is the old hand-written free orbit: it let the
+// camera cross the poles by rotating `camera.up`, and after an upside-down pose
+// a horizontal drag moved the model the wrong way. The stock controller keeps
+// `camera.up` at world up and clamps the polar angle, so the screen basis cannot
+// invert. Meant to run with a version selected (`&record=v105&freeze=1&freezeat=6000&slow=9000`);
+// the delayed freeze leaves the canvas live while the probe drags. `&orbitreset=1`
 // also clicks 复原 afterwards and checks that position and camera.up return.
 if (q.get('assert') === 'orbit') {
   const show = (lines: string[]) => {
@@ -564,7 +564,7 @@ if (q.get('assert') === 'orbit') {
       await pause(250);
     }
     if (!canvas || !host?.__camera || !host.__controls) {
-      show([`free orbit (dock ${w}×${h})`, 'FAIL  no live camera/controls — load a version first (`&record=<version>&freeze=1&freezeat=6000&slow=9000`)']);
+      show([`default orbit (dock ${w}×${h})`, 'FAIL  no live camera/controls — load a version first (`&record=<version>&freeze=1&freezeat=6000&slow=9000`)']);
       return;
     }
     const cam = host.__camera;
@@ -596,8 +596,8 @@ if (q.get('assert') === 'orbit') {
     let prevQ = cam.quaternion.clone();
     let maxStep = 0;
     ev('pointerdown', cx, cy);
-    // Drag DOWN: a turntable climbs to the north pole and stops (y stays > 0);
-    // free orbit keeps going and the camera ends up below the target (y < 0).
+    // Drag DOWN: the default polar clamp stops at the pole instead of rolling
+    // the camera over it. The invariant is that up stays world up.
     const steps = 24;
     const total = r.height * 2.4;
     for (let i = 1; i <= steps; i++) {
@@ -612,13 +612,15 @@ if (q.get('assert') === 'orbit') {
     ev('pointerup', cx, cy + total);
     canvas.setPointerCapture = originalCapture;
     canvas.releasePointerCapture = originalRelease;
-    await pause(500); // let the damping settle before reporting
-    const crossed = minY < -0.05 * Math.max(radius, 1e-6);
+    await pause(500); // let any damping settle before reporting
+    const clamped = minY > -0.05 * Math.max(radius, 1e-6);
+    const upStable = cam.up.y > 0.99;
     const lines = [
-      `free orbit (dock ${w}×${h})`,
-      `${crossed ? 'PASS' : 'FAIL'}  one downward drag crosses the pole (min camera y relative to target < 0)`,
+      `default orbit (dock ${w}×${h})`,
+      `${clamped ? 'PASS' : 'FAIL'}  the polar clamp stops the camera above the target (min camera y relative to target ${minY.toFixed(2)})`,
       `camera y rel. target: start ${startY.toFixed(2)}, min ${minY.toFixed(2)}, max ${maxY.toFixed(2)}, radius ${radius.toFixed(2)}`,
-      `${maxStep < 90 ? 'PASS' : 'FAIL'}  no mirror flip while crossing (max orientation step ${maxStep.toFixed(1)}°)`,
+      `${upStable ? 'PASS' : 'FAIL'}  camera.up stays world up (y=${cam.up.y.toFixed(3)})`,
+      `${maxStep < 90 ? 'PASS' : 'FAIL'}  no mirror flip during the drag (max orientation step ${maxStep.toFixed(1)}°)`,
     ];
     if (q.get('orbitreset') === '1') {
       const resetBtn = Array.from(document.querySelectorAll('#root button'))
@@ -637,8 +639,8 @@ if (q.get('assert') === 'orbit') {
 }
 
 // ?assert=orbit-drain — one 100 px move vs the same 100 px split into 20 events
-// inside ONE frame. With the per-pointer-event drain the sum of the per-event
-// rotation angles is the same; TrackballControls would only apply its last 5 px.
+// inside ONE frame. OrbitControls accumulates every pointermove into the same
+// spherical delta, so the two drags must end at the same pose.
 if (q.get('assert') === 'orbit-drain') {
   const show = (lines: string[]) => {
     const pre = document.createElement('pre');
