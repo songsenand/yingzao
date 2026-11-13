@@ -2484,7 +2484,7 @@ export function CadPanel(): React.ReactElement {
     : version ? (runsOnVersion.length ? `本版 ${runsOnVersion.length} 次验证` : '本版无验证')
       : null;
   const statusIdentity = record
-    ? [record.id, run ? RUN_KIND_LABEL[run.kind] : '版本', revText, fmtTime(record.timestamp)]
+    ? [record.id, run ? RUN_KIND_LABEL[run.kind] : t('ui.nav.versions'), revText, fmtTime(record.timestamp)]
       .filter(Boolean).join(' · ')
     : (parts.length === 0 ? '还没有零件 — 让 Agent 生成一个' : '该零件还没有记录');  // The description is the elidable tail: identity and revision come first.
   const statusDetail = record ? (run ? run.summary || runTitle(run) : version?.title ?? '') : '';
@@ -2566,18 +2566,18 @@ export function CadPanel(): React.ReactElement {
     'div',
     { style: { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, lineHeight: 1.5 } },
     ...([
-      ['📏测量', '点一下进入测量 → 点零件上第一个点 → 点第二个点。两个点选完**自动退出**测量，红点/连线/读数都留着（再点 📏测量 可量下一处）。'],
-      ['▤壁厚', '点一下进入壁厚 → **单击**零件任意一处：读的是「沿视线」穿过材料两面的厚度（薄壁只看得见一个面，所以不用点两个点）。读完**自动退出**，读数留在下面那行；不用拉框——拉框是「▭标注」。'],
-      ['▭标注', '点一下进入标注 → 在视口里拖框框出问题区域 → 点 📸截图，框会一起带走。'],
-      ['◐剖切', '点一下切开：沿 z 切掉近侧半边看内部；下面那行可换 x / y / z 轴并拖滑块改切面位置（看中心孔这类内部结构，用 x 或 y 纵向切）。剖切状态下测量只认看得见的面。'],
-      ['📸截图', '点一下先弹出发送框：预览截图、写一句你想让它做什么（可改写默认说明），再点「发送到会话」——文字随图一起给模型，不用再补消息。也可「只存托盘」以后再发。运行中的回合不会被打断（排在你后面）。'],
-      ['⤢ 放大', '把下面这一节抬到浮层，可用整栏高度阅读；浮层不占版式，所以放大/收回都不会让模型跳动。Esc 或 ✕ 收回。'],
+      [t('ui.tool.measure'), t('ui.help.measure')],
+      [t('ui.tool.thickness'), t('ui.help.thickness')],
+      [t('ui.tool.annotate'), t('ui.help.annotate')],
+      [t('ui.tool.section'), t('ui.help.section')],
+      [t('ui.tool.screenshot'), t('ui.help.shot')],
+      [t('ui.tool.expand'), t('ui.help.expand')],
     ] as [string, string][]).map(([k, v]) => React.createElement('div', { key: k, style: { display: 'flex', gap: 6 } },
       React.createElement('span', { style: { flex: 'none', width: 58, fontWeight: 600, color: '#3b4450' } }, k),
       React.createElement('span', { style: { color: T.soft } }, v),
     )),
     React.createElement('div', { style: { color: T.muted, borderTop: '1px solid #eef1f3', paddingTop: 5 } },
-      '测量 / 壁厚 / 标注只对零件版本可用；回放产物（物理 / 机构 / 流体）在各回放视图内自带截图按钮。'),
+      t('ui.help.note')),
   );
 
   const trayBody = () => React.createElement(
@@ -3308,7 +3308,7 @@ export function CadPanel(): React.ReactElement {
             React.createElement('div', {
               key: 'older-divider',
               style: { fontSize: 10, color: T.muted, padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
-            }, `更早 ${older.length} 版 · 只读参考`),
+            }, t('ui.nav.older', { count: older.length })),
             ...older.map((v) => vRow(v, true)),
             // A nudge, not a wall: history is here when you need it, but the
             // cheap path is to ask the agent — it can read old revisions and
@@ -3316,12 +3316,12 @@ export function CadPanel(): React.ReactElement {
             React.createElement('div', {
               key: 'older-nudge',
               style: { fontSize: 10, color: T.muted, padding: '4px 6px', lineHeight: '14px' },
-            }, '历史版本只用于对比。要让 Agent 查旧版 / 解释两版差在哪里，通常更快。'),
+            }, t('ui.nav.historyNote')),
           ]
           : []),
       ];
     const versionToggle = !q && older.length
-      ? navRow('versions-toggle', versionsExpanded ? '收起历史' : `全部 ${versionsAll.length} 版 ›`, null,
+      ? navRow('versions-toggle', versionsExpanded ? t('ui.nav.collapseHistory') : t('ui.nav.allVersions', { count: versionsAll.length }), null,
         () => setExpandedVersionsFor(versionsExpanded ? null : currentPart?.id ?? null))
       : null;
     const runRows = (list: RunProduct[]) => list
@@ -3338,14 +3338,14 @@ export function CadPanel(): React.ReactElement {
     // A query searches EVERYTHING; without one the sections are the map (and each
     // long section is capped, with search as the way to reach the rest).
     const body = q
-      ? [navSection(`结果 · “${q}”`, [
+      ? [navSection(t('ui.nav.results', { q }), [
         ...versionRows, ...partRows, ...fileRows,
         ...runRows(simRuns), ...runRows(checkRuns), ...runRows(assemblyRuns), ...runRows(contractRuns),
       ])]
       : [
         // 最近 first: after an interruption this is what you actually want, and it
         // is the one section that needs no knowledge of the corpus at all.
-        navSection('最近', (() => {
+        navSection(t('ui.nav.recent'), (() => {
           const rows: React.ReactNode[] = [];
           for (const id of recent) {
             const hit = resolveAddress(id);
@@ -3355,26 +3355,26 @@ export function CadPanel(): React.ReactElement {
         })()),
         navSection(
           currentPart
-            ? `版本 · ${currentPart.name}`
-              + (!q && older.length && !versionsExpanded ? `（最近 ${head.length} / 共 ${versionsAll.length}）` : '')
-            : '版本',
+            ? t('ui.nav.versionsOf', { name: currentPart.name })
+              + (!q && older.length && !versionsExpanded ? t('ui.nav.versionCount', { head: head.length, all: versionsAll.length }) : '')
+            : t('ui.nav.versions'),
           [...versionRows, versionToggle],
         ),
         // The machine is an OBJECT, not four run categories: its evidence lives
         // on its own page. Without a manifest there is nothing to group under, so
         // the flat sections stay as the fallback.
         machine
-          ? navSection(`机器 · 1`, [navRow('machine', machine.name,
-            `${machine.nodes.length} 节点 · ${machineRuns.length} 条证据`, navPickMachine, kind === 'machine')])
+          ? navSection(t('ui.nav.machineOne'), [navRow('machine', machine.name,
+            t('ui.nav.machineMeta', { nodes: machine.nodes.length, runs: machineRuns.length }), navPickMachine, kind === 'machine')])
           : null,
-        navSection(`零件 · ${parts.length}`, partRows),
+        navSection(t('ui.nav.parts', { count: parts.length }), partRows),
         ...(machine ? [] : [
-          navSection(`仿真 · ${simRuns.length}`, runRows(simRuns)),
-          navSection(`检查 · ${checkRuns.length}`, runRows(checkRuns)),
-          navSection(`组件 · ${assemblyRuns.length}`, runRows(assemblyRuns)),
-          navSection(`契约 · ${contractRuns.length}`, runRows(contractRuns)),
+          navSection(t('ui.nav.sims', { count: simRuns.length }), runRows(simRuns)),
+          navSection(t('ui.nav.checks', { count: checkRuns.length }), runRows(checkRuns)),
+          navSection(t('ui.nav.assemblies', { count: assemblyRuns.length }), runRows(assemblyRuns)),
+          navSection(t('ui.nav.contracts', { count: contractRuns.length }), runRows(contractRuns)),
         ]),
-        navSection(`未登记 · ${unregistered.length}`, fileRows),
+        navSection(t('ui.nav.unregistered', { count: unregistered.length }), fileRows),
       ];
 
     return React.createElement('div', {
@@ -3395,13 +3395,13 @@ export function CadPanel(): React.ReactElement {
         },
           React.createElement('input', {
             autoFocus: true, value: navQuery,
-            placeholder: '搜索零件 / 版本 / 运行 / 文件…',
-            'aria-label': '搜索产物',
+            placeholder: t('ui.nav.searchPlaceholder'),
+            'aria-label': t('ui.nav.searchLabel'),
             onChange: (e: any) => setNavQuery(e.target.value),
             onKeyDown: (e: any) => { if (e.key === 'Escape') navClose(); },
             style: { flex: 1, minWidth: 0, height: 28, fontSize: 12, padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6 },
           }),
-          React.createElement('button', { type: 'button', onClick: navClose, title: '关闭（Esc）', style: S.smallBtn }, '✕'),
+          React.createElement('button', { type: 'button', onClick: navClose, title: t('ui.nav.close'), style: S.smallBtn }, '✕'),
         ),
         React.createElement('div', {
           style: { overflow: 'auto', padding: '4px 6px 8px', flex: 1, minHeight: 0 },
@@ -3510,7 +3510,7 @@ export function CadPanel(): React.ReactElement {
             `${pending.length} 条未读${settled.length ? ` · ${settled.length} 条已处理` : ''}`),
           review.error && React.createElement('span', { style: { fontSize: 10, color: T.danger } }, review.error),
           React.createElement('button', {
-            type: 'button', onClick: () => setReviewOpen(false), title: '关闭（Esc）',
+            type: 'button', onClick: () => setReviewOpen(false), title: t('ui.nav.close'),
             style: { ...S.smallBtn, marginLeft: 'auto' },
           }, '✕'),
         ),
@@ -3531,11 +3531,11 @@ export function CadPanel(): React.ReactElement {
 
   /** Where you are, in one line: the breadcrumb IS the answer, not a chooser. */
   const crumb = (() => {
-    if (kind === 'machine') return machine ? machine.name : '整机';
-    if (kind === 'part') return currentPart ? `${currentPart.name}${version ? ` · ${version.id}` : ''}` : '选择零件';
-    if (kind === 'unregistered') return fileSubject || '未登记文件';
+    if (kind === 'machine') return machine ? machine.name : t('ui.crumb.whole');
+    if (kind === 'part') return currentPart ? `${currentPart.name}${version ? ` · ${version.id}` : ''}` : t('ui.crumb.selectPart');
+    if (kind === 'unregistered') return fileSubject || t('ui.crumb.unregistered');
     if (run) return `${run.id} · ${runTitle(run)}`;
-    return kind === 'sim' ? '仿真运行' : kind === 'check' ? '检查结果' : kind === 'assembly' ? '组件' : '装配契约';
+    return kind === 'sim' ? t('ui.crumb.sim') : kind === 'check' ? t('ui.crumb.check') : kind === 'assembly' ? t('ui.crumb.assembly') : t('ui.crumb.contract');
   })();
 
   return React.createElement(
@@ -3683,24 +3683,24 @@ export function CadPanel(): React.ReactElement {
             setFileSubject('');
             setFileMeta(null);
           },
-          title: '项目：必须显式选择一份 CAD 语料（只读浏览）。\n没有默认根目录，也不跟随会话；根目录和子目录都是同级的独立项目。未选择时面板不读取任何语料。',
-          'aria-label': '项目',
+          title: t('ui.project.title'),
+          'aria-label': t('ui.project.label'),
           style: { ...S.select, flex: 'none', maxWidth: 150 },
         },
-        React.createElement('option', { key: '', value: '', disabled: true }, '选择项目…'),
+        React.createElement('option', { key: '', value: '', disabled: true }, t('ui.project.placeholder')),
         workspaces.map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
           `${w.rel === '.' ? w.name : w.rel} · ${w.parts}零件/${w.versions}版`)),
       ),
       !workspaceCwd && React.createElement('span', {
         key: 'no-project',
         style: { flex: 'none', color: '#b42318', fontSize: 11, whiteSpace: 'nowrap' },
-        title: '路径为空：面板不会回退到根目录或会话目录',
-      }, '未选择项目'),
+        title: t('ui.project.notSelectedTitle'),
+      }, t('ui.project.notSelected')),
       React.createElement('button', {
         type: 'button',
         onClick: () => { setNavQuery(''); setNavOpen(true); },
-        title: '选择要看的东西：搜索 / 零件 / 运行 / 未登记（Esc 关闭）',
-        'aria-label': '打开产物导航',
+        title: t('ui.project.navTitle'),
+        'aria-label': t('ui.project.navLabel'),
         style: {
           // `1 1 0`, not `1 1 auto`: in a WRAPPING flex row the wrap decision uses
           // the flex base size, so an auto basis (the breadcrumb's text width) makes
@@ -3719,8 +3719,8 @@ export function CadPanel(): React.ReactElement {
       kind === 'part' && record && statusGlyph(record.status),
       React.createElement('button', {
         type: 'button',
-        title: '未登记文件：工作区里没有版本的几何 — 预览、标注、导入为版本',
-        'aria-label': '未登记文件',
+        title: t('ui.project.unregisteredTitle'),
+        'aria-label': t('ui.project.unregisteredLabel'),
         onClick: () => { setKind('unregistered'); setRecordId(null); refreshUnregistered(); },
         style: { ...S.smallBtn, padding: '2px 6px' },
       }, '📂'),
@@ -3746,12 +3746,12 @@ export function CadPanel(): React.ReactElement {
         },
           // One line: a two-line banner covered the tool chips, and "回到最新" is
           // the actionable half anyway. The full sentence lives in the tooltip.
-          `⚠ 旧版本 ${version.id} · 最新 ${latestVersionId}`,
+          t('ui.stale.banner', { version: version.id, latest: latestVersionId }),
           React.createElement('button', {
             type: 'button',
             onClick: () => { setRecordId(latestVersionId); },
             style: { ...S.smallBtn, marginLeft: 'auto', padding: '1px 8px' },
-          }, '回到最新'),
+          }, t('ui.stale.backLatest')),
         ),
       // The inset's frame and colour key are DOM: the WebGL picture is drawn by
       // the renderer, but a border and a legend must stay crisp — and a canvas
@@ -3775,10 +3775,10 @@ export function CadPanel(): React.ReactElement {
         },
           React.createElement('div', null,
             React.createElement('span', { style: { color: '#2563eb' } }, '● 蓝 '),
-            React.createElement('span', null, `${staleBanner ? '历史' : '当前'} ${version?.id ?? ''}`)),
+            React.createElement('span', null, `${staleBanner ? t('ui.legend.history') : t('ui.legend.current')} ${version?.id ?? ''}`)),
           React.createElement('div', null,
             React.createElement('span', { style: { color: '#e2651c' } }, '● 橙 '),
-            React.createElement('span', null, `${staleBanner ? '当前' : '历史'} ${ghostVersionId}`)),
+            React.createElement('span', null, `${staleBanner ? t('ui.legend.current') : t('ui.legend.history')} ${ghostVersionId}`)),
         ),
       ),
       meshSource && React.createElement('div', {
@@ -3806,9 +3806,9 @@ export function CadPanel(): React.ReactElement {
         },
       },
       React.createElement('div', { style: { fontSize: 26 } }, '🚫'),
-      React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, '此环境无法创建 WebGL 上下文'),
+      React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, t('ui.webgl.title')),
       React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
-        '几何预览不可用；版本、运行与报告仍可浏览。',
+        t('ui.webgl.body'),
         React.createElement('br'),
         React.createElement('span', { style: { fontFamily: 'ui-monospace, monospace' } }, glError)),
       ),
@@ -3830,7 +3830,7 @@ export function CadPanel(): React.ReactElement {
           setThickMode(false);
           setSection(false);
           setSectionPos(0.5);
-          setHint('视图已复原 — 剖视 / 测量 / 壁厚 / 标注已清除');
+          setHint(t('ui.restore.hint'));
         },
       }),
       run && (run.kind === 'motion' || run.kind === 'physics') && run.hasGeometry &&
