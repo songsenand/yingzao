@@ -105,6 +105,10 @@
 
 先安装 OpenSCAD（2021.01 可运行但 `doctor` 会报 degraded；推荐 2025.06+，Manifold 后端）。
 
+> **自动下载的不是 OpenSCAD。** 首次用到计算功能时，插件会自动下载约 400MB 的 Python 运行时；
+> OpenSCAD 是系统级几何内核，预览版**不随包分发、也不替用户下载**。缺它时 `doctor` 会直接报
+> `OpenSCAD not found`，并给出安装或 `CAD_OPENSCAD_BIN` 的下一步。
+
 **方式 A：tarball（预览版，不需要构建）**
 
 ```bash
