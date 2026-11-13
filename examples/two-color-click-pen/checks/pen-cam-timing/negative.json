@@ -1,0 +1,11 @@
+{
+  "apiVersion": "checker/v1",
+  "geometry": {
+    "parts": [
+      { "id": "rotor", "stl": "negative-rotor.stl" }
+    ]
+  },
+  "constraints": {
+    "checkConfig": { "rotorPartId": "rotor" }
+  }
+}

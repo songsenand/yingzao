@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "kind": "motion",
+      "statement": "Three click states' tip positions (-4/+8, +4/-4, +4/+8 mm) and the black-arm-under-red-track clearance are measured from the delivered rotor STL by the pen-cam-timing check.",
+      "checkId": "pen-cam-timing"
+    }
+  ]
+}

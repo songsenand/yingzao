@@ -1,0 +1,51 @@
+{
+  "inputs": {
+    "E_MPa": 1500.0,
+    "L_mm": 13.0,
+    "w_mm": 4.0,
+    "t_mm": 0.8,
+    "delta_mm": 8.0,
+    "load_at_mm": 4.8
+  },
+  "second_moment_mm4": 0.17067,
+  "cases": [
+    {
+      "model": "cantilever L=11.3mm",
+      "k_N_per_mm": 0.5323,
+      "force_N_at_8mm": 4.26,
+      "root_strain_pct": 7.52,
+      "delta_over_L": 0.708,
+      "linear_beam_valid": false
+    },
+    {
+      "model": "cantilever L=13.0mm",
+      "k_N_per_mm": 0.3496,
+      "force_N_at_8mm": 2.8,
+      "root_strain_pct": 5.68,
+      "delta_over_L": 0.615,
+      "linear_beam_valid": false
+    },
+    {
+      "model": "simply supported, load at x=+4.8mm",
+      "k_N_per_mm": 6.4446,
+      "force_N_at_8mm": 51.56,
+      "max_strain_pct": 24.39,
+      "delta_over_L": 0.615,
+      "linear_beam_valid": false
+    },
+    {
+      "model": "fixed-fixed, load at x=+4.8mm",
+      "k_N_per_mm": 27.6711,
+      "force_N_at_8mm": 221.37,
+      "max_strain_pct": 48.78,
+      "delta_over_L": 0.615,
+      "linear_beam_valid": false
+    }
+  ],
+  "warnings": [
+    "E=1500 MPa is an assumption; PP grade is not declared.",
+    "pusher-post and carrier-arm compliance are not included.",
+    "the barrel web's actual support condition is not declared in CAD.",
+    "delta/L > 0.1 means the linear beam result is not a valid answer."
+  ]
+}

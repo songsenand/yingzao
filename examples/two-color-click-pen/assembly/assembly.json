@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "name": "双色按压圆珠笔",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "pen",
+    "name": "双色按压圆珠笔",
+    "kind": "assembly",
+    "children": [
+      {
+        "id": "front",
+        "name": "前笔杆",
+        "kind": "part",
+        "version": "v061"
+      },
+      {
+        "id": "rear",
+        "name": "后笔杆",
+        "kind": "part",
+        "version": "v062"
+      },
+      {
+        "id": "rotor",
+        "name": "旋转凸轮",
+        "kind": "part",
+        "version": "v085"
+      },
+      {
+        "id": "retainer",
+        "name": "转子保持环",
+        "kind": "part",
+        "version": "v064"
+      },
+      {
+        "id": "cap",
+        "name": "顶环",
+        "kind": "part",
+        "version": "v083"
+      },
+      {
+        "id": "button",
+        "name": "按钮",
+        "kind": "part",
+        "version": "v084"
+      },
+      {
+        "id": "clip",
+        "name": "笔夹",
+        "kind": "part",
+        "version": "v071"
+      },
+      {
+        "id": "refill_b",
+        "name": "黑色笔芯",
+        "kind": "part",
+        "version": "v067",
+        "transform": {
+          "translate": [
+            1.6,
+            0,
+            -4
+          ]
+        }
+      },
+      {
+        "id": "refill_r",
+        "name": "红色笔芯",
+        "kind": "part",
+        "version": "v067",
+        "transform": {
+          "translate": [
+            -1.6,
+            0,
+            8
+          ]
+        }
+      },
+      {
+        "id": "carrier_b",
+        "name": "黑色滑架",
+        "kind": "part",
+        "version": "v068",
+        "transform": {
+          "translate": [
+            1.6,
+            0,
+            -4
+          ]
+        }
+      },
+      {
+        "id": "carrier_r",
+        "name": "红色滑架",
+        "kind": "part",
+        "version": "v069",
+        "transform": {
+          "translate": [
+            -1.6,
+            0,
+            8
+          ]
+        }
+      },
+      {
+        "id": "leaf",
+        "name": "回位板簧",
+        "kind": "part",
+        "version": "v070"
+      },
+      {
+        "id": "spring_btn",
+        "name": "按钮压簧",
+        "kind": "part",
+        "version": "v072",
+        "transform": {
+          "translate": [
+            0,
+            0,
+            117
+          ]
+        },
+        "elastic": {
+          "behavior": "compression",
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "freeLengthMm": 30,
+          "stiffnessNPerMm": 0.5,
+          "solidHeightMm": 8,
+          "outerDiameterMm": 5.4,
+          "guided": false,
+          "forceBudgetN": 2.5,
+          "requiredTravelMm": 4,
+          "source": {
+            "kind": "assumed",
+            "ref": "generic PP compression spring; measure before claiming"
+          }
+        }
+      },
+      {
+        "id": "detent",
+        "name": "弹簧柱塞",
+        "kind": "part",
+        "version": "v073",
+        "transform": {
+          "translate": [
+            0,
+            7.3,
+            119
+          ],
+          "rotate": [
+            -90,
+            0,
+            0
+          ]
+        }
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "I1",
+        "a": "front.web_top",
+        "b": "rear.bottom",
+        "type": "前后笔杆贴合",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 0,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I2",
+        "a": "front.axis",
+        "b": "rear.axis",
+        "type": "前后笔杆同轴",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I3",
+        "a": "rear.axis",
+        "b": "rotor.axis",
+        "type": "转子转动副",
+        "severity": "hard",
+        "check": "motion-clearance",
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "params": {
+          "runId": "r050"
+        }
+      },
+      {
+        "id": "I4",
+        "a": "rotor.seat",
+        "b": "retainer.top",
+        "type": "转子轴向支承",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 0,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I5",
+        "a": "rear.axis",
+        "b": "cap.axis",
+        "type": "顶环同轴",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        }
+      },
+      {
+        "id": "I6",
+        "a": "cap.axis",
+        "b": "button.axis",
+        "type": "按钮导向同轴",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I7",
+        "a": "button.bottom",
+        "b": "cap.flange",
+        "type": "按钮上挡",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 1,
+          "max": 1.4
+        }
+      },
+      {
+        "id": "I8",
+        "a": "leaf.top",
+        "b": "front.web_top",
+        "type": "板簧安装",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 1.8,
+          "max": 2.2
+        }
+      },
+      {
+        "id": "I9",
+        "a": "spring_btn.bottom",
+        "b": "rotor.seat",
+        "type": "按钮簧座",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 0.3,
+          "max": 0.7
+        }
+      },
+      {
+        "id": "I10",
+        "a": "spring_btn.bottom",
+        "b": "spring_btn.top",
+        "type": "按钮压簧",
+        "severity": "intent",
+        "check": "spring-behaviour",
+        "params": {
+          "behavior": "compression",
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "freeLengthMm": 30,
+          "stiffnessNPerMm": 0.5,
+          "solidHeightMm": 8,
+          "outerDiameterMm": 5.4,
+          "guided": false,
+          "forceBudgetN": 2.5,
+          "requiredTravelMm": 4,
+          "source": {
+            "kind": "assumed",
+            "ref": "generic PP compression spring; measure before claiming"
+          }
+        }
+      },
+      {
+        "id": "I11",
+        "a": "front.refill_black",
+        "b": "refill_b.tip",
+        "type": "黑笔芯伸出 4mm",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 3.8,
+          "max": 4.2
+        }
+      },
+      {
+        "id": "I12",
+        "a": "front.refill_red",
+        "b": "refill_r.tip",
+        "type": "红笔芯缩回 8mm",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 7.8,
+          "max": 8.2
+        }
+      },
+      {
+        "id": "I13",
+        "a": "carrier_r.post",
+        "b": "rotor.seat",
+        "type": "红滑架凸轮接触",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 0,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I14",
+        "a": "rear.axis",
+        "b": "clip.axis",
+        "type": "笔夹同轴",
+        "severity": "intent",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.3,
+          "max": 0.3
+        }
+      },
+      {
+        "id": "I15",
+        "a": "rear.top",
+        "b": "detent.ball",
+        "type": "柱塞高度",
+        "severity": "intent",
+        "check": "distance",
+        "tolerance": {
+          "min": 8.8,
+          "max": 9.2
+        }
+      },
+      {
+        "id": "I16",
+        "a": "button.cap_under",
+        "b": "cap.top",
+        "type": "按钮行程 4mm",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 3.8,
+          "max": 4.2
+        }
+      },
+      {
+        "id": "I17",
+        "a": "rear.top",
+        "b": "cap.top",
+        "type": "顶环上端面",
+        "severity": "hard",
+        "check": "distance",
+        "tolerance": {
+          "min": 0,
+          "max": 0.2
+        }
+      }
+    ],
+    "process": {
+      "id": "injection-pp",
+      "source": "policy",
+      "rationale": "按用户批准的工艺集分配；注塑优先"
+    }
+  },
+  "manufacturing": {
+    "approvedBy": "PROMPT.md",
+    "allowed": [
+      {
+        "id": "injection-pp",
+        "note": "PROMPT.md：塑料件注塑"
+      },
+      {
+        "id": "fdm-pla-0.4",
+        "note": "自有 FDM，可选原型/替代"
+      }
+    ],
+    "preference": [
+      "injection-pp"
+    ],
+    "delegate": true,
+    "mixApprovedBy": "PROMPT.md"
+  }
+}

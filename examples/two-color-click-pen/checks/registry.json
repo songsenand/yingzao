@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "pen-cam-timing",
+      "version": "1.0.0",
+      "hash": "sha256:ef3cf2481fc5379e037003a55be55f728c3a794e308e210c7a478ba4c406c6a4",
+      "row": "fit",
+      "criteria": [
+        "state0-black-tip",
+        "state0-red-tip",
+        "state1-black-tip",
+        "state1-red-tip",
+        "state2-black-tip",
+        "state2-red-tip",
+        "black-arm-red-track-clearance"
+      ],
+      "registeredAt": "2026-11-11T12:03:42.070Z"
+    }
+  ],
+  "history": [
+    {
+      "id": "pen-cam-timing",
+      "version": "1.0.0",
+      "hash": "sha256:e64c31e8eb90a17f040dcf57e5caecd49b98da5aa38a9a0c37da52078e071b64",
+      "registeredAt": "2026-11-11T11:57:48.022Z",
+      "revokedAt": "2026-11-11T12:03:42.070Z",
+      "reason": "fix early-error emit + coverage list; same 7 criteria"
+    }
+  ]
+}

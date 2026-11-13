@@ -1,0 +1,36 @@
+{
+  "apiVersion": "checker/v1",
+  "id": "pen-cam-timing",
+  "version": "1.0.0",
+  "row": "fit",
+  "criteria": [
+    "state0-black-tip",
+    "state0-red-tip",
+    "state1-black-tip",
+    "state1-red-tip",
+    "state2-black-tip",
+    "state2-red-tip",
+    "black-arm-red-track-clearance"
+  ],
+  "entry": ["node", "check.mjs"],
+  "permissions": ["read:geometry", "read:constraints"],
+  "timeoutMs": 15000,
+  "negativeSamples": ["negative.json"],
+  "config": {
+    "rotorPartId": "rotor",
+    "blackRadiusMm": 6.3,
+    "redRadiusMm": 3.6,
+    "refillLengthMm": 100,
+    "redOffsetMm": 8.5,
+    "noseZMm": 0,
+    "stateToleranceMm": 0.25,
+    "stepDeg": 2,
+    "minClearanceMm": 0.2,
+    "states": [
+      { "rotorDeg": 0, "blackTipMm": -4, "redTipMm": 8 },
+      { "rotorDeg": 120, "blackTipMm": 4, "redTipMm": -4 },
+      { "rotorDeg": 240, "blackTipMm": 4, "redTipMm": 8 }
+    ]
+  },
+  "description": "Two-color click pen functional invariant: three click states' tip positions and the black-arm-under-red-track clearance, measured from the delivered rotor STL (vertical ray cast at r=6.3 / r=3.6). This is a project-specific behavior check, not a built-in operator."
+}
