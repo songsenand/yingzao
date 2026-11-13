@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { browseCategories } from './browse';
 import { downloadExport } from './export-gate';
-import { t, useLocaleRevision } from './i18n.ts';
+import { t, t as tr, useLocaleRevision } from './i18n.ts';
 import {
   currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice, environmentNotice,
   refreshProjectScope, withProject, setProjectOverride, sessionCwd,
@@ -1928,7 +1928,7 @@ export function CadPanel(): React.ReactElement {
     opts: { autoSend?: boolean; userText?: string } = {},
   ) => {
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
-    if (!blob) { setError('截图编码失败'); return; }
+    if (!blob) { setError(tr('ui.shot.encodeFailed')); return; }
     // thumbnail for the tray
     const thumb = document.createElement('canvas');
     thumb.width = 96; thumb.height = Math.max(1, Math.round(canvas.height * 96 / canvas.width));
@@ -1952,7 +1952,7 @@ export function CadPanel(): React.ReactElement {
       label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')}`
         + `${version && latestVersionId && version.id !== latestVersionId ? '（旧版）' : ''}`
         + ` · ${label}${!run && annotations.length ? ` · ${annotations.length}个标注` : ''}`,
-      status: '发送中',
+      status: tr('ui.shot.status.sending'),
       time,
       note: noteOverride ?? '',
       // The read-only caption rides with every re-send. It is the only part
@@ -1974,20 +1974,20 @@ export function CadPanel(): React.ReactElement {
     // autoSend=false (the 📸 dialog's「只存托盘」) stops right here: the shot is
     // parked with its status clearly「待发送」, nothing reaches the model.
     if (opts.autoSend === false) {
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '待发送', note: noteOverride ?? x.note } : x));
-      setHint('截图已存入托盘（未发送）— 在列表里补备注后点 ↻发，或 📋图 复制');
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.parked'), note: noteOverride ?? x.note } : x));
+      setHint(tr('ui.shot.parkedHint'));
       return;
     }
     const fileName = shotName;
     const sent = await sendImageToSession(blob, fileName, opts.userText ?? shotPrompt(label));
     if (sent.how === 'sent') {
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '已发送' } : x));
-      setHint('截图已发送到会话（排队）— Agent 下一回合就能看到这张图');
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.sent') } : x));
+      setHint(tr('ui.shot.sentHint'));
       return;
     }
     if (sent.how === 'composer') {
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '待发送' } : x));
-      setHint(`已插入会话输入框（${sent.reason ?? '发送通道不可用'}）— 补一句话后发送`);
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.parked') } : x));
+      setHint(tr('ui.shot.inserted', { reason: sent.reason ?? tr('ui.shot.reasonSend') }));
       return;
     }
 
@@ -2000,13 +2000,13 @@ export function CadPanel(): React.ReactElement {
     } catch { copied = false; }
 
     if (copied) {
-      setHint(`已复制到剪贴板（第 ${tray.length + 1} 张）— 回会话输入框 Ctrl+V 即插入`);
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '已复制' } : x));
+      setHint(tr('ui.shot.copiedHint', { count: tray.length + 1 }));
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.copied') } : x));
     } else {
       // Last resort: the tray is the one place guaranteed visible, so open it.
       setSheet('tray');
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '需手动发送' } : x));
-      setHint(`${sent.reason ? `发送失败（${sent.reason}）` : '插入与剪贴板都不可用'} — 第 ${tray.length + 1} 张已存入浮层，可 ↻发 重试或 📋图 复制`);
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.manual') } : x));
+      setHint(tr('ui.shot.manualHint', { reason: sent.reason ? tr('ui.shot.reasonFailed', { reason: sent.reason }) : tr('ui.shot.reasonBoth'), count: tray.length + 1 }));
     }
   };
 
@@ -2017,26 +2017,26 @@ export function CadPanel(): React.ReactElement {
     if (!item) return;
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': item.blob })]);
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '图片已复制' } : x));
-      setHint('图片已复制 — 输入框 Ctrl+V 粘贴');
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.imageCopied') } : x));
+      setHint(tr('ui.shot.imageCopiedHint'));
     } catch {
       const url = URL.createObjectURL(item.blob);
       const a = document.createElement('a');
       a.href = url; a.download = item.name; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      setTray((t) => t.map((x) => x.id === id ? { ...x, status: '已下载' } : x));
-      setHint('剪贴板不可用 — 已下载文件，可拖入会话');
+      setTray((t) => t.map((x) => x.id === id ? { ...x, status: tr('ui.shot.status.downloaded') } : x));
+      setHint(tr('ui.shot.imageDownloadedHint'));
     }
   };
 
   const copyNote = async (id: string) => {
     const note = tray.find((x) => x.id === id)?.note?.trim();
-    if (!note) { setHint('备注为空 — 先填写备注再复制'); return; }
+    if (!note) { setHint(tr('ui.shot.noteEmpty')); return; }
     try {
       await navigator.clipboard.writeText(note);
-      setHint('备注已复制 — 粘贴到会话与图片一起发送');
+      setHint(tr('ui.shot.noteCopied'));
     } catch {
-      setHint('剪贴板不可用 — 请手动选择备注文字复制');
+      setHint(tr('ui.shot.clipUnavailable'));
     }
   };
 
@@ -2044,7 +2044,7 @@ export function CadPanel(): React.ReactElement {
   const resendImage = async (id: string) => {
     const item = blobById.get(id);
     const row = tray.find((x) => x.id === id);
-    if (!item) { setHint('原图已不在内存里（页面刷新或列表过长）— 请重新截图'); return; }
+    if (!item) { setHint(tr('ui.shot.originalGone')); return; }
     const note = row?.note?.trim();
     // The auto caption is the identity; only fall back to the tray label for a
     // row that somehow predates it (the tray is in-memory, so this is a guard).
@@ -2053,11 +2053,11 @@ export function CadPanel(): React.ReactElement {
     const r = await sendImageToSession(item.blob, item.name, text);
     setTray((t) => t.map((x) => x.id === id ? {
       ...x,
-      status: r.how === 'sent' ? '已发送' : r.how === 'composer' ? '待发送' : '发送失败',
+      status: r.how === 'sent' ? tr('ui.shot.status.sent') : r.how === 'composer' ? tr('ui.shot.status.parked') : '发送失败',
     } : x));
-    setHint(r.how === 'sent' ? '已重新发送到会话（排队）'
-      : r.how === 'composer' ? `已插入会话输入框（${r.reason ?? '发送通道不可用'}）— 补一句话后发送`
-        : `发送失败：${r.reason ?? '未知原因'} — 可点 📋图 复制后手动粘贴`);
+    setHint(r.how === 'sent' ? tr('ui.shot.resendSent')
+      : r.how === 'composer' ? tr('ui.shot.resendInserted', { reason: r.reason ?? tr('ui.shot.reasonSend') })
+        : tr('ui.shot.resendFailed', { reason: r.reason ?? 'unknown' }));
   };
 
   /** Capture and open the compose dialog — nothing is sent until the user confirms. */
@@ -2584,7 +2584,7 @@ export function CadPanel(): React.ReactElement {
     'div',
     { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
     tray.length === 0
-      ? React.createElement('div', { style: S.hint }, '还没有截图 — 点工具栏的 📸截图，先写一句话（想让它改什么）再发进会话。')
+      ? React.createElement('div', { style: S.hint }, tr('ui.tray.empty'))
       : React.createElement('div', null, ...tray.map((item) => React.createElement(
         'div',
         { key: item.id, style: { display: 'flex', gap: 6, alignItems: 'flex-start', padding: '3px 0' } },
@@ -2606,7 +2606,7 @@ export function CadPanel(): React.ReactElement {
           }, item.auto.replace(/\n/g, ' · ')),
           React.createElement('input', {
             type: 'text',
-            placeholder: '备注（重发时随图给模型）',
+            placeholder: tr('ui.tray.notePlaceholder'),
             value: item.note,
             onChange: (e: any) => setTray((t) => t.map((x) => x.id === item.id ? { ...x, note: e.target.value } : x)),
             style: { width: '100%', marginTop: 2, fontSize: 11, padding: '2px 5px', border: '1px solid #e3e7ea', borderRadius: 4 },
@@ -2614,22 +2614,22 @@ export function CadPanel(): React.ReactElement {
         ),
         React.createElement('button', {
           type: 'button', onClick: () => void resendImage(item.id),
-          title: '把这张图再发一次到会话（排队）', style: S.smallBtn,
+          title: tr('ui.tray.resendTitle'), style: S.smallBtn,
         }, '↻发'),
         React.createElement('button', {
           type: 'button', onClick: () => void copyImage(item.id),
-          title: '复制图片，粘贴到会话输入框', style: S.smallBtn,
+          title: tr('ui.tray.copyImageTitle'), style: S.smallBtn,
         }, '📋图'),
         React.createElement('button', {
           type: 'button', onClick: () => void copyNote(item.id),
-          title: '复制备注文本，粘贴到会话与图片一起发送', style: S.smallBtn,
+          title: tr('ui.tray.copyTextTitle'), style: S.smallBtn,
         }, '📋文'),
         React.createElement('button', {
           type: 'button', onClick: () => setTray((t) => t.filter((x) => x.id !== item.id)), style: S.smallBtn,
         }, '✕'),
       ))),
     React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
-      '截图默认已直接发进会话（排队，不打断运行中的回合）；这里的 ↻发 用于重发，📋图 用于手动粘贴'),
+      tr('ui.tray.footer')),
   );
 
   /**
@@ -3505,7 +3505,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', {
           style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: '1px solid #e6ebef', background: T.white },
         },
-          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: T.ink } }, '待阅'),
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: T.ink } }, tr('ui.review.title')),
           React.createElement('span', { style: { fontSize: 11, color: T.muted } },
             `${pending.length} 条未读${settled.length ? ` · ${settled.length} 条已处理` : ''}`),
           review.error && React.createElement('span', { style: { fontSize: 10, color: T.danger } }, review.error),
@@ -3519,7 +3519,7 @@ export function CadPanel(): React.ReactElement {
         },
           review.items.length === 0
             ? React.createElement('div', { style: { color: T.muted, fontSize: 12, padding: 8 } },
-              '还没有待阅项。Agent 想让你看什么时会往这里放，不会自己切换视口。')
+              tr('ui.review.empty'))
             : [...pending, ...settled].map(row),
         ),
         React.createElement('div', {
@@ -3581,10 +3581,10 @@ export function CadPanel(): React.ReactElement {
         'div',
         { style: { background: T.white, borderRadius: 10, padding: 12, width: 340, maxWidth: '92vw', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' } },
         React.createElement('div', { style: { fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#3b4450' } },
-          `📸 截图 · ${shotDraft.label} — 加一句你想让它做什么`),
+          tr('ui.shot.title', { label: shotDraft.label })),
         React.createElement('img', {
           src: shotDraft.url,
-          alt: '截图预览',
+          alt: tr('ui.shot.alt'),
           style: { width: '100%', borderRadius: 6, border: '1px solid #e3e7ea', marginBottom: 8, display: 'block' },
         }),
         // Auto caption: machine-generated facts (view, version, bbox, 测量/标注),
@@ -3600,7 +3600,7 @@ export function CadPanel(): React.ReactElement {
         shotDraft.stale && React.createElement('div', {
           style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
                    borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: T.warnInk },
-        }, `⚠ 此截图来自旧版本 ${shotDraft.stale.version}（最新为 ${shotDraft.stale.latest}）— 发送时会再次确认`),
+        }, tr('ui.shot.stale', { version: shotDraft.stale.version, latest: shotDraft.stale.latest })),
         React.createElement('textarea', {
           value: shotDraft.text,
           onChange: (e: any) => setShotDraft((d) => d ? { ...d, text: e.target.value } : d),
@@ -3617,21 +3617,21 @@ export function CadPanel(): React.ReactElement {
           { style: { display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' } },
           React.createElement('button', {
             type: 'button', onClick: () => void sendShotDraft(),
-            title: '图片 + 你写的文字一起发进会话（排队，不打断运行中的回合）',
+            title: tr('ui.shot.sendTitle'),
             style: { ...S.smallBtn, background: T.accent, color: T.white, border: '1px solid #2f6fdb', fontWeight: 600 },
           }, '✓ 发送到会话'),
           React.createElement('button', {
             type: 'button', onClick: () => void parkShotDraft(),
-            title: '存进截图列表，不发送 — 以后可在列表里补备注后 ↻发',
+            title: tr('ui.shot.parkTitle'),
             style: S.smallBtn,
           }, '只存托盘'),
           React.createElement('button', {
             type: 'button', onClick: () => setShotDraft(null),
-            title: '丢弃这张截图', style: { ...S.smallBtn, marginLeft: 'auto' },
+            title: tr('ui.shot.discardTitle'), style: { ...S.smallBtn, marginLeft: 'auto' },
           }, '取消'),
         ),
         React.createElement('div', { style: { fontSize: 10, color: T.muted, marginTop: 6 } },
-          'Ctrl+Enter 发送 · 文字随图片一起给模型，不用再补一条消息'),
+          tr('ui.shot.hint')),
       ),
     ),
 
@@ -4005,7 +4005,7 @@ export function CadPanel(): React.ReactElement {
           type: 'button',
           'data-review-strip': '',
           onClick: () => { setReviewOpen(true); void refreshReviewQueue(); },
-          title: '打开待阅列表 —— 打开不会切换视口，点「看」才跳过去',
+          title: tr('ui.review.openTitle'),
           style: {
             display: 'flex', alignItems: 'center', gap: 5, flex: '1 1 auto', minWidth: 0,
             height: 17, boxSizing: 'border-box', padding: '0 5px', cursor: 'pointer', textAlign: 'left',
@@ -4017,7 +4017,7 @@ export function CadPanel(): React.ReactElement {
               flex: 'none', fontSize: 10, fontWeight: 700, color: T.white, background: T.accent,
               borderRadius: 3, padding: '0 4px', lineHeight: '13px',
             },
-          }, `待阅 ${review.items.filter((i) => i.status === 'unread').length}`),
+          }, tr('ui.review.count', { count: review.items.filter((i) => i.status === 'unread').length })),
           React.createElement('span', {
             style: {
               flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -4145,11 +4145,11 @@ export function CadPanel(): React.ReactElement {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
           fontSize: 11, lineHeight: '16px', color: T.muted, textDecoration: 'underline dotted',
         },
-      }, `待阅记录 ${review.items.length}`),
+      }, tr('ui.review.processed', { count: review.items.length })),
       tray.length > 0 && React.createElement('button', {
         type: 'button',
         onClick: () => setSheet('tray'),
-        title: '打开截图列表 — 点 📋图 复制后回输入框 Ctrl+V',
+        title: tr('ui.tray.buttonTitle'),
         // Deliberately borderless and padding-less: it must occupy exactly the
         // height of the text it replaced, or the band grows and the viewport
         // shrinks by 2px the moment the first screenshot is taken.
@@ -4157,7 +4157,7 @@ export function CadPanel(): React.ReactElement {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
           fontSize: 11, lineHeight: '16px', color: '#8a6d1a', textDecoration: 'underline dotted',
         },
-      }, `📸 ${tray.length} 张截图`),
+      }, tr('ui.tray.buttonLabel', { count: tray.length })),
     ),
   );
 }
