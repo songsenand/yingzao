@@ -45,9 +45,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y openscad
       - name: Install OpenSCAD (macOS)
         if: runner.os == 'macOS'
-        run: brew install openscad
+        run: node scripts/provision-openscad.mjs --source official
       - name: Full preview acceptance (P0 + P1 suites)
-        run: npm run accept:preview
+        run: |
+          set -o pipefail
+          npm run accept:preview 2>&1 | tee /tmp/accept.log
+      - name: Upload acceptance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accept-log-${{ matrix.os }}
+          path: /tmp/accept.log
+          if-no-files-found: ignore
 
       - name: Doctor (fail only on kind=fail)
         run: |
