@@ -5950,3 +5950,24 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `docs/dev/TODO.md`、`docs/dev/RELEASE-0.1.0-PREVIEW.md`、`docs/user/preview.md`、`src/host/jobs.ts`；不改变已交付的 compile job。
 
 **非目标：** 不在 0.1.0-preview 内做渲染/仿真异步化；不把“没有 job”写成“已验证”。
+
+## 2026-11-13：`dsh-cad-setup` 默认自动准备 OpenSCAD
+
+**触发条件：** 第 1 条（用户在 provision 提交中确认“安装后的默认路径就该准备内核”）+ 第 4 条（影响安装流程、许可与联网行为）。
+
+**要解决的问题：** 2026-11-12 的 A3 决策写的是“用户自行安装 OpenSCAD、插件不替用户下载内核”，但实际安装路径需要用户记住 `--openscad=auto`；同时 tarball 不能带 GPL 二进制。二者需要一个明确的默认值。
+
+**决策内容：**
+
+- `setup --openscad=auto` 成为默认：系统已有 2025.06+ 直接用；否则官方快照优先，官方不可达或持续低于 256 KB/s 才切 OSS 镜像。
+- 下载物落在 `$DSH_HOME/cad/tools/openscad/`，由 `backend.json` 的 `binaryPath` 指向；**tarball 仍不包含 OpenSCAD 二进制**。
+- `--openscad=off` 只写预设、不联网；`official` / `mirror` 强制单源；`--from` 支持离线包。
+- `doctor` 读取 `binaryPath` 并校验版本/Manifold；下载失败不写 preset，错误带源与下一步。
+
+**理由：** 用户不应为了默认路径记住一个开关；OpenSCAD 仍是独立进程（GPL 义务在用户下载的副本上），包本身不分发二进制。默认自动准备让“装完就能用”，同时保留 `off` 的离线/审计路径。
+
+**依据：** `accept:provision` 16/16（官方慢/404/哈希错→镜像；官方快→不碰镜像；双失败报两源）；`accept:setup` 11/11 显式 `--openscad=off`；`accept:preview` 287/287；CI 的 unpack smoke 显式 `--openscad=off`，不让网络成为发布门。
+
+**影响：** `scripts/setup.mjs`、`scripts/provision-{lib,openscad}.mjs`、`backend.json`、README/install/preview、CI smoke；**取代** 2026-11-12 A3 决策里“用户自行安装/不替用户下载”的默认路径。
+
+**非目标：** 不把 OpenSCAD 放进 tarball；不改变“OpenSCAD 只是默认内核，其他内核 planned”的定位；不在 setup 阶段自动下载 Python 运行时。

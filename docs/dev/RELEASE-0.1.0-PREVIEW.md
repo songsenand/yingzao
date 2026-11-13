@@ -55,7 +55,7 @@
 
 预览版承诺：
 
-- `setup --openscad=auto` 自动准备 OpenSCAD（>= 2025.06 才有 Manifold）：系统已有就用，
+- `setup --openscad=auto` 默认自动准备 OpenSCAD（>= 2025.06 才有 Manifold）：系统已有就用，
   没有则官方快照优先、官方不可达/过慢才切 OSS；插件不随包分发内核。
 - `dsh-cad-backend` 在安装时/运行时选择 kernel 与 compileBackend，写入 `$DSH_HOME/cad/backend.json`；
   `doctor` 校验路径、版本和可选后端。
