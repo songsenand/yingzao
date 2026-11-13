@@ -1912,8 +1912,8 @@ export function CadPanel(): React.ReactElement {
       heatLegend: heat?.legend,
       compare: insetShown && version && ghostVersionId
         ? {
-          blue: { role: stale ? '历史' : '当前', id: version.id },
-          orange: { role: stale ? '当前' : '历史', id: ghostVersionId },
+          blue: { role: stale ? tr('ui.legend.history') : tr('ui.legend.current'), id: version.id },
+          orange: { role: stale ? tr('ui.legend.current') : tr('ui.legend.history'), id: ghostVersionId },
         }
         : undefined,
     });
@@ -2073,8 +2073,8 @@ export function CadPanel(): React.ReactElement {
 
   const onScreenshot = async () => {
     const canvas = captureCanvas();
-    if (!canvas) { setError('视口尚未就绪'); return; }
-    openShotDraft(canvas, measure?.b ? `测量 ${(measure.dist ?? 0).toFixed(2)}mm` : '截图', measureNote || undefined);
+    if (!canvas) { setError(tr('ui.shot.viewportError')); return; }
+    openShotDraft(canvas, measure?.b ? tr('ui.shot.measureLabel', { value: (measure.dist ?? 0).toFixed(2) }) : tr('ui.shot.shotLabel'), measureNote || undefined);
   };
 
   /** 发送 = 自动说明（只读，机器生成的事实）+ 用户写的话，合成一条消息。 */
@@ -2599,7 +2599,7 @@ export function CadPanel(): React.ReactElement {
           // Read-only identity that rides with the image on every send. Visible
           // here so the user can see what the model will be told, but not edit it.
           React.createElement('div', {
-            title: `随图必发（机器生成）：\n${item.auto}`,
+            title: tr('ui.shot.autoTitleWith', { auto: item.auto }),
             style: { color: T.soft, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
           }, item.auto.replace(/\n/g, ' · ')),
           React.createElement('input', {
@@ -2613,15 +2613,15 @@ export function CadPanel(): React.ReactElement {
         React.createElement('button', {
           type: 'button', onClick: () => void resendImage(item.id),
           title: tr('ui.tray.resendTitle'), style: S.smallBtn,
-        }, '↻发'),
+        }, tr('ui.shot.resend')),
         React.createElement('button', {
           type: 'button', onClick: () => void copyImage(item.id),
           title: tr('ui.tray.copyImageTitle'), style: S.smallBtn,
-        }, '📋图'),
+        }, tr('ui.shot.copyImage')),
         React.createElement('button', {
           type: 'button', onClick: () => void copyNote(item.id),
           title: tr('ui.tray.copyTextTitle'), style: S.smallBtn,
-        }, '📋文'),
+        }, tr('ui.shot.copyText')),
         React.createElement('button', {
           type: 'button', onClick: () => setTray((t) => t.filter((x) => x.id !== item.id)), style: S.smallBtn,
         }, '✕'),
@@ -2678,8 +2678,8 @@ export function CadPanel(): React.ReactElement {
       // manifest of the row (ids, versions, summary) for when it is not enough.
       title: `${r.id} · ${runTitle(r)}\n${r.sourceVersionIds.join(' · ')}`
         + (r.summary ? `\n${r.summary}` : '')
-        + (r.staleVersionIds?.length ? `\n⚠ 基于旧版本 ${r.staleVersionIds.join(', ')}` : '')
-        + (r.supersededBy ? `\n已被 ${r.supersededBy} 取代` : ''),
+        + (r.staleVersionIds?.length ? tr('ui.run.old', { versions: r.staleVersionIds.join(', ') }) : '')
+        + (r.supersededBy ? tr('ui.run.superseded', { id: r.supersededBy }) : ''),
       onClick: () => { setKind(browseKindOf(r)); setRecordId(r.id); },
       style: {
         display: 'flex', flexDirection: 'column', gap: 2, width: '100%', textAlign: 'left',
@@ -2957,7 +2957,7 @@ export function CadPanel(): React.ReactElement {
         style: { ...S.smallBtn, alignSelf: 'flex-start' },
       }, importBusy ? tr('ui.unreg.importing') : tr('ui.unreg.import')),
       importMsg && React.createElement('div', {
-        style: { fontSize: 11, color: importMsg.startsWith('导入失败') ? T.danger : '#1e8449' },
+        style: { fontSize: 11, color: importMsg.startsWith(tr('ui.import.failed')) ? T.danger : '#1e8449' },
       }, importMsg),
     ));
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
@@ -2980,7 +2980,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', { style: S.caption, title: version?.title ?? run?.title },
           version ? version.title : run ? `${runTitle(run)} · ${fmtTime(run.timestamp)}` : ''),
         spec && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
-          `尺寸 ${spec.size.map((v) => v.toFixed(1)).join(' × ')} mm · ${spec.triangles} 面`),
+          tr('ui.spec.size', { size: spec.size.map((v) => v.toFixed(1)).join(' × '), triangles: spec.triangles })),
         version?.source === 'imported' && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           tr('ui.imported.from', { origin: version.origin ?? 'external file' }),
           version.solid === false && React.createElement('span', { style: { color: T.danger } },
@@ -2999,7 +2999,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('button', {
           type: 'button',
           onClick: () => { setKind('unregistered'); setRecordId(null); refreshUnregistered(); },
-          title: '未登记文件：工作区里没有版本的几何 — 在这里预览、标注，或登记为版本',
+          title: tr('ui.unreg.previewTitle'),
           style: { ...S.smallBtn, alignSelf: 'flex-start' },
         }, t('panel.unregistered')),
         React.createElement('button', {
@@ -3029,7 +3029,7 @@ export function CadPanel(): React.ReactElement {
       return React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
         ...run.parts.map((name) => React.createElement('button', {
           key: name, type: 'button', style: S.smallBtn,
-          title: `下载 ${run.id}_${name}.stl`,
+          title: tr('ui.download.title', { name: `${run.id}_${name}.stl` }),
           onClick: () => { window.location.href = withProject(`/api/cad/run/stl?id=${run.id}&part=${encodeURIComponent(name)}`); },
         }, `${name}.stl`)));
     }
@@ -3175,7 +3175,7 @@ export function CadPanel(): React.ReactElement {
     // The machine is an address too (`?t=machine`): it was documented as one and
     // the navigator row already carried the id.
     if (id === 'machine' && machine) {
-      return { title: machine.name, meta: `${machine.nodes.length} 节点`, apply: () => navPickMachine() };
+      return { title: machine.name, meta: tr('ui.nav.nodeMeta', { count: machine.nodes.length }), apply: () => navPickMachine() };
     }
     if (/^v\d{3,}$/.test(id)) {
       for (const p of parts) {
@@ -3190,7 +3190,7 @@ export function CadPanel(): React.ReactElement {
     }
     if (/^p\d{3,}$/.test(id)) {
       const p = parts.find((x) => x.id === id);
-      return p ? { title: p.name, meta: `${p.versions.length} 版`, apply: () => navPickPart(id) } : null;
+      return p ? { title: p.name, meta: tr('ui.nav.versionMeta', { count: p.versions.length }), apply: () => navPickPart(id) } : null;
     }
     if (id.startsWith('f:')) {
       const path = id.slice(2);
@@ -3274,7 +3274,7 @@ export function CadPanel(): React.ReactElement {
       // `∗` keeps the honesty marker the old row carried: a name derived from
       // userIntent is not a name the agent declared.
       .map((p) => navRow(`p:${p.id}`, `${p.name}${p.nameSource === 'intent' ? ' ∗' : ''}`,
-        `${p.versions.length} 版`, () => navPickPart(p.id), kind === 'part' && subjectId === p.id));
+        tr('ui.nav.versionMeta', { count: p.versions.length }), () => navPickPart(p.id), kind === 'part' && subjectId === p.id));
     // A 50-version part must not push every other section off the screen: the list
     // is capped and says so, with search as the way to reach older revisions.
     const versionsAll = currentPart
@@ -4020,7 +4020,7 @@ export function CadPanel(): React.ReactElement {
               fontSize: 11, fontWeight: 600, color: '#1f4f8f',
             },
           }, review.items.find((i) => i.status === 'unread')?.title ?? ''),
-          React.createElement('span', { style: { flex: 'none', fontSize: 11, color: T.accent } }, '打开 ›'),
+          React.createElement('span', { style: { flex: 'none', fontSize: 11, color: T.accent } }, tr('ui.nav.open')),
         )
         : React.createElement('span', {
           style: {
