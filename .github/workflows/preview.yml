@@ -57,6 +57,10 @@ jobs:
           grep -E 'FAIL|SKIP|accept-[a-z-]+: [0-9]+ passed|Process completed' /tmp/accept.log | tail -100 | while IFS= read -r line; do
             echo "::error::${line}"
           done
+          echo "::error::LAST-LINES"
+          tail -20 /tmp/accept.log | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
 
       - name: Upload acceptance log
         if: always()
