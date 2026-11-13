@@ -2413,16 +2413,22 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 - 面板 `S.bar` 最左侧「项目」下拉：列出发现到的**全部**项目，根项目（如果根自己也是项目）
   和子目录项目**同级**（根用 basename，子目录用 `rel`，统一 `· N零件/M版`）；没有「跟随会话」选项。
   根为 workspace（`cad-workspace.json`）时它本身不出现在列表里。
-  默认选中会话所在项目（只是一个普通选项），切换只改 `?project=`（`client/project.ts` 的
-  `setProjectOverride`），读数即换语料；只要有发现结果就显示，发现失败时不显示。
+  **没有默认选中项**（2026-11-02 决策）：未选择时显示「未选择项目」，不发 products 请求；人类必须
+  显式选一个，切换只改 `?project=`（`client/project.ts` 的 `setProjectOverride`），**并在同一次
+  onChange 里立即 `refreshProducts()`**，不再等 3 s 轮询；只要有发现结果就显示，发现失败时不显示。
+  项目下拉里的 `· N零件/M版` 计数随 products 每次变化重新发现（只读），不再等到会话切换。
+- **在途请求按项目区分**（`products-store.ts`）：切项目时新请求立即发出，不等待旧项目的在途
+  `/products`；旧回复因 `?project=` 不符被丢弃，不会把上一个项目的树或错误画到新项目上。
 - **写路径按标记**：Agent 的工具从 workingDirectory 起点走 `resolveProjectRoot`，写最近
   `cad-data/project.json` 标记的语料（`projectStoresFor`）。「看 A 写 B」在结构上不可能；
   下拉的 tooltip 明说"只读浏览"。
 
 **边界**：项目选择是**项目**，不是会话事实。会话切换（`refreshProjectScope`）不清空
-override；只有选中项目不在新会话 workspace 的发现列表里时，才回落到会话项目或第一项。
-发现范围永远相对**会话** cwd，不受当前浏览目标影响；不引入语料内"组件"分组——跨组件的
-联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
+override；只有选中项目不在新会话 workspace 的发现列表里时，才清空为「未选择」——**不回落**到
+会话项目或第一项。发现根是**最近的 `cad-workspace.json`；没有标记时是最近的祖先语料**
+（`<dir>/cad-data/`），再没有才是会话 cwd——所以会话 cwd 在项目子目录里（`<project>/src`）时
+仍能看到项目本身，而不是一个空下拉。发现范围不受当前浏览目标影响；不引入语料内"组件"分组
+——跨组件的联合装配检查仍要求所有零件在同一份语料里，那是另一件事。
 
 **验证**：B 后 `discoverWorkspaces(examples)` 返回 10 份语料（含 `ball-and-stick` 的 glucose/fructose），
 深度 3 的分子项目可见；不存在的 root → `[]`；单语料 root（`examples/microscope5`）→ `[.] v83`。

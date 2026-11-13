@@ -67,5 +67,36 @@ calls = 0;
 await new Promise((r) => setTimeout(r, 60));
 check(calls === 0, 'the last unsubscribe stops the poller', `${calls} calls`);
 
+// A project switch while a request is in flight must not wait for it. Before
+// this fix the new project reused the old request's promise, so the panel could
+// show an empty list for a whole 3 s interval after the human picked a project.
+setProjectOverride('/tmp/cad-store-A');
+const pending = [];
+globalThis.fetch = (url) => new Promise((resolve) => {
+  pending.push({ url: String(url), resolve });
+});
+const requestA = refreshProducts();
+setProjectOverride('/tmp/cad-store-B');
+const requestB = refreshProducts();
+check(pending.length === 2,
+  'a different project starts its own request instead of reusing the in-flight one', `${pending.length} requests`);
+check(pending[0].url.includes('cad-store-A') && pending[1].url.includes('cad-store-B'),
+  'each request names the project it was made for');
+pending[1].resolve(new Response(JSON.stringify({ ...wire, project: '/tmp/cad-store-B' }), {
+  status: 200, headers: { 'content-type': 'application/json' },
+}));
+await requestB;
+check(productsSnapshot().data?.project === '/tmp/cad-store-B' && productsSnapshot().data?.parts?.length === 1,
+  'the newly selected project lands immediately', JSON.stringify(productsSnapshot().data?.project));
+// The old reply arrives late: its project is no longer selected, so it must not
+// repaint the tree (nor clear it with its empty part list).
+pending[0].resolve(new Response(JSON.stringify({ ...wire, parts: [], project: '/tmp/cad-store-A' }), {
+  status: 200, headers: { 'content-type': 'application/json' },
+}));
+await requestA;
+check(productsSnapshot().data?.project === '/tmp/cad-store-B' && productsSnapshot().data?.parts?.length === 1,
+  'a stale reply from the previous project is ignored', JSON.stringify(productsSnapshot().data?.project));
+setProjectOverride(null);
+
 console.log(failures ? `\nFAILED (${failures})` : '\nOK');
 process.exit(failures ? 1 : 0);

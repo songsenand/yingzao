@@ -41,6 +41,10 @@ let lastEtag: string | null = null;
 let listeners = new Set<Listener>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let inflight: Promise<void> | null = null;
+/** The project `inflight` belongs to; a different selection must not reuse it. */
+let inflightProject: string | null = null;
+/** Identity token so a superseded request cannot clear the new one's slot. */
+let inflightToken: object | null = null;
 
 const visible = (): boolean =>
   typeof document === 'undefined' || document.visibilityState !== 'hidden';
@@ -72,9 +76,8 @@ function onVisibility(): void {
   if (visible()) void tick();
 }
 
-/** Fetch now (coalesced: concurrent callers share one request). */
+/** Fetch now (coalesced per project: a project change never waits for the old one). */
 export function tick(): Promise<void> {
-  if (inflight) return inflight;
   if (!visible()) return Promise.resolve();
   const project = currentProject();
   // No selection = no request. The panel shows an explicit "not selected"
@@ -88,15 +91,25 @@ export function tick(): Promise<void> {
     emit();
     return Promise.resolve();
   }
+  // Coalesce only the SAME project. Reusing an in-flight request after the
+  // human switched projects was why the new tree could stay empty for a whole
+  // poll interval (3 s) even though the panel had already cleared the old one.
+  if (inflight && inflightProject === project) return inflight;
   const sameProject = lastProject === project;
   const url = withProject(`/api/cad/products${sameProject && lastSeq > 0 ? `?since=${lastSeq}` : ''}`);
   const headers: Record<string, string> =
     sameProject && lastEtag ? { 'if-none-match': lastEtag } : {};
-  inflight = fetch(url, { headers })
+  const token = {};
+  inflightToken = token;
+  const request = fetch(url, { headers })
     .then(async (r) => {
       if (r.status === 304) return; // unchanged: keep the tree, tell nobody
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const payload = await r.json() as { seq?: number } & Record<string, unknown>;
+      // The selection can move while the request is in flight. This reply names
+      // the project it was for; dropping it here keeps the panel from briefly
+      // painting one corpus under another project's guard.
+      if (currentProject() !== project) return;
       lastProject = project;
       lastSeq = typeof payload.seq === 'number' ? payload.seq : 0;
       lastEtag = r.headers.get('etag');
@@ -104,11 +117,20 @@ export function tick(): Promise<void> {
       emit();
     })
     .catch((e: unknown) => {
+      // An old project's failure must not paint an error row on the new one.
+      if (currentProject() !== project) return;
       snapshot = { ...snapshot, error: String((e as Error)?.message ?? e) };
       emit();
     })
-    .finally(() => { inflight = null; });
-  return inflight;
+    .finally(() => {
+      if (inflightToken !== token) return;
+      inflight = null;
+      inflightProject = null;
+      inflightToken = null;
+    });
+  inflight = request;
+  inflightProject = project;
+  return request;
 }
 
 /** Force a tick; safe to call from an event handler. */

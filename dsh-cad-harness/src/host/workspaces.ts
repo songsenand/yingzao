@@ -87,14 +87,21 @@ async function readCorpus(cwd: string): Promise<Omit<WorkspaceEntry, 'cwd' | 're
  * panel asks "what projects are here?" from the session cwd, which may be a
  * member (`examples/windup-frog`). Walking up to the nearest `cad-workspace.json`
  * makes the project selector a workspace-level list instead of "only me".
+ *
+ * With no workspace marker, the nearest ANCESTOR corpus is the discovery root.
+ * A session cwd one level inside a project (`<project>/src`) used to scan only
+ * downward, find no `<cwd>/cad-data`, and offer an empty project dropdown even
+ * though the project itself was right above it.
  * Read-only; no directory is created.
  */
 export function workspaceRootOf(start: string): string {
   let dir = resolve(start);
+  let corpusRoot: string | null = null;
   while (true) {
     if (existsSync(join(dir, 'cad-workspace.json'))) return dir;
+    if (!corpusRoot && existsSync(join(dir, 'cad-data'))) corpusRoot = dir;
     const parent = dirname(dir);
-    if (parent === dir) return resolve(start);
+    if (parent === dir) return corpusRoot ?? resolve(start);
     dir = parent;
   }
 }

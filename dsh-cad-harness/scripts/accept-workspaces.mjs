@@ -76,6 +76,29 @@ try {
   check(siblings.some((e) => e.rel === 'memberA') && siblings.some((e) => e.rel === 'deep/memberB'),
     'a member sees its siblings through the workspace root', siblings.map((e) => e.rel).join(', '));
 
+  // A project with no subprojects must still be selectable: the panel's
+  // dropdown is the only way to pick a corpus, and "one entry" is a normal
+  // list, not an empty one. This also pins the root's `rel === '.'` option
+  // (the UI labels it by name, not by ".").
+  const single = join(base, 'single-project');
+  corpus(single, { versions: 4, parts: 2 });
+  const only = await discoverWorkspaces(single);
+  check(only.length === 1 && only[0].rel === '.' && only[0].cwd === single,
+    'a corpus with no subprojects yields exactly its own root entry', JSON.stringify(only));
+  check(only[0]?.parts === 2 && only[0]?.versions === 4,
+    'the root entry carries the counts the dropdown shows', JSON.stringify(only[0]));
+
+  // A session cwd one level inside a project is still that project's view: the
+  // discovery root is the nearest ANCESTOR corpus when there is no workspace
+  // marker. Scanning only downward used to show an empty project dropdown.
+  const inside = join(single, 'src');
+  mkdirSync(inside, { recursive: true });
+  check(workspaceRootOf(inside) === single,
+    'a nested session cwd resolves to its ancestor corpus', workspaceRootOf(inside));
+  const fromInside = await discoverWorkspaces(workspaceRootOf(inside));
+  check(fromInside.some((e) => e.cwd === single),
+    'the ancestor corpus is discoverable from the nested cwd', fromInside.map((e) => e.rel).join(', '));
+
   const real = await discoverWorkspaces(join(REPO, 'examples'));
   const realRels = real.map((e) => e.rel);
   check(realRels.includes('ball-and-stick/glucose-molecule'), 'the real glucose project is discovered', realRels.join(', '));

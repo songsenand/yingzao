@@ -5,7 +5,7 @@ import { downloadExport } from './export-gate';
 import { t, t as tr, useLocaleRevision } from './i18n.ts';
 import {
   currentProject, currentSessionId, currentSessionPreset, currentSessionBlank, cadMissingToolsNotice, environmentNotice,
-  refreshProjectScope, withProject, setProjectOverride, sessionCwd,
+  refreshProjectScope, withProject, setProjectOverride, projectOverride, sessionCwd,
   type CadScope,
 } from './project';
 import * as THREE from 'three';
@@ -606,11 +606,26 @@ export function CadPanel(): React.ReactElement {
    * are peers, and a selection survives a session switch when the project is
    * still in the new session's workspace.
    */
-  const [workspaceCwd, setWorkspaceCwd] = useState<string>('');
+  const [workspaceCwd, setWorkspaceCwd] = useState<string>(() => projectOverride() ?? '');
   /** Corpora discoverable under the session's workspace root. */
   const [workspaces, setWorkspaces] = useState<WorkspaceEntry[]>([]);
+  /**
+   * Whether {@link workspaces} is a successful discovery result, not merely the
+   * initial empty array. The validation effect below must not clear an explicit
+   * selection just because the list has not arrived (or the endpoint failed) —
+   * that made a remount or the sandbox's `?project=` stand-in look "unselected"
+   * and disabled everything that reads `workspaceCwd` (assembly manifest, import).
+   */
+  const [workspacesReady, setWorkspacesReady] = useState(false);
   /** Bumped on a session switch so the discovery effect re-runs. */
   const [scopeTick, setScopeTick] = useState(0);
+  /**
+   * Bumped when the products tree changes. The project dropdown shows each
+   * corpus's part/version COUNTS, and those counts only move when a tool writes;
+   * refreshing the list on every products change keeps it from aging silently
+   * behind the tree the panel is already showing.
+   */
+  const [workspaceTick, setWorkspaceTick] = useState(0);
   /**
    * The session cwd as the last poll resolved it. State (not the module getter)
    * because the discovery effect must re-run the moment the session list
@@ -1060,7 +1075,13 @@ export function CadPanel(): React.ReactElement {
         setScopeTick((t) => t + 1);
       }
       if (error) { setError(error); return; }
-      if (data) applyProductsRef.current(data);
+      if (data) {
+        applyProductsRef.current(data);
+        // A new version/run also changes the counts shown in the project
+        // dropdown; refresh that read-only list now instead of waiting for a
+        // session switch that may never come.
+        setWorkspaceTick((t) => t + 1);
+      }
     });
     // The tool-scope decision is profile-wide and static, so it is fetched once.
     fetch('/api/cad/scope')
@@ -1077,21 +1098,26 @@ export function CadPanel(): React.ReactElement {
     const root = sessionDir;
     if (!root) return;
     let dead = false;
+    // A new root invalidates the previous list: until it answers, "not in the
+    // list" must not clear the project the human already selected.
+    setWorkspacesReady(false);
     fetch(`/api/cad/projects?root=${encodeURIComponent(root)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: { workspaces?: WorkspaceEntry[] }) => {
-        if (!dead) setWorkspaces(d.workspaces ?? []);
+        if (dead) return;
+        setWorkspaces(d.workspaces ?? []);
+        setWorkspacesReady(true);
       })
-      .catch(() => { /* discovery is a convenience; "follow session" always works */ });
+      .catch(() => { /* discovery is a convenience; an explicit selection still works */ });
     return () => { dead = true; };
-  }, [scopeTick, sessionDir]);
+  }, [scopeTick, sessionDir, workspaceTick]);
 
   // Validate the explicit selection; NEVER pick a default. If the selected
   // project disappears (session switch / deleted corpus), clear the view and
   // show the "not selected" state. Root is not preferred, and neither is the
   // session's own corpus: the human (or the LLM, on the tool side) must name a path.
   useEffect(() => {
-    if (!workspaceCwd) return;
+    if (!workspaceCwd || !workspacesReady) return;
     if (workspaces.some((w) => w.cwd === workspaceCwd)) return;
     setWorkspaceCwd('');
     setProjectOverride(null);
@@ -3672,6 +3698,11 @@ export function CadPanel(): React.ReactElement {
             setUnregistered([]);
             setFileSubject('');
             setFileMeta(null);
+            // Fetch the selected project NOW. The 3 s poll was the only trigger
+            // before, so the part list sat empty (or showed the "no parts" state)
+            // until the next tick — and a switch during an in-flight request
+            // waited even longer.
+            void refreshProducts();
           },
           title: t('ui.project.title'),
           'aria-label': t('ui.project.label'),
