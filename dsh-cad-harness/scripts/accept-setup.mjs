@@ -53,27 +53,27 @@ try {
   check('skill files are discoverable', listSkillFiles(skillDir).length === 2);
 
   const presetFile = join(tmp, 'presets', 'cad', 'preset.patch.yml');
-  const first = run(['--root', tmp, '--standard', standard]);
+  const first = run(['--root', tmp, '--standard', standard, '--openscad=off']);
   check('setup writes the preset', first.status === 0, first.stderr);
   const text1 = existsSync(presetFile) ? readFileSync(presetFile, 'utf8') : '';
   check('written preset points at the temp skill dir', text1.includes(`- ${skillDir}`));
 
-  const checkOk = run(['--root', tmp, '--standard', standard, '--check']);
+  const checkOk = run(['--root', tmp, '--standard', standard, '--check', '--openscad=off']);
   check('setup --check passes after write', checkOk.status === 0, checkOk.stderr);
 
-  const second = run(['--root', tmp, '--standard', standard]);
+  const second = run(['--root', tmp, '--standard', standard, '--openscad=off']);
   const text2 = readFileSync(presetFile, 'utf8');
   check('setup is idempotent', second.status === 0 && text1 === text2);
 
   rmSync(join(tmp, 'skills', 'cad-assembly', 'SKILL.md'));
-  const missing = run(['--root', tmp, '--standard', standard, '--check']);
+  const missing = run(['--root', tmp, '--standard', standard, '--check', '--openscad=off']);
   check('setup --check fails when a skill disappears', missing.status === 1, `status=${missing.status}`);
 
   const noSkills = buildPreset({ root: tmp, skillDir, standardPatch: standard, withoutSkills: true });
   check('--without-skills omits the CAD skill row', !noSkills.text.includes('cad-skill-filesystem'));
 
   writeFileSync(join(tmp, 'skills', 'cad-assembly', 'SKILL.md'), '---\nname: cad-assembly\n---\n');
-  const json = run(['--root', tmp, '--standard', standard, '--json']);
+  const json = run(['--root', tmp, '--standard', standard, '--json', '--openscad=off']);
   const parsed = (() => {
     try { return JSON.parse(json.stdout); } catch { return null; }
   })();

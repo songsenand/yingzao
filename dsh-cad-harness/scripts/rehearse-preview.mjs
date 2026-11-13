@@ -56,8 +56,8 @@ try {
   const standard = findStandardPatch(ROOT);
   check('standard.patch.yml found', Boolean(standard), standard ?? '');
   if (standard) {
-    check('setup writes', run('setup', process.execPath, ['scripts/setup.mjs', '--root', pkg, '--standard', standard]));
-    check('setup --check', run('setup --check', process.execPath, ['scripts/setup.mjs', '--root', pkg, '--standard', standard, '--check']));
+    check('setup writes', run('setup', process.execPath, ['scripts/setup.mjs', '--root', pkg, '--standard', standard, '--openscad=off']));
+    check('setup --check', run('setup --check', process.execPath, ['scripts/setup.mjs', '--root', pkg, '--standard', standard, '--check', '--openscad=off']));
   }
   const doctor = spawnSync(process.execPath, ['scripts/doctor.mjs', '--root', pkg, '--json'], { encoding: 'utf8' });
   let doctorJson = null;

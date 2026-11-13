@@ -45,7 +45,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   --skill-dir <dir>    skill directory (default: <root>/skills)
   --standard <file>    explicit standard.patch.yml (default: find installed dsh)
   --out <file>         write here instead of <root>/presets/cad/preset.patch.yml
-  --openscad <mode>    auto|official|mirror|off (default off): provision OpenSCAD too
+  --openscad <mode>    auto|official|mirror|off (default auto): provision OpenSCAD too
 
 Exit: 0 ok · 1 stale/missing skills · 2 cannot write / no dsh`);
   process.exit(0);
@@ -57,7 +57,7 @@ const root = resolve(argValue('--root') ?? ROOT);
 const skillDir = resolve(argValue('--skill-dir') ?? join(root, 'skills'));
 const file = resolve(argValue('--out') ?? join(root, 'presets', 'cad', 'preset.patch.yml'));
 const standard = argValue('--standard');
-const openscadMode = argValue('--openscad') ?? 'off';
+const openscadMode = argValue('--openscad') ?? 'auto';
 
 if (!['off', 'auto', 'official', 'mirror'].includes(openscadMode)) {
   console.error(`dsh-cad-setup: unknown --openscad ${openscadMode}`);
