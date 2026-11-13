@@ -2474,28 +2474,28 @@ export function CadPanel(): React.ReactElement {
   const revIndex = version && currentPart
     ? currentPart.versions.findIndex((v) => v.id === version.id) : -1;
   const revText = version && currentPart && revIndex >= 0
-    ? `第 ${currentPart.versions.length - revIndex}/${currentPart.versions.length} 版` : null;
+    ? tr('ui.status.rev', { current: currentPart.versions.length - revIndex, total: currentPart.versions.length }) : null;
   const provenance = run
     // Count, not the ids: the band's frozen right edge must stay short enough
     // that the run's own summary wins the space (the ids are in the tooltip and
     // as clickable chips in the details).
-    ? (run.sourceVersionIds.length ? `来源 ${run.sourceVersionIds.length} 版` : '内联 SCAD')
-    : version ? (runsOnVersion.length ? `本版 ${runsOnVersion.length} 次验证` : '本版无验证')
+    ? (run.sourceVersionIds.length ? tr('ui.status.sourceCount', { count: run.sourceVersionIds.length }) : tr('ui.status.inline'))
+    : version ? (runsOnVersion.length ? tr('ui.status.verified', { count: runsOnVersion.length }) : tr('ui.status.noVerify'))
       : null;
   const statusIdentity = record
     ? [record.id, run ? RUN_KIND_LABEL[run.kind] : t('ui.nav.versions'), revText, fmtTime(record.timestamp)]
       .filter(Boolean).join(' · ')
-    : (parts.length === 0 ? '还没有零件 — 让 Agent 生成一个' : '该零件还没有记录');  // The description is the elidable tail: identity and revision come first.
+    : (parts.length === 0 ? tr('ui.status.noParts') : tr('ui.status.noRecords'));  // The description is the elidable tail: identity and revision come first.
   const statusDetail = record ? (run ? run.summary || runTitle(run) : version?.title ?? '') : '';
   const statusTooltip = record
     ? [
       statusIdentity, statusDetail,
       // Full provenance in the tooltip — the band only has room for the count.
-      run ? (run.sourceVersionIds.length ? `来源 ${run.sourceVersionIds.join(' · ')}` : '内联 SCAD 场景') : null,
+      run ? (run.sourceVersionIds.length ? tr('ui.status.sourceList', { list: run.sourceVersionIds.join(' · ') }) : tr('ui.status.inlineScene')) : null,
       run?.supersededBy
-        ? `已被 ${run.supersededBy} 取代 — 同类、同主题（同一份清单 / 同一组零件）的更新一次运行`
+        ? tr('ui.status.superseded', { id: run.supersededBy })
         : null,
-      provenance, `零件：${currentPart?.name ?? '跨零件场景'}`,
+      provenance, tr('ui.status.part', { name: currentPart?.name ?? tr('ui.status.crossPart') }),
     ].filter(Boolean).join('\n')
     : statusIdentity;
 
@@ -2520,13 +2520,13 @@ export function CadPanel(): React.ReactElement {
   ];
 
   /** One line, whatever the state: the feedback block's height is fixed. */
-  const feedbackText = annotateMode ? '标注：在视口里拖框框出问题区域，完成后点 📸 截图带走'
-    : measureMode ? (!measure ? '测量：点击零件表面第一个点（可先旋转视角）'
-      : '测量：已选第一点 — 点击第二个点出距离（量完自动退出测量）')
-    : thickMode ? '壁厚：单击零件任意一处即读数（不用点第二个面、不用拉框），读完自动退出'
+  const feedbackText = annotateMode ? tr('ui.feedback.annotate')
+    : measureMode ? (!measure ? tr('ui.feedback.measureFirst')
+      : tr('ui.feedback.measureSecond'))
+    : thickMode ? tr('ui.feedback.thickness')
     : hint ?? (version
-      ? '工具在视口左上角；「⤢」放大下面任一节'
-      : '回放产物：截图在各回放视图内（📸）；「⤢」放大报告/几何体');
+      ? tr('ui.feedback.tools')
+      : tr('ui.feedback.replay'));
 
   // ── sections ──────────────────────────────────────────────────────────────
   // The strip is the table of contents (one fixed 26px row); the body holds the
@@ -3058,10 +3058,10 @@ export function CadPanel(): React.ReactElement {
     ? React.createElement('button', {
       type: 'button',
       'data-compare-toggle': '',
-      'aria-label': '对比视口',
+      'aria-label': tr('ui.compare.aria'),
       title: compareActive
-        ? `副视口：蓝 = 当前 ${version.id}，橙 = ${ghostVersionId}（点击收起）`
-        : `在右下角副视口里同时放置 ${version.id} 与 ${ghostVersionId}，看差在哪里`,
+        ? tr('ui.compare.onTitle', { current: version.id, ghost: ghostVersionId })
+        : tr('ui.compare.offTitle', { current: version.id, ghost: ghostVersionId }),
       onClick: () => setCompareOn(!compareActive),
       style: {
         position: 'absolute', right: 8, top: 66, zIndex: 8, cursor: 'pointer',
@@ -3071,7 +3071,7 @@ export function CadPanel(): React.ReactElement {
         color: compareActive ? T.dangerInk : T.ink,
         ...(compareActive ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
       },
-    }, `${compareActive ? '◫' : '▢'} 对比 ${ghostVersionId}`)
+    }, `${compareActive ? '◫' : '▢'} ${tr('ui.compare.label')} ${ghostVersionId}`)
     : null;
 
   const bgPicker = version && !glError
@@ -3083,8 +3083,8 @@ export function CadPanel(): React.ReactElement {
       },
       React.createElement('button', {
         type: 'button',
-        title: `视口背景：当前是「${bg.label}」，点开选其它底色`,
-        'aria-label': `视口背景（当前${bg.label}）`,
+        title: tr('ui.bg.title', { label: bg.label }),
+        'aria-label': tr('ui.bg.aria', { label: bg.label }),
         onClick: () => setBgPickerOpen((v) => !v),
         // A visual twin of the neighbouring 复原 pill — same plate, same type —
         // with the CURRENT ground colour as its icon. The first version filled
@@ -3097,7 +3097,7 @@ export function CadPanel(): React.ReactElement {
           background: 'rgba(255,255,255,0.86)', color: T.ink,
           ...(bgPickerOpen ? { boxShadow: '0 0 0 2px rgba(52,152,219,0.25)' } : {}),
         },
-      }, '🎨 背景'),
+      }, tr('ui.bg.label')),
       bgPickerOpen && React.createElement(
         'div',
         {
@@ -3111,7 +3111,7 @@ export function CadPanel(): React.ReactElement {
         VIEWPORT_BACKGROUNDS.map((option) => React.createElement('button', {
           key: option.id,
           type: 'button',
-          title: `背景：${option.label}`,
+          title: tr('ui.bg.option', { label: option.label }),
           onClick: () => { setBgId(option.id); saveBackgroundId(option.id); setBgPickerOpen(false); },
           style: {
             display: 'flex', alignItems: 'center', gap: 6, width: 92,
@@ -3434,7 +3434,7 @@ export function CadPanel(): React.ReactElement {
             color: item.kind === 'revert' ? T.dangerInk : T.accent,
             background: item.kind === 'revert' ? '#fdeee2' : T.accentSoft,
           },
-        }, item.kind === 'revert' ? '回退提议' : '待看'),
+        }, item.kind === 'revert' ? tr('ui.review.revert') : tr('ui.review.pendingKind')),
         React.createElement('span', {
           style: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
         }, item.title),
@@ -3447,11 +3447,11 @@ export function CadPanel(): React.ReactElement {
         item.target && React.createElement('span', {
           style: { fontFamily: 'ui-monospace, monospace', fontSize: 10, color: T.muted },
         }, item.target),
-        item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: '#1e8449' } }, `已回退为 ${item.resolvedBy}`),
+        item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: '#1e8449' } }, tr('ui.review.resolved', { version: item.resolvedBy })),
         React.createElement('span', { style: { marginLeft: 'auto' } }),
         item.target && item.kind === 'revert' && React.createElement('button', {
           type: 'button',
-          title: `批准回退：以 ${item.target} 的几何新建一个版本（父版本=当前 head，历史不改写）`,
+          title: tr('ui.review.approveTitle', { target: item.target }),
           onClick: async () => {
             try {
               const res = await approveReviewItem(item.id);
@@ -3459,15 +3459,15 @@ export function CadPanel(): React.ReactElement {
               if (res.versionId && pid) { setKind('part'); setSubjectId(pid); setRecordId(res.versionId); }
               setReviewOpen(false);
             } catch (e: any) {
-              setError(`回退失败：${String(e?.message ?? e)}`);
+              setError(tr('ui.review.failed', { error: String(e?.message ?? e) }));
             }
           },
           style: { ...tinyBtn, border: '1px solid #a4531c', color: T.dangerInk, background: '#fdeee2' },
-        }, '批准回退'),
+        }, tr('ui.review.approve')),
         item.target && React.createElement('button', {
           type: 'button',
           'data-review-open': item.id,
-          title: `在面板里打开 ${item.target}`,
+          title: tr('ui.review.openItemTitle', { target: item.target }),
           onClick: () => {
             const hit = item.target ? resolveAddress(item.target) : null;
             hit?.apply();
@@ -3475,15 +3475,15 @@ export function CadPanel(): React.ReactElement {
             setReviewOpen(false);
           },
           style: { ...tinyBtn, border: '1px solid #2c81ba', background: '#e8f4fa' },
-        }, '看'),
+        }, tr('ui.review.view')),
         React.createElement('button', {
           type: 'button', onClick: () => void setReviewItemStatus(item.id, item.status === 'unread' ? 'read' : 'unread'),
           style: tinyBtn,
-        }, item.status === 'unread' ? '已阅' : '标为未读'),
+        }, item.status === 'unread' ? tr('ui.review.read') : tr('ui.review.unread')),
         React.createElement('button', {
           type: 'button', onClick: () => void setReviewItemStatus(item.id, 'dismissed'),
           style: tinyBtn,
-        }, '忽略'),
+        }, tr('ui.review.ignore')),
       ),
     );
 
@@ -3505,7 +3505,7 @@ export function CadPanel(): React.ReactElement {
         },
           React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: T.ink } }, tr('ui.review.title')),
           React.createElement('span', { style: { fontSize: 11, color: T.muted } },
-            `${pending.length} 条未读${settled.length ? ` · ${settled.length} 条已处理` : ''}`),
+            tr('ui.review.unreadCount', { pending: pending.length, settled: settled.length ? tr('ui.review.settled', { count: settled.length }) : '' })),
           review.error && React.createElement('span', { style: { fontSize: 10, color: T.danger } }, review.error),
           React.createElement('button', {
             type: 'button', onClick: () => setReviewOpen(false), title: t('ui.nav.close'),
@@ -3522,7 +3522,7 @@ export function CadPanel(): React.ReactElement {
         ),
         React.createElement('div', {
           style: { borderTop: '1px solid #e6ebef', padding: '5px 9px', fontSize: 10, color: T.muted, background: T.white },
-        }, '打开这个列表不会改变视口；点「看」才会跳过去。'),
+        }, tr('ui.review.footer')),
       ),
     );
   };
