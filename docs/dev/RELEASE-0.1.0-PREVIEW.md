@@ -1,7 +1,7 @@
 # 0.1.0-preview 发布计划：把外壳补到 L2
 
 > **状态**：P0 + P1 完成（2026-11-13）；13/13 + 6/6 已收口，证据见 [TODO.md](TODO.md)。
-> **英文入口**：README.en.md + docs/en/user/{install,preview,limits,README}.md；完整 UI 双语留 preview.2。
+> **英文入口**：README.en.md + docs/en/user 全套 + docs/en/llm + HARNESS.en.md；客户端 UI 文案已全量英文化（`accept:ui-i18n`）。
 > **总索引**：[TODO.md](TODO.md)（顺序/状态）；本文件是 0.1.0-preview 的详细设计。
 > **目标**：不是把 L2 全部做完，而是让 `0.1.0-preview` 达到四条底线：
 > **装得上、查得出、拦得住（但允许带风险导出）、退得回。**
@@ -298,6 +298,7 @@ interface CadBackend {
 
 - **UI 双语是部分覆盖**：标签页、环境提示、导出弹窗、主要空状态已中英切换；深层面板仍中文。
 - **英文文档**：英文用户文档全套 + `docs/en/llm` + `HARNESS.en.md`；`docs/dev` 仍中文。
+- **英文 UI**：客户端可见文案全量英文化，`accept:ui-i18n` 扫描字符串字面量；host 的模型侧工具输出/诊断仍中文（不是 UI 文案）。
 - **后台 job 只覆盖 OpenSCAD 编译**：submit/status/cancel/timeout/重启恢复/孤儿清理已验收；渲染与仿真仍同步。
 - **GitHub Actions 未实际运行**：workflow 已写并在本地 `rehearse:preview` 通过；推送/tag 待网络。
 - **A4 的真实断网/磁盘满注入未跑**：分类器与 state 落盘已测；真实网络故障仍靠现场。

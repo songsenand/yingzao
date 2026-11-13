@@ -322,7 +322,7 @@ async function sendImageToSession(
   // services being mounted in the exact wire shape, so the reason is logged
   // and surfaced in the hint instead of silently degrading to the clipboard.
   const fail = (reason: string) => {
-    try { console.warn('[cad-harness] 截图未能发送到会话:', reason); } catch { /* console may be gone */ }
+    try { console.warn('[cad-harness] screenshot could not be sent to the session:', reason); } catch { /* console may be gone */ }
     return { how: 'failed' as const, reason };
   };
   if (!s || !conversationService?.createDrafts) return fail(tr('ui.send.noSession'));

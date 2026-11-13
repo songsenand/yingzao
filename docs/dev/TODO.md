@@ -42,6 +42,7 @@
 | `npm run accept:scope` | 10/10（runtime/backend 路由 + 5 种环境提示） |
 | `npm run accept:i18n` | 17/17（zh/en key、英文无 CJK、通知/弹窗、locale 注册、英文 user+llm 文档齐全/链接可解析） |
 | `npm run accept:run-facts` | 11/11（motion/fluid/assembly 的英文 headline/label/summary） |
+| `npm run accept:ui-i18n` | 1/1（client 字符串字面量除术语外无中文，汉字只在 i18n.ts） |
 | `npm run accept:error-envelope` | 35/35（8 类 code/stage/hint/cause；所有带输出契约的工具错误都挂上 envelope，消息不变） |
 | `npm pack` | 113 files / 4.6 MB；含 LICENSE/NOTICE/README.en；tarball 内 preset 无 `/home/` |
 | `npm run rehearse:preview` | PASS（build → accept:preview → pack → extract → setup → doctor → verify） |

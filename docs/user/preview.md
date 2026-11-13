@@ -62,6 +62,6 @@ OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推�
 
 ## 这一版之后
 
-近期优先：完整 UI 双语、英文用户文档全套、Python 首启进度。
+近期优先：英文用户文档全套已交付，完整 UI 双语已覆盖客户端文案；Python 首启进度继续。
 中远期第一项：第二几何内核（CadQuery 优先）。完整顺序见
 [`docs/dev/TODO.md`](../dev/TODO.md)。

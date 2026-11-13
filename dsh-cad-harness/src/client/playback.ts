@@ -819,7 +819,7 @@ export function MotionPlaybackView(props: {
   }, [traj]);
 
   if (!traj) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err ?? '加载轨迹…');
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err ?? tr('playback.trajectoryLoad'));
   }
 
   const t = traj.trajectory.times[Math.min(frameIdx, nFrames - 1)] ?? 0;
