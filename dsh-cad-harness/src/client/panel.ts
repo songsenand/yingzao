@@ -2194,13 +2194,13 @@ export function CadPanel(): React.ReactElement {
     const intent = s.intentFlags ?? 0;
     const undeclared = (rep?.undeclared ?? []) as
       { partA: string; partB: string; minDistance: number; intersectionVolume: number }[];
-    const verdict = !rep ? { label: '读取中', color: T.muted }
-      : hard > 0 ? { label: '契约有冲突', color: T.danger }
-        : rows.length === 0 || skipped + intent > 0 ? { label: '无法判定', color: T.warn }
-          : { label: '契约成立', color: T.ok };
+    const verdict = !rep ? { label: t('ui.contract.reading'), color: T.muted }
+      : hard > 0 ? { label: t('ui.contract.conflict'), color: T.danger }
+        : rows.length === 0 || skipped + intent > 0 ? { label: t('ui.contract.undecidable'), color: T.warn }
+          : { label: t('ui.contract.holds'), color: T.ok };
     const opLabel: Record<string, string> = {
-      coaxial: '同轴', distance: '距离', 'diameter-match': '直径',
-      'motion-clearance': '运动间隙', 'spring-preload': '预紧力', 'spring-behaviour': '弹簧行为', 'snap-fit': '卡扣',
+      coaxial: t('ui.contract.op.coaxial'), distance: t('ui.contract.op.distance'), 'diameter-match': t('ui.contract.op.diameter'),
+      'motion-clearance': t('ui.contract.op.motion'), 'spring-preload': t('ui.contract.op.preload'), 'spring-behaviour': t('ui.contract.op.spring'), 'snap-fit': t('ui.contract.op.snap'),
     };
     const opCounts = rows.reduce<Record<string, number>>((acc, x) => {
       const k = x.check ?? '?';
@@ -2221,8 +2221,8 @@ export function CadPanel(): React.ReactElement {
     const nodes = machine?.nodes.length ?? 0;
     const bomFilled = (machine?.nodes ?? []).filter((n) => n.qty !== undefined && n.material).length;
     const thin: string[] = [];
-    if (ifaces > 0 && withTol < ifaces) thin.push(`${ifaces} 条接口只有 ${withTol} 条声明了容差`);
-    if (nodes > 0 && bomFilled < nodes) thin.push(`${nodes} 个零件节点只有 ${bomFilled} 个填了数量+材料`);
+    if (ifaces > 0 && withTol < ifaces) thin.push(t('ui.contract.thinIfaces', { ifaces, withTol }));
+    if (nodes > 0 && bomFilled < nodes) thin.push(t('ui.contract.thinNodes', { nodes, bomFilled }));
     const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
       React.createElement('td', {
         style: { padding: '2px 5px', borderBottom: `1px solid ${T.divider}`, fontSize: 10,
@@ -2236,7 +2236,7 @@ export function CadPanel(): React.ReactElement {
       // ── fixed header: who + verdict ────────────────────────────────────────
       React.createElement('div', { style: { padding: '10px 12px 6px', borderBottom: `1px solid ${T.edge}` } },
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, flex: '1 1 auto' } }, '装配清单检查'),
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, flex: '1 1 auto' } }, t('ui.contract.title')),
           React.createElement('span', { style: {
             flex: 'none', fontSize: 10, fontWeight: 600, color: verdict.color,
             border: `1px solid ${verdict.color}`, borderRadius: 9, padding: '1px 7px',
@@ -2244,28 +2244,28 @@ export function CadPanel(): React.ReactElement {
         ),
         row(`${rep?.manifestName ?? runTitle(r)}${rep?.manifestHash ? ` @${rep.manifestHash}` : ''}`,
           { color: T.soft, marginTop: 1 }),
-        row(`检查范围：${subassembly ? '子装配（不是整机）' : '整机'}${manifestBase ? ` · ${manifestBase}` : ''}`,
+        row(t('ui.contract.scope', { scope: subassembly ? t('ui.contract.scopeSub') : t('ui.contract.scopeWhole'), base: manifestBase ? ` · ${manifestBase}` : '' }),
           { color: subassembly ? T.warn : T.muted, fontSize: 10, fontWeight: subassembly ? 600 : 400 }),
-        row(`${fmtTime(r.timestamp)} · ${partCount} 个零件 · ${r.sourceVersionIds.length} 个版本 · 阈值 ${rep?.adjacencyThresholdMm ?? 0.75}mm`,
+        row(t('ui.contract.meta', { time: fmtTime(r.timestamp), parts: partCount, versions: r.sourceVersionIds.length, threshold: rep?.adjacencyThresholdMm ?? 0.75 }),
           { color: T.muted, fontSize: 10 }),
       ),
       // ── scrolling body: the document ───────────────────────────────────────
       React.createElement('div', { style: { flex: '1 1 auto', overflowY: 'auto', padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 4 } },
-        ...(subassembly ? [row('这是子装配清单；整机结论需要另跑 assembly.json，不要把这里的“通过 N 条”当作整机通过。',
+        ...(subassembly ? [row(t('ui.contract.subNote'),
           { color: T.warn, fontSize: 10, fontWeight: 600 })] : []),
         ...(thin.length ? [React.createElement('div', {
           key: 'thin', 'data-contract-thin': '1',
           style: { fontSize: 11, lineHeight: 1.5, color: T.warn, fontWeight: 600 },
-        }, `当前清单本身：${thin.join(' · ')}`)] : []),
-        ...(noReq ? [row(`这份报告有 ${noReq} 条结果没有回传判据——不能读作通过`, { color: T.warn, fontSize: 10 })] : []),
+        }, t('ui.contract.thin', { items: thin.join(' · ') }))] : []),
+        ...(noReq ? [row(t('ui.contract.noReq', { count: noReq }), { color: T.warn, fontSize: 10 })] : []),
         rep
-          ? row(`${rows.length} 条声明接口，${s.pass ?? 0} 条通过${hard ? `，${hard} 条硬冲突` : ''}${skipped ? `，${skipped} 条跳过` : ''}`)
-          : row('报告读取中…', { color: T.muted }),
-        ...(ops ? [row(`执行：${ops}`, { color: T.soft, fontSize: 10 })] : []),
-        ...(rows.length === 0 && rep ? [row('清单没有声明任何接口——下面只有相邻关系的发现。', { color: T.warn, fontSize: 10 })] : []),
+          ? row(t('ui.contract.summary', { interfaces: rows.length, pass: s.pass ?? 0, hard: hard ? t('ui.contract.hard', { count: hard }) : '', skipped: skipped ? t('ui.contract.skipped', { count: skipped }) : '' }))
+          : row(t('ui.contract.readingReport'), { color: T.muted }),
+        ...(ops ? [row(t('ui.contract.ops', { ops }), { color: T.soft, fontSize: 10 })] : []),
+        ...(rows.length === 0 && rep ? [row(t('ui.contract.noIfaces'), { color: T.warn, fontSize: 10 })] : []),
         rows.length ? React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 2 } },
           React.createElement('thead', null, React.createElement('tr', {},
-            ['接口', '零件对', '要求', '实测', '判定'].map((h) =>
+            [t('ui.contract.col.interface'), t('ui.contract.col.pairs'), t('ui.contract.col.required'), t('ui.contract.col.measured'), t('ui.contract.col.verdict')].map((h) =>
               React.createElement('th', { key: h, style: { padding: '2px 5px', fontSize: 10, textAlign: 'left',
                 borderBottom: `2px solid ${T.line}`, color: T.muted, whiteSpace: 'nowrap' } }, h)))),
           React.createElement('tbody', null, rows.map((x, i) =>
@@ -2277,7 +2277,7 @@ export function CadPanel(): React.ReactElement {
               cell(x.verdict ?? '—', { strong: true, color: x.verdict === 'pass' ? T.ok : x.verdict === 'intent-flag' ? T.warn : T.danger }))))) : null,
         ...(undeclared.length ? [
           React.createElement('div', { key: 'u-h', style: { height: 1, background: T.divider, margin: '6px 0 2px' } }),
-          row(`清单不完整：${undeclared.length} 对相邻零件没有声明关系`, { color: T.warn, fontWeight: 600 }),
+          row(t('ui.contract.incomplete', { count: undeclared.length }), { color: T.warn, fontWeight: 600 }),
           ...undeclared.map((u, i) => React.createElement('div', {
             key: `u${i}`, 'data-undeclared-row': String(i),
             style: { fontSize: 10, color: T.soft, paddingLeft: 6, lineHeight: 1.5 },
@@ -2288,7 +2288,7 @@ export function CadPanel(): React.ReactElement {
             `${w.partId}: ${w.messages.join('; ')}`)),
         ...(rep ? [
           React.createElement('div', { key: 'b', style: { height: 1, background: T.divider, margin: '6px 0 2px' } }),
-          row('不覆盖：零件几何干涉（装配间隙）· 数量/材料/库存（BOM）· 可打印性', { color: T.muted, fontSize: 10 }),
+          row(t('ui.contract.coverage'), { color: T.muted, fontSize: 10 }),
         ] : []),
       ),
     );
@@ -2297,7 +2297,7 @@ export function CadPanel(): React.ReactElement {
   /** Compact per-kind report body, rendered from the run's own report.json. */
   const runReportBody = (r: RunProduct): React.ReactNode => {
     const rep = runReport;
-    if (!rep) return React.createElement('div', { style: S.hint }, '报告读取中…');
+    if (!rep) return React.createElement('div', { style: S.hint }, t('ui.contract.readingReport'));
     const line = (text: string, color?: string) =>
       React.createElement('div', { style: { fontSize: 12, padding: '1px 0', color: color ?? '#374151' } }, text);
     const toneInk = (tone?: RunTone): string =>
@@ -2403,7 +2403,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', { style: { overflowX: 'auto' } },
         React.createElement('table', { style: { borderCollapse: 'collapse', width: '100%', marginTop: 4 } },
           React.createElement('thead', null, React.createElement('tr', {},
-            ['接口', '零件对', '要求', '实测', '判定'].map((h) =>
+            [t('ui.contract.col.interface'), t('ui.contract.col.pairs'), t('ui.contract.col.required'), t('ui.contract.col.measured'), t('ui.contract.col.verdict')].map((h) =>
               React.createElement('th', { key: h, style: { padding: '3px 6px', fontSize: 11, textAlign: 'left',
                 borderBottom: '2px solid #d1d5db', color: '#6b7280' } }, h)))),
           React.createElement('tbody', null, rows.map((row, i) =>
