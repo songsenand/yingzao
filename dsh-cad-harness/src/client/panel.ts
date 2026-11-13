@@ -1590,7 +1590,7 @@ export function CadPanel(): React.ReactElement {
     const raycaster = pickRay(e);
     if (!target || !raycaster) return;
     const hits = visibleHits(raycaster, target);
-    if (hits.length === 0) { setHint('未点到零件表面 — 再试一次'); return; }
+    if (hits.length === 0) { setHint(tr('ui.hint.noSurface')); return; }
     const p = xyz(new THREE.Vector3(...refinePick(xyz(hits[0]!.point))));
     // Completing the pair ends the mode: the measurement (dots, line, value)
     // stays, but the viewport goes back to orbit/zoom without a second click.
@@ -1620,7 +1620,7 @@ export function CadPanel(): React.ReactElement {
     if (!target || !raycaster) return;
     const hits = visibleHits(raycaster, target);
     if (hits.length < 2) {
-      setHint('视线只穿过一层表面 — 换个角度（或用 ◐剖切）让视线穿过壁的两面再点');
+      setHint(tr('ui.hint.oneFace'));
       return;
     }
     setThick({
@@ -1631,7 +1631,7 @@ export function CadPanel(): React.ReactElement {
     // One click is the whole gesture, and reading it ends the mode — same shape
     // as the two-point measure. The value stays on the line below.
     setThickMode(false);
-    setHint('壁厚已读取 — 已退出壁厚模式；再点「▤壁厚」测别处');
+    setHint(tr('ui.hint.thicknessDone'));
   };
   const clearThick = () => { setThick(null); };
 
@@ -1646,11 +1646,11 @@ export function CadPanel(): React.ReactElement {
     // and the user had no way to tell a missing mesh from a missing field from a missing
     // route. Every exit now says something.
     if (!geo || !mat) {
-      setHint('热力图需要先有一个版本的 3D 预览（当前视图里没有可着色的零件）');
+      setHint(tr('ui.hint.heatNeedPreview'));
       return;
     }
     if (!versionId) {
-      setHint('热力图按版本取场数据，但当前预览没有 versionId');
+      setHint(tr('ui.hint.heatNoVersion'));
       return;
     }
     if (heat) {
@@ -1661,7 +1661,7 @@ export function CadPanel(): React.ReactElement {
       return;
     }
     try {
-      setHint('热力图取数中…');
+      setHint(tr('ui.hint.heatLoading'));
       // A selected run owns its field; a version asks for the newest one (see attentionQuery).
       const q = attentionQuery({ run: run ? { id: run.id, kind: run.kind } : null, versionId });
       let res = await fetch(withProject(`/api/cad/attention?${q.query}`));
@@ -1674,14 +1674,13 @@ export function CadPanel(): React.ReactElement {
         fellBack = res.ok;
       }
       if (!res.ok) {
-        setHint(`热力图：服务器上没有 ${versionId} 的场数据（HTTP ${res.status}）— 先对这个版本跑一次 check_printability 生成 run；` +
-          '如果刚更新过插件，还需要重启 dsh 进程，新路由才会存在');
+        setHint(tr('ui.hint.heatNoField', { version: versionId, status: res.status }));
         return;
       }
       const payload = (await res.json()) as AttentionPayload;
       const layer = pickHeatLayer(payload);
       if (!layer) {
-        setHint(`场数据回来了（${payload.samples ? Object.keys(payload.samples).join('/') : '空'}），但没有可画的层：壁厚与悬垂采样都少于 8 个`);
+        setHint(tr('ui.hint.heatNoLayers', { layers: payload.samples ? Object.keys(payload.samples).join('/') : 'empty' }));
         return;
       }
       const { colors } = buildHeatColors(geo, layer);
@@ -1690,12 +1689,12 @@ export function CadPanel(): React.ReactElement {
       mat.needsUpdate = true;
       // Name the source run in the legend: the same version can have a press field and a
       // stress field, and "which one am I looking at" must not be a guess (FIX-E5).
-      setHeat({ legend: payload.source ? `${layer.legend} · 来源 ${payload.source.runId}（${payload.source.kind}）` : layer.legend });
+      setHeat({ legend: payload.source ? tr('ui.hint.heatSource', { legend: layer.legend, run: payload.source.runId, kind: payload.source.kind }) : layer.legend });
       setHint(fellBack
-        ? '选中的运行没有场数据，已显示该版本最新的一份（来源写在图例里）'
+        ? tr('ui.hint.heatFallback')
         : null);
     } catch (err) {
-      setHint(`热力图取数失败：${String(err).slice(0, 80)}`);
+      setHint(tr('ui.hint.heatFailed', { error: String(err).slice(0, 80) }));
     }
   };
 
@@ -2849,11 +2848,11 @@ export function CadPanel(): React.ReactElement {
    */
   const importFileAsVersion = async () => {
     const target = fileSubject.trim();
-    if (!target) { setImportMsg('先选一个文件'); return; }
+    if (!target) { setImportMsg(tr('ui.unreg.selectFirst')); return; }
     setImportBusy(true);
     setImportMsg(null);
     try {
-      if (!workspaceCwd) { setImportMsg('未选择项目：请先选择项目路径'); setImportBusy(false); return; }
+      if (!workspaceCwd) { setImportMsg(tr('ui.unreg.noProject')); setImportBusy(false); return; }
       const req = buildImportStlRequest({
         project: workspaceCwd,
         file: target,
@@ -2870,11 +2869,11 @@ export function CadPanel(): React.ReactElement {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(String(data?.error ?? `HTTP ${res.status}`));
       pendingFocusRef.current = typeof data?.versionId === 'string' ? data.versionId : null;
-      setImportMsg(`已登记为版本 ${data?.versionId ?? ''} — 面板会切到它`);
+      setImportMsg(tr('ui.unreg.registered', { version: data?.versionId ?? '' }));
       refresh();
       refreshUnregistered();
     } catch (e) {
-      setImportMsg(`导入失败：${String((e as Error)?.message ?? e)}`);
+      setImportMsg(tr('ui.unreg.failed', { error: String((e as Error)?.message ?? e) }));
     } finally {
       setImportBusy(false);
     }
@@ -2884,27 +2883,26 @@ export function CadPanel(): React.ReactElement {
   const unregisteredBody = (): React.ReactNode => {
     const row = unregistered.find((f) => f.path === fileSubject) ?? null;
     const kids: React.ReactNode[] = [
-      React.createElement('div', { style: { ...S.caption, color: '#9c6f0a' } }, '未登记 · 不是版本 · 不入证据'),
+      React.createElement('div', { style: { ...S.caption, color: '#9c6f0a' } }, tr('ui.unreg.badge')),
       React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
-        '工作区里没有版本的几何文件，与 delivery_audit 是同一份扫描。可以在这里看、可以登记为版本；' +
-        '测量 / 壁厚 / 装配 / 热力图不适用于它们（那些需要一个版本作为主语）。'),
+        tr('ui.unreg.desc')),
       React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
-        React.createElement('button', { type: 'button', onClick: refreshUnregistered, style: S.smallBtn }, '↻ 刷新'),
+        React.createElement('button', { type: 'button', onClick: refreshUnregistered, style: S.smallBtn }, tr('ui.unreg.refresh')),
         React.createElement('button', {
           type: 'button',
           onClick: () => {
-            if (!workspaceCwd) { setError('未选择项目：请先在上方选择项目路径，再按路径导入。'); return; }
+            if (!workspaceCwd) { setError(tr('ui.unreg.noProjectPath')); return; }
             setFileOpen(true);
           },
           style: S.smallBtn,
-        }, '📂 按路径导入…'),
-        React.createElement('span', { style: { fontSize: 11, color: T.muted } }, `${unregistered.length} 个文件`)),
+        }, tr('ui.unreg.importPath')),
+        React.createElement('span', { style: { fontSize: 11, color: T.muted } }, tr('ui.unreg.files', { count: unregistered.length }))),
     ];
-    if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: T.danger } }, `扫描失败：${unregError}`));
+    if (unregError) kids.push(React.createElement('div', { style: { fontSize: 11, color: T.danger } }, tr('ui.unreg.scanFailed', { error: unregError })));
     if (!fileSubject) {
       kids.push(React.createElement('div', { style: S.hint }, unregistered.length
-        ? '从上面的「未登记文件」列表选一个；不在工作区里的文件用「按路径导入」。'
-        : '没有未登记的几何文件 — 每个 STL/STEP/3MF/DXF 要么有版本，要么被声明为豁免。'));
+        ? tr('ui.unreg.pick')
+        : tr('ui.unreg.empty')));
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
     }
     kids.push(React.createElement('div', {
@@ -2913,38 +2911,38 @@ export function CadPanel(): React.ReactElement {
     if (row) {
       kids.push(React.createElement('div', {
         style: { fontSize: 11, color: row.severity === 'blocked' ? T.danger : '#9c6f0a' },
-      }, `${row.severity === 'blocked' ? '⚠ 比最新版本还新' : '早于最新版本'} · ${row.format.toUpperCase()} · ` +
+      }, `${row.severity === 'blocked' ? tr('ui.unreg.newer') : tr('ui.unreg.older')} · ${row.format.toUpperCase()} · ` +
          `${fmtBytes(row.bytes)} · ${fmtTime(row.modified)}`));
     }
     if (fileMeta) {
       kids.push(React.createElement('div', { style: { fontSize: 11, color: T.soft } },
-        `${fileMeta.solid ? '封闭实体' : `非封闭（${fileMeta.shells} 个壳）`} · ` +
-        `${fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件里的数字显示）'}`));
+        `${fileMeta.solid ? tr('ui.unreg.solid') : tr('ui.unreg.openShells', { count: fileMeta.shells })} · ` +
+        tr(fileMeta.unitsMm ? 'ui.unreg.unitsMm' : 'ui.unreg.unitsUnknown')));
       for (const w of fileMeta.warnings.slice(0, 3)) {
         kids.push(React.createElement('div', { key: w, style: { fontSize: 11, color: '#9c6f0a' } }, w));
       }
     }
     if (row && !row.previewable) {
       kids.push(React.createElement('div', { style: S.hint },
-        'DXF 是二维轮廓，预览需要先有厚度 — 用下面的「导入为版本」并填深度。'));
+        tr('ui.unreg.dxf')));
     }
     kids.push(React.createElement('div', {
       style: { display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #e6e9ec', paddingTop: 6 },
     },
-      React.createElement('div', { style: { fontSize: 11, fontWeight: 600 } }, '登记为版本（写入会话目录）'),
+      React.createElement('div', { style: { fontSize: 11, fontWeight: 600 } }, tr('ui.unreg.form')),
       React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
         React.createElement('input', {
-          value: importPart, placeholder: `零件名（默认 ${partNameFromPath(fileSubject)}）`,
-          'aria-label': '零件名', onChange: (e: any) => setImportPart(e.target.value),
+          value: importPart, placeholder: tr('ui.unreg.name', { name: partNameFromPath(fileSubject) }),
+          'aria-label': tr('ui.unreg.nameLabel'), onChange: (e: any) => setImportPart(e.target.value),
           style: { ...fieldStyle, flex: '1 1 110px' },
         }),
         React.createElement('select', {
-          value: importUnit, 'aria-label': '单位',
+          value: importUnit, 'aria-label': tr('ui.unreg.unitLabel'),
           onChange: (e: any) => setImportUnit(e.target.value as ImportUnit),
           style: { ...fieldStyle, flex: '0 0 86px' },
         }, ...IMPORT_UNITS.map((u) => React.createElement('option', { key: u.id, value: u.id }, u.label))),
         row?.format === 'dxf' && React.createElement('input', {
-          value: importDepth, placeholder: '深度 mm', 'aria-label': 'DXF 深度',
+          value: importDepth, placeholder: tr('ui.unreg.depth'), 'aria-label': tr('ui.unreg.depthLabel'),
           onChange: (e: any) => setImportDepth(e.target.value),
           style: { ...fieldStyle, flex: '0 0 76px' },
         }),
@@ -2954,11 +2952,11 @@ export function CadPanel(): React.ReactElement {
           type: 'checkbox', checked: importNonSolid,
           onChange: (e: any) => setImportNonSolid(Boolean(e.target.checked)),
         }),
-        ' 非封闭也存（该版本会被几何工具拒绝）'),
+        tr('ui.unreg.keepOpen')),
       React.createElement('button', {
         type: 'button', disabled: importBusy, onClick: () => void importFileAsVersion(),
         style: { ...S.smallBtn, alignSelf: 'flex-start' },
-      }, importBusy ? '导入中…' : '导入为版本'),
+      }, importBusy ? tr('ui.unreg.importing') : tr('ui.unreg.import')),
       importMsg && React.createElement('div', {
         style: { fontSize: 11, color: importMsg.startsWith('导入失败') ? T.danger : '#1e8449' },
       }, importMsg),
