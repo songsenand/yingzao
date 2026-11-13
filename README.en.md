@@ -17,6 +17,23 @@ This is not a modelling UI. Geometry generation is no longer the bottleneck; **k
 - Third-party geometry (STL / STEP / 3MF / DXF) enters the same checks and assemblies
 - Export a **single version** (STL/3MF/OBJ/OFF/WRL) or the **whole project**: a ZIP with every part STL + assembly manifest + README, plus an optional placed whole-machine STL
 
+## Model preview and panel
+
+Results are not only text: they land in the **CAD Preview** panel on the right.
+
+- **Version history** — `v001`, `v002`, … every generation/modification is immutable; open, compare, pin, revisit.
+- **3D viewport** — orbit, zoom, pan; top/front/side/iso views with bounding-box numbers.
+- **Measure and annotate** — two-point distance, wall thickness, section cuts, red-box annotations sent back to the session.
+- **Run playback** — motion, rigid-body and fluid timelines; pause on a frame.
+- **Verification state** — assembly checks, printability and delivery audit, including “needs review”.
+- **Export** — single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
+
+![Model preview: 20T / 10T spur gear pair](docs/images/readme/gear-pair-blender.png)
+
+> The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the agent writing code or the engine producing truth. It lets you see, measure and point at the problem.
+
+To get this panel, start the session with the **营造模式 (Yingzao mode)** preset. CAD tools are only visible to that preset; standard coding sessions intentionally do not pay the tool-catalog cost.
+
 **Docs have three audiences**: users → [docs/user/](docs/user/) and [docs/en/user/](docs/en/user/), agents → [docs/en/llm/](docs/en/llm/) (English) or [docs/llm/](docs/llm/) (Chinese), maintainers → [docs/dev/](docs/dev/) (Chinese).
 
 ## Quick start
@@ -42,7 +59,7 @@ node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```
 
-Then read the [0.1.0 preview notes](docs/en/user/preview.md), start a session with the **营造模式 (Yingzao mode)** preset, and describe the part:
+Then read the [0.1.0 preview notes](docs/en/user/preview.md), start a session with the **营造模式 (Yingzao mode)** preset, open the **CAD Preview** tab on the right, and describe the part:
 
 > Make a 60×40×8 mounting plate, four M3 countersunk holes, one 20 mm through hole in the centre.
 
