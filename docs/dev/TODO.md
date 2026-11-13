@@ -40,8 +40,9 @@
 | `npm run accept:clean` | 8/8（dry-run / apply / 非 harness 目录保留；doctor 报 stale） |
 | `npm run accept:jobs` | 16/16（submit/done/cancel/timeout/重启/孤儿/10 连消/并发闸/HTTP） |
 | `npm run accept:scope` | 10/10（runtime/backend 路由 + 5 种环境提示） |
+| `npm run accept:i18n` | 13/13（zh/en key 对齐、英文无 CJK、通知/弹窗切换、locale 注册接线） |
 | `npm run accept:error-envelope` | 35/35（8 类 code/stage/hint/cause；所有带输出契约的工具错误都挂上 envelope，消息不变） |
-| `npm pack` | 108 files / 4.6 MB；含 LICENSE/NOTICE；tarball 内 preset 无 `/home/` |
+| `npm pack` | 113 files / 4.6 MB；含 LICENSE/NOTICE/README.en；tarball 内 preset 无 `/home/` |
 | `npm run rehearse:preview` | PASS（build → accept:preview → pack → extract → setup → doctor → verify） |
 | 解包 smoke | `setup` 写入后 `--check` 通过；`doctor` kind=degraded（仅 OpenSCAD 旧版）；`verify-cli` 可跑 |
 | 未测 | GitHub Actions 实际运行；A4 真实断网/磁盘满注入（分类与 state 落盘已测） |

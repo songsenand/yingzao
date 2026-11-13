@@ -9,9 +9,10 @@ import React from 'react';
 import { CadPanel, setClientServices } from './panel';
 import { refreshProjectScope, setProjectServices } from './project';
 import { subscribeProducts } from './products-store';
+import { installCadLocale, t } from './i18n.ts';
 
 /** Required services (cordis fiber inject). */
-export const inject = ['connection', 'slots', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation'];
+export const inject = ['connection', 'slots', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation', 'locale'];
 
 export const name = 'cad-harness-client';
 
@@ -21,6 +22,7 @@ const TAB_KIND = 'cad-viewer';
 
 /** Client plugin body: declare the tab type, register the body, open it. */
 export function apply(ctx: any) {
+  installCadLocale(ctx);
   setClientServices({ connection: ctx.connection, sessions: ctx.sessions, conversation: ctx.conversation, root: ctx });
   setProjectServices({ sessions: ctx.sessions });
 
@@ -29,7 +31,7 @@ export function apply(ctx: any) {
     const disposeType = ctx.sidebarRightTabs.register({
       id: TAB_ID,
       kind: TAB_KIND,
-      title: () => 'CAD 预览',
+      title: () => t('tab.title'),
     });
 
     // 2. Register the tab body. The body receives useTabInfo() via context;

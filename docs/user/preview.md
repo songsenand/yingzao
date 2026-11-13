@@ -1,3 +1,5 @@
+[English](../en/user/preview.md) | 中文
+
 # 0.1.0 预览版说明
 
 > **这是预览版，不是生产放行系统。** 它已经能装、能自检、能验证、能交付，但不承诺工业级
@@ -17,15 +19,17 @@
 见 [安装与首次准备](install.md)。预览版的最小路径：
 
 ```bash
-dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
-npx dsh-cad-setup          # 写入本机 skill 路径
-npx dsh-cad-backend --show # 查看当前内核/编译后端
-npx dsh-cad-doctor         # kind=ok 才算装好
-npx dsh-cad-verify <project> --advisory  # 六行证据报告（只读）
+tar -xzf dsh-cad-harness-0.1.0.tgz
+dsh plugin --profile <profile> add -w "$PWD/package"
+cd package
+node scripts/setup.mjs          # 写入本机 skill 路径
+node scripts/backend.mjs --show # 查看当前内核/编译后端
+node scripts/doctor.mjs         # kind=ok，或有解释的 degraded
+node scripts/verify-cli.mjs <project> --advisory  # 六行证据报告（只读）
 # 重启 dsh
 ```
 
-OpenSCAD 由用户自行安装（>= 2025.06 才有 Manifold 后端）；插件不随包分发 OpenSCAD，
+OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推荐 2025.06+（Manifold）。插件不随包分发 OpenSCAD，
 也不要求它必须是唯一后端——预览版只实现了 OpenSCAD 适配器，CadQuery/FreeCAD 在菜单里
 显示为 `planned`，不可选、不静默替代。
 
@@ -35,14 +39,16 @@ OpenSCAD 由用户自行安装（>= 2025.06 才有 Manifold 后端）；插件�
 - **Python 运行时**：首次使用会下载约 400MB，可能需要几分钟；断网会失败并给出下一步。
 - **BOSL2**：可选；标准件需要，缺失时报告会说明，不会静默产出空几何。
 - **内核**：预览版只有 OpenSCAD。第二内核已列入中远期第一项，不是本版承诺。
-- **长任务**：渲染/仿真目前没有独立的 job id / cancel 协议；超时会被报告，不会被当成通过。
+- **长任务**：后台编译 job 已有 submit/status/cancel/timeout/重启恢复；渲染、仿真仍同步，超时会被报告，不会被当成通过。
+- **英文界面**：本版先覆盖标签页、环境提示、导出弹窗和主要空状态；深层面板仍以中文为主（完整双语在 preview.2）。
+- **英文文档**：README、install、preview、limits 有英文版；其余文档暂时中文。
 - **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。
 
 ## 怎么报告问题
 
 请附上：
 
-1. `npx dsh-cad-doctor --json` 的输出（或至少 `kind` 与失败项）；
+1. `node scripts/doctor.mjs --json` 的输出（或至少 `kind` 与失败项）；
 2. 操作系统、dsh 版本、OpenSCAD 版本；
 3. 复现步骤（哪句话、哪个按钮）；
 4. 原始报错文本，不要只写"失败了"。
@@ -56,6 +62,6 @@ OpenSCAD 由用户自行安装（>= 2025.06 才有 Manifold 后端）；插件�
 
 ## 这一版之后
 
-近期优先：异步作业/取消、错误分类、Python 首启进度、UI 剩余批次。
+近期优先：完整 UI 双语、英文用户文档全套、Python 首启进度。
 中远期第一项：第二几何内核（CadQuery 优先）。完整顺序见
 [`docs/dev/TODO.md`](../dev/TODO.md)。

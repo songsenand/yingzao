@@ -8,7 +8,7 @@
 > 是按发生时的事实留档的，其中出现的 `DESGIGN.md` 一律指本文件，**不回改**。
 > 活文档与代码里的引用已全部更新。
 
-**版本**：v2.33（2026-10-23）
+**版本**：v2.34（2026-11-13）
 > **版本记录 = git log（用户拍板 2026-10-23）。** §11 的逐版清单冻结于 v2.15：它写多读少，且
 > 每轮都滞后。此后"这一版改了什么"看 `git log --oneline -- DESIGN.md`，取舍看 `DECISION-LOG.md`。
 **目标读者**：编码 Agent
@@ -106,8 +106,8 @@
 │  │  │    └─ 版本写入                              │  │  │
 │  │  │  validate_assembly 工具                    │  │  │
 │  │  │    └─ 布尔交集 + 最小距离                   │  │  │
-│  │  │  postprocess_mpm 工具                      │  │  │
-│  │  │    └─ 统计量 + 规则引擎建议                 │  │  │
+│  │  │  export / project/export 路由               │  │  │
+│  │  │    └─ 交付审计 → 409 / _UNVERIFIED / 审计  │  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  │                                                   │  │
 │  │  ┌─── Client 半 (浏览器) ─────────────────────┐  │  │
@@ -1103,27 +1103,40 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 
 > **v2.11 回填**：本节原为「内部共享」计划（私有 git / 私有 registry 三阶段）。**当前实作**：本地工作区链接安装（虚拟 DSH 沙箱即此法），无 git/registry 分发；定位已于 2026-09-27 升级为**开放使用**（HARNESS.md §1/§10），但公开分发方式（公开 npm / 公开仓库）**尚未定**，`package.json` 仍 `private: true`。
 
-### 7.1 安装方式（当前可用）
+### 7.1 安装方式（0.1.0-preview）
 
-开发期用本地路径链接（`-w` 即 workspace/link），沙箱 profile 就是这么装的：
+首发形态是 **GitHub Release tarball**（包内已含 `lib/`）；也支持本地源码路径。
 
+**tarball（推荐给用户）**：
+
+```bash
+tar -xzf dsh-cad-harness-0.1.0.tgz
+dsh plugin --profile <profile> add -w "$PWD/package"
+cd package && node scripts/setup.mjs     # 写入本机 skill 绝对路径
+node scripts/doctor.mjs                  # kind=ok / degraded / fail
+node scripts/backend.mjs --show          # kernel=openscad, compileBackend=auto
 ```
+
+**源码 checkout（开发）**：
+
+```bash
 dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
-# 隔离沙箱：dsh --profile cad-sandbox --port <port> --no-open
-#   DSH_HOME 由 ~/.local/bin/dsh wrapper 强制为 <ToyMarker>/examples/dsh-home（v2.8）
+cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
+npm run setup
 ```
 
-改动 Host 代码后需 `pnpm run build` 重建 `lib/`，并**重启 dsh 进程**（宿主 bundle 不热重载）。
+改动 Host 代码后必须重建 `lib/` 并**重启 dsh**（宿主 bundle 不热重载）；tarball 用户不需要 build。
 
-**换机器/换克隆位置后必须重跑 `node scripts/sync-cad-preset.mjs`**：`presets/cad/preset.patch.yml`
-是生成的，其中 `customSkillDirs` 是**绝对路径**。路径不对时失败是静默的（有工具、没 skill），
-所以宿主启动时会比对并告警，指出这条命令（2026-10-23 审计 D21）。
+`presets/cad/preset.patch.yml` 由 `scripts/setup.mjs` / `scripts/preset-lib.mjs` 生成，
+其中 `customSkillDirs` 是**安装机绝对路径**。`sync-cad-preset.mjs` 仍保留为手动/旧流程入口，
+用户路径统一走 `setup.mjs`；`--check` 在路径过期或缺 skill 时退出 1。
 
-### 7.2 版本约定（当前）
+### 7.2 版本约定（0.1.0-preview）
 
-- `package.json` version 仍为 `0.1.0`；**无 git tag 流程**（项目当前不是 git 仓库）
-- 版本可追溯性目前靠**插件自身的版本库**（`data/versions/vNNN` + manifest）与 DESIGN.md 的版本记录（v2.1→v2.11），不是发布版本号
-- 📌 开放化前置项：建立 git 仓库 + tag 流程 + 变更日志（HARNESS.md §10 顺序）
+- `package.json` version 为 `0.1.0`，仍是 `private: true`；**不上 npm**，首发 GitHub tarball。
+- 首次发布 tag 计划为 `v0.1.0-preview.1`；GitHub Actions workflow 已写，实际运行待网络。
+- 版本可追溯性靠 git 提交（DCO）+ 插件自身版本库（`versions/vNNN` + manifest）+ 验收脚本。
+- 本地提交使用 `git commit -s`；发布前检查 `accept:preview` / `rehearse:preview`。
 
 ### 7.3 可调参数的暴露（v2.11 更正：无 config.ts / 无 dsh Config schema）
 
@@ -1137,6 +1150,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 | 网格步距 `dxMm` | `simulate_fluid` / `deriveFluidPreset` | 2mm（**精度旋钮**） |
 | 关键帧预算 `keyframeCount` | `simulate_physics` 入参 | 6 |
 | 仿真步数 `steps` | 各 simulate_* 入参 | 按场景推导 |
+| 几何内核 `kernel` / OpenSCAD 编译后端 `compileBackend` | `$DSH_HOME/cad/backend.json`（`dsh-cad-backend`） | `openscad` / `auto` |
 
 📌 若要让团队/用户共享一份集中配置，需要新增 dsh Config schema（目前不存在）——列为开放化待办。
 
@@ -1144,6 +1158,7 @@ dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 
 **语料在项目里**：`<cwd>/cad-data/`（版本、运行、装配清单、帧数据——见 §6.8 的目录图）。
 **遥测在 profile 层**：`<DSH_HOME>/cad/telemetry/usage.jsonl`（跨项目，量的是请求）。
+**后台 job / 导出审计也在项目里**：`<cwd>/cad-data/jobs/<jNNN>/`、`<cwd>/cad-data/exports/<exportId>/`。
 **插件自带的 `data/` 只剩研究存档**：`data/bench/mpm-scaling.json`。
 虚拟 DSH 沙箱的 `DSH_HOME` 在 `examples/dsh-home`，与用户仓库互不重叠。
 
@@ -4014,3 +4029,79 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 补齐 `stale-contract`/`failing-printability`/`latest-printability-failing`/
 `duplicate-runs`/`overlay-backed-runs`/`role-exempt-parts`；motion 子系统 claim 用显式
 `versionIds`。回归验收 `scripts/accept-row-regressions.mjs`。
+
+## 37. 0.1.0-preview 外壳：安装、诊断、风险导出与后台作业（2026-11-13）
+
+§36 之后新增的不是几何能力，而是把已有能力变成**可安装、可诊断、可交付**的外壳。实现与验收如下。
+
+### 37.1 安装与预设
+
+- `scripts/preset-lib.mjs` 从已安装的 `standard.patch.yml` 生成 `presets/cad/preset.patch.yml`，
+  写入本机 `skills/` 绝对路径；`scripts/setup.mjs`（`dsh-cad-setup`）是用户入口，
+  `--check` 只检查不写。
+- `prepack.mjs` 打包时去掉 skill-provider 行，`postpack.mjs` 恢复 checkout；
+  包内不出现 `/home/`，`accept:setup` 11/11、`accept:plugin-add -- --require` 5/5。
+- 预设 id 仍是 `cad`；显示名是 `营造模式`。技术 id（包名/插件 id/CLI/数据目录）不随品牌改。
+
+### 37.2 环境诊断
+
+`scripts/doctor.mjs`（`dsh-cad-doctor`）输出 `kind=ok|degraded|fail` 和逐项 `fix`：
+
+- Node/dsh 版本兼容；插件 bundle、preset、skill 路径；
+- OpenSCAD 是否存在；2021.01 可跑但 `openscad-backend` 为 warn（无 Manifold），2025.06+ 为 pass；
+- BOSL2 可选；Python runtime 状态与修复提示；
+- 项目 marker、写权限；project/assembly/claims/policy 的 `schemaVersion`（新版 fail、旧版 warn）；
+- 临时目录 stale 检查。
+验收 `accept:doctor` 15/15；`accept:scope` 10/10 覆盖面板环境提示。
+
+### 37.3 内核选择
+
+- 产品层只暴露 `kernel`；`compileBackend`（`auto|manifold|cgal`）只是 OpenSCAD 适配器内部选项。
+- `scripts/backend.mjs`（`dsh-cad-backend`）list/show/set，写 `$DSH_HOME/cad/backend.json`；
+  未知/未实现内核返回 `backend_not_available`，不静默回退。
+- `src/host/backend.ts` 定义 `CadBackend`；`src/host/backends/openscad.ts` 是第一个适配器；
+  `compileAndRender` 经 registry 分发。新版本 manifest 记录 `backend`，旧版本不重写。
+- 验收 `accept:backend` 19/19。
+
+### 37.4 风险标注导出（C1）
+
+- `src/host/export-gate.ts`：`classifyExport`/`auditExport`/`annotateDownloadName`/
+  `buildExportManifest`/`writeExportRecord`。
+- 单版本与整项目路由在 blocked 时：无 `confirm=1` → 409 JSON；有 confirm 无 reason → 400；
+  有 reason → 200，文件名带 `_UNVERIFIED`，ZIP 内 `UNVERIFIED.md` + `export-manifest.json`，
+  项目 `exports/<id>/manifest.json` 留 override 审计。
+- `src/client/export-gate.ts`：409 → DOM 弹窗 → 勾选 + reason → 重试；`difficult` 不改名。
+- 验收 `accept:export-gate` 26/26、`accept:export-http` 24/24、`accept:export-dialog` 9/9。
+
+### 37.5 verify 随包
+
+- `src/host/verify/cli.ts` 由 esbuild 打成 `lib/verify.js`；`scripts/verify-cli.mjs` 是包内入口，
+  不依赖 repo/tsx。验收 `accept:verify-cli` 8/8。
+- 六行证据、claims/freshness/policy 语义见 §36；CLI 只读，不跑 CAD。
+
+### 37.6 后台编译 job
+
+- `src/host/jobs.ts` 的 job store 落在 `<project>/cad-data/jobs/<jNNN>/`；
+  submit 返回 id；status/list/cancel；timeout 标 `timeout`；重启后把非本进程的 running 行标 failed
+  并杀孤儿；并发上限 4。
+- HTTP：`GET /api/cad/jobs`、`POST /api/cad/jobs/compile`、`POST /api/cad/jobs/cancel`、
+  `GET /api/cad/jobs/one`。
+- **边界**：只覆盖 OpenSCAD 编译；渲染/仿真仍同步。`accept:jobs` 16/16。
+
+### 37.7 错误、空状态与资源
+
+- `src/shared/error-envelope.ts`：`{code,stage,hint,cause}`；`withOutputContract` 给所有带输出契约
+  的工具错误挂上 envelope，消息不变；export 路由返回同一形状。验收 35/35。
+- 面板环境提示：运行时 absent/failed/disabled/unsupported、内核不可用、未选预设各有下一步；
+  英文覆盖标签页/环境提示/导出弹窗/主要空状态（深层面板 preview.2）。
+- `scripts/clean.mjs`（`dsh-cad-clean`）默认 dry-run，`--apply` 只删 harness 拥有的临时目录；
+  doctor 报 stale；`accept:clean` 8/8。
+
+### 37.8 许可、schema 与 CI
+
+- 包内 `LICENSE` + `NOTICE`；tarball 无 AppImage/BOSL2/node_modules；`accept:license` 15/15。
+- `docs/dev/SCHEMA.md` 定义 project/assembly/claims/policy 的 schemaVersion 支持面；未知新版拒绝，
+  迁移前备份，不自动迁移。
+- `.github/workflows/preview.yml`：tag/手动触发，Ubuntu+macOS，build、accept:preview、干净安装、
+  doctor、pack、解包 smoke、artifact。`scripts/rehearse-preview.mjs` 是本地等价全流程；
+  **GitHub 实际运行待网络**。

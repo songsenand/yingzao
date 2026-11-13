@@ -1,6 +1,7 @@
 # 0.1.0-preview 发布计划：把外壳补到 L2
 
-> **状态**：P0 完成（2026-11-12）；13/13 已收口，证据与剩余 P1 见 [TODO.md](TODO.md)。
+> **状态**：P0 + P1 完成（2026-11-13）；13/13 + 6/6 已收口，证据见 [TODO.md](TODO.md)。
+> **英文入口**：README.en.md + docs/en/user/{install,preview,limits,README}.md；完整 UI 双语留 preview.2。
 > **总索引**：[TODO.md](TODO.md)（顺序/状态）；本文件是 0.1.0-preview 的详细设计。
 > **目标**：不是把 L2 全部做完，而是让 `0.1.0-preview` 达到四条底线：
 > **装得上、查得出、拦得住（但允许带风险导出）、退得回。**
@@ -58,7 +59,7 @@
 - `dsh-cad-backend` 在安装时/运行时选择 kernel 与 compileBackend，写入 `$DSH_HOME/cad/backend.json`；
   `doctor` 校验路径、版本和可选后端。
 - 未实现的内核显示 `planned`（禁用），API 返回 `backend_not_available` + 原因，不静默回退。
-- 新版本记录 `{kernel, options, version}`，旧版本不重写（版本 manifest 接线是 N03 剩余项）。
+- 新版本记录 `{kernel, options, version}`，旧版本不重写（N03/N04 已接线）。
 
 **关键区分**：选择器 + 配置 + 校验是 1–2 天；**让一个内核真正可被本工具链消费**是适配器工作。
 "能装"不等于"能用"，难点在源码语言、datum 声明、编译/渲染、错误语义和测试矩阵。
@@ -87,6 +88,7 @@ customSkillDirs:
 ## 2. 工作流与优先级
 
 > 估时按 1 人计，粗估。P0 = 不发这个版本就别叫预览；P1 = 可带 known issue，但必须在文档和 doctor 里显性化；P2 = 预览后。
+> 下表的“现状/缺口”是**开工前口径**，不等于当前状态；完成证据见 §10/TODO。
 
 | ID | P | 工作项 | 现状 / 缺口 | 完成判据（可证伪） | 估时 |
 |---|---|---|---|---|---|
@@ -98,18 +100,18 @@ customSkillDirs:
 | **A4** | P0 | Python 首启 | 400MB 下载只有"首次慢"，无进度/重试/离线错误 | 断网/超时/磁盘不足各返回 code+fix；有进度和重试；`DSH_CAD_PYTHON=system` 可用 | 2–3d |
 | **A5** | P0 | 版本/兼容矩阵 | 依赖钉 0.1.5-rc.3，宿主 0.2.1-rc.2；无 `engines`/peer；无版本暴露 | `doctor` 打印 dsh/plugin/node；不兼容 fail 并给范围；CI 在声明支持的 dsh 上过 | 1d |
 | **B1** | P0 | `doctor` 环境自检 | 只有交付用 `preflight`，没有安装/环境诊断 | `dsh-cad-doctor` 一条命令 `kind=ok`；8 种坏环境各唯一 kind+fix；`--json`；面板状态页 | 2–3d |
-| **B2** | P1 | 空状态/错误页 | 标准模式有提示，但缺可操作路径 | 未选预设/运行时未就绪/缺包/面板空白各一条可操作文案 | 0.5–1d |
+| **B2** | P1 | 空状态/错误页 | 已实现：环境提示与空状态 | 未选预设/运行时未就绪/缺包/面板空白各一条可操作文案 | 0.5–1d |
 | **C1a** | P0 | 导出弹窗 | 导出无审计；`deliver` 只读；`verify --block` 是独立 CLI | blocked 导出先 409 JSON；面板弹窗列 findings；必须勾选确认；`difficult` 不弹窗 | 1–2d |
 | **C1b** | P0 | 文件名/清单/审计 | 无 `_UNVERIFIED`；无 export manifest | 单版本/整项目/合并 STL 三条路径都带后缀；ZIP 含 `UNVERIFIED.md` + `export-manifest.json`；项目 `exports/<id>/manifest.json` 可查 | 1–2d |
 | **C1c** | P0 | 自动化 override | 无 CLI 导出策略 | 无 `confirm=1` 的 HTTP 调用返回 409；`confirm=1&reason=...` 才写文件；reason 为空返回 400；导出记录留 override | 0.5–1d |
 | **C2** | P0 | `verify` 随包 | `scripts/verify.mjs` import `.ts`，不在 `files`；Node 20 跑不了 | 干净安装后 `dsh-cad-verify` 可跑；不依赖 repo checkout；Node 20/22 行为写清 | 1d |
-| **D1** | P1 | 异步作业/取消 | 渲染/MPM/LBM 同步阻塞；无 job id/cancel | submit 返回 id；cancel 后进程消失；重启后 list 有记录；timeout 标 timeout | 3–5d |
-| **D2** | P1 | 错误分类 | 报错多为文本，模型看到栈 | 统一 `{code,stage,hint,cause}`；6 类故障注入各一码；日志带 runId | 1–2d |
-| **D3** | P1 | 资源清理 | 取消/崩溃可能留进程和临时目录 | 10 次取消无孤儿；临时目录有上限；并发有闸 | 1–2d |
+| **D1** | P1 | 异步作业/取消 | 编译 job 已实现；渲染/仿真仍同步 | submit 返回 id；cancel 后进程消失；重启后 list 有记录；timeout 标 timeout | 3–5d |
+| **D2** | P1 | 错误分类 | 已实现：工具错误挂 code/stage/hint/cause | 统一 `{code,stage,hint,cause}`；6 类故障注入各一码；日志带 runId | 1–2d |
+| **D3** | P1 | 资源清理 | 已实现：clean/10 连消/并发闸/孤儿清理 | 10 次取消无孤儿；临时目录有上限；并发有闸 | 1–2d |
 | **E1** | P0 | 最小 CI | 无 `.github`，发布靠手工 | tag 触发：typecheck + build + 核心 accept + 干净安装 + doctor + 立方体示例；失败不出包 | 2–3d |
 | **E2** | P0 | 发布文档 | 安装文档假设源码/作者；无 known issues | 陌生人在干净 VM 15 分钟出 v001；known issues/预览语义/卸载/数据位置齐全 | 1–2d |
-| **E3** | P1 | 许可/第三方 | 分发 AppImage 有 GPL 义务；BOSL2 不入库 | 预览不含未合规 GPL 二进制；NOTICE/THIRD-PARTY 更新；BOSL2 缺失有明确降级 | 0.5–1d |
-| **E4** | P1 | 项目 schema/迁移 | 有 `schemaVersion`，无升级策略 | 旧项目能开；未知新 schema 拒绝并说明；迁移前备份 | 1–2d |
+| **E3** | P1 | 许可/第三方 | 已实现：LICENSE/NOTICE 进包，无 GPL 二进制 | 预览不含未合规 GPL 二进制；NOTICE/THIRD-PARTY 更新；BOSL2 缺失有明确降级 | 0.5–1d |
+| **E4** | P1 | 项目 schema/迁移 | 已实现：doctor schema 检查 + 备份/拒绝策略 | 旧项目能开；未知新 schema 拒绝并说明；迁移前备份 | 1–2d |
 | **F1** | P2 | 审批/回滚 | `limits.md` 明说没有 | 实现或 release notes 明示"预览不支持" | — |
 | **F2** | P2 | L0-first 证据分级 | 无分级 | 预览后做 | — |
 | **F3** | P2 | 参考图量测 | 只有 `recall_reference_image` | 预览后做 | — |
@@ -292,6 +294,18 @@ interface CadBackend {
 
 ---
 
+## 6.5 已知边界（0.1.0-preview）
+
+- **UI 双语是部分覆盖**：标签页、环境提示、导出弹窗、主要空状态已中英切换；深层面板仍中文。
+- **英文文档是子集**：README.en.md + `docs/en/user/{install,preview,limits}.md`；其余中文。
+- **后台 job 只覆盖 OpenSCAD 编译**：submit/status/cancel/timeout/重启恢复/孤儿清理已验收；渲染与仿真仍同步。
+- **GitHub Actions 未实际运行**：workflow 已写并在本地 `rehearse:preview` 通过；推送/tag 待网络。
+- **A4 的真实断网/磁盘满注入未跑**：分类器与 state 落盘已测；真实网络故障仍靠现场。
+- **OpenSCAD 2021.01 可用但 degraded**：2025.06+ 推荐（Manifold）。这不是安装失败。
+- **没有第二个几何内核**：CadQuery/FreeCAD 是 planned，不可选、不静默回退。
+- **没有自动迁移器**：schema 不匹配时 doctor 拒绝并给备份说明；迁移需人工。
+- **导出是风险标注，不是放行**：`_UNVERIFIED` 是提示，不是安全边界。
+
 ## 7. 明确不做（scope freeze）
 
 - 不加新几何能力、不加新工具；
@@ -317,5 +331,5 @@ interface CadBackend {
 
 - [ ] 是否把 C1 的"风险标注导出"写进 `DECISION-LOG`（用户已拍板）。
 - [ ] A3 的"其他内核"是否在 preview 就要求第二个可用的（当前计划：只 OpenSCAD，其他 planned）。
-- [ ] 发布形态：GitHub tarball（推荐）还是 npm。
-- [ ] OpenSCAD 最低版本：2025.06（Manifold）还是允许 2021.01（CGAL）。
+- [x] 发布形态：GitHub Release tarball；不上 npm。
+- [x] OpenSCAD：2021.01 可跑但 degraded；推荐 2025.06+。

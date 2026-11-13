@@ -4,6 +4,8 @@
 // this module shows the findings, and only a checked acknowledgement re-requests
 // the file with `confirm=1&reason=...`. The server still enforces both.
 
+import { t } from './i18n.ts';
+
 export interface ExportGatePayload {
   kind?: string;
   verdict?: string;
@@ -54,7 +56,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     ].join(';');
 
     const title = document.createElement('div');
-    title.textContent = '此版本未通过交付审计';
+    title.textContent = t('export.title');
     title.style.cssText = 'font-size:16px;font-weight:650;margin:0 0 6px';
     panel.appendChild(title);
 
@@ -64,7 +66,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     panel.appendChild(verdict);
 
     const message = document.createElement('p');
-    message.textContent = payload.message ?? '文件名会带 _UNVERIFIED；导出记录会留在项目的 exports/ 下。';
+    message.textContent = t('export.message');
     message.style.cssText = 'margin:0 0 12px;color:#40505f';
     panel.appendChild(message);
 
@@ -86,7 +88,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
       }
       if (findings.length > 8) {
         const more = document.createElement('div');
-        more.textContent = `还有 ${findings.length - 8} 条，见导出 manifest。`;
+        more.textContent = t('export.more', { count: findings.length - 8 });
         more.style.cssText = 'color:#5b6b7a;margin-bottom:10px';
         panel.appendChild(list);
         panel.appendChild(more);
@@ -98,16 +100,16 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     if (payload.nextLook?.length) {
       const next = document.createElement('div');
       next.style.cssText = 'margin:0 0 12px;padding:8px 10px;border-left:3px solid #c9d3dd;background:#f7f9fb;color:#40505f';
-      next.textContent = `下一步：${payload.nextLook.join('；')}`;
+      next.textContent = t('export.next', { items: payload.nextLook.join('; ') });
       panel.appendChild(next);
     }
 
     const reasonLabel = document.createElement('label');
-    reasonLabel.textContent = '确认原因（会写进导出记录）';
+    reasonLabel.textContent = t('export.reasonLabel');
     reasonLabel.style.cssText = 'display:block;font-weight:600;margin:6px 0 4px';
     const reason = document.createElement('input');
     reason.type = 'text';
-    reason.value = '我已阅读上述风险，仍要导出';
+    reason.value = t('export.reasonDefault');
     reason.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #ccd5dd;border-radius:6px;font:inherit';
     panel.append(reasonLabel, reason);
 
@@ -117,7 +119,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     ack.type = 'checkbox';
     ack.style.cssText = 'margin-top:2px';
     const ackText = document.createElement('span');
-    ackText.textContent = '我已阅读以上风险；我知道文件名和 manifest 会标注未验证，改名不会改变这一点。';
+    ackText.textContent = t('export.ack');
     ackLabel.append(ack, ackText);
     panel.appendChild(ackLabel);
 
@@ -125,11 +127,11 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
     const cancel = document.createElement('button');
     cancel.type = 'button';
-    cancel.textContent = '取消';
+    cancel.textContent = t('export.cancel');
     cancel.style.cssText = 'padding:7px 14px;border:1px solid #ccd5dd;background:#fff;border-radius:6px;cursor:pointer;font:inherit';
     const confirm = document.createElement('button');
     confirm.type = 'button';
-    confirm.textContent = '仍要导出（未验证）';
+    confirm.textContent = t('export.confirm');
     confirm.disabled = true;
     confirm.style.cssText = 'padding:7px 14px;border:1px solid #a4262c;background:#a4262c;color:#fff;border-radius:6px;cursor:pointer;font:inherit;opacity:.45';
     actions.append(cancel, confirm);
@@ -177,16 +179,16 @@ export async function downloadExport(url: string): Promise<void> {
       try {
         const parsed = JSON.parse(text) as { error?: { code?: string; hint?: string } };
         if (parsed.error?.code) {
-          window.alert(`导出失败（${parsed.error.code}）：${parsed.error.hint ?? ''}`);
+          window.alert(t('export.errorCode', { code: parsed.error.code, hint: parsed.error.hint ?? '' }));
           return;
         }
       } catch { /* not an envelope; show the text */ }
-      window.alert(`导出失败（${response.status}）${text ? `：${text}` : ''}`);
+      window.alert(t('export.errorStatus', { status: response.status, detail: text ? `: ${text}` : '' }));
       return;
     }
     const name = filenameFromDisposition(response.headers.get('content-disposition')) ?? 'download';
     saveBlob(await response.blob(), name);
   } catch (error) {
-    window.alert(`导出失败：${error instanceof Error ? error.message : String(error)}`);
+    window.alert(t('export.error', { message: error instanceof Error ? error.message : String(error) }));
   }
 }

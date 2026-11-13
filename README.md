@@ -3,7 +3,9 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/user/limits.md)
-[![Status](https://img.shields.io/badge/status-0.1.0%20%E5%AE%9E%E9%AA%8C%E6%80%A7-orange.svg)](docs/user/limits.md)
+[![Status](https://img.shields.io/badge/status-0.1.0%20%E9%A2%84%E8%A7%88%E7%89%88-orange.svg)](docs/user/preview.md)
+
+[English](README.en.md) | 中文
 
 > **营造（Yingzao）——用自然语言描述零件，得到经过验证、可直接打印的模型。**
 
@@ -19,12 +21,25 @@
 
 ## 快速开始
 
+先装 OpenSCAD（2021.01 可跑但 `doctor` 报 degraded；推荐 2025.06+，Manifold 后端）。
+
+**方式 A：tarball（预览版首发，不需要 build）**
+
 ```bash
-# 1. 安装（本地路径；分发方式待定）
+tar -xzf dsh-cad-harness-0.1.0.tgz
+dsh plugin --profile <你的 profile> add -w "$PWD/package"
+cd package
+node scripts/setup.mjs     # 写入“营造模式”预设在本机的 skill 路径
+node scripts/doctor.mjs    # kind=ok，或有解释的 degraded
+```
+
+**方式 B：源码 checkout（开发）**
+
+```bash
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
-cd /path/to/dsh-cad-harness && pnpm run build
-npm run setup          # 写入“营造模式”预设在本机的 skill 路径
-npx dsh-cad-doctor     # 环境自检；kind=ok 才算装好
+cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
+npm run setup
+node scripts/doctor.mjs
 ```
 
 2. 预览版说明与已知边界 → [0.1.0 预览版说明](docs/user/preview.md)。

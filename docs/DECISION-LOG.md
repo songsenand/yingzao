@@ -5902,3 +5902,29 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** README、docs/user、`presets/cad/preset.yml` 显示名、NOTICE、HARNESS、dsh README、examples 当前说明；技术 id 不变。
 
 **非目标：** 不重命名 GitHub 仓库（等网络）、不改包名/插件 id/CLI/数据目录、不改历史记录。
+
+## 2026-11-13：0.1.0-preview 的英文入口采用方案 A（部分 UI + 子集文档）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响 UI 文案、文档结构、发布范围）。
+
+**要解决的问题：** 是否把界面和全部文档翻成中英双语、随系统自动切换，以及是否阻塞 preview.1。
+
+**决策内容：**
+
+- 采用方案 A：**中文首发**；英文提供 `README.en.md` 与 `docs/en/user/{install,preview,limits}.md`。
+- UI 用 DSH 自带 `@deepseek-ai/dsh-client-locale` 注册 `cad` 命名空间，先覆盖标签页、环境提示、导出弹窗、主要空状态；
+  深层面板与其余文档留 preview.2。
+- 不在 preview.1 翻译 `DESIGN.md`、`HARNESS.md`、`docs/dev/`、`docs/llm/`；静态 Markdown 不做“随系统切换”，只提供语言入口。
+- 模型可见的工具描述/skill 不因 UI 语言而翻译；避免模型行为随浏览器语言漂移。
+
+**理由：** 全量 UI 约 1,100 条字符串（10–15 人日），全量文档约 10 万汉字（4–6 周）；
+这会阻塞发布且质量难保证。方案 A 用 4–6 人日解决“英文用户能装、能知道边界”，不牺牲中文权威版本。
+
+**依据：** DSH locale 已提供 navigator/OS 匹配、持久化选择、`<html lang>` 与 typed dictionary；
+本仓 511 条 `panel.ts` 中文字面量、其余 client 约 190 条、host 约 400 条；
+`docs` 当前约 10 万汉字。`accept:i18n` 13/13；`accept:preview` 245/245。
+
+**影响：** `src/client/i18n.ts`、`src/client/{index,panel,project,export-gate}.ts`、`package.json` 的 `accept:i18n`、
+`README.en.md`、`docs/en/user/`；`docs/user/preview.md` 明确“英文部分覆盖”。
+
+**非目标：** 不翻译工具描述、不新增语言包、不在 preview.1 做完整 UI/文档双语、不做文档站 locale 路由。

@@ -1,38 +1,50 @@
+[English](../en/user/install.md) | 中文
+
 # 安装与首次准备
 
 ## 需要什么
 
 | 需要 | 说明 |
 |---|---|
-| **dsh**（含 Web GUI） | 插件挂在 dsh 上；目前以**本地路径**安装 |
-| **Node ≥ 20 + pnpm** | 用于安装与构建插件（本项目在 Node 26 上开发） |
-| **OpenSCAD** | 优先使用插件自带快照；也可通过 `CAD_OPENSCAD_BIN` 指向自行安装的可执行文件 |
-| **BOSL2** | 标准件库（齿轮/螺纹/螺丝/壁）。需从上游自行下载并放到 `lib/BOSL2/`（仓库不包含） |
-| **Python** | **无需自行准备**——插件内置，首次使用时自动下载 |
+| **dsh**（含 Web GUI） | 插件挂在 dsh 上；预览版以 tarball 或本地路径安装 |
+| **Node ≥ 20 + pnpm** | 安装/运行插件；tarball 用户不需要 build，DSH 内部仍会用 pnpm |
+| **OpenSCAD** | **用户自行安装**。2021.01 可跑但 `doctor` 报 degraded；推荐 2025.06+（Manifold）。也可用 `CAD_OPENSCAD_BIN` 指定 |
+| **BOSL2** | 可选标准件库（齿轮/螺纹/螺丝/壁）。从上游自行下载到 `lib/BOSL2/`，包内不包含 |
+| **Python** | **不随包分发**；首次分析/仿真时下载约 400MB 到 `$DSH_HOME/cad/runtime/` |
 
 ## 安装
 
+### 方式 A：tarball（预览版首发，不需要 build）
+
 ```bash
-# 当前以本地路径安装（分发方式待定，暂无 npm 包名）
-dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
-
-# 修改插件源码后需重新构建并重启 dsh（宿主部分不热重载）
-cd /path/to/dsh-cad-harness && pnpm run build
-
-# 预设里的 skill 目录是“安装时这台机器”的绝对路径：
-# 换机器/换克隆位置后跑一次，否则 CAD 会话有工具但没有 skill
-cd /path/to/dsh-cad-harness && npm run setup
+tar -xzf dsh-cad-harness-0.1.0.tgz
+dsh plugin --profile <你的 profile> add -w "$PWD/package"
+cd package
+node scripts/setup.mjs
+node scripts/doctor.mjs
+node scripts/backend.mjs --show
 ```
 
-`npm run setup`（安装包内是 `npx dsh-cad-setup`）会重新生成
+### 方式 B：源码 checkout（开发）
+
+```bash
+dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
+cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
+npm run setup
+node scripts/doctor.mjs
+```
+
+改动 Host 代码后需重新 `pnpm run build` 并重启 dsh（宿主 bundle 不热重载）。tarball 用户不需要这一步。
+
+`node scripts/setup.mjs`（源码目录里的 `npm run setup` 等价）会重新生成
 `presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径；`npm run setup:check`
 只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
 
 再跑一次环境自检：
 
 ```bash
-npx dsh-cad-doctor          # kind=ok 才算装好；degraded 也有 fix 行
-npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
+node scripts/doctor.mjs          # kind=ok，或有解释的 degraded（例如 OpenSCAD 2021）
+node scripts/backend.mjs --show  # kernel=openscad, compileBackend=auto
 ```
 
 `dsh-cad-backend` 是内核/编译后端的选择入口。预览版只有 OpenSCAD 可用；

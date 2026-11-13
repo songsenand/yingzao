@@ -12,6 +12,8 @@
 // This lives in its own module so the panel and the playback views can both
 // build URLs without importing each other.
 
+import { t } from './i18n.ts';
+
 let sessionsService: any = null;
 
 /** Wire the sessions service (called once from the client entry). */
@@ -233,12 +235,12 @@ export function cadMissingToolsNotice(
   const label = (id: string) => scope?.names?.[id] ?? id;
   const wanted = (scope?.presets ?? []).map(label).join(' / ') || 'CAD';
   if (blank === true) {
-    return `预设没生效：本会话是「${label(preset)}」 · 会话还没开始，现在重新选一次「${wanted}」还能生效`;
+    return t('missing.blank', { preset: label(preset), wanted });
   }
   if (blank === false) {
-    return `预设没生效：本会话以「${label(preset)}」开始，已锁定 · 新建会话，或在设置里把「${wanted}」设为默认预设`;
+    return t('missing.locked', { preset: label(preset), wanted });
   }
-  return `此会话没有 CAD 工具（预设「${label(preset)}」不在开放列表里） · 新建会话并选「${wanted}」`;
+  return t('missing.unknown', { preset: label(preset), wanted });
 }
 
 /**
@@ -253,21 +255,21 @@ export function environmentNotice(scope: CadScope | null): string | null {
   if (!scope) return null;
   const backend = scope.backend;
   if (backend && backend.kernel !== 'openscad') {
-    return `几何内核「${backend.kernel}」在这个版本不可用 · 运行 npx dsh-cad-backend --kernel openscad，然后重启 dsh`;
+    return t('env.kernel', { kernel: backend.kernel });
   }
   const runtime = scope.runtime;
   if (!runtime) return null;
   if (runtime.state === 'failed') {
-    return `Python 运行时失败：${runtime.error ?? '未知错误'} · 运行 python_runtime action=repair；仍失败就附上 dsh-cad-doctor --json`;
+    return t('env.failed', { error: runtime.error ?? 'unknown' });
   }
   if (runtime.state === 'disabled') {
-    return 'Python 运行时被禁用（DSH_CAD_PYTHON=off）— 几何分析、物理与流体不可用 · unset DSH_CAD_PYTHON 后重启';
+    return t('env.disabled');
   }
   if (runtime.state === 'unsupported') {
-    return `Python 运行时在这个平台不可用（${backend?.kernel ?? 'openscad'}）— 分析/仿真会拒绝运行 · 这不是建模失败`;
+    return t('env.unsupported', { kernel: backend?.kernel ?? 'openscad' });
   }
   if (runtime.state === 'absent') {
-    return 'Python 运行时未就绪：首次分析/仿真会下载约 400 MB · 可让 Agent 先跑 python_runtime action=provision，或设置 DSH_CAD_PYTHON=eager';
+    return t('env.absent');
   }
   return null;
 }
