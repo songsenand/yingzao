@@ -89,3 +89,6 @@ examples/rocket-3part/
 
 # ---- 示例内的临时核对残留（verify/assembly 快照，可再生成）----
 examples/*/.tmp/
+
+# README 渲染中间件
+/docs/readme-models/build/
