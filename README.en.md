@@ -7,32 +7,15 @@
 
 [中文](README.md) | English
 
-> **Yingzao (营造) — describe a part in natural language, get a model that has been checked and can be printed.**
+> **Yingzao (营造) — describe a part in natural language; a multimodal LLM drives CAD tools through a DeepSeek Harness plugin to produce a verified, deliverable model.**
 
 This is not a modelling UI. Geometry generation is no longer the bottleneck; **knowing whether the result is correct** is. A system that can generate but cannot verify produces things that only "look right". This plugin closes the loop **generate → verify → iterate → deliver**, and keeps the judgement calls with the human.
 
-- The agent writes code, compiles, renders, and **reads the images itself** before presenting a result
+- The **multimodal LLM** writes code, compiles, renders, and **reads the images itself** before presenting a result
 - The engine returns **numbers**: dimensions, volume, wall thickness, clearance, interference, motion stroke, fluid trends
 - Every revision is an **immutable version** you can browse, pin and compare
 - Third-party geometry (STL / STEP / 3MF / DXF) enters the same checks and assemblies
 - Export a **single version** (STL/3MF/OBJ/OFF/WRL) or the **whole project**: a ZIP with every part STL + assembly manifest + README, plus an optional placed whole-machine STL
-
-## Model preview and panel
-
-Results are not only text: they land in the **CAD Preview** panel on the right.
-
-- **Version history** — `v001`, `v002`, … every generation/modification is immutable; open, compare, pin, revisit.
-- **3D viewport** — orbit, zoom, pan; top/front/side/iso views with bounding-box numbers.
-- **Measure and annotate** — two-point distance, wall thickness, section cuts, red-box annotations sent back to the session.
-- **Run playback** — motion, rigid-body and fluid timelines; pause on a frame.
-- **Verification state** — assembly checks, printability and delivery audit, including “needs review”.
-- **Export** — single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
-
-![Model preview: 20T / 10T spur gear pair](docs/images/readme/gear-pair-blender.png)
-
-> The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the agent writing code or the engine producing truth. It lets you see, measure and point at the problem.
-
-To get this panel, start the session with the **营造模式 (Yingzao mode)** preset. CAD tools are only visible to that preset; standard coding sessions intentionally do not pay the tool-catalog cost.
 
 **Docs have three audiences**: users → [docs/user/](docs/user/) and [docs/en/user/](docs/en/user/), agents → [docs/en/llm/](docs/en/llm/) (English) or [docs/llm/](docs/llm/) (Chinese), maintainers → [docs/dev/](docs/dev/) (Chinese).
 
@@ -62,6 +45,23 @@ npx dsh-cad-doctor
 Then read the [0.1.0 preview notes](docs/en/user/preview.md), start a session with the **营造模式 (Yingzao mode)** preset, open the **CAD Preview** tab on the right, and describe the part:
 
 > Make a 60×40×8 mounting plate, four M3 countersunk holes, one 20 mm through hole in the centre.
+
+This is what it looks like (windup-frog assembly, 12 parts / 12 versions):
+
+![CAD Preview: version picker, assembly viewport, verification state and export entry](docs/images/readme/model-preview.png)
+
+The panel gives you:
+
+- **Version history** — `v001`, `v002`, … every generation/modification is immutable; open, compare, pin, revisit.
+- **3D viewport** — orbit, zoom, pan; top/front/side/iso views with bounding-box numbers.
+- **Measure and annotate** — two-point distance, wall thickness, section cuts, red-box annotations sent back to the session.
+- **Run playback** — motion, rigid-body and fluid timelines; pause on a frame.
+- **Verification state** — assembly checks, printability and delivery audit, including “needs review”.
+- **Export** — single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
+
+> The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the model writing code or the engine producing truth. It lets you see, measure and point at the problem.
+
+CAD tools are only visible to the **营造模式 (Yingzao mode)** preset; standard coding sessions intentionally do not pay the tool-catalog cost.
 
 Next:
 
