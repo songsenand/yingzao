@@ -28,6 +28,8 @@ check(toolsInGroups(undefined) === null && toolsInGroups([]) === null,
   'no declaration = whole catalog (capability stays open, narrowing is opt-in)');
 check(CAD_TOOL_GROUPS.deliver.every((n) => typeof n === 'string') && CAD_TOOL_GROUPS.deliver.includes('delivery_audit'),
   'the gate group names the audit');
+check(CAD_TOOL_GROUPS.detect.includes('check_appearance'),
+  'the detect group matches the skill: appearance is a look-here tool');
 
 // The declaration source: a preset may carry its own groups, so switching preset
 // re-scopes the session's roster (the switch path already re-applies the scope).

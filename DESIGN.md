@@ -1101,7 +1101,7 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 
 ## 7. 安装与共享
 
-> **v2.11 回填**：本节原为「内部共享」计划（私有 git / 私有 registry 三阶段）。**当前实作**：本地工作区链接安装（虚拟 DSH 沙箱即此法），无 git/registry 分发；定位已于 2026-09-27 升级为**开放使用**（HARNESS.md §1/§10），但公开分发方式（公开 npm / 公开仓库）**尚未定**，`package.json` 仍 `private: true`。
+> **当前实作（0.1.0-preview）**：首发为 GitHub Release tarball；也支持本地路径链接安装（虚拟 DSH 沙箱即此法）。**不上 npm**，`package.json` 仍 `private: true`；定位见 HARNESS.md §1/§10。
 
 ### 7.1 安装方式（0.1.0-preview）
 
@@ -1112,9 +1112,9 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 ```bash
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
-cd package && node scripts/setup.mjs     # 写入本机 skill 绝对路径
-node scripts/doctor.mjs                  # kind=ok / degraded / fail
-node scripts/backend.mjs --show          # kernel=openscad, compileBackend=auto
+cd package && npx dsh-cad-setup     # 写入本机 skill 绝对路径
+npx dsh-cad-doctor                  # kind=ok / degraded / fail
+npx dsh-cad-backend --show          # kernel=openscad, compileBackend=auto
 ```
 
 **源码 checkout（开发）**：
@@ -1138,7 +1138,7 @@ npm run setup
 - 版本可追溯性靠 git 提交（DCO）+ 插件自身版本库（`versions/vNNN` + manifest）+ 验收脚本。
 - 本地提交使用 `git commit -s`；发布前检查 `accept:preview` / `rehearse:preview`。
 
-### 7.3 可调参数的暴露（v2.11 更正：无 config.ts / 无 dsh Config schema）
+### 7.3 可调参数的暴露（v2.11：无 dsh Config schema；backend.json 是插件私有配置）
 
 参数**不是**集中配置，而是工具入参（每次调用显式给，或由预设推导）：
 
@@ -1152,7 +1152,7 @@ npm run setup
 | 仿真步数 `steps` | 各 simulate_* 入参 | 按场景推导 |
 | 几何内核 `kernel` / OpenSCAD 编译后端 `compileBackend` | `$DSH_HOME/cad/backend.json`（`dsh-cad-backend`） | `openscad` / `auto` |
 
-📌 若要让团队/用户共享一份集中配置，需要新增 dsh Config schema（目前不存在）——列为开放化待办。
+📌 `backend.json` 是插件自己的 JSON 配置，不是 dsh Config schema；工具参数仍走入参。若要让团队/用户共享一份集中配置，需要新增 dsh Config schema（目前不存在）——列为开放化待办。
 
 ### 7.4 运行时数据位置
 
@@ -3837,7 +3837,7 @@ GLB viewer，只需加 client GLTFLoader + 路由 + 版本元数据，不必恢�
 ### 33.3 验收
 
 ```bash
-node scripts/accept-skill-tools.mjs   # 五个 skill；工具数为 29
+node scripts/accept-skill-tools.mjs   # 五个 skill；工具数为 43
 npm run typecheck
 ```
 
@@ -4051,7 +4051,7 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 - OpenSCAD 是否存在；2021.01 可跑但 `openscad-backend` 为 warn（无 Manifold），2025.06+ 为 pass；
 - BOSL2 可选；Python runtime 状态与修复提示；
 - 项目 marker、写权限；project/assembly/claims/policy 的 `schemaVersion`（新版 fail、旧版 warn）；
-- 临时目录 stale 检查。
+- 临时目录 stale 与总大小上限检查（`DSH_CAD_TEMP_MAX_MB`，默认 512）。
 验收 `accept:doctor` 15/15；`accept:scope` 10/10 覆盖面板环境提示。
 
 ### 37.3 内核选择
@@ -4070,8 +4070,9 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 - 单版本与整项目路由在 blocked 时：无 `confirm=1` → 409 JSON；有 confirm 无 reason → 400；
   有 reason → 200，文件名带 `_UNVERIFIED`，ZIP 内 `UNVERIFIED.md` + `export-manifest.json`，
   项目 `exports/<id>/manifest.json` 留 override 审计。
-- `src/client/export-gate.ts`：409 → DOM 弹窗 → 勾选 + reason → 重试；`difficult` 不改名。
-- 验收 `accept:export-gate` 26/26、`accept:export-http` 24/24、`accept:export-dialog` 9/9。
+- `src/client/export-gate.ts`：409 → DOM 弹窗 → 勾选 + reason → 重试；`difficult` 不改名但下载前弹一次警告。
+- `auditExport` 同时读 `auditDelivery` 与 `verify` policy；manifest 记录 `policy` 和 `notCovered`。
+- 验收 `accept:export-gate` 31/31、`accept:export-http` 24/24、`accept:export-dialog` 10/10。
 
 ### 37.5 verify 随包
 
@@ -4090,12 +4091,13 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 
 ### 37.7 错误、空状态与资源
 
-- `src/shared/error-envelope.ts`：`{code,stage,hint,cause}`；`withOutputContract` 给所有带输出契约
-  的工具错误挂上 envelope，消息不变；export 路由返回同一形状。验收 35/35。
+- `src/shared/error-envelope.ts`：`{code,stage,hint,cause}`；`withOutputContract` 把 envelope
+  写进错误文本（`[code] stage: ... hint: ...`），因为 dsh 的 `toolErrorResult` 只序列化 message。
+  export 路由返回同一形状。验收 37/37。
 - 面板环境提示：运行时 absent/failed/disabled/unsupported、内核不可用、未选预设各有下一步；
   英文覆盖标签页/环境提示/导出弹窗/主要空状态（深层面板 preview.2）。
 - `scripts/clean.mjs`（`dsh-cad-clean`）默认 dry-run，`--apply` 只删 harness 拥有的临时目录；
-  doctor 报 stale；`accept:clean` 8/8。
+  `--max-mb`（默认 512）报告 overLimit；doctor 用同一阈值告警。`accept:clean` 10/10。
 
 ### 37.8 许可、schema 与 CI
 

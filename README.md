@@ -111,8 +111,8 @@
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs     # 写入“营造模式”预设在本机的 skill 路径
-node scripts/doctor.mjs    # kind=ok，或有解释的 degraded
+npx dsh-cad-setup          # 写入“营造模式”预设在本机的 skill 路径
+npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 ```
 
 **方式 B：源码 checkout**
@@ -121,7 +121,7 @@ node scripts/doctor.mjs    # kind=ok，或有解释的 degraded
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
 npm run setup
-node scripts/doctor.mjs
+npx dsh-cad-doctor
 ```
 
 1. 新建会话时选择预设 **「营造模式」**；普通会话看不到 CAD 工具，这是有意的。

@@ -20,10 +20,10 @@ See [install](install.md). The minimum path:
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs
-node scripts/backend.mjs --show
-node scripts/doctor.mjs
-node scripts/verify-cli.mjs <project> --advisory
+npx dsh-cad-setup
+npx dsh-cad-backend --show
+npx dsh-cad-doctor
+npx dsh-cad-verify <project> --advisory
 # restart dsh
 ```
 
@@ -38,13 +38,15 @@ OpenSCAD is installed by you: 2021.01 works but `doctor` reports `degraded`; 202
 - **Long tasks**: background **compile** jobs have submit/status/cancel/timeout/restart recovery; rendering and simulation are still synchronous. A timeout is reported, never treated as a pass.
 - **English UI**: this release covers the tab title, environment notices, export dialog and main empty states. The deep panel is still mostly Chinese; full bilingual UI is preview.2.
 - **English docs**: the complete English user set is available under `docs/en/user/`; HARNESS also has an English version. `docs/llm` has an English version too; `docs/dev` stays Chinese for now.
-- **Export**: `_UNVERIFIED` is a warning, not a security boundary; renaming the file does not change the manifest verdict.
+- **Export**: `_UNVERIFIED` is a warning, not a security boundary; renaming the file does not change the manifest verdict. A `difficult` export shows one warning before the download but keeps the original filename.
+- **Schema/migration**: old projects open; an unknown newer `schemaVersion` is refused by `doctor`; there is no automatic migrator, so back up before migrating.
+- **CI**: the GitHub Actions workflow is written but was not run from this machine (network); `rehearse:preview` is the local equivalent.
 
 ## Reporting a problem
 
 Please include:
 
-1. `node scripts/doctor.mjs --json` (or at least `kind` and the failing checks);
+1. `npx dsh-cad-doctor --json` (or at least `kind` and the failing checks);
 2. OS, dsh version, OpenSCAD version;
 3. reproduction steps (the sentence, the button);
 4. the original error text, not just “it failed”.
@@ -58,5 +60,5 @@ Please include:
 
 ## After this release
 
-Near term: full bilingual UI, the full English user-doc set, Python first-run progress.
+Near term: render/simulation jobs, the full bilingual UI, Python first-run progress.
 First mid-term item: a second geometry kernel (CadQuery first). Full order: [`docs/dev/TODO.md`](../../dev/TODO.md) (Chinese).

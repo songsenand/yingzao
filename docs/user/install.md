@@ -20,9 +20,9 @@
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs
-node scripts/doctor.mjs
-node scripts/backend.mjs --show
+npx dsh-cad-setup
+npx dsh-cad-doctor
+npx dsh-cad-backend --show
 ```
 
 ### 方式 B：源码 checkout（开发）
@@ -31,20 +31,20 @@ node scripts/backend.mjs --show
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
 npm run setup
-node scripts/doctor.mjs
+npx dsh-cad-doctor
 ```
 
 改动 Host 代码后需重新 `pnpm run build` 并重启 dsh（宿主 bundle 不热重载）。tarball 用户不需要这一步。
 
-`node scripts/setup.mjs`（源码目录里的 `npm run setup` 等价）会重新生成
+`npx dsh-cad-setup`（源码目录里的 `npm run setup` 等价）会重新生成
 `presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径；`npm run setup:check`
 只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
 
 再跑一次环境自检：
 
 ```bash
-node scripts/doctor.mjs          # kind=ok，或有解释的 degraded（例如 OpenSCAD 2021）
-node scripts/backend.mjs --show  # kernel=openscad, compileBackend=auto
+npx dsh-cad-doctor          # kind=ok，或有解释的 degraded（例如 OpenSCAD 2021）
+npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
 ```
 
 `dsh-cad-backend` 是内核/编译后端的选择入口。预览版只有 OpenSCAD 可用；

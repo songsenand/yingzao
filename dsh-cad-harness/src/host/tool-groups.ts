@@ -16,7 +16,7 @@ export const CAD_TOOL_GROUPS: Record<CadToolGroup, readonly string[]> = {
   // gates: must run and must pass (only where no load case is needed to decide)
   deliver: ['preflight', 'deliver', 'pearl_run', 'check_assembly', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'check_parts', 'review_visual', 'delivery_audit'],
   // pointers: where to look next; never gate, never silent
-  detect: ['analyze', 'scan_attention', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'review_visual', 'simulate_stress', 'simulate_motion', 'request_review'],
+  detect: ['analyze', 'scan_attention', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'check_appearance', 'review_visual', 'simulate_stress', 'simulate_motion', 'request_review'],
   // scenario-driven: meaningless without a declared case; produces EVIDENCE
   simulate: ['simulate_physics', 'simulate_motion', 'simulate_fluid', 'simulate_lbm', 'simulate_stress'],
   // truth: numbers + coordinates, neither gates nor points

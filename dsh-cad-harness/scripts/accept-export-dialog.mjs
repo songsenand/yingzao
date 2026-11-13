@@ -38,7 +38,8 @@ globalThis.document = {
   addEventListener() {},
   removeEventListener() {},
 };
-globalThis.window = { location: { origin: 'http://x' }, alert: (msg) => { throw new Error(`unexpected alert: ${msg}`); } };
+const alerts = [];
+globalThis.window = { location: { origin: 'http://x' }, alert: (msg) => { alerts.push(String(msg)); } };
 globalThis.URL.createObjectURL = () => 'blob:test';
 globalThis.URL.revokeObjectURL = () => {};
 
@@ -97,6 +98,18 @@ check('second request carries confirm + reason', calls[1]?.includes('confirm=1')
 const anchor = created.find((e) => e.tagName === 'A');
 check('download uses the server filename', anchor?.download === 'part_v1_UNVERIFIED.stl', anchor?.download ?? 'none');
 check('anchor was clicked', anchor?.clicked === true);
+
+// A 200 with difficult is not a pass; it must warn before the user trusts it.
+globalThis.fetch = async () => new Response(new Uint8Array([4, 5]), {
+  status: 200,
+  headers: {
+    'content-disposition': 'attachment; filename="part_v2.stl"',
+    'x-cad-verdict': 'difficult',
+    'x-cad-export-id': 'exp-test-2',
+  },
+});
+await downloadExport('http://x/api/cad/export?v=v2&format=stl');
+check('difficult export warns', alerts.some((m) => m.includes('difficult') && m.includes('exp-test-2')), alerts.join(' | '));
 
 console.log(`\naccept-export-dialog: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

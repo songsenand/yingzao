@@ -15,8 +15,8 @@ function check(name, condition, detail = '') {
   if (condition) { passed++; console.log(`  PASS ${name}`); }
   else { failed++; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 }
-function run(script, args) {
-  return spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 30_000 });
+function run(script, args, env = {}) {
+  return spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, ...env } });
 }
 function age(path, minutes) {
   const date = new Date(Date.now() - minutes * 60_000);
@@ -40,9 +40,15 @@ try {
   check('dry-run ignores fresh dirs', !dryJson.candidates.some((c) => c.path === fresh));
   check('dry-run ignores unrelated names', !dryJson.candidates.some((c) => c.path === unrelated));
 
+  const capped = run(CLEAN, ['--tmpdir', root, '--older-than-min', '60', '--max-mb', '0', '--json']);
+  check('the size cap is reported', JSON.parse(capped.stdout).overLimit === true);
+
   const doctor = run(DOCTOR, ['--tmpdir', root, '--json']);
   const doctorJson = JSON.parse(doctor.stdout);
   check('doctor warns about stale temps', doctorJson.checks.find((c) => c.id === 'temp-dirs')?.status === 'warn');
+
+  const cappedDoctor = run(DOCTOR, ['--tmpdir', root, '--json'], { DSH_CAD_TEMP_MAX_MB: '0' });
+  check('doctor knows the size cap', JSON.parse(cappedDoctor.stdout).checks.find((c) => c.id === 'temp-dirs')?.detail.includes('limit'));
 
   const applied = run(CLEAN, ['--tmpdir', root, '--older-than-min', '60', '--apply', '--json']);
   const appliedJson = JSON.parse(applied.stdout);

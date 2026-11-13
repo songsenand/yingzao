@@ -186,6 +186,11 @@ export async function downloadExport(url: string): Promise<void> {
       window.alert(t('export.errorStatus', { status: response.status, detail: text ? `: ${text}` : '' }));
       return;
     }
+    const verdict = response.headers.get('x-cad-verdict');
+    if (verdict === 'difficult') {
+      const id = response.headers.get('x-cad-export-id') ?? 'exports/<id>';
+      window.alert(t('export.difficult', { id }));
+    }
     const name = filenameFromDisposition(response.headers.get('content-disposition')) ?? 'download';
     saveBlob(await response.blob(), name);
   } catch (error) {

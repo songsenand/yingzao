@@ -22,9 +22,9 @@ The preview does **not** bundle OpenSCAD, BOSL2 or the Python runtime. The plugi
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs
-node scripts/doctor.mjs
-node scripts/backend.mjs --show
+npx dsh-cad-setup
+npx dsh-cad-doctor
+npx dsh-cad-backend --show
 ```
 
 ### B. Source checkout (development)
@@ -33,18 +33,18 @@ node scripts/backend.mjs --show
 dsh plugin --profile <your-profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
 npm run setup
-node scripts/doctor.mjs
+npx dsh-cad-doctor
 ```
 
 After changing host code you must rebuild `lib/` and restart dsh (the host bundle is not hot-reloaded). Tarball users do not need this.
 
-`node scripts/setup.mjs` (or `npm run setup` in a checkout) rewrites `presets/cad/preset.patch.yml` with **this machine's** `skills/` path. `node scripts/setup.mjs --check` writes nothing and exits 1 when the path is stale or a skill directory is missing. Restart dsh afterwards.
+`npx dsh-cad-setup` (or `npm run setup` in a checkout) rewrites `presets/cad/preset.patch.yml` with **this machine's** `skills/` path. `npx dsh-cad-setup --check` writes nothing and exits 1 when the path is stale or a skill directory is missing. Restart dsh afterwards.
 
 Then check the environment:
 
 ```bash
-node scripts/doctor.mjs          # kind=ok, or an explained degraded (e.g. OpenSCAD 2021)
-node scripts/backend.mjs --show  # kernel=openscad, compileBackend=auto
+npx dsh-cad-doctor          # kind=ok, or an explained degraded (e.g. OpenSCAD 2021)
+npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
 ```
 
 `dsh-cad-backend` is the kernel / compile-backend entry point. The preview ships only the OpenSCAD adapter; `cadquery` / `freecad` are listed as `planned` and cannot be selected.
@@ -76,4 +76,4 @@ Start a **营造模式 (Yingzao mode)** session and say:
 
 > Make a 20 mm cube.
 
-A new version with four views means the install works. If not, see [troubleshooting](../../user/troubleshooting.md) (Chinese) or run `node scripts/doctor.mjs --json`.
+A new version with four views means the install works. If not, see [troubleshooting](../../user/troubleshooting.md) (Chinese) or run `npx dsh-cad-doctor --json`.

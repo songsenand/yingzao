@@ -29,8 +29,8 @@ Install OpenSCAD first. 2021.01 works but `doctor` reports `degraded`; 2025.06+ 
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs     # writes this machine's skill path into the preset
-node scripts/doctor.mjs    # kind=ok, or an explained degraded
+npx dsh-cad-setup          # writes this machine's skill path into the preset
+npx dsh-cad-doctor         # kind=ok, or an explained degraded
 ```
 
 **B. Source checkout (development)**
@@ -39,7 +39,7 @@ node scripts/doctor.mjs    # kind=ok, or an explained degraded
 dsh plugin --profile <your-profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
 npm run setup
-node scripts/doctor.mjs
+npx dsh-cad-doctor
 ```
 
 Then read the [0.1.0 preview notes](docs/en/user/preview.md), start a session with the **营造模式 (Yingzao mode)** preset, and describe the part:

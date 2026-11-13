@@ -7,7 +7,7 @@
 // classifyExport() tested here.
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,8 @@ const gate = {
   findings: [{ severity: 'blocked', code: 'printability', detail: 'wall 0.2mm < 0.4mm' }],
   audit: { visual: { required: true } },
   claims: [],
+  policy: { source: 'file', mode: 'blocking' },
+  notCovered: ['visual-review'],
   nextLook: ['fix it'],
 };
 const manifest = buildExportManifest({
@@ -70,6 +72,8 @@ check('manifest records the override', manifest.override?.reason === 'user says 
 check('manifest records the blocked finding', manifest.findings[0]?.code === 'printability');
 check('manifest records versions', manifest.versions.includes('v012'));
 check('manifest records file hash', manifest.files[0]?.sha256 === expected);
+check('manifest records the policy', manifest.policy?.mode === 'blocking');
+check('manifest records notCovered', manifest.notCovered.includes('visual-review'));
 
 const readme = buildUnverifiedReadme(manifest);
 check('readme says UNVERIFIED', readme.includes('未验证导出') && readme.includes('_UNVERIFIED'));
@@ -94,6 +98,26 @@ check('real corpus gate returns a verdict', ['pass', 'difficult', 'blocked'].inc
 check('real corpus is not silently pass (no claims / stale evidence)', real.verdict !== 'pass', real.verdict);
 check('real corpus findings are present', real.findings.length > 0);
 check('real corpus findings include blocked codes', real.findings.some((f) => f.severity === 'blocked'));
+
+// Policy is part of the gate, not a separate authority.
+const policyDir = mkdtempSync(join(tmpdir(), 'cad-policy-'));
+try {
+  mkdirSync(join(policyDir, 'cad-data'), { recursive: true });
+  writeFileSync(join(policyDir, 'cad-data', 'project.json'), JSON.stringify({ schemaVersion: 1 }));
+  writeFileSync(join(policyDir, 'claims.json'), JSON.stringify({
+    schemaVersion: 1,
+    claims: [{ kind: 'strength', statement: 'it holds' }],
+  }));
+  writeFileSync(join(policyDir, 'evidence-policy.json'), JSON.stringify({
+    schemaVersion: 1, mode: 'blocking', blockOn: ['claim-without-witness'],
+  }));
+  const gated = await auditExport(projectStores(policyDir));
+  check('policy blockOn makes the export blocked', gated.verdict === 'blocked', gated.verdict);
+  check('gate carries the file policy', gated.policy.source === 'file' && gated.policy.mode === 'blocking', JSON.stringify(gated.policy));
+  check('gate carries the policy finding', gated.findings.some((f) => f.severity === 'blocked'));
+} finally {
+  rmSync(policyDir, { recursive: true, force: true });
+}
 
 console.log(`\naccept-export-gate: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

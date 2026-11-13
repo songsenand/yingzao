@@ -5928,3 +5928,25 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 `README.en.md`、`docs/en/user/`；`docs/user/preview.md` 明确“英文部分覆盖”。
 
 **非目标：** 不翻译工具描述、不新增语言包、不在 preview.1 做完整 UI/文档双语、不做文档站 locale 路由。
+
+
+## 2026-11-13：0.1.0-preview 的后台 job 只覆盖 OpenSCAD 编译
+
+**触发条件：** 第 1 条（发布审阅中确认）+ 第 4 条（影响 P1 的完成口径与用户文档）。
+
+**要解决的问题：** N15 的出口写的是“异步作业/取消”，容易被读成渲染、MPM、LBM 都已异步；实际 `src/host/jobs.ts` 只有 `kind: 'compile'`。不把边界写死，就会把“编译 job 做完了”冒充“长任务都异步了”。
+
+**决策内容：**
+
+- 0.1.0-preview 只承诺 **OpenSCAD 编译 job**：submit 返回 id、status、cancel、timeout、重启恢复、孤儿清理、10 次取消无孤儿、并发上限 4。
+- 渲染、`simulate_*`、流体的长任务仍是同步调用；它们没有 job id/cancel 协议。
+- 文档/TODO 必须把 N15 标为 `partial` 或 `compile-only`，不能整体标 done。
+- 后续 preview.2 再把 render/simulation 接到同一套 job store；那需要各自检查取消信号，不能只复用 compile 的进程 kill。
+
+**理由：** 取消一个 JS 计算和取消一个 OpenSCAD 子进程不是同一件事。先交付一个真实、可证伪的 job 协议，比给所有长任务挂一个假 cancel 更符合 HARNESS §11.9。
+
+**依据：** `src/host/jobs.ts` 的 `JobRecord.kind` 只有 `'compile'`；`accept-jobs` 16/16 覆盖 submit/done/cancel/timeout/重启/孤儿/10 连消/并发闸/HTTP；`docs/user/preview.md` 曾写“没有 job id/cancel”，与实现冲突。
+
+**影响：** `docs/dev/TODO.md`、`docs/dev/RELEASE-0.1.0-PREVIEW.md`、`docs/user/preview.md`、`src/host/jobs.ts`；不改变已交付的 compile job。
+
+**非目标：** 不在 0.1.0-preview 内做渲染/仿真异步化；不把“没有 job”写成“已验证”。

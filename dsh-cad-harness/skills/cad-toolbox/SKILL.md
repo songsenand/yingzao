@@ -6,13 +6,15 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-Forty-three tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean:
+Forty-three tools, but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
 | **交付** | 能不能交？ | **`deliver`**（只读计划） · **`preflight`** · `check_printability` · `check_sheet2d` · `check_turning` · `check_cnc_access` · `check_edm_access` · `check_assembly` · `check_parts` · `delivery_audit` | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
 | **检测** | 该往哪看？ | `analyze`（实验性，不可作交付依据） · `scan_attention` · `check_appearance`（成套外观：锐边/收口/对称/近共面/包络预算，只读） · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `simulate_stress` · `simulate_motion` · `simulate_physics` · `simulate_fluid` · `simulate_lbm` | **方向性**读数 + 可靠性 + 证据 | 产**证据**，不自己判交付 |
+
+`instrument` 组只装“读数/坐标/写契约”类工具（`measure_*`、`list_features`、`generate_part`、`render_part`、`write_assembly` 等）；它不是交付判据。声明 `groups` 时不要把 `instrument` 和三个 job 组混为一谈。
 
 ## Six rules
 

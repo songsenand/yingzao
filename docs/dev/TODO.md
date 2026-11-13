@@ -20,7 +20,7 @@
 **2026-11-12 开工进展：**
 
 - **已收口（13）**：N02（A2 预设路径）、N03（A3a 内核选择）、N04（A3b adapter 契约 + 编译经 registry 分发）、N06（A5 版本/兼容矩阵）、N07（B1 doctor）、N08（C1a 弹窗）、N09（C1b 文件名/清单/审计）、N10（C1c 自动化 override）、N11（C2 verify 随包）、N13（E2 预览文档）、N05（A4 失败分类 + state 落盘）、N12（E1 workflow + 本地 rehearsal）、N01（A1 tarball + `dsh plugin add` + 临时 profile 载入）。
-- **P1 全部收口（6/6）**：N14 空状态、N15 作业/取消、N16 错误分类、N17 资源清理、N18 许可、N19 schema/迁移。
+- **P1：5/6 收口 + N15 首片**：N14 空状态、N16 错误分类、N17 资源清理、N18 许可、N19 schema/迁移已收口；N15 只交付 **OpenSCAD 编译 job**，渲染/仿真仍同步。
 
 **验收证据（本机）：**
 
@@ -28,22 +28,25 @@
 |---|---|
 | `npm run accept:setup` | 11/11 |
 | `npm run accept:doctor` | 15/15（含 dsh 版本与 schemaVersion 注入） |
-| `npm run accept:export-gate` | 26/26（含 microscope5 真实语料 blocked） |
+| `npm run accept:export-gate` | 31/31（含 microscope5 真实语料 blocked + policy blockOn） |
 | `npm run accept:export-http` | 24/24（单版本 + ZIP + 合并 STL：409 → 400 → 200 + `_UNVERIFIED` + 审计） |
-| `npm run accept:export-dialog` | 9/9（fake DOM：弹窗 → 勾选 → confirm=1 → 下载文件名） |
+| `npm run accept:export-dialog` | 10/10（fake DOM：弹窗 → 勾选 → confirm=1 → 下载文件名；difficult 警告） |
 | `npm run accept:bundle-load` | 4/4（临时 profile 载入 host/preset/skill provider） |
 | `npm run accept:plugin-add -- --require` | 5/5（真实 `dsh plugin add` + `--dump-config`；`XDG_RUNTIME_DIR` 指向可写临时目录） |
 | `npm run accept:backend` | 19/19（adapter registry + 版本 manifest backend pin） |
 | `npm run accept:verify-cli` | 8/8 |
 | `npm run accept:python-failure` | 27/27（分类 + state.json 落盘，不触发下载） |
 | `npm run accept:license` | 15/15（LICENSE/NOTICE 已打包；无 AppImage/BOSL2/node_modules） |
-| `npm run accept:clean` | 8/8（dry-run / apply / 非 harness 目录保留；doctor 报 stale） |
+| `npm run accept:clean` | 10/10（dry-run / apply / 非 harness 目录保留；doctor 报 stale；`--max-mb` overLimit） |
 | `npm run accept:jobs` | 16/16（submit/done/cancel/timeout/重启/孤儿/10 连消/并发闸/HTTP） |
 | `npm run accept:scope` | 10/10（runtime/backend 路由 + 5 种环境提示） |
 | `npm run accept:i18n` | 17/17（zh/en key、英文无 CJK、通知/弹窗、locale 注册、英文 user+llm 文档齐全/链接可解析） |
 | `npm run accept:run-facts` | 11/11（motion/fluid/assembly 的英文 headline/label/summary） |
 | `npm run accept:ui-i18n` | 1/1（client 字符串字面量除术语外无中文，汉字只在 i18n.ts） |
-| `npm run accept:error-envelope` | 35/35（8 类 code/stage/hint/cause；所有带输出契约的工具错误都挂上 envelope，消息不变） |
+| `npm run accept:i18n` | 17/17 |
+| `npm run accept:run-facts` | 11/11 |
+| `npm run accept:ui-i18n` | 1/1 |
+| `npm run accept:error-envelope` | 37/37（8 类 code/stage/hint/cause；envelope 写进错误文本，因为运行时只序列化 message） |
 | `npm pack` | 113 files / 4.6 MB；含 LICENSE/NOTICE/README.en；tarball 内 preset 无 `/home/` |
 | `npm run rehearse:preview` | PASS（build → accept:preview → pack → extract → setup → doctor → verify） |
 | 解包 smoke | `setup` 写入后 `--check` 通过；`doctor` kind=degraded（仅 OpenSCAD 旧版）；`verify-cli` 可跑 |
@@ -85,13 +88,13 @@
 | ID | P | 状态 | 事项 | 出口 | 详细 |
 |---|---|---|---|---|---|
 | N14 | P1 | done | 空状态/错误页 | 未选预设/运行时未就绪/缺包/面板空白各一条可操作文案 | B2 |
-| N15 | P1 | done | 异步作业/取消 | submit 返回 id；cancel 后进程消失；重启 list 有记录；timeout 标 timeout | D1 |
+| N15 | P1 | partial | 异步作业/取消（compile-only 首片） | submit 返回 id；cancel 后进程消失；重启 list 有记录；timeout 标 timeout；**当前仅 OpenSCAD 编译** | D1 |
 | N16 | P1 | done | 错误分类 | 统一 `{code,stage,hint,cause}`；6 类故障注入各一码；日志带 runId | D2 |
 | N17 | P1 | done | 资源清理 | 10 次取消无孤儿；临时目录有上限；并发有闸 | D3 |
 | N18 | P1 | done | 许可/第三方 | 预览不含未合规 GPL 二进制；NOTICE/THIRD-PARTY 更新；BOSL2 缺失有明确降级 | E3 |
 | N19 | P1 | done | 项目 schema/迁移 | 旧项目能开；未知新 schema 拒绝并说明；迁移前备份 | E4 |
 
-> N15–N19 已完成；release notes 仍要显性列出边界（job 目前只覆盖 OpenSCAD 编译，不覆盖仿真/fluid）。
+> N16–N19 已完成；N15 只交付 OpenSCAD 编译 job，渲染/仿真仍同步。release notes 必须显性列出这条边界。
 
 ---
 

@@ -20,6 +20,8 @@ export interface VerifyResult {
   report: VerifyReport;
   exitCode: number;
   mode: 'advisory' | 'blocking';
+  /** The audit verify already ran; callers that need the raw object reuse it. */
+  audit?: DeliveryAudit | null;
 }
 
 export async function verify(options: VerifyOptions): Promise<VerifyResult> {
@@ -198,5 +200,5 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
 
   report.interfaces = (await ledgerForProject(project)) ?? undefined;
 
-  return { report, exitCode: exitCodeFor(report, mode, options.strict === true), mode };
+  return { report, exitCode: exitCodeFor(report, mode, options.strict === true), mode, audit };
 }

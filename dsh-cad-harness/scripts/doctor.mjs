@@ -195,6 +195,18 @@ add('preset-skill-path', presetHasSkill ? 'pass' : 'fail',
 
 // --- temp hygiene ----------------------------------------------------------
 const TEMP_PREFIXES = ['cad-harness-', 'cad-doctor-', 'cad-setup-', 'cad-export-', 'cad-add-', 'cad-bundle-', 'cad-backend-', 'cad-pyfail-', 'cad-rehearse-', 'cad-http-'];
+const MAX_TEMP_MB = Number(process.env.DSH_CAD_TEMP_MAX_MB ?? '512');
+function dirBytes(dir) {
+  let total = 0;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) total += dirBytes(path);
+      else if (entry.isFile()) { try { total += statSync(path).size; } catch { /* racing delete */ } }
+    }
+  } catch { /* racing delete */ }
+  return total;
+}
 let staleTemps = 0;
 let staleBytes = 0;
 if (existsSync(tmpRoot)) {
@@ -203,13 +215,16 @@ if (existsSync(tmpRoot)) {
     if (!entry.isDirectory() || !TEMP_PREFIXES.some((prefix) => entry.name.startsWith(prefix))) continue;
     try {
       const stat = statSync(join(tmpRoot, entry.name));
-      if (stat.mtimeMs < cutoff) { staleTemps++; staleBytes += stat.size; }
+      if (stat.mtimeMs < cutoff) { staleTemps++; staleBytes += dirBytes(join(tmpRoot, entry.name)); }
     } catch { /* racing delete */ }
   }
 }
-add('temp-dirs', staleTemps === 0 ? 'pass' : 'warn',
-  staleTemps === 0 ? `no stale CAD temp dirs under ${tmpRoot}` : `${staleTemps} stale CAD temp dir(s) under ${tmpRoot}`,
-  staleTemps === 0 ? undefined : 'run `npx dsh-cad-clean --apply` (dry-run without --apply)');
+const tempOver = Number.isFinite(MAX_TEMP_MB) && staleBytes > MAX_TEMP_MB * 1024 * 1024;
+add('temp-dirs', staleTemps === 0 && !tempOver ? 'pass' : 'warn',
+  staleTemps === 0 && !tempOver
+    ? `no stale CAD temp dirs under ${tmpRoot}`
+    : `${staleTemps} stale CAD temp dir(s), ${(staleBytes / 1024 / 1024).toFixed(1)} MiB / ${MAX_TEMP_MB} MiB limit under ${tmpRoot}`,
+  staleTemps === 0 && !tempOver ? undefined : 'run `npx dsh-cad-clean --apply --max-mb ' + MAX_TEMP_MB + '` (dry-run without --apply)');
 
 // --- project (optional) ----------------------------------------------------
 if (project) {

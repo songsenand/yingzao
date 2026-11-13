@@ -40,6 +40,8 @@ try {
   check('wrapped tool throws', false);
 } catch (error) {
   check('wrapped tool keeps the message', String(error.message).includes('ENOENT'));
+  check('wrapped tool message carries the code', String(error.message).includes('[not-found]'));
+  check('wrapped tool message carries the hint', String(error.message).includes('hint:'));
   check('wrapped tool gets a code', error.code === 'not-found', error.code);
   check('wrapped tool gets a stage', error.stage === 'test_tool', error.stage);
   check('wrapped tool gets a hint', typeof error.hint === 'string' && error.hint.length > 0);

@@ -28,7 +28,7 @@
 // registered tool (a silently-not-applied wrapper would reproduce the original bug).
 
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
-import { classifyError } from '../shared/error-envelope.ts';
+import { classifyError, envelopeText } from '../shared/error-envelope.ts';
 
 /** Attached to a wrapped execute so `accept-tool-output.mjs` can see the guard is live. */
 export const OUTPUT_CHECKED = Symbol.for('dsh-cad-harness.outputChecked');
@@ -63,15 +63,14 @@ export function withOutputContract<T extends ContractDefinition>(definition: T):
       }
       return value;
     } catch (error) {
-      // Keep the message unchanged (tests and users read it); attach the
-      // machine-readable classification for logs, panels and future job APIs.
+      // The tool runtime serializes only `error.message` (dsh-tools
+      // toolErrorResult), so the envelope MUST be in the text. Custom Error
+      // properties are kept for direct callers, but they are not the channel.
       const envelope = classifyError(error, definition.name);
-      if (error instanceof Error) {
-        Object.assign(error, envelope);
-        throw error;
-      }
-      const wrapped = new Error(envelope.cause);
-      Object.assign(wrapped, envelope);
+      const wrapped = new Error(envelopeText(envelope));
+      Object.assign(wrapped, {
+        code: envelope.code, stage: envelope.stage, hint: envelope.hint, cause: envelope.cause,
+      });
       throw wrapped;
     }
   };

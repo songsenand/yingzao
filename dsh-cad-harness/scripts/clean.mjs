@@ -29,8 +29,13 @@ const apply = args.includes('--apply');
 const asJson = args.includes('--json');
 const root = resolve(argValue('--tmpdir') ?? tmpdir());
 const olderThanMin = Number(argValue('--older-than-min') ?? '60');
+const maxMb = Number(argValue('--max-mb') ?? '512');
 if (!Number.isFinite(olderThanMin) || olderThanMin < 0) {
   console.error('dsh-cad-clean: --older-than-min must be a non-negative number');
+  process.exit(2);
+}
+if (!Number.isFinite(maxMb) || maxMb < 0) {
+  console.error('dsh-cad-clean: --max-mb must be a non-negative number');
   process.exit(2);
 }
 const cutoff = Date.now() - olderThanMin * 60_000;
@@ -59,6 +64,9 @@ if (existsSync(root)) {
   }
 }
 
+found.sort((a, b) => a.mtime.localeCompare(b.mtime));
+const bytes = found.reduce((sum, item) => sum + item.bytes, 0);
+const maxBytes = maxMb * 1024 * 1024;
 let removed = 0;
 if (apply) {
   for (const item of found) {
@@ -72,12 +80,14 @@ const payload = {
   olderThanMin,
   apply,
   candidates: found,
-  bytes: found.reduce((sum, item) => sum + item.bytes, 0),
+  bytes,
+  maxMb,
+  overLimit: bytes > maxBytes,
   removed,
 };
 if (asJson) console.log(JSON.stringify(payload, null, 2));
 else {
-  console.log(`dsh-cad-clean: ${found.length} candidate(s), ${(payload.bytes / 1024 / 1024).toFixed(1)} MiB, older than ${olderThanMin}m`);
+  console.log(`dsh-cad-clean: ${found.length} candidate(s), ${(payload.bytes / 1024 / 1024).toFixed(1)} MiB, older than ${olderThanMin}m (limit ${maxMb} MiB${payload.overLimit ? ', OVER' : ''})`);
   for (const item of found) console.log(`  ${apply && removed ? 'removed' : 'stale'} ${item.path} (${item.mtime})`);
   if (!apply && found.length) console.log('  dry-run only; pass --apply to remove');
 }

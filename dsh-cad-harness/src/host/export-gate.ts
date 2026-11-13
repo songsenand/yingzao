@@ -15,6 +15,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { auditDelivery, type AuditFinding, type DeliveryAudit, type DeliveryClaim } from './delivery-audit.ts';
+import { verify, type VerifyResult } from './verify/index.ts';
 import type { ProjectStores } from './project.ts';
 
 export type ExportVerdict = 'pass' | 'difficult' | 'blocked';
@@ -24,6 +25,10 @@ export interface ExportGate {
   audit: DeliveryAudit;
   findings: AuditFinding[];
   claims: DeliveryClaim[];
+  /** The verify policy that participated in the decision (C1 §3.1). */
+  policy: VerifyResult['report']['policy'];
+  /** Evidence ids verify could not check; never an empty "everything checked". */
+  notCovered: string[];
   /** Why the export is blocked/difficult, in the order a reader should act. */
   nextLook: string[];
 }
@@ -36,10 +41,12 @@ export interface ExportManifest {
   format: string;
   verdict: ExportVerdict;
   findings: AuditFinding[];
-  notCovered: string[];
   versions: string[];
   override?: { reason: string; confirmedAt: string; surface: 'web' | 'cli' };
+  /** Present when a policy file/flag participated; shape mirrors verify. */
+  policy?: VerifyResult['report']['policy'];
   files: { path: string; sha256: string; bytes: number }[];
+  notCovered: string[];
 }
 
 const NEXT_LOOK: Record<ExportVerdict, string[]> = {
@@ -95,18 +102,34 @@ export async function readProjectClaims(project: ProjectStores): Promise<{
  * classification, not a second opinion.
  */
 /** Pure classification so the route, tests, and any future CLI agree. */
-export function classifyExport(findings: readonly AuditFinding[], auditVerdict: DeliveryAudit['verdict']): ExportVerdict {
-  if (findings.some((f) => f.severity === 'blocked') || auditVerdict === 'excluded') return 'blocked';
-  if (auditVerdict === 'difficult' || findings.some((f) => f.severity === 'warn')) return 'difficult';
+export function classifyExport(
+  findings: readonly AuditFinding[],
+  auditVerdict: DeliveryAudit['verdict'] | VerifyResult['report']['verdict'],
+): ExportVerdict {
+  if (findings.some((f) => f.severity === 'blocked') || auditVerdict === 'excluded' || auditVerdict === 'blocked' || auditVerdict === 'fail') return 'blocked';
+  if (auditVerdict === 'difficult' || auditVerdict === 'warn' || auditVerdict === 'unobserved' || findings.some((f) => f.severity === 'warn')) return 'difficult';
   return 'pass';
 }
 
 export async function auditExport(project: ProjectStores): Promise<ExportGate> {
-  const { claims, findings: claimFindings } = await readProjectClaims(project);
-  const audit = await auditDelivery(project, { claims });
-  const findings = [...claimFindings, ...audit.findings];
-  const verdict = classifyExport(findings, audit.verdict);
-  return { verdict, audit, findings, claims, nextLook: NEXT_LOOK[verdict] };
+  const { claims } = await readProjectClaims(project);
+  // C1 §3.1: the gate is auditDelivery + verify's policy. Calling verify also
+  // runs the audit; do it once and read both halves from the same report.
+  const verified = await verify({ projectRoot: project.cwd, noChecks: true });
+  const audit = verified.audit ?? await auditDelivery(project, { claims });
+  const findings: AuditFinding[] = verified.report.findings
+    .filter((f) => f.severity !== 'info')
+    .map((f) => ({ severity: f.severity, code: f.code, detail: `${f.what}${f.why?.length ? ` — ${f.why.join('; ')}` : ''}` }));
+  const verdict = classifyExport(findings, verified.report.verdict);
+  return {
+    verdict,
+    audit,
+    findings,
+    claims,
+    policy: verified.report.policy,
+    notCovered: verified.report.coverage.missing,
+    nextLook: NEXT_LOOK[verdict],
+  };
 }
 
 /** `part_v012.stl` -> `part_v012_UNVERIFIED.stl`; idempotent. */
@@ -145,10 +168,11 @@ export function buildExportManifest(input: {
     format: input.format,
     verdict: input.gate.verdict,
     findings: input.gate.findings,
-    notCovered: input.gate.audit.visual.required ? [] : ['visual-review disabled by caller'],
     versions: input.versions ?? [],
     override: input.override ? { ...input.override, confirmedAt: now.toISOString() } : undefined,
+    policy: input.gate.policy,
     files: input.files.map((f) => ({ path: f.path, sha256: sha256(f.bytes), bytes: f.bytes.byteLength })),
+    notCovered: input.gate.notCovered,
   };
 }
 

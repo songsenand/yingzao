@@ -37,6 +37,7 @@ export const zh = {
   'export.errorCode': '导出失败（{code}）：{hint}',
   'export.errorStatus': '导出失败（HTTP {status}）{detail}',
   'export.error': '导出失败：{message}',
+  'export.difficult': '导出含 difficult/警告项（不是 pass）。文件已下载；审计记录在 {id}。请先读 findings 再使用。',
 
   'panel.projectZip': '整机 ZIP (.zip)',
   'panel.projectZipTitle': '整个项目打包：每个零件的 STL + 装配清单 + 说明（有清单时另含按位姿摆好的 assembly.stl）',
@@ -632,6 +633,7 @@ export const en: Record<CadKey, string> = {
   'export.errorCode': 'Export failed ({code}): {hint}',
   'export.errorStatus': 'Export failed (HTTP {status}){detail}',
   'export.error': 'Export failed: {message}',
+  'export.difficult': 'This export has difficult/warning findings (not a pass). The file downloaded; the audit record is at {id}. Read the findings before use.',
 
   'panel.projectZip': 'Project ZIP (.zip)',
   'panel.projectZipTitle': 'Package the whole project: every part STL + assembly manifest + README (plus a placed assembly.stl when a manifest exists)',

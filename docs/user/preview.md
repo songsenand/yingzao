@@ -22,10 +22,10 @@
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
-node scripts/setup.mjs          # 写入本机 skill 路径
-node scripts/backend.mjs --show # 查看当前内核/编译后端
-node scripts/doctor.mjs         # kind=ok，或有解释的 degraded
-node scripts/verify-cli.mjs <project> --advisory  # 六行证据报告（只读）
+npx dsh-cad-setup          # 写入本机 skill 路径
+npx dsh-cad-backend --show # 查看当前内核/编译后端
+npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
+npx dsh-cad-verify <project> --advisory  # 六行证据报告（只读）
 # 重启 dsh
 ```
 
@@ -42,13 +42,15 @@ OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推�
 - **长任务**：后台编译 job 已有 submit/status/cancel/timeout/重启恢复；渲染、仿真仍同步，超时会被报告，不会被当成通过。
 - **英文界面**：本版先覆盖标签页、环境提示、导出弹窗和主要空状态；深层面板仍以中文为主（完整双语在 preview.2）。
 - **英文文档**：英文用户文档已全套（README、install、preview、limits、workflow、verification、configuration、troubleshooting、advanced），HARNESS 也有英文版；`docs/llm` 也有英文版；`docs/dev` 暂时中文。
-- **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。
+- **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。`difficult` 导出会弹一次警告，但文件名不变。
+- **schema/迁移**：旧项目可开；未知的新 schemaVersion 会被 `doctor` 拒绝；没有自动迁移器，迁移前必须备份。
+- **CI**：GitHub Actions workflow 已写，但本机网络暂时无法实际跑；本地 `rehearse:preview` 是等价演练。
 
 ## 怎么报告问题
 
 请附上：
 
-1. `node scripts/doctor.mjs --json` 的输出（或至少 `kind` 与失败项）；
+1. `npx dsh-cad-doctor --json` 的输出（或至少 `kind` 与失败项）；
 2. 操作系统、dsh 版本、OpenSCAD 版本；
 3. 复现步骤（哪句话、哪个按钮）；
 4. 原始报错文本，不要只写"失败了"。
@@ -62,6 +64,6 @@ OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推�
 
 ## 这一版之后
 
-近期优先：英文用户文档全套已交付，完整 UI 双语已覆盖客户端文案；Python 首启进度继续。
+近期优先：渲染/仿真 job、Python 首启进度、深层面板完整双语。
 中远期第一项：第二几何内核（CadQuery 优先）。完整顺序见
 [`docs/dev/TODO.md`](../dev/TODO.md)。
