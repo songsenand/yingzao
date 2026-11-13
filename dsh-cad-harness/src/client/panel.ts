@@ -204,21 +204,21 @@ function applyClip(
  */
 const recordLabel = (r: PartRecord, isLatestVersion = false): string => {
   if (r.type === 'version') {
-    const tag = isLatestVersion ? '最新 · ' : '';
+    const tag = isLatestVersion ? tr('ui.row.latest') : '';
     // "导入" rides in the row, not only in the tooltip: which revisions came
     // from outside is the thing a human scans a part's history for.
-    const from = r.source === 'imported' ? '导入 · ' : r.source === 'merged' ? '合并 · ' : '';
-    const broken = r.solid === false ? '非实体 · ' : '';
-    return `${r.id} · ${tag}${from}${broken}${fmtTime(r.timestamp)} — ${r.title || '(无意图描述)'}`.slice(0, 96);
+    const from = r.source === 'imported' ? tr('ui.row.imported') : r.source === 'merged' ? tr('ui.row.merged') : '';
+    const broken = r.solid === false ? tr('ui.row.nonSolid') : '';
+    return `${r.id} · ${tag}${from}${broken}${fmtTime(r.timestamp)} — ${r.title || tr('ui.row.noIntent')}`.slice(0, 96);
   }
   // "已被 rNNN 取代" rides in the row: with 36 runs in a project, whether a
   // record is still the current answer is the first thing a human needs, and
   // the timestamp alone does not say it (a run can be newer and still not
   // supersede a different subject).
-  const replaced = r.supersededBy ? `已被 ${r.supersededBy} 取代 · ` : '';
+  const replaced = r.supersededBy ? tr('ui.row.superseded', { id: r.supersededBy }) : '';
   // Evidence expires with the version it cites (DESIGN §22): a run that still
   // says "pass" over geometry a part has since replaced must say so in the row.
-  const stale = r.staleVersionIds?.length ? `⚠ 基于旧版本 ${r.staleVersionIds.join(', ')} · ` : '';
+  const stale = r.staleVersionIds?.length ? tr('ui.row.basedOld', { versions: r.staleVersionIds.join(', ') }) : '';
   // The name comes from the PARTS (`displayTitle`), not the version ids: fifteen
   // motion runs about the same mechanism are indistinguishable by `v014+v025+v026`.
   // Time leaves the row: the list is already newest-first and the tooltip keeps it,
@@ -325,21 +325,21 @@ async function sendImageToSession(
     try { console.warn('[cad-harness] 截图未能发送到会话:', reason); } catch { /* console may be gone */ }
     return { how: 'failed' as const, reason };
   };
-  if (!s || !conversationService?.createDrafts) return fail('没有活动会话');
+  if (!s || !conversationService?.createDrafts) return fail(tr('ui.send.noSession'));
   const drafts: any[] = [];
   const release = () => { try { conversationService?.releaseDraftAttachments?.(drafts); } catch { /* nothing to release */ } };
   try {
     const file = new File([blob], name, { type: 'image/png' });
     drafts.push(...(conversationService.createDrafts(s.sessionId, [file]) ?? []));
     const ids = drafts.map((d: any) => d.id).filter(Boolean);
-    if (ids.length === 0) return fail('附件草稿创建失败');
+    if (ids.length === 0) return fail(tr('ui.send.draftFailed'));
 
     if (s.face && typeof conversationService.sendSession === 'function') {
       try {
         const outcome = await conversationService.sendSession(s.face, text, ids, 'queue');
         if (outcome?.kind === 'success') return { how: 'sent' };
         release();
-        return fail('会话拒绝了这次提交');
+        return fail(tr('ui.send.rejected'));
       } catch (e) {
         // A thrown sendSession keeps its drafts registered, so parking them in
         // the composer below is safe and loses nothing.
@@ -352,9 +352,9 @@ async function sendImageToSession(
     }
 
     const input = conversationService?.input?.for?.(s.actx);
-    if (input?.addAttachments?.(ids)) return { how: 'composer', reason: '发送通道不可用' };
+    if (input?.addAttachments?.(ids)) return { how: 'composer', reason: tr('ui.send.unavailable') };
     release();
-    return fail('会话输入框不可用');
+    return fail(tr('ui.send.inputUnavailable'));
   } catch (e) {
     release();
     return fail(String((e as Error)?.message ?? e));
@@ -2052,7 +2052,7 @@ export function CadPanel(): React.ReactElement {
     const r = await sendImageToSession(item.blob, item.name, text);
     setTray((t) => t.map((x) => x.id === id ? {
       ...x,
-      status: r.how === 'sent' ? tr('ui.shot.status.sent') : r.how === 'composer' ? tr('ui.shot.status.parked') : '发送失败',
+      status: r.how === 'sent' ? tr('ui.shot.status.sent') : r.how === 'composer' ? tr('ui.shot.status.parked') : tr('ui.send.failed'),
     } : x));
     setHint(r.how === 'sent' ? tr('ui.shot.resendSent')
       : r.how === 'composer' ? tr('ui.shot.resendInserted', { reason: r.reason ?? tr('ui.shot.reasonSend') })
@@ -2142,7 +2142,7 @@ export function CadPanel(): React.ReactElement {
     const overlaps = annotations.some((a) =>
       nx0 < a.x1 && nx1 > a.x0 && ny0 < a.y1 && ny1 > a.y0);
     if (overlaps) {
-      setHint('新标注与已有标注重叠 — 请换个位置或先清除重叠的框');
+      setHint(tr('ui.annot.overlap'));
       return;
     }
     const color = ANN_COLORS[annotations.length % ANN_COLORS.length]!;
@@ -2162,7 +2162,7 @@ export function CadPanel(): React.ReactElement {
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       await refresh();
     } catch (e: any) {
-      setError(`流体仿真失败: ${String(e?.message ?? e)}`);
+      setError(tr('ui.fluid.failed', { error: String(e?.message ?? e) }));
     } finally {
       setFluidBusy(false);
     }
@@ -2983,16 +2983,16 @@ export function CadPanel(): React.ReactElement {
         spec && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           `尺寸 ${spec.size.map((v) => v.toFixed(1)).join(' × ')} mm · ${spec.triangles} 面`),
         version?.source === 'imported' && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
-          `导入自 ${version.origin ?? '外部文件'}`,
+          tr('ui.imported.from', { origin: version.origin ?? 'external file' }),
           version.solid === false && React.createElement('span', { style: { color: T.danger } },
-            ' · 非实体（几何工具会拒绝这个版本）')),
+            tr('ui.imported.nonSolid'))),
         // A merged body expires with its inputs, and that is worth a line: it looks like a
         // normal version until you know which revisions it was built from (FIX-C5).
         version?.source === 'merged' && React.createElement('div', { style: { fontSize: 11, color: T.soft } },
           (version.staleMergedInputs?.length ?? 0) > 0
             ? React.createElement('span', { style: { color: T.danger } },
-              `合并件已过期：输入 ${version.staleMergedInputs!.join(', ')} 已被同一零件的新版本取代 —— 需要重新合并`)
-            : '合并件：由多个零件的版本合成（输入仍是最新）'),
+              tr('ui.merged.stale', { inputs: version.staleMergedInputs!.join(', ') }))
+            : tr('ui.merged.fresh')),
         run && sourceVersionChips(run),
         // A brand-new project has no parts at all — this is the one place a
         // human can start from THEIR file without an agent turn. Kept in the
@@ -3022,7 +3022,7 @@ export function CadPanel(): React.ReactElement {
             style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
                      borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600,
                      color: T.warnInk, marginBottom: 4 },
-          }, `⚠ 此结果基于旧版本 ${run.staleVersionIds.join(', ')} — 零件已更新，需重跑后才能作为当前版本的证据`)
+          }, tr('ui.run.staleBanner', { versions: run.staleVersionIds.join(', ') }))
         : null;
       return React.createElement('div', null, notice, body);
     }
@@ -3687,7 +3687,7 @@ export function CadPanel(): React.ReactElement {
         },
         React.createElement('option', { key: '', value: '', disabled: true }, t('ui.project.placeholder')),
         workspaces.map((w) => React.createElement('option', { key: w.cwd, value: w.cwd },
-          `${w.rel === '.' ? w.name : w.rel} · ${w.parts}零件/${w.versions}版`)),
+          tr('ui.workspace.meta', { name: w.rel === '.' ? w.name : w.rel, parts: w.parts, versions: w.versions }))),
       ),
       !workspaceCwd && React.createElement('span', {
         key: 'no-project',
@@ -3734,7 +3734,7 @@ export function CadPanel(): React.ReactElement {
       // Stale-version banner (DESIGN §20): the user demanded it be obvious.
       kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
         React.createElement('div', {
-          title: '讨论请以此为准，或点「回到最新」',
+          title: tr('ui.stale.tooltip'),
           style: {
             position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
             display: 'flex', alignItems: 'center', gap: 8,
@@ -3772,10 +3772,10 @@ export function CadPanel(): React.ReactElement {
           },
         },
           React.createElement('div', null,
-            React.createElement('span', { style: { color: '#2563eb' } }, '● 蓝 '),
+            React.createElement('span', { style: { color: '#2563eb' } }, tr('ui.legend.blue')),
             React.createElement('span', null, `${staleBanner ? t('ui.legend.history') : t('ui.legend.current')} ${version?.id ?? ''}`)),
           React.createElement('div', null,
-            React.createElement('span', { style: { color: '#e2651c' } }, '● 橙 '),
+            React.createElement('span', { style: { color: '#e2651c' } }, tr('ui.legend.orange')),
             React.createElement('span', null, `${staleBanner ? t('ui.legend.current') : t('ui.legend.history')} ${ghostVersionId}`)),
         ),
       ),
@@ -4044,9 +4044,9 @@ export function CadPanel(): React.ReactElement {
       // work too, which is also how the sandbox can assert it.
       React.createElement('div', {
         role: 'separator',
-        'aria-label': '调整详情区高度',
+        'aria-label': tr('ui.splitter.aria'),
         tabIndex: 0,
-        title: '拖动调整功能区高度：视口相应变矮。自动档 = 视口 4:3；最扁可到 16:9（视口越扁，模型显示得越小）；双击或按 Home 恢复自动',
+        title: tr('ui.splitter.title'),
         onDoubleClick: () => setBodyH(null),
         onPointerDown: (e: any) => {
           e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -4076,14 +4076,14 @@ export function CadPanel(): React.ReactElement {
       ...tabs.map((t) => React.createElement('button', {
         key: t.id,
         type: 'button',
-        title: `查看「${t.label}」（点 ⤢ 放大到浮层）`,
+        title: tr('ui.overlay.view', { label: t.label }),
         onClick: () => { setTab(t.id); setSheet((cur) => (cur && cur !== 'tray' ? t.id : cur)); },
         style: tabBtnStyle(t.id === tab && !sheet),
       }, t.label)),
       React.createElement('button', {
         key: '__expand',
         type: 'button',
-        title: sheet ? '收回浮层' : '把当前这一节放大到浮层（浮层不占版式）',
+        title: sheet ? tr('ui.overlay.collapse') : tr('ui.overlay.expand'),
         onClick: () => setSheet((cur) => (cur ? null : tab)),
         style: { ...S.smallBtn, marginLeft: 'auto', padding: '2px 6px' },
       }, sheet ? '⤡' : '⤢'),
@@ -4091,7 +4091,7 @@ export function CadPanel(): React.ReactElement {
 
     React.createElement('div', { style: { ...S.details, flexBasis: stageBody }, ref: detailsRef },
       sheet
-        ? React.createElement('div', { style: S.hint }, `「${tabLabel(sheet)}」已在浮层中打开 — 点 ⤡ 收回`)
+        ? React.createElement('div', { style: S.hint }, tr('ui.overlay.expanded', { label: tabLabel(sheet) }))
         : sectionBody(tab),
     ),
 
@@ -4112,8 +4112,8 @@ export function CadPanel(): React.ReactElement {
         run && React.createElement('span', { style: { fontSize: 11, color: T.muted } }, run.id),
         React.createElement('button', {
           type: 'button', onClick: () => setSheet(null),
-          title: '收回（Esc）', style: { ...S.smallBtn, marginLeft: 'auto' },
-        }, '✕ 收回'),
+          title: tr('ui.overlay.close'), style: { ...S.smallBtn, marginLeft: 'auto' },
+        }, tr('ui.overlay.closeShort')),
       ),
       React.createElement('div', { style: S.sheetBody }, sectionBody(sheet)),
     ),
