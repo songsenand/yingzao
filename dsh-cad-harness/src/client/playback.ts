@@ -8,6 +8,7 @@
  *
  * Both read the exact files the LLM reads — one artifact set, two consumers.
  */
+import { t as tr } from './i18n.ts';
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
@@ -377,7 +378,7 @@ function RunDataStrip(props: {
         'details',
         { style: { fontSize: 11 } },
         React.createElement('summary', { style: { cursor: 'pointer', color: T.muted } },
-          `事件 ${props.facts.events.length}（点时间跳到该帧）`),
+          tr('playback.events', { count: props.facts.events.length })),
         React.createElement('div', { style: { maxHeight: 96, overflowY: 'auto', marginTop: 2 } },
           ...props.facts.events.slice(0, 30).map((ev, i) => React.createElement(
             'button',
@@ -462,7 +463,7 @@ function RunTimeline(props: {
     { 'data-run-timeline': '1', onClick: click, style: { position: 'relative', height: 22, width: '100%', cursor: 'crosshair', marginTop: 0 } },
     React.createElement('div', { style: { position: 'absolute', left: 0, right: 0, top: 10, height: 2, background: T.line } }),
     ...props.keyframes.map((k, i) => React.createElement('button', {
-      key: `kf-${i}`, type: 'button', title: `关键帧 ${k.label} @ ${k.timeSec.toFixed(3)}s`,
+      key: `kf-${i}`, type: 'button', title: tr('playback.keyframeAt', { label: k.label, time: k.timeSec.toFixed(3) }),
       onClick: (e: React.MouseEvent) => { e.stopPropagation(); props.onKeyframe(i); },
       style: {
         position: 'absolute', left: pct(k.timeSec), top: 6, width: 8, height: 8, padding: 0,
@@ -555,9 +556,9 @@ export function MotionPlaybackView(props: {
         const data = (await res.json()) as TrajectoryJson;
         if (dead) return;
         if (data?.trajectory?.parts?.length) setTraj(data);
-        else setErr('这次运行没有轨迹数据');
+        else setErr(tr('playback.noTrajectory'));
       } catch {
-        if (!dead) setErr('这次运行没有轨迹数据');
+        if (!dead) setErr(tr('playback.noTrajectory'));
       }
     })();
     return () => { dead = true; };
@@ -568,7 +569,7 @@ export function MotionPlaybackView(props: {
     const mount = mountRef.current;
     if (!mount || !traj) return;
     const handle = createScene(mount, props.background);
-    if (!handle) { setErr('此环境无法创建 WebGL 上下文 — 回放不可用'); return; }
+    if (!handle) { setErr(tr('playback.webgl')); return; }
     sceneRef.current = handle;
     let dead = false;
 
@@ -859,53 +860,53 @@ export function MotionPlaybackView(props: {
         },
       },
       React.createElement('button', {
-        type: 'button', title: '实时剖切（无封盖）：看内部关节/间隙', onClick: () => setSection((cur) => ({ ...cur, on: !cur.on })),
+        type: 'button', title: tr('playback.sectionTitle'), onClick: () => setSection((cur) => ({ ...cur, on: !cur.on })),
         style: { ...btn(section.on), fontSize: 10, padding: '1px 7px' },
-      }, '✂ 剖切'),
+      }, tr('playback.section')),
       React.createElement('button', {
-        type: 'button', title: '在模型上点两点测距（视口射线，近似值）', onClick: () => setMeasureOn((v) => !v),
+        type: 'button', title: tr('playback.measureTitle'), onClick: () => setMeasureOn((v) => !v),
         style: { ...btn(measureOn, '#ff3040'), fontSize: 10, padding: '1px 7px' },
-      }, '📏 测距'),
+      }, tr('playback.measure')),
       // Screen-space box: works here because it does not need the picking stack
       // (the main viewer's 标注 was the only place this existed).
       React.createElement('button', {
         type: 'button', 'data-annotate-toggle': '1',
-        title: '在画面上拖出一个框，圈出要说明的地方；框随截图一起带走',
+        title: tr('playback.annotateTitle'),
         onClick: () => setAnnotOn((v) => !v),
         style: { ...btn(annotOn, T.danger), fontSize: 10, padding: '1px 7px' },
-      }, annotOn ? '▭ 标注中' : '▭ 标注'),
+      }, annotOn ? tr('playback.annotateOn') : tr('playback.annotate')),
       boxes.length
         ? React.createElement('button', {
-            type: 'button', 'data-annotate-clear': '1', title: '清除所有标注框',
+            type: 'button', 'data-annotate-clear': '1', title: tr('playback.annotateClearTitle'),
             onClick: () => setBoxes([]),
             style: { ...btn(false), fontSize: 10, padding: '1px 7px' },
-          }, `清除 ${boxes.length}`)
+          }, tr('playback.clearBoxes', { count: boxes.length }))
         : null,
       section.on ? React.createElement('select', {
-        value: section.axis, title: '剖切轴',
+        value: section.axis, title: tr('playback.sectionAxis'),
         onChange: (e: any) => setSection((cur) => ({ ...cur, axis: e.target.value as 'x' | 'y' | 'z' })),
         style: { fontSize: 10, padding: '1px 3px' },
       }, (['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a.toUpperCase()))) : null,
       section.on ? React.createElement('input', {
-        type: 'range', min: 0, max: 1, step: 0.01, value: section.frac, title: '剖切位置',
+        type: 'range', min: 0, max: 1, step: 0.01, value: section.frac, title: tr('playback.sectionPosition'),
         onChange: (e: any) => setSection((cur) => ({ ...cur, frac: Number(e.target.value) })),
         style: { width: 96 },
       }) : null,
       section.on ? React.createElement('button', {
-        type: 'button', title: '翻转保留侧', onClick: () => setSection((cur) => ({ ...cur, flip: !cur.flip })),
+        type: 'button', title: tr('playback.flipTitle'), onClick: () => setSection((cur) => ({ ...cur, flip: !cur.flip })),
         style: { ...btn(section.flip), fontSize: 10, padding: '1px 7px' },
-      }, '翻转') : null,
-      section.on ? React.createElement('span', { style: { color: T.muted } }, '无封盖') : null,
+      }, tr('playback.flip')) : null,
+      section.on ? React.createElement('span', { style: { color: T.muted } }, tr('playback.noCaps')) : null,
       measureOn
         ? React.createElement('span', { style: { color: measureMm == null ? T.muted : T.ink } },
             measureMm == null
-              ? (measurePoints === 1 ? '再点一个点' : '点模型上两点')
-              : `距离 ${measureMm.toFixed(2)}mm（视口近似）`)
+              ? (measurePoints === 1 ? tr('playback.measureFirst') : tr('playback.measurePrompt'))
+              : tr('playback.measureDistance', { value: measureMm.toFixed(2) }))
         : null,
       measureMm != null
         ? React.createElement('button', {
             type: 'button', onClick: clearMeasure, style: { ...btn(false), fontSize: 10, padding: '1px 7px' },
-          }, '清除')
+          }, tr('playback.clear'))
         : null,
     )
     : null;
@@ -956,12 +957,12 @@ export function MotionPlaybackView(props: {
     onReset: () => { if (!err) sceneRef.current?.refit(); },
     controls: [
       React.createElement('button', {
-        key: 'kf-first', title: '第一个关键帧', disabled: keyframes.length === 0,
+        key: 'kf-first', title: tr('playback.kfFirst'), disabled: keyframes.length === 0,
         onClick: () => goKeyframe(0),
         style: { ...btn(false), opacity: keyframes.length ? 1 : 0.35 },
       }, '⏮'),
       React.createElement('button', {
-        key: 'kf-prev', title: '上一关键帧', disabled: prevKf < 0,
+        key: 'kf-prev', title: tr('playback.kfPrev'), disabled: prevKf < 0,
         onClick: () => goKeyframe(prevKf),
         style: { ...btn(false), opacity: prevKf < 0 ? 0.35 : 1 },
       }, '⟨'),
@@ -971,10 +972,10 @@ export function MotionPlaybackView(props: {
           if (!playing) playStartRef.current = frameIdx;
           setPlaying((p) => !p);
         },
-        style: btn(playing), title: playing ? '暂停' : '播放',
+        style: btn(playing), title: playing ? tr('playback.pause') : tr('playback.play'),
       }, playing ? '⏸' : '▶'),
       React.createElement('button', {
-        key: 'kf-next', title: '下一关键帧', disabled: nextKf < 0,
+        key: 'kf-next', title: tr('playback.kfNext'), disabled: nextKf < 0,
         onClick: () => goKeyframe(nextKf),
         style: { ...btn(false), opacity: nextKf < 0 ? 0.35 : 1 },
       }, '⟩'),
@@ -999,7 +1000,7 @@ export function MotionPlaybackView(props: {
         },
       }, shortTime),
       React.createElement('select', {
-        key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: '跳到关键帧',
+        key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: tr('playback.kfSelect'),
         onChange: (e: any) => {
           const i = Number(e.target.value);
           if (i >= 0) goKeyframe(i); else setKfIdx(-1);
@@ -1012,20 +1013,20 @@ export function MotionPlaybackView(props: {
           fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
         },
       },
-      React.createElement('option', { value: -1 }, keyframes.length ? '关键帧…' : '无关键帧'),
+      React.createElement('option', { value: -1 }, keyframes.length ? tr('playback.kfPlaceholder') : tr('playback.kfNone')),
       ...keyframes.map((k, i) => React.createElement('option', { value: i }, `${k.label} · ${k.timeSec.toFixed(2)}s`))),
       React.createElement('select', {
         key: 'speed', value: speed, onChange: (e: any) => setSpeed(Number(e.target.value)),
         style: { fontSize: 11, padding: '2px 4px', flex: '0 0 48px', width: 48 },
       }, [0.25, 0.5, 1, 2, 4].map((s) => React.createElement('option', { key: s, value: s }, `${s}×`))),
       React.createElement('label', {
-        key: 'pause-kf', 'data-pause-keyframes': '1', title: '播放时在下一个关键帧自动暂停',
+        key: 'pause-kf', 'data-pause-keyframes': '1', title: tr('playback.pauseAtKf'),
         style: { fontSize: 11, color: T.soft, display: 'inline-flex', gap: 3, alignItems: 'center' },
       },
       React.createElement('input', {
         type: 'checkbox', checked: pauseAtKf,
         onChange: (e: any) => setPauseAtKf(Boolean(e.target.checked)),
-      }), '到关键帧停'),
+      }), tr('playback.stopAtKf')),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
@@ -1034,7 +1035,7 @@ export function MotionPlaybackView(props: {
               const viewport = mountRef.current?.closest('[data-playback-viewport]') as HTMLElement | null;
               props.onScreenshot?.(
                 bakeBoxes(canvas, boxes, { width: viewport?.clientWidth ?? canvas.clientWidth, height: viewport?.clientHeight ?? canvas.clientHeight }),
-                `${isMotion ? '机构' : '物理'}回放 t=${t.toFixed(2)}s`,
+                isMotion ? tr('playback.motionReplay', { time: t.toFixed(2) }) : tr('playback.physicsReplay', { time: t.toFixed(2) }),
               // The caption needs the exact frame, not just the rounded t it
               // prints: the frame index is what survives a same-t collision.
                 { index: frameIdx + 1, total: nFrames, timeSec: t, events: traj.trajectory.events,
@@ -1055,7 +1056,7 @@ export function MotionPlaybackView(props: {
         })),
       compact ? null : React.createElement('details', { key: 'analysis', style: { width: '100%', fontSize: 11 } },
         React.createElement('summary', { style: { cursor: 'pointer', color: T.muted } },
-          `曲线 / 关键帧缩略图${chart ? '' : '（这个 run 没有逐帧数据）'}`),
+          `${tr('playback.chart')}${chart ? '' : tr('playback.noFrameData')}`),
         React.createElement(RunKeyframeStrip, {
           runId: props.runId, keyframes, activeIndex: selectedKf >= 0 ? selectedKf : undefined,
           onPick: goKeyframe, compact: true,
@@ -1066,7 +1067,7 @@ export function MotionPlaybackView(props: {
         ...traj.trajectory.parts.map((p, i) => {
           const hidden = hiddenParts.has(p.name);
           return React.createElement('button', {
-            key: p.name, type: 'button', title: hidden ? '点击显示这个零件' : '点击隐藏这个零件',
+            key: p.name, type: 'button', title: hidden ? tr('playback.showPart') : tr('playback.hidePart'),
             onClick: () => togglePart(p.name),
             style: {
               fontSize: 11, color: T.soft, border: 0, background: 'transparent', cursor: 'pointer',
@@ -1134,9 +1135,9 @@ export function FluidPlaybackView(props: {
         const data = (await res.json()) as FluidManifest;
         if (dead) return;
         if (data.frames.length > 0) setManifest(data);
-        else setErr('这次运行没有流体帧');
+        else setErr(tr('playback.noFluidFrames'));
       } catch {
-        if (!dead) setErr('这次运行没有流体帧');
+        if (!dead) setErr(tr('playback.noFluidFrames'));
       }
     })();
     return () => { dead = true; };
@@ -1147,7 +1148,7 @@ export function FluidPlaybackView(props: {
     const mount = mountRef.current;
     if (!mount || !manifest) return;
     const handle = createScene(mount, props.background);
-    if (!handle) { setErr('此环境无法创建 WebGL 上下文 — 回放不可用'); return; }
+    if (!handle) { setErr(tr('playback.webgl')); return; }
     sceneRef.current = handle;
     let dead = false;
 
@@ -1268,7 +1269,7 @@ export function FluidPlaybackView(props: {
     return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err);
   }
   if (!manifest) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, '加载流体帧…');
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, tr('playback.fluidLoad'));
   }
 
   const entry = manifest.frames[Math.min(frameIdx, manifest.frames.length - 1)]!;
@@ -1295,27 +1296,27 @@ export function FluidPlaybackView(props: {
     onReset: () => sceneRef.current?.refit(),
     controls: [
       React.createElement('button', { key: 'play', onClick: () => setPlaying((p) => !p), style: btn(playing, '#2c81ba') },
-        playing ? '⏸ 暂停' : '▶ 播放'),
+        playing ? tr('playback.fluidPlaying') : tr('playback.fluidPaused')),
       React.createElement('input', {
         key: 'seek', type: 'range', min: 0, max: Math.max(0, manifest.frames.length - 1), value: Math.min(frameIdx, manifest.frames.length - 1),
         onChange: (e: any) => { setPlaying(false); setFrameIdx(Number(e.target.value)); },
         style: { flex: 1, minWidth: 120 },
       }),
       React.createElement('span', { key: 'time', style: { fontSize: 11, color: '#555', minWidth: 110, textAlign: 'right' } },
-        `t=${entry.timeSec}s · ${entry.particles} 粒`),
+        tr('playback.fluidFrame', { time: entry.timeSec, particles: entry.particles })),
       React.createElement('select', {
         key: 'speed', value: speed, onChange: (e: any) => setSpeed(Number(e.target.value)),
         style: { fontSize: 11, padding: '2px 4px' },
       }, [0.25, 0.5, 1, 2].map((s) => React.createElement('option', { key: s, value: s }, `${s}×`))),
-      loading && React.createElement('span', { key: 'ld', style: { fontSize: 11, color: '#b8860b' } }, '加载帧…'),
+      loading && React.createElement('span', { key: 'ld', style: { fontSize: 11, color: '#b8860b' } }, tr('playback.loadingFrame')),
       React.createElement('span', { key: 'legend', style: { fontSize: 11, color: '#666' } },
-        '速度 ', React.createElement('span', { style: { color: '#3457d5', fontWeight: 700 } }, '■'),
+        `${tr('playback.speed')} `, React.createElement('span', { style: { color: '#3457d5', fontWeight: 700 } }, '■'),
         '→', React.createElement('span', { style: { color: '#e5261a', fontWeight: 700 } }, '■'),
         ` 0…${manifest.vmaxMmPerSec.toFixed(0)}mm/s`),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
-            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, `流体回放 t=${entry.timeSec}s`,
+            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, tr('playback.fluidShot', { time: entry.timeSec }),
               { index: frameIdx + 1, total: manifest.frames.length, timeSec: entry.timeSec,
                 stepSec: manifest.frames.length > 1 ? manifest.frames[1]!.timeSec - manifest.frames[0]!.timeSec : 0 }),
             style: btn(false),
@@ -1349,7 +1350,7 @@ export function StaticPartsView(props: {
     const mount = mountRef.current;
     if (!mount) return;
     const handle = createScene(mount, props.background);
-    if (!handle) { setErr('此环境无法创建 WebGL 上下文 — 回放不可用'); return; }
+    if (!handle) { setErr(tr('playback.webgl')); return; }
     sceneRef.current = handle;
     let dead = false;
 
@@ -1383,7 +1384,7 @@ export function StaticPartsView(props: {
         } catch { /* skip a part that failed to load */ }
       }
       if (dead) return;
-      if (loaded === 0) setErr('这次运行的几何体读取失败');
+      if (loaded === 0) setErr(tr('playback.fluidLoadFailed'));
       else {
         const center = new THREE.Vector3();
         box.getCenter(center);
@@ -1408,12 +1409,12 @@ export function StaticPartsView(props: {
     onReset: () => sceneRef.current?.refit(),
     controls: [
       React.createElement('span', { key: 'label', style: { fontSize: 11, color: '#555' } },
-        `装配静置视图 · ${props.parts.length} 零件`),
+        tr('playback.staticAssembly', { count: props.parts.length })),
       err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: '#c0392b' } }, err),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
-            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, '装配静置视图'),
+            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, tr('playback.staticShot')),
             style: btn(false),
           }, '📸')
         : null,
