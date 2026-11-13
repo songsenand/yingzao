@@ -8,14 +8,14 @@
 //
 // The corpus is a copy: the test must not write exports/ into examples/.
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { apply } from '../src/host/index.ts';
 import { projectStores } from '../src/host/project.ts';
-import { listVersions } from '../src/host/version.ts';
+import { listVersions, openVersionStore, saveVersion } from '../src/host/version.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -44,9 +44,27 @@ check('export route is registered', Boolean(route));
 
 const tmp = mkdtempSync(join(tmpdir(), 'cad-http-'));
 try {
-  const example = join(ROOT, '..', 'examples', 'roberval-balance');
-  cpSync(join(example, 'cad-data'), join(tmp, 'cad-data'), { recursive: true });
-  if (existsSync(join(example, 'assembly'))) cpSync(join(example, 'assembly'), join(tmp, 'assembly'), { recursive: true });
+  // Build a tiny corpus from a TRACKED STL. The old copy of
+  // examples/roberval-balance/cad-data only worked on the author's machine:
+  // cad-data/ is gitignored, so CI had nothing to copy.
+  mkdirSync(join(tmp, 'cad-data'), { recursive: true });
+  writeFileSync(join(tmp, 'cad-data', 'project.json'), JSON.stringify({ schemaVersion: 1, id: 'http-fixture' }, null, 2));
+  const fixtureStl = readFileSync(join(ROOT, '..', 'examples', 'bench', 'subjects', '06-measure', 'part.stl'));
+  const versionStore = openVersionStore(join(tmp, 'cad-data'));
+  const versionId = await saveVersion(versionStore, {
+    stl: fixtureStl,
+    userIntent: 'export-http fixture',
+    partId: 'http-fixture',
+  });
+  mkdirSync(join(tmp, 'assembly'), { recursive: true });
+  writeFileSync(join(tmp, 'assembly', 'assembly.json'), JSON.stringify({
+    schemaVersion: 1, name: 'http-fixture', unit: 'mm', up: 'z',
+    root: {
+      id: 'root', name: 'http-fixture', kind: 'assembly',
+      children: [{ id: 'part-1', name: 'part', kind: 'part', version: versionId, transform: { translate: [0, 0, 0] } }],
+    },
+    interfaces: [],
+  }, null, 2));
   const project = projectStores(tmp);
   const versions = await listVersions(project.store);
   const version = versions.find((v) => existsSync(join(project.store.root, 'versions', v.id, 'model.stl')));
