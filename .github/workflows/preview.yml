@@ -72,8 +72,8 @@ jobs:
 
       - name: Doctor (fail only on kind=fail)
         run: |
-          node scripts/doctor.mjs --json > doctor.json
-          node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); if(r.kind==="fail") process.exit(1)'
+          node scripts/doctor.mjs --json > doctor.json || true
+          node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); for(const c of r.checks||[]) if(c.status==="fail") console.log("::error::"+c.id+": "+c.detail+" (fix: "+(c.fix||"")+")"); if(r.kind==="fail") process.exit(1)'
       - name: Pack the preview tarball
         if: runner.os == 'Linux'
         run: |
