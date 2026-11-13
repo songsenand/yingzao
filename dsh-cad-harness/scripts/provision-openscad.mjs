@@ -183,14 +183,14 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
     process.exit(ready ? 0 : 1);
   }
 
-  if (!force && system?.score >= 202506) {
+  if (!force && !fromFile && system?.score >= 202506) {
     const payload = { ok: true, source: 'system', bin: system.bin, version: system.version };
     if (json) console.log(JSON.stringify(payload, null, 2));
     else console.log(`Using system OpenSCAD: ${system.bin} (${system.version})`);
     process.exit(0);
   }
 
-  if (!force && existing) {
+  if (!force && !fromFile && existing) {
     writeBackend(existing.bin);
     const payload = { ok: true, source: existing.source, bin: existing.bin, version: existing.version };
     if (json) console.log(JSON.stringify(payload, null, 2));
