@@ -67,16 +67,12 @@ const judgementGlyph = (j: RunJudgement | null): React.ReactNode => {
 };
 
 const VERDICT_WORD: Record<string, string> = {
-  // The band only ever shows a canonical judgement; `unjudged` is a run that judged
-  // nothing, `draft` a version no run named. The legacy status words stay for rows.
-  unjudged: '未判定', draft: '未验证',
-  pass: '通过', check: '待复核', fail: '失败',
-  // The canonical three (src/shared/judgement.ts). 'not-excluded' is deliberately NOT
-  // 通过: it means no counter-example was found, never "safe" (DESIGN §25.7).
-  'not-excluded': '不排除可行', difficult: '困难', excluded: '否决',
-  // Assembly interface words — kept distinct from the three above.
-  'hard-violation': '硬冲突', 'intent-flag': '意图标记', skipped: '跳过',
+  unjudged: 'ui.verdict.unjudged', draft: 'ui.verdict.draft',
+  pass: 'ui.verdict.pass', check: 'ui.verdict.check', fail: 'ui.verdict.fail',
+  'not-excluded': 'ui.verdict.not-excluded', difficult: 'ui.verdict.difficult', excluded: 'ui.verdict.excluded',
+  'hard-violation': 'ui.verdict.hard-violation', 'intent-flag': 'ui.verdict.intent-flag', skipped: 'ui.verdict.skipped',
 };
+const verdictWord = (v: string): string => t((VERDICT_WORD[v] ?? 'ui.verdict.unjudged') as any);
 const verdictColor = (v: string | null): string =>
   v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? T.danger : v === 'difficult' ? '#9c6f0a'
     : v === 'pass' ? '#1e8449' : v === 'fail' ? T.danger : v === 'check' ? '#9c6f0a' : T.muted;
@@ -2540,29 +2536,29 @@ export function CadPanel(): React.ReactElement {
   // content is exclusive, so the section's inputs are never mounted twice.
   const tabs: { id: string; label: string }[] = kind === 'machine'
     ? [
-      { id: 'overview', label: '概览' },
-      { id: 'evidence', label: `证据${machineRuns.length ? ` ${machineRuns.length}` : ''}` },
-      { id: 'nodes', label: `清单${machine ? ` ${machine.nodes.length}` : ''}` },
-      { id: 'export', label: '导出' },
-      { id: 'help', label: '用法' },
+      { id: 'overview', label: t('ui.tab.overview') },
+      { id: 'evidence', label: `${t('ui.tab.evidence')}${machineRuns.length ? ` ${machineRuns.length}` : ''}` },
+      { id: 'nodes', label: `${t('ui.tab.nodes')}${machine ? ` ${machine.nodes.length}` : ''}` },
+      { id: 'export', label: t('ui.tab.export') },
+      { id: 'help', label: t('ui.tab.help') },
     ]
     : version
     ? [
-      { id: 'overview', label: '概览' },
+      { id: 'overview', label: t('ui.tab.overview') },
       // The part's whole evidence, not only the runs that named THIS revision:
       // that narrower list stays in 验证.
-      { id: 'evidence', label: `证据${currentPart?.runs.length ? ` ${currentPart.runs.length}` : ''}` },
-      { id: 'export', label: '导出' },
-      { id: 'help', label: '用法' },
+      { id: 'evidence', label: `${t('ui.tab.evidence')}${currentPart?.runs.length ? ` ${currentPart.runs.length}` : ''}` },
+      { id: 'export', label: t('ui.tab.export') },
+      { id: 'help', label: t('ui.tab.help') },
     ]
     : [
-      { id: 'overview', label: '概览' },
-      ...(run ? [{ id: 'report', label: '报告' }] : []),
-      ...(run?.hasGeometry ? [{ id: 'geometry', label: `几何体 ${run.parts.length}` }] : []),
-      { id: 'help', label: '用法' },
+      { id: 'overview', label: t('ui.tab.overview') },
+      ...(run ? [{ id: 'report', label: t('ui.tab.report') }] : []),
+      ...(run?.hasGeometry ? [{ id: 'geometry', label: `${t('ui.tab.geometry')} ${run.parts.length}` }] : []),
+      { id: 'help', label: t('ui.tab.help') },
     ];
   const tabLabel = (id: string): string => (id === 'tray'
-    ? `上下文插入列表（${tray.length}）`
+    ? t('ui.tab.tray', { count: tray.length })
     : tabs.find((t) => t.id === id)?.label ?? id);
 
   /** What each tool does and how to drive it; the answer to "这些按钮怎么用". */
@@ -3897,12 +3893,12 @@ export function CadPanel(): React.ReactElement {
         title: '📸截图并发送到会话：把未登记文件的视图（含标注框）发进上下文，说明"就是这个文件"',
         onClick: () => void onScreenshot(),
         style: { ...viewToolStyle(false), overflow: 'hidden' },
-      }, `📸截图${tray.length ? ` ${tray.length}` : ''}`),
+      }, `${t('ui.tool.screenshot')}${tray.length ? ` ${tray.length}` : ''}`),
       React.createElement('button', {
-        type: 'button', title: annotateMode ? '□标注（进行中，再点一次退出）' : '□标注：在视口里拖框框出问题区域',
+        type: 'button', title: annotateMode ? t('ui.tool.annotateOnTitle') : t('ui.tool.annotateTitle'),
         onClick: () => setAnnotateMode((m) => !m),
         style: viewToolStyle(annotateMode, '#e74c3c'),
-      }, '▭标注'),
+      }, t('ui.tool.annotate')),
     ),
     // ── markup tools, in the viewport (top-left): these only make sense on a
     // single part version ──
@@ -3911,45 +3907,45 @@ export function CadPanel(): React.ReactElement {
       { style: toolStripStyle },
       React.createElement('button', {
         type: 'button',
-        title: '📸截图并发送到会话：视口（含测量线、标注框）直接进上下文，排队不打断当前回合',
+        title: t('ui.tool.shotTitle'),
         onClick: () => void onScreenshot(),
         // Fixed width: the pending count must not widen the row. The count is
         // kept to a bare number so 320px docks still fit all five chips.
         style: { ...viewToolStyle(false), overflow: 'hidden' },
-      }, `📸截图${tray.length ? ` ${tray.length}` : ''}`),
+      }, `${t('ui.tool.screenshot')}${tray.length ? ` ${tray.length}` : ''}`),
       React.createElement('button', {
-        type: 'button', title: annotateMode ? '□标注（进行中，再点一次退出）' : '□标注：在视口里拖框框出问题区域',
+        type: 'button', title: annotateMode ? t('ui.tool.annotateOnTitle') : t('ui.tool.annotateTitle'),
         onClick: () => { setAnnotateMode((m) => !m); setMeasureMode(false); setThickMode(false); },
         style: viewToolStyle(annotateMode, '#e74c3c'),
-      }, '▭标注'),
+      }, t('ui.tool.annotate')),
       React.createElement('button', {
-        type: 'button', title: measureMode ? '📏测量（进行中，再点一次退出）' : '📏测量：点两个点量距离，量完自动退出',
+        type: 'button', title: measureMode ? t('ui.tool.measureOnTitle') : t('ui.tool.measureTitle'),
         onClick: () => {
           setMeasureMode((v) => !v); setAnnotateMode(false); setThickMode(false);
           if (measureMode) clearMeasure();
         },
         style: viewToolStyle(measureMode, T.measure),
-      }, '📏测量'),
+      }, t('ui.tool.measure')),
       React.createElement('button', {
         type: 'button',
-        title: thickMode ? '▤壁厚（进行中，再点一次退出）' : '▤壁厚：点一处，读该处沿视线穿过材料两面的厚度',
+        title: thickMode ? t('ui.tool.thicknessOnTitle') : t('ui.tool.thicknessTitle'),
         onClick: () => {
           setThickMode((v) => !v); setAnnotateMode(false); setMeasureMode(false);
           if (thickMode) clearThick();
         },
         style: viewToolStyle(thickMode, T.thick),
-      }, '▤壁厚'),
+      }, t('ui.tool.thickness')),
       React.createElement('button', {
-        type: 'button', title: section ? '◐剖切（已开启，再点一次关闭）' : '◐剖切：切掉近侧半边看内部（下面可换 x/y/z 轴）',
+        type: 'button', title: section ? t('ui.tool.sectionOnTitle') : t('ui.tool.sectionTitle'),
         onClick: () => setSection((v) => !v),
         style: viewToolStyle(section, T.clip),
-      }, '◐剖切'),
+      }, t('ui.tool.section')),
       React.createElement('button', {
         type: 'button',
-        title: '热力图：把检查工具测到的逐点数值画在零件表面上（颜色含义见图例；没有场数据时提示先跑 check_printability）',
+        title: t('ui.tool.heatTitle'),
         onClick: () => { void toggleHeat(); },
         style: viewToolStyle(Boolean(heat), T.danger),
-      }, '🔥热力图'),
+      }, t('ui.tool.heat')),
     ),
   ),            // closes the panel's createElement (children resume below)
 
@@ -3961,21 +3957,21 @@ export function CadPanel(): React.ReactElement {
       { style: S.feedback },
       measure && React.createElement('span', {
         style: { fontSize: 12, fontWeight: 700, color: T.danger, flex: 'none', lineHeight: '18px' },
-      }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : '已选 1 点…'),
-      measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, '清除测量'),
+      }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : t('ui.feedback.selectedOne')),
+      measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, t('ui.feedback.clearMeasure')),
       heat && React.createElement('span', {
         style: { fontSize: 11, color: T.danger, flex: '1 1 auto', lineHeight: '16px' },
       }, heat.legend),
       thick && React.createElement('span', {
         style: { fontSize: 12, fontWeight: 700, color: T.thick, flex: 'none', lineHeight: '18px' },
       }, `壁厚 ${thick.dist.toFixed(2)} mm（沿视线）`),
-      thick && React.createElement('button', { type: 'button', onClick: clearThick, style: S.smallBtn }, '清除壁厚'),
+      thick && React.createElement('button', { type: 'button', onClick: clearThick, style: S.smallBtn }, t('ui.feedback.clearThickness')),
       annotations.length > 0 && React.createElement('button', {
         type: 'button', onClick: () => setAnnotations((a) => a.slice(0, -1)), style: S.smallBtn,
-      }, '↩ 撤销标注'),
+      }, t('ui.feedback.undoAnnot')),
       annotations.length > 0 && React.createElement('button', {
         type: 'button', onClick: () => setAnnotations([]), style: S.smallBtn,
-      }, '清除标注'),
+      }, t('ui.feedback.clearAnnot')),
       section && React.createElement(
         'span',
         {
@@ -3985,16 +3981,16 @@ export function CadPanel(): React.ReactElement {
         React.createElement('select', {
           value: sectionAxis,
           onChange: (e: any) => setSectionAxis(e.target.value),
-          'aria-label': '剖切轴向',
-          title: '沿哪个轴切开：z 横向切、x/y 纵向切（看中心孔这类内部结构用 x/y）',
+          'aria-label': t('ui.section.axis'),
+          title: t('ui.section.axisTitle'),
           style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: '1px solid #d5d9dd', borderRadius: 4 },
         }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a))),
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } },
           `${(clipRef.current.pos * 100).toFixed(0)}%`),
         React.createElement('input', {
           type: 'range', min: 0, max: 1, step: 0.01, value: sectionPos,
-          'aria-label': '剖切位置',
-          title: '拖动改切面位置：0% = 低端，100% = 高端',
+          'aria-label': t('ui.section.position'),
+          title: t('ui.section.positionTitle'),
           onChange: (e: any) => setSectionPos(Number(e.target.value)),
           style: { flex: '1 1 auto', minWidth: 40, height: 18 },
         }),
@@ -4131,7 +4127,7 @@ export function CadPanel(): React.ReactElement {
       record && React.createElement('span', { style: { flex: 'none' } }, judgementGlyph(verdict)),
       record && React.createElement('span', {
         style: { flex: 'none', fontWeight: 600, color: verdictColor(verdict) },
-      }, VERDICT_WORD[verdict ?? (run ? 'unjudged' : 'draft')]),
+      }, verdictWord(verdict ?? (run ? 'unjudged' : 'draft'))),
       React.createElement('span', { style: S.statusText },
         statusDetail ? `${statusIdentity} — ${statusDetail}` : statusIdentity),
       record && provenance && React.createElement('span', {
