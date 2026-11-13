@@ -50,6 +50,10 @@ jobs:
         run: |
           set -o pipefail
           npm run accept:preview 2>&1 | tee /tmp/accept.log
+      - name: Publish acceptance failure summary
+        if: failure()
+        run: tail -200 /tmp/accept.log >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload acceptance log
         if: always()
         uses: actions/upload-artifact@v4
