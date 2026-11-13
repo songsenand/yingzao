@@ -416,7 +416,7 @@ const reqText = (
   e?: { quantity?: string; nominal?: number; min?: number; max?: number },
   verdict?: string,
 ): string => {
-  if (!e) return verdict === 'skipped' ? '未声明' : '未回传';
+  if (!e) return verdict === 'skipped' ? tr('ui.qty.undeclared') : tr('ui.qty.noEcho');
   const symmetric = e.min !== undefined && e.max !== undefined && Math.abs(e.min + e.max) < 1e-9;
   const range = symmetric ? `±${Math.abs(e.min as number)}` : `${e.min ?? '−∞'}–${e.max ?? '+∞'}`;
   const unit = e.quantity === '角度' ? '°' : e.quantity === '预紧力' || e.quantity === '弹簧力' || e.quantity === '插入力' ? 'N' : '';
@@ -426,7 +426,7 @@ const reqText = (
 
 /** An undeclared pair's gap, said the way it matters (a clash beats a gap). */
 const gapText = (u: { minDistance: number; intersectionVolume: number }): string =>
-  u.intersectionVolume > 0 ? `干涉 ${u.intersectionVolume.toFixed(1)}mm³` : `${u.minDistance.toFixed(2)}mm`;
+  u.intersectionVolume > 0 ? `${tr('rf.interference')} ${u.intersectionVolume.toFixed(1)}mm³` : `${u.minDistance.toFixed(2)}mm`;
 
 const fmtTime = (ts: string): string => {
   const d = new Date(ts);
@@ -1803,7 +1803,7 @@ export function CadPanel(): React.ReactElement {
 
   const clearMeasure = () => { setMeasure(null); };
   const measureNote = measure?.b
-    ? `测量: (${measure.a.join(',')}) → (${measure.b.join(',')}) 距离=${measure.dist}mm (版本 ${versionId})`
+    ? tr('ui.auto.measure', { a: measure.a.join(','), b: measure.b.join(','), dist: measure.dist ?? 0, version: versionId ?? '' })
     : '';
 
   const captureCanvas = (): HTMLCanvasElement | null => {
@@ -1831,7 +1831,7 @@ export function CadPanel(): React.ReactElement {
       segs.push({ a: measure.a, b: measure.b, color: T.measure, label: `${(measure.dist ?? 0).toFixed(2)}mm` });
     }
     if (thick) {
-      segs.push({ a: thick.a, b: thick.b, color: T.thick, label: `壁厚 ${thick.dist.toFixed(2)}mm` });
+      segs.push({ a: thick.a, b: thick.b, color: T.thick, label: tr('ui.auto.thickness', { value: thick.dist.toFixed(2) }) });
     }
     for (const seg of segs) {
       const pa = projectToScreen(seg.a);
@@ -1881,15 +1881,15 @@ export function CadPanel(): React.ReactElement {
     // path and the "not evidence" status travel with the picture.
     const asFile = !version && kind === 'unregistered' && fileSubject ? fileSubject : null;
     if (asFile) {
-      const head = [`未登记文件 ${asFile}`, '不是版本 · 未入证据', label];
+      const head = [tr('ui.auto.unregistered', { file: asFile }), tr('ui.auto.notVersion'), label];
       const facts: string[] = [];
       if (fileMeta) {
-        facts.push(`格式 ${fileMeta.format || asFile.split('.').pop()}`);
-        facts.push(fileMeta.unitsMm ? '单位 mm（文件自带）' : '单位未声明（按文件数字显示）');
-        facts.push(fileMeta.solid ? '封闭实体' : `非封闭（${fileMeta.shells} 个壳）`);
+        facts.push(tr('ui.auto.format', { format: fileMeta.format || asFile.split('.').pop() || '' }));
+        facts.push(tr(fileMeta.unitsMm ? 'ui.auto.unitsFromFile' : 'ui.auto.unitsUnknown'));
+        facts.push(fileMeta.solid ? tr('ui.auto.solid') : tr('ui.auto.shells', { count: fileMeta.shells }));
       }
-      if (annotations.length) facts.push(`${annotations.length} 处标注框`);
-      return `CAD 视口截图 — ${head.join(' · ')}${facts.length ? `\n${facts.join(' · ')}` : ''}`;
+      if (annotations.length) facts.push(tr('ui.auto.annotations', { count: annotations.length }));
+      return tr('ui.auto.shot', { head: head.join(' · ') }) + (facts.length ? `\n${facts.join(' · ')}` : '');
     }
     // An old revision, the heatmap and the comparison inset all change what the
     // pixels mean and none of them is readable from the image: the revision
@@ -1949,8 +1949,8 @@ export function CadPanel(): React.ReactElement {
       // A capture taken from a history version says so: the image will be read
       // later, out of context, and "which revision is this?" must survive the trip.
       label: `${fileSubject && !version ? fileSubject : (recordId ?? '—')}`
-        + `${version && latestVersionId && version.id !== latestVersionId ? '（旧版）' : ''}`
-        + ` · ${label}${!run && annotations.length ? ` · ${annotations.length}个标注` : ''}`,
+        + `${version && latestVersionId && version.id !== latestVersionId ? tr('ui.auto.old') : ''}`
+        + ` · ${label}${!run && annotations.length ? ` · ${tr('ui.auto.annotCount', { count: annotations.length })}` : ''}`,
       status: tr('ui.shot.status.sending'),
       time,
       note: noteOverride ?? '',
@@ -2047,7 +2047,7 @@ export function CadPanel(): React.ReactElement {
     const note = row?.note?.trim();
     // The auto caption is the identity; only fall back to the tray label for a
     // row that somehow predates it (the tray is in-memory, so this is a guard).
-    const auto = row?.auto || `CAD 视口截图 — ${row?.label ?? '视图'}`;
+    const auto = row?.auto || tr('ui.auto.shot', { head: row?.label ?? tr('ui.auto.view') });
     const text = [auto, note].filter(Boolean).join('\n');
     const r = await sendImageToSession(item.blob, item.name, text);
     setTray((t) => t.map((x) => x.id === id ? {
@@ -2082,8 +2082,7 @@ export function CadPanel(): React.ReactElement {
     const d = shotDraft;
     if (!d) return;
     if (d.stale && !window.confirm(
-      `⚠ 这张截图来自旧版本 ${d.stale.version}（最新为 ${d.stale.latest}）。\n` +
-      '确认它就是你要让模型看的内容，并仍要发送？')) return;
+      tr('ui.shot.staleConfirm', { version: d.stale.version, latest: d.stale.latest }))) return;
     setShotDraft(null);
     const note = d.text.trim();
     const text = [d.auto, note].filter(Boolean).join('\n');
@@ -2509,13 +2508,13 @@ export function CadPanel(): React.ReactElement {
     ...(measure
       ? [{
         key: 'measure',
-        text: measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : '第一点…',
+        text: measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : tr('ui.feedback.selectedOne'),
         world: measure.b ? mid(measure.a, measure.b) : measure.a,
         color: T.danger,
       }]
       : []),
     ...(thick
-      ? [{ key: 'thick', text: `壁厚 ${thick.dist.toFixed(2)} mm`, world: mid(thick.a, thick.b), color: T.thick }]
+      ? [{ key: 'thick', text: tr('ui.thickness.label', { value: thick.dist.toFixed(2) }), world: mid(thick.a, thick.b), color: T.thick }]
       : []),
   ];
 
@@ -2643,19 +2642,19 @@ export function CadPanel(): React.ReactElement {
   const evidenceBody = (scope: 'part' | 'machine') => {
     const all = scope === 'machine' ? machineRuns : (currentPart?.runs ?? []);
     const groups: { id: EvidenceFilter; label: string; test: (r: RunProduct) => boolean }[] = [
-      { id: 'all', label: '全部', test: () => true },
-      { id: 'sim', label: '仿真', test: (r) => browseKindOf(r) === 'sim' },
+      { id: 'all', label: tr('ui.review.filter.all'), test: () => true },
+      { id: 'sim', label: tr('ui.review.filter.sim'), test: (r) => browseKindOf(r) === 'sim' },
       // NOT "检查": the runs are titled "装配清单检查 …", so a chip called 检查
       // made people look for the contract report there and find zero.
-      { id: 'check', label: '零件', test: (r) => browseKindOf(r) === 'check' },
-      { id: 'assembly', label: '组件', test: (r) => browseKindOf(r) === 'assembly' },
-      { id: 'contract', label: '装配清单', test: (r) => browseKindOf(r) === 'contract' },
+      { id: 'check', label: tr('ui.review.filter.parts'), test: (r) => browseKindOf(r) === 'check' },
+      { id: 'assembly', label: tr('ui.review.filter.assembly'), test: (r) => browseKindOf(r) === 'assembly' },
+      { id: 'contract', label: tr('ui.review.filter.contract'), test: (r) => browseKindOf(r) === 'contract' },
     ];
     // 本版 is the scope the old 验证 tab had, now a FILTER instead of a second tab:
     // one list, two views ("this revision was tested by" vs "this part was").
     const vid = scope === 'part' ? version?.id ?? null : null;
     if (vid) {
-      groups.splice(1, 0, { id: 'current', label: '本版', test: (r) => r.sourceVersionIds.includes(vid) });
+      groups.splice(1, 0, { id: 'current', label: tr('ui.review.filter.current'), test: (r) => r.sourceVersionIds.includes(vid) });
     }
     const active = groups.find((g) => g.id === evidenceFilter) ?? groups[0]!;
     const list = all.filter(active.test);
@@ -2698,8 +2697,8 @@ export function CadPanel(): React.ReactElement {
           'data-evidence-title': '',
           style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: T.ink },
         }, runTitle(r)),
-        r.staleVersionIds?.length ? badge('旧版', T.warn) : null,
-        r.supersededBy ? badge('已被取代', T.muted) : null,
+        r.staleVersionIds?.length ? badge(tr('ui.badge.old'), T.warn) : null,
+        r.supersededBy ? badge(tr('ui.badge.superseded'), T.muted) : null,
       ),
       // Second line = the DISCRIMINATORS: which revisions were posed, then what
       // the run found. Fifteen same-named runs differ exactly here.
@@ -2731,7 +2730,7 @@ export function CadPanel(): React.ReactElement {
         }, `${g.label} ${all.filter(g.test).length}`)),
       ),
       list.length === 0
-        ? React.createElement('div', { style: S.hint }, '没有符合条件的证据 — 换一个筛选，或让 Agent 对它跑一次检查。')
+        ? React.createElement('div', { style: S.hint }, tr('ui.evidence.empty'))
         : React.createElement('div', null, ...list.map(row)),
       scope === 'part' && version && React.createElement(
         'div',
@@ -2741,29 +2740,29 @@ export function CadPanel(): React.ReactElement {
           onClick: () => void runFluid(),
           disabled: fluidBusy,
           style: { ...S.smallBtn, border: '1px solid #2c81ba', background: '#e8f4fa', opacity: fluidBusy ? 0.55 : 1 },
-        }, fluidBusy ? '仿真中…（可能数分钟）'
+        }, fluidBusy ? tr('ui.fluid.busy')
           : version.id !== latestVersionId
-            ? `在旧版 ${version.id} 上跑流体（结果会标注基于旧版）`
-            : `以 ${version.id} 为管件跑流体仿真`),
-        React.createElement('span', { style: S.hint }, '跑完会作为新运行出现在证据里'),
+            ? tr('ui.fluid.old', { version: version.id })
+            : tr('ui.fluid.run', { version: version.id })),
+        React.createElement('span', { style: S.hint }, tr('ui.fluid.hint')),
       ),
     );
   };
 
   /** What the machine physically is, and where its evidence went. */
   const machineOverview = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, machine?.name ?? '整机'),
+    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, machine?.name ?? tr('ui.machine.title')),
     React.createElement('div', { style: S.hint },
-      `清单 ${machine?.nodes.length ?? 0} 个节点 · ${machine?.distinctParts ?? 0} 种零件 · 机器级证据 ${machineRuns.length} 条`),
+      tr('ui.machine.summary', { nodes: machine?.nodes.length ?? 0, parts: machine?.distinctParts ?? 0, runs: machineRuns.length })),
     React.createElement('div', { style: S.hint },
-      '整机的检查（装配间隙 / 清单检查 / 机构运动 / 刚体物理）都在「证据」里；单个零件的检查在零件页。'),
+      tr('ui.machine.note')),
     React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
       React.createElement('button', {
         type: 'button', onClick: () => setTab('evidence'), style: S.smallBtn,
-      }, `看机器的 ${machineRuns.length} 条证据`),
+      }, tr('ui.machine.evidenceCta', { count: machineRuns.length })),
       React.createElement('button', {
         type: 'button', onClick: () => setTab('nodes'), style: S.smallBtn,
-      }, `看清单 ${machine?.nodes.length ?? 0} 个节点`),
+      }, tr('ui.machine.nodesCta', { count: machine?.nodes.length ?? 0 })),
     ),
   );
 
@@ -2776,7 +2775,7 @@ export function CadPanel(): React.ReactElement {
         key: n.id,
         type: 'button',
         disabled: !known,
-        title: known ? `打开 ${n.part} ${n.version}` : '这个节点引用的零件/版本不在语料里',
+        title: known ? tr('ui.node.open', { part: n.part, version: n.version ?? '' }) : tr('ui.node.missing'),
         onClick: () => { if (partId && n.version) navPickVersion(partId, n.version); },
         style: {
           display: 'flex', gap: 6, width: '100%', textAlign: 'left', padding: '3px 6px',
@@ -2787,7 +2786,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement('span', {
           style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
         }, n.part),
-        React.createElement('span', { style: { flex: 'none', color: T.muted, fontSize: 11 } }, n.version ?? '未钉版本'),
+        React.createElement('span', { style: { flex: 'none', color: T.muted, fontSize: 11 } }, n.version ?? tr('ui.node.unpinned')),
       );
     }),
   );
@@ -3144,9 +3143,9 @@ export function CadPanel(): React.ReactElement {
    */
   const projectLabel = (() => {
     const cwd = currentProject();
-    if (!cwd) return '\n（项目：未选择 — 请在上方显式选择项目路径；没有默认根目录）';
+    if (!cwd) return tr('ui.project.suffixNone');
     const name = cwd.replace(/\/+$/, '').split('/').pop() || cwd;
-    return `\n（项目：${name}）`;
+    return tr('ui.project.suffix', { name });
   })();
 
   // ── the navigator: one overlay, every entry point ──────────────────────────
@@ -3547,15 +3546,14 @@ export function CadPanel(): React.ReactElement {
     notice &&
       React.createElement('div', {
         style: S.notice,
-        title: '本插件的工具表按「预设」开放：只有选了 CAD 预设的会话才有 CAD 工具。'
-          + '要让它必然生效，在 设置 → Agent 预设 里把「营造模式」设为默认预设，再新建会话。',
+        title: tr('ui.notice.presetTitle'),
       },
         notice),
 
     envNotice &&
       React.createElement('div', {
         style: S.notice,
-        title: '环境未就绪不是建模失败：这条信息说明缺什么、下一步做什么。',
+        title: tr('ui.notice.envTitle'),
       },
         envNotice),
 
@@ -3589,7 +3587,7 @@ export function CadPanel(): React.ReactElement {
         // necessary context for the model but NOT the user's business to edit —
         // shown read-only, always sent.
         React.createElement('div', {
-          title: '自动说明（随图必发，不可编辑）',
+          title: tr('ui.shot.autoTitle'),
           style: {
             fontSize: 10, color: T.muted, background: '#f4f6f8', borderRadius: 4,
             padding: '4px 6px', marginBottom: 6, whiteSpace: 'pre-wrap', userSelect: 'text',
@@ -3607,7 +3605,7 @@ export function CadPanel(): React.ReactElement {
           },
           rows: 3,
           autoFocus: true,
-          placeholder: '写你想让它做什么（可选）：例：这个孔太小了，改成 Ø12 再出一版',
+          placeholder: tr('ui.shot.draftPlaceholder'),
           style: { width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px', border: '1px solid #d7dde2', borderRadius: 6, resize: 'vertical' },
         }),
         React.createElement(
@@ -3617,16 +3615,16 @@ export function CadPanel(): React.ReactElement {
             type: 'button', onClick: () => void sendShotDraft(),
             title: tr('ui.shot.sendTitle'),
             style: { ...S.smallBtn, background: T.accent, color: T.white, border: '1px solid #2f6fdb', fontWeight: 600 },
-          }, '✓ 发送到会话'),
+          }, tr('ui.shot.send')),
           React.createElement('button', {
             type: 'button', onClick: () => void parkShotDraft(),
             title: tr('ui.shot.parkTitle'),
             style: S.smallBtn,
-          }, '只存托盘'),
+          }, tr('ui.shot.park')),
           React.createElement('button', {
             type: 'button', onClick: () => setShotDraft(null),
             title: tr('ui.shot.discardTitle'), style: { ...S.smallBtn, marginLeft: 'auto' },
-          }, '取消'),
+          }, tr('ui.shot.cancel')),
         ),
         React.createElement('div', { style: { fontSize: 10, color: T.muted, marginTop: 6 } },
           tr('ui.shot.hint')),
@@ -3888,7 +3886,7 @@ export function CadPanel(): React.ReactElement {
       { style: toolStripStyle },
       React.createElement('button', {
         type: 'button',
-        title: '📸截图并发送到会话：把未登记文件的视图（含标注框）发进上下文，说明"就是这个文件"',
+        title: tr('ui.unreg.shotTitle'),
         onClick: () => void onScreenshot(),
         style: { ...viewToolStyle(false), overflow: 'hidden' },
       }, `${t('ui.tool.screenshot')}${tray.length ? ` ${tray.length}` : ''}`),
@@ -3962,7 +3960,7 @@ export function CadPanel(): React.ReactElement {
       }, heat.legend),
       thick && React.createElement('span', {
         style: { fontSize: 12, fontWeight: 700, color: T.thick, flex: 'none', lineHeight: '18px' },
-      }, `壁厚 ${thick.dist.toFixed(2)} mm（沿视线）`),
+      }, tr('ui.thickness.label', { value: thick.dist.toFixed(2) })),
       thick && React.createElement('button', { type: 'button', onClick: clearThick, style: S.smallBtn }, t('ui.feedback.clearThickness')),
       annotations.length > 0 && React.createElement('button', {
         type: 'button', onClick: () => setAnnotations((a) => a.slice(0, -1)), style: S.smallBtn,
@@ -3975,7 +3973,7 @@ export function CadPanel(): React.ReactElement {
         {
           style: { display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 170px', minWidth: 80, height: 20 },
         },
-        React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } }, '剖切'),
+        React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } }, tr('ui.toolStrip.section')),
         React.createElement('select', {
           value: sectionAxis,
           onChange: (e: any) => setSectionAxis(e.target.value),
@@ -4138,7 +4136,7 @@ export function CadPanel(): React.ReactElement {
         type: 'button',
         'data-review-badge': '',
         onClick: () => { setReviewOpen(true); void refreshReviewQueue(); },
-        title: `${review.items.length} 条已处理的待阅记录`,
+        title: tr('ui.review.processedTitle', { count: review.items.length }),
         style: {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
           fontSize: 11, lineHeight: '16px', color: T.muted, textDecoration: 'underline dotted',
