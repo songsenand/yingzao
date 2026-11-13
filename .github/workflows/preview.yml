@@ -65,8 +65,8 @@ jobs:
           mkdir -p /tmp/cad-smoke && tar -xzf artifacts/*.tgz -C /tmp/cad-smoke
           STD="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml"
           test -f "$STD"
-          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD"
-          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD" --check
+          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD" --openscad=off
+          node /tmp/cad-smoke/package/scripts/setup.mjs --root /tmp/cad-smoke/package --standard "$STD" --openscad=off --check
           tar -xOzf artifacts/*.tgz package/presets/cad/preset.patch.yml > /tmp/preset-packed.yml
           if grep -q '/home/' /tmp/preset-packed.yml; then echo "packed preset leaked an absolute path"; exit 1; fi
           node /tmp/cad-smoke/package/scripts/doctor.mjs --root /tmp/cad-smoke/package --json > /tmp/doctor-packed.json || true

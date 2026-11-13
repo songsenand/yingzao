@@ -44,11 +44,8 @@
 | `npm run accept:run-facts` | 11/11（motion/fluid/assembly 的英文 headline/label/summary） |
 | `npm run accept:ui-i18n` | 1/1（client 字符串字面量除术语外无中文，汉字只在 i18n.ts） |
 | `npm run accept:provision` | 16/16（官方慢/404/哈希错→镜像；官方快→不碰镜像；双失败报两源；doctor 读 binaryPath） |
-| `npm run accept:i18n` | 17/17 |
-| `npm run accept:run-facts` | 11/11 |
-| `npm run accept:ui-i18n` | 1/1 |
 | `npm run accept:error-envelope` | 37/37（8 类 code/stage/hint/cause；envelope 写进错误文本，因为运行时只序列化 message） |
-| `npm pack` | 113 files / 4.6 MB；含 LICENSE/NOTICE/README.en；tarball 内 preset 无 `/home/` |
+| `npm pack` | 118 files / 4.5 MB；含 LICENSE/NOTICE/README.en；tarball 内 preset 无 `/home/` |
 | `npm run rehearse:preview` | PASS（build → accept:preview → pack → extract → setup → doctor → verify） |
 | 解包 smoke | `setup` 写入后 `--check` 通过；`doctor` kind=degraded（仅 OpenSCAD 旧版）；`verify-cli` 可跑 |
 | 未测 | GitHub Actions 实际运行；A4 真实断网/磁盘满注入（分类与 state 落盘已测） |

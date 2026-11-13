@@ -4041,6 +4041,9 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
   `--check` 只检查不写。
 - `prepack.mjs` 打包时去掉 skill-provider 行，`postpack.mjs` 恢复 checkout；
   包内不出现 `/home/`，`accept:setup` 11/11、`accept:plugin-add -- --require` 5/5。
+- `setup --openscad=auto`（默认）准备 OpenSCAD：系统已有 2025.06+ 直接用；否则官方快照优先、
+  官方不可达/持续低于 256 KB/s 才切 OSS；`--openscad=off` 只写预设不下载。下载物落
+  `$DSH_HOME/cad/tools/openscad/`，不随 tarball 分发；`backend.json` 记录 binaryPath。
 - 预设 id 仍是 `cad`；显示名是 `营造模式`。技术 id（包名/插件 id/CLI/数据目录）不随品牌改。
 
 ### 37.2 环境诊断
