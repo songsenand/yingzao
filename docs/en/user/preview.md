@@ -37,7 +37,7 @@ OpenSCAD is installed by you: 2021.01 works but `doctor` reports `degraded`; 202
 - **Kernel**: OpenSCAD only in this preview. A second kernel is the first mid-term item, not a promise for this release.
 - **Long tasks**: background **compile** jobs have submit/status/cancel/timeout/restart recovery; rendering and simulation are still synchronous. A timeout is reported, never treated as a pass.
 - **English UI**: this release covers the tab title, environment notices, export dialog and main empty states. The deep panel is still mostly Chinese; full bilingual UI is preview.2.
-- **English docs**: README, install, preview and limits are translated. The remaining docs stay Chinese for now.
+- **English docs**: the complete English user set is available under `docs/en/user/`; HARNESS also has an English version. `docs/llm` and `docs/dev` stay Chinese for now.
 - **Export**: `_UNVERIFIED` is a warning, not a security boundary; renaming the file does not change the manifest verdict.
 
 ## Reporting a problem

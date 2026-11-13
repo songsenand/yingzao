@@ -1,3 +1,5 @@
+[English](../en/user/advanced.md) | 中文
+
 # 进阶用法
 
 ## 装额外的 Python 包

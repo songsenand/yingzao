@@ -1,3 +1,5 @@
+[English](../en/user/troubleshooting.md) | 中文
+
 # 故障排查
 
 | 现象 | 怎么办 |

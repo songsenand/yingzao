@@ -2,6 +2,9 @@
 // Plan A acceptance: the high-traffic zh/en dictionaries are complete, the
 // English copy is actually English, and the notice/dialog helpers switch.
 
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { en, installCadLocale, setCadTranslator, t, zh } from '../src/client/i18n.ts';
 import { cadMissingToolsNotice, environmentNotice } from '../src/client/project.ts';
 
@@ -23,7 +26,7 @@ check('every key has non-empty en', enKeys.every((k) => en[k].length > 0));
 check('English copy contains no CJK', enKeys.every((k) => !/[\u4e00-\u9fff]/.test(en[k])), enKeys.filter((k) => /[\u4e00-\u9fff]/.test(en[k])).join(', '));
 
 setCadTranslator((key, vars) => fill(en, key, vars));
-check('English translator is active', t('tab.title') === 'CAD preview');
+check('English translator is active', t('tab.title') === 'Model & checks');
 check('missing-preset notice translates', cadMissingToolsNotice({ toolScope: 'preset', presets: ['cad'], names: { cad: 'Yingzao mode', standard: 'Standard' } }, 'standard', true)?.includes('Preset not active'));
 check('runtime notice translates', environmentNotice({ toolScope: 'global', presets: [], runtime: { state: 'absent' } })?.includes('400 MB'));
 check('interpolation works in English', t('export.more', { count: 3 }) === '3 more finding(s); see the export manifest.');
@@ -40,11 +43,27 @@ const fakeCtx = {
 };
 installCadLocale(fakeCtx);
 check('locale registers zh and en', seen.includes('cad:zh') && seen.includes('cad:en'), seen.join(','));
-check('locale binding is active', t('tab.title') === 'CAD preview');
+check('locale binding is active', t('tab.title') === 'Model & checks');
 
 setCadTranslator((key, vars) => fill(zh, key, vars));
-check('Chinese translator restores', t('tab.title') === 'CAD 预览');
+check('Chinese translator restores', t('tab.title') === '模型与验证');
 check('Chinese runtime notice is back', environmentNotice({ toolScope: 'global', presets: [], runtime: { state: 'absent' } })?.includes('400 MB'));
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const enDir = join(root, 'docs/en/user');
+const expected = ['README', 'install', 'preview', 'limits', 'what-is-yingzao', 'workflow', 'verification', 'configuration', 'troubleshooting', 'advanced'];
+check('English user docs are complete', expected.every((n) => existsSync(join(enDir, `${n}.md`))));
+let broken = 0;
+for (const name of expected) {
+  const file = join(enDir, `${name}.md`);
+  if (!existsSync(file)) { broken++; continue; }
+  const text = readFileSync(file, 'utf8');
+  for (const target of [...text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1])) {
+    if (!target || target.startsWith(('http', '#', 'mailto:'))) continue;
+    if (!existsSync(resolve(dirname(file), target.split('#')[0]))) broken++;
+  }
+}
+check('English user doc links resolve', broken === 0, `${broken} broken`);
 
 console.log(`\naccept-i18n: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -11,7 +11,9 @@ import React from 'react';
 export const NS = 'cad';
 
 export const zh = {
-  'tab.title': 'CAD 预览',
+  'tab.title': '模型与验证',
+  'action.openPanel': '模型预览',
+  'action.openPanelTitle': '打开模型预览与验证面板',
 
   'missing.blank': '预设没生效：本会话是「{preset}」 · 会话还没开始，现在重新选一次「{wanted}」还能生效',
   'missing.locked': '预设没生效：本会话以「{preset}」开始，已锁定 · 新建会话，或在设置里把「{wanted}」设为默认预设',
@@ -56,7 +58,9 @@ export const zh = {
 export type CadKey = keyof typeof zh;
 
 export const en: Record<CadKey, string> = {
-  'tab.title': 'CAD preview',
+  'tab.title': 'Model & checks',
+  'action.openPanel': 'Model preview',
+  'action.openPanelTitle': 'Open the model preview and verification panel',
 
   'missing.blank': 'Preset not active: this session is “{preset}” · It has not started yet, so re-selecting “{wanted}” now still works',
   'missing.locked': 'Preset not active: this session started as “{preset}” and is locked · Start a new session, or make “{wanted}” the default preset in Settings',

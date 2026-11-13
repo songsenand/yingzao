@@ -1,3 +1,5 @@
+[English](../en/user/configuration.md) | 中文
+
 # 配置（用户可调项）
 
 | 变量 | 作用 | 默认 |

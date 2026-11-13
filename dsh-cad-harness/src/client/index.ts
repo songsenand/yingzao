@@ -116,7 +116,7 @@ export function apply(ctx: any) {
     };
     const CadOpenControl = () => React.createElement('button', {
       type: 'button',
-      title: '打开 CAD 预览面板',
+      title: t('action.openPanelTitle'),
       onClick: openCadTab,
       style: {
         background: 'transparent',
@@ -129,7 +129,7 @@ export function apply(ctx: any) {
         padding: '2px 8px',
         opacity: 0.85,
       },
-    }, 'CAD');
+    }, t('action.openPanel'));
     try {
       const dispose = ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
         { name: 'conversation.session.header.utilities', id: 'cad-open-control', order: 50 },
