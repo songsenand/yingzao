@@ -2,7 +2,7 @@
 
 [中文](../../user/README.md) | English
 
-This is the English entry point for the 0.1.0 preview. It covers the complete preview user surface: install, preview scope, limits, workflow, verification, configuration, troubleshooting and advanced usage. Agent reference (`docs/llm/`) remains Chinese for now.
+This is the English entry point for the 0.1.0 preview. It covers the complete preview user surface: install, preview scope, limits, workflow, verification, configuration, troubleshooting and advanced usage. Agent reference is available in English at [docs/en/llm/](../llm/README.md).
 
 ## Read in this order
 

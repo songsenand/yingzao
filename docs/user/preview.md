@@ -41,7 +41,7 @@ OpenSCAD 由用户自行安装：2021.01 可跑但 `doctor` 报 degraded；推�
 - **内核**：预览版只有 OpenSCAD。第二内核已列入中远期第一项，不是本版承诺。
 - **长任务**：后台编译 job 已有 submit/status/cancel/timeout/重启恢复；渲染、仿真仍同步，超时会被报告，不会被当成通过。
 - **英文界面**：本版先覆盖标签页、环境提示、导出弹窗和主要空状态；深层面板仍以中文为主（完整双语在 preview.2）。
-- **英文文档**：英文用户文档已全套（README、install、preview、limits、workflow、verification、configuration、troubleshooting、advanced），HARNESS 也有英文版；`docs/llm` 与 `docs/dev` 暂时中文。
+- **英文文档**：英文用户文档已全套（README、install、preview、limits、workflow、verification、configuration、troubleshooting、advanced），HARNESS 也有英文版；`docs/llm` 也有英文版；`docs/dev` 暂时中文。
 - **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。
 
 ## 怎么报告问题

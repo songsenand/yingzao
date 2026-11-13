@@ -1,3 +1,5 @@
+[English](../en/llm/assembly.md) | 中文
+
 # 装配契约：datum、配合与清单能证明什么
 
 > 长解释参考；短规则在 `skills/cad-assembly/SKILL.md`。

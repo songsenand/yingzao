@@ -1,3 +1,5 @@
+[English](../en/llm/verify.md) | 中文
+
 # Evidence verification (V1)
 
 `verify` is a **read-only evidence report**. It does not run CAD, write runs, write a

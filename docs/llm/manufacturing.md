@@ -1,3 +1,5 @@
+[English](../en/llm/manufacturing.md) | 中文
+
 # 制造性：筛查、工艺档案与校准
 
 > 长解释参考；短规则在 `skills/cad-manufacturing/SKILL.md`。

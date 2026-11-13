@@ -1,3 +1,5 @@
+[English](../en/llm/delivery.md) | 中文
+
 # 交付纪律：claim、证据与覆盖
 
 > 长解释参考；短规则在 `skills/cad-toolbox/SKILL.md`。

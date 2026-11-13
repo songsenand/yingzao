@@ -1,3 +1,5 @@
+[English](../en/llm/pearls.md) | 中文
+
 # Pearls: gate, execute, and what "repair" may mean
 
 > **Historical (2026-11-06).** The pearl execution layer is demoted; V1 evidence verification

@@ -52,7 +52,10 @@ check('Chinese runtime notice is back', environmentNotice({ toolScope: 'global',
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const enDir = join(root, 'docs/en/user');
 const expected = ['README', 'install', 'preview', 'limits', 'what-is-yingzao', 'workflow', 'verification', 'configuration', 'troubleshooting', 'advanced'];
+const llmDir = join(root, 'docs/en/llm');
+const expectedLlm = ['README', 'engines', 'assembly', 'manufacturing', 'processes', 'modeling', 'delivery', 'conventions', 'traps', 'verify', 'pearls'];
 check('English user docs are complete', expected.every((n) => existsSync(join(enDir, `${n}.md`))));
+check('English LLM docs are complete', expectedLlm.every((n) => existsSync(join(llmDir, `${n}.md`))));
 let broken = 0;
 for (const name of expected) {
   const file = join(enDir, `${name}.md`);
@@ -64,6 +67,17 @@ for (const name of expected) {
   }
 }
 check('English user doc links resolve', broken === 0, `${broken} broken`);
+let llmBroken = 0;
+for (const name of expectedLlm) {
+  const file = join(llmDir, `${name}.md`);
+  if (!existsSync(file)) { llmBroken++; continue; }
+  const text = readFileSync(file, 'utf8');
+  for (const target of [...text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1])) {
+    if (!target || target.startsWith(('http', '#', 'mailto:'))) continue;
+    if (!existsSync(resolve(dirname(file), target.split('#')[0]))) llmBroken++;
+  }
+}
+check('English LLM doc links resolve', llmBroken === 0, `${llmBroken} broken`);
 
 console.log(`\naccept-i18n: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

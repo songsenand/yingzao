@@ -297,7 +297,7 @@ interface CadBackend {
 ## 6.5 已知边界（0.1.0-preview）
 
 - **UI 双语是部分覆盖**：标签页、环境提示、导出弹窗、主要空状态已中英切换；深层面板仍中文。
-- **英文文档**：英文用户文档全套 + `HARNESS.en.md`；`docs/llm` 与 `docs/dev` 仍中文。
+- **英文文档**：英文用户文档全套 + `docs/en/llm` + `HARNESS.en.md`；`docs/dev` 仍中文。
 - **后台 job 只覆盖 OpenSCAD 编译**：submit/status/cancel/timeout/重启恢复/孤儿清理已验收；渲染与仿真仍同步。
 - **GitHub Actions 未实际运行**：workflow 已写并在本地 `rehearse:preview` 通过；推送/tag 待网络。
 - **A4 的真实断网/磁盘满注入未跑**：分类器与 state 落盘已测；真实网络故障仍靠现场。

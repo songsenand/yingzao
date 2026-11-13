@@ -1,3 +1,5 @@
+[English](../en/llm/traps.md) | 中文
+
 # 纪律与陷阱：让绿色数字保持诚实
 
 > 长解释参考；短规则在 `skills/cad-toolbox/SKILL.md`。

@@ -1,3 +1,5 @@
+[English](../en/llm/README.md) | 中文
+
 # LLM 文档
 
 这是给 **Agent** 看的参考层。用户文档在 `docs/user/`，不要混。

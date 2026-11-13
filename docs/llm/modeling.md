@@ -1,3 +1,5 @@
+[English](../en/llm/modeling.md) | 中文
+
 # 建模与测量：作者陷阱与工具选择
 
 > 长解释参考；短规则在 `skills/cad-modeling-measure/SKILL.md`。

@@ -1,3 +1,5 @@
+[English](../en/llm/processes.md) | 中文
+
 # 工艺目录：每一种常见方法都有验证方法
 
 `manufacturing.allowed` 是**用户能拿到什么工艺**（决策空间）；`verification` 是**怎么验**。

@@ -17,7 +17,7 @@ This is not a modelling UI. Geometry generation is no longer the bottleneck; **k
 - Third-party geometry (STL / STEP / 3MF / DXF) enters the same checks and assemblies
 - Export a **single version** (STL/3MF/OBJ/OFF/WRL) or the **whole project**: a ZIP with every part STL + assembly manifest + README, plus an optional placed whole-machine STL
 
-**Docs have three audiences**: users → [docs/user/](docs/user/) and [docs/en/user/](docs/en/user/), agents → [docs/llm/](docs/llm/) (Chinese for now), maintainers → [docs/dev/](docs/dev/) (Chinese).
+**Docs have three audiences**: users → [docs/user/](docs/user/) and [docs/en/user/](docs/en/user/), agents → [docs/en/llm/](docs/en/llm/) (English) or [docs/llm/](docs/llm/) (Chinese), maintainers → [docs/dev/](docs/dev/) (Chinese).
 
 ## Quick start
 
@@ -77,9 +77,10 @@ node scripts/verify.mjs /path/to/project --block --strict
 | [docs/en/user/install.md](docs/en/user/install.md) | Install, setup, first run |
 | [docs/en/user/limits.md](docs/en/user/limits.md) | Known boundaries |
 | [HARNESS.en.md](HARNESS.en.md) | What it is and is not; positioning |
+| [docs/en/llm/README.md](docs/en/llm/README.md) | Agent reference: engines, assembly, manufacturing, delivery, traps, verify |
 | [DESIGN.md](DESIGN.md) | Current design and module map (Chinese) |
 
-The English **user** documentation is complete for this preview. Agent reference (`docs/llm/`) and maintainer docs remain Chinese until preview.2.
+The English **user** and **agent** documentation is complete for this preview. Maintainer docs (`docs/dev`, `DESIGN.md`) remain Chinese until preview.2.
 
 ## Contributing
 

@@ -1,3 +1,5 @@
+[English](../en/llm/conventions.md) | 中文
+
 # 约定：每个工具默认的坐标系、datum、清单与运行
 
 > 长解释参考；短规则在 `skills/cad-toolbox/SKILL.md`。
