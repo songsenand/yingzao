@@ -94,6 +94,14 @@
   because a run with too little travel is `check`, not pass — 0 checks ≠ 0 collisions.
 - `simulate_physics` with parts placed exactly touching starts in penetration;
   place them slightly separated and let gravity close the gap.
+- **A still keyframe from a physics run is not evidence that the mechanism slips.**
+  With no `motor` on the joint, the only motion input is `initialAngularVelocity`
+  — an impulse. The reducer's worm took 30 rad/s, turned 7.5°, spent the 0.056mm
+  backlash on the first tooth face and stopped; all six keyframes were the same
+  pose. Ask "was it driven?" before asking "why did it stop": a joint that is
+  supposed to run needs `motor: { targetVelocityRadPerSec, maxTorqueNm }`, and
+  `metrics.motors` says whether the drive reached its target (`reachedTarget`)
+  or was capped out by the load. A stall is a number, not a mood.
 - A "gap" between two probe points that are not roughly facing each other is not
   the gap you meant — the tool reports true point-to-point distance, which on
   two skew surfaces is larger than the clearance.

@@ -96,7 +96,10 @@ interface GeneratePartArgs {
 }
 
 interface PhysicsToolArgs {
-  parts: { name: string; scadCode: string; bodyType: string; position: number[]; rotation?: number[]; density?: number; initialAngularVelocity?: number[] }[];
+  parts: {
+    name: string; scadCode: string; bodyType: string; position: number[]; rotation?: number[];
+    density?: number; friction?: number; initialAngularVelocity?: number[];
+  }[];
   joints?: {
     type?: string; bodyA: string; bodyB: string;
     anchorA?: number[]; anchorB?: number[];
@@ -111,8 +114,14 @@ interface PhysicsToolArgs {
     axisWorld?: number[];
     limits?: number[];
     staticFriction?: number;
+    /** `gear` type only: turns of B per turn of A, about each body's own axis (signed). */
+    ratio?: number;
+    /** Torque-limited velocity motor (revolute only). */
+    motor?: { targetVelocityRadPerSec: number; maxTorqueNm: number; damping?: number };
   }[];
   durationSec?: number;
+  /** Integration step, s. Default 1/60 — too coarse for fast sliding contact. */
+  timestepSec?: number;
   gravity?: number[];
   /** Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing a gravity vector. Ignored when gravity is given explicitly. */
   tiltDeg?: number;
@@ -2532,6 +2541,7 @@ export function registerCadTools(
           position: p.position as [number, number, number],
           rotation: p.rotation as [number, number, number] | undefined,
           density: p.density,
+          friction: p.friction,
           initialAngularVelocity: p.initialAngularVelocity as [number, number, number] | undefined,
         });
       }
@@ -2610,6 +2620,8 @@ export function registerCadTools(
         ];
       };
       const resolvedJoints = (a.joints ?? []).map((j) => {
+        // A gear coupling has no anchors to resolve; it only names two shafts.
+        if (j.type === 'gear') return j as never;
         let out = j;
         if (j.anchorA === undefined || j.anchorB === undefined) {
           if (!Array.isArray(j.anchorWorld) || j.anchorWorld.length !== 3) {
@@ -2645,6 +2657,7 @@ export function registerCadTools(
         parts,
         joints: resolvedJoints as never,
         durationSec: a.durationSec,
+        timestepSec: a.timestepSec,
         gravity,
         keyframeCount: 6,
         jointContacts: a.jointContacts === true,
@@ -2704,6 +2717,9 @@ export function registerCadTools(
         closedLoop: svg.closedLoop ?? false,
         loopJoints: svg.loopJoints ?? [],
         ...(svg.holdAnalysis ? { holdAnalysis: svg.holdAnalysis } : {}),
+        ...(svg.motors ? { motors: svg.motors } : {}),
+        frictions: svg.frictions ?? {},
+        ...(svg.gears ? { gears: svg.gears } : {}),
         notes: svg.notes,
         geometrySuspects: suspectLines,
         geometrySuspectRule: SUSPECT_RULE,
@@ -2717,7 +2733,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_physics',
     description:
-      'Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames.',
+      'Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames. A revolute joint may carry a torque-limited motor (`motor`): with one the mechanism is DRIVEN and keeps turning; without one the only input is an impulse (initialAngularVelocity) that dies at the first tooth/stop — a still keyframe then means "nothing drove it", not "it slips". Joints may also be `gear` (a kinematic ratio coupling between two shafts — rapier has no gear constraint, so it is prescribed, not solved). `metrics.motors` reports commanded vs measured so a stall is a number. Two more INPUTS decide whether that verdict means anything: `friction` per part (default rapier 0.5, echoed in `metrics.frictions` — a self-locking worm is η≈19% at 0.5 and η≈40% at POM\'s 0.15) and `timestepSec` (default 1/60, too coarse for fast contact: keep v·dt ≤ clearance/10, e.g. 1/2000 for a 20 rad/s shaft).',
     parameters: {
       parts: {
         type: 'array',
@@ -2738,6 +2754,10 @@ export function registerCadTools(
             },
             rotation: { type: 'array', description: 'Initial rotation [rx,ry,rz] degrees XYZ.', items: { type: 'number' } },
             density: { type: 'number', description: 'kg/mm³. Default 1.05e-6 (ABS plastic).' },
+            friction: {
+              type: 'number',
+              description: 'Coulomb friction μ for this part\'s collider. Default: rapier\'s own 0.5 — a number nobody chose. Declare it whenever friction is part of the question: a single-start worm (lead 7.1°) at μ=0.5 has a 26.6° friction angle and is deep in self-locking (η≈19%), while POM-on-POM μ≈0.15 is a different machine (η≈40%). The μ actually applied is echoed in metrics.frictions.',
+            },
             initialAngularVelocity: { type: 'array', description: 'rad/s, e.g. a push on a hinged door.', items: { type: 'number' } },
           },
         },
@@ -2749,7 +2769,7 @@ export function registerCadTools(
           type: 'object',
           additionalProperties: false,
           properties: {
-            type: { type: 'string', description: '"revolute" (hinge, default) or "prismatic" (slide along the axis).' },
+            type: { type: 'string', description: '"revolute" (hinge, default), "prismatic" (slide along the axis), or "gear" (a ratio coupling between two shafts).' },
             bodyA: { type: 'string', required: true },
             bodyB: { type: 'string', required: true },
             anchorA: { type: 'array', description: 'Joint point in A local frame [x,y,z] mm — give this AND anchorB, OR anchorWorld.', items: { type: 'number' } },
@@ -2764,10 +2784,28 @@ export function registerCadTools(
               type: 'number',
               description: 'prismatic only: static friction μ. Adds a quasi-static hold analysis (μ·m·|g⊥| vs m·|g∥| → holds/slides) to the report — rapier joints carry no friction, so this is analytic, not simulated.',
             },
+            ratio: {
+              type: 'number',
+              description: 'gear only: turns of bodyB per turn of bodyA about each body\'s own axisA/axisB, signed. For an external mesh ratio = \u2212z_A/z_B (20T driving 40T \u2192 \u22120.5); a 12:1 worm is \u22121/12. The coupling is kinematic and exact: it prescribes the ratio, transfers no torque, and the pair does not collide — "do the teeth actually drive it" is a contact run WITHOUT this joint, and "do they collide" is simulate_motion\'s interference timeline.',
+            },
+            motor: {
+              type: 'object',
+              additionalProperties: false,
+              description: 'revolute only: a torque-limited VELOCITY MOTOR on this hinge — it drives bodyB relative to bodyA and keeps driving. Without it the only motion input is initialAngularVelocity, an impulse that dies at the first tooth/stop; a mechanism that is supposed to run needs a motor. The report echoes target vs measured in metrics.motors, so a stall (measured << target) is visible rather than a still frame. Not a measurement of transmitted power.',
+              properties: {
+                targetVelocityRadPerSec: { type: 'number', required: true, description: 'Target angular velocity of B relative to A about the joint axis (right-hand rule about axisA, world direction at t=0), rad/s. 0 = a brake that holds against any torque under the cap.' },
+                maxTorqueNm: { type: 'number', required: true, description: 'Hard cap on motor torque, N·m (must be > 0). An uncapped motor is not a model: the cap is what makes a stall a result instead of a silently wrong still frame.' },
+                damping: { type: 'number', description: 'Rapier velocity-motor damping, N·m·s/rad. Default = maxTorqueNm × 100, so a 0.01 rad/s speed error already saturates the cap and maxTorqueNm means what it says (with the raw maxTorqueNm a target-0 "brake" becomes a damper that sags).' },
+              },
+            },
           },
         },
       },
       durationSec: { type: 'number', description: 'Simulation length. Default 2.' },
+      timestepSec: {
+        type: 'number',
+        description: 'Integration step, s. Default 1/60 — which is WRONG for fast contact: a surface moving v mm/s advances v·dt per step, and when that is comparable to the clearance the solver resolves the teeth as interpenetration (a worm at 2 rad/s on a 4mm pitch radius advances 0.133mm/step against a 0.03–0.15mm backlash). Rule of thumb: v·dt ≤ clearance/10, e.g. 1/2000 for a 20 rad/s shaft. Cost is linear in steps.',
+      },
       gravity: { type: 'array', description: 'mm/s². Default [0,0,-9810] (z-up).' },
       tiltDeg: {
         type: 'number',
@@ -2835,6 +2873,41 @@ export function registerCadTools(
                 holds: { type: 'boolean', required: true },
               },
             },
+          },
+          motors: {
+            type: 'array',
+            description: 'One entry per motor joint: commanded target vs what the solver measured at the last step. measuredRadPerSec << targetVelocityRadPerSec is a STALL (the cap was spent on the load), not a numerical artefact. turnedDeg is the angle the joint really turned over the run, from the same pose timeline the panel plays back.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                joint: { type: 'string', required: true },
+                targetVelocityRadPerSec: { type: 'number', required: true },
+                maxTorqueNm: { type: 'number', required: true },
+                damping: { type: 'number', required: true },
+                measuredRadPerSec: { type: 'number', required: true },
+                turnedDeg: { type: 'number', required: true },
+                reachedTarget: { type: 'boolean', required: true },
+              },
+            },
+          },
+          gears: {
+            type: 'array',
+            description: 'One entry per gear coupling: declared ratio vs the ratio the run produced (turnedB/turnedA). They agree exactly because the ratio is PRESCRIBED; that is not a measurement of transmission.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                joint: { type: 'string', required: true },
+                ratio: { type: 'number', required: true },
+                turnedADeg: { type: 'number', required: true },
+                turnedBDeg: { type: 'number', required: true },
+                measuredRatio: { type: 'number', required: true },
+              },
+            },
+          },
+          frictions: {
+            type: 'object',
+            description: 'Coulomb μ each collider actually carried, per part. Reported even when nobody declared one: rapier\'s 0.5 is a number nobody chose, and a self-locking worm\'s efficiency roughly doubles between μ=0.5 and μ=0.15.',
+            additionalProperties: true,
           },
           notes: { type: 'array', items: { type: 'string' } },
           keyframes: { type: 'array', required: true, items: { type: 'string' } },

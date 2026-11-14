@@ -3955,6 +3955,47 @@ def op_scad_parse_params(params: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _quat_mul(a, b) -> tuple:
+    """Hamilton product (a applied after b), mirroring quatMul in src/host/physics.ts."""
+    ax, ay, az, aw = (float(v) for v in a)
+    bx, by, bz, bw = (float(v) for v in b)
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
+
+
+def _quat_conj(q) -> tuple:
+    """Conjugate (= inverse for a unit quaternion); tuple order x, y, z, w."""
+    x, y, z, w = (float(v) for v in q)
+    return (-x, -y, -z, w)
+
+
+def _turned_about(poses_list, name, axis) -> float:
+    """Signed, unwrapped turn of one body about its own local axis, radians.
+
+    Mirrors `signedTurn` in src/host/physics.ts: measured from the same pose
+    timeline the panel plays back, so the number a reader checks against the
+    animation is the number the report prints.
+    """
+    length = math.hypot(*(float(v) for v in axis)) or 1.0
+    unit = [float(v) / length for v in axis]
+    total = 0.0
+    prev = None
+    for poses in poses_list:
+        current = tuple(float(v) for v in poses[name]["rotation"])
+        if prev is not None:
+            delta = _quat_mul(_quat_conj(prev), current)
+            vlen = math.sqrt(delta[0] ** 2 + delta[1] ** 2 + delta[2] ** 2)
+            angle = 2 * math.atan2(vlen, delta[3])
+            dot = delta[0] * unit[0] + delta[1] * unit[1] + delta[2] * unit[2]
+            total += (1 if dot > 0 else -1 if dot < 0 else 0) * angle
+        prev = current
+    return total
+
+
 def _quat_to_matrix3(q) -> list:
     x, y, z, w = (float(v) for v in q)
     return [
@@ -6697,9 +6738,20 @@ def op_simulate_physics(params: dict) -> dict:
     bodies: dict = {}
     colliders: dict = {}
     collider_kinds: dict = {}
+    friction_used: dict = {}
     fell_over_checks: list = []
     initial_pos: dict = {}
     initial_rotations: dict = {}
+
+    # Gear pairs must not collide with each other: the coupling already fixes the
+    # ratio, and letting the teeth resolve as contacts turns a designed mesh into
+    # permanent interpenetration. 16 usable bits in rapier's interaction groups.
+    gear_partners: dict = {}
+    for joint in scenario.get("joints") or []:
+        if joint["type"] != "gear":
+            continue
+        gear_partners.setdefault(joint["bodyA"], set()).add(joint["bodyB"])
+        gear_partners.setdefault(joint["bodyB"], set()).add(joint["bodyA"])
 
     for part in scenario["parts"]:
         name = part["name"]
@@ -6719,19 +6771,25 @@ def op_simulate_physics(params: dict) -> dict:
         # the pans across the machine (r002: 25mm settled penetration, 5 joint
         # violations). Convex parts keep the cheap hull; concave parts now use
         # their exact mesh, the same rule the fixed side already used.
+        declared_friction = part.get("friction")
+
+        def with_friction(desc):
+            # Applied at BUILD time: a ColliderHandle cannot carry it afterwards.
+            return desc.friction(float(declared_friction)) if declared_friction is not None else desc
+
         if part["bodyType"] == "dynamic":
             if _is_convex(part["path"]):
                 collider = world.add_collider(
-                    R.Collider.convex_hull(raw.reshape(-1, 3)).density(float(part.get("density") or 1.05e-6)), body
+                    with_friction(R.Collider.convex_hull(raw.reshape(-1, 3)).density(float(part.get("density") or 1.05e-6))), body
                 )
                 collider_kinds[name] = "hull"
             else:
                 vertices, faces, _degenerate = _weld_raw(raw)
                 collider = world.add_collider(
-                    R.Collider.trimesh(
+                    with_friction(R.Collider.trimesh(
                         np.asarray(vertices, dtype=np.float32),
                         np.asarray(faces, dtype=np.uint32),
-                    ).density(float(part.get("density") or 1.05e-6)),
+                    ).density(float(part.get("density") or 1.05e-6))),
                     body,
                 )
                 collider_kinds[name] = "trimesh"
@@ -6742,14 +6800,19 @@ def op_simulate_physics(params: dict) -> dict:
         elif _is_convex(part["path"]):
             # CCD does not help a fixed body against a trimesh collider, so convex
             # fixed geometry MUST be a convex hull (robust + fast).
-            collider = world.add_collider(R.Collider.convex_hull(raw.reshape(-1, 3)), body)
+            collider = world.add_collider(with_friction(R.Collider.convex_hull(raw.reshape(-1, 3))), body)
             collider_kinds[name] = "hull"
         else:
             vertices, faces, _degenerate = _weld_raw(raw)
             collider = world.add_collider(
-                R.Collider.trimesh(np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32)), body
+                with_friction(R.Collider.trimesh(np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32))), body
             )
             collider_kinds[name] = "trimesh"
+        # μ actually used, read back from the live collider. rapier's own default
+        # is 0.5 — a number nobody chose, and for a self-locking worm (lead 7.1°)
+        # the difference between μ=0.5 (φ=26.6°, η≈19%) and POM-on-POM μ≈0.15
+        # (η≈40%) is the difference between "stalls" and "runs".
+        friction_used[name] = float(world.colliders.get(collider).friction)
         bodies[name] = body
         colliders[name] = collider
         initial_pos[name] = [float(v) for v in part["position"]]
@@ -6766,6 +6829,21 @@ def op_simulate_physics(params: dict) -> dict:
             for i in range(3)
         ]
 
+    if gear_partners and len(scenario["parts"]) <= 16:
+        bit_of = {p["name"]: index for index, p in enumerate(scenario["parts"])}
+        for name, handle in colliders.items():
+            bit = bit_of.get(name)
+            if bit is None:
+                continue
+            filter_bits = 0xFFFF
+            for other in gear_partners.get(name, ()):  # type: ignore[arg-type]
+                other_bit = bit_of.get(other)
+                if other_bit is not None:
+                    filter_bits &= ~(1 << other_bit)
+            world.colliders.get(handle).collision_groups = R.InteractionGroups(
+                R.Group(1 << bit), R.Group(filter_bits)
+            )
+
     # ---- t=0 assembly gate -------------------------------------------------
     # Measured BEFORE anything moves (mirrors motion's assertAssembledAtStart).
     # Without it a scenario whose anchors are 10mm apart is "solved" by dragging
@@ -6773,6 +6851,8 @@ def op_simulate_physics(params: dict) -> dict:
     initial_joint_gaps = []
     broken = []
     for joint in scenario.get("joints") or []:
+        if joint["type"] == "gear":
+            continue  # a coupling has no anchor points to line up
         name = f"{joint['bodyA']}~{joint['bodyB']}"
         a = bodies.get(joint["bodyA"])
         b = bodies.get(joint["bodyB"])
@@ -6822,6 +6902,7 @@ def op_simulate_physics(params: dict) -> dict:
     joint_contacts = bool(scenario.get("jointContacts", False))
     contacts_disabled = []
     joint_anchors = []
+    gears = []
     for joint in scenario.get("joints") or []:
         a = bodies.get(joint["bodyA"])
         b = bodies.get(joint["bodyB"])
@@ -6829,6 +6910,28 @@ def op_simulate_physics(params: dict) -> dict:
             raise ValueError(f"joint references unknown part: {joint['bodyA']}")
         if b is None:
             raise ValueError(f"joint references unknown part: {joint['bodyB']}")
+        if joint["type"] == "gear":
+            ratio = joint.get("ratio")
+            if not isinstance(ratio, (int, float)) or not math.isfinite(float(ratio)) or float(ratio) == 0.0:
+                raise ValueError(
+                    f"joint {joint['bodyA']}~{joint['bodyB']}: gear needs a non-zero ratio "
+                    f"(turns of B per turn of A)"
+                )
+            axis_a = tuple(float(v) for v in (joint.get("axisA") or joint["axis"]))
+            axis_b = tuple(float(v) for v in (joint.get("axisB") or joint["axis"]))
+            contacts_disabled.append(f"{joint['bodyA']}~{joint['bodyB']}")
+            gears.append(
+                {
+                    "a": a,
+                    "b": b,
+                    "ratio": float(ratio),
+                    "axisA": axis_a,
+                    "axisB": axis_b,
+                    "qA0": tuple(float(v) for v in world.rigid_bodies[a].rotation.quaternion),
+                    "qB0": tuple(float(v) for v in world.rigid_bodies[b].rotation.quaternion),
+                }
+            )
+            continue  # no rapier joint: nothing to anchor, and the pair must not collide
         anchor_a = tuple(float(v) for v in joint["anchorA"])
         anchor_b = tuple(float(v) for v in joint["anchorB"])
         # One local axis for both bodies is only correct when their frames are
@@ -6863,6 +6966,45 @@ def op_simulate_physics(params: dict) -> dict:
                 .local_axis2(axis_b)
                 .local_anchor1(anchor_a)
                 .local_anchor2(anchor_b)
+            )
+            # Motor: a torque-limited velocity drive. Without it the only motion
+            # input is `initialAngularVelocity` — an impulse, which dies at the
+            # first tooth/stop it meets (the reducer's worm spent its 0.056mm
+            # backlash and stopped at 7.5°, so every keyframe looked identical).
+            # Rapier has had the motor all along; the interface had not exposed it.
+            motor = joint.get("motor")
+            if motor:
+                target_vel = float(motor["targetVelocityRadPerSec"])
+                max_torque_nm = float(motor["maxTorqueNm"])
+                if not math.isfinite(target_vel):
+                    raise ValueError(
+                        f"joint {joint['bodyA']}~{joint['bodyB']}: motor.targetVelocityRadPerSec must be a number"
+                    )
+                if not math.isfinite(max_torque_nm) or max_torque_nm <= 0:
+                    raise ValueError(
+                        f"joint {joint['bodyA']}~{joint['bodyB']}: motor.maxTorqueNm must be > 0 "
+                        f"(got {max_torque_nm}); an uncapped motor is not a model"
+                    )
+                # Default ×100: a 0.01 rad/s error already saturates the cap. With
+                # damping = maxTorqueNm a "brake" at target 0 is a DAMPER and sags
+                # at ω = τ_load/torque (measured: 22.6° of creep under a 2 mN·m cap
+                # against a 0.53 mN·m pendulum).
+                damping_nm = float(motor["damping"]) if motor.get("damping") is not None else max_torque_nm * 100
+                if not math.isfinite(damping_nm) or damping_nm <= 0:
+                    raise ValueError(f"joint {joint['bodyA']}~{joint['bodyB']}: motor.damping must be > 0")
+                # World is mm + mN (density kg/mm³, gravity 9810 mm/s²), so torque
+                # in this unit system is mm·mN = 1e-6 N·m: N·m → rapier units is ×1e6.
+                torque_scale = 1e6
+                builder = (
+                    builder.motor_model(R.MotorModel.FORCE_BASED)
+                    .motor_max_force(max_torque_nm * torque_scale)
+                    .motor_velocity(target_vel, damping_nm * torque_scale)
+                )
+        if joint.get("motor") and joint["type"] != "revolute":
+            # A motor on a slider is a category error, not a typo: silently making
+            # it a slide would report the drive as applied while nothing turned.
+            raise ValueError(
+                f"joint {joint['bodyA']}~{joint['bodyB']}: motor is revolute-only (this is a {joint['type']})"
             )
         if not joint_contacts:
             builder = builder.contacts_enabled(False)
@@ -6949,6 +7091,43 @@ def op_simulate_physics(params: dict) -> dict:
             if _relative_tilt_degrees(rotation, initial_rotations[name]) > TOPPLE_EVENT_DEG:
                 topple_noted.add(name)
                 note_step(step, f"倾倒:{name}")
+
+        # Gear coupling: the ratio is PRESCRIBED, not solved (mirrors physics.ts).
+        # rapier has no gear constraint, and an external per-step impulse cannot be
+        # exact — it corrects one step after the solver integrated; a measured
+        # version left 0.9% error at 1/1000 and 16% at 1/60. So the follower's pose
+        # and angular velocity are projected onto the ratio before the frame is
+        # recorded. Torque is not transferred; a contact run without the gear joint
+        # is the tool for "do the teeth actually drive it".
+        for gear in gears:
+            body_a = world.rigid_bodies[gear["a"]]
+            body_b = world.rigid_bodies[gear["b"]]
+            if float(body_b.inv_mass) == 0.0:
+                continue
+            matrix_a = _quat_to_matrix3(body_a.rotation.quaternion)
+            matrix_b = _quat_to_matrix3(body_b.rotation.quaternion)
+            ua = [sum(matrix_a[i][j] * gear["axisA"][j] for j in range(3)) for i in range(3)]
+            ub = [sum(matrix_b[i][j] * gear["axisB"][j] for j in range(3)) for i in range(3)]
+            length_a = math.hypot(*ua) or 1.0
+            length_b = math.hypot(*ub) or 1.0
+            ua = [value / length_a for value in ua]
+            ub = [value / length_b for value in ub]
+            rel = _quat_mul(_quat_conj(gear["qA0"]), tuple(body_a.rotation.quaternion))
+            vlen = math.sqrt(rel[0] ** 2 + rel[1] ** 2 + rel[2] ** 2)
+            dot = rel[0] * ua[0] + rel[1] * ua[1] + rel[2] * ua[2]
+            theta_a = (1 if dot > 0 else -1 if dot < 0 else 1) * 2 * math.atan2(vlen, rel[3])
+            theta_b = gear["ratio"] * theta_a
+            half = theta_b / 2
+            sin_half = math.sin(half)
+            turn = (ub[0] * sin_half, ub[1] * sin_half, ub[2] * sin_half, math.cos(half))
+            body_b.rotation = _quat_mul(turn, gear["qB0"])
+            w_a = body_a.angvel
+            w_a_axis = w_a[0] * ua[0] + w_a[1] * ua[1] + w_a[2] * ua[2]
+            body_b.angvel = (
+                ub[0] * gear["ratio"] * w_a_axis,
+                ub[1] * gear["ratio"] * w_a_axis,
+                ub[2] * gear["ratio"] * w_a_axis,
+            )
 
         if step % traj_every == 0:
             record_traj(step)
@@ -7131,6 +7310,83 @@ def op_simulate_physics(params: dict) -> dict:
             "the rigid-body solver did not simulate friction"
         )
 
+    # ---- motor diagnostics (mirrors src/host/physics.ts) -------------------
+    # "Did the drive actually deliver?" — the angle the joint really turned, from
+    # the same pose timeline the panel plays back, and the relative angular
+    # velocity at the last step. A cap too small shows up as turnedDeg ≈ 0 while
+    # the target still says 20 rad/s: that is a STALL, and it must be visible.
+    motors = []
+    for joint in scenario.get("joints") or []:
+        motor = joint.get("motor")
+        if not motor:
+            continue
+        a = bodies.get(joint["bodyA"])
+        b = bodies.get(joint["bodyB"])
+        if a is None or b is None:
+            continue
+        axis_local = joint.get("axisA") or joint["axis"]
+        axis_length = math.hypot(*(float(v) for v in axis_local)) or 1.0
+        unit = [float(v) / axis_length for v in axis_local]
+        turned = 0.0
+        prev = None
+        for poses in traj_poses:
+            rel = _quat_mul(
+                _quat_conj(poses[joint["bodyA"]]["rotation"]),
+                poses[joint["bodyB"]]["rotation"],
+            )
+            if prev is not None:
+                delta = _quat_mul(_quat_conj(prev), rel)
+                vlen = math.sqrt(delta[0] ** 2 + delta[1] ** 2 + delta[2] ** 2)
+                angle = 2 * math.atan2(vlen, delta[3])
+                dot = delta[0] * unit[0] + delta[1] * unit[1] + delta[2] * unit[2]
+                turned += (1 if dot > 0 else -1 if dot < 0 else 0) * angle
+            prev = rel
+        matrix = _quat_to_matrix3(world.rigid_bodies[a].rotation.quaternion)
+        world_axis = [sum(matrix[i][j] * unit[j] for j in range(3)) for i in range(3)]
+        wa = world.rigid_bodies[a].angvel
+        wb = world.rigid_bodies[b].angvel
+        measured = sum((wb[i] - wa[i]) * world_axis[i] for i in range(3))
+        target = float(motor["targetVelocityRadPerSec"])
+        max_torque = float(motor["maxTorqueNm"])
+        damping = float(motor["damping"]) if motor.get("damping") is not None else max_torque * 100
+        reached = abs(measured - target) <= max(0.1 * abs(target), 0.05)
+        motors.append(
+            {
+                "joint": f"{joint['bodyA']}~{joint['bodyB']}",
+                "targetVelocityRadPerSec": target,
+                "maxTorqueNm": max_torque,
+                "damping": damping,
+                "measuredRadPerSec": round(measured, 4),
+                "turnedDeg": round(turned * 180 / math.pi, 2),
+                "reachedTarget": bool(reached),
+            }
+        )
+        if not reached:
+            notes.append(
+                f"motor {joint['bodyA']}~{joint['bodyB']} did NOT reach its target: "
+                f"commanded {target} rad/s, measured {round(measured, 4)} rad/s, "
+                f"turned {round(turned * 180 / math.pi, 2)}° — the {max_torque} N·m cap was "
+                "spent on the load (tooth/stop/friction). That is a STALL, not a solver artefact."
+            )
+
+    gear_report = []
+    for joint in scenario.get("joints") or []:
+        if joint.get("type") != "gear":
+            continue
+        axis_a = joint.get("axisA") or joint["axis"]
+        axis_b = joint.get("axisB") or joint.get("axisA") or joint["axis"]
+        turned_a = _turned_about(traj_poses, joint["bodyA"], axis_a)
+        turned_b = _turned_about(traj_poses, joint["bodyB"], axis_b)
+        gear_report.append(
+            {
+                "joint": f"{joint['bodyA']}~{joint['bodyB']}",
+                "ratio": float(joint["ratio"]),
+                "turnedADeg": round(turned_a * 180 / math.pi, 2),
+                "turnedBDeg": round(turned_b * 180 / math.pi, 2),
+                "measuredRatio": round(turned_b / turned_a, 4) if abs(turned_a) > 1e-9 else 0.0,
+            }
+        )
+
     loop_closers = _joint_loop_closers(scenario.get("joints") or [])
     metrics = {
         "maxPenetrationMm": round(abs(min(0.0, max_penetration)), 4),
@@ -7143,12 +7399,17 @@ def op_simulate_physics(params: dict) -> dict:
         "jointToleranceMm": JOINT_TOLERANCE_MM,
         "contactsDisabled": contacts_disabled,
         "colliders": collider_kinds,
+        "frictions": friction_used,
         "closedLoop": bool(loop_closers),
         "loopJoints": loop_closers,
         "notes": notes,
     }
     if hold_analysis:
         metrics["holdAnalysis"] = hold_analysis
+    if motors:
+        metrics["motors"] = motors
+    if gear_report:
+        metrics["gears"] = gear_report
 
     return {
         "metrics": metrics,

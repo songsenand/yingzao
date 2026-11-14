@@ -739,13 +739,14 @@ returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`
 
 ## `simulate_physics`
 
-Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames.
+Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames. A revolute joint may carry a torque-limited motor (`motor`): with one the mechanism is DRIVEN and keeps turning; without one the only input is an impulse (initialAngularVelocity) that dies at the first tooth/stop — a still keyframe then means "nothing drove it", not "it slips". Joints may also be `gear` (a kinematic ratio coupling between two shafts — rapier has no gear constraint, so it is prescribed, not solved). `metrics.motors` reports commanded vs measured so a stall is a number. Two more INPUTS decide whether that verdict means anything: `friction` per part (default rapier 0.5, echoed in `metrics.frictions` — a self-locking worm is η≈19% at 0.5 and η≈40% at POM's 0.15) and `timestepSec` (default 1/60, too coarse for fast contact: keep v·dt ≤ clearance/10, e.g. 1/2000 for a 20 rad/s shaft).
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `parts` | array | **required** | Parts in the scene. |
 | `joints` | array | — | Joints between parts: "revolute" (hinge) or "prismatic" (slide). |
 | `durationSec` | number | — | Simulation length. Default 2. |
+| `timestepSec` | number | — | Integration step, s. Default 1/60 — which is WRONG for fast contact: a surface moving v mm/s advances v·dt per step, and when that is comparable to the clearance the solver resolves the teeth as interpenetration (a worm at 2 rad/s on a 4mm pitch radius advances 0.133mm/step against a 0.03–0.15mm backlash). Rule of thumb: v·dt ≤ clearance/10, e.g. 1/2000 for a 20 rad/s shaft. Cost is linear in steps. |
 | `gravity` | array | — | mm/s². Default [0,0,-9810] (z-up). |
 | `tiltDeg` | number | — | Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing the gravity vector. Ignored when gravity is given. |
 | `tiltAboutAxis` | array | — | Axis to tilt about, default [0,1,0]. |
@@ -755,7 +756,7 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 simulate_physics({ parts: [] })
 ```
 
-returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `closedLoop`, `loopJoints`, `holdAnalysis`, `notes`, `keyframes`
+returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `closedLoop`, `loopJoints`, `holdAnalysis`, `motors`, `gears`, `frictions`, `notes`, `keyframes`
 
 
 ## `simulate_stress`

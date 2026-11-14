@@ -6003,3 +6003,51 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/provenance.ts`（新）、`tools.ts`、`version.ts`、`runs.ts`、`products.ts`、`shared/{types,products-wire}.ts`、`client/{index,activity}.ts`；旧版本/运行无 `originSessionId`，保持不自动弹。
 
 **非目标：** 不改变手动点击右栏/表头按钮；不把 provenance 写入交付导出包。
+
+## 2026-11-14：关节电机进入工具接口（revolute `motor`），物理从“只能甩一下”变成“能驱动”
+
+**触发条件：** 第 1 条（用户明确要求“要改”）+ 第 4 条（跨 TS/Python 两份实现与工具契约）。
+
+**要解决的问题：** 减速器会话里蜗杆给了 30 rad/s 初速度、转 7.5° 走完 0.056mm 侧隙就停，六帧关键帧同一姿态。根因不是齿形（运动学 −θ/12 全程 ≤0.0005mm³），而是 `simulate_physics` 的关节只接受几何约束参数，**没有暴露 rapier 本就有的 `configureMotorVelocity` / `setMotorMaxForce`**：唯一的运动输入 `initialAngularVelocity` 是冲量不是驱动。用户当时的判断“旋转没有暴露，所以没法让它自行旋转”是准确的。
+
+**决策内容：** revolute 关节新增可选 `motor: { targetVelocityRadPerSec, maxTorqueNm, damping? }`；`maxTorqueNm`（N·m）按 mm/mN 世界 ×1e6 落到 rapier 的 `setMotorMaxForce`，`configureMotorModel(ForceBased)` + `configureMotorVelocity(target, damping)`；`damping` 默认 `maxTorqueNm × 100`。报告新增 `metrics.motors`（指令 vs 实测相对角速度、累计转角、`reachedTarget`），未达标时加一条 STALL note。**TS（`src/host/physics.ts`）与 Python worker（`python/cad_worker/worker.py`）同时实现**——canonical 在 Python，只改一处会静默不一致。
+
+**理由：** 没有驱动，任何“它转不动/打滑”的结论都无从谈起；扭矩上限是让“卡死”成为可证伪结果的前提，而不是把目标速度当结果报出去。`damping` 取 `maxTorqueNm × 100`（而非 `maxTorqueNm`）是实测逼出来的：默认值下一台 target=0 的“刹车”会退化成阻尼器，2 mN·m 上限顶 0.53 mN·m 的摆仍爬行 22.6°；×100 后 0.01 rad/s 误差即饱和到上限。
+
+**依据：** `scripts/accept-physics-motor.mjs`（已进 `npm run accept`）四组可证伪断言：①自由转子 3 rad/s → 两引擎均 turned 171.88°、measured 3.0000；②带重力摆 1e-2 N·m 上限 → measured 2.8504 达目标；③5e-4 N·m 上限 → 只到 1.866 rad/s 且 `reachedTarget:false` + STALL note；④1e-6 N·m 上限 → 被负载拖走（−19.28 rad/s）；⑤上限 0 与 prismatic+motor 均被拒绝。数值在 Python/TS 两份实现上逐位一致。回归：`accept-physics-sanity` / `accept-physics-contact` / `accept-physics-parity` / `accept-tool-contracts` / `accept-tool-output` / `accept-skill-tools` 全过。
+
+**影响：** `src/host/physics.ts`、`src/host/tools.ts`（schema + 输出）、`python/cad_worker/worker.py`、`docs/TOOL-CONTRACTS.md`（重新生成）、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + `docs/en/llm/engines.md`、`docs/llm/traps.md` + `docs/en/llm/traps.md`、`DESIGN.md` §6.5 实现要点、`package.json` accept 清单。面板回放无需改动：run 的 `trajectory.json` 本来就会播。
+
+**非目标：** 不报告传递扭矩/功率/效率（电机是输入不是测量）；不做 target=0 的静力夹紧语义——那要 `staticFriction` / `check_assembly`；不改 `simulate_motion` 的 kinematic `drive`（它规定转角、不解决接触传力）。
+
+## 2026-11-14（补）：物理的另外两个输入也补上——`timestepSec` 与 `friction`
+
+**触发条件：** 第 1 条（用户要求检查“仿真能力不足”的结论）+ 第 4 条（工具 schema 与两份实现）。
+
+**要解决的问题：** 减速器会话在 r024–r032 得出“m=1 在求解器尺度上注定临界，必须改 m=1.5”，依据是“齿隙 0.03–0.15mm 与求解器穿透 0.07–0.16mm 同量级”。检查发现**那次实验缺两个输入**：`timestepSec` 只存在于 domain（`physics.ts` 的 `PhysicsScenario`）而从未出现在工具 schema、也从未从 `runPhysicsJob` 透传，于是九次 run 全被钉死在 1/60；`friction` 则完全没有字段，所有接触跑在 rapier 默认 μ=0.5 上，而讨论对象是 POM。与上一轮的 `motor` 是同一类缺陷：**引擎支持、接口没开**。
+
+**决策内容：** 工具 schema 新增顶层 `timestepSec`、每件 `friction`；TS 与 Python worker 同步实现；报告新增 `metrics.frictions`（实际生效的 μ，未声明时回读 rapier 的 0.5 并如实报出）；`stepsRun` 用于确认步数。schema 描述里写死经验法则：v·dt ≤ 间隙/10（4mm 节圆、20 rad/s → 1/2000 量级）。
+
+**理由：** 侧隙与“每步推进量”同量级时，接触解算必然把齿面当过度侵入；这不是求解器精度上限，是时间步选错。μ 是蜗杆传动的决定变量（升角 7.1°：μ=0.5 → 摩擦角 26.6°、自锁、η≈19%；μ=0.15 → η≈40%），不声明就等于把 rapier 的默认值当成设计参数。
+
+**依据：** `scripts/accept-physics-motor.mjs` 新增断言：①`timestepSec: 1/1000` → `stepsRun: 1000`；②未声明 μ 时 `metrics.frictions` 报 0.5；③20° 斜面（tan20=0.364）μ=0.6 保持（−0.01mm）、μ=0.1 下滑 130.5mm，TS 与 Python 一致。另做三组旁证：轮子移出啮合时蜗杆精确 2.000 rad/s、啮合后降到 0.60（1/60）/0.76（1/2000）；μ=0 仍只有 1.355 rad/s；蜗杆与蜗轮 STL 布尔交集 0.0mm³。`accept-physics-parity` / `accept-tool-contracts` / `accept-tool-output` 全过。
+
+**影响：** `src/host/physics.ts`、`src/host/tools.ts`、`python/cad_worker/worker.py`、`docs/TOOL-CONTRACTS.md`、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + `docs/en/llm/engines.md`、`DESIGN.md` §6.5、`package.json`。
+
+**非目标：** 不宣称 m=1 可行——那要先用正确的 dt 与 μ 重跑；不改 `simulate_motion`；不为减速器做专用齿轮约束。
+
+## 2026-11-14：`gear` —— 传动比交给约束，接触只回答“咬不咬得动”
+
+**触发条件：** 第 1 条（用户拍板“做 A”）+ 第 2 条（两组对照实验的定量结论）+ 第 4 条（跨 TS/Python 与工具契约）。
+
+**要解决的问题：** 蜗杆 1:12 在接触求解下要么 STALL 要么比率错（r024–r032：目标 2–6 rad/s，实测 0.39–2.14，比率 10.1–13.3）；发条青蛙那组“完美”数字全部来自规定位姿下的布尔干涉，传动比是按齿数**推**出来的，从未被驱动过。根因是分工错了：让接触求解器去发现一个本就是设计事实的比率，而它对 dt 与 μ 的敏感度高两个数量级。
+
+**决策内容：** `joints[].type` 增加 `'gear'`（**不新增工具**，工具数仍 41），参数 `ratio`（B 每转一圈 A 转多少，带符号）。rapier 无齿轮约束，因此实现为**运动学投影**：每步在记录轨迹之前，按 `ratio` 把从动件的姿态与角速度投到主动件上；该对用 interaction groups 做接触隔离（≤16 件时按位分配，否则退回默认并明说）。报告新增 `metrics.gears`（声明比率 vs 实际比率、两侧转角），该对列入 `contactsDisabled`。TS 与 Python 同步实现。
+
+**理由：** 刚性齿轮的比率是约束事实，不是接触涌现量；用约束表达它，比率就精确且与 dt 无关。脉冲式耦合（带反力矩）实测 1/1000 差 0.9%、1/60 差 16%——外部耦合只能在下一次迭代纠正，物理上就次优，所以放弃。代价是**不传扭矩**：这是刻意的边界，写进 schema 描述、skill、engines.md 与 DESIGN；“齿咬不咬得动”必须用**去掉 gear 关节**的接触 run，“会不会撞”用 motion 的干涉时间线。
+
+**依据：** `scripts/accept-physics-gear.mjs`（已进 `npm run accept`）：①真实 30T→10T（青蛙 v043/v045）在 1/60 与 1/1000 下 `measuredRatio` 均 = **-3.0000**；②故意重叠的两个齿轮跑出 **0 穿透**（隔离生效，否则会报整块重叠）；③减速器真实蜗杆/蜗轮对，蜗杆 2 rad/s 驱动，比率 = **-0.0833 (= -1/12)**、穿透 0、蜗杆达速；④ratio 0 被拒绝。TS 与 Python 逐位一致。回归：`accept-physics-parity` / `accept-physics-motor` / `accept-tool-contracts` / `accept-tool-output` 全过。
+
+**影响：** `src/host/physics.ts`、`src/host/tools.ts`、`python/cad_worker/worker.py`、`scripts/accept-physics-gear.mjs`、`package.json`、`docs/TOOL-CONTRACTS.md`、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + 英文镜像、`DESIGN.md` §6.5。
+
+**非目标：** 不做齿轮专用代码（平行/相交/正交轴同一条路径）；不做打滑/效率/扭矩传递；不改 `simulate_motion` 的 kinematic drive；不发面齿轮几何参数（齿数不进模型，比率由调用者给）。

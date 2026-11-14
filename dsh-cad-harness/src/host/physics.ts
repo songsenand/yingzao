@@ -22,8 +22,56 @@ export interface PhysicsPartInput {
   rotation?: [number, number, number];
   /** kg/mm³. Default 1.05e-6 (≈ ABS plastic). */
   density?: number;
+  /**
+   * Coulomb friction coefficient for this part's collider. Default: rapier's own
+   * default (0.5) — which is a NUMBER NOBODY CHOSE. It matters: a single-start
+   * worm has a 7.1° lead angle, and μ=0.5 puts the friction angle at 26.6°, i.e.
+   * deep in the self-locking regime (η ≈ 19%), while POM-on-POM μ≈0.15 is a
+   * different machine (η ≈ 40%). Without this field every "it stalls" verdict
+   * was made at an undeclared μ.
+   */
+  friction?: number;
   initialAngularVelocity?: [number, number, number]; // rad/s
   fellOverCheck?: boolean;
+}
+
+/**
+ * A torque-limited velocity motor on a REVOLUTE joint: it drives bodyB relative
+ * to bodyA about the joint axis at `targetVelocityRadPerSec`, and may never
+ * exceed `maxTorqueNm`.
+ *
+ * Why this exists (2026-11-14, the reducer session): the joint had no motor, so
+ * the only way to make a mechanism move was `initialAngularVelocity` — an
+ * IMPULSE, not a drive. A worm given 30 rad/s stopped after 7.5°, when it had
+ * spent the 0.056 mm backlash and hit the first tooth face. Every frame of that
+ * run looked identical, and the honest reading of it was "the tool cannot drive
+ * anything", not "the gearbox slips". Rapier has had the motor all along
+ * (`configureMotorVelocity` + `setMotorMaxForce`); the interface never exposed it.
+ *
+ * Units: N·m and rad/s at the interface; internally rapier works in mm/mN, so
+ * 1 N·m = 1e6 N·mm. The cap is what makes a stall a RESULT instead of a bug: a
+ * motor that cannot overcome the next tooth reports `measuredRadPerSec` far
+ * below the target instead of silently lying.
+ */
+export interface PhysicsMotorInput {
+  /**
+   * Target angular velocity of B relative to A about the joint axis (right-hand
+   * rule about `axisA`, world direction at t=0), rad/s. 0 = a brake that holds
+   * the joint against whatever torque is under the cap.
+   */
+  targetVelocityRadPerSec: number;
+  /** Hard cap on motor torque, N·m. Must be > 0 — an uncapped motor is not a model of anything. */
+  maxTorqueNm: number;
+  /**
+   * Rapier's damping coefficient for the velocity motor, in N·m·s/rad.
+   * Default `maxTorqueNm × 100` — a 0.01 rad/s speed error already saturates the
+   * cap, so the cap (not the gain) sets the torque and `maxTorqueNm` means what
+   * it says. The ×100 is not cosmetic: with damping = maxTorqueNm a "brake" at
+   * target 0 is a DAMPER and sags at ω = τ_load/torque (measured: a 0.53 mN·m
+   * pendulum crept 22.6° in 1 s under a 2 mN·m cap — a hold that looked like a
+   * failure).
+   */
+  damping?: number;
 }
 
 export interface PhysicsJointInput {
@@ -35,7 +83,7 @@ export interface PhysicsJointInput {
    * hold a sliding part in a rigid-body run was to weld it (fixed) or to hinge
    * it, so "does this slide stay put under load" could not be asked at all.
    */
-  type: 'revolute' | 'prismatic';
+  type: 'revolute' | 'prismatic' | 'gear';
   bodyA: string;
   bodyB: string;
   /** Anchor in A's local frame, mm. */
@@ -65,6 +113,28 @@ export interface PhysicsJointInput {
    * the solver simulated friction.
    */
   staticFriction?: number;
+  /**
+   * `gear` only: turns of B per turn of A, about each body's own `axisA`/`axisB`
+   * (signed — an external spur mesh with both axes +Z is negative, e.g. -40/20).
+   *
+   * A gear is a COUPLING, not a contact problem: it makes the ratio exact instead
+   * of asking a contact solver to rediscover it. The teeth still have to be
+   * checked for collision — that is `simulate_motion`'s exact interference
+   * timeline, which is what already passes for the 12:1 worm pair. The two bodies
+   * of a gear pair do not collide in this run (same rule as a bearing): the
+   * coupling would otherwise fight the solver and produce the "chewing" that was
+   * indistinguishable from a real stall. The coupling is KINEMATIC: it holds the
+   * ratio exactly and transfers no torque, so a slipping mesh is out of scope — a
+   * contact run without this joint is the tool for that question.
+   */
+  ratio?: number;
+  /**
+   * revolute only: a torque-limited velocity motor on this hinge. Without it the
+   * run can only be nudged (initialAngularVelocity) and will coast to a stop on
+   * the first tooth/stop it meets — a mechanism that is "supposed to run" needs
+   * a drive, and a drive needs a torque cap to be honest about stalling.
+   */
+  motor?: PhysicsMotorInput;
 }
 
 export interface PhysicsScenario {
@@ -119,6 +189,36 @@ export interface PhysicsReport {
     geometrySuspectWarn?: number;
     /** Quasi-static "will the slide hold?" answers, when staticFriction was given. */
     holdAnalysis?: { joint: string; mu: number; massKg: number; axialDriveN: number; frictionCapN: number; holds: boolean }[];
+    /**
+     * One entry per motor joint: what was commanded and what the solver actually
+     * delivered at the last step. `measuredRadPerSec` materially below
+     * `targetVelocityRadPerSec` is a STALL (the teeth/stop held it), not a
+     * numerical artefact — that is the number a "did it really turn?" claim needs.
+     */
+    /**
+     * One entry per gear coupling: the declared ratio and the ratio the run
+     * produced. They agree exactly because the ratio is PRESCRIBED by a kinematic
+     * coupling — that is not a measurement of transmission, and the wording in
+     * the report must not imply otherwise.
+     */
+    gears?: {
+      joint: string;
+      ratio: number;
+      turnedADeg: number;
+      turnedBDeg: number;
+      measuredRatio: number;
+    }[];
+    motors?: {
+      joint: string;
+      targetVelocityRadPerSec: number;
+      maxTorqueNm: number;
+      damping: number;
+      /** B's angular velocity relative to A about the joint axis at the final step, rad/s. */
+      measuredRadPerSec: number;
+      /** Signed angle the joint actually turned over the run, degrees (wrapped-free). */
+      turnedDeg: number;
+      reachedTarget: boolean;
+    }[];
     /** Anchor gap per joint, measured at t=0 (before any step). */
     initialJointGaps?: { joint: string; gapMm: number }[];
     /** The t=0 tolerance used by the assembly gate, mm. */
@@ -127,6 +227,12 @@ export interface PhysicsReport {
     contactsDisabled?: string[];
     /** The collision shape each body actually got: "hull" or "trimesh". */
     colliders?: Record<string, 'hull' | 'trimesh'>;
+    /**
+     * The Coulomb friction each collider actually carries. Always reported because
+     * 0.5 (rapier's default) is a number nobody chose, and a self-locking worm's
+     * efficiency moves by 2x between μ=0.5 and μ=0.15.
+     */
+    frictions?: Record<string, number>;
     /** The kinematic graph contains a cycle (a fact, not a verdict). */
     closedLoop?: boolean;
     /** The joints that close a loop, in declaration order. */
@@ -142,6 +248,12 @@ export interface PhysicsReport {
   durationSec: number;
 }
 
+/**
+ * The world is mm + mN (density kg/mm³, gravity 9810 mm/s²), so torque in this
+ * unit system is mm·mN = 1e-6 N·m: N·m → rapier units is × 1e6.
+ */
+const TORQUE_NM_TO_RAPIER = 1e6;
+
 let rapierReady: typeof RAPIER | null = null;
 async function R() {
   if (!rapierReady) { await RAPIER.init(); rapierReady = RAPIER; }
@@ -155,6 +267,23 @@ function quatToMatrix3(q: { x: number; y: number; z: number; w: number }): numbe
     [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
     [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
   ];
+}
+
+/** Hamilton product: qMul(a,b) applies b first, then a (same convention as rapier's q1*q2). */
+function quatMul(
+  a: { x: number; y: number; z: number; w: number },
+  b: { x: number; y: number; z: number; w: number },
+): { x: number; y: number; z: number; w: number } {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+  };
+}
+
+function quatConj(q: { x: number; y: number; z: number; w: number }): { x: number; y: number; z: number; w: number } {
+  return { x: -q.x, y: -q.y, z: -q.z, w: q.w };
 }
 
 /** The body's local +Z in world coordinates. */
@@ -260,6 +389,7 @@ export async function runPhysics(scenario: PhysicsScenario): Promise<PhysicsRepo
       position: part.position,
       ...(part.rotation ? { rotation: part.rotation } : {}),
       ...(part.density !== undefined ? { density: part.density } : {}),
+      ...(part.friction !== undefined ? { friction: part.friction } : {}),
       ...(part.initialAngularVelocity ? { initialAngularVelocity: part.initialAngularVelocity } : {}),
       ...(part.fellOverCheck !== undefined ? { fellOverCheck: part.fellOverCheck } : {}),
     });
@@ -301,6 +431,41 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
 
   const bodies = new Map<string, RAPIER.RigidBody>();
   const colliders = new Map<string, RAPIER.Collider>();
+  /** μ the solver actually used, per part (declared, or rapier's undeclared default). */
+  const frictionUsed: Record<string, number> = {};
+  const applyFriction = (collider: RAPIER.Collider, part: PhysicsPartInput) => {
+    if (part.friction !== undefined) collider.setFriction(part.friction);
+    frictionUsed[part.name] = collider.friction();
+  };
+
+  // A gear pair must not collide with itself in a physics run: the coupling
+  // already fixes the ratio, and letting the teeth resolve as contacts turns a
+  // designed mesh into permanent interpenetration ("chewing"). Collision groups
+  // express that per part; rapier gives 16 usable bits, so a scene with more than
+  // 16 parts falls back to the default (and says so) rather than silently
+  // isolating the wrong pair.
+  const gearPartners = new Map<string, Set<string>>();
+  for (const j of scenario.joints ?? []) {
+    if (j.type !== 'gear') continue;
+    if (!gearPartners.has(j.bodyA)) gearPartners.set(j.bodyA, new Set());
+    if (!gearPartners.has(j.bodyB)) gearPartners.set(j.bodyB, new Set());
+    gearPartners.get(j.bodyA)!.add(j.bodyB);
+    gearPartners.get(j.bodyB)!.add(j.bodyA);
+  }
+  const gearIsolation = gearPartners.size > 0 && scenario.parts.length <= 16;
+  const bitOf = new Map<string, number>();
+  if (gearIsolation) scenario.parts.forEach((p, i) => bitOf.set(p.name, i));
+  const applyGroups = (collider: RAPIER.Collider, part: PhysicsPartInput) => {
+    if (!gearIsolation) return;
+    const bit = bitOf.get(part.name);
+    if (bit === undefined) return;
+    let filter = 0xffff;
+    for (const other of gearPartners.get(part.name) ?? []) {
+      const ob = bitOf.get(other);
+      if (ob !== undefined) filter &= ~(1 << ob);
+    }
+    collider.setCollisionGroups(((1 << bit) << 16) | filter);
+  };
   const colliderKinds: Record<string, 'hull' | 'trimesh'> = {};
   const fellOverChecks: string[] = [];
   const initialPos = new Map<string, [number, number, number]>();
@@ -324,13 +489,17 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       if (await isConvexStl(part.stl)) {
         const cd = RAPIER_.ColliderDesc.convexHull(verticesOf(part.stl))!;
         cd.setDensity(part.density ?? 1.05e-6);
-        world.createCollider(cd, body);
+        const collider = world.createCollider(cd, body);
+        applyFriction(collider, part);
+        applyGroups(collider, part);
         colliderKinds[part.name] = 'hull';
       } else {
         const { vertices, indices } = trimeshOf(part.stl);
         const cd = RAPIER_.ColliderDesc.trimesh(vertices, indices);
         cd.setDensity(part.density ?? 1.05e-6);
-        world.createCollider(cd, body);
+        const collider = world.createCollider(cd, body);
+        applyFriction(collider, part);
+        applyGroups(collider, part);
         colliderKinds[part.name] = 'trimesh';
       }
       if (part.initialAngularVelocity) {
@@ -342,11 +511,15 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       // convex fixed geometry MUST use a convex hull collider (robust + fast).
       // Non-convex geometry falls back to trimesh with finer substeps.
       if (await isConvexStl(part.stl)) {
-        world.createCollider(RAPIER_.ColliderDesc.convexHull(verticesOf(part.stl))!, body);
+        const collider = world.createCollider(RAPIER_.ColliderDesc.convexHull(verticesOf(part.stl))!, body);
+        applyFriction(collider, part);
+        applyGroups(collider, part);
         colliderKinds[part.name] = 'hull';
       } else {
         const { vertices, indices } = trimeshOf(part.stl);
-        world.createCollider(RAPIER_.ColliderDesc.trimesh(vertices, indices), body);
+        const collider = world.createCollider(RAPIER_.ColliderDesc.trimesh(vertices, indices), body);
+        applyFriction(collider, part);
+        applyGroups(collider, part);
         colliderKinds[part.name] = 'trimesh';
       }
     }
@@ -380,6 +553,8 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
   const initialJointGaps: { joint: string; gapMm: number }[] = [];
   const broken: string[] = [];
   for (const j of scenario.joints ?? []) {
+    if (j.type === 'gear') continue; // a coupling has no anchor points to line up
+    if (!j.anchorA || !j.anchorB) throw new Error(`joint ${j.bodyA}~${j.bodyB} (${j.type}) needs anchors`);
     const a = bodies.get(j.bodyA);
     const b = bodies.get(j.bodyB);
     if (!a || !b) throw new Error(`joint references unknown part: ${!a ? j.bodyA : j.bodyB}`);
@@ -417,7 +592,18 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     );
   }
 
-  // Joints: revolute (hinge) and prismatic (slide).
+  // Joints: revolute (hinge) and prismatic (slide) — plus `gear`, which is not a
+  // rapier joint at all but a velocity coupling enforced below.
+  const gears: {
+    a: RAPIER.RigidBody;
+    b: RAPIER.RigidBody;
+    ratio: number;
+    axisA: [number, number, number];
+    axisB: [number, number, number];
+    /** Poses at t=0: the ratio is applied relative to these. */
+    qA0: { x: number; y: number; z: number; w: number };
+    qB0: { x: number; y: number; z: number; w: number };
+  }[] = [];
   const jointContacts = scenario.jointContacts === true;
   const contactsDisabled: string[] = [];
   const jointAnchors: {
@@ -434,6 +620,19 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     const a = bodies.get(j.bodyA);
     const b = bodies.get(j.bodyB);
     if (!a || !b) throw new Error(`joint references unknown part: ${!a ? j.bodyA : j.bodyB}`);
+    if (j.type === 'gear') {
+      if (typeof j.ratio !== 'number' || !Number.isFinite(j.ratio) || j.ratio === 0) {
+        throw new Error(`joint ${j.bodyA}~${j.bodyB}: gear needs a non-zero ratio (turns of B per turn of A)`);
+      }
+      const { axisA, axisB } = axesOf(j, a, b);
+      contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
+      gears.push({
+        a, b, ratio: j.ratio, axisA, axisB,
+        qA0: a.rotation(), qB0: b.rotation(),
+      });
+      continue; // no rapier joint: nothing to anchor, and the pair must not collide
+    }
+    if (!j.anchorA || !j.anchorB) throw new Error(`joint ${j.bodyA}~${j.bodyB} (${j.type}) needs anchors`);
     const anchorA = { x: j.anchorA[0], y: j.anchorA[1], z: j.anchorA[2] };
     const anchorB = { x: j.anchorB[0], y: j.anchorB[1], z: j.anchorB[2] };
     const { axisA, axisB } = axesOf(j, a, b);
@@ -447,6 +646,28 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     if (!jointContacts) contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
     if (type === 'prismatic' && j.limits) {
       (joint as RAPIER.PrismaticImpulseJoint).setLimits(j.limits[0], j.limits[1]);
+    }
+    if (j.motor) {
+      // A motor on a slider is a category error, not a typo: making it a slide
+      // silently would report the drive as applied while nothing turned.
+      if (type !== 'revolute') {
+        throw new Error(`joint ${j.bodyA}~${j.bodyB}: motor is revolute-only (this is a ${type})`);
+      }
+      const { targetVelocityRadPerSec, maxTorqueNm } = j.motor;
+      if (!Number.isFinite(targetVelocityRadPerSec)) {
+        throw new Error(`joint ${j.bodyA}~${j.bodyB}: motor.targetVelocityRadPerSec must be a number`);
+      }
+      if (!Number.isFinite(maxTorqueNm) || maxTorqueNm <= 0) {
+        throw new Error(`joint ${j.bodyA}~${j.bodyB}: motor.maxTorqueNm must be > 0 (got ${maxTorqueNm}); an uncapped motor is not a model`);
+      }
+      const damping = j.motor.damping ?? maxTorqueNm * 100;
+      if (!Number.isFinite(damping) || damping <= 0) {
+        throw new Error(`joint ${j.bodyA}~${j.bodyB}: motor.damping must be > 0 (got ${damping})`);
+      }
+      const rj = joint as RAPIER.RevoluteImpulseJoint;
+      rj.configureMotorModel(RAPIER_.MotorModel.ForceBased);
+      rj.setMotorMaxForce(maxTorqueNm * TORQUE_NM_TO_RAPIER);
+      rj.configureMotorVelocity(targetVelocityRadPerSec, damping * TORQUE_NM_TO_RAPIER);
     }
     jointAnchors.push({
       name: `${j.bodyA}~${j.bodyB}`, type, a, b, anchorA, anchorB, axis,
@@ -468,6 +689,40 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
   let maxPenetration = 0;          // worst transient during the whole run (impact spikes live here)
   let settledPenetration = 0;      // worst penetration in the final 10% of steps
   const settleFrom = Math.floor(steps * 0.9);
+
+  /** A joint axis (local) expressed in world coordinates for the CURRENT pose. */
+  const worldAxisOf = (body: RAPIER.RigidBody, local: [number, number, number]): [number, number, number] => {
+    const m = quatToMatrix3(body.rotation());
+    return [
+      m[0]![0]! * local[0] + m[0]![1]! * local[1] + m[0]![2]! * local[2],
+      m[1]![0]! * local[0] + m[1]![1]! * local[1] + m[1]![2]! * local[2],
+      m[2]![0]! * local[0] + m[2]![1]! * local[1] + m[2]![2]! * local[2],
+    ];
+  };
+
+  /**
+   * Moment of inertia about a world-space axis through the centre of mass.
+   * 0 means the body is fixed (infinite inertia): such a body is a rigid
+   * reference, so the coupling simply leaves it alone.
+   */
+  const inertiaAbout = (body: RAPIER.RigidBody, u: [number, number, number]): number => {
+    if (body.invMass() === 0) return 0;
+    const m = quatToMatrix3(body.rotation());
+    // world -> body local (transpose), then body local -> principal frame.
+    const l: [number, number, number] = [
+      m[0]![0]! * u[0] + m[1]![0]! * u[1] + m[2]![0]! * u[2],
+      m[0]![1]! * u[0] + m[1]![1]! * u[1] + m[2]![1]! * u[2],
+      m[0]![2]! * u[0] + m[1]![2]! * u[1] + m[2]![2]! * u[2],
+    ];
+    const f = quatToMatrix3(body.principalInertiaLocalFrame());
+    const pl: [number, number, number] = [
+      f[0]![0]! * l[0] + f[1]![0]! * l[1] + f[2]![0]! * l[2],
+      f[0]![1]! * l[0] + f[1]![1]! * l[1] + f[2]![1]! * l[2],
+      f[0]![2]! * l[0] + f[1]![2]! * l[1] + f[2]![2]! * l[2],
+    ];
+    const pi = body.principalInertia();
+    return pi.x! * pl[0] ** 2 + pi.y! * pl[1] ** 2 + pi.z! * pl[2] ** 2;
+  };
 
   const samplePose = (name: string): PoseSample => {
     const b = bodies.get(name)!;
@@ -545,6 +800,32 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     }
 
     if (step % trajEvery === 0) recordTraj(step);
+
+    // Gear coupling: the ratio is PRESCRIBED, not solved. rapier has no gear
+    // constraint, and an external per-step impulse cannot be exact — a measured
+    // version left 0.9% error at 1/1000 and 16% at 1/60, because the coupling
+    // can only correct one step after the solver has already integrated. So the
+    // follower's pose and angular velocity are projected onto the ratio here,
+    // before the frame is recorded: what the panel plays IS the ratio, and the
+    // report says so. Torque is not transferred — a contact run without the gear
+    // joint is the tool for "do the teeth actually drive it".
+    for (const g of gears) {
+      if (g.b.invMass() === 0) continue;
+      const uA = worldAxisOf(g.a, g.axisA);
+      const uB = worldAxisOf(g.b, g.axisB);
+      const dA = quatMul(quatConj(g.qA0), g.a.rotation());
+      const len = Math.hypot(dA.x, dA.y, dA.z);
+      const thetaA = Math.sign(len > 1e-12 ? dA.x * uA[0] + dA.y * uA[1] + dA.z * uA[2] : 1)
+        * 2 * Math.atan2(len, dA.w);
+      const thetaB = g.ratio * thetaA;
+      const half = thetaB / 2;
+      const sinHalf = Math.sin(half);
+      const rot = { w: Math.cos(half), x: uB[0] * sinHalf, y: uB[1] * sinHalf, z: uB[2] * sinHalf };
+      g.b.setRotation(quatMul(rot, g.qB0), true);
+      const wA = g.a.angvel();
+      const wAaxis = wA.x * uA[0] + wA.y * uA[1] + wA.z * uA[2];
+      g.b.setAngvel({ x: uB[0] * g.ratio * wAaxis, y: uB[1] * g.ratio * wAaxis, z: uB[2] * g.ratio * wAaxis }, true);
+    }
 
     if (step < steps) world.step();
   }
@@ -728,6 +1009,114 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
   }
 
   const loopJoints = jointLoopClosers(scenario.joints ?? []);
+
+  // ---- motor diagnostics -------------------------------------------------
+  // "Did the drive actually deliver?" answered with two independent numbers:
+  // the angle the joint really turned (from the recorded pose timeline, so it is
+  // the same data the panel plays back) and the relative angular velocity at the
+  // last step (from the solver). A cap that is too small shows up here as
+  // turnedDeg ≈ 0 / measured ≈ 0 while the target says 20 rad/s.
+  /**
+   * Signed, unwrapped turn of ONE body about its own local axis, from the pose
+   * timeline the panel plays back. Used for the gear ratio: it is the number a
+   * reader can check against the animation, not an internal solver quantity.
+   */
+  const signedTurn = (name: string, axisLocal: [number, number, number]): number => {
+    const len = Math.hypot(axisLocal[0], axisLocal[1], axisLocal[2]) || 1;
+    const u: [number, number, number] = [axisLocal[0] / len, axisLocal[1] / len, axisLocal[2] / len];
+    let total = 0;
+    let prev: { x: number; y: number; z: number; w: number } | null = null;
+    for (const poses of trajPoses) {
+      const q = poses[name]!.rotation;
+      const cur = { x: q[0]!, y: q[1]!, z: q[2]!, w: q[3]! };
+      if (prev) {
+        const d = quatMul(quatConj(prev), cur);
+        const l = Math.hypot(d.x, d.y, d.z);
+        const angle = 2 * Math.atan2(l, d.w);
+        const sign = l > 1e-12 ? Math.sign(d.x * u[0] + d.y * u[1] + d.z * u[2]) : 0;
+        total += sign * angle;
+      }
+      prev = cur;
+    }
+    return total;
+  };
+
+  const motorJoints = (scenario.joints ?? []).filter((j) => j.motor);
+  const motors = motorJoints.map((j) => {
+    const a = bodies.get(j.bodyA)!;
+    const b = bodies.get(j.bodyB)!;
+    const axisLocal = jointAnchors.find((k) => k.name === `${j.bodyA}~${j.bodyB}` && k.type === 'revolute')!.axis;
+    const alen = Math.hypot(axisLocal.x, axisLocal.y, axisLocal.z) || 1;
+    const u: [number, number, number] = [axisLocal.x / alen, axisLocal.y / alen, axisLocal.z / alen];
+
+    // Signed, unwrapped turn of B relative to A about that axis, from the poses.
+    let turned = 0;
+    let prev: { x: number; y: number; z: number; w: number } | null = null;
+    for (const poses of trajPoses) {
+      const pa = poses[j.bodyA]!.rotation;
+      const pb = poses[j.bodyB]!.rotation;
+      const rel = quatMul(
+        quatConj({ x: pa[0]!, y: pa[1]!, z: pa[2]!, w: pa[3]! }),
+        { x: pb[0]!, y: pb[1]!, z: pb[2]!, w: pb[3]! },
+      );
+      if (prev) {
+        const d = quatMul(quatConj(prev), rel);
+        const len = Math.hypot(d.x, d.y, d.z);
+        const angle = 2 * Math.atan2(len, d.w);
+        const sign = len > 1e-12 ? Math.sign(d.x * u[0] + d.y * u[1] + d.z * u[2]) : 0;
+        turned += sign * angle;
+      }
+      prev = rel;
+    }
+
+    const m = quatToMatrix3(a.rotation());
+    const wAxis: [number, number, number] = [
+      m[0]![0]! * u[0] + m[0]![1]! * u[1] + m[0]![2]! * u[2],
+      m[1]![0]! * u[0] + m[1]![1]! * u[1] + m[1]![2]! * u[2],
+      m[2]![0]! * u[0] + m[2]![1]! * u[1] + m[2]![2]! * u[2],
+    ];
+    const wa = a.angvel();
+    const wb = b.angvel();
+    const measured =
+      (wb.x - wa.x) * wAxis[0] + (wb.y - wa.y) * wAxis[1] + (wb.z - wa.z) * wAxis[2];
+    const target = j.motor!.targetVelocityRadPerSec;
+    return {
+      joint: `${j.bodyA}~${j.bodyB}`,
+      targetVelocityRadPerSec: target,
+      maxTorqueNm: j.motor!.maxTorqueNm,
+      damping: j.motor!.damping ?? j.motor!.maxTorqueNm * 100,
+      measuredRadPerSec: +measured.toFixed(4),
+      turnedDeg: +((turned * 180) / Math.PI).toFixed(2),
+      // 10% band: a drive that cannot hold speed under its own load is a stall,
+      // and "reached" must not be claimed for 19/20 of the target.
+      reachedTarget: Math.abs(measured - target) <= Math.max(0.1 * Math.abs(target), 0.05),
+    };
+  });
+  const gearReport = (scenario.joints ?? []).filter((j) => j.type === 'gear').map((j) => {
+    const axisLocalA = (j.axisA ?? j.axis) as [number, number, number];
+    const axisLocalB = (j.axisB ?? j.axisA ?? j.axis) as [number, number, number];
+    const turnedA = signedTurn(j.bodyA, axisLocalA);
+    const turnedB = signedTurn(j.bodyB, axisLocalB);
+    return {
+      joint: `${j.bodyA}~${j.bodyB}`,
+      ratio: j.ratio!,
+      turnedADeg: +((turnedA * 180) / Math.PI).toFixed(2),
+      turnedBDeg: +((turnedB * 180) / Math.PI).toFixed(2),
+      measuredRatio: Math.abs(turnedA) > 1e-9 ? +(turnedB / turnedA).toFixed(4) : 0,
+    };
+  });
+
+  if (motors.length > 0) {
+    for (const m of motors) {
+      if (m.reachedTarget) continue;
+      notes.push(
+        `motor ${m.joint} did NOT reach its target: commanded ${m.targetVelocityRadPerSec} rad/s, `
+        + `measured ${m.measuredRadPerSec} rad/s, turned ${m.turnedDeg}° — the ${m.maxTorqueNm} N·m cap `
+        + 'was spent on the load (tooth/stop/friction). That is a STALL, not a solver artefact.',
+      );
+    }
+  }
+
   return {
     metrics: {
       maxPenetrationMm: +Math.abs(Math.min(0, maxPenetration)).toFixed(4),
@@ -740,9 +1129,12 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       jointToleranceMm: JOINT_TOLERANCE_MM,
       contactsDisabled,
       colliders: colliderKinds,
+      frictions: frictionUsed,
       closedLoop: loopJoints.length > 0,
       loopJoints,
       ...(holdAnalysis.length ? { holdAnalysis } : {}),
+      ...(motors.length ? { motors } : {}),
+      ...(gearReport.length ? { gears: gearReport } : {}),
       notes,
     },
     finalPositions,
