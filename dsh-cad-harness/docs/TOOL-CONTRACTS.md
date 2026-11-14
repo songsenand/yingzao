@@ -266,7 +266,7 @@ Audit the corpus before delivering: failing runs that are still the newest of th
 delivery_audit({ manifestPath: "…" })
 ```
 
-returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `unregistered`, `visual`
+returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `brief`, `unregistered`, `visual`
 
 
 ## `generate_part`
@@ -806,7 +806,7 @@ returns: `overallStatus`, `judgement`, `judgedBy`, `parts`, `pairs`
 
 ## `write_assembly`
 
-Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit.
+Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.
 
 | parameter | type | default | meaning |
 |---|---|---|---|

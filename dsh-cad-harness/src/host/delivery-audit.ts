@@ -75,6 +75,20 @@ export interface DeliveryAudit {
     /** Newest run per kind, with whether ANY newer version exists. */
     latestByKind: Record<string, { id: string; status: string; timestamp: string }>;
   };
+  /**
+   * Kickoff alignment recorded in the manifest's `brief`: what was settled with the
+   * user and what the agent assumed. `null` means no manifest (normal for a single
+   * part); `present: false` means a manifest with no brief at all.
+   */
+  brief: {
+    /** An assembly manifest exists (a single part normally has none). */
+    manifest: boolean;
+    /** The manifest carries a `brief` (kickoff alignment). */
+    present: boolean;
+    processes: string[];
+    verify: string[];
+    assumed: { item: string; kind: string }[];
+  };
   contract: {
     name: string | null;
     interfaces: number;
@@ -192,6 +206,7 @@ export async function auditDelivery(
   let contractError: string | null = null;
   /** Delivered versions named by the manifest: the visual gate's subject. */
   const manifestVersions = new Map<string, string>();
+  let brief: DeliveryAudit['brief'] = { manifest: false, present: false, processes: [], verify: [], assumed: [] };
   try {
     const resolved = await resolveAssemblyManifestPath(opts.manifestPath, {
       workspace: opts.workspace ?? project.cwd,
@@ -218,6 +233,30 @@ export async function auditDelivery(
       for (const child of node?.children ?? []) walk(child);
     };
     walk(root);
+
+    // Kickoff alignment (2026-11-14). The 减速器 session chose "FDM → worm drive"
+    // without asking buy-vs-make or which processes were allowed, and the frog
+    // delivered with "未测: simulate_physics" and still passed. Both are silent
+    // decisions; this section makes them visible, not blocking.
+    const raw = (root as any).brief;
+    if (raw && typeof raw === 'object') {
+      const assumed: { item: string; kind: string }[] = [];
+      for (const entry of (Array.isArray(raw.buyVsMake) ? raw.buyVsMake : [])) {
+        if (entry?.by === 'assumed') assumed.push({ item: `buyVsMake: ${entry.item} → ${entry.decision}`, kind: 'buyVsMake' });
+      }
+      for (const entry of (Array.isArray(raw.assumptions) ? raw.assumptions : [])) {
+        if (entry?.by !== 'user') assumed.push({ item: `assumption: ${entry.text}`, kind: 'assumption' });
+      }
+      brief = {
+        manifest: true,
+        present: true,
+        processes: Array.isArray(raw.processes) ? raw.processes.map(String) : [],
+        verify: Array.isArray(raw.verify) ? raw.verify.map(String) : [],
+        assumed,
+      };
+    } else {
+      brief = { manifest: true, present: false, processes: [], verify: [], assumed: [] };
+    }
 
     // "Update to the newest version" is only safe when the newest version can
     // still be an endpoint. A regeneration that dropped its datum() calls cannot
@@ -256,6 +295,27 @@ export async function auditDelivery(
 
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
+
+  // Kickoff alignment findings: visible, never blocking (the user asked for a
+  // record, not a gate — the gate is the human reading the list).
+  if (brief.present) {
+    if (brief.assumed.length > 0) {
+      push('info', 'brief-assumed',
+        `${brief.assumed.length} item(s) were decided by the agent, not the user: `
+        + brief.assumed.map((a) => a.item).join('; '));
+    }
+    if (brief.processes.length === 0) {
+      push('info', 'brief-no-processes', 'the brief records no allowed process set — per-part process provenance is then the only record of who chose it');
+    }
+    if (brief.verify.length === 0) {
+      push('info', 'brief-no-verify', 'the brief does not say what "working" means (assembly / motion / strength), so the delivery cannot be checked against a declared scope');
+    }
+  } else if (brief.manifest) {
+    push('info', 'brief-missing',
+      'the manifest has no `brief`: buy-vs-make, allowed processes and verification scope were never settled (or never recorded). '
+      + 'Record them before the first part, not after the model is built.');
+  }
+
 
   // ── per-version visual review ─────────────────────────────────────────────
   //
@@ -530,6 +590,7 @@ export async function auditDelivery(
     },
     parts: { total: parts.length, newestNeverValidated },
     runs: { total: runs.length, stale: staleRuns, failing, duplicateGroups, latestByKind },
+    brief,
     contract,
     unregistered: scan,
   };

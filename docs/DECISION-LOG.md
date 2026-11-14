@@ -6051,3 +6051,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/physics.ts`、`src/host/tools.ts`、`python/cad_worker/worker.py`、`scripts/accept-physics-gear.mjs`、`package.json`、`docs/TOOL-CONTRACTS.md`、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + 英文镜像、`DESIGN.md` §6.5。
 
 **非目标：** 不做齿轮专用代码（平行/相交/正交轴同一条路径）；不做打滑/效率/扭矩传递；不改 `simulate_motion` 的 kinematic drive；不发面齿轮几何参数（齿数不进模型，比率由调用者给）。
+
+## 2026-11-14：开工对齐写进契约（`brief`），问题用“准入规则”而不是“次数配额”约束
+
+**触发条件：** 第 1 条（用户拍板，并逐条改写了措辞）+ 第 4 条（工具契约与交付审计）。
+
+**要解决的问题：** 减速器会话在没问过“能不能外购”“允许哪些工艺”的情况下，直接宣布“FDM 就只能蜗杆方案”并据此开工；青蛙会话交付时“未测 simulate_physics”也照样过审。共同点不是“问题问多了”，而是**问题问少了，而且把待确认的约束说成了结论**——方案空间被静默砍掉，用户直到返工才知道。
+
+**决策内容：** 三处：①CAD persona（`presets/cad/workflow.md`，生成到 preset）写入“装配体开工先对齐三件事 + 问的准入规则”；②`cad-assembly` skill 加“Kickoff alignment”小节（只留一句判据；减速器那个反例按文体归到 `docs/llm/assembly.md` 的 Traps）；③装配清单根节点新增可选 `brief`（buyVsMake 逐项 `by: user|assumed`、允许工艺**集合**、`verify`、`assumptions`），`delivery_audit` 回读并把 `assumed` 条目作为 `info` 列出，缺失时也只用 `info`。**不设问题次数上限**——数量不是约束，准入与问法才是。
+
+**理由：** 数量配额会让模型为凑数而问，也会在真需要 4 个决策时被卡住；真正决定体验的是“该问的问了没有、问的方式对不对”。工艺由用户给**集合**、agent 按零件选，既不越权也不僵硬；`brief` 落在契约里，是为了让“谁定的”在交付物上可查，而不是靠回忆。
+
+**依据：** `accept-delivery-audit`（新增 6 条断言）：无 `brief` → `info/brief-missing` 且 verdict 仍 `not-excluded`；写入 `brief` 后 `processes`/`verify` 回读正确；两条 `assumed`（1 buyVsMake + 1 assumption）被逐条列出并产生 `info/brief-assumed`；**verdict 不变**。`sync-cad-preset --check` 通过（preset 由 `workflow.md` 生成）、`accept-tool-contracts`（schema 变更后重生成）、`accept-skill-tools`、`tsc`、`build` 全过。
+
+**影响：** `presets/cad/workflow.md` + `presets/cad/preset.patch.yml`（重新生成）、`skills/cad-assembly/SKILL.md`、`schemas/assembly-manifest.schema.json`、`src/host/delivery-audit.ts`、`src/host/tools.ts`、`docs/llm/assembly.md` + 英文镜像、`DESIGN.md` §5.3、`scripts/accept-delivery-audit.mjs`。
+
+**非目标：** 不把 `brief` 做成门禁（不 block）；不限制每轮提问次数；不新增工具（问题仍走 `ask_user_question`，只是问法变了）。

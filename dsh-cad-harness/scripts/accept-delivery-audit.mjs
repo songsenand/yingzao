@@ -165,6 +165,40 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   check(!clean.parts.newestNeverValidated.includes('支架'),
     'the clean part is not flagged as unvalidated');
 
+  // Kickoff alignment (2026-11-14): the manifest's `brief` is a RECORD, not a gate.
+  // Missing → warn; agent-assumed items → info; the verdict must NOT move.
+  check(clean.findings.some((f) => f.code === 'brief-missing' && f.severity === 'info'),
+    'a manifest with no `brief` is flagged (kickoff alignment was never recorded)',
+    clean.findings.map((f) => `${f.severity}/${f.code}`).join(', '));
+  check(clean.brief.manifest === true && clean.brief.present === false,
+    'the audit distinguishes "no manifest" from "manifest without a brief"');
+
+  {
+    const withBrief = JSON.parse((await import('node:fs')).readFileSync(join(workspace, 'assembly', 'assembly.json'), 'utf8'));
+    withBrief.root.brief = {
+      buyVsMake: [{ item: '齿轮', decision: 'buy', by: 'user' }, { item: '支架', decision: 'make', by: 'assumed' }],
+      processes: ['FDM', 'CNC'],
+      processesBy: 'user',
+      verify: ['assembly', 'motion'],
+      verifyBy: 'user',
+      assumptions: [{ text: '齿顶 ≥1.2mm 才可 FDM', by: 'assumed' }],
+    };
+    writeFileSync(join(workspace, 'assembly', 'assembly.json'), JSON.stringify(withBrief, null, 2));
+    const recorded = await auditDelivery(projectStores(workspace), { manifestPath: join(workspace, 'assembly', 'assembly.json') });
+    check(recorded.brief.present === true, 'the brief is read back');
+    check(recorded.brief.processes.includes('CNC') && recorded.brief.verify.includes('motion'),
+      'allowed processes (a SET) and the verification scope are echoed',
+      `${recorded.brief.processes.join('/')} · ${recorded.brief.verify.join('/')}`);
+    check(recorded.brief.assumed.length === 2,
+      'agent-decided items are listed (1 buy-vs-make + 1 assumption)',
+      JSON.stringify(recorded.brief.assumed));
+    check(recorded.findings.some((f) => f.code === 'brief-assumed' && f.severity === 'info'),
+      'assumed decisions produce an info finding, listing them');
+    check(recorded.verdict === 'not-excluded',
+      'and none of it BLOCKS delivery — the record is for the human, not a gate',
+      recorded.verdict);
+  }
+
   // The visual gate must be able to say NO: remove the record and the same clean
   // corpus becomes undeliverable. This is the wind-up-frog failure in one fixture.
   rmVisualSidecar(join(project.store.root, 'versions', v1, 'visual-review.json'));

@@ -66,6 +66,23 @@ array is an optional human hint and is often shorter — do **not** conclude an 
 from the inline list alone. When an endpoint resolves only against the version, `verify` reports
 `model.datum-list-drift` as `info`; the model row stays `pass`.
 
+## Kickoff alignment: `brief` (2026-11-14)
+
+Settle three things with the user BEFORE the first part, write them into the root's `brief`,
+then model:
+
+- **buyVsMake** — gears, bearings, springs, motors, fasteners: bought or made. The default is to
+  ASK, never to assume "make";
+- **processes** — the SET of processes the user allows (multi-select: FDM / sheet metal / CNC /
+  moulding). The user allows the set; YOU pick per part and record who chose it in that part's
+  `process` (`process.source` already carries that provenance);
+- **verify** — what "working" means here: assembly / motion / strength. It decides which runs the
+  delivery must carry.
+
+Every entry carries `by: "user"` or `by: "assumed"`. `delivery_audit` lists the assumed ones
+(`info`, never blocking) — an unasked assumption is how a delivery drifts from the brief.
+`brief` is a RECORD, not a gate; the gate is a human reading it.
+
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 
 `check_assembly` is a **delivery tool**: `validate_assembly` measures, this one judges against
@@ -169,3 +186,10 @@ working, not an error.
   points pass while one bore is tilted. Interfaces about alignment use
   `"check": "coaxial"` with `datum_axis`/`datum_cyl` endpoints — it measures
   axis-to-axis offset AND flags non-parallel axes.
+
+- **“Process X can only do Y” is a constraint to confirm, not a conclusion.** The
+  reducer session never asked about purchased parts or which processes were allowed,
+  and took “FDM, therefore a worm drive” as a premise — the design space was narrowed
+  silently and only surfaced as rework. A constraint you inferred has to name what it
+  eliminates and hand the options back to the user; `brief.processes` records the SET
+  the user allows, not one process.

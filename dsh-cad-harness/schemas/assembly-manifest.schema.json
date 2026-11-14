@@ -173,6 +173,53 @@
         "material": { "type": "string" },
         "qty": { "type": "integer", "minimum": 1 },
         "stockRef": { "type": "string" },
+        "brief": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Kickoff alignment, recorded BEFORE modelling: what was decided with the user and what the agent assumed. `by=assumed` means nobody confirmed it — delivery_audit prints those entries so a human can see who decided what. Not a gate.",
+          "properties": {
+            "buyVsMake": {
+              "type": "array",
+              "description": "Per item: bought or made. Standard parts (gears, bearings, springs, motors, fasteners) default to a QUESTION, not to make.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["item", "decision"],
+                "properties": {
+                  "item": { "type": "string" },
+                  "decision": { "enum": ["buy", "make"] },
+                  "by": { "enum": ["user", "assumed"] },
+                  "note": { "type": "string" }
+                }
+              }
+            },
+            "processes": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "The SET of processes the user allows (multi-select: FDM, sheet metal, CNC, moulding). The agent then picks per part; the per-part choice with its provenance stays in `process`."
+            },
+            "processesBy": { "enum": ["user", "assumed"] },
+            "verify": {
+              "type": "array",
+              "items": { "enum": ["assembly", "motion", "strength", "flow", "appearance"] },
+              "description": "What \"working\" means for this deliverable; decides which runs the delivery must carry."
+            },
+            "verifyBy": { "enum": ["user", "assumed"] },
+            "assumptions": {
+              "type": "array",
+              "description": "Every reversible default the agent took instead of asking. Listed in the delivery report.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["text"],
+                "properties": {
+                  "text": { "type": "string" },
+                  "by": { "enum": ["user", "assumed"] }
+                }
+              }
+            }
+          }
+        },
         "process": {
           "type": "object",
           "description": "Manufacturing process for this part (or the default for an assembly's children). source=user is a confirmed decision; source=agent is a recommendation awaiting user confirmation. The delivery plan reports an unconfirmed recommendation as unobserved, never as a settled process.",

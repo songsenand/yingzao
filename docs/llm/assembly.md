@@ -67,6 +67,16 @@ array is an optional human hint and is often shorter — do **not** conclude an 
 from the inline list alone. When an endpoint resolves only against the version, `verify` reports
 `model.datum-list-drift` as `info`; the model row stays `pass`.
 
+## 开工对齐：`brief`（2026-11-14）
+
+建模之前先把三件事和用户定下来，写进根节点的 `brief`，再开始画零件：
+
+- **buyVsMake**：齿轮、轴承、弹簧、电机、紧固件——买还是做。默认是**问**，不是默认自制；
+- **processes**：用户允许的工艺**集合**（可多选：FDM / 钣金 / CNC / 注塑）。用户给集合，**你**按零件选，并在每个零件的 `process` 里写明谁定的（沿用 `process.source`）；
+- **verify**：这个交付物“能用”指什么——装配 / 运动 / 强度。它决定交付必须带哪些 run。
+
+每条带 `by: "user"` 或 `by: "assumed"`。`delivery_audit` 会把 `assumed` 的逐条列出来（`info`，不阻塞）——**没问过的假设就是交付偏离 brief 的方式**。`brief` 是记录，不是门禁；门禁是人读这份清单。
+
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 
 `check_assembly` is a **delivery tool**: `validate_assembly` measures, this one judges against
@@ -170,3 +180,8 @@ working, not an error.
   points pass while one bore is tilted. Interfaces about alignment use
   `"check": "coaxial"` with `datum_axis`/`datum_cyl` endpoints — it measures
   axis-to-axis offset AND flags non-parallel axes.
+
+- **“工艺 X 只能做 Y” 是待确认的约束，不是结论。** 减速器那次没问过可外购件、
+  也没问允许哪些工艺，就把 “FDM 就只能蜗杆传动” 当前提开工——方案空间被静默砍掉，
+  直到返工才暴露。推断出来的约束要说出它排除了什么，再把选项交回用户；
+  `brief.processes` 记的是用户允许的**集合**，不是某一个工艺。

@@ -2196,7 +2196,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'write_assembly',
     description:
-      'Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version\'s datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit.',
+      'Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version\'s datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.',
     parameters: {
       manifestPath: { type: 'string', description: 'Workspace-relative manifest path; default assembly/assembly.json. Must stay inside the project workspace.' },
       mode: { type: 'string', enum: ['create', 'merge', 'replace'], description: 'Default merge. merge/replace require expectedHash when the file exists.' },
@@ -7113,6 +7113,10 @@ export function registerCadTools(
           parts: { type: 'object', required: true, additionalProperties: true },
           runs: { type: 'object', required: true, additionalProperties: true },
           contract: { type: 'object', required: true, additionalProperties: true },
+          brief: {
+            type: 'object', additionalProperties: true,
+            description: 'Kickoff alignment from assembly.json `brief`: {present, processes[], verify[], assumed[{item, kind}]}. null = no manifest; present:false = manifest without a brief.',
+          },
           unregistered: { type: 'object', required: true, additionalProperties: true, description: 'Mesh files on disk that no version accounts for: {scanned, files[], exempt[], missingExempt[], truncated}.' },
           visual: { type: 'object', required: true, additionalProperties: true, description: 'Per-version visual-review gate: {required, checked, missing[], stale[]}.' },
         },

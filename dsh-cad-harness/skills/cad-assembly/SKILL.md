@@ -10,6 +10,18 @@ Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 
 A green assembly check means the declared interfaces were machine-checked against their operators. It is not a statement that the parts are manufacturable, printable or strong.
 
+## Kickoff alignment (before the first part)
+
+Three questions, once, then record the answers in `assembly.json` → `brief`:
+
+1. **Buy vs make** — gears, bearings, springs, motors, fasteners. Propose a default list; never assume "we machine/print everything".
+2. **Allowed processes** — a SET the user permits (FDM / sheet metal / CNC / moulding), multi-select. The user allows the set; **you** pick per part and state which part got which.
+3. **What "working" means** — assembly / motion / strength. This decides which runs the delivery must carry.
+
+Each entry carries `by: "user"` or `by: "assumed"`; `delivery_audit` prints the assumed ones. Unasked assumptions are how a delivery drifts from the brief.
+
+A constraint YOU inferred ("this process can't do X") is a question, not a premise: name what it eliminates before letting it eliminate anything.
+
 ## Rules
 
 - **Read `judgement`, not `overallStatus`.** Any `hardViolation` → `excluded`; any `skipped` or `intentFlag` → `difficult` (a skipped check is never a pass); none of those → `not-excluded` (never "ok", never "safe"). `judgedBy` counts them.
