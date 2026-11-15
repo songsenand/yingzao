@@ -6147,3 +6147,21 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** 新增 `src/host/import-run.ts`、`src/host/import-run-cli.ts`、`scripts/import-run.mjs`、`lib/import-run.js`；`package.json`（bin/accept/files）、`esbuild.mjs`；文档 `docs/user/advanced.md`（+英文）、`docs/llm/engines.md`（+英文）、`HARNESS.md` §6.1。
 
 **非目标：** 不做 GUI 拖拽导入；不自动跑 `delivery_audit`；导入的 run 不给 `judgement`（它没有判定过任何东西）；不做双向导出。
+
+## 2026-11-16：齿轮 run 的“穿透 0”不再冒充齿面证据，求解器旋钮开放
+
+**触发条件：** 第 1 条（用户拍板按 A→B→C 路线修改）+ 第 4 条（改变 `simulate_physics` 输入契约与报告字段）。
+
+**要解决的问题：** 64:1 齿轮箱会话末尾把两个缺口混在了一起：①齿轮 run 报“穿透 0”，但 `gear` 关节把该对的接触关掉了（[physics.ts:639]），0 是构造出来的，README 却当成了“齿面不干涉”的证据；②求解器参数一个都没暴露，只能调 `timestepSec`，报告也不记录用的是哪些设置。
+
+**决策内容：** ①把隔离原因拆开——`gearIsolated` 与 `jointIsolated` 分开记录，各出一条 note；齿轮那条明说“本 run 不能显示齿面干涉，这里的 0 不是齿面清空的证据”，并新增 `metrics.gearContactsDisabled`。②新增 `solverIterations`（默认 4，钳 1–64）与 `ccdSubsteps`（默认 1，钳 1–16）两个输入，两引擎同时实现，生效值回显到 `metrics.solver`。
+
+**理由：** 前者是可证伪性问题：数字没变，但它的**含义**之前被工具误导。后者是能力缺口，且必须回显——一个穿透数字离开产生它的设置就不可复现。
+
+**依据：** 新增 `accept-physics-solver`（已进 `npm run accept`）：两引擎都断言齿轮对出现在 `gearContactsDisabled`、note 含 "contact DISABLED" 与 "not evidence that the teeth clear"、且**不再**被说成 bearing clearance；默认/调高/越界钳位三种情况的 `metrics.solver` 都正确（期间抓到两个真 bug：`runPhysics` 没把新字段转发给 Python worker；Python 用 `or` 把显式 0 变成默认值）。`accept-physics-parity`、`accept-physics-gear`、`accept-physics-motor`、`accept-tool-contracts`、`accept-tool-output` 全过，`docs/TOOL-CONTRACTS.md` 已重生成。
+
+**旋钮的实际效果（重要）：** 用减速器 r023 的接触场景重建（5 个 trimesh 体、0.5 s、dt 1/4800）扫 `iterations 4→16 × ccd 1→4`，四组结果的 max/settled 穿透**到小数点后四位完全一致**（2.1288 / 0.6094 mm），电机实测也都 5.0057 rad/s。这说明该场景的穿透**不是收敛问题**，调这两个旋钮救不了——C 层（薄齿 + 0.028 mm 侧隙超出 trimesh 接触能力）才是真相。注意重建场景与原 r023 不完全一致（电机 5.0 vs 6.2 rad/s），所以这是强支持证据，不是同一场景的复现。
+
+**影响：** `src/host/physics.ts`、`python/cad_worker/worker.py`、`src/host/tools.ts`（schema + 描述 + 转发）、`docs/TOOL-CONTRACTS.md`、`docs/llm/engines.md`（+英文）、`scripts/accept-physics-solver.mjs`、`package.json`。
+
+**非目标：** 不暴露接触刚度/`contactSkin`（两引擎 API 形状不同：TS 是 `contact_natural_frequency`，Python 是 `contact_spring_stiffness`，强行统一会破坏 parity 的可比性）；不在本版给出“某几何接触仿真可用/不可用”的自动判定。

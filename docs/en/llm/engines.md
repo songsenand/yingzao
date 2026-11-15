@@ -11,6 +11,8 @@ binaries) into its run directory, and the panel's **run → playback** view read
 those files: pause, scrub, event markers, chart. The reply carries `runId` and
 `playback`; point the user there.
 
+**A "0 penetration" in a gear run is not evidence about the teeth.** With a `gear` joint the pair's contact is DISABLED (the ratio is prescribed), so the zero is by construction; `metrics.gearContactsDisabled` lists those pairs and the report carries a dedicated note. To show the teeth do not interfere, run the same parts WITHOUT the gear joint (contact mode), or use `validate_assembly`. `solverIterations` (default 4) and `ccdSubsteps` (default 1) are available and echoed in `metrics.solver` — but for thin teeth with a 0.03mm backlash the knobs may not help, and the verdict must say so.
+
 **A trajectory computed by an external script enters through `dsh-cad-import-run`** (`--trajectory`, optional `--stl-dir`): it writes through the same RunWriter, lock and index as the tools, and lands as `check` (the venue did not witness the computation). So when the tool cannot do the simulation, the correct move is **compute with a script and import it**, never edit the plugin source.
 
 **An image is a snapshot; motion is playback.** Generating a GIF or a frame sequence

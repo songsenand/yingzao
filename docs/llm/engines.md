@@ -8,6 +8,8 @@
 
 每条 `simulate_*` 运行都会把 `runs/<id>/trajectory.json`（流体是 `frames.json` + 帧二进制）写进 run 目录，**面板的「运行 → 回放」直接读这些文件**：可暂停、拖动、带事件标记和曲线。工具回复里带 `runId` 与 `playback`，把用户指到那里即可。
 
+**齿轮 run 的“穿透 0”不是齿面证据。** 用 `gear` 关节时该对的接触是**关闭**的（比率是给定约束），所以 `penetration 0` 是构造出来的；`metrics.gearContactsDisabled` 列出这些对，report 里也有一条专门的 note。要证明齿面不打架，用**不带 gear 关节的接触 run**，或 `validate_assembly`。求解器可用 `solverIterations`（默认 4）和 `ccdSubsteps`（默认 1）调，生效值回显在 `metrics.solver`——但薄齿 + 0.03mm 侧隙这类几何，调参未必有用，报告里该怎么判就怎么写。
+
 **外部脚本算出的轨迹用 `dsh-cad-import-run` 进场**（`--trajectory` + 可选 `--stl-dir`），它和工具写的 run 走同一个写入器、同一把锁、同一个索引；导入默认记 `check`（场地没见证计算过程）。所以“工具做不到这个仿真”时，正确动作是**用脚本算、再导入**，而不是去改插件源码。
 
 **图片是快照，运动是回放。** 自己生成 GIF 或帧序列会造出第二条通道：面板不能暂停它、不能标注它，也无法和报告里的数字对齐。现有通道表达不了时要说出来，并指出缺什么——不要另造一个。

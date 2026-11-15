@@ -152,6 +152,15 @@ export interface PhysicsScenario {
    * on the jointed pair.
    */
   jointContacts?: boolean;
+  /**
+   * Solver knobs. rapier's defaults are tuned for a metre-scale scene (4 solver
+   * iterations, 1 CCD substep), and until now nothing here could change them —
+   * so a thin-tooth gear run could only be "improved" by shrinking timestepSec.
+   * Both values are echoed in `metrics.solver`, because a penetration number
+   * means nothing without the settings that produced it.
+   */
+  solverIterations?: number;
+  ccdSubsteps?: number;
 }
 
 export interface PoseSample {
@@ -225,6 +234,10 @@ export interface PhysicsReport {
     jointToleranceMm?: number;
     /** Jointed pairs whose mutual contact is OFF (bearing clearance, not a clash). */
     contactsDisabled?: string[];
+    /** The subset isolated because of a GEAR coupling (not a designed clearance). */
+    gearContactsDisabled?: string[];
+    /** The solver settings that produced this report — a penetration number without them is not reproducible. */
+    solver?: { timestepSec: number; solverIterations: number; ccdSubsteps: number };
     /** The collision shape each body actually got: "hull" or "trimesh". */
     colliders?: Record<string, 'hull' | 'trimesh'>;
     /**
@@ -405,6 +418,8 @@ export async function runPhysics(scenario: PhysicsScenario): Promise<PhysicsRepo
         ...(scenario.timestepSec !== undefined ? { timestepSec: scenario.timestepSec } : {}),
         ...(scenario.keyframeCount !== undefined ? { keyframeCount: scenario.keyframeCount } : {}),
         ...(scenario.jointContacts !== undefined ? { jointContacts: scenario.jointContacts } : {}),
+        ...(scenario.solverIterations !== undefined ? { solverIterations: scenario.solverIterations } : {}),
+        ...(scenario.ccdSubsteps !== undefined ? { ccdSubsteps: scenario.ccdSubsteps } : {}),
       },
     });
   } finally {
@@ -427,6 +442,10 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
   const keyframeEvery = Math.max(1, Math.floor(steps / (scenario.keyframeCount ?? 6)));
 
   const world = new RAPIER_.World({ x: gravity[0], y: gravity[1], z: gravity[2] });
+  const solverIterations = Math.max(1, Math.min(64, Math.round(scenario.solverIterations ?? 4)));
+  const ccdSubsteps = Math.max(1, Math.min(16, Math.round(scenario.ccdSubsteps ?? 1)));
+  world.integrationParameters.numSolverIterations = solverIterations;
+  world.integrationParameters.maxCcdSubsteps = ccdSubsteps;
   world.timestep = dt;
 
   const bodies = new Map<string, RAPIER.RigidBody>();
@@ -616,6 +635,9 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     maxStepRad: number;
   }[] = [];
   const jointContacts = scenario.jointContacts === true;
+  /** Pairs whose contact is off: a GEAR pair for a different reason than a JOINT pair. */
+  const jointIsolated: string[] = [];
+  const gearIsolated: string[] = [];
   const contactsDisabled: string[] = [];
   const jointAnchors: {
     name: string;
@@ -636,6 +658,7 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
         throw new Error(`joint ${j.bodyA}~${j.bodyB}: gear needs a non-zero ratio (turns of B per turn of A)`);
       }
       const { axisA, axisB } = axesOf(j, a, b);
+      gearIsolated.push(`${j.bodyA}~${j.bodyB}`);
       contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
       gears.push({
         a, b, ratio: j.ratio, axisA, axisB,
@@ -655,7 +678,10 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       : RAPIER_.JointData.revoluteWithAxes(anchorA, anchorB, { x: axisA[0], y: axisA[1], z: axisA[2] }, { x: axisB[0], y: axisB[1], z: axisB[2] });
     const joint = world.createImpulseJoint(params, a, b, true);
     joint.setContactsEnabled(jointContacts);
-    if (!jointContacts) contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
+    if (!jointContacts) {
+      jointIsolated.push(`${j.bodyA}~${j.bodyB}`);
+      contactsDisabled.push(`${j.bodyA}~${j.bodyB}`);
+    }
     if (type === 'prismatic' && j.limits) {
       (joint as RAPIER.PrismaticImpulseJoint).setLimits(j.limits[0], j.limits[1]);
     }
@@ -971,12 +997,22 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       'cross-check part fit with check_assembly / validate_assembly instead',
     );
   }
-  if (contactsDisabled.length > 0) {
+  if (jointIsolated.length > 0) {
     notes.push(
       'jointed pairs do not collide (bearing clearance is design intent): '
-      + `${contactsDisabled.join(', ')}; a stopper that really is supposed to collide on exactly that pair `
+      + `${jointIsolated.join(', ')}; a stopper that really is supposed to collide on exactly that pair `
       + 'must be verified another way (or pass jointContacts: true and expect the solver to resolve the '
       + 'bearing overlap as a collision)',
+    );
+  }
+  if (gearIsolated.length > 0) {
+    // Separate from the joint note: a gear pair is isolated because the ratio is
+    // PRESCRIBED, not because a clearance was designed. Lumping them together let
+    // a gear run's "0 penetration" read as "the teeth do not touch".
+    notes.push(
+      `gear pair(s) ${gearIsolated.join(', ')} are ratio-coupled with contact DISABLED — this run cannot `
+      + 'show tooth interference, and 0 penetration here is not evidence that the teeth clear. For that, '
+      + 'run the same parts WITHOUT the gear joint (contact mode) or use validate_assembly / check_assembly',
     );
   }
   const nonConvexDynamic = scenario.parts
@@ -1174,6 +1210,7 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       initialJointGaps,
       jointToleranceMm: JOINT_TOLERANCE_MM,
       contactsDisabled,
+      gearContactsDisabled: gearIsolated,
       colliders: colliderKinds,
       frictions: frictionUsed,
       closedLoop: loopJoints.length > 0,
@@ -1181,6 +1218,7 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       ...(holdAnalysis.length ? { holdAnalysis } : {}),
       ...(motors.length ? { motors } : {}),
       ...(gearReport.length ? { gears: gearReport } : {}),
+      solver: { timestepSec: +(scenario.timestepSec ?? 1 / 60).toFixed(6), solverIterations, ccdSubsteps },
       notes,
     },
     finalPositions,

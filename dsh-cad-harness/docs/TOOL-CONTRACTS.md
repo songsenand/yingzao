@@ -750,6 +750,8 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 | `gravity` | array | — | mm/s². Default [0,0,-9810] (z-up). |
 | `tiltDeg` | number | — | Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing the gravity vector. Ignored when gravity is given. |
 | `tiltAboutAxis` | array | — | Axis to tilt about, default [0,1,0]. |
+| `solverIterations` | number | — | Solver iterations per step. Default 4 (rapier default, tuned for a metre-scale scene). Raise it (16-32) when a stiff chain or a thin-contact run reports settled penetration: it is the second knob after timestepSec, and unlike timestepSec it does not multiply the cost of every step. Echoed in metrics.solver. |
+| `ccdSubsteps` | number | — | Continuous-collision substeps per step. Default 1. Raise (4-8) when a fast, thin part must not tunnel: a 6400 rpm tooth at a 4.8mm pitch radius advances ~0.67mm per 1/1000 step, far more than the 0.028mm backlash it is supposed to resolve. Echoed in metrics.solver. |
 | `jointContacts` | boolean | — | Default false: the two bodies of a JOINT do not collide, because a bearing is designed to have its parts inside one another's clearance. Set true only when a stopper really is supposed to collide on the jointed pair. |
 
 ```js

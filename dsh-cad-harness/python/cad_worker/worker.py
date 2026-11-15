@@ -6734,6 +6734,15 @@ def op_simulate_physics(params: dict) -> dict:
 
     world = R.PhysicsWorld(tuple(gravity))
     world.integration_parameters.dt = dt
+    # Solver knobs (mirror of physics.ts): rapier's defaults assume a metre-scale
+    # scene, and until now a thin-tooth run could only be "improved" via timestepSec.
+    # `or` would turn an explicit 0 into the default; TS clamps 0 to 1, so mirror that.
+    raw_iterations = scenario.get("solverIterations")
+    raw_ccd = scenario.get("ccdSubsteps")
+    solver_iterations = max(1, min(64, int(round(float(4 if raw_iterations is None else raw_iterations)))))
+    ccd_substeps = max(1, min(16, int(round(float(1 if raw_ccd is None else raw_ccd)))))
+    world.integration_parameters.num_solver_iterations = solver_iterations
+    world.integration_parameters.max_ccd_substeps = ccd_substeps
 
     bodies: dict = {}
     colliders: dict = {}
@@ -6900,6 +6909,10 @@ def op_simulate_physics(params: dict) -> dict:
     # `jointContacts: true` is the explicit opt-in for a stopper that really is
     # supposed to collide on the same pair.
     joint_contacts = bool(scenario.get("jointContacts", False))
+    # A GEAR pair is isolated because the ratio is PRESCRIBED; a JOINT pair is
+    # isolated because the clearance is designed. Different reasons, different notes.
+    joint_isolated = []
+    gear_isolated = []
     contacts_disabled = []
     joint_anchors = []
     gears = []
@@ -6919,6 +6932,7 @@ def op_simulate_physics(params: dict) -> dict:
                 )
             axis_a = tuple(float(v) for v in (joint.get("axisA") or joint["axis"]))
             axis_b = tuple(float(v) for v in (joint.get("axisB") or joint["axis"]))
+            gear_isolated.append(f"{joint['bodyA']}~{joint['bodyB']}")
             contacts_disabled.append(f"{joint['bodyA']}~{joint['bodyB']}")
             gears.append(
                 {
@@ -7017,6 +7031,7 @@ def op_simulate_physics(params: dict) -> dict:
         world.impulse_joints.insert(a, b, builder.build())
         name = f"{joint['bodyA']}~{joint['bodyB']}"
         if not joint_contacts:
+            joint_isolated.append(name)
             contacts_disabled.append(name)
         joint_anchors.append(
             {
@@ -7271,13 +7286,23 @@ def op_simulate_physics(params: dict) -> dict:
             "with sparse ground contacts the settled-penetration figure is a solver artefact, not a fit measurement — "
             "cross-check part fit with check_assembly / validate_assembly instead"
         )
-    if contacts_disabled:
+    if joint_isolated:
         notes.append(
             "jointed pairs do not collide (bearing clearance is design intent): "
-            + ", ".join(contacts_disabled)
+            + ", ".join(joint_isolated)
             + "; a stopper that really is supposed to collide on exactly that pair "
             "must be verified another way (or pass jointContacts: true and expect the "
             "solver to resolve the bearing overlap as a collision)"
+        )
+    if gear_isolated:
+        # A gear pair is isolated because the ratio is PRESCRIBED, not because a
+        # clearance was designed: "0 penetration" here says nothing about the teeth.
+        notes.append(
+            "gear pair(s) " + ", ".join(gear_isolated)
+            + " are ratio-coupled with contact DISABLED — this run cannot show tooth "
+            "interference, and 0 penetration here is not evidence that the teeth clear. "
+            "For that, run the same parts WITHOUT the gear joint (contact mode) or use "
+            "validate_assembly / check_assembly"
         )
     non_convex_dynamic = [name for name, kind in collider_kinds.items() if kind == "trimesh"
                           and any(p["name"] == name and p["bodyType"] == "dynamic" for p in scenario["parts"])]
@@ -7427,6 +7452,8 @@ def op_simulate_physics(params: dict) -> dict:
         "initialJointGaps": initial_joint_gaps,
         "jointToleranceMm": JOINT_TOLERANCE_MM,
         "contactsDisabled": contacts_disabled,
+        "gearContactsDisabled": gear_isolated,
+        "solver": {"timestepSec": round(dt, 6), "solverIterations": solver_iterations, "ccdSubsteps": ccd_substeps},
         "colliders": collider_kinds,
         "frictions": friction_used,
         "closedLoop": bool(loop_closers),

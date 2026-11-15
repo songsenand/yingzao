@@ -128,6 +128,10 @@ interface PhysicsToolArgs {
   tiltAboutAxis?: number[];
   /** Default false: jointed parts do not collide (bearing clearance is design intent). */
   jointContacts?: boolean;
+  /** Solver iterations per step (default 4). Raise for stiff chains / thin contact. */
+  solverIterations?: number;
+  /** CCD substeps per step (default 1). Raise so a fast thin part cannot tunnel. */
+  ccdSubsteps?: number;
 }
 
 interface GeneratePartResult {
@@ -2677,6 +2681,8 @@ export function registerCadTools(
         gravity,
         keyframeCount: 6,
         jointContacts: a.jointContacts === true,
+        solverIterations: a.solverIterations,
+        ccdSubsteps: a.ccdSubsteps,
       });
       // Render keyframes and persist the newest 4 as model-visible attachments.
       const { frames, warnings: renderWarnings } = await renderKeyframes(report, stlFiles, join(run.dir, 'frames'));
@@ -2830,6 +2836,14 @@ export function registerCadTools(
         description: 'Tilt gravity by this many degrees about tiltAboutAxis (default [0,1,0]) — the slope scenario without hand-computing the gravity vector. Ignored when gravity is given.',
       },
       tiltAboutAxis: { type: 'array', description: 'Axis to tilt about, default [0,1,0].', items: { type: 'number' } },
+      solverIterations: {
+        type: 'number',
+        description: 'Solver iterations per step. Default 4 (rapier default, tuned for a metre-scale scene). Raise it (16-32) when a stiff chain or a thin-contact run reports settled penetration: it is the second knob after timestepSec, and unlike timestepSec it does not multiply the cost of every step. Echoed in metrics.solver.',
+      },
+      ccdSubsteps: {
+        type: 'number',
+        description: 'Continuous-collision substeps per step. Default 1. Raise (4-8) when a fast, thin part must not tunnel: a 6400 rpm tooth at a 4.8mm pitch radius advances ~0.67mm per 1/1000 step, far more than the 0.028mm backlash it is supposed to resolve. Echoed in metrics.solver.',
+      },
       jointContacts: {
         type: 'boolean',
         description: 'Default false: the two bodies of a JOINT do not collide, because a bearing is designed to have its parts inside one another\'s clearance. Set true only when a stopper really is supposed to collide on the jointed pair.',
