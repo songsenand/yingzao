@@ -32,3 +32,23 @@ When a large project has several components (`components/*/`) or several example
 
 - This is **read-only browsing**: agent writes always stay in the session directory.
 - Switching does not change the session's corpus root; it only changes which corpus you view in the panel.
+
+## Put an external script's simulation result into the panel
+
+A trajectory computed by your own Python (or anything else) does not need a plugin
+change — it comes in through a command:
+
+```bash
+dsh-cad-import-run --project . --trajectory sim/traj.json --kind physics \
+    --title "external · 3 s @6400 rpm" --versions v016,v014 --stl-dir sim/parts
+```
+
+- The file is the shape the panel already plays: `{ times: [...], parts: [{ name, frames: [[x,y,z,qx,qy,qz,qw], ...] }] }`;
+- it is **validated**: times strictly increasing, each part's frame count equal to `times`, every frame 7 finite numbers — an unplayable file is never written into the corpus;
+- `--stl-dir` holds `<part name>.stl` so the playback has geometry; without it you get poses only (playable, shapeless);
+- `--versions` must be real version ids in the corpus (typos are refused) and is recorded as the run's source;
+- an imported run is **`check`**, not `pass`: the venue did not witness how the numbers were produced. `--status` can override it, but that is your claim.
+
+It writes through the **same RunWriter the tools use** (same lock, same index), so what the panel
+lists and what `delivery_audit` reads are the same kind of artifact — there is no side channel.
+

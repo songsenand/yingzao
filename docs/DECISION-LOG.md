@@ -6131,3 +6131,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/physics.ts`、`python/cad_worker/worker.py`、`scripts/accept-physics-gear.mjs`、`DESIGN.md` §6.5。已有 run 的 `trajectory.json` 不受影响；重新跑出的 run 角度统计会与旧的不同（旧的超过半圈本来就不可信）。
 
 **非目标：** 不改面板播放的帧数；不做"外部脚本轨迹导入面板"（那是宿主能力，需要单独的上游功能）。
+
+## 2026-11-15（补）：外部脚本的轨迹可以进场——`dsh-cad-import-run`
+
+**触发条件：** 第 1 条（用户拍板：场地而非产品，理所当然要提供这个能力）+ 第 4 条（新增对外入口，后续工作要围绕它）。
+
+**要解决的问题：** 64:1 齿轮箱会话用自写 Python 脚本算了 3 s / 6400 rpm 的轨迹，面板里看不到——因为 run 不是一个文件，面板的 RUNS 列表是 store 的索引，只由 `beginRun`/`commit` 在锁内写入。模型因此想改插件源码，被该会话的用户制止。场地哲学（HARNESS §6.1）认为这是"材料进不了场"，不是"产品缺功能"。
+
+**决策内容：** 新增命令行入口 `dsh-cad-import-run`：吃一个面板格式的 `trajectory.json`（外加可选 `--stl-dir`），经**同一个 RunWriter**（同锁、同索引、同 id 分配）写成一条真实 run。写前校验可播性（时间严格递增、帧数与 times 一致、每帧 7 个有限数）；`--versions` 必须是语料中真实存在的版本；默认状态 `check` 并注明"场地未见证计算过程"，可用 `--status` 覆盖为调用者的声明。**不新增工具**——模型不需要新动词，人和脚本需要入口。
+
+**理由：** 影子通道（手写 manifest）会与 host 抢锁、写坏索引；而"给工具加一个参数"会让模型拥有一个它无法担保的通道。CLI 把能力放在场地一侧：谁都能进场，进场记录仍是 host 写的。
+
+**依据：** `accept-import-run`（已进 `npm run accept`）：临时项目里跑真实 CLI → 退出码 0、打印 run id、`runs/<id>/trajectory.json` 与 `run.json` 落盘、**manifest 里能查到**、kind/status 正确、events 保留；三类不可播文件（时间不递增 / 帧数不符 / 帧不是 7 个数）全部拒绝并说明原因；未知版本号拒绝。`tsc`、`esbuild`（新增 `lib/import-run.js`）、`accept-i18n` 通过。
+
+**影响：** 新增 `src/host/import-run.ts`、`src/host/import-run-cli.ts`、`scripts/import-run.mjs`、`lib/import-run.js`；`package.json`（bin/accept/files）、`esbuild.mjs`；文档 `docs/user/advanced.md`（+英文）、`docs/llm/engines.md`（+英文）、`HARNESS.md` §6.1。
+
+**非目标：** 不做 GUI 拖拽导入；不自动跑 `delivery_audit`；导入的 run 不给 `judgement`（它没有判定过任何东西）；不做双向导出。

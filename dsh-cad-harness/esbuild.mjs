@@ -19,6 +19,19 @@ const host = await esbuild.context({
   sourcemap: true,
 });
 
+// External-trajectory import (`dsh-cad-import-run`): ships beside verify.js so a
+// script can put its result into the panel on a clean install.
+const importRunCli = await esbuild.context({
+  entryPoints: ['src/host/import-run-cli.ts'],
+  outfile: 'lib/import-run.js',
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node20',
+  external: ['@deepseek-ai/*', '@deepseek-ai/cordis', 'schemastery', 'manifold-3d'],
+  sourcemap: true,
+});
+
 // Packaged evidence CLI: a clean install runs `dsh-cad-verify` without src/.
 const verifyCli = await esbuild.context({
   entryPoints: ['src/host/verify/cli.ts'],
@@ -61,10 +74,10 @@ const client = await esbuild.context({
 });
 
 if (watch) {
-  await Promise.all([host.watch(), client.watch(), verifyCli.watch()]);
+  await Promise.all([host.watch(), client.watch(), verifyCli.watch(), importRunCli.watch()]);
   console.log('[cad-harness] watching…');
 } else {
-  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild()]);
-  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose()]);
+  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild(), importRunCli.rebuild()]);
+  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose(), importRunCli.dispose()]);
   console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js');
 }
