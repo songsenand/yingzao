@@ -837,6 +837,13 @@ export function CadPanel(): React.ReactElement {
   }
   const ownersOfRun = (r: RunProduct): Set<string> =>
     new Set(r.sourceVersionIds.map((v) => partOfVersion.get(v)).filter((x): x is string => Boolean(x)));
+  // part name → #rrggbb declared in assembly.json. Only where colour already
+  // exists (assembly + playback rendering); absent means "keep the old palette".
+  const partColors = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of machine?.nodes ?? []) if (n.color) map[n.part] = n.color;
+    return map;
+  }, [machine]);
   const machineRuns = allRuns.filter((r) => ownersOfRun(r).size >= 2);
 
   /**
@@ -3859,6 +3866,7 @@ export function CadPanel(): React.ReactElement {
           key: run.id, runId: run.id,
           report: runReport, status: run.status,
           background: bg.hex,
+          partColors: partColors,
           onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => openShotDraft(canvas, label, undefined, frame),
         }),
       run && run.kind === 'fluid' &&
@@ -3872,6 +3880,7 @@ export function CadPanel(): React.ReactElement {
         React.createElement(StaticPartsView, {
           key: run.id, runId: run.id, parts: run.parts,
           background: bg.hex,
+          partColors: partColors,
           // The run stores each part's placement; without it StaticPartsView
           // draws every part at the origin, so a translated assembly looks like
           // a pile. Latent until now only because every corpus part so far was

@@ -338,6 +338,17 @@ const annotateLayer = (opts: {
 
 const PART_COLORS = ['#4a7dbd', '#c0392b', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
+/**
+ * Colour for a part: the manifest's `color` when it declared one, else the
+ * positional palette (unchanged — a manifest without colours looks exactly as
+ * it did before). FIXED bodies stay grey: they were the ghosted reference, and
+ * a manifest colour there would read as "this part is highlighted".
+ */
+function partColor(name: string, index: number, fixed: boolean, declared?: Record<string, string>): string {
+  if (fixed) return '#9aa5b1';
+  return declared?.[name] ?? PART_COLORS[index % PART_COLORS.length]!;
+}
+
 // ---------------------------------------------------------------- run data / timeline
 
 const toneColor = (tone?: RunTone): string =>
@@ -514,6 +525,8 @@ export function MotionPlaybackView(props: {
   status?: string;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
+  /** part name → #rrggbb from the assembly manifest (identity, not decoration). */
+  partColors?: Record<string, string>;
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [traj, setTraj] = useState<TrajectoryJson | null>(null);
@@ -605,7 +618,7 @@ export function MotionPlaybackView(props: {
           geo.computeBoundingSphere();
           const fixed = part.bodyType === 'fixed';
           const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-            color: fixed ? '#9aa5b1' : PART_COLORS[i % PART_COLORS.length]!,
+            color: partColor(part.name, i, fixed, props.partColors),
             metalness: 0.1, roughness: 0.6,
             transparent: fixed, opacity: fixed ? 0.45 : 1,
           }));
@@ -1187,7 +1200,7 @@ export function MotionPlaybackView(props: {
           React.createElement('span', {
             style: {
               display: 'inline-block', width: 8, height: 8, borderRadius: 4, marginRight: 3, verticalAlign: 'middle',
-              background: p.bodyType === 'fixed' ? '#9aa5b1' : PART_COLORS[i % PART_COLORS.length]!,
+              background: partColor(p.name, i, p.bodyType === 'fixed', props.partColors),
               opacity: p.bodyType === 'fixed' ? 0.6 : 1,
             },
           }),
@@ -1455,6 +1468,8 @@ export function StaticPartsView(props: {
   placements?: Record<string, { translate?: number[]; rotate?: number[] }>;
   /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
   background?: string;
+  /** part name → #rrggbb from the assembly manifest (identity, not decoration). */
+  partColors?: Record<string, string>;
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [err, setErr] = useState<string | null>(null);
@@ -1482,7 +1497,7 @@ export function StaticPartsView(props: {
           const geo = new STLLoader().parse(await res.arrayBuffer());
           if (dead) return;
           const material = new THREE.MeshStandardMaterial({
-            color: PART_COLORS[i % PART_COLORS.length]!,
+            color: partColor(name, i, false, props.partColors),
             metalness: 0.1, roughness: 0.6,
             transparent: true, opacity: 0.92,
           });
