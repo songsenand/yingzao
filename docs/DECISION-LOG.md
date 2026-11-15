@@ -6067,3 +6067,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `presets/cad/workflow.md` + `presets/cad/preset.patch.yml`（重新生成）、`skills/cad-assembly/SKILL.md`、`schemas/assembly-manifest.schema.json`、`src/host/delivery-audit.ts`、`src/host/tools.ts`、`docs/llm/assembly.md` + 英文镜像、`DESIGN.md` §5.3、`scripts/accept-delivery-audit.mjs`。
 
 **非目标：** 不把 `brief` 做成门禁（不 block）；不限制每轮提问次数；不新增工具（问题仍走 `ask_user_question`，只是问法变了）。
+
+## 2026-11-14：视觉表达走面板回放，run 交出 `runId` + `playback`
+
+**触发条件：** 第 1 条（用户拍板"就按你的建议改"）+ 第 4 条（工具输出契约）。
+
+**要解决的问题：** 减速器会话在"要看到它转"时，自己去写渲染器导 GIF，被用户制止："不要你生成 gif，我要你在模型预览的视口中展示出来"。根因是**通道不可见**：面板 `MotionPlaybackView` 一直存在（读 `runs/<id>/trajectory.json`，带事件标记与曲线），用户文档也写了，但模型侧文档（`skills/` + `docs/llm/`）里 "playback/回放" 命中 **0** 次；`simulate_physics` 的回复只有关键帧 PNG，**连 `runId` 都不返回**（`check_*` 系列都返回）。模型手里唯一的展示媒介是图片，于是造了第二条通道。
+
+**决策内容：** ①`simulate_physics` / `simulate_motion` 回复新增 `runId` 与 `playback`（一句指向"面板「运行」→ <id> → 回放"的提示），输出 schema 同步声明；②persona 增加 "Show, don't export"：视觉答案走面板，运动看回放，**不要自己生成 GIF/帧序列**，面板表达不了就直说并指出缺什么；③`docs/llm/engines.md` 新增"回放：运动的默认表达方式"一节（中英）；④`cad-simulation` skill 一句话。
+
+**理由：** 回放是面板的一等能力（可暂停、拖动、事件标记、曲线），与报告里的数字读同一份文件；GIF 是死图，不能暂停、不能标注、不能对齐数字。把 run 交出去，模型就能"指"，不必"造"。这条也补上了"现有通道表达不了 → 自己造一个"的通用反模式。
+
+**依据：** `accept-tool-contracts`（schema 变更后重生成并通过）、`accept-tool-output`（真实工具调用返回值仍满足声明 schema）、`accept-skill-tools`、`accept-i18n` 17/17、`sync-cad-preset --check` up to date、`tsc`、`esbuild` 通过。
+
+**影响：** `src/host/tools.ts`（两个 simulate 工具 + 输出 schema）、`presets/cad/workflow.md` + `preset.patch.yml`（重新生成）、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + 英文镜像、`docs/TOOL-CONTRACTS.md`。
+
+**非目标：** 不改面板回放本身；不禁止静态图（版本渲染仍是必要产物）；不新增工具。

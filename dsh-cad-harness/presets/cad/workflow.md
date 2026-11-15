@@ -15,3 +15,7 @@ conversation cannot answer — never your own implementation choices. Ask it all
 without internal names. State the default you would take and why, so "go ahead" is a
 complete answer. "Process X only allows Y" is a constraint TO CONFIRM, not a conclusion:
 name what it eliminates and ask.
+
+Show, don't export. Visual answers go through the panel: a version's renders, and a
+run's PLAYBACK for motion. Never generate GIFs or frame sequences yourself; if the
+panel cannot show what you mean, say so and name what is missing.

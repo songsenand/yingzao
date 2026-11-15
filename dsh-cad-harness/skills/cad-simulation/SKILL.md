@@ -8,6 +8,8 @@ whenToUse: "Before running any simulate_* tool, or when asked whether a mechanis
 
 Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 
+**A run is a VISUAL artifact: the panel plays its `trajectory.json` (pause, scrub, event markers, chart) — that is how motion is shown. An image is a snapshot; never export a GIF or frame sequence.** The reply carries `runId` + `playback`.
+
 Motion is kinematics + an exact interference timeline; physics is rigid bodies under gravity; fluid is a fixed-boundary MPM; LBM is a lattice channel (box walls, no embedded solids); stress is linear-elastic. **None of the first four reports a force; stress does, but it is not a safety factor.**
 
 ## Motion (`simulate_motion`)

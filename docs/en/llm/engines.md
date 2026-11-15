@@ -4,6 +4,18 @@
 
 Five engines, five scopes of trust. **Motion/physics/fluid/LBM do not report force or torque; stress reports reactions and section forces, but that is not a safety factor, drive torque or power. None replaces certification.** Axial spring/snap statics are not in these five engines; they live in `check_assembly`'s `spring-behaviour` / `snap-fit` static contract checks. That is not dynamics, contact or fatigue.
 
+## Playback: how motion is shown
+
+Every `simulate_*` run writes `runs/<id>/trajectory.json` (fluid: `frames.json` + frame
+binaries) into its run directory, and the panel's **run → playback** view reads exactly
+those files: pause, scrub, event markers, chart. The reply carries `runId` and
+`playback`; point the user there.
+
+**An image is a snapshot; motion is playback.** Generating a GIF or a frame sequence
+yourself invents a second channel that the panel cannot pause, annotate or line up with
+the report. When the existing channel cannot express what you mean, say so and name
+what is missing — do not build another one.
+
 ## Motion (`simulate_motion`)
 
 - **Kinematics + exact interference timeline**, no gravity. Answers “with this drive, will parts collide, is the stroke enough?”.

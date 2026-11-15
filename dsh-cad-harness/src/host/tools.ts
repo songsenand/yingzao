@@ -152,6 +152,16 @@ interface GeneratePartResult {
 /** Render refs stashed by execute() for finalizeContent to emit as image blocks. */
 const pendingRenderRefs = new Map<string, { view: string; ref: unknown }[]>();
 
+/**
+ * The one sentence that turns "look at my simulation" into a place the user can
+ * click. Every simulate_* run writes trajectory.json (or frames) into `runs/<id>/`,
+ * and the panel's playback view renders exactly those files — same artifact, two
+ * consumers (src/client/playback.ts). Exporting a GIF invents a second channel
+ * that the panel cannot pause, scrub or annotate.
+ */
+const PLAYBACK_HINT = (runId: string) =>
+  `面板「运行」→ ${runId} → 回放（读 runs/${runId}/trajectory.json，可暂停/拖动，带事件标记与曲线）`;
+
 let physicsResultForFinalize: { refs: { view: string; ref: unknown }[]; overall: string } | null = null;
 let finalizeOnce: { versionId: string; label: string; file: string; refs: { view: string; ref: unknown }[] } | null = null;
 let motionRefsForFinalize: { refs: { view: string; ref: unknown }[] } | null = null;
@@ -1030,6 +1040,12 @@ export function registerCadTools(
       stepsRun: report.stepsRun,
       durationSec: report.durationSec,
       pivots,
+      // The panel is the visual channel (client/playback.ts). Returning the run id
+      // and naming the view is what lets the model POINT at the animation instead
+      // of exporting one: the reducer session built a GIF renderer because nothing
+      // in its context said the run could be played.
+      runId: run.id,
+      playback: PLAYBACK_HINT(run.id),
     };
   }
 
@@ -2724,6 +2740,8 @@ export function registerCadTools(
         geometrySuspects: suspectLines,
         geometrySuspectRule: SUSPECT_RULE,
         keyframes: keep.map((f) => f.view),
+        runId: run.id,
+        playback: PLAYBACK_HINT(run.id),
       };
       physicsResultForFinalize = { refs, overall: result.overallStatus };
       return result;
@@ -2911,6 +2929,8 @@ export function registerCadTools(
           },
           notes: { type: 'array', items: { type: 'string' } },
           keyframes: { type: 'array', required: true, items: { type: 'string' } },
+          runId: { type: 'string', required: true, description: "This run's id. Point the user at it: the panel plays runs/<id>/trajectory.json with event markers and a chart." },
+          playback: { type: 'string', required: true, description: 'Where to watch this run in the panel. Motion is shown by PLAYBACK, not by exported frames/GIFs.' },
         },
       },
       render: (_args: unknown, value: unknown) => [{
@@ -3228,6 +3248,8 @@ export function registerCadTools(
           jointViolations: { type: 'array', required: true, items: { type: 'string' } },
           pivots: { type: 'object', required: true, additionalProperties: true, description: 'Per part: the point its body rotates/slides about, in the part\'s own file frame. Geometry is re-based on it before the run.' },
           keyframes: { type: 'array', required: true, items: { type: 'string' } },
+          runId: { type: 'string', required: true, description: "This run's id. Point the user at it: the panel plays runs/<id>/trajectory.json with event markers and a chart." },
+          playback: { type: 'string', required: true, description: 'Where to watch this run in the panel. Motion is shown by PLAYBACK, not by exported frames/GIFs.' },
           stepsRun: { type: 'integer', required: true },
           durationSec: { type: 'number', required: true },
         },
