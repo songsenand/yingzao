@@ -24,6 +24,12 @@ export interface MachineNode {
    * absent means "not declared", which is information, not zero.
    */
   qty?: number;
+  /**
+   * Identity colour (#rrggbb) for COMMUNICATION: the same part must be the same
+   * colour for the agent and for the human. Only used where colour already
+   * exists (assembly + playback rendering) — never to decorate a table.
+   */
+  color?: string;
   material?: string;
   source?: string;
   stockRef?: string;
@@ -72,8 +78,9 @@ export function parseMachine(raw: unknown): Machine | null {
         part: ref,
         version: typeof n.version === 'string' && n.version ? n.version : null,
       };
-      const with0 = n as { qty?: unknown; material?: unknown; source?: unknown; stockRef?: unknown };
+      const with0 = n as { qty?: unknown; color?: unknown; material?: unknown; source?: unknown; stockRef?: unknown };
       if (typeof with0.qty === 'number') node.qty = with0.qty;
+      if (typeof with0.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(with0.color)) node.color = with0.color;
       if (typeof with0.material === 'string' && with0.material) node.material = with0.material;
       if (typeof with0.source === 'string' && with0.source) node.source = with0.source;
       if (typeof with0.stockRef === 'string' && with0.stockRef) node.stockRef = with0.stockRef;

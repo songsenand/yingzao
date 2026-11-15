@@ -82,6 +82,12 @@ then model:
 Every entry carries `by: "user"` or `by: "assumed"`. `delivery_audit` lists the assumed ones
 (`info`) — an unasked assumption is how a delivery drifts from the brief.
 
+**Part colour**: any child may carry `color` (`#rrggbb`). It is a COMMUNICATION label — not a
+material, finish or spec: the panel's assembly view and playback render with it, so you and the
+human are naming the same part. A part without `color` keeps the old palette (no invented colour);
+reports, tables and contracts never use it. Worth setting when a machine has coaxial compound
+gears or mating pairs, which are exactly the parts people misname by colour.
+
 **`verify` is enforced; everything else is a record.** Declaring `motion` / `strength` requires a
 FRESH run of that kind citing the newest version, or `delivery_audit` is `blocked`
 (`verify-required-motion` / `verify-required-strength`). **With no `brief` at all**, any

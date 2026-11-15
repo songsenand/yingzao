@@ -77,6 +77,11 @@ from the inline list alone. When an endpoint resolves only against the version, 
 
 每条带 `by: "user"` 或 `by: "assumed"`。`delivery_audit` 会把 `assumed` 的逐条列出来（`info`）——**没问过的假设就是交付偏离 brief 的方式**。
 
+**零件颜色**：根节点每个 child 可以带 `color`（`#rrggbb`）。它是**沟通标签**，不是材料/表面/规格：
+面板的装配视图和回放用它上色，于是你和人说的是同一个零件。没写 `color` 的零件保持原有调色板
+（不凭空加色）；报告、表格、契约里**不使用**颜色。装配里有同轴复合件、成对齿轮时尤其值得标，
+因为它们最容易被人按颜色叫错名字。
+
 **`verify` 是硬要求，其余是记录。** 声明了 `motion` / `strength`，就必须有一条**新鲜**的对应 run（引用最新版本），否则 `delivery_audit` 直接 `blocked`（`verify-required-motion` / `verify-required-strength`）。**没写 `brief` 时**，只要 ICD 里出现 `转动副` / `滑动副` / `弹簧`，`motion` 自动成为要求（`verify-derived` 会说明这个推导）——这是发条青蛙那次“README 写着未测 live 仿真、交付照样过审”的补丁。要缩小范围，必须由用户显式写 `brief.verify`（例如 `["assembly"]`），审计会打印 `verify-waived`：**那是一个决定，不是一次通过**。
 
 ## Where this sits in the delivery discipline (updated 2026-10-20)

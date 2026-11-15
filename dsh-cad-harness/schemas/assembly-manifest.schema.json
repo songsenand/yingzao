@@ -170,6 +170,11 @@
           "enum": ["printed", "purchased", "reference"],
           "description": "Appearance ownership. Default when omitted: source=stock -> purchased, otherwise printed. `reference` = vendor geometry kept for fit checking only: it occludes in the scene but is never judged, because you cannot change it."
         },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Identity colour for COMMUNICATION only (#rrggbb): used where colour already exists — assembly and playback rendering — so the agent and the human name the same part. Not a material, finish or spec; it does not introduce colour anywhere there was none (reports, tables, contracts stay uncoloured)."
+        },
         "material": { "type": "string" },
         "qty": { "type": "integer", "minimum": 1 },
         "stockRef": { "type": "string" },
