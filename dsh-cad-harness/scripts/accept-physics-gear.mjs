@@ -113,6 +113,53 @@ const run = async (scenario) => ({
   }
 }
 
+// ---- 2b. more than a full turn must not alias -------------------------------
+//
+// The first version computed A's angle from the total rotation with 2·atan2,
+// whose range is (−π, π]: past HALF a turn the follower jumped to the other
+// side. The 64:1 gearbox saw its output "shake in place" at 6400 rpm. A run
+// longer than a revolution is now the regression test.
+{
+  const FROG = join(REPO, 'examples', 'windup-frog', 'cad-data', 'versions');
+  const drum = join(FROG, 'v043', 'model.stl');
+  const gearB = join(FROG, 'v045', 'model.stl');
+  if (!existsSync(drum) || !existsSync(gearB)) {
+    console.log(`SKIP  no frog corpus at ${FROG}`);
+  } else {
+    const { readFileSync } = await import('node:fs');
+    const drumStl = new Uint8Array(readFileSync(drum));
+    const gearBStl = new Uint8Array(readFileSync(gearB));
+    const scenario = {
+      parts: [
+        { name: 'hubA', stl: cube, bodyType: 'fixed', position: [4, 0, 10] },
+        { name: 'hubB', stl: cube, bodyType: 'fixed', position: [15.691, 8.183, 15] },
+        { name: 'drum', stl: drumStl, bodyType: 'dynamic', position: [0, 0, 0] },
+        { name: 'gearB', stl: gearBStl, bodyType: 'dynamic', position: [0, 0, 0] },
+      ],
+      joints: [
+        { type: 'revolute', bodyA: 'hubA', bodyB: 'drum', anchorA: [0, 0, 0], anchorB: [4, 0, 10], axis: [0, 0, 1],
+          motor: { targetVelocityRadPerSec: 3, maxTorqueNm: 1 } },
+        { type: 'revolute', bodyA: 'hubB', bodyB: 'gearB', anchorA: [0, 0, 0], anchorB: [15.691, 8.183, 15], axis: [0, 0, 1] },
+        { type: 'gear', bodyA: 'drum', bodyB: 'gearB', ratio: -3, axis: [0, 0, 1] },
+      ],
+      durationSec: 2.5, // 3 rad/s × 2.5 s ≈ 430° — past the old ±180° boundary, twice
+      timestepSec: 1 / 1000,
+      keyframeCount: 4,
+      gravity: [0, 0, 0],
+    };
+    const r = await run(scenario);
+    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+      if (!result) continue;
+      const g = result.metrics.gears?.[0];
+      check(!!g, `${name}: >360° run has a gear entry`);
+      if (!g) continue;
+      check(Math.abs(g.turnedADeg) > 400, `${name}: the driver really turned past a revolution`, `${g.turnedADeg}°`);
+      check(near(g.measuredRatio, -3, 5e-3), `${name}: ratio stays exact past 360° (no aliasing)`, `${g.measuredRatio}`);
+      check(!(result.metrics.notes ?? []).some((n) => n.includes('per step')), `${name}: no aliasing note at 1/1000`, (result.metrics.notes ?? []).join(' | '));
+    }
+  }
+}
+
 // ---- 3. the 1:12 worm pair that started this ---------------------------------
 {
   const P = '/home/songsenand/Project/reducer/cad-data/versions';

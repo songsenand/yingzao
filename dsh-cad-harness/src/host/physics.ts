@@ -600,9 +600,20 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
     ratio: number;
     axisA: [number, number, number];
     axisB: [number, number, number];
-    /** Poses at t=0: the ratio is applied relative to these. */
+    /** Poses at t=0: the follower is built from these. */
     qA0: { x: number; y: number; z: number; w: number };
     qB0: { x: number; y: number; z: number; w: number };
+    /**
+     * Angle turned by A since t=0, ACCUMULATED per step. Recomputing it from the
+     * total rotation aliases at ±180° (2·atan2 has range (−π, π]) — the 64:1
+     * gearbox saw the output "shake in place" because at 6400 rpm the input
+     * crossed that boundary every 2.8 ms.
+     */
+    thetaA: number;
+    /** A's pose at the previous step: the increment is taken against it. */
+    prevA: { x: number; y: number; z: number; w: number };
+    /** Largest per-step increment seen, rad — > π means the pose aliased. */
+    maxStepRad: number;
   }[] = [];
   const jointContacts = scenario.jointContacts === true;
   const contactsDisabled: string[] = [];
@@ -629,6 +640,7 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       gears.push({
         a, b, ratio: j.ratio, axisA, axisB,
         qA0: a.rotation(), qB0: b.rotation(),
+        thetaA: 0, prevA: a.rotation(), maxStepRad: 0,
       });
       continue; // no rapier joint: nothing to anchor, and the pair must not collide
     }
@@ -813,11 +825,17 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       if (g.b.invMass() === 0) continue;
       const uA = worldAxisOf(g.a, g.axisA);
       const uB = worldAxisOf(g.b, g.axisB);
-      const dA = quatMul(quatConj(g.qA0), g.a.rotation());
+      // Incremental, not absolute: the step-to-step rotation is small, so the
+      // signed angle about the axis is unambiguous. (Absolute 2·atan2 aliases at
+      // ±180°, which is what made a 6400 rpm run oscillate.)
+      const dA = quatMul(quatConj(g.prevA), g.a.rotation());
+      g.prevA = g.a.rotation();
       const len = Math.hypot(dA.x, dA.y, dA.z);
-      const thetaA = Math.sign(len > 1e-12 ? dA.x * uA[0] + dA.y * uA[1] + dA.z * uA[2] : 1)
+      const thetaStep = Math.sign(len > 1e-12 ? dA.x * uA[0] + dA.y * uA[1] + dA.z * uA[2] : 1)
         * 2 * Math.atan2(len, dA.w);
-      const thetaB = g.ratio * thetaA;
+      g.thetaA += thetaStep;
+      g.maxStepRad = Math.max(g.maxStepRad, Math.abs(thetaStep));
+      const thetaB = g.ratio * g.thetaA;
       const half = thetaB / 2;
       const sinHalf = Math.sin(half);
       const rot = { w: Math.cos(half), x: uB[0] * sinHalf, y: uB[1] * sinHalf, z: uB[2] * sinHalf };
@@ -1092,17 +1110,45 @@ export async function runPhysicsInTs(scenario: PhysicsScenario): Promise<Physics
       reachedTarget: Math.abs(measured - target) <= Math.max(0.1 * Math.abs(target), 0.05),
     };
   });
+  // A per-step rotation near 180° means the increment itself is ambiguous, so the
+  // accumulated angle may be wrong even though the metric looks plausible.
+  for (const g of gears) {
+    if (g.maxStepRad > Math.PI * 0.9) {
+      notes.push(
+        `gear coupling moved ${(g.maxStepRad * 180 / Math.PI).toFixed(0)}° per step — at or above 180° the `
+        + 'signed increment is ambiguous and the ratio may alias; lower timestepSec',
+      );
+    }
+  }
+
+  // Report the angle from the COUPLING's accumulator, not from the sampled poses.
+  // The playback timeline is ~160 frames, so a 6400 rpm shaft advances ~2 turns
+  // per frame and the pose-derived turn aliases into noise (measured: a 3 s run
+  // reported -29° for a shaft that turned 320 times). The accumulator is exact by
+  // construction; `signedTurn` stays in the file for the motor report, where the
+  // speeds are low enough for it to be meaningful.
   const gearReport = (scenario.joints ?? []).filter((j) => j.type === 'gear').map((j) => {
-    const axisLocalA = (j.axisA ?? j.axis) as [number, number, number];
-    const axisLocalB = (j.axisB ?? j.axisA ?? j.axis) as [number, number, number];
-    const turnedA = signedTurn(j.bodyA, axisLocalA);
-    const turnedB = signedTurn(j.bodyB, axisLocalB);
+    const g = gears.find((x) => x.a.handle === bodies.get(j.bodyA)?.handle && x.b.handle === bodies.get(j.bodyB)?.handle);
+    if (!g) {
+      const axisLocalA = (j.axisA ?? j.axis) as [number, number, number];
+      const axisLocalB = (j.axisB ?? j.axisA ?? j.axis) as [number, number, number];
+      const turnedA = signedTurn(j.bodyA, axisLocalA);
+      const turnedB = signedTurn(j.bodyB, axisLocalB);
+      return {
+        joint: `${j.bodyA}~${j.bodyB}`,
+        ratio: j.ratio!,
+        turnedADeg: +((turnedA * 180) / Math.PI).toFixed(2),
+        turnedBDeg: +((turnedB * 180) / Math.PI).toFixed(2),
+        measuredRatio: Math.abs(turnedA) > 1e-9 ? +(turnedB / turnedA).toFixed(4) : 0,
+      };
+    }
+    const turnedB = g.ratio * g.thetaA;
     return {
       joint: `${j.bodyA}~${j.bodyB}`,
       ratio: j.ratio!,
-      turnedADeg: +((turnedA * 180) / Math.PI).toFixed(2),
+      turnedADeg: +((g.thetaA * 180) / Math.PI).toFixed(2),
       turnedBDeg: +((turnedB * 180) / Math.PI).toFixed(2),
-      measuredRatio: Math.abs(turnedA) > 1e-9 ? +(turnedB / turnedA).toFixed(4) : 0,
+      measuredRatio: Math.abs(g.thetaA) > 1e-9 ? +(turnedB / g.thetaA).toFixed(4) : 0,
     };
   });
 

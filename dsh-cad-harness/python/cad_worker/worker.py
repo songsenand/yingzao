@@ -6929,6 +6929,12 @@ def op_simulate_physics(params: dict) -> dict:
                     "axisB": axis_b,
                     "qA0": tuple(float(v) for v in world.rigid_bodies[a].rotation.quaternion),
                     "qB0": tuple(float(v) for v in world.rigid_bodies[b].rotation.quaternion),
+                    # Accumulated angle of A since t=0. Recomputing it from the total
+                    # rotation aliases at ±180° (2·atan2 range) — the 64:1 gearbox saw
+                    # the output shake because 6400 rpm crossed that every 2.8 ms.
+                    "thetaA": 0.0,
+                    "prevA": tuple(float(v) for v in world.rigid_bodies[a].rotation.quaternion),
+                    "maxStepRad": 0.0,
                 }
             )
             continue  # no rapier joint: nothing to anchor, and the pair must not collide
@@ -7112,10 +7118,19 @@ def op_simulate_physics(params: dict) -> dict:
             length_b = math.hypot(*ub) or 1.0
             ua = [value / length_a for value in ua]
             ub = [value / length_b for value in ub]
-            rel = _quat_mul(_quat_conj(gear["qA0"]), tuple(body_a.rotation.quaternion))
+            # Incremental (see the TS implementation): the step-to-step rotation is
+            # small, so the signed angle about the axis is unambiguous.
+            rel = _quat_mul(_quat_conj(gear["prevA"]), tuple(body_a.rotation.quaternion))
+            gear["prevA"] = tuple(body_a.rotation.quaternion)
             vlen = math.sqrt(rel[0] ** 2 + rel[1] ** 2 + rel[2] ** 2)
             dot = rel[0] * ua[0] + rel[1] * ua[1] + rel[2] * ua[2]
-            theta_a = (1 if dot > 0 else -1 if dot < 0 else 1) * 2 * math.atan2(vlen, rel[3])
+            # NOT `step`: that is the simulation loop's variable, and shadowing it
+            # made the loop record almost nothing (it compared a float angle against
+            # traj_every). Caught by the >360° acceptance.
+            theta_step = (1 if dot > 0 else -1 if dot < 0 else 1) * 2 * math.atan2(vlen, rel[3])
+            gear["thetaA"] += theta_step
+            gear["maxStepRad"] = max(gear["maxStepRad"], abs(theta_step))
+            theta_a = gear["thetaA"]
             theta_b = gear["ratio"] * theta_a
             half = theta_b / 2
             sin_half = math.sin(half)
@@ -7369,14 +7384,28 @@ def op_simulate_physics(params: dict) -> dict:
                 "spent on the load (tooth/stop/friction). That is a STALL, not a solver artefact."
             )
 
+    for gear in gears:
+        if gear["maxStepRad"] > math.pi * 0.9:
+            notes.append(
+                f"gear coupling moved {gear['maxStepRad'] * 180 / math.pi:.0f}° per step — at or above 180° "
+                "the signed increment is ambiguous and the ratio may alias; lower timestepSec"
+            )
+
+    # Angles come from the coupling's ACCUMULATOR, not the sampled poses: the
+    # playback timeline is ~160 frames, so a 6400 rpm shaft advances ~2 turns per
+    # frame and the pose-derived turn aliases (a 3 s run reported -29° for a shaft
+    # that turned 320 times).
+    gear_by_pair = {f"{joint['bodyA']}~{joint['bodyB']}": gear for joint, gear in
+                    zip([j for j in (scenario.get("joints") or []) if j.get("type") == "gear"], gears)}
     gear_report = []
     for joint in scenario.get("joints") or []:
         if joint.get("type") != "gear":
             continue
         axis_a = joint.get("axisA") or joint["axis"]
         axis_b = joint.get("axisB") or joint.get("axisA") or joint["axis"]
-        turned_a = _turned_about(traj_poses, joint["bodyA"], axis_a)
-        turned_b = _turned_about(traj_poses, joint["bodyB"], axis_b)
+        accumulated = gear_by_pair.get(f"{joint['bodyA']}~{joint['bodyB']}")
+        turned_a = accumulated["thetaA"] if accumulated else _turned_about(traj_poses, joint["bodyA"], axis_a)
+        turned_b = (accumulated["ratio"] * accumulated["thetaA"]) if accumulated else _turned_about(traj_poses, joint["bodyB"], axis_b)
         gear_report.append(
             {
                 "joint": f"{joint['bodyA']}~{joint['bodyB']}",

@@ -6115,3 +6115,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/client/{gif-encoder,anim-export,playback,i18n}.ts`、`scripts/accept-gif-encoder.mjs`、`package.json` accept 清单、`docs/user/preview.md`。
 
 **非目标：** 不做服务器端渲染、不落盘到项目、不提供自动机位/轨道动画、不导出带标注的叠加层（标注仍是截图那条路）。
+
+## 2026-11-15（补）：`gear` 耦合改为增量累加——修掉 ±180° 翻边，长 run 才可信
+
+**触发条件：** 第 4 条（跨 TS/Python 的实现缺陷，影响已有契约）+ 第 1 条（用户批准"我们就是上游，改"）。
+
+**要解决的问题：** 64:1 齿轮箱会话在 6400 rpm 下看到"输出原地抖"。根因不是求解器：`gear` 耦合每步用 `2·atan2` 从 t=0 的总转角取角度，**值域是 (−π, π]**，相对转角超过半圈就翻到另一侧；6400 rpm 下输入每 2.8 ms 翻一次。顺带发现 `metrics.gears` 的角度取自采样位姿（≈160 帧），高速时会混叠——3 s/320 转被报成 −29°。
+
+**决策内容：** ①耦合的角度改为**按步累加**（每步取相邻位姿的增量，小角度不会混叠），TS 与 Python 同步；②`metrics.gears` 的 `turnedADeg`/`turnedBDeg`/`measuredRatio` 改从累加器取值，不再从采样位姿重算；③单步转角 ≥180° 时累加同样失效，报告加一条 note 建议减小 `timestepSec`；④新增验收：3 rad/s × 2.5 s（≈430°，跨两次旧的边界）比率必须仍为 −3。
+
+**理由：** 增量是唯一无歧义的读法；累加器是引擎自己的状态，比"从 160 帧采样回来的角度"更接近事实——面板播放仍是 160 帧（高转速看起来必然是糊影），但**数字**不该跟着糊。
+
+**依据：** `accept-physics-gear` 新增 ">360° 不混叠" 用例：TS 与 Python 均 `turnedADeg 429.72°`、`measuredRatio −3.0000`；6400 rpm 三秒复核（670.2064 rad/s，dt 1/4000）：输入 **319.9 转**、输出 **−959.76 转**、比率 **−3.0000**，两引擎逐位一致。期间还抓到一个 Python 侧的真 bug：增量变量误命名为 `step`，**遮蔽了仿真循环的 `step`**，导致轨迹只记了 2 帧。`accept-physics-parity`、`accept-physics-motor` 全过。
+
+**影响：** `src/host/physics.ts`、`python/cad_worker/worker.py`、`scripts/accept-physics-gear.mjs`、`DESIGN.md` §6.5。已有 run 的 `trajectory.json` 不受影响；重新跑出的 run 角度统计会与旧的不同（旧的超过半圈本来就不可信）。
+
+**非目标：** 不改面板播放的帧数；不做"外部脚本轨迹导入面板"（那是宿主能力，需要单独的上游功能）。
