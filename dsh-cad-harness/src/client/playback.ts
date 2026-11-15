@@ -877,6 +877,30 @@ export function MotionPlaybackView(props: {
   // The tool row used to live under the data strip and cost a full line of
   // viewport height. It is now a translucent strip INSIDE the viewport (same
   // language as 复原/triad), so the 3D stage keeps the pixels.
+  // One visual group = one function. Groups are separated by an explicit vertical
+  // rule (not a border on the group): the border belonged to a box, so at a wrap
+  // it drew a line on the wrong edge, and it disappeared whenever a group was
+  // hidden (compact mode). A separator is a sibling, so it is only drawn where
+  // two groups really meet — and `data-playback-sep` makes it addressable.
+  const groupEl = (key: string, children: React.ReactNode[], grow = false) =>
+    React.createElement('div', {
+      key, 'data-playback-group': key,
+      style: {
+        display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
+        ...(grow ? { flex: '1 1 260px' } : {}),
+      },
+    }, ...children);
+
+  /** Vertical rule between two functional groups; height matches the control row. */
+  const sep = (key: string) =>
+    React.createElement('span', {
+      key, 'data-playback-sep': '1', 'aria-hidden': 'true',
+      style: {
+        flex: '0 0 1px', width: 1, height: 18, margin: '0 3px',
+        background: T.line, borderRadius: 1, alignSelf: 'center',
+      },
+    });
+
   const playbackTools = !err && !compact && sceneRef.current
     ? React.createElement('div', {
         'data-playback-tools': '1',
@@ -986,6 +1010,11 @@ export function MotionPlaybackView(props: {
       : null),
     onReset: () => { if (!err) sceneRef.current?.refit(); },
     controls: [
+      // The toolbar is grouped by FUNCTION, not by the order things were added:
+      // transport (time), playback settings (what the playhead does), export
+      // (take a frame or the whole run). Export used to sit mid-transport, which
+      // read as "another playback button" — the grouping is the fix.
+      groupEl('transport', [
       React.createElement('button', {
         key: 'kf-first', title: tr('playback.kfFirst'), disabled: keyframes.length === 0,
         onClick: () => goKeyframe(0),
@@ -1029,18 +1058,9 @@ export function MotionPlaybackView(props: {
           textAlign: 'right', whiteSpace: 'nowrap',
         },
       }, shortTime),
-      // Export = "what you see": the current camera, the run's whole trajectory.
-      // GIF and WebM are both produced in the browser; nothing is uploaded.
-      React.createElement('button', {
-        key: 'export-gif', title: tr('playback.exportGif'), disabled: !!exporting || !traj,
-        onClick: () => { void onExport('gif'); },
-        style: { ...btn(false), opacity: exporting ? 0.5 : 1, fontSize: 10 },
-      }, exporting ? `${exporting.done}/${exporting.total}` : 'GIF'),
-      React.createElement('button', {
-        key: 'export-webm', title: tr('playback.exportVideo'), disabled: !!exporting || !traj,
-        onClick: () => { void onExport('webm'); },
-        style: { ...btn(false), opacity: exporting ? 0.5 : 1, fontSize: 10 },
-      }, exporting ? '…' : 'WebM'),
+      ], true),
+      sep('sep-transport'),
+      groupEl('settings', [
       React.createElement('select', {
         key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: tr('playback.kfSelect'),
         onChange: (e: any) => {
@@ -1069,6 +1089,9 @@ export function MotionPlaybackView(props: {
         type: 'checkbox', checked: pauseAtKf,
         onChange: (e: any) => setPauseAtKf(Boolean(e.target.checked)),
       }), tr('playback.stopAtKf')),
+      ]),
+      sep('sep-settings'),
+      groupEl('export', [
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',
@@ -1085,8 +1108,20 @@ export function MotionPlaybackView(props: {
               );
             },
             style: btn(false),
-          }, '📸')
+          }, tr('playback.shot'))
         : null,
+      // Whole-run exports: same camera, same trajectory, produced in the browser.
+      React.createElement('button', {
+        key: 'export-gif', title: tr('playback.exportGif'), disabled: !!exporting || !traj,
+        onClick: () => { void onExport('gif'); },
+        style: { ...btn(false), opacity: exporting ? 0.5 : 1 },
+      }, exporting ? `${exporting.done}/${exporting.total}` : 'GIF'),
+      React.createElement('button', {
+        key: 'export-webm', title: tr('playback.exportVideo'), disabled: !!exporting || !traj,
+        onClick: () => { void onExport('webm'); },
+        style: { ...btn(false), opacity: exporting ? 0.5 : 1 },
+      }, exporting ? '…' : 'WebM'),
+      ]),
       React.createElement('div', { key: 'timeline', style: { width: '100%' } },
         React.createElement(RunTimeline, {
           times: traj.trajectory.times,
@@ -1362,7 +1397,7 @@ export function FluidPlaybackView(props: {
               { index: frameIdx + 1, total: manifest.frames.length, timeSec: entry.timeSec,
                 stepSec: manifest.frames.length > 1 ? manifest.frames[1]!.timeSec - manifest.frames[0]!.timeSec : 0 }),
             style: btn(false),
-          }, '📸')
+          }, tr('playback.shot'))
         : null,
     ],
   });
@@ -1458,7 +1493,7 @@ export function StaticPartsView(props: {
             key: 'shot',
             onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, tr('playback.staticShot')),
             style: btn(false),
-          }, '📸')
+          }, tr('playback.shot'))
         : null,
     ],
   });
