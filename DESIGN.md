@@ -330,7 +330,7 @@ validateAssembly(parts, thresholdMm = 0.75): Promise<AssemblyReport>
 
 #### 6.4.1 装配清单检查（v1，2026-09-28 新增）
 
-**职责**：BOM + 可执行 ICD —— 把「谁和谁配合、什么类型、名义值、容差」写成 `assembly.json`，由引擎逐条核对，并反向发现未声明的邻近零件对。（2026-11-14 补：根节点可带 `brief` —— 建模**之前**的开工对齐记录：buyVsMake 逐项 `by: user|assumed`、允许的工艺**集合**、`verify`（装配/运动/强度）、以及所有假设。它是**记录不是门禁**：`delivery_audit` 把 `assumed` 的条目作为 `info` 列出，缺失时也只用 `info` 提示，不改变 verdict。）设计见 `docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md`，交付记录见 v2.7。
+**职责**：BOM + 可执行 ICD —— 把「谁和谁配合、什么类型、名义值、容差」写成 `assembly.json`，由引擎逐条核对，并反向发现未声明的邻近零件对。（2026-11-14 补：根节点可带 `brief` —— 建模**之前**的开工对齐记录：buyVsMake 逐项 `by: user|assumed`、允许的工艺**集合**、`verify`（装配/运动/强度）、以及所有假设。`assumed` 条目与缺失的 `brief` 只作 `info`；但 **`verify` 是硬要求**（2026-11-15）：声明 `motion`/`strength` 而缺新鲜 run 即 `blocked`，且**未声明时**只要 ICD 有 `转动副`/`滑动副`/`弹簧` 就按 `motion` 要求——用户要缩小范围必须显式写 `verify`，审计打印 `verify-waived`。）设计见 `docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md`，交付记录见 v2.7。
 
 - 实作：`manifest.ts`（清单读写/校验/遍历）+ `assembly-check.ts`（L0 算子 `distance` / `diameter-match`、hard/intent 双通道、邻接发现）
 - 工具 `check_assembly`；路由 `GET /api/cad/assembly/manifest`、`POST /api/cad/assembly/run`（人工发起②）、`GET /api/cad/assembly/check`

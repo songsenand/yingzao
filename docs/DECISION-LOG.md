@@ -6083,3 +6083,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/tools.ts`（两个 simulate 工具 + 输出 schema）、`presets/cad/workflow.md` + `preset.patch.yml`（重新生成）、`skills/cad-simulation/SKILL.md`、`docs/llm/engines.md` + 英文镜像、`docs/TOOL-CONTRACTS.md`。
 
 **非目标：** 不改面板回放本身；不禁止静态图（版本渲染仍是必要产物）；不新增工具。
+
+## 2026-11-15：`verify` 变成硬要求——机构没跑运动仿真不能交付
+
+**触发条件：** 第 1 条（用户指出"交付前没跑仿真，要拴在 BOM/ICD 上"，并确认尚未开始做）。
+
+**要解决的问题：** 上一轮只把 `brief` 做成**记录**（`info`），于是发条青蛙那次"README 写着未测 simulate_physics"依然能过审——记录不等于约束。用户要的是：**装配体是否需要跑仿真，写在 BOM/ICD 里，并在交付时执行**。
+
+**决策内容：** `delivery_audit` 增加"声明/推导的验证范围 → 证据"一段：①`brief.verify` 声明的 `motion` / `strength` 必须有**新鲜**的对应 run（引用最新版本），否则 `blocked`（`verify-required-motion` / `verify-required-strength`）；②**没有 `brief` 时**，只要 ICD 里出现 `转动副` / `滑动副` / `弹簧`，`motion` 自动成为要求（`verify-derived` 说明推导）；③要缩小范围必须由用户显式声明，审计打印 `verify-waived`（是决定，不是通过）。契约统计新增 `kinematicInterfaces`。只强制 motion/strength——装配新鲜度、可制造性、外观各有既有门禁。
+
+**理由：** 这就是用户说的"拴上去"：要求写在契约里、由交付门执行，而不是靠模型记得跑。默认推导让"机构"这件事从接口类型里自动得出，agent 无权悄悄放弃；豁免必须留痕且归因到用户。
+
+**依据：** `accept-delivery-audit`：新建 bare 语料（1 件 + `转动副`，无 run）→ `excluded` + `blocked/verify-required-motion` + `info/verify-derived` + `kinematicInterfaces: 1`；带新鲜 physics run 的同一场景 → `not-excluded`；显式 `verify: ["assembly"]` → `not-excluded` + `info/verify-waived`。回归全过。
+
+**影响：** `src/host/delivery-audit.ts`、`schemas/assembly-manifest.schema.json`（`verify` 描述）、`docs/llm/assembly.md` + 英文镜像、`DESIGN.md` §5.3、`scripts/accept-delivery-audit.mjs`。
+
+**非目标：** 不强制 `assembly` / `manufacturability` / `appearance`（各有既有门禁）；不自动跑仿真（工具只判定有没有证据，不替模型补跑）；不改 `brief` 其余字段的 `info` 级别。

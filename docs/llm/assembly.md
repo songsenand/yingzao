@@ -75,7 +75,9 @@ from the inline list alone. When an endpoint resolves only against the version, 
 - **processes**：用户允许的工艺**集合**（可多选：FDM / 钣金 / CNC / 注塑）。用户给集合，**你**按零件选，并在每个零件的 `process` 里写明谁定的（沿用 `process.source`）；
 - **verify**：这个交付物“能用”指什么——装配 / 运动 / 强度。它决定交付必须带哪些 run。
 
-每条带 `by: "user"` 或 `by: "assumed"`。`delivery_audit` 会把 `assumed` 的逐条列出来（`info`，不阻塞）——**没问过的假设就是交付偏离 brief 的方式**。`brief` 是记录，不是门禁；门禁是人读这份清单。
+每条带 `by: "user"` 或 `by: "assumed"`。`delivery_audit` 会把 `assumed` 的逐条列出来（`info`）——**没问过的假设就是交付偏离 brief 的方式**。
+
+**`verify` 是硬要求，其余是记录。** 声明了 `motion` / `strength`，就必须有一条**新鲜**的对应 run（引用最新版本），否则 `delivery_audit` 直接 `blocked`（`verify-required-motion` / `verify-required-strength`）。**没写 `brief` 时**，只要 ICD 里出现 `转动副` / `滑动副` / `弹簧`，`motion` 自动成为要求（`verify-derived` 会说明这个推导）——这是发条青蛙那次“README 写着未测 live 仿真、交付照样过审”的补丁。要缩小范围，必须由用户显式写 `brief.verify`（例如 `["assembly"]`），审计会打印 `verify-waived`：**那是一个决定，不是一次通过**。
 
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 

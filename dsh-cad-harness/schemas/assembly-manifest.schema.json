@@ -202,7 +202,7 @@
             "verify": {
               "type": "array",
               "items": { "enum": ["assembly", "motion", "strength", "flow", "appearance"] },
-              "description": "What \"working\" means for this deliverable; decides which runs the delivery must carry."
+              "description": "What \"working\" means for this deliverable; ENFORCED: a declared motion/strength needs a FRESH run citing the newest version, or delivery is blocked. Omitted entirely + a kinematic interface (转动副/滑动副/弹簧) => motion is required by derivation. Narrowing it (e.g. [\"assembly\"]) is a user decision and is printed as verify-waived, never as a pass."
             },
             "verifyBy": { "enum": ["user", "assumed"] },
             "assumptions": {

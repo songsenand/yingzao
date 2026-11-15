@@ -80,8 +80,15 @@ then model:
   delivery must carry.
 
 Every entry carries `by: "user"` or `by: "assumed"`. `delivery_audit` lists the assumed ones
-(`info`, never blocking) — an unasked assumption is how a delivery drifts from the brief.
-`brief` is a RECORD, not a gate; the gate is a human reading it.
+(`info`) — an unasked assumption is how a delivery drifts from the brief.
+
+**`verify` is enforced; everything else is a record.** Declaring `motion` / `strength` requires a
+FRESH run of that kind citing the newest version, or `delivery_audit` is `blocked`
+(`verify-required-motion` / `verify-required-strength`). **With no `brief` at all**, any
+`转动副` / `滑动副` / `弹簧` interface makes `motion` required by derivation (`verify-derived` says
+so) — the patch for the wind-up frog shipping with “未测 live simulation” in its README. Narrowing
+the scope means the USER writes `brief.verify` (e.g. `["assembly"]`); the audit then prints
+`verify-waived`: that is a DECISION, never a pass.
 
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 

@@ -44,6 +44,9 @@ export interface DeliveryClaim {
   statement: string;
 }
 
+/** Interfaces that make the deliverable a MECHANISM (see ManifestInterface.type). */
+const KINEMATIC_INTERFACE_TYPES = new Set(['转动副', '滑动副', '弹簧']);
+
 /** What each claim kind needs, and how to say it in a finding. */
 export const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: string }> = {
   strength: { kinds: ['stress'], label: 'a fresh stress run citing the newest version' },
@@ -92,6 +95,12 @@ export interface DeliveryAudit {
   contract: {
     name: string | null;
     interfaces: number;
+    /**
+     * Interfaces that make this a MECHANISM (转动副 / 滑动副 / 弹簧). Their presence
+     * is what makes a fresh motion/physics run a delivery requirement rather than a
+     * nicety — the wind-up-frog shipped with "未测 simulate_physics" and passed.
+     */
+    kinematicInterfaces: number;
     byCheck: Record<string, number>;
     /** Manifest part nodes pointing at a version that is no longer the newest. */
     staleNodes: { name: string; version: string; newest: string; newestDatums?: number }[];
@@ -200,7 +209,7 @@ export async function auditDelivery(
 
   // ── the contract, when there is one ────────────────────────────────────────
   const contract: DeliveryAudit['contract'] = {
-    name: null, interfaces: 0, byCheck: {}, staleNodes: [], geometryNewerThanCheck: false,
+    name: null, interfaces: 0, kinematicInterfaces: 0, byCheck: {}, staleNodes: [], geometryNewerThanCheck: false,
   };
   let contractPath: string | null = null;
   let contractError: string | null = null;
@@ -219,6 +228,7 @@ export async function auditDelivery(
     const walk = (node: any): void => {
       for (const iface of node?.interfaces ?? []) {
         contract.interfaces += 1;
+        if (KINEMATIC_INTERFACE_TYPES.has(String(iface?.type ?? ''))) contract.kinematicInterfaces += 1;
         const check = String(iface?.check ?? '(none)');
         contract.byCheck[check] = (contract.byCheck[check] ?? 0) + 1;
       }
@@ -417,6 +427,42 @@ export async function auditDelivery(
       (r) => kinds.includes(r.kind) && r.status !== 'fail' &&
         (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
     );
+  // ── declared/derived verification scope → evidence ───────────────────────
+  //
+  // The wind-up-frog delivery carried "未测: simulate_physics" in its README and
+  // still passed, because a claim nobody declared requires no evidence. A
+  // mechanism is not a claim the model may drop: when the ICD declares a
+  // kinematic interface, a fresh motion/physics run is REQUIRED, and only the
+  // user's explicit `brief.verify` can narrow that scope.
+  {
+    const declared = brief.present && brief.verify.length > 0 ? brief.verify : null;
+    const derivedMotion = contract.kinematicInterfaces > 0;
+    const required = new Set<string>(declared ?? (derivedMotion ? ['motion'] : []));
+    // Only the kinds that have no other gate are enforced here: an assembly check
+    // already has currency findings, and manufacturability/appearance have their own.
+    const ENFORCED = new Set(['motion', 'strength']);
+    for (const kind of [...required].filter((k) => ENFORCED.has(k))) {
+      const spec = CLAIM_EVIDENCE[kind as keyof typeof CLAIM_EVIDENCE];
+      if (!spec) continue; // unknown kinds are surfaced by the claims loop
+      if (freshOfKind(spec.kinds).length > 0) continue;
+      const why = declared
+        ? `brief.verify declares "${kind}"`
+        : `the ICD declares ${contract.kinematicInterfaces} kinematic interface(s)`;
+      push('blocked', `verify-required-${kind}`,
+        `${why}, but no FRESH run of the right kind exists (${spec.label}). ` +
+        'Run it, or narrow the scope explicitly in assembly.json `brief.verify` — a mechanism that was never run is not a delivered mechanism.');
+    }
+    if (!declared && derivedMotion) {
+      push('info', 'verify-derived',
+        `motion coverage is required because the ICD declares ${contract.kinematicInterfaces} kinematic interface(s); ` +
+        'declare `brief.verify` to state the scope yourself');
+    }
+    if (declared && derivedMotion && !declared.includes('motion')) {
+      push('info', 'verify-waived',
+        'the ICD declares kinematic interfaces but `brief.verify` does not include "motion": motion is treated as OUT of scope by the user\'s declaration — that is a decision, not a pass');
+    }
+  }
+
   const partsMissingPrintability = [...newestOfPart.entries()]
     .filter(([pid, vid]) => {
       if (roleExemptIds.has(pid)) return false;

@@ -165,28 +165,72 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   check(!clean.parts.newestNeverValidated.includes('支架'),
     'the clean part is not flagged as unvalidated');
 
-  // Kickoff alignment (2026-11-14): the manifest's `brief` is a RECORD, not a gate.
-  // Missing → warn; agent-assumed items → info; the verdict must NOT move.
-  check(clean.findings.some((f) => f.code === 'brief-missing' && f.severity === 'info'),
-    'a manifest with no `brief` is flagged (kickoff alignment was never recorded)',
+  // Mechanism rule (2026-11-15): the wind-up-frog shipped "未测 simulate_physics"
+  // in its README and still passed, because nothing declared motion as required.
+  // A kinematic interface with NO fresh motion run is now a BLOCKING finding —
+  // proven on a bare corpus (this one has a green physics run, so it is clean).
+  {
+    const bare = mkdtempSync(join(tmpdir(), 'cad-audit-bare-'));
+    const bareProject = projectStores(bare);
+    const partB = await ensurePart(bareProject.partStore, '曲柄', 'agent');
+    const vB = await saveVersion(bareProject.store, {
+      scadCode: 'cube([10,10,10], center=true);', stl: cubeStl(10), userIntent: 'bare v1',
+      datums: [{ name: '轴心', point: [0, 0, 0] }], partId: partB.id,
+    });
+    await attachVersion(bareProject.partStore, partB.id, vB);
+    await recordVisualReview({
+      store: bareProject.store, versionId: vB, views: ['top', 'iso'],
+      note: 'reviewed the crank cube', source: 'review_visual',
+    });
+    mkdirSync(join(bare, 'assembly'), { recursive: true });
+    writeFileSync(join(bare, 'assembly', 'assembly.json'), JSON.stringify({
+      schemaVersion: 1, name: 'bare', unit: 'mm', up: 'z',
+      root: {
+        id: 'root', name: 'bare', kind: 'assembly',
+        children: [{ id: 'a', name: '曲柄', kind: 'part', version: vB }],
+        interfaces: [{
+          id: 'if-joint', a: 'a.轴心', b: 'a.轴心', type: '转动副',
+          severity: 'intent', layer: 'L1', check: 'motion-clearance', params: {},
+        }],
+      },
+    }, null, 2));
+    const bareReport = await auditDelivery(projectStores(bare), { manifestPath: join(bare, 'assembly', 'assembly.json') });
+    check(bareReport.verdict === 'excluded',
+      'a mechanism (转动副) with NO motion run is BLOCKED',
+      bareReport.findings.map((f) => `${f.severity}/${f.code}`).join(', '));
+    check(bareReport.findings.some((f) => f.code === 'verify-required-motion' && f.severity === 'blocked'),
+      'and the finding names what is missing');
+    check(bareReport.findings.some((f) => f.code === 'verify-derived' && f.severity === 'info'),
+      'the derivation is stated, not silent (no brief → motion required by the ICD)');
+    check(bareReport.contract.kinematicInterfaces === 1,
+      'the audit counts kinematic interfaces', String(bareReport.contract.kinematicInterfaces));
+    rmVisualSidecar(bare, { recursive: true, force: true });
+  }
+
+  // The corpus WITH a fresh physics run is not blocked by this rule.
+  check(clean.verdict === 'not-excluded',
+    'a mechanism with a fresh motion/physics run is not blocked by the rule',
     clean.findings.map((f) => `${f.severity}/${f.code}`).join(', '));
+  check(clean.findings.some((f) => f.code === 'brief-missing' && f.severity === 'info'),
+    'a manifest with no `brief` is flagged (kickoff alignment was never recorded)');
   check(clean.brief.manifest === true && clean.brief.present === false,
     'the audit distinguishes "no manifest" from "manifest without a brief"');
 
+  // The user's explicit scope narrows it — a decision, not a pass.
   {
     const withBrief = JSON.parse((await import('node:fs')).readFileSync(join(workspace, 'assembly', 'assembly.json'), 'utf8'));
     withBrief.root.brief = {
       buyVsMake: [{ item: '齿轮', decision: 'buy', by: 'user' }, { item: '支架', decision: 'make', by: 'assumed' }],
       processes: ['FDM', 'CNC'],
       processesBy: 'user',
-      verify: ['assembly', 'motion'],
+      verify: ['assembly'],
       verifyBy: 'user',
       assumptions: [{ text: '齿顶 ≥1.2mm 才可 FDM', by: 'assumed' }],
     };
     writeFileSync(join(workspace, 'assembly', 'assembly.json'), JSON.stringify(withBrief, null, 2));
     const recorded = await auditDelivery(projectStores(workspace), { manifestPath: join(workspace, 'assembly', 'assembly.json') });
     check(recorded.brief.present === true, 'the brief is read back');
-    check(recorded.brief.processes.includes('CNC') && recorded.brief.verify.includes('motion'),
+    check(recorded.brief.processes.includes('CNC'),
       'allowed processes (a SET) and the verification scope are echoed',
       `${recorded.brief.processes.join('/')} · ${recorded.brief.verify.join('/')}`);
     check(recorded.brief.assumed.length === 2,
@@ -194,8 +238,10 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
       JSON.stringify(recorded.brief.assumed));
     check(recorded.findings.some((f) => f.code === 'brief-assumed' && f.severity === 'info'),
       'assumed decisions produce an info finding, listing them');
+    check(recorded.findings.some((f) => f.code === 'verify-waived' && f.severity === 'info'),
+      'waiving motion for a mechanism is stated as a decision, not counted as a pass');
     check(recorded.verdict === 'not-excluded',
-      'and none of it BLOCKS delivery — the record is for the human, not a gate',
+      'an explicit user scope without motion does not block — but the waiver is printed',
       recorded.verdict);
   }
 
