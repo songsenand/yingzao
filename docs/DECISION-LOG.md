@@ -6099,3 +6099,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/delivery-audit.ts`、`schemas/assembly-manifest.schema.json`（`verify` 描述）、`docs/llm/assembly.md` + 英文镜像、`DESIGN.md` §5.3、`scripts/accept-delivery-audit.mjs`。
 
 **非目标：** 不强制 `assembly` / `manufacturability` / `appearance`（各有既有门禁）；不自动跑仿真（工具只判定有没有证据，不替模型补跑）；不改 `brief` 其余字段的 `info` 级别。
+
+## 2026-11-15：回放可导出 GIF / WebM——面板内、当前视角、不新增工具
+
+**触发条件：** 第 1 条（用户提出并定下"面板功能、当前视角、格式由用户选"）+ 第 3 条（引入一个自写的编码器，替换成本高）。
+
+**要解决的问题：** 用户想把仿真结果作为动图分享出去。之前模型自己写渲染器导 GIF，被制止——那是绕过面板的野路子；正确做法是让**面板**具备导出能力，模型只负责把人指到回放。
+
+**决策内容：** 在回放视图的工具栏加 `GIF` / `WebM` 两个按钮，按**当前相机**逐帧渲染整段轨迹并下载。相机 = 用户当下所见（WYSIWYG），不提供自动环绕/跟随；默认 560×420 @15fps。GIF 用自写编码器（固定 6×7×6 调色板 + 2×2 抖动 + LZW，不引入新依赖）；WebM 用 `canvas.captureStream(0)` + `MediaRecorder`，逐帧 `requestFrame`。全部在浏览器内完成，不上传、不落项目、不新增工具。
+
+**理由：** 导出必须和用户看到的一致，否则又是一条"看起来对"的证据通道；面板拥有场景与轨迹，客户端渲染是唯一能做到 WYSIWYG 的位置。自写编码器是为了不为一个按钮引入运行时依赖（NOTICE/审计/体积），代价是要自己保证 LZW 正确——用独立解码器做往返测试兜住。
+
+**依据：** `scripts/accept-gif-encoder.mjs`（已进 `npm run accept`）：独立解码器逐像素回读，4 帧 64×48 与 320×240 噪声帧（触发 4096 字典重置）均 0 失配；编码确定性（同输入同字节）。期间抓到两个真实缺陷：GCE 缺少块终止符、解码器码长增长晚一步。`tsc`/`esbuild`/`accept-i18n` 17/17/`accept-tool-output` 通过；用户在面板中实测"确认能导出"。
+
+**影响：** `src/client/{gif-encoder,anim-export,playback,i18n}.ts`、`scripts/accept-gif-encoder.mjs`、`package.json` accept 清单、`docs/user/preview.md`。
+
+**非目标：** 不做服务器端渲染、不落盘到项目、不提供自动机位/轨道动画、不导出带标注的叠加层（标注仍是截图那条路）。

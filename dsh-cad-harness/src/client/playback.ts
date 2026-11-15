@@ -20,6 +20,7 @@ import { withProject } from './project';
 import { placementEuler } from './placement';
 import type { ShotFrame } from './shot-caption';
 import { T } from './tokens';
+import { downloadAnimation, exportAnimation } from './anim-export';
 import { runFacts, type RunEvent, type RunFact, type RunFacts, type RunKeyframe, type RunTone } from './run-facts';
 import { buildRunChart, RunChart } from './run-chart';
 
@@ -503,6 +504,7 @@ export function MotionPlaybackView(props: {
   const [err, setErr] = useState<string | null>(null);
   const [frameIdx, setFrameIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const [speed, setSpeed] = useState(1);
   const [meshesVersion, setMeshesVersion] = useState(0);
   const [kfIdx, setKfIdx] = useState(-1);
@@ -643,6 +645,35 @@ export function MotionPlaybackView(props: {
     }
     return best;
   };
+  // Export the run as seen from the CURRENT camera. Deliberately client-side:
+  // the panel owns the scene and the trajectory, so the file matches what the
+  // user was looking at, and no host tool has to grow a renderer.
+  const onExport = async (format: 'gif' | 'webm') => {
+    const handle = sceneRef.current;
+    if (!handle || !traj) return;
+    setPlaying(false);
+    setExporting({ done: 0, total: 1 });
+    try {
+      const { blob, extension } = await exportAnimation({
+        renderer: handle.renderer,
+        scene: handle.scene,
+        camera: handle.camera,
+        meshes: meshesRef.current,
+        parts: traj.trajectory.parts,
+        width: 560,
+        height: 420,
+        fps: 15,
+        onProgress: (done, total) => setExporting({ done, total }),
+      }, format);
+      downloadAnimation(blob, props.runId, extension);
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+    } finally {
+      setExporting(null);
+      setMeshesVersion((v) => v + 1); // put the meshes back on the current frame
+    }
+  };
+
   const seekTime = (time: number) => {
     setPlaying(false);
     setKfIdx(-1);
@@ -998,6 +1029,18 @@ export function MotionPlaybackView(props: {
           textAlign: 'right', whiteSpace: 'nowrap',
         },
       }, shortTime),
+      // Export = "what you see": the current camera, the run's whole trajectory.
+      // GIF and WebM are both produced in the browser; nothing is uploaded.
+      React.createElement('button', {
+        key: 'export-gif', title: tr('playback.exportGif'), disabled: !!exporting || !traj,
+        onClick: () => { void onExport('gif'); },
+        style: { ...btn(false), opacity: exporting ? 0.5 : 1, fontSize: 10 },
+      }, exporting ? `${exporting.done}/${exporting.total}` : 'GIF'),
+      React.createElement('button', {
+        key: 'export-webm', title: tr('playback.exportVideo'), disabled: !!exporting || !traj,
+        onClick: () => { void onExport('webm'); },
+        style: { ...btn(false), opacity: exporting ? 0.5 : 1, fontSize: 10 },
+      }, exporting ? '…' : 'WebM'),
       React.createElement('select', {
         key: 'kf-select', 'data-keyframe-select': '1', value: selectedKf, title: tr('playback.kfSelect'),
         onChange: (e: any) => {
