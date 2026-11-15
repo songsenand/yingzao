@@ -11,6 +11,7 @@
 - Assembly contract (BOM + executable ICD), delivery audit, evidence CLI;
 - Risk-annotated export: a blocked delivery can still be exported, but the panel asks for confirmation, the filename carries `_UNVERIFIED`, and the project `exports/<id>/` keeps a manifest and the findings;
 - Playback export: the motion toolbar has **GIF** and **WebM**, exporting the whole trajectory from the **current camera** in the browser (nothing is uploaded); GIF uses the built-in 256-colour encoder;
+- Two places a screenshot can go: **Shot** sends the current frame (annotations baked in) into the session; **Save** downloads that same image as a PNG;
 - Environment self-check: `dsh-cad-doctor` distinguishes “not installed / not configured / broken project / missing capability” and gives the next step.
 
 ## Install

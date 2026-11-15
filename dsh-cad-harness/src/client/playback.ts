@@ -182,6 +182,22 @@ function speedColor(t: number): [number, number, number] {
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 }
 
+/** Download a canvas as PNG. Same pixels the screenshot flow sends — one capture, two exits. */
+function downloadCanvasPng(canvas: HTMLCanvasElement, base: string): void {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${base ? `${base}_` : ''}${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }, 'image/png');
+}
+
 const btn = (active = false, color = '#4a7dbd'): React.CSSProperties => ({
   cursor: 'pointer', borderRadius: 6, padding: '2px 10px', fontSize: 12,
   border: active ? `2px solid ${color}` : '1px solid #bbb', background: active ? '#e8f0fa' : '#fff',
@@ -648,6 +664,16 @@ export function MotionPlaybackView(props: {
   // Export the run as seen from the CURRENT camera. Deliberately client-side:
   // the panel owns the scene and the trajectory, so the file matches what the
   // user was looking at, and no host tool has to grow a renderer.
+  /** The canvas the screenshot flow sends: current frame, annotation boxes baked in. */
+  const captureFrame = (): HTMLCanvasElement => {
+    const canvas = sceneRef.current!.renderer.domElement;
+    const viewport = mountRef.current?.closest('[data-playback-viewport]') as HTMLElement | null;
+    return bakeBoxes(canvas, boxes, {
+      width: viewport?.clientWidth ?? canvas.clientWidth,
+      height: viewport?.clientHeight ?? canvas.clientHeight,
+    });
+  };
+
   const onExport = async (format: 'gif' | 'webm') => {
     const handle = sceneRef.current;
     if (!handle || !traj) return;
@@ -1096,10 +1122,8 @@ export function MotionPlaybackView(props: {
         ? React.createElement('button', {
             key: 'shot',
             onClick: () => {
-              const canvas = sceneRef.current!.renderer.domElement;
-              const viewport = mountRef.current?.closest('[data-playback-viewport]') as HTMLElement | null;
               props.onScreenshot?.(
-                bakeBoxes(canvas, boxes, { width: viewport?.clientWidth ?? canvas.clientWidth, height: viewport?.clientHeight ?? canvas.clientHeight }),
+                captureFrame(),
                 isMotion ? tr('playback.motionReplay', { time: t.toFixed(2) }) : tr('playback.physicsReplay', { time: t.toFixed(2) }),
               // The caption needs the exact frame, not just the rounded t it
               // prints: the frame index is what survives a same-t collision.
@@ -1109,6 +1133,15 @@ export function MotionPlaybackView(props: {
             },
             style: btn(false),
           }, tr('playback.shot'))
+        : null,
+      // Same image, saved instead of sent: annotations are baked in both cases, so
+      // what lands on disk is exactly what the agent would have seen.
+      props.onScreenshot && sceneRef.current
+        ? React.createElement('button', {
+            key: 'save-shot', title: tr('playback.saveShotTitle'),
+            onClick: () => downloadCanvasPng(captureFrame(), `${props.runId}_f${frameIdx + 1}_t${t.toFixed(2)}`),
+            style: btn(false),
+          }, tr('playback.saveShot'))
         : null,
       // Whole-run exports: same camera, same trajectory, produced in the browser.
       React.createElement('button', {
@@ -1399,6 +1432,13 @@ export function FluidPlaybackView(props: {
             style: btn(false),
           }, tr('playback.shot'))
         : null,
+      props.onScreenshot && sceneRef.current
+        ? React.createElement('button', {
+            key: 'save-shot', title: tr('playback.saveShotTitle'),
+            onClick: () => downloadCanvasPng(sceneRef.current!.renderer.domElement, `${props.runId}_fluid_f${frameIdx + 1}`),
+            style: btn(false),
+          }, tr('playback.saveShot'))
+        : null,
     ],
   });
 }
@@ -1494,6 +1534,13 @@ export function StaticPartsView(props: {
             onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, tr('playback.staticShot')),
             style: btn(false),
           }, tr('playback.shot'))
+        : null,
+      props.onScreenshot && sceneRef.current
+        ? React.createElement('button', {
+            key: 'save-shot', title: tr('playback.saveShotTitle'),
+            onClick: () => downloadCanvasPng(sceneRef.current!.renderer.domElement, `${props.runId}_assembly`),
+            style: btn(false),
+          }, tr('playback.saveShot'))
         : null,
     ],
   });
