@@ -6165,3 +6165,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/physics.ts`、`python/cad_worker/worker.py`、`src/host/tools.ts`（schema + 描述 + 转发）、`docs/TOOL-CONTRACTS.md`、`docs/llm/engines.md`（+英文）、`scripts/accept-physics-solver.mjs`、`package.json`。
 
 **非目标：** 不暴露接触刚度/`contactSkin`（两引擎 API 形状不同：TS 是 `contact_natural_frequency`，Python 是 `contact_spring_stiffness`，强行统一会破坏 parity 的可比性）；不在本版给出“某几何接触仿真可用/不可用”的自动判定。
+
+## 2026-11-16：零件颜色进契约——沟通标签，只在已有颜色的地方生效
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（改变 manifest 字段与面板配色来源）。
+
+**要解决的问题：** 64:1 齿轮箱会话里，视口按 **z 层**上色、图例按**零件名**上色（in_asm 红、mid1 绿、mid2 黄、out_asm 紫），于是同轴复合齿轮被画成两种颜色、同一层啮合的一对反而同色。人和代理来回争论了四轮“红色是输入还是输出”，最后才发现**颜色不是身份**。颜色此前是客户端按数组下标分配的（`PART_COLORS[i % n]`），同一个零件在不同 run 里可能就是不同颜色。
+
+**决策内容：** manifest 的 child 可带 `color`（`^#[0-9a-fA-F]{6}$`），作为零件的**内在身份**。客户端装配视图与回放用它上色（`partColor()`：先取名册颜色，缺失则回落到原调色板），图例同步。三条边界写死在实现与文档里：①**只用于沟通**，不是材料/表面/规格；②**只在原有颜色的地方**生效（装配视图、回放网格与图例），报告/表格/契约不上色；③**没写就不加色**——旧 manifest 的观感与行为完全不变（fixed 参照体仍为灰色）。
+
+**理由：** 颜色不一致的代价不是“不好看”，是**争错了对象**：同一段对话里人和代理各说各的零件。把颜色钉在契约上，双方引用的是同一个字段；同时不扩大到报表，避免把标识当成数据。
+
+**依据：** 新增 `accept-part-color`（已进 `npm run accept`）：声明的颜色被读进 `MachineNode`；`red` / `#12345` / `#1234567` / `rgb(...)` / `#GGGGGG` / 空串全部被拒（不当作 CSS 颜色透传）；schema 声明 pattern 且描述含 "COMMUNICATION" 与 "does not introduce colour"。`tsc`、`esbuild`、`accept-manifest-lock`、`accept-i18n` 通过。
+
+**影响：** `schemas/assembly-manifest.schema.json`、`src/client/assembly.ts`、`src/client/playback.ts`、`src/client/panel.ts`、`src/host/tools.ts`（`write_assembly` 描述）、`docs/llm/assembly.md`（+英文）、`scripts/accept-part-color.mjs`、`package.json`。
+
+**非目标：** 不做配色主题、不让颜色进 `delivery_audit`/报告、不改变 fixed 参照体的灰色、不把颜色用于 2D/流体视图。**另外登记**：`docs/dev/TODO.md` 新增 L15「仿真/装配视图内直接选中零件」（P2, planned）——点选 + 高亮 + 显示零件名/版本/颜色/BOM 行，与本次的 `color` 共用同一身份。

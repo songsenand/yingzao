@@ -142,6 +142,7 @@
 | L12 | P3 | planned | 研究储备：弹性本构 / 特征识别 / pixel-unproject | 未到产品化；先做场地评估 | 每项先写实验报告，不直接进工具面 | DESIGN §12.4；实验 20261107 |
 | L13 | P2 | planned | 平台与分发：npm、Win/mac 全矩阵、插件市场 | 预览只承诺 tarball + Linux/macOS | npm 包、三平台 CI、安装/升级路径 | README；RELEASE |
 | L14 | P3 | triggered | 多用户/云/移动 | 单用户本地够用 | 按 PROJECT-SCOPE 触发条件再评估 | DESIGN §2.2 |
+| L15 | P2 | planned | 仿真/装配视图内直接选中零件 | 现在只能看，不能点：`in_asm`/`out_asm` 这类同轴复合件在 64:1 会话里被反复认错（颜色、图例、拾取都没有同一套身份） | 视口内点选 → 高亮 + 显示零件名/版本/颜色/BOM 行；与 manifest 的 `color` 共用同一身份 | DECISION-LOG 2026-11-16（零件颜色） |
 
 ---
 
