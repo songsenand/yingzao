@@ -72,6 +72,8 @@ export interface ToolScopeConfig {
    * `DSH_CAD_PYTHON` overrides this value.
    */
   pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
+  /** Opt-in Phase-2 facade prototypes; production leaves this unset. */
+  toolFacades?: readonly string[];
   /** Declaration source ①: job groups for ALL CAD sessions. Absent = whole catalog. */
   groups?: readonly CadToolGroup[];
   /** Declaration source ② (the useful one): preset id → the groups THAT preset works in.

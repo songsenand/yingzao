@@ -5,7 +5,7 @@
 // nothing had called them since the panel moved to the real routes, and an unreferenced
 // RPC interceptor is a debugging surface nobody is watching (audit FIX-E1).
 
-import { registerCadTools } from './tools.ts';
+import { registerCadToolsWithFacades } from './register-with-facades.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
 import { configureWorkingDirectoryService } from './project.ts';
@@ -54,7 +54,7 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // exotic deployments — the resolver then falls back to the session header,
   // exactly as before this fix.
   configureWorkingDirectoryService(ctx?.workingDirectory);
-  const cadTools = registerCadTools(ctx, config);
+  const cadTools = [...registerCadToolsWithFacades(ctx, config)];
   warnIfSkillRootIsStale(ctx);
 
   // The bundled Python runtime (DECISION-LOG 2026-10-08). The mode comes from

@@ -22,8 +22,8 @@ export const CAD_TOOL_GROUPS: Record<CadToolGroup, readonly string[]> = {
   // truth: numbers + coordinates, neither gates nor points
   instrument: [
     'generate_part', 'create_part', 'import_part', 'merge_parts', 'set_datums', 'write_assembly', 'validate_assembly',
-    'render_part', 'measure_part', 'measure_gap', 'measure_thickness', 'list_features',
-    'measure_section', 'measure_angle', 'check_parts', 'recall_reference_image', 'attach_appearance',
+    'render_part', 'measure', 'measure_part', 'measure_gap', 'measure_thickness', 'list_features',
+    'measure_section', 'measure_angle', 'check_parts', 'recall_reference_image', 'attach_appearance', 'cad_inspect',
     'set_part_role', 'check_appearance', 'project_info', 'init_project', 'bind_project', 'run_python', 'python_runtime',
   ],
 };

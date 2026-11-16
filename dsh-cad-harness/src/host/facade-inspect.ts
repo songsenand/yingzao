@@ -39,15 +39,25 @@ export const INSPECT_OPS: readonly InspectOp[] = [
 const OPS = new Map(INSPECT_OPS.map((entry) => [entry.op, entry]));
 
 function paramRows(parameters: Record<string, unknown> | undefined) {
-  return Object.entries(parameters ?? {}).map(([name, raw]) => {
-    const spec = (raw ?? {}) as Record<string, unknown>;
-    return {
-      name,
-      type: typeof spec.type === 'string' ? spec.type : 'json',
-      required: spec.required === true,
-      description: typeof spec.description === 'string' ? spec.description : '',
-    };
-  });
+  // defineTool compiles the flat declaration into a JSON schema at registration.
+  // The prototype may receive either shape: the original `{ field: {type,...} }`
+  // or `{ type:'object', properties:{...}, required:[...] }`.
+  const schema = (parameters ?? {}) as Record<string, unknown>;
+  const source = schema.properties && typeof schema.properties === 'object'
+    ? schema.properties as Record<string, unknown>
+    : schema;
+  const required = new Set(Array.isArray(schema.required) ? schema.required.map(String) : []);
+  return Object.entries(source)
+    .filter(([name]) => !['type', 'properties', 'required', 'additionalProperties'].includes(name))
+    .map(([name, raw]) => {
+      const spec = (raw ?? {}) as Record<string, unknown>;
+      return {
+        name,
+        type: typeof spec.type === 'string' ? spec.type : 'json',
+        required: spec.required === true || required.has(name),
+        description: typeof spec.description === 'string' ? spec.description : '',
+      };
+    });
 }
 
 function editDistance(a: string, b: string): number {

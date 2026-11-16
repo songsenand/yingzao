@@ -1,6 +1,6 @@
-# 工具面压缩方案（9 facade，Phase 1 原型）
+# 工具面压缩方案（9 facade，Phase 2 注册原型）
 
-> **状态**：方案 A 已确认（2026-11-16）；Phase 0 映射/基线已落盘，Phase 1 `cad_inspect` 原型已通过。
+> **状态**：方案 A 已确认（2026-11-16）；Phase 0 映射/基线、Phase 1 `cad_inspect`、Phase 2 opt-in 注册均已落盘。
 >
 > **目标**：把模型可见的 CAD 工具从 40+ 压到 8–12 个，同时不丢掉
 > gate、evidence、版本不可变和交付审计。
@@ -16,6 +16,12 @@
 > **Phase 1 状态（2026-11-16）**：`cad_inspect` 原型已落盘（未注册）。
 > 4 个旧 schema 11,594 chars → facade 639 chars（约 -94.5%）；
 > `scripts/accept-cad-inspect-facade.mjs` PASS，catalog/help/未知 action/委派均覆盖。
+
+> **Phase 2 状态（2026-11-16）**：`toolFacades: ["inspect"]` 是 opt-in，默认关闭。
+> 默认 39 个旧工具不变；开启后 40 个（旧 39 + `cad_inspect`），用于对照。
+> `accept-cad-inspect-registered.mjs` PASS；真实 `measure` 因本机 runtime 受限显式 SKIP，
+> 委派由 Phase 1 的 fake legacy 覆盖。过渡期两者同时可见，schema 从 11,594 增到 12,233 chars，
+> 不是净下降——Phase 3 隐藏旧四个后才算压缩。
 
 ## 0. 结论
 

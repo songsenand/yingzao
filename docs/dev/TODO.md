@@ -17,8 +17,8 @@
 
 详细验收、设计、排期在 [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md)。本文件只做索引和状态。
 
-> **工具面压缩（Phase 1 原型）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
-> 9 个作业面 facade 已确认；Phase 0 映射/基线、Phase 1 `cad_inspect` 原型已落盘（未注册）。
+> **工具面压缩（Phase 2 注册原型）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
+> 9 个作业面 facade 已确认；Phase 0/1 已落盘，Phase 2 opt-in 注册通过（默认仍 39 个旧工具）。
 
 **2026-11-12 开工进展：**
 
