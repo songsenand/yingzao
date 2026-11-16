@@ -105,7 +105,8 @@ export function deriveNameFromFile(file: string): string {
 
 export interface DatumInput {
   name: string;
-  kind: 'point' | 'axis' | 'plane' | 'cylinder';
+  /** Omitted: inferred from the fields — radius -> cylinder, normal -> plane, dir -> axis, else point. */
+  kind?: 'point' | 'axis' | 'plane' | 'cylinder';
   point: [number, number, number];
   /** axis/cylinder direction. */
   dir?: [number, number, number];
@@ -192,7 +193,11 @@ export function normalizeDatums(input: readonly DatumInput[] | undefined): Datum
     if (seen.has(name)) throw new Error(`duplicate datum name "${name}"`);
     seen.add(name);
     const point = vec3(d.point, `datum "${name}" point`);
-    switch (d.kind) {
+    // The discriminator is inferable from the fields that would otherwise be
+    // unused. A bare point is a point; a dir+radius is a cylinder; a dir is an
+    // axis; a normal is a plane. Explicit kind always wins.
+    const kind = d.kind ?? (d.radius !== undefined ? 'cylinder' : d.normal !== undefined ? 'plane' : d.dir !== undefined ? 'axis' : 'point');
+    switch (kind) {
       case 'point':
         (set.points as DatumPoint[]).push({ name, point });
         break;
@@ -212,7 +217,7 @@ export function normalizeDatums(input: readonly DatumInput[] | undefined): Datum
         break;
       }
       default:
-        throw new Error(`datum "${name}" has unknown kind "${String(d.kind)}" (point|axis|plane|cylinder)`);
+        throw new Error(`datum "${name}" has unknown kind "${String(kind)}" (point|axis|plane|cylinder)`);
     }
   }
   return set;

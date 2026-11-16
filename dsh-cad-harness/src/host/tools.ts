@@ -1704,7 +1704,7 @@ export function registerCadTools(
           additionalProperties: false,
           properties: {
             name: { type: 'string', required: true, description: 'Datum name, e.g. "内孔".' },
-            kind: { type: 'string', required: true, description: 'point | axis | plane | cylinder.' },
+            kind: { type: 'string', description: 'point | axis | plane | cylinder. Omit to infer: bare point -> point, normal -> plane, dir -> axis, dir+radius -> cylinder.' },
             point: { type: 'array', required: true, description: '[x,y,z] mm.', items: { type: 'number' } },
             dir: { type: 'array', description: 'Direction (axis/cylinder).', items: { type: 'number' } },
             normal: { type: 'array', description: 'Normal (plane).', items: { type: 'number' } },
@@ -2033,7 +2033,7 @@ export function registerCadTools(
           additionalProperties: false,
           properties: {
             name: { type: 'string', required: true },
-            kind: { type: 'string', required: true, description: 'point | axis | plane | cylinder' },
+            kind: { type: 'string', description: 'point | axis | plane | cylinder. Omit to infer from the other fields.' },
             point: { type: 'array', required: true, items: { type: 'number' } },
             dir: { type: 'array', description: 'axis/cylinder direction.', items: { type: 'number' } },
             normal: { type: 'array', description: 'plane normal.', items: { type: 'number' } },
