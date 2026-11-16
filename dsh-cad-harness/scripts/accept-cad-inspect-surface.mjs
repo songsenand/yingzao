@@ -51,6 +51,8 @@ check('catalog includes required fields',
 const help = await surface.execute({ action: 'help', args: { op: 'measure' } }, {});
 check('help returns the legacy description', help?.description === 'legacy measure');
 check('help returns parameter rows', help?.parameters?.[0]?.name === 'versionId' && help.parameters[0].required === true);
+const stringHelp = await surface.execute({ action: 'help', args: '{"op":"measure"}' }, {});
+check('stringified help op resolves', stringHelp?.description === 'legacy measure');
 check('help does not execute legacy tools', calls.length === 0);
 
 const delegated = await surface.execute({ action: 'features', args: { versionId: 'v002' } }, { tag: 'exec' });
@@ -59,10 +61,16 @@ check('op forwards args unchanged', calls[0].args.versionId === 'v002');
 check('op forwards exec unchanged', calls[0].exec.tag === 'exec');
 check('op returns the legacy value', delegated?.op === 'features' && delegated?.forwarded?.versionId === 'v002');
 
+// Models send the JSON-typed `args` as a JSON string as often as an object.
+// Both must reach the legacy body; this was the production failure mode.
+const stringArgs = await surface.execute({ action: 'measure', args: '{"versionId":"v003"}' }, {});
+check('stringified args reach the legacy tool', calls.length === 2 && calls[1].tool === 'measure' && calls[1].args.versionId === 'v003');
+check('stringified args return the legacy value', stringArgs?.op === 'measure' && stringArgs?.forwarded?.versionId === 'v003');
+
 let unknown = '';
 try { await surface.execute({ action: 'mesure', args: {} }, {}); } catch (error) { unknown = String(error?.message ?? error); }
 check('unknown action suggests the nearest op', /did you mean "measure"/.test(unknown), unknown.slice(0, 160));
-check('unknown action does not execute legacy tools', calls.length === 1);
+check('unknown action does not execute legacy tools', calls.length === 2);
 
 let unknownHelp = '';
 try { await surface.execute({ action: 'help', args: { op: 'mesure' } }, {}); } catch (error) { unknownHelp = String(error?.message ?? error); }

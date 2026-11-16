@@ -68,6 +68,26 @@ export function paramRows(parameters: Record<string, unknown> | undefined) {
     });
 }
 
+/**
+ * `args` is declared as JSON, but models routinely send it as a JSON string.
+ * Accept both: a nested-object-only reader silently dropped every stringified
+ * call and produced "missing required property dir"/"needs code or script".
+ */
+function parseSurfaceArgs(raw: unknown): Record<string, unknown> | undefined {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function editDistance(a: string, b: string): number {
   const rows = Array.from({ length: a.length + 1 }, (_, i) => [i]);
   for (let j = 1; j <= b.length; j++) rows[0][j] = j;
@@ -151,9 +171,7 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
     async execute(rawArgs: unknown, exec: unknown) {
       const args = (rawArgs ?? {}) as { action?: unknown; args?: unknown };
       const action = typeof args.action === 'string' ? args.action : '';
-      const inner = args.args && typeof args.args === 'object' && !Array.isArray(args.args)
-        ? args.args as Record<string, unknown>
-        : undefined;
+      const inner = parseSurfaceArgs(args.args);
 
       if (action === 'catalog') {
         return {

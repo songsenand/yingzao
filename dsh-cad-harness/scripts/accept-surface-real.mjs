@@ -42,7 +42,7 @@ check('cad_session and cad_see exist', Boolean(session && see));
 
 const workspace = join(home, 'workspace');
 const exec = { agent: { session: { header: { id: 'cad-surface-real', cwd: workspace } } } };
-const init = await session.execute({ action: 'init', args: { dir: workspace } }, exec);
+const init = await session.execute({ action: 'init', args: JSON.stringify({ dir: workspace }) }, exec);
 check('cad_session.init creates a project', init?.created === true || init?.bound === true, JSON.stringify(init).slice(0, 160));
 
 function boxStl(dx, dy, dz) {
