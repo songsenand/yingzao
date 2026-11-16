@@ -8,6 +8,12 @@
 import { registerCadTools } from './tools.ts';
 import { buildCadInspectFacade } from './facade-inspect.ts';
 import { buildCadCheckFacade } from './facade-check.ts';
+import { buildCadSessionFacade } from './facade-session.ts';
+import { buildCadPartFacade } from './facade-part.ts';
+import { buildCadAssemblyFacade } from './facade-assembly.ts';
+import { buildCadSeeFacade } from './facade-see.ts';
+import { buildCadPythonFacade } from './facade-python.ts';
+import { buildCadDeliverFacade } from './facade-deliver.ts';
 import { buildCadSimulateFacade } from './facade-simulate.ts';
 import type { LegacyTool } from './facade.ts';
 import { withOutputContract } from './tool-contract.ts';
@@ -46,9 +52,15 @@ export function registerCadToolsWithFacades(ctx: any, scope?: FacadeRegisterScop
   const names = [...registerCadTools(toolCtx, scope)].filter((name) => !hidden.has(name));
   const enabled = new Set(scope?.toolFacades ?? []);
   const facades = [
-    enabled.has('inspect') ? buildCadInspectFacade(captured) : null,
+    enabled.has('session') ? buildCadSessionFacade(captured) : null,
+    enabled.has('part') ? buildCadPartFacade(captured) : null,
+    enabled.has('assembly') ? buildCadAssemblyFacade(captured) : null,
     enabled.has('check') ? buildCadCheckFacade(captured) : null,
     enabled.has('simulate') ? buildCadSimulateFacade(captured) : null,
+    enabled.has('inspect') ? buildCadInspectFacade(captured) : null,
+    enabled.has('see') ? buildCadSeeFacade(captured) : null,
+    enabled.has('python') ? buildCadPythonFacade(captured) : null,
+    enabled.has('deliver') ? buildCadDeliverFacade(captured) : null,
   ].filter((entry): entry is NonNullable<typeof entry> => entry !== null);
   for (const facade of facades) {
     ctx.tools.register(withOutputContract(facade as never) as never);

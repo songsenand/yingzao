@@ -18,7 +18,7 @@
 详细验收、设计、排期在 [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md)。本文件只做索引和状态。
 
 > **工具面压缩（Phase 3 cutover 探针）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
-> 9 个作业面 facade 已确认；Phase 0–3c 探针通过（26 工具 / -48,304 chars），默认仍 39。
+> 9 个作业面 facade 已确认；Phase 0–3d 探针通过（9 工具 / 3,868 chars / -95.6%），默认仍 39。
 
 **2026-11-12 开工进展：**
 

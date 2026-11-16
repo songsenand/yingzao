@@ -31,6 +31,8 @@ export interface FacadeSpec {
   readonly description: string;
   readonly ops: readonly FacadeOp[];
   readonly timeoutMs?: number;
+  /** True when this facade owns a delivery gate. */
+  readonly gate?: boolean;
 }
 
 const RESERVED = new Set(['catalog', 'help']);
@@ -125,6 +127,7 @@ export function buildFacade(spec: FacadeSpec, tools: ReadonlyMap<string, LegacyT
       if (action === 'catalog') {
         return {
           facade: spec.name,
+          gate: Boolean(spec.gate),
           ops: spec.ops.map((entry) => ({
             op: entry.op,
             summary: entry.summary,

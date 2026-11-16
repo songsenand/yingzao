@@ -1,4 +1,4 @@
-# 工具面压缩方案（9 facade，Phase 3 cutover 探针）
+# 工具面压缩方案（9 facade，Phase 3d 全量 cutover 探针）
 
 > **状态**：方案 A 已确认（2026-11-16）；Phase 0/1/2 已落盘，Phase 3 的 36 工具 cutover 探针通过。
 >
@@ -35,6 +35,10 @@
 > **Phase 3c 状态（2026-11-16）**：inspect + check + simulate 三个 facade 同时 cutover：
 > 26 工具，87,064 → 38,760 chars（-48,304，约 -55.5%）；
 > 旧 16 个工具隐藏，三个 facade 保留。仍为 opt-in，生产默认 39。
+
+> **Phase 3d 状态（2026-11-16）**：9 个 facade 全部落盘；opt-in 48 工具，
+> 全量 cutover 后 **9 工具 / 3,868 chars**（87,064 → 3,868，-83,196，约 -95.6%）。
+> `accept-cad-all-facades.mjs` PASS；`cad_deliver` 仍标记为顶层 gate。默认生产仍 39。
 
 > **2026-11-16 方向修正（用户拍板）**：保留 **9 个作业面**，不做“数据域 4 工具”。
 > 理由不是“9 更少”，而是 39→9 已经把 87 KB 降到约 6 KB（按 `cad_inspect` 实测外推），
