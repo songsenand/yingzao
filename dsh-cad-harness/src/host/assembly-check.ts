@@ -1312,6 +1312,13 @@ export async function runAssemblyCheck(
       nominal: iface.nominal,
       tolerance: iface.tolerance,
       params: iface.params,
+      // The first-class evidence pointer must survive this rebuild. It did not
+      // (2026-11-16): the adapter listed fields one by one and `evidence` was
+      // absent, so a cited run arrived at the worker as "no evidence" and a
+      // motion interface passed with a silently dropped citation. The TS half
+      // (`runAssemblyCheckInTs`) read it through `citedRunId`; production is the
+      // worker, so the field has to be forwarded here too.
+      evidence: iface.evidence,
       elastic: iface.elastic,
     };
   });

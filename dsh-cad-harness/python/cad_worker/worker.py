@@ -2113,8 +2113,14 @@ def op_assembly_contracts(params: dict) -> dict:
                 # whether the pair survives the travel (decided by simulate_motion).
                 # An interface naming the run that proved it gets the halves tied
                 # together here instead of being reported as unimplemented forever.
-                raw = (iface.get("params") or {}).get("runId")
-                cited = str(raw) if isinstance(raw, str) else None
+                # `evidence.runId` is the documented field; `params.runId` is the
+                # legacy alias. Reading only params (as this did until 2026-11-16)
+                # made a citation through the recommended field look like no
+                # evidence at all, so a nonexistent run passed instead of being a
+                # hard violation. Same precedence as host `citedRunId()`.
+                evd = iface.get("evidence")
+                raw = (evd.get("runId") if isinstance(evd, dict) else None) or (iface.get("params") or {}).get("runId")
+                cited = str(raw) if isinstance(raw, str) and raw else None
                 if not cited:
                     verdict["detail"] += " — motion half NOT evidenced: run simulate_motion over the travel and cite it with evidence.runId"
                 else:
