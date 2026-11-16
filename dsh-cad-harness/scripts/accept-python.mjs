@@ -1,9 +1,9 @@
 // Acceptance for the bundled Python runtime (DECISION-LOG 2026-10-08).
 //
-//   1. Lock integrity: seven platform targets with real sha256s; every
-//      dependency pinned with `==` and at least one hash (pip refuses anything
-//      else under --require-hashes); the darwin-x64 rapier3d marker is present,
-//      because that platform has no wheel.
+//   1. Lock integrity: six platform targets with real sha256s (darwin-x64 was
+//      retired 2026-11-16); every dependency pinned with `==` and at least one
+//      hash (pip refuses anything else under --require-hashes); the musl
+//      exclusions are present, because those targets have no wheel.
 //   2. Extractor: the pure-JS tar reader handles files, explicit directories,
 //      symlinks and GNU long names — and REFUSES path traversal, absolute
 //      members and escaping symlinks. A runtime extractor that can be talked
@@ -63,7 +63,7 @@ const skip = (label, why) => console.log(`SKIP  ${label}  — ${why}`);
 // ---------------------------------------------------------------------------
 console.log('--- lock ---');
 const targets = Object.entries(PYTHON_BUILD.targets);
-check(targets.length === 7, 'seven platform targets are locked', targets.map(([key]) => key).join(', '));
+check(targets.length === 6, 'six platform targets are locked (darwin-x64 retired)', targets.map(([key]) => key).join(', '));
 check(
   targets.every(([, value]) => /^[0-9a-f]{64}$/.test(value.sha256) && value.asset.includes(PYTHON_BUILD.pythonVersion)),
   'every target has a sha256 and the pinned python version',
@@ -95,37 +95,24 @@ check(
     : pinnedNames.join(', '),
 );
 check(
-  REQUIREMENTS_LOCK.includes('# cad-exclude: darwin-x64 |') && REQUIREMENTS_LOCK.includes('rapier3d==0.36.1'),
-  'rapier3d carries the darwin-x64 exclude directive',
+  !REQUIREMENTS_LOCK.includes('cad-exclude: darwin-x64'),
+  'the retired darwin-x64 target no longer appears in the lock',
 );
-check(!lockForTarget('darwin-x64').includes('rapier3d'), 'the darwin-x64 lock drops rapier3d (no wheel for that platform)');
-check(lockForTarget('linux-x64-gnu').includes('rapier3d==0.36.1'), 'other targets keep rapier3d');
-check(
-  lockForTarget('darwin-x64').includes('numpy==2.5.3') && lockForTarget('darwin-x64').includes('--hash=sha256:'),
-  'dropping one block keeps the rest of the lock intact',
-);
-// The skip must be CONFIRMED, not silent: every platform decision has to reach the model,
-// not just the pip log. darwin-x64 has no wheel for the whole compute stack (rapier → physics
-// stays TS; numba/xlb/warp/jax → MPM falls back to numpy and LBM is unavailable), so the
-// expectation is the NAMED SET, not "exactly one" (that was true in 2026-10-08, before the
-// LBM and numba lanes landed). Each entry must also carry a reason.
-const EXPECTED_DARWIN_SKIPS = ['jax', 'jaxlib', 'llvmlite', 'numba', 'rapier3d', 'warp-lang', 'xlb'];
-const darwinPlan = lockPlanForTarget('darwin-x64');
-const darwinSkips = darwinPlan.skipped.map((entry) => entry.name).sort();
-check(
-  darwinSkips.join(',') === EXPECTED_DARWIN_SKIPS.join(','),
-  'the darwin-x64 plan skips exactly the packages without a wheel there',
-  darwinSkips.join(', ') || '(none)',
-);
-check(
-  darwinPlan.skipped.every((entry) => typeof entry.reason === 'string' && entry.reason.trim().length > 0),
-  'every skipped package carries a reason (it must look designed, not broken)',
-  darwinPlan.skipped.map((entry) => `${entry.name}: ${entry.reason}`).join(' | '),
-);
-check(
-  /TS .*rapier3d-compat|TS rapier3d-compat/.test(darwinPlan.skipped.find((entry) => entry.name === 'rapier3d')?.reason ?? ''),
-  'the rapier3d skip names the TS canonical (that is the decision it implements)',
-);
+check(!REQUIREMENTS_LOCK.includes('darwin-x64'), 'no lock directive mentions darwin-x64 at all');
+check(lockForTarget('darwin-arm64').includes('rapier3d==0.36.1'),
+  'darwin-arm64 (the only macOS target) keeps rapier3d — physics still runs there');
+check(lockForTarget('linux-x64-gnu').includes('rapier3d==0.36.1'), 'linux keeps rapier3d');
+// musl still has no wheel for the compute stack: the skip must stay CONFIRMED and named,
+// with a reason — "absent by design" must never look like "broken".
+const EXPECTED_MUSL_SKIPS = ['cascadio', 'jax', 'jaxlib', 'llvmlite', 'ml_dtypes', 'numba', 'warp-lang', 'xlb'];
+for (const target of ['linux-x64-musl', 'linux-arm64-musl']) {
+  const plan = lockPlanForTarget(target);
+  const skips = plan.skipped.map((entry) => entry.name).sort();
+  check(skips.join(',') === EXPECTED_MUSL_SKIPS.join(','),
+    `the ${target} plan skips exactly the packages without a wheel`, skips.join(', ') || '(none)');
+  check(plan.skipped.every((entry) => typeof entry.reason === 'string' && entry.reason.trim().length > 0),
+    `every ${target} skip carries a reason`);
+}
 check(lockPlanForTarget('linux-x64-gnu').skipped.length === 0, 'a supported target skips nothing');
 check(
   (REQUIREMENTS_LOCK.match(/--hash=sha256:/g) ?? []).length >= 30,

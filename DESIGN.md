@@ -3093,7 +3093,7 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 - **解包器自研**（`tar-extract.ts`）：不依赖系统 tar、不引 npm 依赖，拒绝绝对路径、
   `..` 越界与逃逸符号链接；实测 pbs 归档只含普通文件与符号链接两种成员，另带 9 个顶层
   LICENSE（**保留**，随解释器一起落盘——我们在再分发 CPython）。
-- **平台矩阵**：linux gnu/musl × x64/arm64、darwin arm64/x64、win32-x64。Windows 用 pbs
+- **平台矩阵**：linux gnu/musl × x64/arm64、**darwin arm64（仅此一种 macOS）**、win32-x64。darwin-x64 于 2026-11-16 退役（无 rapier3d wheel，Intel Mac 不再承诺）。Windows 用 pbs
   的 `install_only` 而不是官方 embeddable：后者没有 `venv`/`ensurepip`，要改 `._pth`，
   会把"一条代码路径"拆成两条。
 
@@ -3263,10 +3263,11 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 - **常驻 worker 已落地（2026-10-08，batch 0）**：`python-worker.ts` 是单例 + 崩溃重启，见 §26.4。
   v1 曾是"每次调用一个全新进程"（无残留状态、超时可靠、traceback 干净），后来改成常驻——
   迁移后的工具要复用已加载的库（numpy/trimesh/manifold3d 的 import 代价按秒计）。
-- **rapier3d 无 darwin-x64 wheel → 该平台物理继续用 TS**（用户 2026-10-08 拍板）。
-  锁里 `# cad-exclude: darwin-x64 | <原因>` 裁剪该块，**原因随包走**：写进
-  `state.json.skipped`，由 `python_runtime` 明确报出（"没有 wheel，物理留在 TS canonical"）。
-  这是**安装期确认**，不是静默缺包——静默缺包会让模型把"平台差异"读成"库坏了"。
+- ~~**rapier3d 无 darwin-x64 wheel → 该平台物理继续用 TS**（用户 2026-10-08 拍板）。~~
+  **2026-11-16 退役**：darwin-x64 不再支持，锁定矩阵 7→6，`rapier3d` 在剩余平台都有 wheel，
+  该 `cad-exclude` 指令一并删除（DECISION-LOG 同日）。原来"原因随包走"的机制保留给 musl
+  （numba/xlb/warp/jax/cascadio 仍无 musl wheel）：写进 `state.json.skipped`，由
+  `python_runtime` 明确报出——**安装期确认**，不是静默缺包。
 - **离线/内网**：可用 `DSH_CAD_PYTHON_INDEX_URL` 指向内网索引；整仓离线镜像（wheelhouse）
   尚未做，需要时再加 `--find-links` 通道。
 

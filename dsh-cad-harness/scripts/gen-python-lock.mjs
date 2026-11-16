@@ -40,15 +40,15 @@ const TARGETS = [
   { key: 'linux-x64-musl', asset: 'x86_64-unknown-linux-musl', interpreter: 'bin/python3' },
   { key: 'linux-arm64-musl', asset: 'aarch64-unknown-linux-musl', interpreter: 'bin/python3' },
   { key: 'darwin-arm64', asset: 'aarch64-apple-darwin', interpreter: 'bin/python3' },
-  { key: 'darwin-x64', asset: 'x86_64-apple-darwin', interpreter: 'bin/python3' },
   { key: 'win32-x64', asset: 'x86_64-pc-windows-msvc', interpreter: 'python.exe' },
 ];
 
 // Pinned versions, not "latest": a lock that moves under the user is not a lock.
-// rapier3d is abi3 (cp39-abi3) and publishes no darwin-x64 wheel; that platform
-// would have to compile Rust, so the lock carries a generated exclude directive
-// instead of a PEP 508 marker (pip's requirements parser rejected the marker
-// form when combined with --hash continuations — measured 2026-10-08).
+// Some packages still have no wheel for musl, so the lock carries generated
+// exclude directives instead of PEP 508 markers (pip's requirements parser
+// rejected the marker form when combined with --hash continuations — measured
+// 2026-10-08). darwin-x64 used to be in that list; it was retired on 2026-11-16
+// and every remaining target has a wheel for everything above.
 const PACKAGES = [
   { name: 'numpy', version: '2.5.3' },
   { name: 'scipy', version: '1.18.1' },
@@ -114,15 +114,8 @@ const PACKAGES = [
   {
     name: 'rapier3d',
     version: '0.36.1',
-    // No darwin-x64 wheel exists. The 2026-10-08 decision is to keep the TS
-    // canonical there instead of building Rust on a user's machine — so the
-    // package is dropped for that target AND the reason travels with it: a
-    // silently missing physics library is how a model concludes "rapier3d is
-    // broken" instead of "this platform uses the TS engine".
-    exclude: {
-      targets: ['darwin-x64'],
-      reason: 'no darwin-x64 wheel — physics canonical stays the TS rapier3d-compat (DESIGN §31.4)',
-    },
+    // Every remaining target has a wheel; the darwin-x64 exclusion and the TS
+    // fallback engine were retired together (DECISION-LOG 2026-11-16).
   },
   // MPM kernel JIT engine (adopted 2026-10-14, DECISION-LOG same day; measurement
   // experiments/20261014_numba_mpm_probe.md): the same kernel algorithm, compiled —
@@ -133,12 +126,12 @@ const PACKAGES = [
   // slower kernel it already had, never to a broken tool.
   // Requires numpy<2.6 (pin 2.5.3 satisfies) and llvmlite (pinned alongside).
   // cp313 wheels exist for manylinux x86_64/aarch64, macOS arm64 and Windows
-  // x64/arm64 only — no musl, no darwin-x64.
+  // x64/arm64 only — no musl.
   {
     name: 'numba',
     version: '0.68.0',
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
       reason: 'no cp313 wheel — MPM engine falls back to the numpy kernel (worker _mpm_engine)',
     },
   },
@@ -149,7 +142,7 @@ const PACKAGES = [
     // needs every transitive dep pinned and hashed, so it travels in the lock
     // with the same exclusion set as numba.
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
       reason: 'numba dependency, same cp313 wheel gaps as numba',
     },
   },
@@ -164,7 +157,7 @@ const PACKAGES = [
     name: 'xlb',
     version: '0.3.1',
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
       reason: 'LBM engine entry; useless without warp/jaxlib (same platform gaps)',
     },
   },
@@ -175,15 +168,15 @@ const PACKAGES = [
     // which breaks `import xlb` at 0.3.1 (probe 2026-10-15). Revisit when xlb
     // ships a release carrying its Warp upgrade (upstream PR #168).
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
-      reason: 'no cp313 wheel on musl/darwin-x64 — xlb import requires warp (probe 2026-10-15)',
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
+      reason: 'no cp313 wheel on musl — xlb import requires warp (probe 2026-10-15)',
     },
   },
   {
     name: 'jax',
     version: '0.11.2',
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
       reason: 'needs jaxlib; LBM engine unavailable where jaxlib is excluded',
     },
   },
@@ -191,8 +184,8 @@ const PACKAGES = [
     name: 'jaxlib',
     version: '0.11.2',
     exclude: {
-      targets: ['linux-x64-musl', 'linux-arm64-musl', 'darwin-x64'],
-      reason: 'no cp313 wheel on musl/darwin-x64 — jax compute stack unavailable',
+      targets: ['linux-x64-musl', 'linux-arm64-musl'],
+      reason: 'no cp313 wheel on musl — jax compute stack unavailable',
     },
   },
   {
