@@ -10,11 +10,22 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { argError } from './arg-error.ts';
 
+export interface SurfaceMeta {
+  /** Future surface id, e.g. "cad_inspect". */
+  readonly id: string;
+  /** Action name inside that surface, e.g. "measure". */
+  readonly action: string;
+  /** Optional short catalog line; falls back to the legacy description. */
+  readonly summary?: string;
+}
+
 export interface LegacyTool {
   readonly name: string;
   readonly description?: string;
   readonly parameters?: Record<string, unknown>;
   readonly execute?: (args: unknown, exec: unknown) => unknown;
+  /** Phase-4 prototype: a tool declares its own route instead of a hand table. */
+  readonly surface?: SurfaceMeta;
 }
 
 export interface SurfaceOp {
@@ -84,6 +95,26 @@ function nearest(names: readonly string[], name: string): string | null {
 
 function missingTools(spec: SurfaceSpec, tools: ReadonlyMap<string, LegacyTool>): string[] {
   return spec.ops.filter((entry) => !tools.has(entry.tool)).map((entry) => entry.tool);
+}
+
+/** Derive a surface from the tools that declared `surface.id`. */
+export function buildSurfaceFromToolMeta(
+  name: string,
+  description: string,
+  tools: ReadonlyMap<string, LegacyTool>,
+  timeoutMs?: number,
+) {
+  const ops: SurfaceOp[] = [];
+  for (const tool of tools.values()) {
+    if (tool.surface?.id !== name) continue;
+    ops.push({
+      op: tool.surface.action,
+      tool: tool.name,
+      summary: tool.surface.summary ?? (tool.description ?? '').split('\n')[0].slice(0, 160),
+    });
+  }
+  if (ops.length === 0) throw new Error(`${name}: no tool declares this surface`);
+  return buildSurface({ name, description, ops, timeoutMs }, tools);
 }
 
 export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, LegacyTool>) {
