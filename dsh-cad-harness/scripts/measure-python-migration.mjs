@@ -31,7 +31,7 @@ const argOf = (flag, fallback) => {
   const index = args.indexOf(flag);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
-const RUNTIME_ROOT = resolve(argOf('--runtime', join(REPO, '.tmp-measure-runtime')));
+const RUNTIME_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, '.tmp-measure-runtime')));
 const OUT = resolve(argOf('--out', join(ROOT, 'data', 'bench', 'python-migration.json')));
 /** `--only e4` runs just one section (keeps the expensive ones opt-out). */
 const ONLY = argOf('--only', null);

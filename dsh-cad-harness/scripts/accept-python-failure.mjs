@@ -33,7 +33,12 @@ check('network hint names the mirror knob', dn.hint.includes('DSH_CAD_PYTHON_MIR
 const disk = classifyProvisionFailure(new Error('ENOSPC'));
 check('disk hint names the runtime dir', disk.hint.includes('runtime'));
 const home = mkdtempSync(join(tmpdir(), 'cad-pyfail-'));
+// This test asserts the DSH_HOME layout, so it must not inherit a shared runtime
+// override from the caller (a suite-wide DSH_CAD_PYTHON_ROOT would send writeState
+// somewhere else and the read below would look in an empty temp home).
+const savedRuntimeRoot = process.env.DSH_CAD_PYTHON_ROOT;
 try {
+  delete process.env.DSH_CAD_PYTHON_ROOT;
   process.env.DSH_HOME = home;
   const stored = await recordRuntimeFailure(new Error('ENOSPC: no space left on device'));
   check('recorded failure carries the code', stored.includes('[disk-full]'), stored);
@@ -42,6 +47,7 @@ try {
   check('state.json records the classified error', String(state.error).includes('[disk-full]'));
   check('state.json keeps the hint', String(state.error).includes('free disk space'));
 } finally {
+  if (savedRuntimeRoot !== undefined) process.env.DSH_CAD_PYTHON_ROOT = savedRuntimeRoot;
   rmSync(home, { recursive: true, force: true });
 }
 

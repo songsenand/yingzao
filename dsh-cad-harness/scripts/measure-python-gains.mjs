@@ -32,7 +32,7 @@ const argOf = (flag, fallback) => {
   const index = args.indexOf(flag);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
-const RUNTIME_ROOT = resolve(argOf('--runtime', join(REPO, '.tmp-measure-runtime')));
+const RUNTIME_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, '.tmp-measure-runtime')));
 const OUT = resolve(argOf('--out', join(ROOT, 'data', 'bench', 'python-gains.json')));
 const VENV_PYTHON = process.platform === 'win32'
   ? join(RUNTIME_ROOT, 'venv', 'Scripts', 'python.exe')

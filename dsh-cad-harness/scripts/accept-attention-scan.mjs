@@ -22,7 +22,7 @@ const argOf = (flag, fallback) => {
   const i = args.indexOf(flag);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
-process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', join(ROOT, '.tmp-cad-runtime')));
+process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(ROOT, '.tmp-cad-runtime')));
 const CORPUS = resolve(argOf('--corpus', join(REPO, 'examples', 'toy-balance', 'cad-data')));
 if (!existsSync(join(CORPUS, 'versions'))) {
   console.error(`no versions/ under ${CORPUS} — pass --corpus`);

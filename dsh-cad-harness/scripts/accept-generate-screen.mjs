@@ -22,7 +22,7 @@ const argOf = (flag, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'cad-gen-screen-'));
-process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', join(REPO, 'dsh-cad-harness', '.tmp-cad-runtime')));
+process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, 'dsh-cad-harness', '.tmp-cad-runtime')));
 
 const venvPython = process.platform === 'win32'
   ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')

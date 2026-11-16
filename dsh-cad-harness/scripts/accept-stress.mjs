@@ -31,7 +31,7 @@ const argOf = (flag, fallback) => {
   const i = args.indexOf(flag);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
-const PYTHON = argOf('--python', join(ROOT, '.tmp-cad-runtime/venv/bin/python'));
+const PYTHON = argOf('--python', process.env.DSH_CAD_PYTHON_ROOT ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'bin', 'python') : join(ROOT, '.tmp-cad-runtime/venv/bin/python'));
 
 let passed = 0;
 let failed = 0;

@@ -47,7 +47,7 @@ export function atElbow(p, tol = ELBOW.tolMm) {
 }
 
 export function scanAttention(path) {
-  const PY = join(ROOT, '.tmp-cad-runtime', 'venv', 'bin', 'python');
+  const PY = join(process.env.DSH_CAD_PYTHON_ROOT ?? join(ROOT, '.tmp-cad-runtime'), 'venv', 'bin', 'python');
   return new Promise((res, rej) => {
     const p = spawn(PY, ['-I', 'python/cad_worker/worker.py'], { cwd: ROOT, stdio: ['pipe', 'pipe', 'inherit'] });
     let buf = '';

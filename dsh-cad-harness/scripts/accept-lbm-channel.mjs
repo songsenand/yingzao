@@ -31,7 +31,7 @@ const argOf = (flag, fallback) => {
   if (index >= 0 && args[index + 1]) return args[index + 1];
   return fallback;
 };
-process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', join(REPO, '.tmp-measure-runtime')));
+process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, '.tmp-measure-runtime')));
 
 const venvPython = process.platform === 'win32'
   ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')
