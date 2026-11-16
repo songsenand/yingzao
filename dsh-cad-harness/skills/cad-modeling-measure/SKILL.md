@@ -22,7 +22,7 @@ The hard part is naming the thing you want measured. `list_features` gives coord
 ## Modeling
 
 - **`merge_parts` is for "one rigid body", not tidying a corpus.** It reports **shells**: more than one means the merged parts do not all touch — a pile, not a machine.
-- **`genus` is meaningful only for ONE connected solid.** For multi-body use `measure_part` (`bodies` uses shared edges; two solids touching at a vertex are two bodies).
+- **`genus` is meaningful only for ONE connected solid.** For multi-body use `measure` with `kind="part"` (`bodies` uses shared edges; two solids touching at a vertex are two bodies).
 - **`// PARAMS`** turns a top-level `name = number; // PARAMS <label>` into a panel tunable for that version.
 
 ## Traps

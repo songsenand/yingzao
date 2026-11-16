@@ -94,21 +94,21 @@ check('  …and the structured warnings array carries it too',
 console.log('\n--- P0-3  measure_* warnings on open meshes ---');
 const vClosed = closed.value.versionId;
 const vOpen = open.value.versionId;
-const closest = await call('measure_gap', { aVersionId: vOpen, bVersionId: vClosed });
+const closest = await call('measure', { kind: 'gap', aVersionId: vOpen, bVersionId: vClosed });
 check('measure_gap: a solid/solid pair needs no base part', closest.ok !== false, JSON.stringify(closest.value).slice(0, 80));
 check('measure_gap (solid/solid) warns when an input is not watertight',
   (closest.value.warnings ?? []).some((w) => /NOT watertight/.test(w)),
   JSON.stringify(closest.value.warnings ?? []));
-const closestClosed = await call('measure_gap', { aVersionId: vClosed, bVersionId: vClosed });
+const closestClosed = await call('measure', { kind: 'gap', aVersionId: vClosed, bVersionId: vClosed });
 check('  …and stays silent on closed solids',
   (closestClosed.value.warnings ?? []).length === 0);
-const dist = await call('measure_gap', {
+const dist = await call('measure', { kind: 'gap',
   versionId: vOpen, aPoint: [5, 5, 0], bOn: vClosed, bPoint: [10, 10, 20],
 });
 check('measure_gap (point/point) warns on open-mesh surface snapping too',
   (dist.value.warnings ?? []).some((w) => /NOT watertight/.test(w)),
   JSON.stringify(dist.value.warnings ?? []));
-const distDatum = await call('measure_gap', {
+const distDatum = await call('measure', { kind: 'gap',
   versionId: vClosed, aPoint: [0, 0, 20], bPoint: [0, 0, 0],
 });
 check('  …with clean inputs there are no warnings',
@@ -428,7 +428,7 @@ const vMeasure = (await call('generate_part', {
   views: ['iso'],
 })).value.versionId;
 
-const thickness = await call('measure_thickness', {
+const thickness = await call('measure', { kind: 'thickness',
   versionId: vMeasure, from: [-30, 0, 0], direction: '+x',
 });
 check('measure_thickness: the tool layer forwards an axis string and returns spans',
@@ -448,24 +448,24 @@ check('list_features: the tool layer returns faces, holes and the bore/boss clas
 check('list_features: thresholds are echoed so a filtered list is readable',
   features.value.thresholds.minFaceAreaMm2 > 0 && typeof features.value.facesOmitted === 'number');
 
-const section = await call('measure_section', { versionId: vMeasure, axis: 'z' });
+const section = await call('measure', { kind: 'section', versionId: vMeasure, axis: 'z' });
 check('measure_section: the tool layer sections a version and reports the plane frame',
   section.value.empty === false && section.value.polygons.length > 0
     && Array.isArray(section.value.uAxisMm) && typeof section.value.atMm === 'number',
   `polys=${section.value.polygons.length} holes=${section.value.holeCount} at=${section.value.atMm}`);
 check('measure_section: a bad axis is refused by the worker, not silently defaulted',
-  await call('measure_section', { versionId: vMeasure, axis: 'diagonal' }).then(() => false, () => true));
+  await call('measure', { kind: 'section', versionId: vMeasure, axis: 'diagonal' }).then(() => false, () => true));
 
-const extent = await call('measure_part', { versionId: vMeasure, axis: 'x' });
+const extent = await call('measure', { kind: 'part', versionId: vMeasure, axis: 'x' });
 check('measure_part(axis): the tool layer projects on an axis and hands back extremal points',
   extent.value.extent.sizeMm > 39 && extent.value.extent.minPointMm.length === 3 && extent.value.extent.maxPointMm.length === 3,
   `size=${extent.value.extent.sizeMm} points=${JSON.stringify([extent.value.extent.minPointMm, extent.value.extent.maxPointMm])}`);
-const diagonalExtent = await call('measure_part', { versionId: vMeasure, axisVector: [1, 1, 0] });
+const diagonalExtent = await call('measure', { kind: 'part', versionId: vMeasure, axisVector: [1, 1, 0] });
 check('measure_part(axisVector): reaches the worker as a vector',
   Math.abs(diagonalExtent.value.extent.sizeMm - (40 + 40) / Math.SQRT2) < 0.1,
   `size=${diagonalExtent.value.extent.sizeMm}`);
 
-const angleByProbe = await call('measure_angle', {
+const angleByProbe = await call('measure', { kind: 'angle',
   versionId: vMeasure, aProbe: [30, 0, 0], bProbe: [0, 0, 10],
 });
 check('measure_angle: two probes reach the worker and report the convention trio',
@@ -478,23 +478,25 @@ const vRail = (await call('generate_part', {
   userIntent: 'P3 datum rail', part: 'P3 导轨', scadCode: 'datum_axis("rail", [0,0,0], [0,0,1]); cube(8, center=true);',
   views: ['iso'],
 })).value.versionId;
-const angleByDatum = await call('measure_angle', { versionId: vRail, aDatum: 'rail', bDir: [1, 0, 0] });
+const angleByDatum = await call('measure', { kind: 'angle', versionId: vRail, aDatum: 'rail', bDir: [1, 0, 0] });
 check('measure_angle: a datum axis resolves through the tool layer and says so',
   Math.abs(angleByDatum.value.acuteDeg - 90) < 0.01
     && /datum axis "rail"/.test(angleByDatum.value.aSource),
   angleByDatum.value.aSource);
 check('measure_angle: naming one side two ways is refused, not silently resolved',
-  await call('measure_angle', { versionId: vRail, aDatum: 'rail', aDir: [1, 0, 0], bDir: [1, 0, 0] })
+  await call('measure', { kind: 'angle', versionId: vRail, aDatum: 'rail', aDir: [1, 0, 0], bDir: [1, 0, 0] })
     .then(() => false, () => true));
 check('measure_angle: a POINT datum is refused with a way forward (it has no direction)',
-  await call('measure_angle', { versionId: vMeasure, aDatum: 'nope', bDir: [1, 0, 0] })
+  await call('measure', { kind: 'angle', versionId: vMeasure, aDatum: 'nope', bDir: [1, 0, 0] })
     .then(() => false, (error) => /not found|POINT/.test(String(error?.message ?? error))));
 
 // The section caption moved to shot-caption.ts; the section SNAP logic still
 // lives in panel.ts. Read both so the caption assertion follows the code.
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'client');
 const panelSrc = (await Promise.all(
-  ['panel.ts', 'shot-caption.ts'].map((f) => readFile(join(clientDir, f), 'utf8')),
+  // The dialog copy moved to i18n.ts (commit 8fe4ee4) — read it too, or this
+  // assertion silently turns permanently red (it did, unnoticed, until 2026-11-16).
+  ['panel.ts', 'shot-caption.ts', 'i18n.ts'].map((f) => readFile(join(clientDir, f), 'utf8')),
 )).join('\n');
 check('panel: 📸 opens a compose dialog (draft + send/park), text travels with the image',
   /shotDraft/.test(panelSrc) && /发送到会话/.test(panelSrc) && /只存托盘/.test(panelSrc) &&

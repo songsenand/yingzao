@@ -22,7 +22,7 @@ A manufacturing screen answers "does this violate a declared rule". It never ans
 - **Fits**: printed mating pairs get ±0.15mm loose fit; "tight" means a fastener
   or an insert, not a tight print.
 - **Bed and time**: check each part against the bed (e.g. 220×220×250) and the
-  time budget (e.g. ≤6h) with `measure_part`'s bbox; a part that does not fit is
+  time budget (e.g. ≤6h) with `measure`（`kind="part"`）'s bbox; a part that does not fit is
   split — and the new joint goes into the assembly manifest as an interface.
 - **Color is design data, not a geometric pass.** `check_printability` does not
   check color; a colored render is not a print-color promise. A GLB can be stored

@@ -350,117 +350,58 @@ list_features({ versionId: "…" })
 returns: `versionId`, `watertight`, `triangles`, `thresholds`, `faces`, `facesOmitted`, `curvedSegmentFacets`, `cylinders`, `curvedSurfaces`, `faceCount`, `holeCount`, `cylinderCount`, `warnings`
 
 
-## `measure_angle`
+## `measure`
 
-The angle between two directions, plus the distance between their lines. Name each side ONE of three ways: `aProbe` [x,y,z] (a point — the direction becomes the normal of the face it lands on, so a rough guess is enough), `aDatum` (an axis / cylinder / plane datum, resolved exactly), or `aPoints` [[x,y,z],[x,y,z]] (the direction is the segment; give [apex, point] for a corner) / `aDir` (a vector you already know). Returns angleDeg (between the vectors AS GIVEN, 0..180), acuteDeg (0..90 — the usual reading of "the angle between two lines") and supplementDeg TOGETHER, with lineDistanceMm (perpendicular offset for parallel lines, closest approach for skew), commonNormalMm and the crossing point when they meet. Angles are degrees. mm, z-up.
-
-| parameter | type | default | meaning |
-|---|---|---|---|
-| `versionId` | string | **required** | Version whose surface side b snaps a probe to (and the default for side b's datum). |
-| `aVersionId` | string | — | Version for side a when the two sides live on different parts. Defaults to versionId. |
-| `bVersionId` | string | — | Version for side b. Defaults to versionId. |
-| `aProbe` | array | — | Side a as a POINT [x,y,z] mm: the direction becomes the normal of the nearest face. Approximate is fine. |
-| `bProbe` | array | — | Side b as a point (nearest face normal). |
-| `aDatum` | string | — | Side a as a datum name declared on aVersionId: axis / cylinder / plane give a direction, resolved EXACTLY. |
-| `bDatum` | string | — | Side b as a datum name declared on bVersionId. |
-| `aPoints` | array | — | Side a as two points [[x,y,z],[x,y,z]]; the direction is the segment between them. |
-| `bPoints` | array | — | Side b as two points. |
-| `aDir` | array | — | Side a as a direction vector [x,y,z] you already know (e.g. a face normal read out of list_features). |
-| `bDir` | array | — | Side b as a direction vector. |
-| `aOrigin` | array | — | A point ON side a's line. Needed for a meaningful lineDistanceMm / coplanar / crossing point when you gave aDir instead of a position. |
-| `bOrigin` | array | — | A point on side b's line. |
-| `parallelToleranceDeg` | number | — | Within this many degrees of 0 the lines count as parallel (and 90 as perpendicular). Default 0.5. |
-
-```js
-measure_angle({ versionId: "…" })
-```
-
-returns: `versionId`, `aDirMm`, `bDirMm`, `aOriginMm`, `bOriginMm`, `aSource`, `bSource`, `anchoredAtOrigin`, `angleDeg`, `acuteDeg`, `supplementDeg`, `parallel`, `perpendicular`, `coplanar`, `lineDistanceMm`, `commonNormalMm`, `crossingPointMm`, `convention`, `warnings`
-
-
-## `measure_gap`
-
-How far apart two things are, however you name them. Each endpoint is ONE of: a saved solid (`aVersionId`/`bVersionId`), an analytic sphere (`aSphere`/`bSphere`, solved exactly), a coordinate (`aPoint`/`bPoint`, snapped to the surface by default) or a declared datum (`aDatum`/`bDatum`, resolved EXACTLY and never snapped). Solid/sphere pairs are solved as a closest-point problem and come back with an annotated render; point/datum pairs come back with per-endpoint snap distances and whether your input point was inside the solid. Both endpoints must be the same kind — a solid cannot be paired with a point in one call. mm, z-up.
+Geometry ground truth about a saved version — one entry point, five kinds. Pick kind first:
+  kind="part"      → whole-part numbers: bbox (size AND min/max), volume, area, centre of mass, triangles, watertight, genus, and the disconnected BODIES; add axis/axisVector for a projection and the two extremal vertices.
+  kind="gap"       → closest distance between two geometries (points / spheres / datum faces), with the witness pair on each side.
+  kind="thickness" → wall thickness at a named side, cast outward along a direction (or the inward normal) up to maxSpanMm.
+  kind="section"   → the cross-section polygon loop at a fraction of an axis (area, holes, bbox).
+  kind="angle"     → angle between two directions + the distance between their lines; each side is a probe point, a datum, two points, or a known vector.
+All measurements are mm, z-up, and read the SAVED version: the answer is about that artifact, not about a model you are about to change. For per-feature facts (a cylinder's length, a hole's depth) use list_features instead.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `versionId` | string | — | The base part: it owns endpoint A and, unless bOn says otherwise, endpoint B. Required for point/datum endpoints; a solid/sphere pair does not need it. |
-| `aVersionId` | string | — | Endpoint A as a whole solid: saved version id. |
-| `aSphere` | object | — | Endpoint A as an analytic sphere probe {center:[x,y,z], radius} — solved exactly. |
-| `aPoint` | array | — | Endpoint A as a coordinate [x,y,z] mm — approximate is fine (snapped to versionId's surface). Give this OR aDatum. |
-| `aDatum` | string | — | Endpoint A as a datum anchor declared via datum("name",[x,y,z]). Resolved EXACT (no snapping) — prefer over aPoint. |
-| `bVersionId` | string | — | Endpoint B as a whole solid: saved version id. |
-| `bSphere` | object | — | Endpoint B as an analytic sphere probe. |
-| `bPoint` | array | — | Endpoint B as a coordinate [x,y,z] mm — snapped to bOn's surface (bOn defaults to versionId). Give this OR bDatum. |
-| `bDatum` | string | — | Endpoint B as a datum anchor on bOn (defaults to versionId). Resolved EXACT — prefer over bPoint. |
-| `bOn` | string | — | Which part a bPoint/bDatum endpoint belongs to. Defaults to versionId. (This is what the retired measure_distance meant by bVersionId.) |
-| `snap` | boolean | — | Snap raw coordinate inputs to the nearest surface point. Default true. Datum-resolved points are never snapped. |
+| `versionId` | string | — | Saved version, e.g. "v003". Required for part / section / thickness; for gap and angle it is the default for a side whose own *VersionId is omitted. |
+| `kind` | string (part \| gap \| thickness \| section \| angle) | **required** | Which measurement. Each kind reads its own parameter cluster below; fields of other kinds are ignored. |
+| `aVersionId` | string | — | gap/angle: version for side a when the two sides live on different parts. Defaults to versionId. |
+| `bVersionId` | string | — | gap/angle/thickness: version for side b. Defaults to versionId. |
+| `axis` | string | — | part: project on x \| y \| z (a leading "-" flips it). section: the axis to slice perpendicular to. Default z. |
+| `axisVector` | array | — | part: projection axis [x,y,z] for a non-principal direction (normalised internally). |
+| `aSphere` | array | — | gap: side a as a sphere [x,y,z,r] — the radius is honoured, not snapped. |
+| `aPoint` | array | — | gap: side a as a point [x,y,z]. |
+| `aDatum` | string | — | gap: side a as a datum name (axis / cylinder / plane) declared on aVersionId. |
+| `bSphere` | array | — | gap: side b as a sphere [x,y,z,r]. |
+| `bPoint` | array | — | gap: side b as a point. |
+| `bDatum` | string | — | gap: side b as a datum name. |
+| `bOn` | string | — | gap: which side the reported distance is measured TO ("a" \| "b"); default both witness pairs. |
+| `snap` | boolean | — | gap: snap a bare point onto the nearest surface of its version before measuring. Default true. |
+| `from` | array | — | thickness: starting point [x,y,z]. |
+| `fromDatum` | string | — | thickness: start from a datum instead of a point. |
+| `direction` | string | — | thickness: cast direction x \| y \| z (a leading "-" flips it). |
+| `directionVector` | array | — | thickness: cast direction [x,y,z]. |
+| `maxSpanMm` | number | — | thickness: give up after this many mm (default 50). |
+| `fraction` | number | — | section: where to slice along the axis, 0..1 (default 0.5). |
+| `atMm` | number | — | section: absolute slice coordinate instead of fraction. |
+| `simplifyToleranceMm` | number | — | section: polygon simplification tolerance (default 0.02). |
+| `maxPolygons` | integer | — | section: cap on returned loops (default 8). |
+| `maxHolesPerPolygon` | integer | — | section: cap on holes reported per loop. |
+| `maxHoleNeighbours` | integer | — | section: how many neighbouring holes to name. |
+| `aProbe` | array | — | angle: side a as a POINT — the direction becomes the normal of the face it lands on. Approximate is fine. |
+| `bProbe` | array | — | angle: side b as a point (nearest face normal). |
+| `aPoints` | array | — | angle: side a as two points [[x,y,z],[x,y,z]]; the direction is the segment. |
+| `bPoints` | array | — | angle: side b as two points. |
+| `aDir` | array | — | angle: side a as a direction vector you already know. |
+| `bDir` | array | — | angle: side b as a direction vector. |
+| `aOrigin` | array | — | angle: a point ON side a's line (needed for a meaningful line distance when you passed aDir). |
+| `bOrigin` | array | — | angle: a point on side b's line. |
+| `parallelToleranceDeg` | number | — | angle: within this many degrees of 0 the lines count as parallel (90 = perpendicular). Default 0.5. |
 
 ```js
-measure_gap({ versionId: "…" })
+measure({ kind: "part" })
 ```
 
-returns: `distanceMm`, `dxMm`, `dyMm`, `dzMm`, `pointA`, `pointB`, `method`, `frame`, `aSnapDistanceMm`, `bSnapDistanceMm`, `aOutside`, `bOutside`, `warnings`
-
-
-## `measure_part`
-
-Whole-part ground truth in one call: bounding box (size AND min/max), volume, surface area, centre of mass, triangle count, watertightness, genus, and the mutually disconnected BODIES with each one's bbox (a part must be a single body). Pass `axis` (x|y|z, a leading "-" flips it) or `axisVector` for a non-principal direction and you also get the projection along it: min/max, size, centre and the two extremal VERTICES — the coordinates you would otherwise hunt for by hand, and a point ON the part to hand to another measurement. mm, z-up. For a per-feature extent (a cylinder's length, a hole's depth) use `list_features` instead. On an open / non-manifold mesh the mass properties are OMITTED (with a warning) rather than guessed, but the body count still comes back.
-
-| parameter | type | default | meaning |
-|---|---|---|---|
-| `versionId` | string | **required** | Saved version, e.g. "v003". |
-| `axis` | string | — | Optional. Project on x \| y \| z (a leading "-" flips it). For anything else use axisVector. Without either, only the axis-aligned bbox is reported. |
-| `axisVector` | array | — | Optional projection axis [x,y,z] for a non-principal direction (a diagonal, a slanted boss); normalised internally. |
-
-```js
-measure_part({ versionId: "…" })
-```
-
-returns: `versionId`, `watertight`, `triangles`, `sizeMm`, `bboxMinMm`, `bboxMaxMm`, `volumeMm3`, `surfaceAreaMm2`, `centerOfMassMm`, `genus`, `bodies`, `bodySizes`, `bodyCenters`, `bodyVerdict`, `extent`, `warnings`
-
-
-## `measure_section`
-
-Cut a saved version with a plane and return the SECTION AS DATA: every polygon, its outer ring (points in the plane's 2D frame AND in world mm, with per-segment lengths and angles), every hole in it (centre, diameter, kind, and the exact segment-to-segment wall thickness to the outside), and the centre distance and clearance between neighbouring holes. Use it for hole spacing, wall thickness or an in-plane angle WITHOUT naming any 3D point — `axis` plus `fraction` is the whole input. The plane's own u/v axes are reported, so a follow-up `measure_distance` can be written against the world coordinates it returns. Holes are found by polygonising the cut, so a slot is reported as non-circular rather than forced through a circle. mm, z-up.
-
-| parameter | type | default | meaning |
-|---|---|---|---|
-| `versionId` | string | **required** | Saved version to section, e.g. "v003". |
-| `axis` | string | — | Plane normal along a principal axis: x \| y \| z (a leading "-" flips it). Default z, i.e. a horizontal cut. |
-| `fraction` | number | — | Where to cut, as 0..1 across the bounding box along the axis. Default 0.5 (mid-height). |
-| `atMm` | number | — | Explicit cut position in mm along the axis — wins over `fraction`. The version's extent along that axis is reported as planeRangeMm. |
-| `simplifyToleranceMm` | number | — | Ring vertices within this distance of the line through their neighbours are dropped. Default 0.01 (a $fn=64 R=10 circle keeps every vertex). |
-| `maxPolygons` | integer | — | Cap on reported polygons, largest first. Default 12. |
-| `maxHolesPerPolygon` | integer | — | Cap on holes reported per polygon. Default 24. |
-| `maxHoleNeighbours` | integer | — | How many nearest holes to relate to each hole. Default 3. |
-
-```js
-measure_section({ versionId: "…" })
-```
-
-returns: `versionId`, `axisMm`, `atMm`, `originMm`, `uAxisMm`, `vAxisMm`, `planeRangeMm`, `thresholds`, `empty`, `polygons`, `polygonsOmitted`, `voidRegions`, `holeSpacing`, `areaMm2`, `perimeterMm`, `bboxUvMm`, `holeCount`, `warnings`
-
-
-## `measure_thickness`
-
-Every material span along one ray, in a single call: wall thicknesses, internal cavities and cross-part clearances. Give a start point (APPROXIMATE IS FINE — the ray only has to cross the wall, not hit a surface) and an axis. Returns, for each span, the enter/exit distance from the start, the thickness, the point and surface normal at each end, plus the gap between consecutive spans. Opposite entry/exit normals mean a wall; same-facing normals mean a slot, not a wall. Pass bVersionId to read a clearance between two parts along the same line (tagged "a→b"). Prefer this over measure_distance whenever you cannot name an exact surface point. mm, z-up.
-
-| parameter | type | default | meaning |
-|---|---|---|---|
-| `versionId` | string | **required** | Saved version to probe, e.g. "v003". |
-| `from` | array | — | Start point [x,y,z] mm — approximate is fine. Give this OR fromDatum. |
-| `fromDatum` | string | — | Datum anchor name, resolved EXACTLY (no guessing). Prefer over `from` when the part declares one. |
-| `direction` | string | — | Ray direction along a principal axis: +x \| -x \| +y \| -y \| +z \| -z. Give this OR directionVector. Pick the axis that crosses the feature you care about. |
-| `directionVector` | array | — | Ray direction [x,y,z] for a non-axis-aligned probe; normalised internally. |
-| `bVersionId` | string | — | Second part included in the same ray, so a gap between the two comes back tagged "a→b". |
-| `maxSpanMm` | number | — | Stop reporting past this distance from `from`, mm. A span cut by the limit comes back with clipped:true. |
-
-```js
-measure_thickness({ versionId: "…" })
-```
-
-returns: `direction`, `from`, `fromInsideSolid`, `spans`, `gaps`, `thinnestSpanMm`, `clipped`, `nudgedMm`, `probeAgreement`, `watertightA`, `watertightB`, `warnings`
+returns: `kind`, `versionId`
 
 
 ## `merge_parts`

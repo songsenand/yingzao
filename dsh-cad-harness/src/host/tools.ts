@@ -494,7 +494,8 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
   simulate_motion: 600_000,
   'gap-closest-points': 180_000,
   list_features: 60_000,
-  measure_section: 60_000,
+  // merged measure: section is the slowest kind (polygon loops), so it sets the cap
+  measure: 60_000,
   check_printability: 180_000,
   simulate_stress: 600_000,
   preflight: 600_000,
@@ -1232,7 +1233,7 @@ export function registerCadTools(
         result.warnings.push(
           `DISCIPLINE (DESIGN §18): ${shellCount(parsed!)} disconnected bodies in one version — a part must be a ` +
           'single connected solid. Either union the fragments in OpenSCAD, or model them as SEPARATE parts. ' +
-          'Run measure_part to see where each body sits (it reports bodies, bodySizes, bodyCenters).',
+          `Run measure(kind="part") to see where each body sits (it reports bodies, bodySizes, bodyCenters).`,
         );
       }
 
@@ -3974,7 +3975,7 @@ export function registerCadTools(
   }));
 
   // --- measure_part: exact geometry ground truth ---
-  registerTool(defineTool({
+  const DEF_MEASURE_PART = defineTool({
     name: 'measure_part',
     description:
       'Whole-part ground truth in one call: bounding box (size AND min/max), volume, surface area, centre of ' +
@@ -4114,7 +4115,7 @@ export function registerCadTools(
         ...(warnings.length ? { warnings } : {}),
       };
     },
-  }));
+  });
 
   // --- measure_gap: how far apart two things are, however you name them ------
   //
@@ -4144,7 +4145,7 @@ export function registerCadTools(
   //     which is what it always meant in closest. The snap/inside diagnostics are
   //     now OMITTED for a datum endpoint instead of being forced to 0/false:
   //     a datum is never snapped, so those numbers would be invented.
-  registerTool(defineTool({
+  const DEF_MEASURE_GAP = defineTool({
     name: 'measure_gap',
     description:
       'How far apart two things are, however you name them. Each endpoint is ONE of: a saved solid ' +
@@ -4406,7 +4407,7 @@ export function registerCadTools(
         warnings,
       };
     },
-  }));
+  });
 
   // --- measure_thickness: every material span along one ray (the aiming-tolerant one) ---
   //
@@ -4417,7 +4418,7 @@ export function registerCadTools(
   // wall it asks about, and every crossing comes back, so "how deep do I aim" stops
   // being a question. The solve is Python's (`measure_thickness` op); what lives
   // here is the schema, datum/axis resolution and the report.
-  registerTool(defineTool({
+  const DEF_MEASURE_THICKNESS = defineTool({
     name: 'measure_thickness',
     description:
       'Every material span along one ray, in a single call: wall thicknesses, internal cavities and ' +
@@ -4543,7 +4544,7 @@ export function registerCadTools(
         warnings: out.warnings,
       };
     },
-  }));
+  });
 
   // --- list_features: WHERE things are, for geometry you did not draw ---
   //
@@ -4706,7 +4707,7 @@ export function registerCadTools(
   // diameter, and the exact wall thickness to the outside) and the spacing between
   // holes. Hole spacing, wall thickness and in-plane angles are then read off the
   // reply instead of being aimed at.
-  registerTool(defineTool({
+  const DEF_MEASURE_SECTION = defineTool({
     name: 'measure_section',
     description:
       'Cut a saved version with a plane and return the SECTION AS DATA: every polygon, its outer ring ' +
@@ -4838,7 +4839,7 @@ export function registerCadTools(
       });
       return { versionId: a.versionId, ...out };
     },
-  }));
+  });
 
 
   // --- check_sheet2d: the 2D cut screen for flat sheet/plate parts ---
@@ -5563,7 +5564,7 @@ export function registerCadTools(
   // plus which of the three ways each side was named. The arithmetic is the worker's
   // — the same `_axis_line_metrics` that `check_assembly`'s `coaxial` operator uses,
   // so the two can never drift.
-  registerTool(defineTool({
+  const DEF_MEASURE_ANGLE = defineTool({
     name: 'measure_angle',
     description:
       'The angle between two directions, plus the distance between their lines. Name each side ONE of three ways: ' +
@@ -5705,6 +5706,120 @@ export function registerCadTools(
         aSource: (payload.aSourceHint as string | undefined) ?? out.aSource,
         bSource: (payload.bSourceHint as string | undefined) ?? out.bSource,
       };
+    },
+  });
+
+  // --- measure: ONE tool, five kinds -----------------------------------------
+  // Merged 2026-11-16 (43 -> 39 tools). The five were one capability split by
+  // QUERY ("angle" / "gap" / "part" / "section" / "thickness"): same part, same
+  // units, same "give me a number or a slice" semantics, and a caller who wanted
+  // the angle between two bosses had to know that `measure_angle` existed before
+  // they could look for it. The union below is still readable because the kinds
+  // do not fight: `kind` says which parameter cluster applies, and each handler
+  // keeps its own refusals (a missing side still names the side).
+  //
+  // NOT merged, on purpose: the five `check_*` process tools. Their parameter
+  // sets share only versionId (kerf/bendLines vs barDiameter vs maxSetups vs
+  // burnAxis) — merging those would make 80% of the schema irrelevant per call,
+  // which is discovery damage, not integration.
+  registerTool(defineTool({
+    name: 'measure',
+    description:
+      'Geometry ground truth about a saved version — one entry point, five kinds. Pick kind first:\n' +
+      '  kind="part"      → whole-part numbers: bbox (size AND min/max), volume, area, centre of mass, ' +
+      'triangles, watertight, genus, and the disconnected BODIES; add axis/axisVector for a projection ' +
+      'and the two extremal vertices.\n' +
+      '  kind="gap"       → closest distance between two geometries (points / spheres / datum faces), ' +
+      'with the witness pair on each side.\n' +
+      '  kind="thickness" → wall thickness at a named side, cast outward along a direction (or the ' +
+      'inward normal) up to maxSpanMm.\n' +
+      '  kind="section"   → the cross-section polygon loop at a fraction of an axis (area, holes, bbox).\n' +
+      '  kind="angle"     → angle between two directions + the distance between their lines; each side ' +
+      'is a probe point, a datum, two points, or a known vector.\n' +
+      'All measurements are mm, z-up, and read the SAVED version: the answer is about that artifact, not ' +
+      'about a model you are about to change. For per-feature facts (a cylinder\'s length, a hole\'s depth) ' +
+      'use list_features instead.',
+    parameters: {
+      versionId: { type: 'string', description: 'Saved version, e.g. "v003". Required for part / section / thickness; for gap and angle it is the default for a side whose own *VersionId is omitted.' },
+      kind: {
+        type: 'string', required: true, enum: ['part', 'gap', 'thickness', 'section', 'angle'],
+        description: 'Which measurement. Each kind reads its own parameter cluster below; fields of other kinds are ignored.',
+      },
+      // ---- shared ----
+      aVersionId: { type: 'string', description: 'gap/angle: version for side a when the two sides live on different parts. Defaults to versionId.' },
+      bVersionId: { type: 'string', description: 'gap/angle/thickness: version for side b. Defaults to versionId.' },
+      // ---- part ----
+      axis: { type: 'string', description: 'part: project on x | y | z (a leading "-" flips it). section: the axis to slice perpendicular to. Default z.' },
+      axisVector: { type: 'array', description: 'part: projection axis [x,y,z] for a non-principal direction (normalised internally).', items: { type: 'number' } },
+      // ---- gap ----
+      aSphere: { type: 'array', description: 'gap: side a as a sphere [x,y,z,r] — the radius is honoured, not snapped.', items: { type: 'number' } },
+      aPoint: { type: 'array', description: 'gap: side a as a point [x,y,z].', items: { type: 'number' } },
+      aDatum: { type: 'string', description: 'gap: side a as a datum name (axis / cylinder / plane) declared on aVersionId.' },
+      bSphere: { type: 'array', description: 'gap: side b as a sphere [x,y,z,r].', items: { type: 'number' } },
+      bPoint: { type: 'array', description: 'gap: side b as a point.', items: { type: 'number' } },
+      bDatum: { type: 'string', description: 'gap: side b as a datum name.' },
+      bOn: { type: 'string', description: 'gap: which side the reported distance is measured TO ("a" | "b"); default both witness pairs.' },
+      snap: { type: 'boolean', description: 'gap: snap a bare point onto the nearest surface of its version before measuring. Default true.' },
+      // ---- thickness ----
+      from: { type: 'array', description: 'thickness: starting point [x,y,z].', items: { type: 'number' } },
+      fromDatum: { type: 'string', description: 'thickness: start from a datum instead of a point.' },
+      direction: { type: 'string', description: 'thickness: cast direction x | y | z (a leading "-" flips it).' },
+      directionVector: { type: 'array', description: 'thickness: cast direction [x,y,z].', items: { type: 'number' } },
+      maxSpanMm: { type: 'number', description: 'thickness: give up after this many mm (default 50).' },
+      // ---- section ----
+      fraction: { type: 'number', description: 'section: where to slice along the axis, 0..1 (default 0.5).' },
+      atMm: { type: 'number', description: 'section: absolute slice coordinate instead of fraction.' },
+      simplifyToleranceMm: { type: 'number', description: 'section: polygon simplification tolerance (default 0.02).' },
+      maxPolygons: { type: 'integer', description: 'section: cap on returned loops (default 8).' },
+      maxHolesPerPolygon: { type: 'integer', description: 'section: cap on holes reported per loop.' },
+      maxHoleNeighbours: { type: 'integer', description: 'section: how many neighbouring holes to name.' },
+      // ---- angle ----
+      aProbe: { type: 'array', description: 'angle: side a as a POINT — the direction becomes the normal of the face it lands on. Approximate is fine.', items: { type: 'number' } },
+      bProbe: { type: 'array', description: 'angle: side b as a point (nearest face normal).', items: { type: 'number' } },
+      aPoints: { type: 'array', description: 'angle: side a as two points [[x,y,z],[x,y,z]]; the direction is the segment.', items: { type: 'array', items: { type: 'number' } } },
+      bPoints: { type: 'array', description: 'angle: side b as two points.', items: { type: 'array', items: { type: 'number' } } },
+      aDir: { type: 'array', description: 'angle: side a as a direction vector you already know.', items: { type: 'number' } },
+      bDir: { type: 'array', description: 'angle: side b as a direction vector.', items: { type: 'number' } },
+      aOrigin: { type: 'array', description: 'angle: a point ON side a\'s line (needed for a meaningful line distance when you passed aDir).', items: { type: 'number' } },
+      bOrigin: { type: 'array', description: 'angle: a point on side b\'s line.', items: { type: 'number' } },
+      parallelToleranceDeg: { type: 'number', description: 'angle: within this many degrees of 0 the lines count as parallel (90 = perpendicular). Default 0.5.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: true,
+        properties: {
+          kind: { type: 'string', required: true, description: 'Echoes which measurement produced this payload.' },
+          versionId: { type: 'string', description: 'The version the numbers are about.' },
+        },
+      },
+      // The five kinds return different payloads: the union is declared loose and
+      // the text rendering carries the whole answer. The tight per-kind schemas
+      // still live on the five handlers, which validate their own inputs.
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    execute: async (a: Record<string, unknown>, exec: unknown) => {
+      const kind = a.kind as string;
+      const impl: Record<string, { execute?: (args: unknown, e: unknown) => unknown }> = {
+        part: DEF_MEASURE_PART as never,
+        gap: DEF_MEASURE_GAP as never,
+        thickness: DEF_MEASURE_THICKNESS as never,
+        section: DEF_MEASURE_SECTION as never,
+        angle: DEF_MEASURE_ANGLE as never,
+      };
+      if (['part', 'section', 'thickness'].includes(kind) && typeof a.versionId !== 'string') {
+        // These three describe ONE artifact; without it there is nothing to measure.
+        // gap/angle may name each side instead (aVersionId + bVersionId).
+        throw new Error(`measure: kind "${kind}" needs versionId (the saved version to measure)`);
+      }
+      const target = impl[kind];
+      if (!target || typeof target.execute !== 'function') {
+        throw new Error(
+          `measure: kind must be one of part | gap | thickness | section | angle (got ${JSON.stringify(a.kind)})`,
+        );
+      }
+      const { kind: _k, ...rest } = a;
+      const result = await (target.execute as (args: unknown, e: unknown) => Promise<Record<string, unknown>>)(rest, exec);
+      return { kind, ...result };
     },
   }));
 

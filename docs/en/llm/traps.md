@@ -77,7 +77,7 @@
   simulate a version flagged NOT WATERTIGHT: every interference, clearance and
   closest-point number on an open mesh is a lie (microscope3's fake 0.05mm
   "margin" and its phantom rack interference both came from exactly this).
-  Fix the mesh first — `measure_gap` now warns too,
+  Fix the mesh first — `measure` (`kind="gap"`) now warns too,
   but a warning after the fact is cheaper than a rework, only if you obey it.
 - Renders are seductive: a shape can look right and measure wrong. Anything with
   a tolerance in it gets a `measure_*` call before it gets a verdict.
@@ -109,7 +109,7 @@
   interference timeline and the stroke number are the real outputs.
 
 - **A part is ONE connected solid — always.** `generate_part` warns when a
-  version carries multiple disconnected bodies, and `measure_part` shows
+  version carries multiple disconnected bodies, and `measure` (`kind="part"`) shows
   where each body sits. Multi-body is NEVER acceptable as "one part": either
   union the fragments in OpenSCAD (they must genuinely touch/overlap), or
   model them as SEPARATE parts. Delivering a multi-body version as a single

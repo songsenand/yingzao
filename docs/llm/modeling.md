@@ -12,7 +12,7 @@ The hard part is almost never the arithmetic — it is naming the thing you want
 - **`import_part` refuses a mesh that is not a closed solid, and that is a
   feature.** It runs Manifold on the file first; if the surface has holes,
   T-junctions or inside-out winding, nothing is stored. Storing it would let
-  `measure_part`, `validate_assembly` and the simulators report confident numbers
+  `measure`（`kind="part"`）, `validate_assembly` and the simulators report confident numbers
   about a shape that is not a body. `allowNonSolid:true` exists only to look at
   broken geometry, and it brands the version so the geometric tools refuse it.
 - **STL has no unit.** `import_part`'s `unit` (mm/cm/m/inch) and `scale` are your
@@ -43,12 +43,12 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   thread, a fillet radius). STL/DXF ignore both (the mesh is already given).
 - **`merge_parts` is for "one rigid body", not for tidying a corpus.** Use it when
   a whole machine has to be a single body (`simulate_physics` topple, a
-  whole-assembly `measure_part`), because `simulate_physics` takes only
+  whole-assembly `measure`（`kind="part"`）), because `simulate_physics` takes only
   revolute/prismatic joints and cannot hold a machine together by itself. It reports
   the number of **shells**: more than one means the parts you merged do not all
   touch, so the body is not a machine but a pile.
 - **`genus` is only meaningful for ONE connected solid.** A multi-body mesh
-  reports a negative genus; use `measure_part` (its `bodies` uses the shared-edge
+  reports a negative genus; use `measure`（`kind="part"`） (its `bodies` uses the shared-edge
   criterion — two solids touching at a single vertex are two bodies) for the count.
 - **`// PARAMS`** turns a top-level `name = number; // PARAMS <label>` line into a
   panel tunable for that version.

@@ -85,8 +85,10 @@ function cubeTris(x0, y0, z0, s) {
     fetch: { register: () => {} },
   };
   registerCadTools(ctx);
-  const tool = registered.find((t) => t.name === 'measure_part');
-  check(!!tool && JSON.stringify(tool.output?.schema ?? {}).includes('"bodies"'), 'measure_part is registered and carries the body fields (check_connectivity was merged into it)');
+  // The five measure_* tools were merged into one `measure` (2026-11-16), so the
+  // body fields now travel through the per-kind handlers, not the tool schema.
+  const tool = registered.find((t) => t.name === 'measure');
+  check(!!tool, 'measure is registered (the five measure_* tools were merged into it)');
   check(registered.some((t) => t.name === 'generate_part'), 'generation tools still registered alongside');
 
   // A project with one multi-body version and one single-body version.
@@ -100,18 +102,18 @@ function cubeTris(x0, y0, z0, s) {
   writeFileSync(join(stores.root, 'versions', 'v002', 'model.stl'), writeStl(cubeTris(0, 0, 0, 10)));
 
   const exec = { agent: { session: { header: { cwd: project } } } };
-  const multi = await tool.execute({ versionId: 'v001' }, exec);
+  const multi = await tool.execute({ kind: 'part', versionId: 'v001' }, exec);
   check(multi.bodyVerdict === 'multi-body' && multi.bodies === 2,
     'tool: a two-fragment version reports multi-body', JSON.stringify({ bodyVerdict: multi.bodyVerdict, bodies: multi.bodies }));
   check(JSON.stringify(multi.bodySizes[0]) === '[10,10,10]',
     'tool: per-body sizes are real mm', JSON.stringify(multi.bodySizes));
 
-  const single = await tool.execute({ versionId: 'v002' }, exec);
+  const single = await tool.execute({ kind: 'part', versionId: 'v002' }, exec);
   check(single.bodyVerdict === 'single-body' && single.bodies === 1,
     'tool: a single cube reports single-body', JSON.stringify({ bodyVerdict: single.bodyVerdict, bodies: single.bodies }));
 
   let refused = false;
-  try { await tool.execute({ versionId: 'vXXX' }, exec); } catch (e) { refused = /no model\.stl|unknown version/.test(String(e.message)); }
+  try { await tool.execute({ kind: 'part', versionId: 'vXXX' }, exec); } catch (e) { refused = /no model\.stl|unknown version/.test(String(e.message)); }
   check(refused, 'missing version refuses with an actionable error');
 
   rmSync(home, { recursive: true, force: true });
@@ -123,7 +125,7 @@ function cubeTris(x0, y0, z0, s) {
   const src = new URL('../src/host/tools.ts', import.meta.url);
   const { readFileSync } = await import('node:fs');
   const tools = readFileSync(src, 'utf8');
-  check(tools.includes('DISCIPLINE (DESIGN §18)') && tools.includes('Run measure_part to see where each body sits'),
+  check(tools.includes('DISCIPLINE (DESIGN §18)') && tools.includes('Run measure(kind="part") to see where each body sits'),
     'generate_part warns with the single-solid discipline when shells > 1');
   // Read the WHOLE skills tree, not one file: the skill was split into layers
   // (tier-1 router + per-job skills + reference files), and a doc test pinned to a
@@ -136,8 +138,8 @@ function cubeTris(x0, y0, z0, s) {
     return statSync(full).isDirectory() ? walk(full) : full.endsWith('.md') ? [full] : [];
   });
   const md = walk(skillsRoot).map((f) => readFileSync(f, 'utf8')).join('\n');
-  check(md.includes('ONE connected solid') && md.includes('measure_part'),
-    'the skill carries the single-solid discipline and routes to the tool (measure_part.bodies)');
+  check(md.includes('ONE connected solid') && md.includes('kind="part"'),
+    'the skill carries the single-solid discipline and routes to measure(kind="part")');
 }
 
 console.log(`\n${failures === 0 ? 'OK' : `${failures} FAILURE(S)`}`);

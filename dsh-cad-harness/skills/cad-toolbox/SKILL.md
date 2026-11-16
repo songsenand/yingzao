@@ -103,14 +103,14 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "I need to deliver this printed part", "is the D hole really a D hole" | `review_visual` (top+iso, section when internal; writes the per-version record) | `generate_part({views:[]})`, or claiming "looks good" without an image |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `simulate_fluid` | anything rigid |
 | "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `simulate_lbm` | embedded solids (box walls only) |
-| "how big / how many holes / is it watertight", whole-part numbers | `measure_part` | renders |
-| "how long along a diagonal", "which point is the top" | `measure_part` with `axis` / `axisVector` | bare `measure_part` (bbox only) |
+| "how big / how many holes / is it watertight", whole-part numbers | `measure` `kind="part"` | renders |
+| "how long along a diagonal", "which point is the top" | `measure` `kind="part"` + `axis` / `axisVector` | bare kind="part" (bbox only) |
 | **"where are the holes", "what features", geometry you did not draw** | **`list_features`** | guessing coordinates from a render |
-| "how thick is this wall", "what is behind this face", "gap along this line" | `measure_thickness` | aiming `measure_gap` at a point you cannot name |
-| **"hole spacing in this plane", "wall thickness in a cut", "angle in a section"** | **`measure_section`** | picking 3D points off a render |
-| "hole spacing", "wall thickness here", "gap at this spot" | `measure_gap` with point / datum endpoints | `measure_part` |
-| "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure_gap` with solid / sphere endpoints | `measure_gap` at a point you cannot name |
-| **"what angle is this", "are these faces parallel", "how far off axis is this bore"** | **`measure_angle`** | eyeballing a render; guessing 30°/150° |
+| "how thick is this wall", "what is behind this face", "gap along this line" | `measure` `kind="thickness"` | aiming a gap at a point you cannot name |
+| **"hole spacing in this plane", "wall thickness in a cut", "angle in a section"** | **`measure` `kind="section"`** | picking 3D points off a render |
+| "hole spacing", "wall thickness here", "gap at this spot" | `measure` `kind="gap"` with point / datum endpoints | `kind="part"` |
+| "how close do these two get", "minimum gap", "nearest point to this sphere" | `measure` `kind="gap"` with solid / sphere endpoints | a gap at a point you cannot name |
+| **"what angle is this", "are these faces parallel", "how far off axis is this bore"** | **`measure` `kind="angle"`** | eyeballing a render; guessing 30°/150° |
 | "does the declared interface hold", "check the BOM's tolerances" | `check_assembly` | `validate_assembly` |
 | "is the evidence fresh?", "what is still unobserved?" | `verify` (V1; read-only) | `delivery_audit` (claims only) |
 | "run the selected pearl template" (deprecated) | `pearl_run({execute:true, inputs})` — deprecated; use the atomic tools | `preflight` (it only runs the gate) |
@@ -121,7 +121,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "can a 3-axis mill reach this pocket/undercut; how many setups" | `check_cnc_access` (six principal directions + setup count) | CAM/toolpath |
 | "can a sinker EDM electrode reach this cavity along one axis" | `check_edm_access` (single burn axis line of sight) | electrode shape/undercut |
 | **"screen a family at once", "which of these parts is thin"** | **`check_parts`** | N single calls; it runs the same jobs and writes one run per part |
-| "is this one part or floating fragments", "shells > 1 warning" | `measure_part` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
+| "is this one part or floating fragments", "shells > 1 warning" | `measure` `kind="part"` (`bodies` / `bodySizes` / `bodyVerdict`) | guessing from renders |
 | "what anchors does this version have", "I forgot a datum", "rename/add an anchor" | `set_datums` | re-running `generate_part` |
 | "look from another angle / cut it open" | `render_part` | re-running `generate_part` |
 | "give this version a color/material design" | `attach_appearance` (GLB sidecar; no render path) | treating STL as a color carrier |
@@ -134,7 +134,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "a check no CAD tool covers" (FEM, optimisation, a custom metric) | `run_python` | shelling out to the system python |
 | "the runtime is missing / broken / I want it warm" | `python_runtime` | re-running a failing tool and hoping |
 
-**`measure_part` vs `measure_gap`**: whole-part numbers → `measure_part` (add `axis`/`axisVector` for a projection). “How far apart are these two things” → `measure_gap`, where the only decision is how you NAME each endpoint, and both must be the same kind: solid (`aVersionId`/`bVersionId`) or sphere (`aSphere`/`bSphere`), or point (`aPoint`/`bPoint`) or datum (`aDatum`/`bDatum`). A solid cannot pair with a point in one call. Renders carry no coordinates: get them from `list_features` first; when you cannot name a point, `measure_thickness` takes a line instead.
+**`measure` 的五个 kind**：whole-part 数字 → `kind="part"`（加 `axis`/`axisVector` 可投影）。“两样东西相距多远” → `kind="gap"`, where the only decision is how you NAME each endpoint, and both must be the same kind: solid (`aVersionId`/`bVersionId`) or sphere (`aSphere`/`bSphere`), or point (`aPoint`/`bPoint`) or datum (`aDatum`/`bDatum`). A solid cannot pair with a point in one call. Renders carry no coordinates: get them from `list_features` first; when you cannot name a point, `kind="thickness"` takes a line instead.
 
 **`validate_assembly` vs `check_assembly`**: the first is ad-hoc (parts + poses → interference/clearance); the second is contractual (manifest → declared interfaces + undeclared adjacency).
 
