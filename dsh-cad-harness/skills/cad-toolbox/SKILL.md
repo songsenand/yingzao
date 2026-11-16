@@ -19,6 +19,8 @@ Nine job surfaces (39 ops), but **three jobs first**. Pick the group, not the to
 
 `instrument` 组只装“读数/坐标/写契约”类工具（`cad_inspect` (`action: "measure"`)、`cad_inspect` (`action: "features"`)、`cad_part` (`action: "generate"`)、`cad_see` (`action: "render"`)、`cad_assembly` (`action: "write"`) 等）；它不是交付判据。声明 `groups` 时不要把 `instrument` 和三个 job 组混为一谈。
 
+> **不要用通用 `edit`/`write` 改 `assembly/assembly.json`**：通用编辑不会跑契约校验，而且会被“未读先写”策略挡住。用 `cad_assembly` (`action: "write"`)。同理，`set_datums` 生成的新版本是元数据版本；它的渲染由工具从父版本复制，不要假设 `versions/<new>/render_*.png` 一定存在，视觉复核图在 `cad-data/render/<v>-review-*.png`。
+
 ## Six rules
 
 1. **先结账，再交付**：任何“可以交了”之前，先 `cad_deliver` (`action: "plan"`) 看只读计划（它从 BOM/ICD/claims/run 图派生每行，并给出该跑的原子工具；**它不跑 CAD，也不是闸门**）；按 `next` 跑完缺失项，再 `cad_check` (`action: "printability"`)（每个打印件）与 `cad_assembly` (`action: "check"`)（每份契约），最后 `cad_deliver` (`action: "audit"`) 并把主张写进 `claims`。缺证据会报 `claim-without-evidence`——门在工作。**`cad_deliver` (`action: "plan"`) 的 plan pass 不是 claim。** BOM 顶层的 `manufacturing` 策略是**一次用户决定**（`allowed` + `approvedBy`；用户可以说“我只有 FDM”），agent 在允许集合内给每个零件分配 `source:"policy"`；**不要逐件问用户**。`M:mix` 让用户确认一次配比（例如 10×injection-pp）；只有集合外的零件才问一次例外。总计 0–3 次关键选择，不是 N 次零件确认。未批准的策略/推荐一律 `unobserved`。工艺 id 的能力分级（`supported` / `partial` / `planned`；车削、EDM、激光/水刀/钣金切割/挤出、CNC/压铸/砂铸/真空/模锻/SLA/SLS 都已 **partial**；CNC 用 `cad_check` (`action: "printability"`)（圆孔/壁）+ `cad_check` (`action: "cnc"`)（六方向可达 + 装夹数）；剩下的是斜装夹/刀具长度/夹具、钣金展开图/K 因子/让位槽几何、EDM 电极形状/侧蚀的 handoff）见 `docs/llm/processes.md`；不要拿打印性 profile 冒充新工艺的检查。

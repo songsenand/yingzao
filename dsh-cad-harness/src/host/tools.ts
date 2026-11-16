@@ -2133,6 +2133,16 @@ export function registerCadTools(
         ...(known.source ? { source: known.source } : {}),
         solid: true,
       });
+      // A datum-only edit copies the mesh byte-for-byte; the new version must
+      // also keep the parent's rendered views or the model/human loses the only
+      // visual record of an otherwise identical part. (The old version still
+      // has its own review record; this is not a review of the new anchors.)
+      for (const view of ['top', 'front', 'side', 'iso']) {
+        try {
+          const png = await readFile(join(store.root, 'versions', a.versionId, `render_${view}.png`));
+          await writeFile(join(store.root, 'versions', newId, `render_${view}.png`), png);
+        } catch { /* the parent may predate renders */ }
+      }
       // A versioned anchor edit is still a version of the SAME part. The first cut
       // saved the version but never attached it, so `parts/manifest.json` kept only
       // the pre-edit id (wind-up-frog p010 listed v013 while the assembly used v034).
