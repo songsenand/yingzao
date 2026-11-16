@@ -74,6 +74,8 @@ export interface ToolScopeConfig {
   pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
   /** Opt-in Phase-2 facade prototypes; production leaves this unset. */
   toolFacades?: readonly string[];
+  /** Phase-3 cutover probe: legacy names to stop exposing (not production yet). */
+  hideLegacy?: readonly string[];
   /** Declaration source ①: job groups for ALL CAD sessions. Absent = whole catalog. */
   groups?: readonly CadToolGroup[];
   /** Declaration source ② (the useful one): preset id → the groups THAT preset works in.

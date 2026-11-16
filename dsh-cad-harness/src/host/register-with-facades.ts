@@ -13,6 +13,8 @@ export interface FacadeRegisterScope {
   toolScope?: string;
   presets?: readonly string[];
   toolFacades?: readonly string[];
+  /** Phase 3 cutover probe: do not expose these legacy names. */
+  hideLegacy?: readonly string[];
 }
 
 /**
@@ -22,12 +24,14 @@ export interface FacadeRegisterScope {
  */
 export function registerCadToolsWithFacades(ctx: any, scope?: FacadeRegisterScope): readonly string[] {
   const captured = new Map<string, LegacyTool>();
+  const hidden = new Set(scope?.hideLegacy ?? []);
   const toolCtx = Object.create(ctx) as any;
   toolCtx.tools = new Proxy(ctx.tools, {
     get(target: any, prop: string | symbol, receiver: unknown) {
       if (prop === 'register') {
         return (definition: any) => {
           captured.set(definition.name, definition as LegacyTool);
+          if (hidden.has(definition.name)) return () => {};
           return target.register(definition);
         };
       }
@@ -36,7 +40,7 @@ export function registerCadToolsWithFacades(ctx: any, scope?: FacadeRegisterScop
     },
   });
 
-  const names = [...registerCadTools(toolCtx, scope)];
+  const names = [...registerCadTools(toolCtx, scope)].filter((name) => !hidden.has(name));
   if (scope?.toolFacades?.includes('inspect')) {
     const facade = buildCadInspectFacade(captured);
     ctx.tools.register(withOutputContract(facade as never) as never);

@@ -1,6 +1,6 @@
-# 工具面压缩方案（9 facade，Phase 2 注册原型）
+# 工具面压缩方案（9 facade，Phase 3 cutover 探针）
 
-> **状态**：方案 A 已确认（2026-11-16）；Phase 0 映射/基线、Phase 1 `cad_inspect`、Phase 2 opt-in 注册均已落盘。
+> **状态**：方案 A 已确认（2026-11-16）；Phase 0/1/2 已落盘，Phase 3 的 36 工具 cutover 探针通过。
 >
 > **目标**：把模型可见的 CAD 工具从 40+ 压到 8–12 个，同时不丢掉
 > gate、evidence、版本不可变和交付审计。
@@ -22,6 +22,11 @@
 > `accept-cad-inspect-registered.mjs` PASS；真实 `measure` 因本机 runtime 受限显式 SKIP，
 > 委派由 Phase 1 的 fake legacy 覆盖。过渡期两者同时可见，schema 从 11,594 增到 12,233 chars，
 > 不是净下降——Phase 3 隐藏旧四个后才算压缩。
+
+> **Phase 3 状态（2026-11-16）**：`hideLegacy` 探针已验证 36 工具（39 - 4 + 1），
+> 39 工具 schema 87,064 chars → 36 工具 76,109 chars（-10,955，约 -12.6%）。
+> 默认生产仍是 39；真实 `measure(kind="part")` 需在可写 runtime / CI 再补，
+> 当前 `accept-cad-inspect-registered` 显式 SKIP。
 
 ## 0. 结论
 
@@ -167,6 +172,28 @@ skill 只写跨动作的工作流，不复制全部参数表。
 - 更新所有 skill、测试、文档；
 - 在 CHANGELOG 里写明“工具名迁移”；
 - 如保留别名，只保留一个 minor 版本，并标 deprecated。
+
+## 2.5 为什么这次不是珍珠链：BOM/ICD 是稳定主轴
+
+珍珠链的失败点之一，是它在工具之外又造了一套生命周期和契约，却没有一个已经稳定的数据主轴。
+这次不同：当前流程已经把 BOM/ICD 放在中心。
+
+- **BOM**：`assembly/assembly.json` 的零件、版本、装配位姿、角色、制造策略；
+- **ICD**：同一 manifest 里的接口、datum、公差、运动/强度声明；
+- **证据图**：versions / runs / claims / delivery audit 都引用这套 BOM/ICD；
+- **交付计划**：`deliver` 从 BOM/ICD/claims/run 图派生，而不是由 facade 发明流程。
+
+facade 只回答“这个动作怎么调”，不回答“现在该走到哪一步”。生命周期和判据仍然来自
+BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，也是本轮抽象更稳的原因。
+
+但 BOM/ICD 不是免死金牌：
+
+1. 单零件任务可以没有完整 BOM/ICD，facade 必须降级，而不是强制先写装配；
+2. BOM/ICD 只提供数据，不替 facade 做执行/状态管理；
+3. 如果 facade 自己新增 `CadStatus`、repair loop 或第二份契约，它仍然会珍珠化。
+
+**红线**：每个 facade action 必须能指向一个 BOM/ICD 锚点或一个已有 run/evidence；
+没有锚点的“便利状态”不进入 facade。
 
 ## 3. 候选方案
 

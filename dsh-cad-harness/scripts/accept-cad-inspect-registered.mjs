@@ -52,7 +52,28 @@ check('opt-in: cad_inspect is registered', after.has('cad_inspect'));
 check('opt-in: four legacy inspect tools remain',
   ['measure', 'list_features', 'scan_attention', 'analyze'].every((name) => after.has(name)));
 
+const cutover = capture({
+  toolFacades: ['inspect'],
+  hideLegacy: ['measure', 'list_features', 'scan_attention', 'analyze'],
+});
+check('cutover: 36 tools (39 - 4 old + facade)', cutover.size === 36, String(cutover.size));
+check('cutover: cad_inspect is registered', cutover.has('cad_inspect'));
+check('cutover: four legacy inspect tools are hidden',
+  ['measure', 'list_features', 'scan_attention', 'analyze'].every((name) => !cutover.has(name)));
+const schemaChars = (map) => [...map.values()].reduce((sum, definition) => sum + JSON.stringify({
+  name: definition.name,
+  description: definition.description,
+  parameters: definition.parameters,
+}).length, 0);
+const beforeChars = schemaChars(before);
+const cutoverChars = schemaChars(cutover);
+check('cutover: net schema is smaller than the 39-tool surface', cutoverChars < beforeChars,
+  `${cutoverChars} vs ${beforeChars}`);
+console.log(`  INFO cutover: ${beforeChars} chars (39) -> ${cutoverChars} chars (36), delta ${cutoverChars - beforeChars}`);
+
 const facade = after.get('cad_inspect');
+const cutFacade = cutover.get('cad_inspect');
+check('cutover facade still catalogs four ops', (await cutFacade.execute({ action: 'catalog' }, {}))?.ops?.length === 4);
 const catalog = await facade.execute({ action: 'catalog' }, {});
 check('facade catalog lists four ops', catalog?.ops?.length === 4, JSON.stringify(catalog).slice(0, 100));
 const help = await facade.execute({ action: 'help', args: { op: 'measure' } }, {});
@@ -102,7 +123,7 @@ await attachVersion(stores.partStore, part.id, version);
 
 console.log('  SKIP real measure — the Python runtime is intentionally off here;');
 console.log('       delegation is covered by accept-cad-inspect-facade (fake legacy execute),');
-console.log('       and the default tool surface still uses the old tools until Phase 3.');
+console.log('       and the default tool surface still uses the old tools until production cutover.');
 
 // Transition accounting: adding the facade necessarily adds one schema until the
 // four legacy tools are hidden. Record the delta rather than pretending it is a cut.
