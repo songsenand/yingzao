@@ -14,19 +14,27 @@
 > `scripts/accept-tool-surface.mjs` PASS。未注册/删除/修改任何工具行为。
 
 > **Phase 1 状态（2026-11-16）**：`cad_inspect` 原型已落盘（未注册）。
-> 4 个旧 schema 11,594 chars → facade 639 chars（约 -94.5%）；
+> 4 个旧 schema 11,594 chars → facade 549 chars（约 -95.3%）；
 > `scripts/accept-cad-inspect-facade.mjs` PASS，catalog/help/未知 action/委派均覆盖。
 
 > **Phase 2 状态（2026-11-16）**：`toolFacades: ["inspect"]` 是 opt-in，默认关闭。
 > 默认 39 个旧工具不变；开启后 40 个（旧 39 + `cad_inspect`），用于对照。
 > `accept-cad-inspect-registered.mjs` PASS；真实 `measure` 因本机 runtime 受限显式 SKIP，
-> 委派由 Phase 1 的 fake legacy 覆盖。过渡期两者同时可见，schema 从 11,594 增到 12,233 chars，
+> 委派由 Phase 1 的 fake legacy 覆盖。过渡期两者同时可见，schema 从 11,594 增到 12,143 chars，
 > 不是净下降——Phase 3 隐藏旧四个后才算压缩。
 
 > **Phase 3 状态（2026-11-16）**：`hideLegacy` 探针已验证 36 工具（39 - 4 + 1），
-> 39 工具 schema 87,064 chars → 36 工具 76,109 chars（-10,955，约 -12.6%）。
+> 39 工具 schema 87,064 chars → 36 工具 76,019 chars（-11,045，约 -12.7%）。
 > 默认生产仍是 39；真实 `measure(kind="part")` 需在可写 runtime / CI 再补，
-> 当前 `accept-cad-inspect-registered` 显式 SKIP。
+> `accept-cad-inspect-registered` 显式 SKIP 了依赖 runtime 的 measure。
+
+> **Phase 3b 状态（2026-11-16）**：`cad_check` + `cad_simulate` opt-in；
+> check 7 ops / simulate 5 ops，cutover 29 工具，87,064 → 49,805 chars（-37,259，约 -42.8%）。
+> `accept-cad-check-simulate.mjs` PASS；仍未注册到生产默认。
+
+> **Phase 3c 状态（2026-11-16）**：inspect + check + simulate 三个 facade 同时 cutover：
+> 26 工具，87,064 → 38,760 chars（-48,304，约 -55.5%）；
+> 旧 16 个工具隐藏，三个 facade 保留。仍为 opt-in，生产默认 39。
 
 > **2026-11-16 方向修正（用户拍板）**：保留 **9 个作业面**，不做“数据域 4 工具”。
 > 理由不是“9 更少”，而是 39→9 已经把 87 KB 降到约 6 KB（按 `cad_inspect` 实测外推），

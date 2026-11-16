@@ -6,7 +6,10 @@
 // of that file and makes the switch explicit at the plugin entry point.
 
 import { registerCadTools } from './tools.ts';
-import { buildCadInspectFacade, type LegacyTool } from './facade-inspect.ts';
+import { buildCadInspectFacade } from './facade-inspect.ts';
+import { buildCadCheckFacade } from './facade-check.ts';
+import { buildCadSimulateFacade } from './facade-simulate.ts';
+import type { LegacyTool } from './facade.ts';
 import { withOutputContract } from './tool-contract.ts';
 
 export interface FacadeRegisterScope {
@@ -41,10 +44,15 @@ export function registerCadToolsWithFacades(ctx: any, scope?: FacadeRegisterScop
   });
 
   const names = [...registerCadTools(toolCtx, scope)].filter((name) => !hidden.has(name));
-  if (scope?.toolFacades?.includes('inspect')) {
-    const facade = buildCadInspectFacade(captured);
+  const enabled = new Set(scope?.toolFacades ?? []);
+  const facades = [
+    enabled.has('inspect') ? buildCadInspectFacade(captured) : null,
+    enabled.has('check') ? buildCadCheckFacade(captured) : null,
+    enabled.has('simulate') ? buildCadSimulateFacade(captured) : null,
+  ].filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  for (const facade of facades) {
     ctx.tools.register(withOutputContract(facade as never) as never);
-    names.push('cad_inspect');
+    names.push(facade.name);
   }
   return names;
 }
