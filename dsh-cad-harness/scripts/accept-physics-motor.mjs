@@ -20,7 +20,8 @@
 //   3. STALL IS REPORTED: the under-capped case must say reachedTarget:false and
 //      carry a "did NOT reach its target" note. A stall that reports target as
 //      met is the failure mode this whole change exists to prevent.
-//   4. PARITY: the Python worker (canonical) and `runPhysicsInTs` (oracle) must
+//   4. VALIDATION: refusals must happen in the canonical engine, not only in a
+//      test double (the TS solver was retired 2026-11-16) — the check reads
 //      agree on all of the above — both implementations grew the motor.
 //
 //   node scripts/accept-physics-motor.mjs [--runtime <dir>]
@@ -28,7 +29,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPhysics, runPhysicsInTs } from '../src/host/physics.ts';
+import { runPhysics } from '../src/host/physics.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -111,10 +112,10 @@ const pendulumScenario = (maxTorqueNm, targetVelocityRadPerSec = 3) => ({
   keyframeCount: 4,
 });
 
+// One engine now (Python is canonical; the TS solver was retired 2026-11-16).
 const run = async (scenario) => {
   const py = havePython ? await runPhysics(scenario) : null;
-  const ts = await runPhysicsInTs(scenario);
-  return { py, ts };
+  return { py };
 };
 
 console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} mN·m `
@@ -122,14 +123,13 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
 
 // ---- 1. the drive turns, and both engines say so -------------------------
 {
-  const { py, ts } = await run(rotorScenario({ targetVelocityRadPerSec: 3, maxTorqueNm: 0.02 }));
+  const { py } = await run(rotorScenario({ targetVelocityRadPerSec: 3, maxTorqueNm: 0.02 }));
   const label = (who) => {
     const m = who.metrics.motors?.[0];
-    return m ? `${who === py ? 'py' : 'ts'}: turned ${m.turnedDeg}°, measured ${m.measuredRadPerSec} rad/s, reached ${m.reachedTarget}` : 'no metrics.motors';
+    return m ? `py: turned ${m.turnedDeg}°, measured ${m.measuredRadPerSec} rad/s, reached ${m.reachedTarget}` : 'no metrics.motors';
   };
-  console.log(`rotor 3 rad/s → ${label(ts)}`);
   if (py) console.log(`rotor 3 rad/s → ${label(py)}`);
-  for (const [who, name] of [[ts, 'TS'], [py, 'py']]) {
+  for (const [who, name] of [[py, 'py']]) {
     if (!who) continue;
     const m = who.metrics.motors?.[0];
     check(!!m, `${name}: metrics.motors is present`);
@@ -157,7 +157,7 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
   ];
   for (const c of cases) {
     const r = await run(pendulumScenario(c.cap));
-    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+    for (const [name, result] of [['py', r.py]]) {
       if (!result) continue;
       const m = result.metrics.motors?.[0];
       check(!!m, `${name} ${c.label}: metrics.motors is present`);
@@ -183,8 +183,8 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
 // `friction` did not exist at all, so every contact ran at rapier's undeclared
 // default 0.5 while the session talked about POM. Both are asserted here.
 {
-  const { py, ts } = await run(rotorScenario({ targetVelocityRadPerSec: 3, maxTorqueNm: 0.02 }));
-  for (const [name, result] of [['TS', ts], ['py', py]]) {
+  const { py } = await run(rotorScenario({ targetVelocityRadPerSec: 3, maxTorqueNm: 0.02 }));
+  for (const [name, result] of [['py', py]]) {
     if (!result) continue;
     check(result.stepsRun === 1000, `${name}: timestepSec 1/1000 is honoured (1000 steps for 1 s)`, `stepsRun ${result.stepsRun}`);
     check(result.metrics.frictions?.hub === 0.5, `${name}: the undeclared μ is reported, not hidden`, JSON.stringify(result.metrics.frictions));
@@ -212,7 +212,7 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
   };
   for (const mu of [0.6, 0.1]) {
     const r = await run(slope(mu));
-    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+    for (const [name, result] of [['py', r.py]]) {
       if (!result) continue;
       const d = slid(result);
       if (mu >= 0.6) check(Math.abs(d) < 1, `${name}: μ=0.6 holds a 20° slope (tan20=0.364)`, `slid ${d.toFixed(2)}mm`);
@@ -227,11 +227,11 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
   const bad = pendulumScenario(0.0);
   let threw = '';
   try {
-    await runPhysicsInTs(bad);
+    await runPhysics(bad);
   } catch (e) {
     threw = String(e.message ?? e);
   }
-  check(/maxTorqueNm must be > 0/.test(threw), 'TS: maxTorqueNm 0 is refused, not silently undriven', threw);
+  check(/maxTorqueNm must be > 0/.test(threw), 'py: maxTorqueNm 0 is refused, not silently undriven', threw);
 
   const slide = {
     parts: [
@@ -247,11 +247,11 @@ console.log(`pendulum gravity torque τ = ${(PENDULUM_TAU_NM * 1e3).toFixed(3)} 
   };
   let prismatic = '';
   try {
-    await runPhysicsInTs(slide);
+    await runPhysics(slide);
   } catch (e) {
     prismatic = String(e.message ?? e);
   }
-  check(/motor is revolute-only/.test(prismatic), 'TS: motor on a slider is refused', prismatic);
+  check(/motor is revolute-only/.test(prismatic), 'a motor on a slider is refused', prismatic);
 }
 
 await resetPythonWorker();

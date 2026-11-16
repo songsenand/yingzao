@@ -27,7 +27,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPhysics, runPhysicsInTs } from '../src/host/physics.ts';
+import { runPhysics } from '../src/host/physics.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,9 +55,9 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 const { compileStlOnly } = await import('../src/host/compile.ts');
 const cube = (await compileStlOnly('cube([4,4,4], center=true);')).stl;
 
+// One engine now (Python is canonical; the TS solver was retired 2026-11-16).
 const run = async (scenario) => ({
   py: havePython ? await runPhysics(scenario) : null,
-  ts: await runPhysicsInTs(scenario),
 });
 
 // ---- 1/2. a real spur pair: exact ratio, dt-independent, and isolated -------
@@ -92,7 +92,7 @@ const run = async (scenario) => ({
 
     for (const dt of [1 / 60, 1 / 1000]) {
       const r = await run(pair(dt, false));
-      for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+      for (const [name, result] of [['py', r.py]]) {
         if (!result) continue;
         const g = result.metrics.gears?.[0];
         check(!!g, `${name} dt=${(1 / dt).toFixed(0)}Hz: gears present`);
@@ -106,7 +106,7 @@ const run = async (scenario) => ({
 
     // Overlapping on purpose: with isolation the run must still be clean.
     const r = await run(pair(1 / 1000, true));
-    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+    for (const [name, result] of [['py', r.py]]) {
       if (!result) continue;
       check(result.metrics.maxPenetrationMm === 0, `${name}: overlapping gear pair reports 0 penetration (isolation works)`, `${result.metrics.maxPenetrationMm}mm`);
     }
@@ -148,7 +148,7 @@ const run = async (scenario) => ({
       gravity: [0, 0, 0],
     };
     const r = await run(scenario);
-    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+    for (const [name, result] of [['py', r.py]]) {
       if (!result) continue;
       const g = result.metrics.gears?.[0];
       check(!!g, `${name}: >360° run has a gear entry`);
@@ -190,7 +190,7 @@ const run = async (scenario) => ({
       gravity: [0, 0, 0],
     };
     const r = await run(scenario);
-    for (const [name, result] of [['TS', r.ts], ['py', r.py]]) {
+    for (const [name, result] of [['py', r.py]]) {
       if (!result) continue;
       const g = result.metrics.gears?.[0];
       check(!!g, `${name}: worm pair gears present`);
@@ -218,7 +218,7 @@ const run = async (scenario) => ({
   };
   let threw = '';
   try {
-    await runPhysicsInTs(base);
+    await runPhysics(base);
   } catch (e) {
     threw = String(e.message ?? e);
   }

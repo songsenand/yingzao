@@ -6181,3 +6181,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `schemas/assembly-manifest.schema.json`、`src/client/assembly.ts`、`src/client/playback.ts`、`src/client/panel.ts`、`src/host/tools.ts`（`write_assembly` 描述）、`docs/llm/assembly.md`（+英文）、`scripts/accept-part-color.mjs`、`package.json`。
 
 **非目标：** 不做配色主题、不让颜色进 `delivery_audit`/报告、不改变 fixed 参照体的灰色、不把颜色用于 2D/流体视图。**另外登记**：`docs/dev/TODO.md` 新增 L15「仿真/装配视图内直接选中零件」（P2, planned）——点选 + 高亮 + 显示零件名/版本/颜色/BOM 行，与本次的 `color` 共用同一身份。
+
+## 2026-11-16（补）：退役 darwin-x64，物理收敛到单一实现
+
+**触发条件：** 第 1 条（用户拍板："我想放弃 darwin-x64" + "分歧不能确认问题就不保留"）+ 第 3 条（不可逆：删除一个引擎）。
+
+**要解决的问题：** 物理有两份实现：Python worker（canonical）与 `runPhysicsInTs`。用户问"为什么有两份"。查证后两条理由：①**硬理由**——`rapier3d` 在 darwin-x64 无 wheel，该平台只能走 TS（2026-10-08 决定）；②**软理由**——TS 是 parity oracle。而 2026-11-16 的接触场景对照显示：同一份几何，TS 报 0.000 mm、Python 报 0.165 mm，**无法裁定谁对**。
+
+**决策内容：** ①darwin-x64 退役，锁定矩阵 7→6，`rapier3d` 的 cad-exclude 删除（剩余平台都有 wheel）；②删除 `runPhysicsInTs`（约 890 行）与 `accept-physics-parity`，三处引用它的验收（gear/motor/contact）改为只跑 Python；③物理自此**只有一个标准**。printability/measure/connectivity 的 parity **保留**——那里的分歧可裁定（33 处薄壁 0.026 mm 可手验），且确实抓到过 BVH `faceIndex` 错位那个真 bug。
+
+**理由：** 判据是用户的：**分歧只有在能确认谁对时才有意义**。不可裁定的分歧不是信号，是噪声；它今天还让我把一个假重建场景当成了证据。可裁定的 parity 留，不可裁定的删。
+
+**依据：** `accept-python` 40 项通过（六平台、darwin-arm64/linux 仍带 rapier3d、musl 跳过集与理由齐全、锁里不再出现 darwin-x64；剩余 1 项 `run_python` 建 cad-data 的失败在 stash 到干净树后同样复现，属既有问题）。删除后 `tsc`/`esbuild` 通过，`accept-physics-motor`、`-gear`、`-contact`、`-solver` 全过（曾抓到两个迁移残留：一次误删 `runPhysics`/`quatToMatrix3`，由 `tsc` 立刻照出）。
+
+**影响：** `src/host/physics.ts`（-890 行）、`scripts/gen-python-lock.mjs`、`src/host/python-lock.ts`、`scripts/accept-python.mjs`、`accept-physics-{parity 删除,gear,motor,contact,solver}`、`package.json`、`DESIGN.md`（§26 平台矩阵、§31.2/§31.4 canonical 表述）。
+
+**非目标：** 不删 `runMotionInTs`（运动仍是 oracle，且它的分歧同样是待裁定问题，留待单独判断）；不改 printability/measure 的 parity；不保证 darwin-x64 上已安装的运行时还能继续工作（只是不再有新安装）。

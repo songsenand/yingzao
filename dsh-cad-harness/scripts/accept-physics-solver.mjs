@@ -13,7 +13,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { runPhysics, runPhysicsInTs } from '../src/host/physics.ts';
+import { runPhysics } from '../src/host/physics.ts';
 import { compileStlOnly } from '../src/host/compile.ts';
 
 let failures = 0;
@@ -57,7 +57,7 @@ if (!haveFrog) {
   console.log(`SKIP  no frog corpus at ${FROG}`);
 } else {
   // ---- 1. a gear pair is isolated, and the report says WHY -----------------
-  for (const [name, fn] of [['TS', runPhysicsInTs], ['py', runPhysics]]) {
+  for (const [name, fn] of [['py', runPhysics]]) {
     const r = await fn(await scene());
     const gearNote = (r.metrics.notes ?? []).find((n) => /gear pair/i.test(n));
     check(r.metrics.gearContactsDisabled?.includes('drum~gearB') === true,
@@ -73,7 +73,7 @@ if (!haveFrog) {
   }
 
   // ---- 2. solver knobs are applied AND recorded ---------------------------
-  for (const [name, fn] of [['TS', runPhysicsInTs], ['py', runPhysics]]) {
+  for (const [name, fn] of [['py', runPhysics]]) {
     const def = await fn(await scene());
     check(def.metrics.solver?.solverIterations === 4 && def.metrics.solver?.ccdSubsteps === 1,
       `${name}: defaults are echoed (4 iterations, 1 CCD substep)`, JSON.stringify(def.metrics.solver));

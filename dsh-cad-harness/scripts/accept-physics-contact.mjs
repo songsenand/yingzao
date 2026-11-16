@@ -23,7 +23,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPhysics, runPhysicsInTs } from '../src/host/physics.ts';
+import { runPhysics } from '../src/host/physics.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -96,15 +96,12 @@ function assertReport(tag, report) {
 }
 
 console.log('--- physics contact regression: r002 ---');
-const ts = await runPhysicsInTs(scenario);
-assertReport('TS', ts);
+// One engine (Python) since 2026-11-16; the TS solver was retired with darwin-x64.
 if (havePython) {
   const py = await runPhysics(scenario);
   assertReport('Python', py);
-  const worst = Math.max(...Object.keys(initial).map((n) => drift(py.finalPositions[n], ts.finalPositions[n])));
-  check(worst < 0.1, 'Python vs TS final poses agree (constraint-driven)', `worst Δ ${worst.toFixed(4)}mm`);
 } else {
-  console.log(`SKIP  Python worker (no venv at ${venvPython})`);
+  console.log(`SKIP  Python worker (no venv at ${venvPython}) — this regression needs the canonical engine`);
 }
 
 // ---- t=0 assembly gate: a 10mm anchor error is REFUSED, not simulated ----
@@ -114,7 +111,7 @@ const broken = {
 };
 let refused = '';
 try {
-  await runPhysicsInTs(broken);
+  await runPhysics(broken);
 } catch (error) {
   refused = String(error?.message ?? error);
 }
@@ -136,7 +133,7 @@ const authored = {
   timestepSec: 1 / 60,
   keyframeCount: 6,
 };
-const tilt = await runPhysicsInTs(authored);
+const tilt = await runPhysics(authored);
 check(tilt.metrics.fellOver.beam === false, 'authored 90° beam is not "toppled"', JSON.stringify(tilt.metrics.fellOver));
 check(tilt.metrics.closedLoop === false && tilt.metrics.loopJoints.length === 0, 'a single hinge is a tree, not a loop', `${tilt.metrics.closedLoop} ${JSON.stringify(tilt.metrics.loopJoints)}`);
 check(!tilt.trajectory.events.some((e) => /倾倒:beam/.test(e.label)), '  …and no topple event is logged', JSON.stringify(tilt.trajectory.events));

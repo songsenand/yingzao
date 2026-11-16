@@ -171,7 +171,7 @@ node scripts/audit-tool-contracts.mjs      # 当前工具表（含参数与返�
 | 层 | 目录 | 职责 | 不许出现 |
 |---|---|---|---|
 | 平台接线 | `src/host/index.ts`、`tools.ts` 的注册段、路由段 | dsh 宿主面：`ctx.tools.register` / `connection.fetch.register` / `ctx.attachments` / 生命周期 | 几何算法、仿真内核 |
-| 领域（TS） | `src/host/*.ts`（compile/assembly/motion/fluid/mpm/measure/process-profile/…） | 版本库、真值引擎封装、判据与报告；部分模块是 Python 权威的 parity oracle | dsh API（除 `tools.ts` 内的接线） |
+| 领域（TS） | `src/host/*.ts`（compile/assembly/motion/fluid/mpm/measure/process-profile/…） | 版本库、真值引擎封装、判据与报告；部分模块是 Python 权威的 parity oracle（物理已无 TS 实现，2026-11-16） | dsh API（除 `tools.ts` 内的接线） |
 | 领域（Python） | `dsh-cad-harness/python/cad_worker/` | 几何分析、仿真、装配契约、工艺档案求解 | 插件宿主生命周期 |
 | 浏览器 | `src/client/` | 面板、回放、视口角标、热力图、背景、本地文件 | 任何主机能力（只经精确路由取数） |
 | 共享 | `src/shared/` | `types.ts`（Host/Client 契约）、`judgement.ts`（**判定词汇的唯一来源**） | 任一侧的私有实现 |
@@ -3159,9 +3159,11 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   只剩四行相机常量，搬过去只多一次往返而无领域收益。**批次 2 完成。**
 - **批次 3 第一件：`simulate_physics`（2026-10-08，Q2=A）。** worker 的 `simulate_physics` op
   逐行镜像 `runPhysics`（世界/关节/接触采样/指标/关键帧/时间线），TS 侧只剩 schema、parts
-  落盘与关键帧渲染。`runPhysicsInTs` 保留为 parity oracle，**也是 darwin-x64 的 canonical**
-  （锁里没有该平台 wheel，必须明确走它而不是报错）。重新定基线按探针分层：解析量精确、
-  定性判定一致、数值落带内、接触主导的只打印。**`accept-p2` / `accept-p3` /
+  落盘与关键帧渲染。**`runPhysicsInTs` 已于 2026-11-16 删除**：它原本是 parity oracle +
+  darwin-x64 的 canonical，而 darwin-x64 同日退役；保留的理由剩下"第二双眼睛"，但物理上的
+  分歧（接触场景 0.000 vs 0.165 mm）无法裁定谁对，按"分歧不能确认问题就不保留"的原则删掉。
+  物理自此**只有一个实现**（Python）。重新定基线按探针分层：解析量精确、定性判定一致、
+  数值落带内、接触主导的只打印。**`accept-p2` / `accept-p3` /
   `accept-sim-verdict` 在 Python 侧重跑全过，未改阈值。**
   顺带发现一个真缺陷（未修）：TS 的碰撞事件从未开启 `ActiveEvents.COLLISION_EVENTS`，
   所以 `接触:` 关键帧标签是死代码；Python 侧照现状镜像，开启它属于行为变更。
@@ -3762,10 +3764,10 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 （rapier Python 绑定有 `add_soft_body` 系列，JS 绑定没有）→ MPM 弹性本构降级为"显式要求才
 做"。**防越界条款**：连续介质问题（流量/死区/灌装/颗粒）的答案必须来自 MPM，不允许用 rapier
 输出冒充；任一方向的越界使用都应说明理由供人审。
-**canonical 现状（2026-10-16 校订）**：物理/运动的 canonical 在 **Python worker**（`physics.ts`
-/`motion.ts` 内的注释 Q2=A），TS 侧 `runPhysicsInTs`/`runMotionInTs` 保留为 parity oracle，
-且只在 **darwin-x64**（锁里没有 `rapier3d` wheel）继续当 canonical。决策谱系见 DECISION-LOG
-2026-09-28 补记与 2026-10-08 各条。
+**canonical 现状（2026-11-16 校订）**：物理/运动的 canonical 在 **Python worker**，且**物理
+已无 TS 实现**——`runPhysicsInTs` 随 darwin-x64 一起于 2026-11-16 退役（它的分歧在接触场景
+无法裁定，`accept-physics-parity` 同时删除）。`runMotionInTs` 仍在，作为运动的 parity oracle。
+决策谱系见 DECISION-LOG 2026-09-28 补记、2026-10-08 各条与 2026-11-16 条目。
 
 **31.5 B-rep / STEP 边界**（2026-10-16 校订）
 - 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy。
