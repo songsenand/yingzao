@@ -633,6 +633,8 @@ export function CadPanel(): React.ReactElement {
    * lost, leaving the dropdown empty forever.
    */
   const [sessionDir, setSessionDir] = useState('');
+  /** Last session identity the panel painted; a switch must not reuse its scene. */
+  const lastSessionRef = useRef('');
   /**
    * What the host says about tool visibility (null until it answers). The
    * panel's own half of this plugin is global while the model's half is
@@ -1057,11 +1059,17 @@ export function CadPanel(): React.ReactElement {
       // Re-read the project every tick: this tab is shared by every session, so a
       // session switch must swap the corpus, not merge it.
       const { switched } = refreshProjectScope();
+      const activeSession = currentSessionId();
+      const sessionChanged = activeSession !== lastSessionRef.current;
+      lastSessionRef.current = activeSession;
       setSessionDir((cur) => {
         const now = sessionCwd();
         return cur === now ? cur : now;
       });
-      if (switched) {
+      // A session switch can share the same cwd (same project, different
+      // conversation). The corpus does not change, but the old conversation's
+      // selected part/version must not stay painted in the viewport.
+      if (switched || sessionChanged) {
         // Nothing from the previous project survives the switch.
         prevIdsRef.current = new Set();
         subjectRef.current = '';
@@ -1098,17 +1106,54 @@ export function CadPanel(): React.ReactElement {
     return off;
   }, []);
 
+  // Keep the session fact independent of the products poller. `tick()` stops
+  // when no project is selected, so waiting for a products callback to populate
+  // `sessionDir` deadlocks the project dropdown: no project -> no payload ->
+  // no cwd -> no project. Poll the cheap local session list instead.
+  useEffect(() => {
+    const sync = () => {
+      refreshProjectScope();
+      const dir = sessionCwd();
+      setSessionDir((cur) => (cur === dir ? cur : dir));
+      const active = currentSessionId();
+      if (active && lastSessionRef.current && active !== lastSessionRef.current) {
+        // Same project, different conversation: the corpus is shared but the
+        // old conversation's part/version must not stay in the viewport.
+        prevIdsRef.current = new Set();
+        subjectRef.current = '';
+        setParts([]);
+        setScene([]);
+        setSubjectId('');
+        setRecordId(null);
+        setRunReport(null);
+        setError(null);
+        setUnregistered([]);
+        setFileSubject('');
+        setFileMeta(null);
+      }
+      lastSessionRef.current = active;
+    };
+    sync();
+    const timer = setInterval(sync, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Discover the corpora under this SESSION's workspace root (read-only).
   // Deliberately keyed on the session cwd, not on the pinned workspace: the
   // list must stay stable while you browse, and a session switch re-runs it.
   useEffect(() => {
     const root = sessionDir;
-    if (!root) return;
     let dead = false;
     // A new root invalidates the previous list: until it answers, "not in the
     // list" must not clear the project the human already selected.
     setWorkspacesReady(false);
-    fetch(`/api/cad/projects?root=${encodeURIComponent(root)}`)
+    // With no resolved session cwd, ask the host anyway: the request header
+    // still carries the session, and an empty dropdown after a remount is worse
+    // than a host-resolved discovery list.
+    const discovery = root
+      ? `/api/cad/projects?root=${encodeURIComponent(root)}`
+      : '/api/cad/projects';
+    fetch(discovery)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: { workspaces?: WorkspaceEntry[] }) => {
         if (dead) return;

@@ -17,7 +17,7 @@ A screen answers "does this violate a declared rule". It never answers "which pr
 - **Threads**: no fine load-bearing printed threads; use a clearance hole + locknut/insert. Coarse (≥1.5mm pitch) is fine.
 - **Fits**: printed mating pairs ±0.15mm loose; "tight" means a fastener/insert, not a tight print.
 - **Bed/time**: check bbox against the bed and the time budget; a part that does not fit is split, and the joint becomes an interface.
-- **Color is not a geometric pass.** `attach_appearance` stores a GLB sidecar; the panel still previews STL.
+- **Color is not a geometric pass.** `cad_part` (`action: "appearance"`) stores a GLB sidecar; the panel still previews STL.
 
 ## Rules
 

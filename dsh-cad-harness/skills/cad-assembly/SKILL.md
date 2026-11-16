@@ -18,7 +18,7 @@ Three questions, once, then record the answers in `assembly.json` → `brief`:
 2. **Allowed processes** — a SET the user permits (FDM / sheet metal / CNC / moulding), multi-select. The user allows the set; **you** pick per part and state which part got which.
 3. **What "working" means** — assembly / motion / strength. This decides which runs the delivery must carry.
 
-Each entry carries `by: "user"` or `by: "assumed"`; `delivery_audit` prints the assumed ones. Unasked assumptions are how a delivery drifts from the brief.
+Each entry carries `by: "user"` or `by: "assumed"`; `cad_deliver` (`action: "audit"`) prints the assumed ones. Unasked assumptions are how a delivery drifts from the brief.
 
 A constraint YOU inferred ("this process can't do X") is a question, not a premise: name what it eliminates before letting it eliminate anything.
 
@@ -30,10 +30,10 @@ A constraint YOU inferred ("this process can't do X") is a question, not a premi
 - **`snap-fit` (卡扣) is a beam screening, not a contact sim.** Declare `lobeCount`, `lobeWidthMm`, `lobeThicknessMm`, `leverArmMm`, `radialInterferenceMm`, `youngModulusMPa`; add `leadAngleDeg`/`frictionCoeff` to get insertion force, `maxStrainPct` for strain, `retentionLoadN` for retention. Default output is L1 (headline + worst + `nextLook`); `detail:"checks"` adds the L2 utilization rows. `forceBudgetN` is the **insertion** budget. Complex undercut/self-contact is outside the domain.
 - **Alignment uses `"check": "coaxial"` with `datum_axis` / `datum_cyl` endpoints.** Two well-chosen points can pass while a bore is tilted; that is not a coaxial check.
 - **A meshing angle is a `pose`, not a whole-part `rotate`.** `"transform": {"pose": {"datum": "<axis>", "angleDeg": -40.1}}` rotates about the part's own datum axis and the datums follow; a whole-part `rotate` swings the D-flat/keyway too.
-- **Write the manifest with `write_assembly`, not a generic write or `run_python`.** It validates child versions, datum endpoints, direct-child ownership and `expectedHash`; it does not compute distances or judge fit. `set_datums → write_assembly → check_assembly` is the contract path.
-- **`validate_assembly` measures; `check_assembly` judges.** `clearanceThreshold` (default 0.75mm) and `adjacencyThresholdMm` are choices — state them. `interferenceEpsilonMm3` (default 1e-3) separates discretisation residual from a clash.
-- **Imported parts have no datums until you declare them.** Use `import_part`'s `datums` or `set_datums` afterwards; `set_datums` in write mode creates a NEW version — point the manifest at the returned id. Stock parts without a version cannot be endpoints.
+- **Write the manifest with `cad_assembly` (`action: "write"`), not a generic write or `cad_python` (`action: "run"`).** It validates child versions, datum endpoints, direct-child ownership and `expectedHash`; it does not compute distances or judge fit. `set_datums → write_assembly → check_assembly` is the contract path.
+- **`cad_assembly` (`action: "validate"`) measures; `cad_assembly` (`action: "check"`) judges.** `clearanceThreshold` (default 0.75mm) and `adjacencyThresholdMm` are choices — state them. `interferenceEpsilonMm3` (default 1e-3) separates discretisation residual from a clash.
+- **Imported parts have no datums until you declare them.** Use `cad_part` (`action: "import"`)'s `datums` or `cad_assembly` (`action: "datums"`) afterwards; `cad_assembly` (`action: "datums"`) in write mode creates a NEW version — point the manifest at the returned id. Stock parts without a version cannot be endpoints.
 - **Undeclared adjacency is a manifest gap, not noise.** Declare the interface or move the parts apart.
-- **`preflight` runs the assembly job and, when `pearl-profile.json` exists, the six-pearl gate.** It still is not a substitute for a deliberate `check_assembly` when you are testing a BOM change; a claim with no fresh check comes back as `claim-without-evidence`.
+- **`cad_deliver` (`action: "preflight"`) runs the assembly job and, when `pearl-profile.json` exists, the six-pearl gate.** It still is not a substitute for a deliberate `cad_assembly` (`action: "check"`) when you are testing a BOM change; a claim with no fresh check comes back as `claim-without-evidence`.
 
 Full document shape, the operator list, threshold details and the traps: `docs/llm/assembly.md`.

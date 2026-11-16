@@ -78,6 +78,12 @@ export function currentSessionId(): string {
   try {
     const state = sessionsList();
     if (!state?.byId) return '';
+    // Some post-crash/remount windows have the retainedBy bit on the row but
+    // no live binding yet. The shipped session list treats that row as on
+    // stage; mirror it before falling back to the binding loop.
+    for (const [id, row] of Object.entries<any>(state.byId)) {
+      if ((row?.retainedBy?.mainView ?? 0) > 0) return id;
+    }
     for (const id of Object.keys(state.byId)) {
       try {
         if (sessionsService?.binding?.(id) === undefined) continue;

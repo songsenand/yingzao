@@ -8,7 +8,7 @@ whenToUse: "Authoring or importing a part, measuring geometry you did not create
 
 Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 
-The hard part is naming the thing you want measured. `list_features` gives coordinates for geometry you did not author.
+The hard part is naming the thing you want measured. `cad_inspect` (`action: "features"`) gives coordinates for geometry you did not author.
 
 ## Import
 
@@ -17,7 +17,7 @@ The hard part is naming the thing you want measured. `list_features` gives coord
 - STEP/3MF/DXF carry units: STEP self-declares, 3MF `model@unit` wins, DXF `$INSUNITS` wins when set. `scale` still works.
 - **Formats: STL / STEP / 3MF / DXF in; IGES and OBJ/OFF are refused** with a conversion route. **A 3MF must contain ONE object**; a slicer "plate of parts" is refused with the body count. DXF needs `depthMm`.
 - **Tessellation is yours for STEP/3MF**: `tolLinear` (mm) / `tolAngular` (rad); lower them only when curvature is the question. STL/DXF ignore them.
-- **Color is not an import format.** A GLB color design is a sidecar via `attach_appearance`; the panel still previews STL.
+- **Color is not an import format.** A GLB color design is a sidecar via `cad_part` (`action: "appearance"`); the panel still previews STL.
 
 ## Modeling
 
