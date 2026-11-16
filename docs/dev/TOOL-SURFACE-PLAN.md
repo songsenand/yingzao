@@ -1,6 +1,6 @@
-# 工具面压缩方案（9 facade，Phase 0 已落盘）
+# 工具面压缩方案（9 facade，Phase 1 原型）
 
-> **状态**：方案 A 已确认（2026-11-16）；Phase 0 已落盘（data-only），Phase 1 待开工。
+> **状态**：方案 A 已确认（2026-11-16）；Phase 0 映射/基线已落盘，Phase 1 `cad_inspect` 原型已通过。
 >
 > **目标**：把模型可见的 CAD 工具从 40+ 压到 8–12 个，同时不丢掉
 > gate、evidence、版本不可变和交付审计。
@@ -12,6 +12,10 @@
 > `src/host/tool-facades.ts`（9 facade / 39 个现有工具，data-only）；
 > `scripts/audit-tool-surface.mjs` 实测 87,064 schema chars ≈ 21,766 tokens；
 > `scripts/accept-tool-surface.mjs` PASS。未注册/删除/修改任何工具行为。
+
+> **Phase 1 状态（2026-11-16）**：`cad_inspect` 原型已落盘（未注册）。
+> 4 个旧 schema 11,594 chars → facade 639 chars（约 -94.5%）；
+> `scripts/accept-cad-inspect-facade.mjs` PASS，catalog/help/未知 action/委派均覆盖。
 
 ## 0. 结论
 
