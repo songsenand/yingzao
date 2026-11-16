@@ -6,7 +6,7 @@
 //
 // Registration is the Phase 2 subject. A real measure needs the shared Python runtime;
 // this acceptance deliberately keeps DSH_CAD_PYTHON=off and reports SKIP, while the
-// dispatcher delegation itself is covered by accept-cad-inspect-facade.
+// dispatcher delegation itself is covered by accept-cad-inspect-surface.
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,7 @@ const home = mkdtempSync(join(tmpdir(), 'cad-inspect-reg-'));
 process.env.DSH_HOME = home;
 process.env.DSH_CAD_PYTHON = 'off';
 
-const { registerCadToolsWithFacades } = await import('../src/host/register-with-facades.ts');
+const { registerCadToolsWithSurfaces } = await import('../src/host/register-with-surfaces.ts');
 const { saveVersion } = await import('../src/host/version.ts');
 const { ensurePart, attachVersion } = await import('../src/host/parts.ts');
 const { projectStores } = await import('../src/host/project.ts');
@@ -38,7 +38,7 @@ function capture(scope) {
     effect: (fn) => { try { fn(); } catch { /* ignore */ } },
     logger: { debug() {}, info() {}, warn() {}, error() {} },
   };
-  registerCadToolsWithFacades(ctx, scope);
+  registerCadToolsWithSurfaces(ctx, scope);
   return tools;
 }
 
@@ -46,17 +46,17 @@ const before = capture(undefined);
 check('default: 39 legacy tools', before.size === 39, String(before.size));
 check('default: cad_inspect is NOT registered', !before.has('cad_inspect'));
 
-const after = capture({ toolFacades: ['inspect'] });
-check('opt-in: 40 tools (39 legacy + facade)', after.size === 40, String(after.size));
+const after = capture({ toolSurfaces: ['inspect'] });
+check('opt-in: 40 tools (39 legacy + surface)', after.size === 40, String(after.size));
 check('opt-in: cad_inspect is registered', after.has('cad_inspect'));
 check('opt-in: four legacy inspect tools remain',
   ['measure', 'list_features', 'scan_attention', 'analyze'].every((name) => after.has(name)));
 
 const cutover = capture({
-  toolFacades: ['inspect'],
+  toolSurfaces: ['inspect'],
   hideLegacy: ['measure', 'list_features', 'scan_attention', 'analyze'],
 });
-check('cutover: 36 tools (39 - 4 old + facade)', cutover.size === 36, String(cutover.size));
+check('cutover: 36 tools (39 - 4 old + surface)', cutover.size === 36, String(cutover.size));
 check('cutover: cad_inspect is registered', cutover.has('cad_inspect'));
 check('cutover: four legacy inspect tools are hidden',
   ['measure', 'list_features', 'scan_attention', 'analyze'].every((name) => !cutover.has(name)));
@@ -71,16 +71,16 @@ check('cutover: net schema is smaller than the 39-tool surface', cutoverChars < 
   `${cutoverChars} vs ${beforeChars}`);
 console.log(`  INFO cutover: ${beforeChars} chars (39) -> ${cutoverChars} chars (36), delta ${cutoverChars - beforeChars}`);
 
-const facade = after.get('cad_inspect');
-const cutFacade = cutover.get('cad_inspect');
-check('cutover facade still catalogs four ops', (await cutFacade.execute({ action: 'catalog' }, {}))?.ops?.length === 4);
-const catalog = await facade.execute({ action: 'catalog' }, {});
-check('facade catalog lists four ops', catalog?.ops?.length === 4, JSON.stringify(catalog).slice(0, 100));
-const help = await facade.execute({ action: 'help', args: { op: 'measure' } }, {});
-check('facade help exposes measure kind', help?.parameters?.some((row) => row.name === 'kind' && row.required));
+const surface = after.get('cad_inspect');
+const cutSurface = cutover.get('cad_inspect');
+check('cutover surface still catalogs four ops', (await cutSurface.execute({ action: 'catalog' }, {}))?.ops?.length === 4);
+const catalog = await surface.execute({ action: 'catalog' }, {});
+check('surface catalog lists four ops', catalog?.ops?.length === 4, JSON.stringify(catalog).slice(0, 100));
+const help = await surface.execute({ action: 'help', args: { op: 'measure' } }, {});
+check('surface help exposes measure kind', help?.parameters?.some((row) => row.name === 'kind' && row.required));
 let unknown = '';
-try { await facade.execute({ action: 'mesure', args: {} }, {}); } catch (error) { unknown = String(error?.message ?? error); }
-check('facade unknown action suggests measure', /did you mean "measure"/.test(unknown), unknown.slice(0, 120));
+try { await surface.execute({ action: 'mesure', args: {} }, {}); } catch (error) { unknown = String(error?.message ?? error); }
+check('surface unknown action suggests measure', /did you mean "measure"/.test(unknown), unknown.slice(0, 120));
 
 // A minimal box version, written directly (no Python / OpenSCAD dependency).
 function boxStl(dx, dy, dz) {
@@ -122,10 +122,10 @@ const version = await saveVersion(stores.store, {
 await attachVersion(stores.partStore, part.id, version);
 
 console.log('  SKIP real measure — the Python runtime is intentionally off here;');
-console.log('       delegation is covered by accept-cad-inspect-facade (fake legacy execute),');
+console.log('       delegation is covered by accept-cad-inspect-surface (fake legacy execute),');
 console.log('       and the default tool surface still uses the old tools until production cutover.');
 
-// Transition accounting: adding the facade necessarily adds one schema until the
+// Transition accounting: adding the surface necessarily adds one schema until the
 // four legacy tools are hidden. Record the delta rather than pretending it is a cut.
 const chars = (definition) => JSON.stringify({
   name: definition.name,
@@ -134,7 +134,7 @@ const chars = (definition) => JSON.stringify({
 }).length;
 const oldChars = ['measure', 'list_features', 'scan_attention', 'analyze']
   .reduce((sum, name) => sum + chars(after.get(name)), 0);
-console.log(`  INFO transition: legacy four=${oldChars} chars; cad_inspect=${chars(facade)} chars; both visible=${oldChars + chars(facade)}`);
+console.log(`  INFO transition: legacy four=${oldChars} chars; cad_inspect=${chars(surface)} chars; both visible=${oldChars + chars(surface)}`);
 
 rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\naccept-cad-inspect-registered: ${failed} FAILURE(S)` : '\naccept-cad-inspect-registered: PASS');

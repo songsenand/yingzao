@@ -1,6 +1,6 @@
-// Thin, data-free facade builder for the 9 job entries.
+// Thin, data-free surface builder for the 9 job entries.
 //
-// A facade owns no lifecycle, no status and no second report. It only:
+// A surface owns no lifecycle, no status and no second report. It only:
 //   1. lists its ops (catalog),
 //   2. explains one op's legacy parameters (help),
 //   3. delegates an op to the already-wrapped legacy tool.
@@ -17,8 +17,8 @@ export interface LegacyTool {
   readonly execute?: (args: unknown, exec: unknown) => unknown;
 }
 
-export interface FacadeOp {
-  /** Action name exposed by the facade. */
+export interface SurfaceOp {
+  /** Action name exposed by the surface. */
   readonly op: string;
   /** Legacy tool that owns the implementation. */
   readonly tool: string;
@@ -26,12 +26,12 @@ export interface FacadeOp {
   readonly summary: string;
 }
 
-export interface FacadeSpec {
+export interface SurfaceSpec {
   readonly name: string;
   readonly description: string;
-  readonly ops: readonly FacadeOp[];
+  readonly ops: readonly SurfaceOp[];
   readonly timeoutMs?: number;
-  /** True when this facade owns a delivery gate. */
+  /** True when this surface owns a delivery gate. */
   readonly gate?: boolean;
 }
 
@@ -82,11 +82,11 @@ function nearest(names: readonly string[], name: string): string | null {
   return bestDistance <= 3 ? best : null;
 }
 
-function missingTools(spec: FacadeSpec, tools: ReadonlyMap<string, LegacyTool>): string[] {
+function missingTools(spec: SurfaceSpec, tools: ReadonlyMap<string, LegacyTool>): string[] {
   return spec.ops.filter((entry) => !tools.has(entry.tool)).map((entry) => entry.tool);
 }
 
-export function buildFacade(spec: FacadeSpec, tools: ReadonlyMap<string, LegacyTool>) {
+export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, LegacyTool>) {
   const names = spec.ops.map((entry) => entry.op);
   for (const name of names) {
     if (RESERVED.has(name)) throw new Error(`${spec.name}: op "${name}" is reserved for catalog/help`);
@@ -126,7 +126,7 @@ export function buildFacade(spec: FacadeSpec, tools: ReadonlyMap<string, LegacyT
 
       if (action === 'catalog') {
         return {
-          facade: spec.name,
+          surface: spec.name,
           gate: Boolean(spec.gate),
           ops: spec.ops.map((entry) => ({
             op: entry.op,

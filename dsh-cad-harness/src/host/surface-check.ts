@@ -1,8 +1,8 @@
-// cad_check: manufacturing/process screens. Thin facade over the seven checks.
+// cad_check: manufacturing/process screens. Thin surface over the seven checks.
 
-import { buildFacade, type FacadeOp, type LegacyTool } from './facade.ts';
+import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
 
-export type CheckOp = FacadeOp;
+export type CheckOp = SurfaceOp;
 
 export const CHECK_OPS: readonly CheckOp[] = [
   { op: 'printability', tool: 'check_printability', summary: 'Wall thickness, overhang area and printability findings for a saved version.' },
@@ -14,8 +14,8 @@ export const CHECK_OPS: readonly CheckOp[] = [
   { op: 'appearance', tool: 'check_appearance', summary: 'Appearance relations across an assembly set.' },
 ];
 
-export function buildCadCheckFacade(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildFacade({
+export function buildCadCheckSurface(tools: ReadonlyMap<string, LegacyTool>) {
+  return buildSurface({
     name: 'cad_check',
     description:
       'One entry point for process/manufacturing checks. action="catalog" lists the ops; '

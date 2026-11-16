@@ -1,8 +1,8 @@
-// cad_simulate: scenario simulations. Thin facade over the five simulate_* tools.
+// cad_simulate: scenario simulations. Thin surface over the five simulate_* tools.
 
-import { buildFacade, type FacadeOp, type LegacyTool } from './facade.ts';
+import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
 
-export type SimulateOp = FacadeOp;
+export type SimulateOp = SurfaceOp;
 
 export const SIMULATE_OPS: readonly SimulateOp[] = [
   { op: 'physics', tool: 'simulate_physics', summary: 'Rigid-body simulation: penetration, toppling, joints and keyframes.' },
@@ -12,8 +12,8 @@ export const SIMULATE_OPS: readonly SimulateOp[] = [
   { op: 'stress', tool: 'simulate_stress', summary: 'Static linear-elastic stress with a declared load case.' },
 ];
 
-export function buildCadSimulateFacade(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildFacade({
+export function buildCadSimulateSurface(tools: ReadonlyMap<string, LegacyTool>) {
+  return buildSurface({
     name: 'cad_simulate',
     description:
       'One entry point for simulations. action="catalog" lists the ops; '

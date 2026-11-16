@@ -1,9 +1,9 @@
 // cad_inspect: one job entry for geometry truth about a saved version.
-// All logic lives in the shared facade builder; this file is only the op table.
+// All logic lives in the shared surface builder; this file is only the op table.
 
-import { buildFacade, type FacadeOp, type LegacyTool } from './facade.ts';
+import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
 
-export type InspectOp = FacadeOp;
+export type InspectOp = SurfaceOp;
 
 export const INSPECT_OPS: readonly InspectOp[] = [
   { op: 'measure', tool: 'measure', summary: 'Dimensions, volume, wall thickness, gap, section and angle of one saved version.' },
@@ -12,8 +12,8 @@ export const INSPECT_OPS: readonly InspectOp[] = [
   { op: 'analyze', tool: 'analyze', summary: 'Experimental point map: thin walls, corners and optional stress peaks.' },
 ];
 
-export function buildCadInspectFacade(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildFacade({
+export function buildCadInspectSurface(tools: ReadonlyMap<string, LegacyTool>) {
+  return buildSurface({
     name: 'cad_inspect',
     description:
       'One entry point for geometry truth about a saved version. '

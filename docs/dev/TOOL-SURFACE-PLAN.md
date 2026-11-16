@@ -1,23 +1,24 @@
-# 工具面压缩方案（9 facade，Phase 3d 全量 cutover 探针）
+# 工具面压缩方案（9 个作业面 / surface，Phase 3d 全量 cutover 探针）
 
-> **状态**：方案 A 已确认（2026-11-16）；Phase 0/1/2 已落盘，Phase 3 的 36 工具 cutover 探针通过。
+> **状态**：方案 A 已确认（2026-11-16）；Phase 0–3d 已落盘，9 个 surface 的 cutover 探针通过。
+> **术语（2026-11-16）**：代码与当前文档统一用 `surface` / “作业面”；历史 DECISION-LOG 保留原文。
 >
 > **目标**：把模型可见的 CAD 工具从 40+ 压到 8–12 个，同时不丢掉
 > gate、evidence、版本不可变和交付审计。
 >
 > **参照**：[sixtysevenlf/dsh-blender-plugin](https://github.com/sixtysevenlf/dsh-blender-plugin)
-> 的 6 工具 facade + 228-op catalog 结构（`docs/architecture.md`、`src/tools/op/index.ts`）。
+> 的 6 工具 surface + 228-op catalog 结构（`docs/architecture.md`、`src/tools/op/index.ts`）。
 
 > **Phase 0 状态（2026-11-16）**：已落盘映射与测量。
-> `src/host/tool-facades.ts`（9 facade / 39 个现有工具，data-only）；
+> `src/host/tool-surfaces.ts`（9 surface / 39 个现有工具，data-only）；
 > `scripts/audit-tool-surface.mjs` 实测 87,064 schema chars ≈ 21,766 tokens；
 > `scripts/accept-tool-surface.mjs` PASS。未注册/删除/修改任何工具行为。
 
 > **Phase 1 状态（2026-11-16）**：`cad_inspect` 原型已落盘（未注册）。
-> 4 个旧 schema 11,594 chars → facade 549 chars（约 -95.3%）；
-> `scripts/accept-cad-inspect-facade.mjs` PASS，catalog/help/未知 action/委派均覆盖。
+> 4 个旧 schema 11,594 chars → surface 549 chars（约 -95.3%）；
+> `scripts/accept-cad-inspect-surface.mjs` PASS，catalog/help/未知 action/委派均覆盖。
 
-> **Phase 2 状态（2026-11-16）**：`toolFacades: ["inspect"]` 是 opt-in，默认关闭。
+> **Phase 2 状态（2026-11-16）**：`toolSurfaces: ["inspect"]` 是 opt-in，默认关闭。
 > 默认 39 个旧工具不变；开启后 40 个（旧 39 + `cad_inspect`），用于对照。
 > `accept-cad-inspect-registered.mjs` PASS；真实 `measure` 因本机 runtime 受限显式 SKIP，
 > 委派由 Phase 1 的 fake legacy 覆盖。过渡期两者同时可见，schema 从 11,594 增到 12,143 chars，
@@ -32,24 +33,24 @@
 > check 7 ops / simulate 5 ops，cutover 29 工具，87,064 → 49,805 chars（-37,259，约 -42.8%）。
 > `accept-cad-check-simulate.mjs` PASS；仍未注册到生产默认。
 
-> **Phase 3c 状态（2026-11-16）**：inspect + check + simulate 三个 facade 同时 cutover：
+> **Phase 3c 状态（2026-11-16）**：inspect + check + simulate 三个 surface 同时 cutover：
 > 26 工具，87,064 → 38,760 chars（-48,304，约 -55.5%）；
-> 旧 16 个工具隐藏，三个 facade 保留。仍为 opt-in，生产默认 39。
+> 旧 16 个工具隐藏，三个 surface 保留。仍为 opt-in，生产默认 39。
 
-> **Phase 3d 状态（2026-11-16）**：9 个 facade 全部落盘；opt-in 48 工具，
+> **Phase 3d 状态（2026-11-16）**：9 个 surface 全部落盘；opt-in 48 工具，
 > 全量 cutover 后 **9 工具 / 3,868 chars**（87,064 → 3,868，-83,196，约 -95.6%）。
-> `accept-cad-all-facades.mjs` PASS；`cad_deliver` 仍标记为顶层 gate。默认生产仍 39。
+> `accept-cad-all-surfaces.mjs` PASS；`cad_deliver` 仍标记为顶层 gate。默认生产仍 39。
 
 > **2026-11-16 方向修正（用户拍板）**：保留 **9 个作业面**，不做“数据域 4 工具”。
 > 理由不是“9 更少”，而是 39→9 已经把 87 KB 降到约 6 KB（按 `cad_inspect` 实测外推），
 > 9→4 只能再省约 2–3 KB（约 0.5–0.8k tokens），却把 20+ 个 action 塞进 `cad_artifact`，
 > 增加跨域歧义；BOM/ICD 是 subject/context，不是工具命名空间。
-> “删掉 facade 作为独立架构层”仍成立：9 个入口只是薄适配器 + 一个 catalog，
+> “删掉 surface 作为独立架构层”仍成立：9 个入口只是薄适配器 + 一个 catalog，
 > 不拥有状态、不拥有生命周期。
 
 ## 0. 结论
 
-推荐 **方案 A：按“作业面”做 9 个 facade，内部继续用 typed op 校验**。
+推荐 **方案 A：按“作业面”做 9 个 surface，内部继续用 typed op 校验**。
 
 不建议直接照搬 Blender 插件的 6 个工具：
 
@@ -175,7 +176,7 @@ output: ANY_SCHEMA
 
 ### P4：按需展开，不按需猜
 
-每个 facade 提供：
+每个 surface 提供：
 
 ```text
 action="catalog"   列动作
@@ -200,27 +201,27 @@ skill 只写跨动作的工作流，不复制全部参数表。
 - **BOM**：`assembly/assembly.json` 的零件、版本、装配位姿、角色、制造策略；
 - **ICD**：同一 manifest 里的接口、datum、公差、运动/强度声明；
 - **证据图**：versions / runs / claims / delivery audit 都引用这套 BOM/ICD；
-- **交付计划**：`deliver` 从 BOM/ICD/claims/run 图派生，而不是由 facade 发明流程。
+- **交付计划**：`deliver` 从 BOM/ICD/claims/run 图派生，而不是由 surface 发明流程。
 
-facade 只回答“这个动作怎么调”，不回答“现在该走到哪一步”。生命周期和判据仍然来自
+surface 只回答“这个动作怎么调”，不回答“现在该走到哪一步”。生命周期和判据仍然来自
 BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，也是本轮抽象更稳的原因。
 
 但 BOM/ICD 不是免死金牌：
 
-1. 单零件任务可以没有完整 BOM/ICD，facade 必须降级，而不是强制先写装配；
-2. BOM/ICD 只提供数据，不替 facade 做执行/状态管理；
-3. 如果 facade 自己新增 `CadStatus`、repair loop 或第二份契约，它仍然会珍珠化。
+1. 单零件任务可以没有完整 BOM/ICD，surface 必须降级，而不是强制先写装配；
+2. BOM/ICD 只提供数据，不替 surface 做执行/状态管理；
+3. 如果 surface 自己新增 `CadStatus`、repair loop 或第二份契约，它仍然会珍珠化。
 
-**红线**：每个 facade action 必须能指向一个 BOM/ICD 锚点或一个已有 run/evidence；
-没有锚点的“便利状态”不进入 facade。
+**红线**：每个 surface action 必须能指向一个 BOM/ICD 锚点或一个已有 run/evidence；
+没有锚点的“便利状态”不进入 surface。
 
 ## 3. 候选方案
 
-### 方案 A（推荐）：9 个作业面 facade
+### 方案 A（推荐）：9 个作业面 surface
 
 把现有 39 个 base 工具按“作业面”分组：
 
-| facade | 覆盖的旧工具 | 说明 |
+| surface | 覆盖的旧工具 | 说明 |
 |---|---|---|
 | `cad_session` | `project_info`、`init_project`、`bind_project`、`request_review` | 项目选择、人类审阅队列 |
 | `cad_part` | `create_part`、`generate_part`、`import_part`、`merge_parts`、`set_part_role`、`attach_appearance` | 零件生成/导入/合并/角色/外观 |
@@ -260,15 +261,15 @@ BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，�
 **结论（2026-11-16）：保留 A 的 9 个作业面；不做数据域 4。**
 `cad_inspect + cad_check + cad_simulate` 不再合并为 `cad_op`；9 已经是当前收益/风险拐点。
 
-## 4. Facade 契约
+## 4. Surface 契约
 
 ### 4.1 通用参数
 
-每个 facade 只暴露少量通用字段：
+每个 surface 只暴露少量通用字段：
 
 ```ts
 {
-  action: string,       // 该 facade 的动作
+  action: string,       // 该 surface 的动作
   args?: json,          // 动作参数
   project?: string,     // 可选，显式项目路径
   versionId?: string,   // 可选，显式版本
@@ -276,14 +277,14 @@ BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，�
 }
 ```
 
-具体参数由 `args` 承载，dispatcher 在 host 侧按 `facade + action` 校验。
+具体参数由 `args` 承载，dispatcher 在 host 侧按 `surface + action` 校验。
 
 ### 4.2 catalog / help
 
-每个 facade 必须支持：
+每个 surface 必须支持：
 
 ```text
-action="catalog"   → 该 facade 的动作列表（名字、一句话、是否 gate、是否需要会话）
+action="catalog"   → 该 surface 的动作列表（名字、一句话、是否 gate、是否需要会话）
 action="help"      → 单个动作的参数、输出、示例、常见错误
 ```
 
@@ -304,7 +305,7 @@ cad_check({ action: "printability", args: { versionId: "v003", profileIds: ["fdm
 
 ```text
 value
-  → validateOutput(facade, op, value)
+  → validateOutput(surface, op, value)
   → 失败：host 侧错误，而不是把坏形状发给模型
   → 成功：再包成统一信封
 ```
@@ -325,7 +326,7 @@ received: {...}
 并加：
 
 - `did_you_mean`：未知 action/op 时给出最近的名字；
-- `facade` / `action` 两级命名；
+- `surface` / `action` 两级命名；
 - 不再出现“没有这个工具”这种无法定位的错误。
 
 ## 5. Gate 与 evidence
@@ -371,16 +372,16 @@ pearl_run（deprecated）
 
 ### 6.2 tool-groups 的语义变化
 
-当前 `tool-groups.ts` 按**工具名**分组；facade 之后一个工具会跨多个组，
+当前 `tool-groups.ts` 按**工具名**分组；surface 之后一个工具会跨多个组，
 不能再用“工具名”表达“只给检查、不给仿真”。
 
 两个选项：
 
-1. **先只按 facade 分组**：sacrifice 细粒度，保证行为简单；
-2. **facade + action 二级 scope**：`cad_check` 的 action 允许列表由 host 控制。
+1. **先只按 surface 分组**：sacrifice 细粒度，保证行为简单；
+2. **surface + action 二级 scope**：`cad_check` 的 action 允许列表由 host 控制。
 
 建议第一版不做二级 scope；`toolScope` 继续只在“CAD 会话 / 非 CAD 会话”
-之间切换。等 facade 稳定后再加 action scope。
+之间切换。等 surface 稳定后再加 action scope。
 
 ### 6.3 迁移顺序
 
@@ -392,9 +393,9 @@ pearl_run（deprecated）
 
 **Phase 1：dispatcher + `cad_inspect` 试点**
 
-- 引入 facade 注册和 catalog/help；
+- 引入 surface 注册和 catalog/help；
 - 先迁 `measure` / `list_features` / `scan_attention` / `analyze`；
-- 不删旧工具，只在新 facade 内部调用旧实现；
+- 不删旧工具，只在新 surface 内部调用旧实现；
 - 对比输出、错误、token。
 
 **Phase 2：`cad_check` + `cad_simulate`**
@@ -428,7 +429,7 @@ pearl_run（deprecated）
 
 - `accept-tool-surface.mjs`
   - 顶层工具数 = 9（或选定的目标）；
-  - 每个 facade 有 `catalog` / `help`；
+  - 每个 surface 有 `catalog` / `help`；
   - 39 个旧工具全部有映射；
   - 顶层 schema 字节数低于预算（建议 < 15 KB）。
 - `accept-op-catalog.mjs`
@@ -441,7 +442,7 @@ pearl_run（deprecated）
 
 - `accept-tool-boundary`：所有 op 的代表性调用；
 - `accept-tool-contracts`：参数描述、输出 schema；
-- `accept-tool-groups`：facade 分组完整；
+- `accept-tool-groups`：surface 分组完整；
 - `accept-p0` / `accept-p1` / `accept-p3`；
 - `accept:preview` 全量；
 - `rehearse:preview`。
@@ -453,17 +454,17 @@ pearl_run（deprecated）
 | 模型不会用 catalog | 选错 op / 多一次调用 | catalog 返回示例；skill 写“先 catalog/help”；错误给 did_you_mean |
 | 输出契约退化 | evidence 形状变松 | dispatcher 按 op 校验，不用 ANY_SCHEMA |
 | gate 被藏起来 | 交付门被跳过 | `cad_deliver` 保持顶层 |
-| tool-scope 语义破坏 | 非 CAD 会话看到/看不到错误工具 | 第一版只按 facade 分组；后续再做 action scope |
+| tool-scope 语义破坏 | 非 CAD 会话看到/看不到错误工具 | 第一版只按 surface 分组；后续再做 action scope |
 | 迁移破坏测试/skill | CI 红、旧提示失效 | 分阶段、旧名映射、CHANGELOG |
 | token 没降反升 | catalog/help 调用成本 | 先量 baseline，再决定 A/B；目标用 audit 脚本验证 |
-| “上帝工具”难维护 | 一个 facade 太大 | 每个 facade 一个模块，dispatcher 只做路由/校验 |
+| “上帝工具”难维护 | 一个 surface 太大 | 每个 surface 一个模块，dispatcher 只做路由/校验 |
 
 ## 9. 需要确认的决策
 
 1. **目标形态**：已确认 A（9 个）；数据域 4 / 6 工具不做。
 2. **gate 是否保持顶层**：是否同意 `cad_deliver` 单独存在？
 3. **兼容策略**：0.1.0-preview 直接 breaking，还是保留一个 minor 的旧名 alias？
-4. **`toolScope`**：第一版是否只按 facade 分组，不做 action 级 scope？
+4. **`toolScope`**：第一版是否只按 surface 分组，不做 action 级 scope？
 5. **`cad_python`**：是否默认暴露？是否只允许分析、不允许写 evidence？
 6. **时间**：先做 Phase 0–1（可回退），还是一次做到 Phase 4？
 

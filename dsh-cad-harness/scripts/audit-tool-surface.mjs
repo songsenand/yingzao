@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Phase 0 of the tool-surface compression: measure the CURRENT catalogue and
-// check the frozen 9-facade mapping. This script must not change behaviour.
+// check the frozen 9-surface mapping. This script must not change behaviour.
 //
 //   node scripts/audit-tool-surface.mjs
 //   node scripts/audit-tool-surface.mjs --json
@@ -21,7 +21,7 @@ process.env.DSH_HOME = home;
 process.env.DSH_CAD_PYTHON = process.env.DSH_CAD_PYTHON || 'off';
 
 const { registerCadTools } = await import('../src/host/tools.ts');
-const { CAD_FACADE_IDS, CAD_FACADES, facadeCoverage } = await import('../src/host/tool-facades.ts');
+const { CAD_SURFACE_IDS, CAD_SURFACES, surfaceCoverage } = await import('../src/host/tool-surfaces.ts');
 
 const tools = new Map();
 const connection = { fetch: { register: () => (() => {}) } };
@@ -51,21 +51,21 @@ const rows = [...tools.entries()].map(([name, definition]) => {
   });
   return {
     name,
-    facade: CAD_FACADE_IDS.find((id) => CAD_FACADES[id].members.includes(name)) ?? null,
+    surface: CAD_SURFACE_IDS.find((id) => CAD_SURFACES[id].members.includes(name)) ?? null,
     descriptionChars: String(definition.description ?? '').length,
     schemaChars: schema.length,
   };
 }).sort((a, b) => b.schemaChars - a.schemaChars);
 
 const registered = rows.map((row) => row.name);
-const coverage = facadeCoverage(registered);
+const coverage = surfaceCoverage(registered);
 const totalChars = rows.reduce((sum, row) => sum + row.schemaChars, 0);
-const byFacade = CAD_FACADE_IDS.map((id) => {
-  const members = rows.filter((row) => row.facade === id);
+const bySurface = CAD_SURFACE_IDS.map((id) => {
+  const members = rows.filter((row) => row.surface === id);
   return {
     id,
-    title: CAD_FACADES[id].title,
-    gate: Boolean(CAD_FACADES[id].gate),
+    title: CAD_SURFACES[id].title,
+    gate: Boolean(CAD_SURFACES[id].gate),
     tools: members.length,
     schemaChars: members.reduce((sum, row) => sum + row.schemaChars, 0),
     names: members.map((row) => row.name),
@@ -78,32 +78,32 @@ if (JSON_OUT) {
   console.log(JSON.stringify({
     ok: !failed,
     tools: rows.length,
-    facades: CAD_FACADE_IDS.length,
+    surfaces: CAD_SURFACE_IDS.length,
     schemaChars: totalChars,
     approxTokens: Math.round(totalChars / 4),
     coverage,
-    byFacade,
+    bySurface,
     largest: rows.slice(0, 10),
   }, null, 2));
 } else {
   console.log(`tools: ${rows.length}`);
-  console.log(`facades: ${CAD_FACADE_IDS.length}`);
+  console.log(`surfaces: ${CAD_SURFACE_IDS.length}`);
   console.log(`schema chars: ${totalChars} (~${Math.round(totalChars / 4)} tokens, chars/4)`);
   console.log('');
-  console.log('facade       tools  schemaKB');
-  for (const facade of byFacade) {
-    console.log(`${facade.id.padEnd(12)} ${String(facade.tools).padStart(5)}  ${(facade.schemaChars / 1024).toFixed(1).padStart(8)}`);
+  console.log('surface       tools  schemaKB');
+  for (const surface of bySurface) {
+    console.log(`${surface.id.padEnd(12)} ${String(surface.tools).padStart(5)}  ${(surface.schemaChars / 1024).toFixed(1).padStart(8)}`);
   }
   console.log('');
   console.log('largest tools:');
   for (const row of rows.slice(0, 10)) {
-    console.log(`  ${row.name.padEnd(24)} ${(row.schemaChars / 1024).toFixed(1).padStart(6)} KB  ${row.facade ?? 'MISSING'}`);
+    console.log(`  ${row.name.padEnd(24)} ${(row.schemaChars / 1024).toFixed(1).padStart(6)} KB  ${row.surface ?? 'MISSING'}`);
   }
   if (failed) {
     console.log('');
-    if (coverage.missing.length) console.log(`MISSING from facade table: ${coverage.missing.join(', ')}`);
+    if (coverage.missing.length) console.log(`MISSING from surface table: ${coverage.missing.join(', ')}`);
     if (coverage.absent.length) console.log(`IN TABLE but not registered: ${coverage.absent.join(', ')}`);
-    if (coverage.duplicates.length) console.log(`DUPLICATE facade members: ${coverage.duplicates.join(', ')}`);
+    if (coverage.duplicates.length) console.log(`DUPLICATE surface members: ${coverage.duplicates.join(', ')}`);
   }
 }
 

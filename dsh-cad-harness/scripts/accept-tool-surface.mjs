@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Phase 0 acceptance for the 9-facade migration ledger.
+// Phase 0 acceptance for the 9-surface migration ledger.
 //
 // It does not require a live session, CAD engine or Python runtime: the audit
 // captures the registered definitions with a fake ctx and compares them with
-// src/host/tool-facades.ts. A failure means the migration table drifted.
+// src/host/tool-surfaces.ts. A failure means the migration table drifted.
 
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -25,19 +25,19 @@ check('audit runs', run.status === 0, (run.stderr ?? '').trim().slice(0, 160));
 let report = null;
 try { report = JSON.parse(run.stdout); } catch { /* checked below */ }
 check('audit JSON parses', report !== null);
-check('9 facades declared', report?.facades === 9, String(report?.facades));
+check('9 surfaces declared', report?.surfaces === 9, String(report?.surfaces));
 check('39 current tools captured', report?.tools === 39, String(report?.tools));
-check('every registered tool is in exactly one facade',
+check('every registered tool is in exactly one surface',
   report?.coverage?.missing?.length === 0
   && report?.coverage?.absent?.length === 0
   && report?.coverage?.duplicates?.length === 0,
   JSON.stringify(report?.coverage));
-check('every facade is non-empty',
-  (report?.byFacade ?? []).length === 9 && (report?.byFacade ?? []).every((f) => f.tools > 0));
+check('every surface is non-empty',
+  (report?.bySurface ?? []).length === 9 && (report?.bySurface ?? []).every((f) => f.tools > 0));
 check('deliver is a top-level gate',
-  (report?.byFacade ?? []).find((f) => f.id === 'deliver')?.gate === true);
-check('simulate is the largest current facade',
-  (report?.byFacade ?? []).slice().sort((a, b) => b.schemaChars - a.schemaChars)[0]?.id === 'simulate');
+  (report?.bySurface ?? []).find((f) => f.id === 'deliver')?.gate === true);
+check('simulate is the largest current surface',
+  (report?.bySurface ?? []).slice().sort((a, b) => b.schemaChars - a.schemaChars)[0]?.id === 'simulate');
 check('schema is measured, not assumed',
   Number(report?.schemaChars) > 0 && Number(report?.approxTokens) > 0,
   String(report?.schemaChars));

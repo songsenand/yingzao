@@ -10,10 +10,10 @@ import { join } from 'node:path';
 const home = mkdtempSync(join(tmpdir(), 'cad-check-sim-'));
 process.env.DSH_HOME = home;
 process.env.DSH_CAD_PYTHON = 'off';
-const { registerCadToolsWithFacades } = await import('../src/host/register-with-facades.ts');
-const { CHECK_OPS } = await import('../src/host/facade-check.ts');
-const { SIMULATE_OPS } = await import('../src/host/facade-simulate.ts');
-const { INSPECT_OPS } = await import('../src/host/facade-inspect.ts');
+const { registerCadToolsWithSurfaces } = await import('../src/host/register-with-surfaces.ts');
+const { CHECK_OPS } = await import('../src/host/surface-check.ts');
+const { SIMULATE_OPS } = await import('../src/host/surface-simulate.ts');
+const { INSPECT_OPS } = await import('../src/host/surface-inspect.ts');
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -31,7 +31,7 @@ function capture(scope) {
     effect: (fn) => { try { fn(); } catch { /* ignore */ } },
     logger: { debug() {}, info() {}, warn() {}, error() {} },
   };
-  registerCadToolsWithFacades(ctx, scope);
+  registerCadToolsWithSurfaces(ctx, scope);
   return tools;
 }
 const chars = (map) => [...map.values()].reduce((sum, definition) => sum + JSON.stringify({
@@ -42,10 +42,10 @@ const chars = (map) => [...map.values()].reduce((sum, definition) => sum + JSON.
 
 const base = capture(undefined);
 check('default: 39 tools', base.size === 39, String(base.size));
-const added = capture({ toolFacades: ['check', 'simulate'] });
-check('opt-in: 41 tools (39 + 2 facades)', added.size === 41, String(added.size));
-check('check facade registered', added.has('cad_check'));
-check('simulate facade registered', added.has('cad_simulate'));
+const added = capture({ toolSurfaces: ['check', 'simulate'] });
+check('opt-in: 41 tools (39 + 2 surfaces)', added.size === 41, String(added.size));
+check('check surface registered', added.has('cad_check'));
+check('simulate surface registered', added.has('cad_simulate'));
 
 const checkDef = added.get('cad_check');
 const simulateDef = added.get('cad_simulate');
@@ -66,27 +66,27 @@ const hidden = [
   ...CHECK_OPS.map((entry) => entry.tool),
   ...SIMULATE_OPS.map((entry) => entry.tool),
 ];
-const cutover = capture({ toolFacades: ['check', 'simulate'], hideLegacy: hidden });
-check('cutover: 29 tools (39 - 12 old + 2 facades)', cutover.size === 29, String(cutover.size));
+const cutover = capture({ toolSurfaces: ['check', 'simulate'], hideLegacy: hidden });
+check('cutover: 29 tools (39 - 12 old + 2 surfaces)', cutover.size === 29, String(cutover.size));
 check('cutover: old check/simulate tools hidden', hidden.every((name) => !cutover.has(name)));
 const before = chars(base);
 const after = chars(cutover);
 check('cutover: net schema is smaller', after < before, `${after} vs ${before}`);
 console.log(`  INFO check+simulate cutover: ${before} chars (39) -> ${after} chars (29), delta ${after - before}`);
-check('cutover: both facades remain', cutover.has('cad_check') && cutover.has('cad_simulate'));
+check('cutover: both surfaces remain', cutover.has('cad_check') && cutover.has('cad_simulate'));
 
 const allHidden = [...INSPECT_OPS, ...CHECK_OPS, ...SIMULATE_OPS].map((entry) => entry.tool);
 const three = capture({
-  toolFacades: ['inspect', 'check', 'simulate'],
+  toolSurfaces: ['inspect', 'check', 'simulate'],
   hideLegacy: allHidden,
 });
-check('three facades: 26 tools (39 - 16 old + 3)', three.size === 26, String(three.size));
-check('three facades: all three remain',
+check('three surfaces: 26 tools (39 - 16 old + 3)', three.size === 26, String(three.size));
+check('three surfaces: all three remain',
   ['cad_inspect', 'cad_check', 'cad_simulate'].every((name) => three.has(name)));
-check('three facades: old 16 are hidden', allHidden.every((name) => !three.has(name)));
-check('three facades: net schema is smaller than check+sim alone', chars(three) < after,
+check('three surfaces: old 16 are hidden', allHidden.every((name) => !three.has(name)));
+check('three surfaces: net schema is smaller than check+sim alone', chars(three) < after,
   `${chars(three)} vs ${after}`);
-console.log(`  INFO three facades: ${before} chars (39) -> ${chars(three)} chars (26), delta ${chars(three) - before}`);
+console.log(`  INFO three surfaces: ${before} chars (39) -> ${chars(three)} chars (26), delta ${chars(three) - before}`);
 
 rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\naccept-cad-check-simulate: ${failed} FAILURE(S)` : '\naccept-cad-check-simulate: PASS');

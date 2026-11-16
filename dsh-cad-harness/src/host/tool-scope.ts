@@ -72,8 +72,8 @@ export interface ToolScopeConfig {
    * `DSH_CAD_PYTHON` overrides this value.
    */
   pythonRuntime?: 'auto' | 'eager' | 'off' | 'system';
-  /** Opt-in Phase-2 facade prototypes; production leaves this unset. */
-  toolFacades?: readonly string[];
+  /** Opt-in Phase-2 surface prototypes; production leaves this unset. */
+  toolSurfaces?: readonly string[];
   /** Phase-3 cutover probe: legacy names to stop exposing (not production yet). */
   hideLegacy?: readonly string[];
   /** Declaration source ①: job groups for ALL CAD sessions. Absent = whole catalog. */
