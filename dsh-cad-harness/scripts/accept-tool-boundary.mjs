@@ -420,6 +420,49 @@ for (const row of rows) {
     detail = String(error?.message ?? error);
   }
   check(fine, `${row.tool}: fixture call returns the expected shape`, fine ? detail : `unexpected: ${detail}`);
+
+  // The model never calls the legacy name: prove the SURFACE path returns the same
+  // value for this op. The surface half above proves every op is wired to the right
+  // validator; this proves the value crosses the extra layer unchanged.
+  const meta = tools.get(row.tool)?.surface;
+  if (!meta) {
+    check(false, `${row.tool}: declares the surface that exposes it`, 'no surface metadata');
+    continue;
+  }
+  const viaSurface = await attemptSurface(meta.id, { action: meta.action, args: row.args });
+  // Same CONTRACT, not byte equality: most of these tools commit a run on every
+  // call, so runId/duration differ between the two executions (and a write tool
+  // would create a second version). The delegation is a direct call in surface.ts,
+  // so the meaningful assertions are "it returns the op's shape" and "the row's
+  // semantic check still holds" — a wrong routing fails both.
+  const keysOf = (value) => Object.keys(value ?? {}).sort().join(',');
+  let sameShape = false;
+  let assertOk = false;
+  let why = '';
+  if (!viaSurface.ok) {
+    why = `surface refused: ${(viaSurface.error ?? '').split('\n')[0].slice(0, 130)}`;
+  } else {
+    sameShape = keysOf(viaSurface.value) === keysOf(got.value);
+    try { assertOk = !row.assert || Boolean(row.assert(viaSurface.value)); } catch { assertOk = false; }
+    if (!sameShape) why = `keys differ: ${keysOf(viaSurface.value)} vs ${keysOf(got.value)}`;
+    else if (!assertOk) why = 'the op shape check failed on the surface value';
+  }
+  check(sameShape && assertOk, `${meta.id}.${meta.action}: the surface returns the same shape as ${row.tool}`, why);
+}
+
+// The agent's most common surface mistake is a wrong action/op name. The refusal
+// must list what IS accepted (the catalog is the vocabulary), not merely fail.
+{
+  const catalog = await attemptSurface('cad_inspect', { action: 'catalog' });
+  const ops = (catalog.value?.ops ?? []).map((entry) => entry.op);
+  const badAction = await attemptSurface('cad_inspect', { action: 'nope' });
+  check(!badAction.ok && ops.length > 0 && ops.every((op) => (badAction.error ?? '').includes(op)),
+    'cad_inspect: an unknown action lists every accepted action',
+    (badAction.error ?? '').split('\n')[0].slice(0, 130));
+  const badHelp = await attemptSurface('cad_inspect', { action: 'help', args: { op: 'nope' } });
+  check(!badHelp.ok && ops.every((op) => (badHelp.error ?? '').includes(op)),
+    'cad_inspect: help for an unknown op lists the real ops',
+    (badHelp.error ?? '').split('\n')[0].slice(0, 130));
 }
 
 // A tool that returned a value must have passed the output guard too; the guard

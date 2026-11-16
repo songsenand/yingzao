@@ -797,15 +797,15 @@ check('an open mesh carries the watertight warning into its findings',
     !/"(rank|score|recommend|recommended|best)"\s*:/.test(surface));
 }
 check('the skill set carries the delivery-discipline section (green numbers ≠ done)',
-  /## Delivery\b/.test(skillTree) && /check_printability/.test(skillTree));
-// Every tool the agent can call must be NAMED in the manual. This replaces a
-// literal "Fifteen tools" that had gone stale: it asserted a number from two
-// catalog generations ago, so it failed for a reason unrelated to what it was
-// guarding (the 2026-10-12 catalog is 20). Naming is the invariant that actually
-// matters — a tool the router table never mentions is a tool the model will not
-// reach for.
-const undocumented = [...tools.keys()].filter((name) => !new RegExp(`\\b${name}\\b`).test(skillNow));
-check(`SKILL.md names every registered CAD tool (${tools.size} of them)`, undocumented.length === 0, undocumented.join(', '));
+  /## Delivery\b/.test(skillTree) && /printability/.test(skillTree));
+// The model calls SURFACES, not legacy tools. "Documented" therefore means the
+// surface that exposes the tool is in the manual; the catalog() carries the ops.
+const noSurface = [...tools.entries()].filter(([, def]) => !def.surface?.id).map(([name]) => name);
+check('every registered tool is reachable through a declared surface', noSurface.length === 0, noSurface.join(', '));
+const surfaceIds = [...new Set([...tools.values()].map((def) => def.surface?.id).filter(Boolean))];
+const undocumented = surfaceIds.filter((id) => !new RegExp(`\\b${id}\\b`).test(skillNow));
+check(`SKILL.md names every surface the model can call (${surfaceIds.length} of them)`,
+  undocumented.length === 0, undocumented.join(', '));
 const hostSrc = await readFile(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'host', 'tools.ts'), 'utf8');
 check('validate_assembly finalize states the delivery gate (eyes + printability before done)',

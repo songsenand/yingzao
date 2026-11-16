@@ -46,7 +46,37 @@ const contract = new Map();
   }
 }
 const toolNames = new Set(contract.keys());
-check(toolNames.size === 43, 'the contract sheet lists 43 tools', String(toolNames.size));
+
+// The territory is the LIVE registry, not a literal. After the measure merge and the
+// 9-surface cutover a hard-coded 43 kept passing while testing the old world; importing
+// the registry also proves every op declares the surface production exposes — a tool
+// without one is unreachable to the model no matter what the sheet says.
+const defs = new Map();
+{
+  const { registerCadTools } = await import('../src/host/tools.ts');
+  registerCadTools({
+    tools: { register: (definition) => { defs.set(definition.name, definition); return () => {}; } },
+    attachments: { saveImages: async () => [] },
+    reflect: { get: () => undefined },
+    on: () => {},
+  });
+}
+const registry = new Set(defs.keys());
+check(registry.size === 39, 'the registry exposes 39 ops', String(registry.size));
+check(toolNames.size === registry.size && [...registry].every((n) => toolNames.has(n)),
+  'the contract sheet lists exactly the registered ops',
+  `${toolNames.size} sheet vs ${registry.size} registered`);
+const surfaceOf = (name) => defs.get(name)?.surface;
+const missingSurface = [...registry].filter((n) => !surfaceOf(n)?.id || !surfaceOf(n)?.action);
+check(missingSurface.length === 0, 'every op declares the surface that exposes it',
+  missingSurface.join(', ') || `(${registry.size} ops)`);
+const opsBySurface = new Map();
+for (const name of registry) {
+  const id = surfaceOf(name)?.id;
+  if (id) opsBySurface.set(id, (opsBySurface.get(id) ?? 0) + 1);
+}
+check(opsBySurface.size === 9, 'nine surfaces cover every op',
+  [...opsBySurface].map(([id, n]) => `${id}:${n}`).join(', '));
 
 // ── the map: the five skills ───────────────────────────────────────────────
 const skills = [];
@@ -67,12 +97,19 @@ check(unknown.length === 0, 'every tool the skills name is registered', unknown.
 
 // 2) the stated count matches the registry
 const toolbox = skills.find((s) => s.name === 'cad-toolbox').text;
-check(/Forty-three tools/.test(toolbox) && toolNames.size === 43,
-  'cad-toolbox says "Forty-three tools" and there are 43', `${toolNames.size}`);
+check(/(?:Nine job surfaces|9 个 surface)/.test(toolbox),
+  'cad-toolbox states the 9-surface model (not the retired 43-tool count)',
+  toolbox.match(/^.*surface.*$/m)?.[0]?.slice(0, 90) ?? '');
+check(/\b39\b/.test(toolbox) && registry.size === 39,
+  'cad-toolbox states the 39-op count', `${registry.size}`);
 
-// 3) every registered tool reaches at least one skill
-const unreached = [...toolNames].filter((t) => !all.includes(`\`${t}\``));
-check(unreached.length === 0, 'every registered tool is mentioned in a skill', unreached.join(', ') || '(all covered)');
+// 3) every registered op reaches a skill through its SURFACE. Under the cutover the
+// model never sees a legacy name, so naming the surface (whose catalog() lists every
+// op) is the equivalent of the old "every tool is mentioned" rule — and it keeps a
+// new op from being reachable in production but invisible in the map.
+const undocumentedSurfaces = [...opsBySurface.keys()].filter((id) => !all.includes(`\`${id}\``));
+check(undocumentedSurfaces.length === 0, 'every surface is named in a skill',
+  undocumentedSurfaces.join(', ') || `(all ${opsBySurface.size})`);
 
 // 4) retired verdict vocabulary only inside its own history sentence
 {
@@ -87,9 +124,9 @@ const PARAM_CLAIMS = [
   ['check_printability', 'mode'], ['check_printability', 'profileIds'],
   ['simulate_stress', 'mode'], ['import_part', 'tolLinear'], ['import_part', 'tolAngular'],
   ['generate_part', 'views'], ['delivery_audit', 'claims'], ['delivery_audit', 'exempt'],
-  ['measure_part', 'axis'], ['measure_part', 'axisVector'], ['render_part', 'view'],
-  ['attach_appearance', 'file'], ['measure_gap', 'aDatum'],
-  ['measure_gap', 'bOn'], ['simulate_motion', 'cycles'], ['analyze', 'profileIds'],
+  ['measure', 'axis'], ['measure', 'axisVector'], ['render_part', 'view'],
+  ['attach_appearance', 'file'], ['measure', 'aDatum'],
+  ['measure', 'bOn'], ['simulate_motion', 'cycles'], ['analyze', 'profileIds'],
 ];
 for (const [tool, param] of PARAM_CLAIMS) {
   check(contract.get(tool)?.params.has(param) === true, `${tool}.${param} exists`, tool);
@@ -100,8 +137,8 @@ const FIELD_CLAIMS = [
   ['simulate_physics', 'notes'], ['simulate_physics', 'settledPenetrationMm'],
   ['simulate_physics', 'jointViolations'], ['simulate_motion', 'initialJointGaps'],
   ['simulate_motion', 'jointToleranceMm'], ['simulate_fluid', 'metrics'],
-  ['simulate_lbm', 'metrics'], ['measure_gap', 'frame'], ['measure_part', 'bodies'],
-  ['measure_part', 'bodySizes'], ['measure_part', 'bodyVerdict'], ['render_part', 'label'],
+  ['simulate_lbm', 'metrics'], ['measure', 'kind'], ['measure', 'versionId'],
+  ['render_part', 'label'],
   ['attach_appearance', 'materials'], ['delivery_audit', 'judgement'],
 ];
 for (const [tool, field] of FIELD_CLAIMS) {

@@ -315,10 +315,16 @@ section('static invariants');
   // `simulate_lbm` is a global lattice channel: it reads no project store, so
   // there is no execution context for it to receive. Every other tool must take
   // `exec` — that is what keeps a project-scoped body from silently losing it.
+  // Two legal spellings of an execute body: the method form `async execute(a, exec)`
+  // and the arrow form `execute: async (a, exec)` (introduced with the measure merge).
+  // The detector used to know only the method form, so a merged tool looked like a
+  // body with no exec at all — a false failure of a real invariant.
+  const scopedPattern = /(?:async execute\([^)]*exec: unknown\)|execute:\s*async\s*\([^)]*exec: unknown\))/;
+  const unscopedPattern = /(?:async execute\(args: unknown\)|execute:\s*async\s*\(args: unknown\))/;
   const unscoped = blocks
-    .filter((b) => /async execute\(args: unknown\)/.test(b))
+    .filter((b) => unscopedPattern.test(b))
     .map((b) => /name: '([^']+)'/.exec(b)?.[1] ?? '?');
-  const scopedExecutes = blocks.filter((b) => /async execute\([^)]*exec: unknown\)/.test(b)).length;
+  const scopedExecutes = blocks.filter((b) => scopedPattern.test(b)).length;
   // Counted against the registration sites rather than a literal: adding a tool
   // must not be able to leave this check passing while a body silently loses its
   // execution context (the whole point of the invariant).
