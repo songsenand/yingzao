@@ -6197,3 +6197,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/physics.ts`（-890 行）、`scripts/gen-python-lock.mjs`、`src/host/python-lock.ts`、`scripts/accept-python.mjs`、`accept-physics-{parity 删除,gear,motor,contact,solver}`、`package.json`、`DESIGN.md`（§26 平台矩阵、§31.2/§31.4 canonical 表述）。
 
 **非目标：** 不删 `runMotionInTs`（运动仍是 oracle，且它的分歧同样是待裁定问题，留待单独判断）；不改 printability/measure 的 parity；不保证 darwin-x64 上已安装的运行时还能继续工作（只是不再有新安装）。
+
+## 2026-11-16：CAD 工具面压缩为 9 个作业面 facade
+
+**触发条件：** 第 1 条（用户拍板：“9 个作业面 facade……以我为主，开工”）+ 第 4 条（工具名、skill、测试和 preset scope 都受影响）。
+
+**要解决的问题：** 模型面有 40+ 个 CAD 工具，39 个 base 的 `name + description + parameters` 约 87 KB（≈2.2 万 tokens）。继续加能力会把工具表变成上下文和选择负担；但直接学 dsh-blender-plugin 的 6 工具也不合适——它的 6 个是 `session / op / py / see / run / inspect`，228 个操作藏在 `blender_op` 的通用 `args` 和 catalog 里。
+
+**决策内容：** 采用 9 个作业面 facade：`cad_session`、`cad_part`、`cad_assembly`、`cad_check`、`cad_simulate`、`cad_inspect`、`cad_see`、`cad_python`、`cad_deliver`。参数用 `action + args` 按需展开；`catalog` / `help` 只列动作和参数，不执行 CAD。**不照搬 6 工具**：`cad_deliver` 保持顶层 gate，`cad_python` 独立，输出仍按 op 做 host 侧校验，不用 `ANY_SCHEMA` 一把梭。
+
+**理由：** 工具面是“作业边界”，操作面可以留在 catalog；但 gate、evidence、版本绑定必须仍然可识别。9 个是“压缩”和“可验证”之间的当前折中，不是最终数字；如果 Phase 1 实测 token 仍高，再把 `inspect/check/simulate` 合成一个 `cad_op`。
+
+**依据：** `docs/dev/TOOL-SURFACE-PLAN.md`；Phase 0 已落盘 `src/host/tool-facades.ts`（9 facade / 39 工具，data-only）与 `scripts/audit-tool-surface.mjs`；审计实测 39 tools / 9 facades / 87,064 schema chars ≈ 21,766 tokens；`accept-tool-surface` PASS。未注册、删除或修改任何工具行为。
+
+**影响：** 后续 Phase 1–4 会改 `src/host/tools.ts`、`src/host/tool-facades.ts`、`src/host/tool-groups.ts`、skills、`docs/TOOL-CONTRACTS.md`、所有相关 accept 脚本和 preset scope；旧工具名在 cutover 时 breaking，CHANGELOG 必须给迁移表。
+
+**非目标：** 不把工具压到 6 个；不把 `delivery_audit`/`deliver` 降级成普通 op；不在 Phase 0 改任何行为；不因为压缩而接受 `ANY_SCHEMA` 的输出契约。

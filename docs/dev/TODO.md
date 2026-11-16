@@ -17,8 +17,8 @@
 
 详细验收、设计、排期在 [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md)。本文件只做索引和状态。
 
-> **工具面压缩（Proposed，未开工）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
-> 目标 9 个作业面 facade，gate 保持顶层；先做 Phase 0 量基线，不改行为。
+> **工具面压缩（Phase 0 完成）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
+> 9 个作业面 facade 已确认；映射/基线已落盘，Phase 1 待开工。
 
 **2026-11-12 开工进展：**
 

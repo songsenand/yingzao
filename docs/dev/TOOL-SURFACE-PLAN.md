@@ -1,12 +1,17 @@
-# 工具面压缩方案（Proposed）
+# 工具面压缩方案（9 facade，Phase 0 已落盘）
 
-> **状态**：提案，2026-11-16。尚未修改代码；待确认后再进 DECISION-LOG 和 TODO。
+> **状态**：方案 A 已确认（2026-11-16）；Phase 0 已落盘（data-only），Phase 1 待开工。
 >
 > **目标**：把模型可见的 CAD 工具从 40+ 压到 8–12 个，同时不丢掉
 > gate、evidence、版本不可变和交付审计。
 >
 > **参照**：[sixtysevenlf/dsh-blender-plugin](https://github.com/sixtysevenlf/dsh-blender-plugin)
 > 的 6 工具 facade + 228-op catalog 结构（`docs/architecture.md`、`src/tools/op/index.ts`）。
+
+> **Phase 0 状态（2026-11-16）**：已落盘映射与测量。
+> `src/host/tool-facades.ts`（9 facade / 39 个现有工具，data-only）；
+> `scripts/audit-tool-surface.mjs` 实测 87,064 schema chars ≈ 21,766 tokens；
+> `scripts/accept-tool-surface.mjs` PASS。未注册/删除/修改任何工具行为。
 
 ## 0. 结论
 
