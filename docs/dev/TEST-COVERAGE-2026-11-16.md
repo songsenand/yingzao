@@ -253,3 +253,53 @@ node scripts/coverage-tools.mjs --reuse /tmp/cad-coverage-xxxx --json coverage.j
 **未测**：浏览器/WebGL 画面、真机 OpenSCAD 之外的内核、Windows/macOS 专属路径；
 Python 子进程内部的覆盖（worker 是独立解释器，V8 看不到）；`ToolRuntime` 的超时/取消与成功结果封装
 （脚本直接调 `execute`，经过的是 `defineTool` 的入参校验与 `withOutputContract` 的输出校验）。
+
+---
+
+## 9. 测试补强（2026-11-17 凌晨）
+
+在 9-surface 架构上又补了一轮，`3209546` + 工作树改动之后的全量复测：
+
+| 指标 | 现在 | 上一轮（§8） |
+|---|---|---|
+| accept 脚本 | 170：**166 绿 / 2 红 / 2 超时** | 154 绿 / 12 红 / 4 超时 |
+| PASS 断言 | **2994** | 2774 |
+| `src/` 行覆盖 | **88.3%**（36790/41667） | 86.9% |
+| `src/` 函数覆盖 | **82.7%**（1933/2338） | 81.7% |
+| 工具边界（套件内） | 37/39 | 36/39 |
+| 边界验收（单独跑） | 39/39 工具 + 9 surface/39 op，177 PASS | 150 PASS |
+
+### 9.1 抓到一个真 bug：`evidence.runId` 被静默丢弃
+
+`check_assembly` 的生产路径是「宿主映射 → Python worker」，而宿主映射逐字段重建 interface 时**没有带 `evidence`**；worker 也只读 `params.runId`。结果：按文档用 `evidence: {runId}` 引用一个**不存在的 run**，返回 `pass`，而不是 hard-violation——正是 `accept-p2` 的 (b2) 断言抓到的。
+
+修法两处：`assembly-check.ts` 的映射转发 `evidence`；`worker.py` 按 `evidence.runId` → `params.runId` 的优先级读取（与宿主 `citedRunId()` 一致）。证伪：修复前该断言 `P2 ACCEPTANCE FAILED (1)`，修复后 `P2 ACCEPTANCE PASSED`，且 `evidence.runId r006` 与 legacy `params.runId` 两条路径都通过。
+
+### 9.2 按「agent 实际调用面」补的测试
+
+- **surface 端到端**：fixture 里的每一行工具调用，现在再经 `cad_*.action` 走一遍，断言“同形状 + 该行语义断言仍成立”（不比字节相等：多数工具每次调用会写 run，`runId`/耗时会变）。surface 半原有的 27 个必填 op 的“空参委派到旧校验器”仍在。
+- **surface 错误面**：未知 `action`、`help` 的未知 `op` 必须列出**全部**可接受值（由 `catalog` 生成，不写死），这是 agent 最常犯的错。
+- `accept-skill-tools` 改为**注册表驱动**：39 op、每个 op 必须声明 `surface`（否则模型不可达）、9 个 surface 必须出现在技能里、契约表与注册表集合一致；`measure_part.axis` 等旧断言换成 `measure.axis/axisVector/aDatum/bOn`。
+- `accept-p3` 的“每个工具都被手册点名”改为“每个 surface 被点名，且每个工具都有 surface”，交付纪律节按 `cad_check` 措辞校验。
+- `accept-project-scope` 现在同时识别 `async execute(args, exec)` 与箭头式 `execute: async (a, exec)`（measure 合并后的写法），不再把真实签名误判为“没接 exec”。
+
+### 9.3 测试基础设施
+
+- 约 25 个脚本（parity / measure / physics / analyze-control…）的运行时默认值改为**尊重 `DSH_CAD_PYTHON_ROOT`**：有该环境变量时不再依赖仓库里的 `.tmp-*-runtime` 目录。此前这些测试会在全量跑里因为 `.tmp` 目录不存在而整片变红（§8 的 12 红里大半是它）。
+- `accept-python-failure` 显式清掉继承来的 runtime override（它要断言 `DSH_HOME` 布局），跑完恢复。
+- `accept-check-parts`、`accept-analyze` 的 Python 入口同样改为 env 优先。
+
+### 9.4 仍未绿（4 个，均与本次改动无关）
+
+| 脚本 | 原因 |
+|---|---|
+| `accept-attention-source` | 既有 2 条断言（面板 run 归属），与工具面无关 |
+| `accept-python` | 在临时 home 里现场 provisioning，150 s 不够（环境） |
+| `accept-tool-scope` | 既有 skill-root 路径断言（环境） |
+| `accept-ui` | 需要浏览器/WebGL（未测） |
+
+`tools.ts` 的边界在套件内是 37/39：差的 `python_runtime` / `run_python` 正是 `accept-python` 超时未跑的那两个；边界验收单独跑仍是 39/39。
+
+### 9.5 顺手发现、未改的一处测试卫生问题
+
+`accept-assembly.mjs` 直接 `openVersionStore(<plugin>/data)`，每跑一次就往仓库的 `data/` 里写新版本（本轮把 `assembly.good.json` 的 v111 改成 v141）。本轮已把 `data/` 回滚；建议后续让它用临时 `DSH_HOME`，和其余测试一样不碰仓库夹具。
