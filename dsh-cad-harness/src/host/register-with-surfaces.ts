@@ -33,23 +33,14 @@ export interface SurfaceRegisterScope {
  */
 export function registerCadToolsWithSurfaces(ctx: any, scope?: SurfaceRegisterScope): readonly string[] {
   const captured = new Map<string, LegacyTool>();
-  const toolCtx = Object.create(ctx) as any;
-  toolCtx.tools = new Proxy(ctx.tools, {
-    get(target: any, prop: string | symbol, receiver: unknown) {
-      if (prop === 'register') {
-        return (definition: any) => {
-          // Buffer registrations until the cutover decision is known. This lets
-          // `hideLegacy: 'all'` work without a 39-name hand list.
-          captured.set(definition.name, definition as LegacyTool);
-          return () => {};
-        };
-      }
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
 
-  registerCadTools(toolCtx, scope);
+  // `registerCadTools` accepts a registration sink instead of us assigning a new
+  // `tools` property onto a Cordis context. The latter crosses fiber ownership
+  // and fails with "cannot set property tools in multiple fibers".
+  registerCadTools(ctx, scope, (definition) => {
+    captured.set((definition as { name: string }).name, definition as LegacyTool);
+    return () => {};
+  });
 
   const hidden = scope?.hideLegacy === 'all'
     ? new Set(captured.keys())

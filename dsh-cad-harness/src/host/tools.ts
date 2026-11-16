@@ -513,6 +513,7 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
 export function registerCadTools(
   ctx: Context,
   scope?: { toolScope?: string; presets?: readonly string[]; hideLegacy?: readonly string[] | 'all' },
+  register: (definition: unknown) => unknown = (definition) => ctx.tools.register(definition as never),
 ): readonly string[] {
   const registered: string[] = [];
   /**
@@ -555,7 +556,7 @@ export function registerCadTools(
           withOriginSession(sessionIdOf(exec), () => (execute as (a: unknown, e: unknown) => unknown)(args, exec)),
       }
       : withLimit;
-    return ctx.tools.register(withOutputContract(scoped) as never);
+    return register(withOutputContract(scoped));
   };
 
   // Stores are resolved PER CALL, never captured here: the plugin is applied

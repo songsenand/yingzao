@@ -42,6 +42,7 @@ const workspace = join(HOME, 'workspace');
 mkdirSync(workspace, { recursive: true });
 
 const { registerCadTools } = await import('../src/host/tools.ts');
+const { registerCadToolsWithSurfaces } = await import('../src/host/register-with-surfaces.ts');
 const { OUTPUT_CHECKED } = await import('../src/host/tool-contract.ts');
 
 let failures = 0;
@@ -59,9 +60,12 @@ const skip = (label, why) => {
 const tools = new Map();
 const ctx = {
   tools: { register: (def) => { tools.set(def.name, def); } },
-  attachments: { saveImages: async () => [] },
+  connection: { fetch: { register: () => () => {} } },
+  attachments: { saveImages: async (images) => images },
   reflect: { get: () => undefined },
-  on: () => {},
+  on: () => () => {},
+  effect: (fn) => fn(),
+  logger: { debug() {}, info() {}, warn() {}, error() {} },
 };
 const names = registerCadTools(ctx);
 check(names.length === tools.size && tools.size >= 39, 'the live catalog is registered', `${tools.size} tool(s)`);
@@ -104,6 +108,59 @@ for (const [name, def] of tools) {
     check(Boolean(def.output?.schema), `${name}: no required field — declares an output schema (body covered by the fixture half or its own acceptance)`);
   }
 }
+
+// ------------------------------------------------------ 1b. surface half
+// The production entry point is 9 job surfaces (cad_session … cad_deliver) that
+// delegate to the legacy tools. A green legacy call says nothing about the
+// surface: its catalog, its help text, and whether an action is wired to the tool
+// it claims. Without a call the delegation itself is unproven, so each op is
+// invoked with an empty args object: the LEGACY tool's required-field refusal must
+// come back through the surface, naming its own fields. Ops with no required
+// field are not called (an empty call can start real work, the reason the schema
+// half above has the same rule).
+console.log('\nsurface half\n');
+const SURFACES = ['session', 'part', 'assembly', 'check', 'simulate', 'inspect', 'see', 'python', 'deliver'];
+const surfaceTools = new Map();
+const surfaceCtx = {
+  ...ctx,
+  tools: { register: (def) => { surfaceTools.set(def.name, def); return () => {}; } },
+};
+registerCadToolsWithSurfaces(surfaceCtx, { toolSurfaces: SURFACES, hideLegacy: 'all' });
+check(surfaceTools.size === 9, 'the nine job surfaces are registered', `${surfaceTools.size}`);
+check(![...surfaceTools.keys()].some((name) => tools.has(name)),
+  'cutover hides every legacy tool (only surfaces are visible)');
+const attemptSurface = async (name, args) => {
+  try {
+    return { ok: true, value: await surfaceTools.get(name).execute(args, exec) };
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error) };
+  }
+};
+
+let opCount = 0;
+let wired = 0;
+for (const [name, def] of surfaceTools) {
+  const catalog = await attemptSurface(name, { action: 'catalog' });
+  check(catalog.ok && Array.isArray(catalog.value?.ops) && catalog.value.ops.length > 0,
+    `${name}: catalog lists its ops`, catalog.ok ? `${catalog.value?.ops?.length ?? 0} op(s)` : (catalog.error ?? '').slice(0, 100));
+  if (!catalog.ok || !Array.isArray(catalog.value?.ops)) continue;
+  for (const op of catalog.value.ops) {
+    opCount++;
+    const help = await attemptSurface(name, { action: 'help', args: { op: op.op } });
+    check(help.ok && help.value?.tool, `${name}.${op.op}: help names its legacy tool`,
+      help.ok ? String(help.value?.tool) : (help.error ?? '').split('\n')[0].slice(0, 90));
+    const required = Array.isArray(op.required) ? op.required : [];
+    if (!required.length) continue;
+    const refused = await attemptSurface(name, { action: op.op, args: {} });
+    const missing = required.filter((field) => !refused.error?.includes(`missing required property "${field}"`));
+    check(!refused.ok && missing.length === 0,
+      `${name}.${op.op}: delegates to the legacy validator (all ${required.length} field(s) named)`,
+      refused.ok ? 'returned a value' : missing.length ? `not named: ${missing.join(', ')}` : '');
+    if (!refused.ok && missing.length === 0) wired++;
+  }
+}
+check(opCount === 39, 'the surfaces expose all 39 ops (no orphan tool)', `${opCount}`);
+check(wired > 0, 'the wired-op check looked at something', `${wired} op(s) with required fields`);
 
 // ---------------------------------------------------------------- 2. fixture
 console.log('\nfixture\n');
@@ -228,6 +285,10 @@ const rows = [
   {
     tool: 'measure', python: true, args: { kind: 'angle', versionId: vBase, aDir: [0, 0, 1], bDir: [0, 0, 1] },
     assert: (v) => Math.abs(Number(v?.angleDeg)) < 1e-6,
+  },
+  {
+    tool: 'measure', python: true, args: { kind: 'part', versionId: vBase },
+    assert: (v) => v?.kind === 'part' && typeof v?.volumeMm3 === 'number',
   },
   {
     tool: 'measure', python: true, args: { kind: 'section', versionId: vBase, atMm: 0 },
