@@ -6213,3 +6213,19 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** 后续 Phase 1–4 会改 `src/host/tools.ts`、`src/host/tool-facades.ts`、`src/host/tool-groups.ts`、skills、`docs/TOOL-CONTRACTS.md`、所有相关 accept 脚本和 preset scope；旧工具名在 cutover 时 breaking，CHANGELOG 必须给迁移表。
 
 **非目标：** 不把工具压到 6 个；不把 `delivery_audit`/`deliver` 降级成普通 op；不在 Phase 0 改任何行为；不因为压缩而接受 `ANY_SCHEMA` 的输出契约。
+
+## 2026-11-16：保留 9 个作业面，拒绝数据域 4 工具
+
+**触发条件：** 第 1 条（用户拍板：“9 个工具方案本身我是满意的……继续压缩的收益成本比未必很好”）+ 第 4 条（决定后续 facade 迁移边界）。
+
+**要解决的问题：** 在 Phase 3 之后，是否继续把 9 个作业面压成按 BOM/ICD 数据域划分的 4 个入口（`cad_assembly` / `cad_artifact` / `cad_deliver` / `cad_python`）。
+
+**决策内容：** 保留 9 个作业面：`cad_session` / `cad_part` / `cad_assembly` / `cad_check` / `cad_simulate` / `cad_inspect` / `cad_see` / `cad_python` / `cad_deliver`。**不做**数据域 4 工具，也不做 6 个 Blender 式通道。9 个入口仍必须是薄适配器：共享一个 catalog/dispatcher，不拥有状态、不拥有生命周期；BOM/ICD 只作为 subject 和证据锚点，不作为工具命名空间。
+
+**理由：** 39 个旧 schema 实测 87,064 chars；`cad_inspect` 原型把四个旧 schema 11,594 chars 压到 639 chars（约 -94.5%）。按此形态，9 个薄 facade 约 6–8 KB，已经吃掉大部分收益；再压到 4 个只能再省约 2–3 KB（约 0.5–0.8k tokens），却会把 20+ 个 action 塞进 `cad_artifact`，增加跨域歧义（`measure` 看版本、`check_assembly` 看 BOM/ICD、`deliver` 同时看两者）。skill 继续压缩也进入边际递减；当前主要成本是工具 schema，不是 skill 长度。数据域 4 没有实测收益，却有把 BOM/ICD 变成第二套 workflow/命名空间的珍珠链风险。
+
+**依据：** Phase 0 audit 39 tools / 87,064 chars；Phase 1 `cad_inspect` 639 vs 11,594 chars；Phase 3 cutover 探针 39→36 tools / 87,064→76,109 chars（-10,955，约 -12.6%）；`accept-cad-inspect-*`、`accept-tool-surface`、`tsc` 通过。9 的总 schema 为按 639 chars/薄 facade 的外推估计，不是 9 个全部实现后的实测值。
+
+**影响：** 后续继续按 9 个作业面迁移 `cad_check` / `cad_simulate` / `cad_part` / `cad_assembly` / `cad_session` / `cad_see` / `cad_deliver`；数据域 4 方案不进入代码。`facade` 作为独立架构层仍删除，只保留 9 个薄入口 + 一个 catalog。
+
+**非目标：** 不再为“更少工具”牺牲动作可发现性；不把 BOM/ICD 变成执行器；不把 9 个入口扩成 9 套生命周期/状态。

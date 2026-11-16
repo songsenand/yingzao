@@ -28,6 +28,13 @@
 > 默认生产仍是 39；真实 `measure(kind="part")` 需在可写 runtime / CI 再补，
 > 当前 `accept-cad-inspect-registered` 显式 SKIP。
 
+> **2026-11-16 方向修正（用户拍板）**：保留 **9 个作业面**，不做“数据域 4 工具”。
+> 理由不是“9 更少”，而是 39→9 已经把 87 KB 降到约 6 KB（按 `cad_inspect` 实测外推），
+> 9→4 只能再省约 2–3 KB（约 0.5–0.8k tokens），却把 20+ 个 action 塞进 `cad_artifact`，
+> 增加跨域歧义；BOM/ICD 是 subject/context，不是工具命名空间。
+> “删掉 facade 作为独立架构层”仍成立：9 个入口只是薄适配器 + 一个 catalog，
+> 不拥有状态、不拥有生命周期。
+
 ## 0. 结论
 
 推荐 **方案 A：按“作业面”做 9 个 facade，内部继续用 typed op 校验**。
@@ -218,7 +225,7 @@ BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，�
 > `cad_job` 先不建：当前 N15 只有编译 job，没有独立的模型面作业工具。
 > 如果以后需要 render/simulation 的异步 submit/cancel，再增加第 10 个。
 
-### 方案 B（激进）：6 个 Blender 式通道
+### 方案 B（已否决）：数据域 4 工具 / 6 个 Blender 式通道
 
 | 工具 | 内容 |
 |---|---|
@@ -238,8 +245,8 @@ BOM/ICD、claims、policy 和 run 图。这是珍珠链没有的稳定主轴，�
 - 模型需要更多 `op=catalog` / `op=help` 调用；
 - 不利于按 preset 做“只给检查、不给建模”的裁剪。
 
-**建议先做 A；A 的 token 仍然过高时，再把 `cad_inspect + cad_check + cad_simulate`
-合成一个 `cad_op`，而不是一开始就做 6。**
+**结论（2026-11-16）：保留 A 的 9 个作业面；不做数据域 4。**
+`cad_inspect + cad_check + cad_simulate` 不再合并为 `cad_op`；9 已经是当前收益/风险拐点。
 
 ## 4. Facade 契约
 
@@ -441,7 +448,7 @@ pearl_run（deprecated）
 
 ## 9. 需要确认的决策
 
-1. **目标形态**：方案 A（9 个）还是方案 B（6 个）？
+1. **目标形态**：已确认 A（9 个）；数据域 4 / 6 工具不做。
 2. **gate 是否保持顶层**：是否同意 `cad_deliver` 单独存在？
 3. **兼容策略**：0.1.0-preview 直接 breaking，还是保留一个 minor 的旧名 alias？
 4. **`toolScope`**：第一版是否只按 facade 分组，不做 action 级 scope？
