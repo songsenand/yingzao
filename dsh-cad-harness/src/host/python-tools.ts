@@ -24,7 +24,7 @@ import {
 } from './python-runtime.ts';
 import { runPython, type RunPythonResult } from './python-worker.ts';
 
-type RegisterTool = (definition: { name: string }) => unknown;
+type RegisterTool = (definition: { name: string }, surface?: { id: string; action: string; summary?: string }) => unknown;
 
 interface LoggerLike {
   info?: (message: string) => void;
@@ -197,9 +197,9 @@ function renderRuntimeStatus(status: PythonRuntimeStatus): string {
  */
 export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerLike): readonly string[] {
   const names: string[] = [];
-  const register = (definition: { name: string }) => {
+  const register = (definition: { name: string }, surface?: { id: string; action: string; summary?: string }) => {
     names.push(definition.name);
-    registerTool(definition);
+    registerTool(definition, surface);
   };
 
   const progressLogger = (message: string) => logger?.info?.(`cad-harness: python runtime: ${message}`);
@@ -319,7 +319,7 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
       if (!value) return undefined;
       return renderRunResult(value) as never;
     },
-  }));
+  }), { id: 'cad_python', action: 'run' });
 
   register(defineTool({
     name: 'python_runtime',
@@ -507,7 +507,7 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
         : value.summary;
       return [{ type: 'text', text }] as never;
     },
-  }));
+  }), { id: 'cad_python', action: 'runtime' });
 
   return names;
 }

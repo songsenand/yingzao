@@ -3,7 +3,7 @@
 //
 // Production is unchanged. This captures the real 39 definitions, annotates only
 // the four inspect tools with `surface`, and compares the generated surface with
-// the hand-written cad_inspect facade. If they agree, the 9 hand tables can later
+// the hand-written cad_inspect surface. If they agree, the 9 hand tables can later
 // be deleted.
 
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -42,10 +42,7 @@ const META = {
   scan_attention: { id: 'cad_inspect', action: 'attention', summary: 'where to look' },
   analyze: { id: 'cad_inspect', action: 'analyze', summary: 'point map' },
 };
-const annotated = new Map([...tools].map(([name, definition]) => [
-  name,
-  META[name] ? { ...definition, surface: META[name] } : definition,
-]));
+const annotated = tools;
 const declared = [...annotated.values()].filter((tool) => tool.surface?.id === 'cad_inspect');
 check('four tools declare cad_inspect', declared.length === 4, String(declared.length));
 
@@ -54,7 +51,7 @@ const generated = buildSurfaceFromToolMeta(
   'generated from tool metadata',
   annotated,
 );
-const hand = buildCadInspectSurface(tools);
+const hand = buildCadInspectSurface(annotated);
 const generatedCatalog = await generated.execute({ action: 'catalog' }, {});
 const handCatalog = await hand.execute({ action: 'catalog' }, {});
 

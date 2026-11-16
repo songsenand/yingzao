@@ -31,6 +31,19 @@
         toolScope: preset
         presets:
           - cad
+        # 9 model-facing surfaces, generated from each tool's `surface` metadata.
+        # `hideLegacy: all` keeps only those entries in the CAD session's catalog.
+        toolSurfaces:
+          - session
+          - part
+          - assembly
+          - check
+          - simulate
+          - inspect
+          - see
+          - python
+          - deliver
+        hideLegacy: all
 
 # Replace the stock image-offload executor with the plugin's preset-aware one.
 # The stock `@deepseek-ai/dsh-compaction-image-offload` offloads the OLDEST

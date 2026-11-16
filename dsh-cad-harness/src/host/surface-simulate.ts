@@ -1,23 +1,11 @@
-// cad_simulate: scenario simulations. Thin surface over the five simulate_* tools.
+// cad_simulate: generated from tools that declare surface.id = cad_simulate.
+import { buildSurfaceFromToolMeta, type LegacyTool } from './surface.ts';
 
-import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
-
-export type SimulateOp = SurfaceOp;
-
-export const SIMULATE_OPS: readonly SimulateOp[] = [
-  { op: 'physics', tool: 'simulate_physics', summary: 'Rigid-body simulation: penetration, toppling, joints and keyframes.' },
-  { op: 'motion', tool: 'simulate_motion', summary: 'Mechanism kinematics: crank, oscillators and followers.' },
-  { op: 'fluid', tool: 'simulate_fluid', summary: 'MPM flow through a pipe or cavity.' },
-  { op: 'lbm', tool: 'simulate_lbm', summary: 'Lattice-Boltzmann channel-flow screen.' },
-  { op: 'stress', tool: 'simulate_stress', summary: 'Static linear-elastic stress with a declared load case.' },
-];
+export const SIMULATE_SURFACE_NAME = 'cad_simulate';
+export const SIMULATE_SURFACE_DESCRIPTION =
+  'One entry point for simulations. action="catalog" lists the ops; '
+  + 'action="help" with args.op=<op> gives the legacy parameters; an op delegates to the old tool.';
 
 export function buildCadSimulateSurface(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildSurface({
-    name: 'cad_simulate',
-    description:
-      'One entry point for simulations. action="catalog" lists the ops; '
-      + 'action="help" with args.op=<op> gives the legacy parameters; an op delegates to the old tool.',
-    ops: SIMULATE_OPS,
-  }, tools);
+  return buildSurfaceFromToolMeta(SIMULATE_SURFACE_NAME, SIMULATE_SURFACE_DESCRIPTION, tools);
 }

@@ -1,24 +1,18 @@
-// cad_inspect: one job entry for geometry truth about a saved version.
-// All logic lives in the shared surface builder; this file is only the op table.
+// cad_inspect: generated from the four tools that declare surface.id = cad_inspect.
+// No hand-written op table lives here.
 
-import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
+import { buildSurfaceFromToolMeta, type LegacyTool } from './surface.ts';
 
-export type InspectOp = SurfaceOp;
-
-export const INSPECT_OPS: readonly InspectOp[] = [
-  { op: 'measure', tool: 'measure', summary: 'Dimensions, volume, wall thickness, gap, section and angle of one saved version.' },
-  { op: 'features', tool: 'list_features', summary: 'Planar faces, holes and their coordinates for one saved version.' },
-  { op: 'attention', tool: 'scan_attention', summary: 'Mesh health plus reentrant corners: where to LOOK, never a verdict.' },
-  { op: 'analyze', tool: 'analyze', summary: 'Experimental point map: thin walls, corners and optional stress peaks.' },
-];
+export const INSPECT_SURFACE_NAME = 'cad_inspect';
+export const INSPECT_SURFACE_DESCRIPTION =
+  'One entry point for geometry truth about a saved version. '
+  + 'action="catalog" lists the four ops; action="help" with args.op=<op> gives the legacy parameters; '
+  + 'an op delegates to the same implementation and output contract as the old tool.';
 
 export function buildCadInspectSurface(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildSurface({
-    name: 'cad_inspect',
-    description:
-      'One entry point for geometry truth about a saved version. '
-      + 'action="catalog" lists the four ops; action="help" with args.op=<op> gives the legacy parameters; '
-      + 'an op delegates to the same implementation and output contract as the old tool.',
-    ops: INSPECT_OPS,
-  }, tools);
+  return buildSurfaceFromToolMeta(
+    INSPECT_SURFACE_NAME,
+    INSPECT_SURFACE_DESCRIPTION,
+    tools,
+  );
 }

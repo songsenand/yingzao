@@ -8373,8 +8373,10 @@ def _app_silhouette(mesh, axes, res: float = 0.5):
     rows = np.where(mask.any(1))[0]
     if len(rows) == 0:
         return {}
-    width = np.array([(np.where(mask[r])[0].max() - np.where(mask[r])[0].min() + 1) * res
-                      for r in range(rows.min(), rows.max() + 1)])
+    width = np.array([
+        (cols.max() - cols.min() + 1) * res if len(cols := np.where(mask[r])[0]) else 0.0
+        for r in range(rows.min(), rows.max() + 1)
+    ])
     z = mn[1] + np.arange(rows.min(), rows.max() + 1) * res
     ws = np.convolve(width, np.ones(9) / 9, mode="same")
     waists, _ = find_peaks(-ws, prominence=5.0)

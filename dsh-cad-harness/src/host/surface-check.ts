@@ -1,25 +1,11 @@
-// cad_check: manufacturing/process screens. Thin surface over the seven checks.
+// cad_check: generated from tools that declare surface.id = cad_check.
+import { buildSurfaceFromToolMeta, type LegacyTool } from './surface.ts';
 
-import { buildSurface, type SurfaceOp, type LegacyTool } from './surface.ts';
-
-export type CheckOp = SurfaceOp;
-
-export const CHECK_OPS: readonly CheckOp[] = [
-  { op: 'printability', tool: 'check_printability', summary: 'Wall thickness, overhang area and printability findings for a saved version.' },
-  { op: 'sheet2d', tool: 'check_sheet2d', summary: '2D sheet cut screen: kerf-adjusted holes and wall spacing.' },
-  { op: 'turning', tool: 'check_turning', summary: 'Turning screen: bar stock, L/D limit and rotational symmetry.' },
-  { op: 'cnc', tool: 'check_cnc_access', summary: 'CNC 3-axis access: reachable area and minimum principal setups.' },
-  { op: 'edm', tool: 'check_edm_access', summary: 'EDM sinker access along one burn axis.' },
-  { op: 'parts', tool: 'check_parts', summary: 'Batch mesh/printability screen for up to 12 saved versions.' },
-  { op: 'appearance', tool: 'check_appearance', summary: 'Appearance relations across an assembly set.' },
-];
+export const CHECK_SURFACE_NAME = 'cad_check';
+export const CHECK_SURFACE_DESCRIPTION =
+  'One entry point for process/manufacturing checks. action="catalog" lists the ops; '
+  + 'action="help" with args.op=<op> gives the legacy parameters; an op delegates to the old tool.';
 
 export function buildCadCheckSurface(tools: ReadonlyMap<string, LegacyTool>) {
-  return buildSurface({
-    name: 'cad_check',
-    description:
-      'One entry point for process/manufacturing checks. action="catalog" lists the ops; '
-      + 'action="help" with args.op=<op> gives the legacy parameters; an op delegates to the old tool.',
-    ops: CHECK_OPS,
-  }, tools);
+  return buildSurfaceFromToolMeta(CHECK_SURFACE_NAME, CHECK_SURFACE_DESCRIPTION, tools);
 }

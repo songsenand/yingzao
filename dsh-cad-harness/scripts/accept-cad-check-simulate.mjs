@@ -11,9 +11,6 @@ const home = mkdtempSync(join(tmpdir(), 'cad-check-sim-'));
 process.env.DSH_HOME = home;
 process.env.DSH_CAD_PYTHON = 'off';
 const { registerCadToolsWithSurfaces } = await import('../src/host/register-with-surfaces.ts');
-const { CHECK_OPS } = await import('../src/host/surface-check.ts');
-const { SIMULATE_OPS } = await import('../src/host/surface-simulate.ts');
-const { INSPECT_OPS } = await import('../src/host/surface-inspect.ts');
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -41,6 +38,10 @@ const chars = (map) => [...map.values()].reduce((sum, definition) => sum + JSON.
 }).length, 0);
 
 const base = capture(undefined);
+const namesFor = (id) => [...base.values()].filter((definition) => definition.surface?.id === id).map((definition) => definition.name);
+const checkHidden = namesFor('cad_check');
+const simulateHidden = namesFor('cad_simulate');
+const inspectHidden = namesFor('cad_inspect');
 check('default: 39 tools', base.size === 39, String(base.size));
 const added = capture({ toolSurfaces: ['check', 'simulate'] });
 check('opt-in: 41 tools (39 + 2 surfaces)', added.size === 41, String(added.size));
@@ -62,10 +63,7 @@ let unknown = '';
 try { await checkDef.execute({ action: 'printabilty', args: {} }, {}); } catch (error) { unknown = String(error?.message ?? error); }
 check('check unknown action suggests printability', /did you mean "printability"/.test(unknown), unknown.slice(0, 140));
 
-const hidden = [
-  ...CHECK_OPS.map((entry) => entry.tool),
-  ...SIMULATE_OPS.map((entry) => entry.tool),
-];
+const hidden = [...checkHidden, ...simulateHidden];
 const cutover = capture({ toolSurfaces: ['check', 'simulate'], hideLegacy: hidden });
 check('cutover: 29 tools (39 - 12 old + 2 surfaces)', cutover.size === 29, String(cutover.size));
 check('cutover: old check/simulate tools hidden', hidden.every((name) => !cutover.has(name)));
@@ -75,7 +73,7 @@ check('cutover: net schema is smaller', after < before, `${after} vs ${before}`)
 console.log(`  INFO check+simulate cutover: ${before} chars (39) -> ${after} chars (29), delta ${after - before}`);
 check('cutover: both surfaces remain', cutover.has('cad_check') && cutover.has('cad_simulate'));
 
-const allHidden = [...INSPECT_OPS, ...CHECK_OPS, ...SIMULATE_OPS].map((entry) => entry.tool);
+const allHidden = [...inspectHidden, ...checkHidden, ...simulateHidden];
 const three = capture({
   toolSurfaces: ['inspect', 'check', 'simulate'],
   hideLegacy: allHidden,

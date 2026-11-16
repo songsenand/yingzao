@@ -10,7 +10,7 @@
 > 的 6 工具 surface + 228-op catalog 结构（`docs/architecture.md`、`src/tools/op/index.ts`）。
 
 > **Phase 0 状态（2026-11-16）**：已落盘映射与测量。
-> `src/host/tool-surfaces.ts`（9 surface / 39 个现有工具，data-only）；
+> 每个工具自带 `surface` 元数据；Phase 4 已删除手写 `tool-surfaces.ts`；
 > `scripts/audit-tool-surface.mjs` 实测 87,064 schema chars ≈ 21,766 tokens；
 > `scripts/accept-tool-surface.mjs` PASS。未注册/删除/修改任何工具行为。
 
@@ -40,6 +40,16 @@
 > **Phase 3d 状态（2026-11-16）**：9 个 surface 全部落盘；opt-in 48 工具，
 > 全量 cutover 后 **9 工具 / 3,868 chars**（87,064 → 3,868，-83,196，约 -95.6%）。
 > `accept-cad-all-surfaces.mjs` PASS；`cad_deliver` 仍标记为顶层 gate。默认生产仍 39。
+
+> **Phase 4 状态（2026-11-16）**：39 个工具在注册处声明 `surface`；9 个 surface
+> 全部由 `buildSurfaceFromToolMeta` 生成；手写 `tool-surfaces.ts` 已删除。
+> `accept-surface-meta` / `accept-cad-all-surfaces` / `accept-tool-surface` PASS；
+> 9 工具 schema 3,868 chars。默认生产仍 39。
+
+> **生产 cutover 前置清理（2026-11-16）**：39 个工具在注册处自带 `surface`；
+> 9 个 surface 由 `buildSurfaceFromToolMeta` 生成；手写 `tool-surfaces.ts` 删除；
+> `cadToolNames()` 在 cutover 后只含 9 个 surface（`accept-surface-cutover` PASS）；
+> `toolScope` 的分组过滤保留 `cad_*` surface。剩余：写进 preset 配置、真实 CAD 调用。
 
 > **2026-11-16 方向修正（用户拍板）**：保留 **9 个作业面**，不做“数据域 4 工具”。
 > 理由不是“9 更少”，而是 39→9 已经把 87 KB 降到约 6 KB（按 `cad_inspect` 实测外推），

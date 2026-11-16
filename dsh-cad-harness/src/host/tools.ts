@@ -65,6 +65,7 @@ import {
 import { withDeadline } from './deadline.ts';
 import { argError } from './arg-error.ts';
 import { withOutputContract } from './tool-contract.ts';
+import type { SurfaceMeta } from './surface.ts';
 import { withOriginSession } from './provenance.ts';
 import { nextLookFor } from './next-look.ts';
 import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
@@ -409,6 +410,11 @@ export function cadToolNames(): readonly string[] {
   return registeredCadTools;
 }
 
+/** Register a surface name in the CAD catalog (used by the surface builder). */
+export function rememberCadToolName(name: string): void {
+  if (!registeredCadTools.includes(name)) registeredCadTools.push(name);
+}
+
 /**
  * Where the shipped example profiles live, from BOTH build layouts: `src/host/` when a
  * script imports the source, `lib/` when the bundled plugin runs.
@@ -506,7 +512,7 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
 
 export function registerCadTools(
   ctx: Context,
-  scope?: { toolScope?: string; presets?: readonly string[] },
+  scope?: { toolScope?: string; presets?: readonly string[]; hideLegacy?: readonly string[] | 'all' },
 ): readonly string[] {
   const registered: string[] = [];
   /**
@@ -525,12 +531,17 @@ export function registerCadTools(
    * pearl forever. Per-tool timeouts are the lightweight step watchdog; the
    * pearl itself has one total deadline.
    */
-  const registerTool = (definition: { name: string; execute?: unknown; output?: { schema?: unknown }; timeoutMs?: number }) => {
+  const registerTool = (
+    definition: { name: string; execute?: unknown; output?: { schema?: unknown }; timeoutMs?: number },
+    surface?: SurfaceMeta,
+  ) => {
     registered.push(definition.name);
-    registeredCadTools.push(definition.name);
+    const hidden = scope?.hideLegacy === 'all'
+      || (Array.isArray(scope?.hideLegacy) && scope.hideLegacy.includes(definition.name));
+    if (!hidden) registeredCadTools.push(definition.name);
     const withLimit = definition.timeoutMs === undefined
-      ? { ...definition, timeoutMs: CAD_TOOL_TIMEOUTS[definition.name] ?? DEFAULT_TOOL_TIMEOUT_MS }
-      : definition;
+      ? { ...definition, timeoutMs: CAD_TOOL_TIMEOUTS[definition.name] ?? DEFAULT_TOOL_TIMEOUT_MS, ...(surface ? { surface } : {}) }
+      : { ...definition, ...(surface ? { surface } : {}) };
     // Stamp the calling conversation onto every version/run this body writes.
     // The stores are several layers below `exec`; AsyncLocalStorage carries the
     // id without threading a session argument through each call. The wrapper
@@ -1309,7 +1320,7 @@ export function registerCadTools(
       }
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_part', action: 'generate' });
 
   // --- create_part: name a part before any geometry exists -------------------
   //
@@ -1351,7 +1362,7 @@ export function registerCadTools(
       const part = await createUniquePart(partStore, a.name, 'agent');
       return { partId: part.id, name: part.name, created: true };
     },
-  }));
+  }), { id: 'cad_part', action: 'create' });
 
   // --- request_review: ask for attention, never take it ---------------------
   //
@@ -1466,7 +1477,7 @@ export function registerCadTools(
         target: it?.target ? String(it.target).trim() : null,
       })));
     },
-  }));
+  }), { id: 'cad_session', action: 'review' });
 
   // --- import_part: an external file becomes a first-class version ----------
   //
@@ -1759,7 +1770,7 @@ export function registerCadTools(
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_part', action: 'import' });
 
   // --- merge_parts: N parts at their placements → one solid version ----------
   //
@@ -1997,7 +2008,7 @@ export function registerCadTools(
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_part', action: 'merge' });
 
   // --- set_datums: anchors are metadata, not a new version -------------------
 
@@ -2156,7 +2167,7 @@ export function registerCadTools(
         warnings,
       };
     },
-  }));
+  }), { id: 'cad_assembly', action: 'datums' });
 
   // --- set_part_role: the audit exempts what was DECLARED not-printed (G4) ---
 
@@ -2211,7 +2222,7 @@ export function registerCadTools(
         effect,
       };
     },
-  }));
+  }), { id: 'cad_part', action: 'role' });
 
   // --- write_assembly: typed assembly-manifest writer ---
   registerTool(defineTool({
@@ -2256,7 +2267,7 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       return writeAssembly(await allStores(exec), args as WriteAssemblyInput);
     },
-  }));
+  }), { id: 'cad_assembly', action: 'write' });
 
   // --- validate_assembly: multi-part interference and clearance check ---
 
@@ -2524,7 +2535,7 @@ export function registerCadTools(
       for (const r of state.refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_assembly', action: 'validate' });
 
   /** Shared by the simulate_physics tool and POST /api/cad/physics/run (docs/archive/M4-PREP.md §4.6 path ②). */
   async function runPhysicsJob(a: PhysicsToolArgs, project: ProjectStores) {
@@ -3003,7 +3014,7 @@ export function registerCadTools(
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_simulate', action: 'physics' });
 
   /** Shared by the simulate_fluid tool, the panel preset button and POST /api/cad/fluid/run. */
   interface FluidToolArgs {
@@ -3353,7 +3364,7 @@ export function registerCadTools(
       for (const r of state.refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_simulate', action: 'motion' });
 
   // --- simulate_fluid: MPM through-flow validation (M4) ---
   registerTool(defineTool({
@@ -3430,7 +3441,7 @@ export function registerCadTools(
       for (const r of state.refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_simulate', action: 'fluid' });
 
   // --- simulate_lbm: XLB lattice-Boltzmann channel template (CFD lane stage A, 2026-10-15) ---
   registerTool(defineTool({
@@ -3505,7 +3516,7 @@ export function registerCadTools(
       ];
       return [{ type: 'text', text: lines.join('\n') }] as never;
     },
-  }));
+  }), { id: 'cad_simulate', action: 'lbm' });
 
   // --- project_info / init_project: the C-lite lifecycle, made explicit -----
   //
@@ -3569,7 +3580,7 @@ export function registerCadTools(
       if (info.liveCwd) out.liveCwd = info.liveCwd;
       return out as never;
     },
-  }));
+  }), { id: 'cad_session', action: 'info' });
 
   registerTool(defineTool({
     name: 'init_project',
@@ -3625,7 +3636,7 @@ export function registerCadTools(
         note,
       };
     },
-  }));
+  }), { id: 'cad_session', action: 'init' });
 
   registerTool(defineTool({
     name: 'bind_project',
@@ -3661,7 +3672,7 @@ export function registerCadTools(
           'Writes now go there; no corpus move is needed.',
       };
     },
-  }));
+  }), { id: 'cad_session', action: 'bind' });
 
   // --- render_part: on-demand view with camera params (model-initiated) ---
   registerTool(defineTool({
@@ -3721,7 +3732,7 @@ export function registerCadTools(
       for (const r of refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_see', action: 'render' });
 
   // --- review_visual: the delivery gate's "the model has LOOKED" record ------
   //
@@ -3898,7 +3909,7 @@ export function registerCadTools(
       for (const r of state.refs) blocks.push({ type: 'image', attachment: r.ref });
       return blocks as never;
     },
-  }));
+  }), { id: 'cad_see', action: 'review' });
 
   // --- attach_appearance: give a version a color/material sidecar ---
   registerTool(defineTool({
@@ -3972,7 +3983,7 @@ export function registerCadTools(
       if (record.note) result.note = record.note;
       return result;
     },
-  }));
+  }), { id: 'cad_part', action: 'appearance' });
 
   // --- measure_part: exact geometry ground truth ---
   const DEF_MEASURE_PART = defineTool({
@@ -4696,7 +4707,7 @@ export function registerCadTools(
       });
       return { versionId: a.versionId, ...out };
     },
-  }));
+  }), { id: 'cad_inspect', action: 'features' });
 
   // --- measure_section: the cross-section as data, so nothing has to be aimed at ---
   //
@@ -5052,7 +5063,7 @@ export function registerCadTools(
         runId: run.id,
       };
     },
-  }));
+  }), { id: 'cad_check', action: 'sheet2d' });
 
   // --- check_turning: bar stock / L/D / rotational symmetry ---
   //
@@ -5217,7 +5228,7 @@ export function registerCadTools(
       });
       return { ...report, runId: run.id };
     },
-  }));
+  }), { id: 'cad_check', action: 'turning' });
 
   // --- check_cnc_access: six-direction visibility + setup count ---
   //
@@ -5413,7 +5424,7 @@ export function registerCadTools(
       });
       return { ...report, runId: run.id };
     },
-  }));
+  }), { id: 'cad_check', action: 'cnc' });
 
   // --- check_edm_access: single-axis electrode line of sight ---
   //
@@ -5553,7 +5564,7 @@ export function registerCadTools(
       });
       return { ...report, runId: run.id };
     },
-  }));
+  }), { id: 'cad_check', action: 'edm' });
 
   // --- measure_angle: the angle between two things, with the convention stated ---
   //
@@ -5821,7 +5832,7 @@ export function registerCadTools(
       const result = await (target.execute as (args: unknown, e: unknown) => Promise<Record<string, unknown>>)(rest, exec);
       return { kind, ...result };
     },
-  }));
+  }), { id: 'cad_inspect', action: 'measure' });
 
   // --- check_printability: "符合逻辑"与"打得出来"是两回事 ---------------------
   //
@@ -6475,7 +6486,7 @@ export function registerCadTools(
       const job = await screenVersionJob(args as never, await allStores(exec));
       return job.reply as never;
     },
-  }));
+  }), { id: 'cad_check', action: 'printability' });
 
   // --- check_parts: screen a family in ONE call -------------------------------
   //
@@ -6649,7 +6660,7 @@ export function registerCadTools(
         },
       } as never;
     },
-  }));
+  }), { id: 'cad_check', action: 'parts' });
 
   // --- simulate_stress: 内部应力的"注意力场"（DECISION-LOG 2026-10-19）--------
   //
@@ -7107,7 +7118,7 @@ export function registerCadTools(
       // it the whole tool call fails as "value is not lossless JSON".
       return jsonSafe(out) as any;
     },
-  }));
+  }), { id: 'cad_simulate', action: 'stress' });
 
   // --- scan_attention: 把注意力指向可能出错的几何（HARNESS §11.14）------------
   //
@@ -7186,7 +7197,7 @@ export function registerCadTools(
       }
       return scanAttention(store, a);
     },
-  }));
+  }), { id: 'cad_inspect', action: 'attention' });
 
   // --- delivery_audit: 交付前的"证据体检"（DESIGN §23）------------------------
   //
@@ -7317,7 +7328,7 @@ export function registerCadTools(
       await persistDeliveryAudit(project, value, a.claims ?? []);
       return value;
     },
-  }));
+  }), { id: 'cad_deliver', action: 'audit' });
 
 
   // --- pearl_run: read-only six-pearl gate ---
@@ -7366,7 +7377,7 @@ export function registerCadTools(
       };
       return await executeTemplate(profile.pearl, profile.template, context, dispatch, { deadlineMs: a.deadlineMs }) as never;
     },
-  }));
+  }), { id: 'cad_deliver', action: 'pearl' });
 
   // Per-call usage telemetry (observer on llm/stream; never blocks anything).
   // Profile-wide on purpose: this observes every session at once, and the
@@ -7676,7 +7687,7 @@ export function registerCadTools(
           `${notCovered.length} not covered · judgment ${summary.judgement} — read unevaluable before claiming anything`,
       } as never;
     },
-  }));
+  }), { id: 'cad_deliver', action: 'preflight' });
 
 
   // --- deliver: the derived delivery plan (read-only; not a gate) -----------
@@ -7792,7 +7803,7 @@ export function registerCadTools(
         verification: plan.verification,
       } as never;
     },
-  }));
+  }), { id: 'cad_deliver', action: 'plan' });
 
   // --- analyze: the risk map (detection only; never gates) ------------------
   registerTool(defineTool({
@@ -8062,7 +8073,7 @@ export function registerCadTools(
         note: `${out.peaks.length} peak(s) · ${suspects.length} geometry suspect(s) · ${support ? `${(support.regions as unknown[]).length} 处质量超阈的悬空区（需支撑或改朝向，不是失败）` : `悬空质量未评估`} · strength ${stressLayer ? `${stressLayer.loadCase}（${stressLayer.runId}）` : `未映射（没有 stress run）`} · |u| 是"离各自舒适带多远"（逐点取最坏那一路）；峰=该看，不是会坏${out.notMapped.length ? ` · ${out.notMapped.length} 类未映射` : ""}`,
       } as never;
     },
-  }));
+  }), { id: 'cad_inspect', action: 'analyze' });
 
   // --- check_appearance: 成套外观检查（只读；不判美丑，只报违规）--------------
   //
@@ -8402,7 +8413,7 @@ export function registerCadTools(
 
       return value;
     },
-  }));
+  }), { id: 'cad_check', action: 'appearance' });
 
   // --- assembly manifest v1: executable interface contracts (L0) ---
   // Shared by the check_assembly tool (LLM-initiated) and the manual
@@ -8655,7 +8666,7 @@ export function registerCadTools(
         undeclared: report.undeclared,
       };
     },
-  }));
+  }), { id: 'cad_assembly', action: 'check' });
 
   // --- recall_reference_image: bring a pruned user attachment back into vision ---
   //
@@ -8785,7 +8796,7 @@ export function registerCadTools(
         { type: 'image', attachment: ref },
       ] as never;
     },
-  }));
+  }), { id: 'cad_see', action: 'reference' });
 
   // --- version preview routes for the client panel (web profiles only) ---
   // The connection service may activate after this plugin, so poll for it

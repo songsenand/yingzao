@@ -75,7 +75,7 @@ export interface ToolScopeConfig {
   /** Opt-in Phase-2 surface prototypes; production leaves this unset. */
   toolSurfaces?: readonly string[];
   /** Phase-3 cutover probe: legacy names to stop exposing (not production yet). */
-  hideLegacy?: readonly string[];
+  hideLegacy?: readonly string[] | 'all';
   /** Declaration source ①: job groups for ALL CAD sessions. Absent = whole catalog. */
   groups?: readonly CadToolGroup[];
   /** Declaration source ② (the useful one): preset id → the groups THAT preset works in.
@@ -159,7 +159,9 @@ export function effectivePresetOf(agent: any): string | null {
 export function applyPresetToolScope(ctx: any, toolNames: readonly string[], config: ToolScopeConfig): void {
   // Declared groups narrow THIS session's catalog; no declaration keeps it whole.
   const declared = toolsInGroups(config.groups);
-  const names = declared ? toolNames.filter((n) => declared.includes(n)) : toolNames;
+  const names = declared
+    ? toolNames.filter((n) => declared.includes(n) || n.startsWith('cad_'))
+    : toolNames;
   const presetIds = config.presets?.length ? [...config.presets] : ['cad'];
   /** session id → the live agent (needed to re-decide when its preset changes). */
   const agents = new Map<string, any>();

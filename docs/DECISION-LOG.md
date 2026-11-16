@@ -6229,3 +6229,24 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** 后续继续按 9 个作业面迁移 `cad_check` / `cad_simulate` / `cad_part` / `cad_assembly` / `cad_session` / `cad_see` / `cad_deliver`；数据域 4 方案不进入代码。`facade` 作为独立架构层仍删除，只保留 9 个薄入口 + 一个 catalog。
 
 **非目标：** 不再为“更少工具”牺牲动作可发现性；不把 BOM/ICD 变成执行器；不把 9 个入口扩成 9 套生命周期/状态。
+
+## 2026-11-16：生产 cutover 到 9 个工具自声明 surface
+
+**触发条件：** 第 1 条（用户拍板：“三件事都要做……到我们手上就解决掉它”）+ 第 3 条（preset 默认工具面从 39 切到 9，用户可见且难回退）+ 第 4 条（影响 tools.ts、surface 构建、scope、测试和 preset 配置）。
+
+**要解决的问题：** 9 个 surface 仍是 opt-in，生产默认 39；路由元数据曾由手写表维护，且 `cadToolNames()`/`toolScope` 会泄漏被隐藏的旧名字。
+
+**决策内容：**
+1. 39 个工具在注册处自带 `surface: { id, action }`；9 个 surface 由 `buildSurfaceFromToolMeta` 生成，删除手写 `tool-surfaces.ts`。
+2. `register-with-surfaces` 先缓冲 39 个注册，再按 `hideLegacy` 决定哪些进入 registry；`hideLegacy: 'all'` 表示只保留 surface。
+3. `CAD preset` 的 `cordis.patch.yml` 启用 9 个 `toolSurfaces` 和 `hideLegacy: all`。
+4. `cadToolNames()` 只返回实际注册的 9 个 surface；scope 分组过滤保留 `cad_*`。
+5. `cad_deliver` 仍是顶层 gate；`deliver` 仍是只读 plan，不合并执行。
+
+**理由：** 20K 上下文的成本是真实的；工具自己声明路由，surface 只做投影，避免第二张手写表和“珍珠链”式第二状态层。缓冲注册让 cutover 不需要维护 39 个旧名字的清单。
+
+**依据：** `accept-surface-cutover` PASS（registry=9、cadToolNames=9、无旧名）；`accept-cad-all-surfaces` / `accept-cad-inspect-*` / `accept-cad-check-simulate` / `accept-surface-meta` / `accept-tool-surface` / `accept-tool-groups` PASS；`tsc` 0；完整 `npm run accept:preview` 通过；`accept-surface-real` 用真实 OpenSCAD 走通 `cad_session.init → cad_see.render`。Python `measure` 仍因本机 runtime 只读显式 SKIP，不是 PASS。
+
+**影响：** CAD 会话的模型面从 39 个原子工具变为 9 个 surface；旧工具名不再出现在模型 catalog 中，内部 pearl 步骤若仍写旧名会失败（pearl 已弃用，需按 surface/action 迁移）。旧名字仍保留在内部实现和测试 fixture 中作为委托目标。
+
+**非目标：** 不把 39 个实现删掉；不把 surface 做成有状态 workflow；不把 BOM/ICD 变成 dispatcher；不放弃 `delivery_audit` 的证据 gate。

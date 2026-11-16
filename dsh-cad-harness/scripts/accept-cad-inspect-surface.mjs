@@ -15,7 +15,7 @@ const home = mkdtempSync(join(tmpdir(), 'cad-inspect-surface-'));
 process.env.DSH_HOME = home;
 process.env.DSH_CAD_PYTHON = process.env.DSH_CAD_PYTHON || 'off';
 
-const { buildCadInspectSurface, INSPECT_OPS } = await import('../src/host/surface-inspect.ts');
+const { buildCadInspectSurface } = await import('../src/host/surface-inspect.ts');
 let failed = 0;
 const check = (name, ok, detail = '') => {
   if (ok) console.log(`  PASS ${name}`);
@@ -24,13 +24,20 @@ const check = (name, ok, detail = '') => {
 
 // Fake legacy defs prove delegation and forwarding without a CAD project.
 const calls = [];
-const fake = new Map(INSPECT_OPS.map((entry, index) => [entry.tool, {
-  name: entry.tool,
-  description: `legacy ${entry.tool}`,
+const fakeSpecs = [
+  ['measure', 'measure'],
+  ['list_features', 'features'],
+  ['scan_attention', 'attention'],
+  ['analyze', 'analyze'],
+];
+const fake = new Map(fakeSpecs.map(([tool, action]) => [tool, {
+  name: tool,
+  description: `legacy ${tool}`,
   parameters: { versionId: { type: 'string', required: true, description: 'version id' } },
+  surface: { id: 'cad_inspect', action },
   execute: async (args, exec) => {
-    calls.push({ tool: entry.tool, args, exec });
-    return { op: entry.op, forwarded: args };
+    calls.push({ tool, args, exec });
+    return { op: action, forwarded: args };
   },
 }]));
 const surface = buildCadInspectSurface(fake);
@@ -76,12 +83,12 @@ const ctx = {
 const { registerCadTools } = await import('../src/host/tools.ts');
 registerCadTools(ctx);
 const realSurface = buildCadInspectSurface(tools);
-const oldChars = INSPECT_OPS.reduce((sum, entry) => {
-  const definition = tools.get(entry.tool);
+const inspectTools = [...tools.values()].filter((definition) => definition.surface?.id === 'cad_inspect');
+const oldChars = inspectTools.reduce((sum, definition) => {
   return sum + JSON.stringify({ name: definition.name, description: definition.description, parameters: definition.parameters }).length;
 }, 0);
 const newChars = JSON.stringify({ name: realSurface.name, description: realSurface.description, parameters: realSurface.parameters }).length;
-check('real four tools are present', INSPECT_OPS.every((entry) => tools.has(entry.tool)));
+check('real four tools declare cad_inspect', inspectTools.length === 4, String(inspectTools.length));
 check('surface schema is less than half the four old schemas', newChars * 2 < oldChars, `${newChars} vs ${oldChars}`);
 console.log(`  INFO cad_inspect schema: ${newChars} chars; four legacy schemas: ${oldChars} chars`);
 

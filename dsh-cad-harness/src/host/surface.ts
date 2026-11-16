@@ -102,7 +102,7 @@ export function buildSurfaceFromToolMeta(
   name: string,
   description: string,
   tools: ReadonlyMap<string, LegacyTool>,
-  timeoutMs?: number,
+  opts?: { timeoutMs?: number; gate?: boolean },
 ) {
   const ops: SurfaceOp[] = [];
   for (const tool of tools.values()) {
@@ -114,7 +114,7 @@ export function buildSurfaceFromToolMeta(
     });
   }
   if (ops.length === 0) throw new Error(`${name}: no tool declares this surface`);
-  return buildSurface({ name, description, ops, timeoutMs }, tools);
+  return buildSurface({ name, description, ops, timeoutMs: opts?.timeoutMs, gate: opts?.gate }, tools);
 }
 
 export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, LegacyTool>) {

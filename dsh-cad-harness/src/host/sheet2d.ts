@@ -156,13 +156,17 @@ export function analyzeSheet2d(section: SheetSection, params: Sheet2dParams): Sh
   let minFeatureEffective: number | undefined;
   let minSpacingEffective: number | undefined;
 
+  // Only present measurements may exist as keys. A key whose value is `undefined`
+  // is not "absent" to the output contract (validateJsonSchemaValue rejects the
+  // whole metrics object as "not a lossless JSON object"), and JSON.stringify
+  // would drop it silently on the way to the model — so the report says
+  // "no round hole was measured" by omitting the field, never by carrying an
+  // undefined one. Found by accept-tool-boundary: a plate without holes crashed
+  // every check_sheet2d call at the registration guard.
   const metricsBase = {
     holes: section.holeCount,
     roundHoles: 0,
     nonCircularHoles: 0,
-    minHoleEffectiveMm: undefined as number | undefined,
-    minFeatureEffectiveMm: undefined as number | undefined,
-    minSpacingEffectiveMm: undefined as number | undefined,
     kerfMm,
     bendLines: bendLines.length,
     ...(params.minHoleToBendMm !== undefined ? { minHoleToBendMm: params.minHoleToBendMm } : {}),

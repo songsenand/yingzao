@@ -2,8 +2,9 @@
 // Phase 0 acceptance for the 9-surface migration ledger.
 //
 // It does not require a live session, CAD engine or Python runtime: the audit
-// captures the registered definitions with a fake ctx and compares them with
-// src/host/tool-surfaces.ts. A failure means the migration table drifted.
+// captures the registered definitions with a fake ctx and derives the 9 surfaces
+// from each tool's metadata. A failure means a tool is unlabelled or an
+// (surface, action) pair is duplicated.
 
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -35,9 +36,9 @@ check('every registered tool is in exactly one surface',
 check('every surface is non-empty',
   (report?.bySurface ?? []).length === 9 && (report?.bySurface ?? []).every((f) => f.tools > 0));
 check('deliver is a top-level gate',
-  (report?.bySurface ?? []).find((f) => f.id === 'deliver')?.gate === true);
+  (report?.bySurface ?? []).find((f) => f.id === 'cad_deliver')?.gate === true);
 check('simulate is the largest current surface',
-  (report?.bySurface ?? []).slice().sort((a, b) => b.schemaChars - a.schemaChars)[0]?.id === 'simulate');
+  (report?.bySurface ?? []).slice().sort((a, b) => b.schemaChars - a.schemaChars)[0]?.id === 'cad_simulate');
 check('schema is measured, not assumed',
   Number(report?.schemaChars) > 0 && Number(report?.approxTokens) > 0,
   String(report?.schemaChars));

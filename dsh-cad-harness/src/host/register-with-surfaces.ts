@@ -5,7 +5,7 @@
 // work (physics/measure migration). This module keeps the surface experiment out
 // of that file and makes the switch explicit at the plugin entry point.
 
-import { registerCadTools } from './tools.ts';
+import { registerCadTools, rememberCadToolName } from './tools.ts';
 import { buildCadInspectSurface } from './surface-inspect.ts';
 import { buildCadCheckSurface } from './surface-check.ts';
 import { buildCadSessionSurface } from './surface-session.ts';
@@ -23,7 +23,7 @@ export interface SurfaceRegisterScope {
   presets?: readonly string[];
   toolSurfaces?: readonly string[];
   /** Phase 3 cutover probe: do not expose these legacy names. */
-  hideLegacy?: readonly string[];
+  hideLegacy?: readonly string[] | 'all';
 }
 
 /**
@@ -33,15 +33,15 @@ export interface SurfaceRegisterScope {
  */
 export function registerCadToolsWithSurfaces(ctx: any, scope?: SurfaceRegisterScope): readonly string[] {
   const captured = new Map<string, LegacyTool>();
-  const hidden = new Set(scope?.hideLegacy ?? []);
   const toolCtx = Object.create(ctx) as any;
   toolCtx.tools = new Proxy(ctx.tools, {
     get(target: any, prop: string | symbol, receiver: unknown) {
       if (prop === 'register') {
         return (definition: any) => {
+          // Buffer registrations until the cutover decision is known. This lets
+          // `hideLegacy: 'all'` work without a 39-name hand list.
           captured.set(definition.name, definition as LegacyTool);
-          if (hidden.has(definition.name)) return () => {};
-          return target.register(definition);
+          return () => {};
         };
       }
       const value = Reflect.get(target, prop, receiver);
@@ -49,7 +49,15 @@ export function registerCadToolsWithSurfaces(ctx: any, scope?: SurfaceRegisterSc
     },
   });
 
-  const names = [...registerCadTools(toolCtx, scope)].filter((name) => !hidden.has(name));
+  registerCadTools(toolCtx, scope);
+
+  const hidden = scope?.hideLegacy === 'all'
+    ? new Set(captured.keys())
+    : new Set(scope?.hideLegacy ?? []);
+  const names = [...captured.keys()].filter((name) => !hidden.has(name));
+  for (const [name, definition] of captured) {
+    if (!hidden.has(name)) ctx.tools.register(definition);
+  }
   const enabled = new Set(scope?.toolSurfaces ?? []);
   const surfaces = [
     enabled.has('session') ? buildCadSessionSurface(captured) : null,
@@ -65,6 +73,7 @@ export function registerCadToolsWithSurfaces(ctx: any, scope?: SurfaceRegisterSc
   for (const surface of surfaces) {
     ctx.tools.register(withOutputContract(surface as never) as never);
     names.push(surface.name);
+    rememberCadToolName(surface.name);
   }
   return names;
 }
