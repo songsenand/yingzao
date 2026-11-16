@@ -17,6 +17,9 @@
 
 详细验收、设计、排期在 [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md)。本文件只做索引和状态。
 
+> **工具面压缩（Proposed，未开工）**：见 [TOOL-SURFACE-PLAN.md](TOOL-SURFACE-PLAN.md)。
+> 目标 9 个作业面 facade，gate 保持顶层；先做 Phase 0 量基线，不改行为。
+
 **2026-11-12 开工进展：**
 
 - **已收口（13）**：N02（A2 预设路径）、N03（A3a 内核选择）、N04（A3b adapter 契约 + 编译经 registry 分发）、N06（A5 版本/兼容矩阵）、N07（B1 doctor）、N08（C1a 弹窗）、N09（C1b 文件名/清单/审计）、N10（C1c 自动化 override）、N11（C2 verify 随包）、N13（E2 预览文档）、N05（A4 失败分类 + state 落盘）、N12（E1 workflow + 本地 rehearsal）、N01（A1 tarball + `dsh plugin add` + 临时 profile 载入）。
