@@ -1,6 +1,8 @@
 # ---- 依赖与构建产物（可由源码 + lockfile 重建）----
 node_modules/
 dsh-cad-harness/lib/
+# CadQuery generator env (build-time; recreated from requirements.lock)
+dsh-cad-harness/library/generator/.venv/
 
 # ---- 缓存 / 包商店 ----
 .chrome-cache/

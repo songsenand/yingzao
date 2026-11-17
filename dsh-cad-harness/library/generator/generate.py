@@ -2,9 +2,8 @@
 """Generate the v0 standard-parts geometry from library/catalog.json.
 
 Usage:
-  PYTHONPATH=.tmp-cadquery \
-    /home/songsenand/.dsh/cad/runtime/venv/bin/python \
-    library/generator/generate.py
+  cd library/generator
+  .venv/bin/python generate.py
 
 The generator is an authoring/build-time tool, not plugin runtime code. It writes
 STEP + STL + part.json under library/parts and then updates catalog.json with the

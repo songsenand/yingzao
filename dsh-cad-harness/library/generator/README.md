@@ -3,15 +3,20 @@
 Authoring/build-time only. The plugin runtime does **not** need CadQuery or OCP;
 it reads the generated STEP/STL and `part.json` files.
 
-```bash
-# from dsh-cad-harness/
-uv pip install --target .tmp-cadquery \
-  --index-url https://mirrors.aliyun.com/pypi/simple cadquery
+The generator has a persistent local venv at `library/generator/.venv/`
+(gitignored, about 1.7 GB). It is a build-time tool; the plugin runtime does not
+need it.
 
-PYTHONPATH=$PWD/.tmp-cadquery \
-  /home/songsenand/.dsh/cad/runtime/venv/bin/python \
-  library/generator/generate.py
+```bash
+cd dsh-cad-harness/library/generator
+uv pip install --python .venv/bin/python \
+  --index-url https://mirrors.aliyun.com/pypi/simple -r requirements.lock
+.venv/bin/python generate.py
 ```
+
+`requirements.lock` pins the exact transitive set used to generate the committed
+artifacts. Recreate the venv with the same Python (3.13) if you need byte-level
+reproducibility.
 
 `generate.py`:
 

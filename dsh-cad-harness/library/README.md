@@ -85,14 +85,15 @@ projects/assemblies per `libRef`, not raw quantity in one BOM.
 ## Regenerate
 
 ```bash
-# from dsh-cad-harness/
-uv pip install --target .tmp-cadquery \
-  --index-url https://mirrors.aliyun.com/pypi/simple cadquery
-
-PYTHONPATH=$PWD/.tmp-cadquery \
-  /home/songsenand/.dsh/cad/runtime/venv/bin/python \
-  library/generator/generate.py
+cd dsh-cad-harness/library/generator
+uv pip install --python .venv/bin/python \
+  --index-url https://mirrors.aliyun.com/pypi/simple -r requirements.lock
+.venv/bin/python generate.py
 ```
+
+`library/generator/.venv/` is the persistent local build environment (about
+1.7 GB, gitignored). It is not needed by the plugin runtime; the generated STEP/STL
+are what ship.
 
 The generator deletes `library/parts` and regenerates all 99 specs, then updates
 `catalog.json`. It fails if a visual bbox escapes its fit envelope. Nominal
