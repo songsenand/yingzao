@@ -81,7 +81,7 @@ returns: `scope`, `manifest`, `parts`, `verdict`, `judgement`, `attention`, `bud
 
 ## `check_assembly`
 
-Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, force at the travel endpoint, buckling attention, optional standardId from the seed catalog, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
+Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, force at the travel endpoint, buckling attention, optional standardId from the seed catalog, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Declared `features` (v1: hole-pattern) are CHECKED against the version mesh — never generated from the declaration; a missing/off-PCD/wrong-diameter hole is a feature failure, and the feature of a BOM-only stock part is skipped (not a pass). Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -93,7 +93,7 @@ Validate the assembly manifest (BOM + interface contracts): distance (datum-kind
 check_assembly({ manifestPath: "…" })
 ```
 
-returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
+returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `features`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
 ## `check_cnc_access`
@@ -257,7 +257,7 @@ Audit the corpus before delivering: failing runs that are still the newest of th
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `manifestPath` | string | — | Assembly manifest to audit against. Defaults to assembly/assembly.json in the session workspace. |
-| `claims` | array | — | Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength \| motion \| assembly \| manufacturability \| appearance \| review. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent. |
+| `claims` | array | — | Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength \| motion \| assembly \| manufacturability \| appearance \| review \| flow. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent. |
 | `scanPaths` | array | — | Workspace-relative roots scanned for mesh files no version accounts for. Default ["."] (whole workspace, skipping the corpus, nested projects and common build dirs); pass [] to disable. A found file NEWER than the newest version is blocked — register it with import_part or declare it exempt. |
 | `exempt` | array | — | Declared exceptions for files intentionally left as files (e.g. bought/reference geometry): {path, reason}. Reported as info, never blocked, and the reason is echoed. Use it instead of narrowing scanPaths when the file is a legitimate non-version. |
 | `visualReview` | string (required \| off) | — | Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info. |
@@ -437,7 +437,7 @@ Run the mandatory delivery sequence in one call: printability for every part (ne
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `claims` | array | — | Delivery claims to back with evidence: {kind, statement}. kind = strength \| motion \| assembly \| manufacturability \| appearance \| review. |
+| `claims` | array | — | Delivery claims to back with evidence: {kind, statement}. kind = strength \| motion \| assembly \| manufacturability \| appearance \| review \| flow. |
 | `profileIds` | array | — | Declared process profiles to screen against (same meaning as in check_printability). |
 | `scanPaths` | array | — | Workspace-relative roots for the unregistered-geometry scan (same meaning as in delivery_audit). Default ["."]; [] disables it. |
 | `exempt` | array | — | Declared exceptions for files intentionally left as files: {path, reason} (same meaning as in delivery_audit). |
@@ -622,11 +622,12 @@ returns: `partId`, `name`, `role`, `previousRole`, `effect`
 
 ## `simulate_fluid`
 
-MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run.
+MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `pipeScad` | string | **required** | Complete OpenSCAD source of the pipe/cavity (the SOLID; the fluid flows through its bore). Self-contained, $fn=48+. |
+| `pipeScad` | string | — | Complete OpenSCAD source of the pipe/cavity (the SOLID; the fluid flows through its bore). Self-contained, $fn=48+. Give this OR versionId; when both are given, versionId wins. |
+| `versionId` | string | — | Use a saved version's model.stl as the solid and record it as the run's source. Give this OR pipeScad; overrides pipeScad when both are given. |
 | `fluidRegionMm` | object | — | Particle seed box {min:[x,y,z], max:[x,y,z]} in mm. Default: derived from the pipe (30% of the length at the inlet end, 3mm wall clearance). |
 | `inletVelocityMmPerSec` | number | — | Inlet axial speed. Default 100 mm/s. |
 | `particleCount` | number | — | Explicit particle count. Default auto (4-8 particles/cell, typically 50k-300k). |
@@ -638,7 +639,7 @@ MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conse
 simulate_fluid({ pipeScad: "…" })
 ```
 
-returns: `overallStatus`, `metrics`, `frames`
+returns: `runId`, `overallStatus`, `metrics`, `frames`
 
 
 ## `simulate_lbm`

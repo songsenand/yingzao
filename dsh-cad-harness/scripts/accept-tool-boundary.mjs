@@ -241,6 +241,49 @@ const vBeam = await saveVersion(stores.store, {
 await attachVersion(stores.partStore, beamPart.id, vBeam);
 check(Boolean(vBase && vBeam), 'two parts exist in the fixture project', `${vBase}, ${vBeam}`);
 
+// Stock-as-ordinary: a stock part WITH a version has geometry and may be an
+// interface endpoint; a stock part WITHOUT one is BOM-only and may not.
+{
+  const root = {
+    id: 'root', name: 'stock endpoint fixture', kind: 'assembly',
+    children: [
+      { id: 'base', name: 'base', kind: 'part', version: vBase },
+      { id: 'bolt', name: 'bolt', kind: 'part', source: 'stock', role: 'purchased', version: vBeam },
+    ],
+    interfaces: [{
+      id: 'I-stock', a: 'base.顶面', b: 'bolt.原点', type: '贴合', severity: 'hard', check: 'distance',
+      nominal: { quantity: '距离', value: 10 }, tolerance: { min: 9, max: 11 },
+    }],
+  };
+  const withVersion = await attempt('write_assembly', { manifestPath: 'assembly/stock-with-version.json', mode: 'create', root });
+  check(withVersion.ok, 'a stock part WITH a version can be an interface endpoint', withVersion.ok ? '' : withVersion.error);
+
+  const withoutVersion = { ...root, children: [root.children[0], { id: 'bolt', name: 'bolt', kind: 'part', source: 'stock' }] };
+  const noVersion = await attempt('write_assembly', { manifestPath: 'assembly/stock-without-version.json', mode: 'create', root: withoutVersion });
+  check(!noVersion.ok && /no version/.test(String(noVersion.error)), 'a stock part WITHOUT a version is refused as an endpoint', noVersion.ok ? 'accepted' : String(noVersion.error).slice(0, 120));
+}
+
+// simulate_fluid is an either/or at the boundary: the schema must accept both
+// {versionId} and {pipeScad}, while {} is refused by the body with a hint that
+// names both. The empty call returns before any stores or engine work, so this
+// check is cheap; the two valid calls are schema-only (running the MPM engine is
+// accept-m4's job).
+{
+  const fluid = tools.get('simulate_fluid');
+  check(Boolean(fluid), 'simulate_fluid is registered');
+  if (fluid) {
+    const { validateJsonSchemaValue } = await import('@deepseek-ai/dsh-tools');
+    const versionOnly = validateJsonSchemaValue(fluid.parameters, { versionId: vBase }, '');
+    const pipeOnly = validateJsonSchemaValue(fluid.parameters, { pipeScad: 'cube(1);' }, '');
+    check(versionOnly.length === 0, 'simulate_fluid: {versionId} passes the live schema', versionOnly.join('; '));
+    check(pipeOnly.length === 0, 'simulate_fluid: {pipeScad} passes the live schema', pipeOnly.join('; '));
+    const empty = await attempt('simulate_fluid', {});
+    check(!empty.ok && /pipeScad|versionId/.test(String(empty.error)),
+      'simulate_fluid: {} is refused with a pipeScad/versionId hint',
+      empty.ok ? 'returned a value' : String(empty.error).slice(0, 120));
+  }
+}
+
 writeFileSync(join(workspace, 'look.glb'), minimalGlb());
 
 const manifest = {

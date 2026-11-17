@@ -155,7 +155,7 @@ export async function validateEndpoints(
           continue;
         }
         if (!child.version) {
-          errors.push(`${path.join('/')} ${iface.id}: child "${childId}" has no version (stock parts cannot be interface endpoints)`);
+          errors.push(`${path.join('/')} ${iface.id}: child "${childId}" has no version (BOM-only stock cannot be an interface endpoint; give it a version to check its geometry)`);
           continue;
         }
         if (!(await versionExists(project.store, child.version))) {

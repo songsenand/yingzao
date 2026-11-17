@@ -11,6 +11,8 @@
 // any acceptance script share one implementation.
 
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { writeJsonAtomic } from './file-lock.ts';
 import { loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
@@ -40,7 +42,7 @@ export interface AuditFinding {
  * gap by name. That is the machine-enforceable half of "we looked at it / we checked it".
  */
 export interface DeliveryClaim {
-  kind: 'strength' | 'motion' | 'assembly' | 'manufacturability' | 'appearance' | 'review';
+  kind: 'strength' | 'motion' | 'assembly' | 'manufacturability' | 'appearance' | 'review' | 'flow';
   statement: string;
 }
 
@@ -55,6 +57,7 @@ export const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; la
   manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY printed part (stock/research roles are exempt by declaration)' },
   appearance: { kinds: ['appearance', 'assembly'], label: 'a fresh appearance run (check_appearance), or an assembly run carrying the renders' },
   review: { kinds: ['assembly'], label: 'a fresh assembly render to look at' },
+  flow: { kinds: ['fluid'], label: 'a fresh fluid run citing the newest flow-domain version' },
 };
 
 export interface DeliveryAudit {
@@ -68,13 +71,24 @@ export interface DeliveryAudit {
     missing: { name: string; version: string }[];
     stale: { name: string; version: string; reviewedAt?: string }[];
   };
-  versions: { total: number; neverCited: string[]; newest: string | null; newestTimestamp: string | null };
+  versions: {
+    total: number;
+    /** Every uncited version (kept for history/back-compat; the warning uses currentUncited). */
+    neverCited: string[];
+    /** Newest version per part that no run cites: a real delivery gap. */
+    currentUncited: string[];
+    /** Older/derived versions with no run: history, not a delivery gap. */
+    supersededUncited: string[];
+    newest: string | null;
+    newestTimestamp: string | null;
+  };
   parts: { total: number; newestNeverValidated: string[] };
   runs: {
     total: number;
     stale: { id: string; kind: string; status: string; superseded: string[] }[];
-    failing: { id: string; kind: string; summary: string }[];
-    duplicateGroups: { signature: string; count: number }[];
+    /** Every failed run, with `current` = no newer run for the same scope. */
+    failing: { id: string; kind: string; summary: string; sourceVersionIds: string[]; current: boolean }[];
+    duplicateGroups: { signature: string; count: number; runIds: string[] }[];
     /** Newest run per kind, with whether ANY newer version exists. */
     latestByKind: Record<string, { id: string; status: string; timestamp: string }>;
   };
@@ -147,6 +161,13 @@ export async function auditDelivery(
   const cited = new Set<string>();
   for (const r of runs) for (const id of r.sourceVersionIds ?? []) cited.add(id);
   const neverCited = versionList.filter((v) => !cited.has(v.id)).map((v) => v.id);
+  // The warning pool is the CURRENT version per part, not the whole store. A
+  // superseded draft or a derived parent is history: it is not in the BOM/ICD,
+  // and listing it beside the current version made v021 (the newest 90° flow
+  // domain) read as "old" and the whole warning readable as historical noise.
+  const currentVersionIds = new Set(newestOfPart.values());
+  const currentUncited = neverCited.filter((id) => currentVersionIds.has(id));
+  const supersededUncited = neverCited.filter((id) => !currentVersionIds.has(id));
 
   // G4 (2026-10-29): a part DECLARED stock/research is not a printed part, so the
   // printability and newest-validated expectations do not apply to it. The
@@ -170,9 +191,6 @@ export async function auditDelivery(
   const staleRuns = runs
     .map((r) => ({ id: r.id, kind: r.kind, status: r.status, superseded: superseded(r.sourceVersionIds ?? []) }))
     .filter((r) => r.superseded.length > 0);
-  const failing = runs
-    .filter((r) => r.status === 'fail')
-    .map((r) => ({ id: r.id, kind: r.kind, summary: r.summary, sourceVersionIds: r.sourceVersionIds ?? [] }));
 
   // A part-scope failure is only actionable with its subject. The run entry
   // carries the version ids; the version index carries the part id; the parts
@@ -188,24 +206,75 @@ export async function auditDelivery(
     return names.length ? `on ${names.slice(0, 3).join(', ')}` : '';
   };
 
-  // Duplicate work: same kind, same cited geometry, same outcome.
+  const latestByKind: DeliveryAudit['runs']['latestByKind'] = {};
+  for (const r of runs) {
+    const cur = latestByKind[r.kind];
+    if (!cur || cur.timestamp < r.timestamp) latestByKind[r.kind] = { id: r.id, status: r.status, timestamp: r.timestamp };
+  }
+
+  // A failure is CURRENT when nothing newer asks the same question about the
+  // same scope. comparing against the newest run OF THE KIND was wrong: r022
+  // (ball v003) is current even though r026 (gasket v012) is the newest
+  // printability run, and r027 (seat v019, wrong spindle) is history after
+  // r029 (seat v019, x axis) passed.
+  const scopeKey = (r: RunEntry): string =>
+    r.subject ? `subject:${r.subject}` : `versions:${[...(r.sourceVersionIds ?? [])].sort().join('+')}`;
+  const failingAll = runs
+    .filter((r) => r.status === 'fail')
+    .map((r) => ({ id: r.id, kind: r.kind, summary: r.summary, sourceVersionIds: r.sourceVersionIds ?? [] }));
+  const failing = failingAll.map((r) => {
+    const run = runs.find((x) => x.id === r.id)!;
+    const newer = runs.some((o) =>
+      o.id !== run.id && o.kind === run.kind && o.timestamp > run.timestamp && scopeKey(o) === scopeKey(run));
+    return { ...r, current: !run.supersededBy && !newer };
+  });
+
+  // Duplicate work: same kind, same geometry/parameters, same outcome. The
+  // signature must include what the run actually asked, not just version ids:
+  // the six fluid runs r003/r005/r006/r007/r008/r009 are different dx/angles
+  // (not duplicates), while r003/r017 are the same numerical run. Runs that a
+  // newer run already superseded are history, not duplicate work.
+  const signatureOf = async (r: RunEntry): Promise<string> => {
+    const root = project.runStore.root;
+    if (r.kind === 'fluid') {
+      try {
+        const fm = JSON.parse(await readFile(join(root, r.id, 'fluid-manifest.json'), 'utf8')) as {
+          dxMm?: number; boundsMm?: unknown; particleCount0?: number;
+        };
+        let steps = '?';
+        try {
+          const report = JSON.parse(await readFile(join(root, r.id, 'report.json'), 'utf8')) as { metrics?: { stepsRun?: number } };
+          steps = String(report.metrics?.stepsRun ?? '?');
+        } catch { /* report missing: keep '?' */ }
+        return `fluid|dx${fm.dxMm ?? '?'}|bounds${JSON.stringify(fm.boundsMm ?? null)}|` +
+          `particles${fm.particleCount0 ?? '?'}|steps${steps}|${r.status}`;
+      } catch { /* no manifest: fall through */ }
+    }
+    if (r.kind === 'motion') {
+      try {
+        const spec = await readFile(join(root, r.id, 'motion-spec.json'), 'utf8');
+        return `motion|${createHash('sha256').update(spec).digest('hex').slice(0, 12)}|${r.status}`;
+      } catch { /* no spec: fall through */ }
+    }
+    if (r.subject) return `${r.kind}|subject:${r.subject}|${r.status}`;
+    return `${r.kind}|versions:${[...(r.sourceVersionIds ?? [])].sort().join('+')}|${r.status}`;
+  };
+  const signatureEntries = await Promise.all(
+    runs.filter((r) => !r.supersededBy).map(async (r) => [r.id, await signatureOf(r)] as const),
+  );
+  const signatureById = new Map(signatureEntries);
   const groups = new Map<string, RunEntry[]>();
   for (const r of runs) {
-    const sig = `${r.kind}|${[...(r.sourceVersionIds ?? [])].sort().join('+')}|${r.status}`;
+    if (r.supersededBy) continue;
+    const sig = signatureById.get(r.id) ?? `${r.kind}|${r.status}`;
     const list = groups.get(sig) ?? [];
     list.push(r);
     groups.set(sig, list);
   }
   const duplicateGroups = [...groups.entries()]
     .filter(([, list]) => list.length > 1)
-    .map(([signature, list]) => ({ signature, count: list.length }))
+    .map(([signature, list]) => ({ signature, count: list.length, runIds: list.map((r) => r.id).sort() }))
     .sort((a, b) => b.count - a.count);
-
-  const latestByKind: DeliveryAudit['runs']['latestByKind'] = {};
-  for (const r of runs) {
-    const cur = latestByKind[r.kind];
-    if (!cur || cur.timestamp < r.timestamp) latestByKind[r.kind] = { id: r.id, status: r.status, timestamp: r.timestamp };
-  }
 
   // ── the contract, when there is one ────────────────────────────────────────
   const contract: DeliveryAudit['contract'] = {
@@ -440,7 +509,9 @@ export async function auditDelivery(
     const required = new Set<string>(declared ?? (derivedMotion ? ['motion'] : []));
     // Only the kinds that have no other gate are enforced here: an assembly check
     // already has currency findings, and manufacturability/appearance have their own.
-    const ENFORCED = new Set(['motion', 'strength']);
+    // `flow` belongs here: the user declaring it in `brief.verify` is the scope,
+    // and no other finding checks whether a fresh fluid run exists.
+    const ENFORCED = new Set(['motion', 'strength', 'flow']);
     for (const kind of [...required].filter((k) => ENFORCED.has(k))) {
       const spec = CLAIM_EVIDENCE[kind as keyof typeof CLAIM_EVIDENCE];
       if (!spec) continue; // unknown kinds are surfaced by the claims loop
@@ -448,9 +519,12 @@ export async function auditDelivery(
       const why = declared
         ? `brief.verify declares "${kind}"`
         : `the ICD declares ${contract.kinematicInterfaces} kinematic interface(s)`;
+      const tail = kind === 'flow'
+        ? 'a flow scope with no fresh fluid run is not a flow check.'
+        : 'a mechanism that was never run is not a delivered mechanism.';
       push('blocked', `verify-required-${kind}`,
         `${why}, but no FRESH run of the right kind exists (${spec.label}). ` +
-        'Run it, or narrow the scope explicitly in assembly.json `brief.verify` — a mechanism that was never run is not a delivered mechanism.');
+        `Run it, or narrow the scope explicitly in assembly.json \`brief.verify\` — ${tail}`);
     }
     if (!declared && derivedMotion) {
       push('info', 'verify-derived',
@@ -471,6 +545,24 @@ export async function auditDelivery(
     })
     .map(([pid]) => parts.find((x) => x.id === pid)?.name ?? pid);
   const claims = opts.claims ?? [];
+  // `brief.verify` is the user's scope; a claim is the caller's promise to back
+  // that scope. If verify says flow but no flow claim was declared, the audit
+  // would otherwise never look at the fluid evidence. Make the mismatch visible
+  // (warn, not blocked: a claim is a declaration, not a design fact).
+  if (claims.length > 0 && brief.present && brief.verify.length > 0) {
+    const claimed = new Set(claims.map((c) => c.kind));
+    for (const kind of brief.verify) {
+      if (!(kind in CLAIM_EVIDENCE)) {
+        push('warn', 'verify-unknown-kind',
+          `brief.verify declares "${kind}", which is not a known claim kind (${Object.keys(CLAIM_EVIDENCE).join(', ')}) — it cannot be audited`);
+        continue;
+      }
+      if (!claimed.has(kind as keyof typeof CLAIM_EVIDENCE)) {
+        push('warn', 'verify-no-claim',
+          `brief.verify declares "${kind}" but no "${kind}" claim was declared — the evidence for that scope is not being judged`);
+      }
+    }
+  }
   for (const claim of claims) {
     const spec = CLAIM_EVIDENCE[claim.kind];
     if (!spec) {
@@ -506,8 +598,10 @@ export async function auditDelivery(
     }
   }
   for (const r of failing) {
-    const isLatest = latestByKind[r.kind]?.id === r.id;
-    if (!isLatest) continue;
+    // The latest run of a kind is already covered by `latest-<kind>-failing`;
+    // current failures for an older version/subject (r022 on the ball, while
+    // r026 is the newest printability run overall) still need their own line.
+    if (!r.current || latestByKind[r.kind]?.id === r.id) continue;
     const subject = subjectOf(r);
     push('blocked', `failing-${r.kind}`, `${r.id} (${r.kind}) failed: ${r.summary}${subject ? ` — ${subject}` : ''}`);
   }
@@ -515,9 +609,23 @@ export async function auditDelivery(
     push('blocked', 'newest-version-unvalidated',
       `${newestNeverValidated.length} part(s) have a newest version NO run ever checked: ${newestNeverValidated.join(', ')}`);
   }
-  if (neverCited.length > 0) {
+  const versionLabel = (id: string): string => {
+    const v = versionById.get(id);
+    const p = v?.partId ? parts.find((x) => x.id === v.partId) : undefined;
+    const role = p ? partRoleOf(p) : undefined;
+    return `${id}${p ? ` (${p.name}${role && role !== 'printed' ? `, ${role}` : ''})` : ''}`;
+  };
+  if (currentUncited.length > 0) {
     push('warn', 'versions-never-cited',
-      `${neverCited.length}/${versionList.length} versions were never used by any run: ${neverCited.slice(0, 12).join(', ')}${neverCited.length > 12 ? ' …' : ''}`);
+      `${currentUncited.length} CURRENT version(s) were never used by any run: ` +
+      `${currentUncited.slice(0, 10).map(versionLabel).join(', ')}${currentUncited.length > 10 ? ' …' : ''}` +
+      ' — a current version without evidence is a delivery gap, not history');
+  }
+  if (supersededUncited.length > 0) {
+    push('info', 'versions-uncited-history',
+      `${supersededUncited.length} superseded/unreferenced version(s) have no run: ` +
+      `${supersededUncited.slice(0, 10).join(', ')}${supersededUncited.length > 10 ? ' …' : ''}` +
+      ' — history, not a delivery gap');
   }
   // A merged body is DERIVED: if a part it was built from moved on, the merged geometry
   // describes an older design and nothing used to say so (2026-10-23 audit, FIX-C5).
@@ -595,7 +703,7 @@ export async function auditDelivery(
   if (duplicateGroups.length > 0) {
     const wasted = duplicateGroups.reduce((a, g) => a + g.count - 1, 0);
     push('info', 'duplicate-runs',
-      `${duplicateGroups.length} group(s) repeat the same kind+geometry+outcome — ${wasted} run(s) spent without new information`);
+      `${duplicateGroups.length} group(s) repeat the same kind+geometry/parameters+outcome — ${wasted} run(s) spent without new information; superseded runs are excluded`);
   }
   // The user's own packages are part of what a number came out of. This is INFO,
   // not a fault: installing is the user's right (DECISION-LOG 2026-10-22). But a
@@ -631,6 +739,8 @@ export async function auditDelivery(
     versions: {
       total: versionList.length,
       neverCited,
+      currentUncited,
+      supersededUncited,
       newest: newestOf(versionList)?.id ?? null,
       newestTimestamp: newestOf(versionList)?.timestamp ?? null,
     },

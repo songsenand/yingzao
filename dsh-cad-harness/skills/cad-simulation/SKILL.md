@@ -49,6 +49,8 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 
 - Fixed-boundary MPM: flow direction, dead zones, pressure trend. **No fluid–structure coupling**; split into a rigid check + a fluid check, or say the limitation.
 - Trend, not industrial CFD.
+- **Give `versionId` for a registered solid; `pipeScad` is inline.** `versionId` records provenance and wins when both are given. The output carries `runId`; quote it.
+- **Arrival = escaped / initial particles, not a flow split.** Compare against a straight-pipe calibration; `active` particles are still trapped and `mass error` is particle bookkeeping, not a physical conservation proof.
 
 ## LBM (`simulate_lbm`)
 

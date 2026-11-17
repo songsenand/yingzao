@@ -43,8 +43,9 @@ Four facts the shape does not make obvious:
 - interfaces sit on the node whose **DIRECT** children they connect (`root.interfaces`), and an
   endpoint is `"<childId>.<datumName>"` — a dot, not `:` or `/`;
 - `tolerance: {min,max}` is the pass/fail criterion — **no tolerance means skipped, never pass**;
-- a part node names its version with `version` (e.g. `"v003"`), or `source: "stock"` if it has no
-  geometry.
+- a part node names its version with `version` (e.g. `"v003"`). A purchased part is
+  `source: "stock"`: with a `version` it has geometry and is checked like any other part; with no
+  `version` it is BOM-only and cannot be an endpoint.
 - `process` on a part (or on the assembly root as the default) is
   `{id, source: "user" | "policy" | "agent", rationale?, confirmedBy?, confirmedAt?}`. The usual
   path is `source: "policy"`: the project has a top-level
@@ -183,11 +184,22 @@ working, not an error.
   (the mesh is copied, not changed) — point the manifest at the returned id.
   Without either, the part is still fully measurable and assemblable, just not
   *addressable* by `check_assembly`.
-- **Stock (purchased) parts without a version cannot be interface endpoints**:
-  they have no geometry to measure. Their influence has to be folded into the
-  datums of the parts that surround them, and that assumption should be written
-  down where a human will see it. **This stops applying the moment you import the
-  part** — an imported part has a version, so it is checked like any other.
+- **Stock (purchased) parts WITH a version are ordinary parts.** Give the node a
+  version (import, library release, or a copied vendor model) and it is measured,
+  checked for interference and usable as an interface endpoint — `source:
+  "stock"` only marks it purchased (no printability/process expectations). A
+  stock part **without** a version is BOM-only: no geometry, no endpoint.
+- **`features` are CHECK-ONLY declarations.** v1 supports `hole-pattern`:
+  `{kind:"hole-pattern", axis:[x,y,z], centerMm:[x,y,z], pcdMm, count,
+  diameterMm, toleranceMm?, through?}` on a part node. `check_assembly` compares
+  the declaration with the version's mesh (`list_features`) and reports
+  missing/off-PCD/wrong-diameter/not-through holes; it **never generates
+  geometry** from the declaration. A BOM-only stock part's feature is
+  `skipped`, not passed, and a skipped feature makes the judgement `difficult`.
+  v1 matches holes that `list_features` reports on **planar faces**; it checks
+  count / PCD / diameter / axis / through, **not angular spacing**. A hole whose
+  opening is on a curved surface is outside v1, and an even angular distribution
+  still needs a datum/coaxial interface if orientation matters.
 - **Undeclared adjacency is a feature, not noise.** A warning about a
   near-touching pair that is not in any interface means the manifest has a gap:
   either declare the interface or move the parts apart. It is the one check that

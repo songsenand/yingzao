@@ -26,6 +26,7 @@ import {
   loadAssemblyManifest, flattenParts, allInterfaces, findNode,
   type AssemblyManifest, type ManifestNode, type ManifestInterface, type OwnedInterface,
 } from './manifest.ts';
+import type { FeatureCheckResult } from './features.ts';
 import type { VersionStore } from './version.ts';
 import { listVersions, readVersionDatums } from './version.ts';
 import { newestVersionPerPart, supersededVersionIds } from './latest.ts';
@@ -447,9 +448,14 @@ export interface AssemblyCheckReport {
   results: InterfaceCheckResult[];
   undeclared: UndeclaredPair[];
   partWarnings: { partId: string; messages: string[] }[];
+  /** Declared features checked against the mesh (v1: hole-pattern). */
+  features?: FeatureCheckResult[];
   /** Gap below which a pair counts as "near" in the undeclared-adjacency pass. */
   adjacencyThresholdMm: number;
-  summary: { interfaces: number; pass: number; hardViolations: number; intentFlags: number; skipped: number; undeclared: number };
+  summary: {
+    interfaces: number; pass: number; hardViolations: number; intentFlags: number; skipped: number; undeclared: number;
+    features?: { total: number; pass: number; fail: number; skipped: number };
+  };
   overallStatus: 'pass' | 'check' | 'fail';
 }
 
@@ -1010,8 +1016,8 @@ export async function runAssemblyCheckInTs(
   const staleCitations = (run: RunEntry): string[] => supersededVersionIds(versionList, run.sourceVersionIds);
 
   for (const flat of flattenParts(manifest.root)) {
-    if (flat.node.source === 'stock') {
-      partWarnings.push({ partId: flat.id, messages: ['stock part — skipped from geometric checks (v1)'] });
+    if (flat.node.source === 'stock' && !flat.node.version) {
+      partWarnings.push({ partId: flat.id, messages: ['stock part with no version — BOM-only, skipped from geometric checks'] });
       continue;
     }
     const world = await loadPartWorld(store, flat.node);
@@ -1276,8 +1282,8 @@ export async function runAssemblyCheck(
   const parts = new Map<string, PartWorld>();
   const partWarnings: AssemblyCheckReport['partWarnings'] = [];
   for (const flat of flattenParts(manifest.root)) {
-    if (flat.node.source === 'stock') {
-      partWarnings.push({ partId: flat.id, messages: ['stock part — skipped from geometric checks (v1)'] });
+    if (flat.node.source === 'stock' && !flat.node.version) {
+      partWarnings.push({ partId: flat.id, messages: ['stock part with no version — BOM-only, skipped from geometric checks'] });
       continue;
     }
     const world = await loadPartWorld(store, flat.node);

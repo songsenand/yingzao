@@ -51,6 +51,7 @@ import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport 
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
+import { checkManifestFeatures } from './features.ts';
 import { auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
 import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } from './visual-review.ts';
@@ -1000,6 +1001,11 @@ export function registerCadTools(
         ?? `机构运动 · ${provenanceLabel(sourceVersionIds)}`,
       sourceVersionIds,
       status: motionStatus,
+      // The same mechanism at the same versions and the same drive is the same
+      // question re-asked; a re-run supersedes the older answer instead of
+      // leaving two equally-current motion runs (r002/r019 was exactly that).
+      subject: `motion:${[...new Set(geometries.map((g) => g.name))].sort().join('+')}:` +
+        `${sourceVersionIds.slice().sort().join('+')}:cycles${a.cycles ?? 2}`,
       // Interference is a witness (the solid overlaps in a real pose) -> excluded.
       // Anchor drift / constraint violations mean the numbers are not trustworthy
       // -> difficult, never a clean bill. Insufficient sampling is the same kind
@@ -3055,8 +3061,10 @@ export function registerCadTools(
       throw new Error('simulate_fluid needs pipeScad or versionId');
     }
     const sourceVersionIds = a.versionId ? [a.versionId] : [];
+    const geometryHash = createHash('sha256').update(pipeStl).digest('hex').slice(0, 12);
 
     const preset = deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100);
+    const steps = a.steps ?? preset.steps;
     const { report, sdf } = await runFluid({
       pipeStl,
       gridCells: preset.gridCells,
@@ -3073,7 +3081,7 @@ export function registerCadTools(
       outletPlaneMm: a.outletPlaneMm ?? preset.outletPlaneMm,
       particlesPerCell: a.particlesPerCell,
       particleCount: a.particleCount,
-      steps: a.steps ?? preset.steps,
+      steps,
       gravityMmPerSec2: a.gravityMmPerSec2 as [number, number, number] | undefined,
       snapshotCount: 8,
     });
@@ -3127,6 +3135,10 @@ export function registerCadTools(
       status: report.overallStatus === 'pass' ? 'pass' : 'check',
       summary: `到达率 ${m.outletArrivalRatio ?? '—'} · 穿透 ${m.penetrationCount ?? '—'} · 粒子 ${m.particleCount0 ?? '—'}`
         + ((m.seedStats?.stacksPerSeed ?? 1) > 1.5 ? ` · ⚠ 粒子堆叠 ×${m.seedStats!.stacksPerSeed}` : ''),
+      // Same geometry + same numerical question (dx/steps/inlet) is a re-run of
+      // the same run, not a new experiment: committing it supersedes the older
+      // one instead of leaving two equally-current fluid runs in the corpus.
+      subject: `fluid:${geometryHash}:dx${preset.dxMm}:steps${steps}:v${a.inletVelocityMmPerSec ?? 100}`,
     });
 
     const keep = frames.slice(-2);
@@ -3142,6 +3154,7 @@ export function registerCadTools(
     fluidRefsForFinalize = { refs };
 
     return {
+      runId: run.id,
       overallStatus: report.overallStatus,
       metrics: report.metrics,
       frames: frames.map((f) => f.path),
@@ -3381,12 +3394,16 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_fluid',
     description:
-      'MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run.',
+      'MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. ' +
+      'Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.',
     parameters: {
       pipeScad: {
         type: 'string',
-        required: true,
-        description: 'Complete OpenSCAD source of the pipe/cavity (the SOLID; the fluid flows through its bore). Self-contained, $fn=48+.',
+        description: 'Complete OpenSCAD source of the pipe/cavity (the SOLID; the fluid flows through its bore). Self-contained, $fn=48+. Give this OR versionId; when both are given, versionId wins.',
+      },
+      versionId: {
+        type: 'string',
+        description: 'Use a saved version\'s model.stl as the solid and record it as the run\'s source. Give this OR pipeScad; overrides pipeScad when both are given.',
       },
       fluidRegionMm: {
         type: 'object',
@@ -3408,6 +3425,7 @@ export function registerCadTools(
         type: 'object',
         additionalProperties: false,
         properties: {
+          runId: { type: 'string', required: true, description: "This run's id. Point the user at it: the panel opens runs/<id>/fluid-manifest.json for playback." },
           overallStatus: { type: 'string', required: true },
           metrics: { type: 'object', required: true, additionalProperties: true },
           frames: { type: 'array', required: true, items: { type: 'string' } },
@@ -3417,13 +3435,21 @@ export function registerCadTools(
     },
     timeoutMs: 300_000,
     async execute(args: unknown, exec: unknown) {
-      const result = await runFluidJob(args as FluidToolArgs, await allStores(exec));
+      const a = (args ?? {}) as FluidToolArgs;
+      if (!a.versionId && !a.pipeScad) {
+        throw argError('simulate_fluid', 'pipeScad',
+          'is required when versionId is absent',
+          'a complete OpenSCAD source, or pass versionId to use a saved version (versionId wins if both are given)',
+          { received: { versionId: a?.versionId, pipeScad: a?.pipeScad } });
+      }
+      const result = await runFluidJob(a, await allStores(exec));
       fluidRefsForFinalize = fluidRefsForFinalize ?? { refs: [] };
-      return { overallStatus: result.overallStatus, metrics: result.metrics, frames: result.frames };
+      return { runId: result.runId, overallStatus: result.overallStatus, metrics: result.metrics, frames: result.frames };
     },
     finalizeContent(_exec, result) {
       const value = (result as {
         value?: {
+          runId: string;
           overallStatus: string;
           metrics: Record<string, unknown>;
           frames: string[];
@@ -3438,13 +3464,15 @@ export function registerCadTools(
       const num = (k: string): string =>
         typeof m[k] === 'number' ? (m[k] as number).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : '—';
       const lines = [
-        `Fluid ${value.overallStatus}${m.diverged === true ? ' (DIVERGED)' : ''}. ` +
+        `Fluid ${value.overallStatus}${m.diverged === true ? ' (DIVERGED)' : ''} (run ${value.runId}). ` +
           `Ran ${num('stepsRun')} steps; snapshots kept: ${(value.frames ?? []).length}.`,
         `Outlet arrival ratio ${num('outletArrivalRatio')} · penetration ${num('penetrationCount')} · ` +
           `particles ${num('particleCount0')} · escaped ${num('escaped')} · active ${num('active')} · ` +
           `max speed ${num('maxVelocityMmPerSec')}mm/s · avg ${num('avgVelocityMmPerSec')}mm/s · ` +
           `mass error ${num('massConservationError')} · ` +
           `time to outlet ${m.timeToOutletSteps === null ? 'never' : `${num('timeToOutletSteps')} steps`}`,
+        'Arrival is escaped / initial particles, not a flow split: compare it with a straight-pipe calibration; ' +
+          'active particles are still trapped, and mass error is particle bookkeeping.',
         `Attached snapshots (newest last): ${state.refs.map((r) => r.view).join(', ') || 'none'}.`,
         'Check: did the fluid reach the outlet, stay inside the bore, and keep a sensible speed profile?',
       ];
@@ -5214,14 +5242,17 @@ export function registerCadTools(
         symmetryToleranceMm: a.symmetryToleranceMm,
         requireSymmetry: a.requireSymmetry === true,
       });
-      const run = await beginRun(runStore, {
-        kind: 'turning',
-        title: `车削筛查 · ${a.versionId} · ${analysis.verdict}`,
-      });
+      const axisDeclared = a.spindleAxis !== undefined;
+      const findings = axisDeclared
+        ? analysis.findings
+        : ['spindleAxis 未声明，默认 z；若零件主轴是 x/y，请显式传 spindleAxis 后重跑。', ...analysis.findings];
+      const title = `车削筛查 · ${a.versionId} · ${axisName} · ${analysis.verdict}`;
+      const run = await beginRun(runStore, { kind: 'turning', title });
       const report = {
         versionId: a.versionId,
         spindleAxis: axisName,
         ...analysis,
+        findings,
         params: {
           barDiameterMm: a.barDiameterMm, maxLdRatio: a.maxLdRatio,
           symmetryToleranceMm: a.symmetryToleranceMm, requireSymmetry: a.requireSymmetry === true,
@@ -5233,9 +5264,13 @@ export function registerCadTools(
       await run.commit({
         status,
         judgement: analysis.verdict,
-        title: `车削筛查 · ${a.versionId} · ${analysis.verdict}`,
-        summary: analysis.findings[0] ?? analysis.verdict,
+        title,
+        summary: `轴 ${axisName} · ${findings[0] ?? analysis.verdict}`,
         sourceVersionIds: [a.versionId],
+        // The same saved version is the same turning question; a rerun (e.g.
+        // correcting the spindle axis) replaces the older answer rather than
+        // leaving a fail and a pass for v019 both looking current.
+        subject: `turning:${a.versionId}`,
       });
       return { ...report, runId: run.id };
     },
@@ -7232,11 +7267,11 @@ export function registerCadTools(
       },
       claims: {
         type: 'array',
-        description: 'Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength | motion | assembly | manufacturability | appearance | review. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent.',
+        description: 'Delivery CLAIMS to back with evidence: {kind, statement}. kind is strength | motion | assembly | manufacturability | appearance | review | flow. A claim with no fresh run of the kind it needs is reported as claim-without-evidence (blocked). Omit it and the audit declines to judge any delivery claim — it only says whether the CORPUS is coherent.',
         items: {
           type: 'object', additionalProperties: false,
           properties: {
-            kind: { type: 'string', required: true, description: 'strength | motion | assembly | manufacturability | appearance | review' },
+            kind: { type: 'string', required: true, description: 'strength | motion | assembly | manufacturability | appearance | review | flow' },
             statement: { type: 'string', required: true, description: 'The claim in words, e.g. "the beam carries 80 g without yielding".' },
           },
         },
@@ -7324,14 +7359,18 @@ export function registerCadTools(
       const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
       const warn = report.findings.filter((f) => f.severity === 'warn').length;
       const info = report.findings.filter((f) => f.severity === 'info').length;
+      const currentFailing = report.runs.failing.filter((r) => r.current).length;
       const value = {
         ...report,
         // The single key management and the delivery audit read (DESIGN §25.7). `verdict` is
         // kept because the panel and the skills display it; `judgement` is the canonical one.
         judgement: asJudgement(report.verdict),
-        summary: `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
-          `${blocked} blocked · ${warn} warn · ${info} info · ` +
-          `stale runs ${report.runs.stale.length} · newest-unvalidated parts ${report.parts.newestNeverValidated.length}` +
+        // Lead with the verdict, not with "0 blocked": the latter is true but reads as
+        // green while `difficult` is the actual answer.
+        summary: `${report.verdict.toUpperCase()} · ${blocked} blocked · ${warn} warn · ${info} info · ` +
+          `${currentFailing} current failing · ${report.versions.currentUncited.length} current uncited · ` +
+          `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
+          `stale runs ${report.runs.stale.length}` +
           (report.unregistered.files.length ? ` · unregistered files ${report.unregistered.files.length}` : ''),
       };
       // Persist the audit as the deliver pearl's evidence. The observer reads this
@@ -7413,7 +7452,7 @@ export function registerCadTools(
     parameters: {
       claims: {
         type: 'array',
-        description: 'Delivery claims to back with evidence: {kind, statement}. kind = strength | motion | assembly | manufacturability | appearance | review.',
+        description: 'Delivery claims to back with evidence: {kind, statement}. kind = strength | motion | assembly | manufacturability | appearance | review | flow.',
         items: {
           type: 'object', additionalProperties: false,
           properties: {
@@ -8453,6 +8492,22 @@ export function registerCadTools(
       runs,
     });
 
+    // Declared features are CHECK-ONLY: verify them against the same versions,
+    // never generate geometry from them. A part without a version is BOM-only;
+    // its features are reported skipped, not passed.
+    const featureResults = await checkManifestFeatures(store.root, path);
+    if (featureResults.length > 0) {
+      report.features = featureResults;
+      const featurePass = featureResults.filter((f) => f.verdict === 'pass').length;
+      const featureFail = featureResults.filter((f) => f.verdict === 'fail').length;
+      const featureSkipped = featureResults.filter((f) => f.verdict === 'skipped').length;
+      report.summary.features = {
+        total: featureResults.length, pass: featurePass, fail: featureFail, skipped: featureSkipped,
+      };
+      if (featureFail > 0) report.overallStatus = 'fail';
+      else if (featureSkipped > 0 && report.overallStatus === 'pass') report.overallStatus = 'check';
+    }
+
     // Provenance: manifest part nodes name their version, so the check is tied
     // to exactly the versions it audited.
     let sourceVersionIds: string[] = [];
@@ -8477,14 +8532,21 @@ export function registerCadTools(
       sourceVersionIds,
       // The canonical judgement (same derivation as the tool's reply): a hard violation
       // is a witness; a skipped/intent interface is "nobody evaluated it" -> difficult.
-      judgement: report.results.some((r) => r.verdict === 'hard-violation')
+      judgement: ((report.features ?? []).some((f) => f.verdict === 'fail') || report.results.some((r) => r.verdict === 'hard-violation'))
         ? 'excluded'
-        : (report.results.length === 0 || report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag'))
+        : (report.results.length === 0 ||
+           report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag') ||
+           (report.features ?? []).some((f) => f.verdict === 'skipped'))
           ? 'difficult'
           : 'not-excluded',
       status: report.overallStatus,
       summary: `${report.summary.interfaces} 接口 · 通过 ${report.summary.pass} · ` +
-        `硬冲突 ${report.summary.hardViolations} · 未声明 ${report.summary.undeclared}`,
+        `硬冲突 ${report.summary.hardViolations} · 未声明 ${report.summary.undeclared}` +
+        (report.summary.features
+          ? ` · 特征 ${report.summary.features.pass}/${report.summary.features.total}` +
+            (report.summary.features.fail ? `（失败 ${report.summary.features.fail}）` : '') +
+            (report.summary.features.skipped ? `（跳过 ${report.summary.features.skipped}）` : '')
+          : ''),
       // The manifest IS the subject of a contract check: re-running it after a
       // design change replaces the previous verdict, while a negative control
       // (a different manifest) stays a separate, still-meaningful record.
@@ -8505,7 +8567,7 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'check_assembly',
     description:
-      'Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, force at the travel endpoint, buckling attention, optional standardId from the seed catalog, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
+      'Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, force at the travel endpoint, buckling attention, optional standardId from the seed catalog, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Declared `features` (v1: hole-pattern) are CHECKED against the version mesh — never generated from the declaration; a missing/off-PCD/wrong-diameter hole is a feature failure, and the feature of a BOM-only stock part is skipped (not a pass). Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.',
     parameters: {
       manifestPath: {
         type: 'string',
@@ -8556,6 +8618,33 @@ export function registerCadTools(
               intentFlags: { type: 'integer', required: true },
               skipped: { type: 'integer', required: true },
               undeclared: { type: 'integer', required: true },
+              features: {
+                type: 'object', additionalProperties: false,
+                description: 'Declared feature checks (v1 hole-pattern), when the manifest declares any.',
+                properties: {
+                  total: { type: 'integer', required: true },
+                  pass: { type: 'integer', required: true },
+                  fail: { type: 'integer', required: true },
+                  skipped: { type: 'integer', required: true },
+                },
+              },
+            },
+          },
+          features: {
+            type: 'array',
+            description: 'Per-feature check results. CHECK-ONLY: the declaration never generates geometry. A skipped feature (e.g. BOM-only stock, missing Python) is not a pass.',
+            items: {
+              type: 'object', additionalProperties: true,
+              properties: {
+                partId: { type: 'string', required: true },
+                partName: { type: 'string', required: true },
+                versionId: { type: 'string' },
+                featureIndex: { type: 'integer', required: true },
+                kind: { type: 'string', required: true },
+                verdict: { type: 'string', required: true },
+                matched: { type: 'integer', required: true },
+                detail: { type: 'string', required: true },
+              },
             },
           },
           hardViolations: {
@@ -8651,6 +8740,7 @@ export function registerCadTools(
         manifestPath: manifestFile,
         adjacencyThresholdMm: report.adjacencyThresholdMm,
         summary: report.summary,
+        ...(report.features ? { features: report.features as unknown as never } : {}),
         hardViolations: report.results.filter((r) => r.verdict === 'hard-violation').map(trim),
         intentFlags: report.results.filter((r) => r.verdict === 'intent-flag').map(trim),
         // The canonical judgement (src/shared/judgement.ts). Derived, not re-decided:
@@ -8659,9 +8749,11 @@ export function registerCadTools(
         //                                 a skipped check is exactly "unevaluable", and it
         //                                 must never read as pass — microscope2 had two)
         //   none           -> not-excluded
-        judgement: report.results.some((r) => r.verdict === 'hard-violation')
+        judgement: ((report.features ?? []).some((f) => f.verdict === 'fail') || report.results.some((r) => r.verdict === 'hard-violation'))
           ? 'excluded'
-          : (report.results.length === 0 || report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag'))
+          : (report.results.length === 0 ||
+             report.results.some((r) => r.verdict === 'skipped' || r.verdict === 'intent-flag') ||
+             (report.features ?? []).some((f) => f.verdict === 'skipped'))
             ? 'difficult'   // an EMPTY contract is an unevaluated one, not a satisfied one
             : 'not-excluded',
         judgedBy: {
@@ -8669,6 +8761,7 @@ export function registerCadTools(
           intentFlags: report.results.filter((r) => r.verdict === 'intent-flag').length,
           skipped: report.results.filter((r) => r.verdict === 'skipped').length,
           undeclared: (report.undeclared ?? []).length,
+          ...(report.summary.features ? { features: report.summary.features } : {}),
         },
         // The skips carry the instructions for how to make them checkable; a
         // bare count let "overallStatus: pass" read as "everything was verified"

@@ -144,6 +144,31 @@ export interface PartTransform {
   pose?: PartPose;
 }
 
+/**
+ * A DECLARED feature, not a modelling instruction. The checker verifies the
+ * version's mesh against it; it never generates geometry from it. Keeping this
+ * check-only avoids a second CAD kernel and a second modelling path.
+ */
+export interface HolePatternFeature {
+  kind: 'hole-pattern';
+  /** Hole axis in the part's own file frame; normalised by the checker. */
+  axis: [number, number, number];
+  /** A point on the pattern axis (e.g. the flange-face centre), part frame, mm. */
+  centerMm: [number, number, number];
+  /** Bolt-circle diameter, mm. */
+  pcdMm: number;
+  /** Expected number of holes. */
+  count: number;
+  /** Nominal hole diameter, mm. */
+  diameterMm: number;
+  /** Allowed deviation for diameter / radius / axis, mm. Default 0.2. */
+  toleranceMm?: number;
+  /** Require every matched hole to be through. */
+  through?: boolean;
+  note?: string;
+}
+export type ManifestFeature = HolePatternFeature;
+
 export interface ManifestNode {
   id: string;
   name: string;
@@ -152,12 +177,12 @@ export interface ManifestNode {
   /**
    * Where the part came from.
    *
-   * `stock` = a purchased/existing part with NO version: no geometry, so it is
-   * skipped by the geometric checks and its influence must be folded into the
-   * datums of the parts around it. `imported` is deliberately a separate value:
-   * an imported part HAS a version directory with a measured mesh, so it is
-   * checked exactly like a generated one — it is an interface endpoint, not a
-   * hole in the manifest. Anything without a `version` is what `stock` means.
+   * `stock` = a purchased/existing part. With a `version` it has geometry and is
+   * checked exactly like an imported part (it can be an interface endpoint);
+   * without one it is BOM-only, skipped by the geometric checks, and its
+   * influence must be folded into the datums of the parts around it. `imported`
+   * is a separate value only to say where the mesh came from; both imported and
+   * versioned-stock parts are checked. Anything without a `version` is BOM-only.
    */
   source?: 'generated' | 'imported' | 'stock';
   /**
@@ -192,6 +217,8 @@ export interface ManifestNode {
   stockRef?: string;                // source=stock: identification of the physical part
   transform?: PartTransform;        // placement in the parent frame (v1: parts only)
   datums?: ManifestDatumDecl[];     // documentation index; truth lives in datums.json
+  /** Check-only feature declarations (v1: hole-pattern). Never a modelling instruction. */
+  features?: ManifestFeature[];
   children?: ManifestNode[];
   interfaces?: ManifestInterface[];
 }
@@ -642,6 +669,52 @@ function checkInterfaces(node: Json, childIds: Map<string, Set<string>>, nodePtr
   });
 }
 
+function checkFeatures(value: unknown, ptr: string, issues: ManifestIssue[]): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    issues.push({ path: ptr, expected: 'an array of feature declarations', got: got(value) });
+    return;
+  }
+  value.forEach((raw, i) => {
+    const p = `${ptr}[${i}]`;
+    if (!isObj(raw)) {
+      issues.push({ path: p, expected: 'a feature object', got: got(raw) });
+      return;
+    }
+    if (raw.kind !== 'hole-pattern') {
+      issues.push({ path: `${p}/kind`, expected: '"hole-pattern" (the only feature kind in v1)', got: got(raw.kind) });
+      return;
+    }
+    const vec3 = (v: unknown, key: string, nonZero = false): void => {
+      if (!Array.isArray(v) || v.length !== 3 || !v.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+        issues.push({ path: `${p}/${key}`, expected: 'an array of 3 finite numbers (mm)', got: got(v) });
+      } else if (nonZero && Math.hypot(v[0] as number, v[1] as number, v[2] as number) < 1e-9) {
+        issues.push({ path: `${p}/${key}`, expected: 'a non-zero direction', got: got(v) });
+      }
+    };
+    vec3(raw.axis, 'axis', true);
+    vec3(raw.centerMm, 'centerMm');
+    for (const key of ['pcdMm', 'diameterMm'] as const) {
+      const v = raw[key];
+      if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+        issues.push({ path: `${p}/${key}`, expected: 'a finite number > 0 (mm)', got: got(v) });
+      }
+    }
+    if (typeof raw.count !== 'number' || !Number.isInteger(raw.count) || raw.count < 1) {
+      issues.push({ path: `${p}/count`, expected: 'a positive integer', got: got(raw.count) });
+    }
+    if (raw.toleranceMm !== undefined && (typeof raw.toleranceMm !== 'number' || !Number.isFinite(raw.toleranceMm) || raw.toleranceMm < 0)) {
+      issues.push({ path: `${p}/toleranceMm`, expected: 'a finite number >= 0 (mm)', got: got(raw.toleranceMm) });
+    }
+    if (raw.through !== undefined && typeof raw.through !== 'boolean') {
+      issues.push({ path: `${p}/through`, expected: 'a boolean', got: got(raw.through) });
+    }
+    if (raw.note !== undefined && typeof raw.note !== 'string') {
+      issues.push({ path: `${p}/note`, expected: 'a string', got: got(raw.note) });
+    }
+  });
+}
+
 function checkNode(node: unknown, ptr: string, isRoot: boolean, ids: Set<string>, issues: ManifestIssue[]): void {
   if (!isObj(node)) {
     issues.push({ path: ptr, expected: 'an assembly node object', got: got(node) });
@@ -695,6 +768,13 @@ function checkNode(node: unknown, ptr: string, isRoot: boolean, ids: Set<string>
   }
 
   checkTransform(node.transform, `${ptr}/transform`, issues);
+  if (node.features !== undefined) {
+    if (node.kind !== 'part') {
+      issues.push({ path: `${ptr}/features`, expected: 'a part node (features describe a part version)', got: `kind "${got(node.kind)}"` });
+    } else {
+      checkFeatures(node.features, `${ptr}/features`, issues);
+    }
+  }
 
   if (node.datums !== undefined) {
     if (!Array.isArray(node.datums)) {

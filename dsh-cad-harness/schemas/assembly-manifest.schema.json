@@ -161,7 +161,7 @@
         "part": { "type": "string", "description": "accepted alias for a part's display name (ignored by the checker)" },
         "kind": { "enum": ["assembly", "part"], "description": "THE node discriminator (not `type`)" },
         "version": { "type": "string", "pattern": "^v\\d{3,}$", "description": "part only: version id in the store" },
-        "source": { "enum": ["generated", "imported", "stock"] },
+        "source": { "enum": ["generated", "imported", "stock"], "description": "stock with a version has geometry and is checked like an imported part; stock without a version is BOM-only" },
         "group": {
           "type": "string",
           "description": "Functional group (功能区) this part belongs to, e.g. \"底座组\". At most ONE group per part; a small part (screw, nut, pin) may have none. Groups are a PARTITION OF PARTS, not a spatial region: a group's envelope is computed as the union of its members' bounding boxes. Budgets attach to groups (see assembly/budget.json), never to parts."
@@ -240,6 +240,26 @@
         },
         "transform": { "$ref": "#/$defs/transform" },
         "datums": { "type": "array", "items": { "$ref": "#/$defs/datumDecl" } },
+        "features": {
+          "type": "array",
+          "description": "CHECK-ONLY feature declarations (v1: hole-pattern). The checker verifies the version mesh against them; the plugin never generates geometry from them, so features do not become a second modelling path.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "axis", "centerMm", "pcdMm", "count", "diameterMm"],
+            "properties": {
+              "kind": { "enum": ["hole-pattern"] },
+              "axis": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3, "description": "Hole axis in the part's own frame; need not be unit." },
+              "centerMm": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3, "description": "A point on the pattern axis (e.g. flange-face centre), part frame, mm." },
+              "pcdMm": { "type": "number", "exclusiveMinimum": 0, "description": "Bolt-circle diameter, mm." },
+              "count": { "type": "integer", "minimum": 1, "description": "Expected hole count." },
+              "diameterMm": { "type": "number", "exclusiveMinimum": 0, "description": "Nominal hole diameter, mm." },
+              "toleranceMm": { "type": "number", "minimum": 0, "description": "Allowed deviation for diameter/radius/axis, mm. Default 0.2." },
+              "through": { "type": "boolean", "description": "Require every matched hole to be through." },
+              "note": { "type": "string" }
+            }
+          }
+        },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/node" },

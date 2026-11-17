@@ -64,14 +64,22 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
   check(report.versions.neverCited.length >= 20,
     'it counts the versions no run ever cited (≥20 of 83)',
     `${report.versions.neverCited.length}/${report.versions.total}`);
+  check(report.versions.currentUncited.length + report.versions.supersededUncited.length === report.versions.neverCited.length,
+    'never-cited is partitioned into current vs superseded (no double count, no lost id)',
+    `${report.versions.currentUncited.length} current + ${report.versions.supersededUncited.length} history`);
+  check(report.runs.failing.every((r) => typeof r.current === 'boolean'),
+    'every failed run says whether it is current or history');
   check(codes.has('contract-without-motion'),
     'it says the contract has NO motion-clearance interface (mechanism not contracted)',
     JSON.stringify(report.contract.byCheck));
   check(report.contract.geometryNewerThanCheck === true,
     'it notices geometry newer than the newest contract check (v083 after r068)');
-  check(report.runs.duplicateGroups.length >= 5,
-    'it reports repeated runs that added no information',
+  check(report.runs.duplicateGroups.length >= 4,
+    'it reports repeated runs that added no information (superseded runs excluded)',
     `${report.runs.duplicateGroups.length} groups`);
+  check(report.runs.duplicateGroups.every((g) => Array.isArray(g.runIds) && g.runIds.length === g.count),
+    'each duplicate group names the runs behind the count',
+    JSON.stringify(report.runs.duplicateGroups.slice(0, 2)));
 
   // The delivery document's own table is stale — the audit's numbers agree with
   // the independent analysis of it (6/15 delivered parts were not newest).
@@ -243,6 +251,24 @@ if (!existsSync(join(m5, 'cad-data', 'runs', 'manifest.json'))) {
     check(recorded.verdict === 'not-excluded',
       'an explicit user scope without motion does not block — but the waiver is printed',
       recorded.verdict);
+
+    // A declared flow scope must be auditable: no fluid run -> BLOCKED by
+    // verify-required-flow; no flow claim -> WARN verify-no-claim. This is the
+    // exact gap that let the ball-valve fluid work sit outside the delivery verdict.
+    const flowManifest = JSON.parse(JSON.stringify(withBrief));
+    flowManifest.root.brief.verify = ['flow'];
+    const flowPath = join(workspace, 'assembly', 'flow.json');
+    writeFileSync(flowPath, JSON.stringify(flowManifest, null, 2));
+    const flowAudit = await auditDelivery(projectStores(workspace), {
+      manifestPath: flowPath,
+      claims: [{ kind: 'motion', statement: 'the clean physics run backs motion' }],
+    });
+    check(flowAudit.findings.some((f) => f.code === 'verify-required-flow' && f.severity === 'blocked'),
+      'brief.verify flow with NO fluid run is BLOCKED',
+      flowAudit.findings.map((f) => `${f.severity}/${f.code}`).join(', '));
+    check(flowAudit.findings.some((f) => f.code === 'verify-no-claim' && f.severity === 'warn'),
+      'and a flow scope without a flow claim is a WARN, not silence');
+    rmSync(flowPath);
   }
 
   // The visual gate must be able to say NO: remove the record and the same clean
