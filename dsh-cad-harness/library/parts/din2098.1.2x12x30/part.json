@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "din2098.1.2x12x30",
+  "family": "din2098",
+  "spec": "w1.2×OD12×L30",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:24.057147+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "catalog wire/OD/free length; fit is an annular envelope",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "end-face": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -6.0,
+      -6.0,
+      0.0
+    ],
+    "max": [
+      6.0,
+      6.0,
+      30.0
+    ],
+    "size": [
+      12.0,
+      12.0,
+      30.0
+    ]
+  },
+  "volumeMm3": 1221.4512,
+  "fit": {
+    "step": "parts/din2098.1.2x12x30/fit/model.step",
+    "stl": "parts/din2098.1.2x12x30/fit/model.stl",
+    "stepSha256": "a2da2a7b33fec953af85af7ac599bf6ccc458b85fde47e8d6d19f48215be90d0",
+    "stlSha256": "18535df589f1bf6c85699e6a2cb0561d007a666092494326ca2aeba9a9d64e2f",
+    "triangles": 336
+  },
+  "visual": {
+    "step": "parts/din2098.1.2x12x30/visual/model.step",
+    "stl": "parts/din2098.1.2x12x30/visual/model.stl",
+    "stepSha256": "35a7acb3841a3d372d11871268b7acbfe8c32e126bf590a25ba312efe0c1bd32",
+    "stlSha256": "893a619a03b27db73b5a067c5710a4f3e7debb4772b1eb5e80f805763dc72852",
+    "mode": "distinct",
+    "triangles": 35018,
+    "bboxMm": {
+      "min": [
+        -6.0,
+        -6.0,
+        -0.0
+      ],
+      "max": [
+        6.0,
+        6.0,
+        30.0
+      ],
+      "size": [
+        12.0,
+        12.0,
+        30.0
+      ]
+    }
+  }
+}

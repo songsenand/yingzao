@@ -1,0 +1,4 @@
+# CadQuery STEP writer emits trailing spaces on some entity lines; they are not
+# source whitespace and must not block commits. STL is binary.
+*.step -whitespace
+*.stl binary

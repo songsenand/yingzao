@@ -4,12 +4,12 @@
   "catalogVersion": "0.1.0-v0",
   "generatedAt": "2026-11-17",
   "units": "mm",
-  "description": "v0 heuristic catalog. Package membership is metadata, not part identity; geometry is not generated yet.",
+  "description": "v0 heuristic catalog; 99 core specs generated with fit+visual. Package membership is metadata, not part identity.",
   "dimensionPolicy": "Spec params are selection values; standard dimension tables are resolved by the generator at build time. Nulls are not stored.",
   "packages": {
     "core": {
       "maxSpecs": 100,
-      "status": "planned",
+      "status": "active",
       "description": "Most common specs; both fit and visual LODs; shipped with the main plugin."
     },
     "full": {
@@ -411,7 +411,7 @@
       "spec": "M3×10",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -421,13 +421,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M3x10/fit/model.step",
+            "stl": "parts/iso4014.M3x10/fit/model.stl",
+            "stepSha256": "ff250318a5282947c5224c11d55aca513d396a574cc4221aad748454e5bb6edb",
+            "stlSha256": "54dd5c98e89083f3e0c880014010d4c6155ff156f82e20837bc9baa7915809cf"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M3x10/visual/model.step",
+            "stl": "parts/iso4014.M3x10/visual/model.stl",
+            "stepSha256": "f0499f0898431fbce00e4ead3c931a9a032ac956326fca962544b0e44de8a29f",
+            "stlSha256": "6055b68cca76e64583b512365d2aa41b3151de76173e6a7f4e12b36e6a6179c8"
+          },
           "mode": "distinct"
         }
       },
@@ -458,7 +468,7 @@
       "spec": "M3×16",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -468,13 +478,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M3x16/fit/model.step",
+            "stl": "parts/iso4014.M3x16/fit/model.stl",
+            "stepSha256": "c33aa4c43a81f8e26994ff236f864af711d17ca34caa4d7f7985465a8a21febc",
+            "stlSha256": "16267a96000692f36ed866b93f22c5cfc7a20f870229d1ccf277526a260f4104"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M3x16/visual/model.step",
+            "stl": "parts/iso4014.M3x16/visual/model.stl",
+            "stepSha256": "60dcf636aec3079ca7e9db3d32d65b8f21e0d6d46f5e827e2e358d0173b25420",
+            "stlSha256": "833e06cba0b7d5dcb375615873be042e29f4db4c8574b01e99c8b11cf43fd1de"
+          },
           "mode": "distinct"
         }
       },
@@ -505,7 +525,7 @@
       "spec": "M4×12",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -515,13 +535,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M4x12/fit/model.step",
+            "stl": "parts/iso4014.M4x12/fit/model.stl",
+            "stepSha256": "8c19e3e317eadc3ee210b1c7a0785ddae5bfd51e52a87e7a176ea3eb1b1dd38b",
+            "stlSha256": "2e0a748d3179a451d4bc9d8534c0394bc49d23c98bfb5c9a58aae8bdf951649d"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M4x12/visual/model.step",
+            "stl": "parts/iso4014.M4x12/visual/model.stl",
+            "stepSha256": "36bdbc0b3214d2fa581a5efffddd9078d61d876f99127b4fc59d1f2b06638a42",
+            "stlSha256": "603d9483ec32f9e66fd9ccaff4a59b3ac93a584d68f5b7007ecf18df8afc5d16"
+          },
           "mode": "distinct"
         }
       },
@@ -552,7 +582,7 @@
       "spec": "M4×20",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -562,13 +592,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M4x20/fit/model.step",
+            "stl": "parts/iso4014.M4x20/fit/model.stl",
+            "stepSha256": "9a49b3e86c189442e51fa4390548ed36d219c3d53bc530215350f29ed11735e2",
+            "stlSha256": "0335db14ffccb0bec0374f336f0a8835b3ea4c13bdc9ec3913c15e763238c0d9"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M4x20/visual/model.step",
+            "stl": "parts/iso4014.M4x20/visual/model.stl",
+            "stepSha256": "3b85858334639842e70833fc02c17cdf28171005511b3c34716bce111b6cc293",
+            "stlSha256": "02ca320abb964f7b4cddaf957dde4340b3b7eea389db383f42ea8be8915ccfbd"
+          },
           "mode": "distinct"
         }
       },
@@ -599,7 +639,7 @@
       "spec": "M5×16",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -609,13 +649,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M5x16/fit/model.step",
+            "stl": "parts/iso4014.M5x16/fit/model.stl",
+            "stepSha256": "c781f071ccf0cb544d7919d223dcd26110918721aabaedbb43c428fbb1312757",
+            "stlSha256": "2f6caa8e8f8805e352f93095f13c504f1290efd3da3da2d5b78964487d701354"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M5x16/visual/model.step",
+            "stl": "parts/iso4014.M5x16/visual/model.stl",
+            "stepSha256": "3d0a0572198e5bdf6487c35ee188cf75bb3a07e3a9380ee33ecf1f509066191f",
+            "stlSha256": "227cef1886d72ce691c7595e342caefe076505134589f67cb50e6edbd45a0ba9"
+          },
           "mode": "distinct"
         }
       },
@@ -646,7 +696,7 @@
       "spec": "M5×25",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -656,13 +706,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M5x25/fit/model.step",
+            "stl": "parts/iso4014.M5x25/fit/model.stl",
+            "stepSha256": "d7c2bb4e05ec2bff76a7e6d103418c1ca1ff37d10a0d62080a860660b413e6e8",
+            "stlSha256": "d11781bbdf1be149bff239dde425c07977197797d81fd321424793c79a96b88f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M5x25/visual/model.step",
+            "stl": "parts/iso4014.M5x25/visual/model.stl",
+            "stepSha256": "4cdeec139a24881b77698800a7efe4aeb3ce21b3985e6f55710457c24fa04cbe",
+            "stlSha256": "e2e74ca5d7881f81462adb5eb7a3a2e623c37ca52d42dae0ac9fc458597e1539"
+          },
           "mode": "distinct"
         }
       },
@@ -693,7 +753,7 @@
       "spec": "M6×20",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -703,13 +763,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M6x20/fit/model.step",
+            "stl": "parts/iso4014.M6x20/fit/model.stl",
+            "stepSha256": "f3fa789184cf018365d6faef3c8f5ddf9034e73fe53db20e97c0b1381288a654",
+            "stlSha256": "1f5384f8315c502ac7d3c00a5395abbe42ed45f37794d02c0516823a0ef46fa8"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M6x20/visual/model.step",
+            "stl": "parts/iso4014.M6x20/visual/model.stl",
+            "stepSha256": "2a5d39a06401797779e5fdb632b1266f5f22995f105b7a39fa8293033251eb21",
+            "stlSha256": "cda1920ee0192696f1e7ab26744cbf6c3858ee4e7da6d8955b241aa8a5a1ecbf"
+          },
           "mode": "distinct"
         }
       },
@@ -740,7 +810,7 @@
       "spec": "M6×30",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -750,13 +820,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M6x30/fit/model.step",
+            "stl": "parts/iso4014.M6x30/fit/model.stl",
+            "stepSha256": "5cd3ace43ec427394812bc4d88a25cc75f7ca0df730b5eccb2005db444f716c8",
+            "stlSha256": "84cf81cb84990783f2fbd61f4d37d508cbed7bf4d764955924147dc130808c4d"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M6x30/visual/model.step",
+            "stl": "parts/iso4014.M6x30/visual/model.stl",
+            "stepSha256": "cdb3c3bc65164e107a4aac4e8644dc5478039c14222be8f4a84fbbcf0926cb4e",
+            "stlSha256": "0eb45b2a5b62bee4ab87cb39d0356e0da86f6cfdb4d1341b750491485e1e35f9"
+          },
           "mode": "distinct"
         }
       },
@@ -787,7 +867,7 @@
       "spec": "M8×25",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -797,13 +877,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M8x25/fit/model.step",
+            "stl": "parts/iso4014.M8x25/fit/model.stl",
+            "stepSha256": "de3b60a8576f0b77e2ebb4b729b9168a4d592eb19201d649eac1df239f9d8977",
+            "stlSha256": "6f4e1fd994b701f82df6870be5b7124a0c44b5fb9f38350ebb777896a1b39780"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M8x25/visual/model.step",
+            "stl": "parts/iso4014.M8x25/visual/model.stl",
+            "stepSha256": "b5717e744260dce3b9ed541b6e092540249194accabb01b49e5870060d6c753a",
+            "stlSha256": "accb71ab8abd1caf8bc9f4491acc895ac71b71c2728c4933e322a8acd59cb39a"
+          },
           "mode": "distinct"
         }
       },
@@ -834,7 +924,7 @@
       "spec": "M8×40",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -844,13 +934,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M8x40/fit/model.step",
+            "stl": "parts/iso4014.M8x40/fit/model.stl",
+            "stepSha256": "3ddb2f57bb5c97174a9b0bf0cc9085efb44ca7e19188a252a75c056407c7d28e",
+            "stlSha256": "8a3a69e834babbedfb16101dd7639ab20c1f8326538c27523b41ace23c855397"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M8x40/visual/model.step",
+            "stl": "parts/iso4014.M8x40/visual/model.stl",
+            "stepSha256": "4d3e5aefb220c58b446216e40e090214dc7a4aeba8e33333a0be347acc0f5ca2",
+            "stlSha256": "7a38691087591b7e8b553552e432b1aad1a3b1396422e85c83367a6927a31f89"
+          },
           "mode": "distinct"
         }
       },
@@ -881,7 +981,7 @@
       "spec": "M10×30",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -891,13 +991,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M10x30/fit/model.step",
+            "stl": "parts/iso4014.M10x30/fit/model.stl",
+            "stepSha256": "6a0d8a0668883e9c86ea4924875ed5a3e7c56be81dfce15287d8b5d2b2f1a129",
+            "stlSha256": "63d4ae445e280eac4db074dbd62555cb776293b8f93e06a3d0b0873cb17b2c7b"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M10x30/visual/model.step",
+            "stl": "parts/iso4014.M10x30/visual/model.stl",
+            "stepSha256": "2cec844786239a30975e16bc1adddc8ffe42a3fb0e966181dc809ee95800ac42",
+            "stlSha256": "e7bb44cdb64e9ef980d09d2b4828498313cfe93d80e32fed45f20efed683c85a"
+          },
           "mode": "distinct"
         }
       },
@@ -928,7 +1038,7 @@
       "spec": "M10×50",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -938,13 +1048,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M10x50/fit/model.step",
+            "stl": "parts/iso4014.M10x50/fit/model.stl",
+            "stepSha256": "c9e1e3874ccf187cb241165755e8545e4074521d4110a8b458076359419d6bd3",
+            "stlSha256": "bdba4807da761992e75c781e8ece8639e68eff539ad76056a2fc55f63b5e8a89"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M10x50/visual/model.step",
+            "stl": "parts/iso4014.M10x50/visual/model.stl",
+            "stepSha256": "cac623b5b9801e036d3161b86238d21698f011f36069096e9ef6a2fe042c6969",
+            "stlSha256": "a34f13e0b5364fc0ad3ca50e7a0d549bb757e211bad958bc0fc4ab73932cbce0"
+          },
           "mode": "distinct"
         }
       },
@@ -975,7 +1095,7 @@
       "spec": "M12×40",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -985,13 +1105,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M12x40/fit/model.step",
+            "stl": "parts/iso4014.M12x40/fit/model.stl",
+            "stepSha256": "5fc4f60d24a7f97912ba81ca537db80397a8f9f7e0f5e5d1dd5ad1fe80131cf8",
+            "stlSha256": "052ab59777575ba76e84fe2c6a063c170f41c4e1394c852082422ae9ff6bbdf4"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M12x40/visual/model.step",
+            "stl": "parts/iso4014.M12x40/visual/model.stl",
+            "stepSha256": "12a891fc1f224fb56936d9f721cbca3f51d1d8e4e1666075455c3d698cd1c14d",
+            "stlSha256": "f6a0c8a2a8a58f634375d5d6d0e3cb88341ab8820a8e49e6be0c8a85711ddf83"
+          },
           "mode": "distinct"
         }
       },
@@ -1022,7 +1152,7 @@
       "spec": "M12×60",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1032,13 +1162,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M12x60/fit/model.step",
+            "stl": "parts/iso4014.M12x60/fit/model.stl",
+            "stepSha256": "6393b4fc5267955c2697bf1aa79c5345fbb0fc51fab0391e677ecdb5d12da474",
+            "stlSha256": "c9d7fd622ecfc216ed8b78d7f318941e2c1fc9338549035c2ce4f0452c7fc2f7"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M12x60/visual/model.step",
+            "stl": "parts/iso4014.M12x60/visual/model.stl",
+            "stepSha256": "1b6283557b7b042c26b2110706eeb7cd7f6761247fbc8f756e4f8f711abb11f4",
+            "stlSha256": "93a277111bc46c2cfadd508d15aaad55a3707d526228adabaa2e508d074ad17a"
+          },
           "mode": "distinct"
         }
       },
@@ -1069,7 +1209,7 @@
       "spec": "M16×60",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1079,13 +1219,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M16x60/fit/model.step",
+            "stl": "parts/iso4014.M16x60/fit/model.stl",
+            "stepSha256": "f6770dc13df66551c8bee44c7d44edc4b5feec2c5f633e3ab89d15ee6b4e307d",
+            "stlSha256": "74a01dad090f36cfabb1df3b2659bffb2c133de5c2014995cf5992007908a990"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M16x60/visual/model.step",
+            "stl": "parts/iso4014.M16x60/visual/model.stl",
+            "stepSha256": "3050ee3a518d556090853956abc3abc0989cb08d6a6722e8694e34341cf5ef02",
+            "stlSha256": "74786aa1ef2775e876db4b8a29cc36bdf446cffbde7a363fe1c95bbd3bc1c812"
+          },
           "mode": "distinct"
         }
       },
@@ -1116,7 +1266,7 @@
       "spec": "M16×80",
       "standard": "ISO 4014 / ISO 4017",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1126,13 +1276,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M16x80/fit/model.step",
+            "stl": "parts/iso4014.M16x80/fit/model.stl",
+            "stepSha256": "6d6cec1b08859b01780a59284bd0cd5536efd1eabc0ec463d8791f623bc55c72",
+            "stlSha256": "1a46f972291b4c04ec3cf47b7a00c25c478edab6d1f028fb53ec37e03c0bcb37"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4014.M16x80/visual/model.step",
+            "stl": "parts/iso4014.M16x80/visual/model.stl",
+            "stepSha256": "6fe199d57be84568c4749e48c1b58d88d9bce2e4d3893dc32b959362db7558c2",
+            "stlSha256": "2f6bde3cdd60da0ee3ce2e270c0ec653c47d6cd58459da1fefd940f62174d5a1"
+          },
           "mode": "distinct"
         }
       },
@@ -1163,7 +1323,7 @@
       "spec": "M3×10",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1173,13 +1333,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M3x10/fit/model.step",
+            "stl": "parts/iso4762.M3x10/fit/model.stl",
+            "stepSha256": "05296cff132c3ab31f8a5d7ead9b608c438baa1f0c1c4435638eb7857386f95c",
+            "stlSha256": "71b8e0259bb25e492ed163e9b1eed51f0510fa9b834af3663ece8963724b965d"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M3x10/visual/model.step",
+            "stl": "parts/iso4762.M3x10/visual/model.stl",
+            "stepSha256": "99e5bbd49aad9c46c048a8f2ab92a15d25f41994b2eefd2a45de148e0fdcb5be",
+            "stlSha256": "cebaaca051a203a4c5fedba78815e8f27d84c4aff23a6aef8284881957b5b363"
+          },
           "mode": "distinct"
         }
       },
@@ -1208,7 +1378,7 @@
       "spec": "M4×12",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1218,13 +1388,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M4x12/fit/model.step",
+            "stl": "parts/iso4762.M4x12/fit/model.stl",
+            "stepSha256": "4d9ea2814ab8f7e34e06174ac6b2edd3b519d440a4079838e9c4ede4a0bd5657",
+            "stlSha256": "3f5e476a4fd3eb5e444ae6ac07011a9ec19972d0d0d2a38067fdaab0df453fa0"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M4x12/visual/model.step",
+            "stl": "parts/iso4762.M4x12/visual/model.stl",
+            "stepSha256": "149f9324c4d216576fefa826552bca945ab0f00ed73fdd1ae963d01175966468",
+            "stlSha256": "bdd35bb6982390c63388c8c2c4198292674460776409cf035efaea690216b307"
+          },
           "mode": "distinct"
         }
       },
@@ -1253,7 +1433,7 @@
       "spec": "M5×16",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1263,13 +1443,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M5x16/fit/model.step",
+            "stl": "parts/iso4762.M5x16/fit/model.stl",
+            "stepSha256": "139fb6b31dec970e7c87b2e598b9126b6a28546a06a6d163811799ad20e14d6c",
+            "stlSha256": "469286fb1122975f848dd8eceee7363e11af6b6e68736ee159d2c2ff63ed7d9e"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M5x16/visual/model.step",
+            "stl": "parts/iso4762.M5x16/visual/model.stl",
+            "stepSha256": "46e96f3502eb58815cfdbd205dfc4f154e1a81653ec72210f0997aeaa0ccbdee",
+            "stlSha256": "9a3721a8c250f197c86fe269edb749c78180aafe7d9e7970c05ac80b416ffc9a"
+          },
           "mode": "distinct"
         }
       },
@@ -1298,7 +1488,7 @@
       "spec": "M6×20",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1308,13 +1498,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M6x20/fit/model.step",
+            "stl": "parts/iso4762.M6x20/fit/model.stl",
+            "stepSha256": "910e4a4419e9e7da3483a72193ea438ecaa703c08cb9970d1fe534d3fdf53a73",
+            "stlSha256": "9d426be44c26d037775b29ee22ba6faa9f680656f6c978ff94fd4980ca5798fb"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M6x20/visual/model.step",
+            "stl": "parts/iso4762.M6x20/visual/model.stl",
+            "stepSha256": "16a40e34a34e18c07562e2390b0ca8352a486ebd84e94fe3302ab8a230658474",
+            "stlSha256": "0824d42049a2222d596848aeb01fae5629982e812c0a684837da7cae06fc4c3d"
+          },
           "mode": "distinct"
         }
       },
@@ -1343,7 +1543,7 @@
       "spec": "M8×25",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1353,13 +1553,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M8x25/fit/model.step",
+            "stl": "parts/iso4762.M8x25/fit/model.stl",
+            "stepSha256": "8c0a952469bd81a7ede851941c955968be92d14b6361d657f28cf330566b8c8e",
+            "stlSha256": "36c0327ca9cf0d4b46aa4ba5cf890591ceaf6f4f18a53242f18e182e2a090495"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M8x25/visual/model.step",
+            "stl": "parts/iso4762.M8x25/visual/model.stl",
+            "stepSha256": "bb0a9ffb8ee151b7b7cbfddde9b003037de058adfde98398cc0f6606370f2c80",
+            "stlSha256": "e8e620d14fbb6923a13b816582921f92bc7cf272c032a8a385ff9ed5f5a8a801"
+          },
           "mode": "distinct"
         }
       },
@@ -1388,7 +1598,7 @@
       "spec": "M8×40",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1398,13 +1608,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M8x40/fit/model.step",
+            "stl": "parts/iso4762.M8x40/fit/model.stl",
+            "stepSha256": "9d097f5d3fd187ad580c6a10dd6c67df02f2a5a1ee8fb7af6abd7a6beee947eb",
+            "stlSha256": "450b83c9a9c2b072791e79f056f3aa227b4f5278d9c5d427fca733e8f8cc82e3"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M8x40/visual/model.step",
+            "stl": "parts/iso4762.M8x40/visual/model.stl",
+            "stepSha256": "7f066e735caf471a01ec6970fd1bf9c1deec8d0613a640628de01b9b45025a80",
+            "stlSha256": "fbc06710cf8fca64dfbc621a3f4d6974bdeb206cf8b83567b663619773118a6a"
+          },
           "mode": "distinct"
         }
       },
@@ -1433,7 +1653,7 @@
       "spec": "M10×30",
       "standard": "ISO 4762",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1443,13 +1663,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M10x30/fit/model.step",
+            "stl": "parts/iso4762.M10x30/fit/model.stl",
+            "stepSha256": "108afa5afa33bd6bc6f4e1a5b2bb7900ec24b133be19ef8ed3ac57ec0998ff77",
+            "stlSha256": "1abbdf8e2382a0f789d6dfdd74989881b4ebb09324f766f24151116db81334b9"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4762.M10x30/visual/model.step",
+            "stl": "parts/iso4762.M10x30/visual/model.stl",
+            "stepSha256": "11e50fb57c82d68b753a879fb0856faddfce3ae9af97596132b58e594db4db63",
+            "stlSha256": "d8eeb6c809ee38384e51b87aec436f0216267d52f7c1585dad4bd10726ff13c5"
+          },
           "mode": "distinct"
         }
       },
@@ -1478,7 +1708,7 @@
       "spec": "M3×5",
       "standard": "ISO 4026",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1488,13 +1718,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M3x5/fit/model.step",
+            "stl": "parts/iso4026.M3x5/fit/model.stl",
+            "stepSha256": "4caa15f98956934e9463f3e60e46a43494c9a668fdd5785b0c0105036617fb3c",
+            "stlSha256": "b08a1582e6639f41c37d1775e773c43e3f086d20c987fac89811d11f510cc17b"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M3x5/fit/model.step",
+            "stl": "parts/iso4026.M3x5/fit/model.stl",
+            "stepSha256": "4caa15f98956934e9463f3e60e46a43494c9a668fdd5785b0c0105036617fb3c",
+            "stlSha256": "b08a1582e6639f41c37d1775e773c43e3f086d20c987fac89811d11f510cc17b"
+          },
           "mode": "alias-fit"
         }
       },
@@ -1523,7 +1763,7 @@
       "spec": "M4×6",
       "standard": "ISO 4026",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1533,13 +1773,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M4x6/fit/model.step",
+            "stl": "parts/iso4026.M4x6/fit/model.stl",
+            "stepSha256": "b209052de2bdc589d9c3aa5ae0637eb6b5fae8cc785ff1bc014589b948ffebb4",
+            "stlSha256": "58788c1d0a0a02c2eebc666231ab1a3f37a715a52ee53fa72e3a4e382f735ac1"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M4x6/fit/model.step",
+            "stl": "parts/iso4026.M4x6/fit/model.stl",
+            "stepSha256": "b209052de2bdc589d9c3aa5ae0637eb6b5fae8cc785ff1bc014589b948ffebb4",
+            "stlSha256": "58788c1d0a0a02c2eebc666231ab1a3f37a715a52ee53fa72e3a4e382f735ac1"
+          },
           "mode": "alias-fit"
         }
       },
@@ -1568,7 +1818,7 @@
       "spec": "M5×8",
       "standard": "ISO 4026",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1578,13 +1828,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M5x8/fit/model.step",
+            "stl": "parts/iso4026.M5x8/fit/model.stl",
+            "stepSha256": "f81d33cd2f08033d75b800df7ff2d362df645bfe20f71440b3800270548a81f1",
+            "stlSha256": "234a7b505730cda6d8f9e6abbd7285835b9ed0b9ec47501470760e1080271652"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M5x8/fit/model.step",
+            "stl": "parts/iso4026.M5x8/fit/model.stl",
+            "stepSha256": "f81d33cd2f08033d75b800df7ff2d362df645bfe20f71440b3800270548a81f1",
+            "stlSha256": "234a7b505730cda6d8f9e6abbd7285835b9ed0b9ec47501470760e1080271652"
+          },
           "mode": "alias-fit"
         }
       },
@@ -1613,7 +1873,7 @@
       "spec": "M6×10",
       "standard": "ISO 4026",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1623,13 +1883,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M6x10/fit/model.step",
+            "stl": "parts/iso4026.M6x10/fit/model.stl",
+            "stepSha256": "2cbb348953f7baaecb04d452cc1846241a0146ca9f45c26f36c6356f7434c8ae",
+            "stlSha256": "9592738210e24f5ccfe50c379e6de9d67374725e7748f3297268c2b1c8d48ecf"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M6x10/fit/model.step",
+            "stl": "parts/iso4026.M6x10/fit/model.stl",
+            "stepSha256": "2cbb348953f7baaecb04d452cc1846241a0146ca9f45c26f36c6356f7434c8ae",
+            "stlSha256": "9592738210e24f5ccfe50c379e6de9d67374725e7748f3297268c2b1c8d48ecf"
+          },
           "mode": "alias-fit"
         }
       },
@@ -1658,7 +1928,7 @@
       "spec": "M8×12",
       "standard": "ISO 4026",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1668,13 +1938,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M8x12/fit/model.step",
+            "stl": "parts/iso4026.M8x12/fit/model.stl",
+            "stepSha256": "51e13e040f1a54cd836d7496c4016221c4413678352b0e186b7c7ecedbd25c7a",
+            "stlSha256": "aebe44e2c4a36b34cf6acc4d7ab7a2c5ae8047aba51a03152997d66b348ca32c"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4026.M8x12/fit/model.step",
+            "stl": "parts/iso4026.M8x12/fit/model.stl",
+            "stepSha256": "51e13e040f1a54cd836d7496c4016221c4413678352b0e186b7c7ecedbd25c7a",
+            "stlSha256": "aebe44e2c4a36b34cf6acc4d7ab7a2c5ae8047aba51a03152997d66b348ca32c"
+          },
           "mode": "alias-fit"
         }
       },
@@ -1703,7 +1983,7 @@
       "spec": "M3",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1713,13 +1993,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M3/fit/model.step",
+            "stl": "parts/iso4032.M3/fit/model.stl",
+            "stepSha256": "9d469f18e02d16573594162b3002e20533bc3431c77b05e9b527d87356dba15b",
+            "stlSha256": "10988104c44d30bc919c74ba2e8d9f9f00dc41a8f1a2d5d7ede9e2ab4bfbd953"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M3/visual/model.step",
+            "stl": "parts/iso4032.M3/visual/model.stl",
+            "stepSha256": "9af9f2e388ad1ab515497a3a0d7799a5a52910ff962af37cf678da49a689d632",
+            "stlSha256": "c470f5cbf4ab2cc6e88ec7e27c35bb463845a998d656a30996d1b15cdacc85b2"
+          },
           "mode": "distinct"
         }
       },
@@ -1748,7 +2038,7 @@
       "spec": "M4",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1758,13 +2048,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M4/fit/model.step",
+            "stl": "parts/iso4032.M4/fit/model.stl",
+            "stepSha256": "22ed90a3cab575d98852211d06939fb9e0870717b68c90439b57e058e0aee345",
+            "stlSha256": "9939f2f825e861472c6050109031f20730be55a36e4bb4cde116156a5d53c9e4"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M4/visual/model.step",
+            "stl": "parts/iso4032.M4/visual/model.stl",
+            "stepSha256": "b71d1fc09d9ea63d061c6cd397b75cb82c2817b18c50af5a16e90c8a4874b0ea",
+            "stlSha256": "b9ee2586bb84570acabfb3d24dcb381c25a7d9b94a4274817ab37d651e933227"
+          },
           "mode": "distinct"
         }
       },
@@ -1793,7 +2093,7 @@
       "spec": "M5",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1803,13 +2103,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M5/fit/model.step",
+            "stl": "parts/iso4032.M5/fit/model.stl",
+            "stepSha256": "c839af521766d953229675ebe1a813be6a969b5f086c633665b9691001c0b8b4",
+            "stlSha256": "4acd84997a7a7ecca830adf1345a10ba3941a11772f56fd0a63aae38d0420e8f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M5/visual/model.step",
+            "stl": "parts/iso4032.M5/visual/model.stl",
+            "stepSha256": "bc51c1f220c019ac577ab2b66f075afecac9d1e2414e4f97c5e4c8769a4d8a67",
+            "stlSha256": "6ad3bab2e63a8c3dbf771b88d97562989f3697f0a34c9b823c20e8e5d7dc439f"
+          },
           "mode": "distinct"
         }
       },
@@ -1838,7 +2148,7 @@
       "spec": "M6",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1848,13 +2158,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M6/fit/model.step",
+            "stl": "parts/iso4032.M6/fit/model.stl",
+            "stepSha256": "74ea5e4278f5805a39953c2000a00f35ac1c7990ece5e17864e1df4f3beafc1e",
+            "stlSha256": "19800a6ed9279dd436b9e35a5c64b920da6ce967bfe242540fbee6f639a7ef8c"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M6/visual/model.step",
+            "stl": "parts/iso4032.M6/visual/model.stl",
+            "stepSha256": "5baa71cd8eb05ccf161a00822136362cdff61456d9f6dcf9a101f6a1c50c18f0",
+            "stlSha256": "bfb0acc3e0e19a195343b6ff3d583527ca121df0cefecfa2bc0e77e11bf9e4f6"
+          },
           "mode": "distinct"
         }
       },
@@ -1883,7 +2203,7 @@
       "spec": "M8",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1893,13 +2213,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M8/fit/model.step",
+            "stl": "parts/iso4032.M8/fit/model.stl",
+            "stepSha256": "a1561095be9c03534a7b8a7b7fa884de97ffa2889498852dcb79e8480ee5f098",
+            "stlSha256": "7e1b97d9d8f24631402fc01d7758eab89aa10c8241ad0838e814b59ad0eadaa5"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M8/visual/model.step",
+            "stl": "parts/iso4032.M8/visual/model.stl",
+            "stepSha256": "cc26f59fad8b4c8b5717e776472368b6e989ca59d246d9909f045c3d71bb52a3",
+            "stlSha256": "848261c9d21168565be4b64426f93e88fb5ab9ed825fe304c55ef694305da262"
+          },
           "mode": "distinct"
         }
       },
@@ -1928,7 +2258,7 @@
       "spec": "M10",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1938,13 +2268,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M10/fit/model.step",
+            "stl": "parts/iso4032.M10/fit/model.stl",
+            "stepSha256": "8bf625d843408501f5a9840fe3751561b60044b75ef322f2ecc70bf29370f0a8",
+            "stlSha256": "d199d173148ebaf0913f96830a5230dd84cc6897a74e5759b0b33fc7be59328b"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M10/visual/model.step",
+            "stl": "parts/iso4032.M10/visual/model.stl",
+            "stepSha256": "b3774728a928f12af4d33a7504f3738e74bd4ab23fbcc0607dd0f8194cd384ea",
+            "stlSha256": "b5f38b4c345323f03e2475f310637f0b21ad7593ad4b72e18bf1848fbd2db22e"
+          },
           "mode": "distinct"
         }
       },
@@ -1973,7 +2313,7 @@
       "spec": "M12",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -1983,13 +2323,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M12/fit/model.step",
+            "stl": "parts/iso4032.M12/fit/model.stl",
+            "stepSha256": "63188ac826f10c75c39b663a20fbc5f631eb62032471faef50f759a25b5ff745",
+            "stlSha256": "4a6674a120b108827f08a2abb31c64ca99301c5f3abaaa923fd9d08396398e4b"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M12/visual/model.step",
+            "stl": "parts/iso4032.M12/visual/model.stl",
+            "stepSha256": "1295c846e73249831a5972b1b88c690628465528990a6ce2c758a7dce5142ccc",
+            "stlSha256": "16d0d57a3465181c86ad26b9a65fbd78d67ba3d8ab3656c89ce1d73841947806"
+          },
           "mode": "distinct"
         }
       },
@@ -2018,7 +2368,7 @@
       "spec": "M16",
       "standard": "ISO 4032",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2028,13 +2378,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M16/fit/model.step",
+            "stl": "parts/iso4032.M16/fit/model.stl",
+            "stepSha256": "607de7ef404bcd09532ac32cba29591982bf2f2b859a8b7cb540dca84290fad9",
+            "stlSha256": "7ab003ab937fc1361dbbbc9d7bf64c505a93ddf6abe5334aedb64f9e78f52000"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso4032.M16/visual/model.step",
+            "stl": "parts/iso4032.M16/visual/model.stl",
+            "stepSha256": "195587f626c105a97764e32fa92c5196f4c9cfa918f6140d10cefda69fe5d8f3",
+            "stlSha256": "390b3559bb7d95fb54efabf52245d34aec2f62e6af0450c7585cb07e06a7b40d"
+          },
           "mode": "distinct"
         }
       },
@@ -2063,7 +2423,7 @@
       "spec": "M8",
       "standard": "ISO 7040 / ISO 7041",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2073,13 +2433,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7040.M8/fit/model.step",
+            "stl": "parts/iso7040.M8/fit/model.stl",
+            "stepSha256": "67620a82d3595653d9b0c946c5b500efffe0612b33b5e9279b5bb030d559492b",
+            "stlSha256": "7e1b97d9d8f24631402fc01d7758eab89aa10c8241ad0838e814b59ad0eadaa5"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7040.M8/visual/model.step",
+            "stl": "parts/iso7040.M8/visual/model.stl",
+            "stepSha256": "1908cc67d1335b069bf32a8fcb0f149f1afa4de6d7958dba5f75ef838e111fe6",
+            "stlSha256": "7e1b97d9d8f24631402fc01d7758eab89aa10c8241ad0838e814b59ad0eadaa5"
+          },
           "mode": "distinct"
         }
       },
@@ -2108,7 +2478,7 @@
       "spec": "M3",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2118,13 +2488,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M3/fit/model.step",
+            "stl": "parts/iso7089.M3/fit/model.stl",
+            "stepSha256": "9debdaa5b98db1a1f56b7149ed932c21d765ef9f40e77d8c9252219c3dbd3165",
+            "stlSha256": "fbe23a693d99a14d09a5ea24ad774dcbd711e3e56a88c475f94c1af35cbbb2e6"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M3/fit/model.step",
+            "stl": "parts/iso7089.M3/fit/model.stl",
+            "stepSha256": "9debdaa5b98db1a1f56b7149ed932c21d765ef9f40e77d8c9252219c3dbd3165",
+            "stlSha256": "fbe23a693d99a14d09a5ea24ad774dcbd711e3e56a88c475f94c1af35cbbb2e6"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2152,7 +2532,7 @@
       "spec": "M4",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2162,13 +2542,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M4/fit/model.step",
+            "stl": "parts/iso7089.M4/fit/model.stl",
+            "stepSha256": "2faeeabe4045a0a5b092fb54014b11f7037e004e75297c107c29a966503ca2a6",
+            "stlSha256": "706a3b4dcda210905509d460704be06c3967a0a519dccc098ca46b264244433a"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M4/fit/model.step",
+            "stl": "parts/iso7089.M4/fit/model.stl",
+            "stepSha256": "2faeeabe4045a0a5b092fb54014b11f7037e004e75297c107c29a966503ca2a6",
+            "stlSha256": "706a3b4dcda210905509d460704be06c3967a0a519dccc098ca46b264244433a"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2196,7 +2586,7 @@
       "spec": "M5",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2206,13 +2596,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M5/fit/model.step",
+            "stl": "parts/iso7089.M5/fit/model.stl",
+            "stepSha256": "6d35f0bdbf14a3a492fc28471ddec97460dc6eb906a00919184bd8f046a3e4d2",
+            "stlSha256": "67d3418e7890e4e6f38d9eeaac9c27a495143c76ff4473b80fc04acc079463f5"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M5/fit/model.step",
+            "stl": "parts/iso7089.M5/fit/model.stl",
+            "stepSha256": "6d35f0bdbf14a3a492fc28471ddec97460dc6eb906a00919184bd8f046a3e4d2",
+            "stlSha256": "67d3418e7890e4e6f38d9eeaac9c27a495143c76ff4473b80fc04acc079463f5"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2240,7 +2640,7 @@
       "spec": "M6",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2250,13 +2650,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M6/fit/model.step",
+            "stl": "parts/iso7089.M6/fit/model.stl",
+            "stepSha256": "f338d4c1ec949cf8af801fdf05d789d02aeac83e4cdf96468e0165fd991e65c5",
+            "stlSha256": "38f85bf156b3376c0c355ae77f5b8b7ac3f30a16adb95d856199aeb4e7094440"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M6/fit/model.step",
+            "stl": "parts/iso7089.M6/fit/model.stl",
+            "stepSha256": "f338d4c1ec949cf8af801fdf05d789d02aeac83e4cdf96468e0165fd991e65c5",
+            "stlSha256": "38f85bf156b3376c0c355ae77f5b8b7ac3f30a16adb95d856199aeb4e7094440"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2284,7 +2694,7 @@
       "spec": "M8",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2294,13 +2704,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M8/fit/model.step",
+            "stl": "parts/iso7089.M8/fit/model.stl",
+            "stepSha256": "79c38d81c1d5a73f23efff80e446c51807d7ccf15c577e74bbcf6557198ce857",
+            "stlSha256": "61b67bfb6b915989bed5ab72d45ef456c00497ba309bed9d3b69cea15a75715f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M8/fit/model.step",
+            "stl": "parts/iso7089.M8/fit/model.stl",
+            "stepSha256": "79c38d81c1d5a73f23efff80e446c51807d7ccf15c577e74bbcf6557198ce857",
+            "stlSha256": "61b67bfb6b915989bed5ab72d45ef456c00497ba309bed9d3b69cea15a75715f"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2328,7 +2748,7 @@
       "spec": "M10",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2338,13 +2758,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M10/fit/model.step",
+            "stl": "parts/iso7089.M10/fit/model.stl",
+            "stepSha256": "9db8f4aa02e9d03eab344f824a02c78f6aa9e44187ce44eb76fd735fcefd2cf9",
+            "stlSha256": "8588aed31bafd06ce6f41980924c83db74e650273aa9d5060f2d1fa865c321b2"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M10/fit/model.step",
+            "stl": "parts/iso7089.M10/fit/model.stl",
+            "stepSha256": "9db8f4aa02e9d03eab344f824a02c78f6aa9e44187ce44eb76fd735fcefd2cf9",
+            "stlSha256": "8588aed31bafd06ce6f41980924c83db74e650273aa9d5060f2d1fa865c321b2"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2372,7 +2802,7 @@
       "spec": "M12",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2382,13 +2812,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M12/fit/model.step",
+            "stl": "parts/iso7089.M12/fit/model.stl",
+            "stepSha256": "1208f8ab4c93389a827fc5f98f9e9aa68732c8a5a39f4b2c8c77dd3464bde972",
+            "stlSha256": "baf8c179359885cb787b71807d28034fa19833a2adfd4a978bde263c6b7b8938"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M12/fit/model.step",
+            "stl": "parts/iso7089.M12/fit/model.stl",
+            "stepSha256": "1208f8ab4c93389a827fc5f98f9e9aa68732c8a5a39f4b2c8c77dd3464bde972",
+            "stlSha256": "baf8c179359885cb787b71807d28034fa19833a2adfd4a978bde263c6b7b8938"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2416,7 +2856,7 @@
       "spec": "M16",
       "standard": "ISO 7089 / ISO 7090",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2426,13 +2866,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M16/fit/model.step",
+            "stl": "parts/iso7089.M16/fit/model.stl",
+            "stepSha256": "1672d9c52f56f0ae9e24cfb90a076a345a60b38d7c2c45de1bd73274d888cb8c",
+            "stlSha256": "9c165538c1b8ccae213cf2bd5518cb205d281335efb413dd4bf5a4b73ca8582a"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso7089.M16/fit/model.step",
+            "stl": "parts/iso7089.M16/fit/model.stl",
+            "stepSha256": "1672d9c52f56f0ae9e24cfb90a076a345a60b38d7c2c45de1bd73274d888cb8c",
+            "stlSha256": "9c165538c1b8ccae213cf2bd5518cb205d281335efb413dd4bf5a4b73ca8582a"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2460,7 +2910,7 @@
       "spec": "M3",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2470,13 +2920,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M3/fit/model.step",
+            "stl": "parts/din127.M3/fit/model.stl",
+            "stepSha256": "c5fdf4c584457d7cbb4cb8267894d28f413b0171541c6ce6c290e623528366bb",
+            "stlSha256": "07ec24b2b9aee7408dcbc39067d514f0d1e75f2060a69c06140af75de34f7166"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M3/fit/model.step",
+            "stl": "parts/din127.M3/fit/model.stl",
+            "stepSha256": "c5fdf4c584457d7cbb4cb8267894d28f413b0171541c6ce6c290e623528366bb",
+            "stlSha256": "07ec24b2b9aee7408dcbc39067d514f0d1e75f2060a69c06140af75de34f7166"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2503,7 +2963,7 @@
       "spec": "M4",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2513,13 +2973,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M4/fit/model.step",
+            "stl": "parts/din127.M4/fit/model.stl",
+            "stepSha256": "d99c220e2279773f8d0f6f36810e9af7ac1853c792db78ab10141cbbb09d947b",
+            "stlSha256": "14c242db8bf423cee729e48340a68c241f6f454df30655048bc00ecffeea5979"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M4/fit/model.step",
+            "stl": "parts/din127.M4/fit/model.stl",
+            "stepSha256": "d99c220e2279773f8d0f6f36810e9af7ac1853c792db78ab10141cbbb09d947b",
+            "stlSha256": "14c242db8bf423cee729e48340a68c241f6f454df30655048bc00ecffeea5979"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2546,7 +3016,7 @@
       "spec": "M5",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2556,13 +3026,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M5/fit/model.step",
+            "stl": "parts/din127.M5/fit/model.stl",
+            "stepSha256": "bcf6a140f37d8010a435e551946ac896366133f5bd7b830fc89a75ec7023ef80",
+            "stlSha256": "a60f044618837cc8ba626a7df608ef909942ad6959e5e1e91ffc2d369e202ea9"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M5/fit/model.step",
+            "stl": "parts/din127.M5/fit/model.stl",
+            "stepSha256": "bcf6a140f37d8010a435e551946ac896366133f5bd7b830fc89a75ec7023ef80",
+            "stlSha256": "a60f044618837cc8ba626a7df608ef909942ad6959e5e1e91ffc2d369e202ea9"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2589,7 +3069,7 @@
       "spec": "M6",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2599,13 +3079,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M6/fit/model.step",
+            "stl": "parts/din127.M6/fit/model.stl",
+            "stepSha256": "2f913890a6a6b1208bf433d838a291f2be30dd904dec568811451bb5ee17090b",
+            "stlSha256": "3e1b1ad6bea397d5e71d9337596ad8d01f793c960642775f08e4c7b1949d7378"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M6/fit/model.step",
+            "stl": "parts/din127.M6/fit/model.stl",
+            "stepSha256": "2f913890a6a6b1208bf433d838a291f2be30dd904dec568811451bb5ee17090b",
+            "stlSha256": "3e1b1ad6bea397d5e71d9337596ad8d01f793c960642775f08e4c7b1949d7378"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2632,7 +3122,7 @@
       "spec": "M8",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2642,13 +3132,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M8/fit/model.step",
+            "stl": "parts/din127.M8/fit/model.stl",
+            "stepSha256": "e3dfe1e94c0ff3482374a43aa5ab4acb5370b47e21aa905b4f71f3545e6760f1",
+            "stlSha256": "310481621fb9f15a79e097351c08ef4f1a5b12d109f612e5096942b4a3d7a515"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M8/fit/model.step",
+            "stl": "parts/din127.M8/fit/model.stl",
+            "stepSha256": "e3dfe1e94c0ff3482374a43aa5ab4acb5370b47e21aa905b4f71f3545e6760f1",
+            "stlSha256": "310481621fb9f15a79e097351c08ef4f1a5b12d109f612e5096942b4a3d7a515"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2675,7 +3175,7 @@
       "spec": "M10",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2685,13 +3185,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M10/fit/model.step",
+            "stl": "parts/din127.M10/fit/model.stl",
+            "stepSha256": "2655d3e362ddd3f58dc7d927b8fbddbe774fb982f6637a8d998696a81bf5e27b",
+            "stlSha256": "e2a04019ce255db89588de15a0e8fdb922d54d909c1a403781298519a40c63fc"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M10/fit/model.step",
+            "stl": "parts/din127.M10/fit/model.stl",
+            "stepSha256": "2655d3e362ddd3f58dc7d927b8fbddbe774fb982f6637a8d998696a81bf5e27b",
+            "stlSha256": "e2a04019ce255db89588de15a0e8fdb922d54d909c1a403781298519a40c63fc"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2718,7 +3228,7 @@
       "spec": "M12",
       "standard": "DIN 127",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2728,13 +3238,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M12/fit/model.step",
+            "stl": "parts/din127.M12/fit/model.stl",
+            "stepSha256": "fe8e6a428ce80f149d6cdfca534bc4b03616ef9ca49956c3e33374b92754ac8d",
+            "stlSha256": "a7e8517c9c17286db207a4d00b2b6c731bd2837bd1429db9d9d4c1c9b5d6f27d"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din127.M12/fit/model.step",
+            "stl": "parts/din127.M12/fit/model.stl",
+            "stepSha256": "fe8e6a428ce80f149d6cdfca534bc4b03616ef9ca49956c3e33374b92754ac8d",
+            "stlSha256": "a7e8517c9c17286db207a4d00b2b6c731bd2837bd1429db9d9d4c1c9b5d6f27d"
+          },
           "mode": "alias-fit"
         }
       },
@@ -2761,7 +3281,7 @@
       "spec": "6000",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2771,13 +3291,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6000/fit/model.step",
+            "stl": "parts/iso15.6000/fit/model.stl",
+            "stepSha256": "76d324b4fdfc4ff1bc924b0a29c6e1326b8c8ba64491a3adb6a11ae63515c1aa",
+            "stlSha256": "75dfacdd51d483fa60d80f879ad8a59c0a66c4f8cb87158695eaf5ac3e782beb"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6000/visual/model.step",
+            "stl": "parts/iso15.6000/visual/model.stl",
+            "stepSha256": "4d834f93115eb527e01a74b8b29e85ca8d5483054170e17044df100dfd58c09e",
+            "stlSha256": "a1339b52dfefc13e353273cb01435914803c32dc317a8f7ef7d45724ef235dec"
+          },
           "mode": "distinct"
         }
       },
@@ -2807,7 +3337,7 @@
       "spec": "6001",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2817,13 +3347,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6001/fit/model.step",
+            "stl": "parts/iso15.6001/fit/model.stl",
+            "stepSha256": "5c81eae80fcbe2df1816c8b0ddc65a0eaea41ccab20d934a92ea96fd3e4cfb7a",
+            "stlSha256": "fa18b7ce825cecce7444182b7ec60821626e7aa3bce7f4a1f23407b5402f4206"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6001/visual/model.step",
+            "stl": "parts/iso15.6001/visual/model.stl",
+            "stepSha256": "a63ba4dfc7ad55c89d3023a6113e6f406edf316edc066428c2539db9baed398a",
+            "stlSha256": "b80974341a65cce3602cb1c0d41416307bc73b57ee508a93bc12c16d0c104a5e"
+          },
           "mode": "distinct"
         }
       },
@@ -2853,7 +3393,7 @@
       "spec": "6002",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2863,13 +3403,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6002/fit/model.step",
+            "stl": "parts/iso15.6002/fit/model.stl",
+            "stepSha256": "52ff3057609d399bf533725d58a4a6dc89193e1fb20d795b201b7d10ef0fca60",
+            "stlSha256": "827e06a8b7815a287169c48a1b3aa757cc8842d4ab1deb16e8065a59905ec818"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6002/visual/model.step",
+            "stl": "parts/iso15.6002/visual/model.stl",
+            "stepSha256": "c2eabc9a102d12309015b22d8669f4d63a291ef8b018a81d27f9001600535489",
+            "stlSha256": "9e5ee07f75183296a87a81fce51307e6f9f7a7a2e9dfb9ad77f4d63c2ed60de4"
+          },
           "mode": "distinct"
         }
       },
@@ -2899,7 +3449,7 @@
       "spec": "6003",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2909,13 +3459,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6003/fit/model.step",
+            "stl": "parts/iso15.6003/fit/model.stl",
+            "stepSha256": "ea67a97ff253c6f19bbcb043555f13ba354fd469f5944a3915cf0254cf3a6ead",
+            "stlSha256": "bd7c8c2f1f6868dc562c395359cabfdc1d9821b234a0a0568de0e847ecf92e2c"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6003/visual/model.step",
+            "stl": "parts/iso15.6003/visual/model.stl",
+            "stepSha256": "a922b04e586b24567388ac9aa8ba56cfaf784b61b6a6bc1d0f59da1429be6fe4",
+            "stlSha256": "00eef7c18fa15e4c0200dec6c18c733767bc7448a3a1547e9de3c63e369d9288"
+          },
           "mode": "distinct"
         }
       },
@@ -2945,7 +3505,7 @@
       "spec": "6004",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -2955,13 +3515,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6004/fit/model.step",
+            "stl": "parts/iso15.6004/fit/model.stl",
+            "stepSha256": "79baf4fe6f8c108cba03f22f225cbe9f286d614ba516ed675e0c87fbaf1d0045",
+            "stlSha256": "f85d4a5b6dda7b11ef80e040cdbeda6a7624d43e157e2ccc74deb093c2983995"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6004/visual/model.step",
+            "stl": "parts/iso15.6004/visual/model.stl",
+            "stepSha256": "fc5013d115364796eae70a01b33e3b74994e5b2374f42ea0092085b2b0c091e2",
+            "stlSha256": "df8cc8f7497db5c8883afdf1d46266ce99d5a3ddadd8a336a4c8e89989ca342d"
+          },
           "mode": "distinct"
         }
       },
@@ -2991,7 +3561,7 @@
       "spec": "6005",
       "standard": "ISO 15:2017, 6000 series",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3001,13 +3571,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6005/fit/model.step",
+            "stl": "parts/iso15.6005/fit/model.stl",
+            "stepSha256": "2669e254422bc62dae9dbab9ea5ba8ebb377e0ce6337107bad57c9e0d359afd9",
+            "stlSha256": "76697323edde0e69148b6c7f6ffca7d2f49ba080c0e6a24a1082b2fb8a946fcd"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso15.6005/visual/model.step",
+            "stl": "parts/iso15.6005/visual/model.stl",
+            "stepSha256": "c39eecef91bf238714e466f4bccd471b3a7173a54b7ba19f6f86ad4b9f5167af",
+            "stlSha256": "214411218a598cc28edfa2d42e82d39eadcfe93a6092b2df43167f95f71b366c"
+          },
           "mode": "distinct"
         }
       },
@@ -3037,7 +3617,7 @@
       "spec": "10×2",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3047,13 +3627,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.10x2/fit/model.step",
+            "stl": "parts/iso3601.10x2/fit/model.stl",
+            "stepSha256": "5ebf827330225210bd509502bcb8daddc1f5a713d3515cd57ce36670e2dcbff1",
+            "stlSha256": "532520e10ee71bce538f482de102a9e8e68a6b7416eb6b17c42f2c899342fea3"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.10x2/fit/model.step",
+            "stl": "parts/iso3601.10x2/fit/model.stl",
+            "stepSha256": "5ebf827330225210bd509502bcb8daddc1f5a713d3515cd57ce36670e2dcbff1",
+            "stlSha256": "532520e10ee71bce538f482de102a9e8e68a6b7416eb6b17c42f2c899342fea3"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3079,7 +3669,7 @@
       "spec": "15×2.5",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3089,13 +3679,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.15x2.5/fit/model.step",
+            "stl": "parts/iso3601.15x2.5/fit/model.stl",
+            "stepSha256": "ffd2ff4fdb6c2b2377fa34105c61fa1010584435636a228e9323182cce90efd0",
+            "stlSha256": "cc6e6a8fe6ff6c07c9b25585470d3bfd50b8cbc5e66ce8f4229a50ed2fda1e13"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.15x2.5/fit/model.step",
+            "stl": "parts/iso3601.15x2.5/fit/model.stl",
+            "stepSha256": "ffd2ff4fdb6c2b2377fa34105c61fa1010584435636a228e9323182cce90efd0",
+            "stlSha256": "cc6e6a8fe6ff6c07c9b25585470d3bfd50b8cbc5e66ce8f4229a50ed2fda1e13"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3121,7 +3721,7 @@
       "spec": "20×2.5",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3131,13 +3731,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.20x2.5/fit/model.step",
+            "stl": "parts/iso3601.20x2.5/fit/model.stl",
+            "stepSha256": "969b2e62f1564e57d7c7003ff3d328d49d3b2dbf94a4a135cf3328acbce0b7dc",
+            "stlSha256": "90dd593144366469198709b8c633695eefd3b46dffb13b62d712e0c7c36dab2c"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.20x2.5/fit/model.step",
+            "stl": "parts/iso3601.20x2.5/fit/model.stl",
+            "stepSha256": "969b2e62f1564e57d7c7003ff3d328d49d3b2dbf94a4a135cf3328acbce0b7dc",
+            "stlSha256": "90dd593144366469198709b8c633695eefd3b46dffb13b62d712e0c7c36dab2c"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3163,7 +3773,7 @@
       "spec": "25×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3173,13 +3783,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.25x3/fit/model.step",
+            "stl": "parts/iso3601.25x3/fit/model.stl",
+            "stepSha256": "dfe94285c905c484d576613a89da5c70b1097e213e9e6a2615661cb3fc5a0038",
+            "stlSha256": "04c6869e32a1762fcd970891d7e3be07b8e0b0e6e1f4f1af2c568180530224b6"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.25x3/fit/model.step",
+            "stl": "parts/iso3601.25x3/fit/model.stl",
+            "stepSha256": "dfe94285c905c484d576613a89da5c70b1097e213e9e6a2615661cb3fc5a0038",
+            "stlSha256": "04c6869e32a1762fcd970891d7e3be07b8e0b0e6e1f4f1af2c568180530224b6"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3205,7 +3825,7 @@
       "spec": "30×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3215,13 +3835,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.30x3/fit/model.step",
+            "stl": "parts/iso3601.30x3/fit/model.stl",
+            "stepSha256": "beac97aca8a8854ee950e864fcf0511f706787bc0a0e55550940af0e86a90410",
+            "stlSha256": "6d5199f8f7f909c25c4aa745df4821d0750bb4c159fc3f4e19e251194a261813"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.30x3/fit/model.step",
+            "stl": "parts/iso3601.30x3/fit/model.stl",
+            "stepSha256": "beac97aca8a8854ee950e864fcf0511f706787bc0a0e55550940af0e86a90410",
+            "stlSha256": "6d5199f8f7f909c25c4aa745df4821d0750bb4c159fc3f4e19e251194a261813"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3247,7 +3877,7 @@
       "spec": "40×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3257,13 +3887,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.40x3/fit/model.step",
+            "stl": "parts/iso3601.40x3/fit/model.stl",
+            "stepSha256": "316ff596946b218f7e3b69738a8795add0305bcf66a710a39bbe761640c420f8",
+            "stlSha256": "a13199f862446c97e9f50b660a98d7f884c24b30d887644fe234e8331f2af401"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.40x3/fit/model.step",
+            "stl": "parts/iso3601.40x3/fit/model.stl",
+            "stepSha256": "316ff596946b218f7e3b69738a8795add0305bcf66a710a39bbe761640c420f8",
+            "stlSha256": "a13199f862446c97e9f50b660a98d7f884c24b30d887644fe234e8331f2af401"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3289,7 +3929,7 @@
       "spec": "50×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3299,13 +3939,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.50x3/fit/model.step",
+            "stl": "parts/iso3601.50x3/fit/model.stl",
+            "stepSha256": "387b83671a5c5244cf2a48466413fd739fa7a3277a8e478ecabedaa5699ba326",
+            "stlSha256": "dc7f89cb177ce08b63d399d82c1f96dccb30faa456b5f2bd03697006c3d6bd61"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.50x3/fit/model.step",
+            "stl": "parts/iso3601.50x3/fit/model.stl",
+            "stepSha256": "387b83671a5c5244cf2a48466413fd739fa7a3277a8e478ecabedaa5699ba326",
+            "stlSha256": "dc7f89cb177ce08b63d399d82c1f96dccb30faa456b5f2bd03697006c3d6bd61"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3331,7 +3981,7 @@
       "spec": "60×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3341,13 +3991,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.60x3/fit/model.step",
+            "stl": "parts/iso3601.60x3/fit/model.stl",
+            "stepSha256": "78df8287936bc15f0a6ad9a2ba8394204d7988f5f284acf597d42f0e0e21700e",
+            "stlSha256": "0786919bea7295aaeef872b694cc79c8cdf72e96292ed9434e9119a8d171cac5"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.60x3/fit/model.step",
+            "stl": "parts/iso3601.60x3/fit/model.stl",
+            "stepSha256": "78df8287936bc15f0a6ad9a2ba8394204d7988f5f284acf597d42f0e0e21700e",
+            "stlSha256": "0786919bea7295aaeef872b694cc79c8cdf72e96292ed9434e9119a8d171cac5"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3373,7 +4033,7 @@
       "spec": "75×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3383,13 +4043,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.75x3/fit/model.step",
+            "stl": "parts/iso3601.75x3/fit/model.stl",
+            "stepSha256": "b5eb0bc87a4c99276342cff5a90d338ef870a2694dba993ec60ab2e94e5a9bba",
+            "stlSha256": "cd6d98a9ff81592ecbdb3df66e2cf3569b0564762d79cb613c5d166772d15dcf"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.75x3/fit/model.step",
+            "stl": "parts/iso3601.75x3/fit/model.stl",
+            "stepSha256": "b5eb0bc87a4c99276342cff5a90d338ef870a2694dba993ec60ab2e94e5a9bba",
+            "stlSha256": "cd6d98a9ff81592ecbdb3df66e2cf3569b0564762d79cb613c5d166772d15dcf"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3415,7 +4085,7 @@
       "spec": "100×3",
       "standard": "ISO 3601",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3425,13 +4095,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.100x3/fit/model.step",
+            "stl": "parts/iso3601.100x3/fit/model.stl",
+            "stepSha256": "156b371c151a985c7582ad17d8a0e6b8be2f7b27989fee7e85f99b8e68221f04",
+            "stlSha256": "c6ee0b8ea4abf7e095481f708c46ee5c25958353805de404ececb1647f815410"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso3601.100x3/fit/model.step",
+            "stl": "parts/iso3601.100x3/fit/model.stl",
+            "stepSha256": "156b371c151a985c7582ad17d8a0e6b8be2f7b27989fee7e85f99b8e68221f04",
+            "stlSha256": "c6ee0b8ea4abf7e095481f708c46ee5c25958353805de404ececb1647f815410"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3457,7 +4137,7 @@
       "spec": "Ø10",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3467,13 +4147,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.10/fit/model.step",
+            "stl": "parts/din471.10/fit/model.stl",
+            "stepSha256": "c68cdba21f5598aa8736771086c3139095cd95e8f9c8fcdda5b4ad1b1c54c94c",
+            "stlSha256": "1455f317d010e17e0e915dc4241b92030a7f69bbfb89e040decbcf0355d17c92"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.10/fit/model.step",
+            "stl": "parts/din471.10/fit/model.stl",
+            "stepSha256": "c68cdba21f5598aa8736771086c3139095cd95e8f9c8fcdda5b4ad1b1c54c94c",
+            "stlSha256": "1455f317d010e17e0e915dc4241b92030a7f69bbfb89e040decbcf0355d17c92"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3499,7 +4189,7 @@
       "spec": "Ø12",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3509,13 +4199,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.12/fit/model.step",
+            "stl": "parts/din471.12/fit/model.stl",
+            "stepSha256": "f42a33b92a6b3da45f721263471a76cd5eb4ea5fca96c44812ad31d79ec6b76d",
+            "stlSha256": "0dc1c771833723a3b3a534ecd237d9b56b64b0471acca84757bbc5a7659aa725"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.12/fit/model.step",
+            "stl": "parts/din471.12/fit/model.stl",
+            "stepSha256": "f42a33b92a6b3da45f721263471a76cd5eb4ea5fca96c44812ad31d79ec6b76d",
+            "stlSha256": "0dc1c771833723a3b3a534ecd237d9b56b64b0471acca84757bbc5a7659aa725"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3541,7 +4241,7 @@
       "spec": "Ø15",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3551,13 +4251,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.15/fit/model.step",
+            "stl": "parts/din471.15/fit/model.stl",
+            "stepSha256": "bab2bded50ecb28870304956009346c20b5241ef07f52b88828e3301c2c9492c",
+            "stlSha256": "1499f25b034335309c30cbb5300bf796094ac775b27f8fd855e7a5710f22fe63"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.15/fit/model.step",
+            "stl": "parts/din471.15/fit/model.stl",
+            "stepSha256": "bab2bded50ecb28870304956009346c20b5241ef07f52b88828e3301c2c9492c",
+            "stlSha256": "1499f25b034335309c30cbb5300bf796094ac775b27f8fd855e7a5710f22fe63"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3583,7 +4293,7 @@
       "spec": "Ø20",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3593,13 +4303,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.20/fit/model.step",
+            "stl": "parts/din471.20/fit/model.stl",
+            "stepSha256": "f9a2424e4b3ca82446a6005db7a96625f6d3051a3124d645609af84881a91600",
+            "stlSha256": "9ba311655b2e13ca638ccf3569020ccd7d2e9d922ea70b297f8faaef1f03365b"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.20/fit/model.step",
+            "stl": "parts/din471.20/fit/model.stl",
+            "stepSha256": "f9a2424e4b3ca82446a6005db7a96625f6d3051a3124d645609af84881a91600",
+            "stlSha256": "9ba311655b2e13ca638ccf3569020ccd7d2e9d922ea70b297f8faaef1f03365b"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3625,7 +4345,7 @@
       "spec": "Ø25",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3635,13 +4355,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.25/fit/model.step",
+            "stl": "parts/din471.25/fit/model.stl",
+            "stepSha256": "56d279212d097389223dbde8eb51eb9e1f3fea7a12fd4b10a4fb414b6f551566",
+            "stlSha256": "aea1916b424b8c15e841029dc4b8c992100e48152fdc993bbc13cecd8ca2a161"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.25/fit/model.step",
+            "stl": "parts/din471.25/fit/model.stl",
+            "stepSha256": "56d279212d097389223dbde8eb51eb9e1f3fea7a12fd4b10a4fb414b6f551566",
+            "stlSha256": "aea1916b424b8c15e841029dc4b8c992100e48152fdc993bbc13cecd8ca2a161"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3667,7 +4397,7 @@
       "spec": "Ø30",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3677,13 +4407,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.30/fit/model.step",
+            "stl": "parts/din471.30/fit/model.stl",
+            "stepSha256": "cd4fc1417848555d249e05d52f1caccd80649b5d9b6a6c4c4d57239885fedcad",
+            "stlSha256": "3e029cfc674b13a1ba301aa2b8f21bbeb7a4b276d523ef6f203737af3fa048ee"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.30/fit/model.step",
+            "stl": "parts/din471.30/fit/model.stl",
+            "stepSha256": "cd4fc1417848555d249e05d52f1caccd80649b5d9b6a6c4c4d57239885fedcad",
+            "stlSha256": "3e029cfc674b13a1ba301aa2b8f21bbeb7a4b276d523ef6f203737af3fa048ee"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3709,7 +4449,7 @@
       "spec": "Ø40",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3719,13 +4459,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.40/fit/model.step",
+            "stl": "parts/din471.40/fit/model.stl",
+            "stepSha256": "b4138d7a481fe500e211f878b3e7ac2f5831fcf98d55e040f7eafc3a7fcd18b6",
+            "stlSha256": "8b08aa820ed0305fbf7e79473727a5b0cb4b289c6f85594d8e7a56a6c6f876bd"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.40/fit/model.step",
+            "stl": "parts/din471.40/fit/model.stl",
+            "stepSha256": "b4138d7a481fe500e211f878b3e7ac2f5831fcf98d55e040f7eafc3a7fcd18b6",
+            "stlSha256": "8b08aa820ed0305fbf7e79473727a5b0cb4b289c6f85594d8e7a56a6c6f876bd"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3751,7 +4501,7 @@
       "spec": "Ø50",
       "standard": "DIN 471",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3761,13 +4511,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.50/fit/model.step",
+            "stl": "parts/din471.50/fit/model.stl",
+            "stepSha256": "4ca91275bef7ae6cad4c7318c39265a68daa4ce5df3b22561552f67848412e16",
+            "stlSha256": "840c52b74adbc80a6616e92dbab9eb1cd3224196b80462dc05347393a9b95f11"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din471.50/fit/model.step",
+            "stl": "parts/din471.50/fit/model.stl",
+            "stepSha256": "4ca91275bef7ae6cad4c7318c39265a68daa4ce5df3b22561552f67848412e16",
+            "stlSha256": "840c52b74adbc80a6616e92dbab9eb1cd3224196b80462dc05347393a9b95f11"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3793,7 +4553,7 @@
       "spec": "4×4×20",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3803,13 +4563,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.4x4x20/fit/model.step",
+            "stl": "parts/din6885.4x4x20/fit/model.stl",
+            "stepSha256": "f7657356312ab610b9b678b9a4bd1ebd99fefc96254aa0a072838060b55f18d7",
+            "stlSha256": "93e3efe1be3203819109dcc47eab47d8d2c8f61e939ba45b103b810904d42206"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.4x4x20/fit/model.step",
+            "stl": "parts/din6885.4x4x20/fit/model.stl",
+            "stepSha256": "f7657356312ab610b9b678b9a4bd1ebd99fefc96254aa0a072838060b55f18d7",
+            "stlSha256": "93e3efe1be3203819109dcc47eab47d8d2c8f61e939ba45b103b810904d42206"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3835,7 +4605,7 @@
       "spec": "5×5×25",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3845,13 +4615,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.5x5x25/fit/model.step",
+            "stl": "parts/din6885.5x5x25/fit/model.stl",
+            "stepSha256": "1a07730550c3140f182cbe78bd059604f242447be3022fd93d95face15b6eec6",
+            "stlSha256": "ee8bd886a6c5789a5dacdd04fe5d9a67d319557c97f029f97367531dbc979e45"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.5x5x25/fit/model.step",
+            "stl": "parts/din6885.5x5x25/fit/model.stl",
+            "stepSha256": "1a07730550c3140f182cbe78bd059604f242447be3022fd93d95face15b6eec6",
+            "stlSha256": "ee8bd886a6c5789a5dacdd04fe5d9a67d319557c97f029f97367531dbc979e45"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3877,7 +4657,7 @@
       "spec": "6×6×30",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3887,13 +4667,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.6x6x30/fit/model.step",
+            "stl": "parts/din6885.6x6x30/fit/model.stl",
+            "stepSha256": "8b22cfaecfee0b6e8a9d73331a04ae1c00834a38cb5bee7dba0b282e98cd0a52",
+            "stlSha256": "83e6c5927aaf426432c44d6aa71dc8f1ae0787d3e6cdfb20351a91215a9edd00"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.6x6x30/fit/model.step",
+            "stl": "parts/din6885.6x6x30/fit/model.stl",
+            "stepSha256": "8b22cfaecfee0b6e8a9d73331a04ae1c00834a38cb5bee7dba0b282e98cd0a52",
+            "stlSha256": "83e6c5927aaf426432c44d6aa71dc8f1ae0787d3e6cdfb20351a91215a9edd00"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3919,7 +4709,7 @@
       "spec": "8×7×40",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3929,13 +4719,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.8x7x40/fit/model.step",
+            "stl": "parts/din6885.8x7x40/fit/model.stl",
+            "stepSha256": "043a1f13266ddbf4a0a1d84477e04cf5a023faaf234cbf66d78468af5f8b0f5a",
+            "stlSha256": "a235edf8798d0f16b9b700cc27c97aa125d9a36c84bee563068fe360fd1941f1"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.8x7x40/fit/model.step",
+            "stl": "parts/din6885.8x7x40/fit/model.stl",
+            "stepSha256": "043a1f13266ddbf4a0a1d84477e04cf5a023faaf234cbf66d78468af5f8b0f5a",
+            "stlSha256": "a235edf8798d0f16b9b700cc27c97aa125d9a36c84bee563068fe360fd1941f1"
+          },
           "mode": "alias-fit"
         }
       },
@@ -3961,7 +4761,7 @@
       "spec": "10×8×50",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -3971,13 +4771,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.10x8x50/fit/model.step",
+            "stl": "parts/din6885.10x8x50/fit/model.stl",
+            "stepSha256": "6c3b957c2f3005d1aa2b4eaae2be7975a02a3a67d395c37cf96b3f92134489e4",
+            "stlSha256": "45cf310cfaa3ba74ff2ae52cfea5b06aed41ecedfaba7e0aaa2854a01aeb499a"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.10x8x50/fit/model.step",
+            "stl": "parts/din6885.10x8x50/fit/model.stl",
+            "stepSha256": "6c3b957c2f3005d1aa2b4eaae2be7975a02a3a67d395c37cf96b3f92134489e4",
+            "stlSha256": "45cf310cfaa3ba74ff2ae52cfea5b06aed41ecedfaba7e0aaa2854a01aeb499a"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4003,7 +4813,7 @@
       "spec": "12×8×60",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4013,13 +4823,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.12x8x60/fit/model.step",
+            "stl": "parts/din6885.12x8x60/fit/model.stl",
+            "stepSha256": "52fe26090ddc1311526e7a48bb8a156cacac433ef124974e1b2f11643bbd1bb4",
+            "stlSha256": "932988e19ffa7dbd2beb3d3e0650674a0f53860e33d5a8d45172d14b9a0ee3bf"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.12x8x60/fit/model.step",
+            "stl": "parts/din6885.12x8x60/fit/model.stl",
+            "stepSha256": "52fe26090ddc1311526e7a48bb8a156cacac433ef124974e1b2f11643bbd1bb4",
+            "stlSha256": "932988e19ffa7dbd2beb3d3e0650674a0f53860e33d5a8d45172d14b9a0ee3bf"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4045,7 +4865,7 @@
       "spec": "14×9×70",
       "standard": "DIN 6885 A/B",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4055,13 +4875,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.14x9x70/fit/model.step",
+            "stl": "parts/din6885.14x9x70/fit/model.stl",
+            "stepSha256": "7353e1c5b6be83f39b678a3020840a8d033e5f0b2239369b2cba7945f22a843d",
+            "stlSha256": "e077c30222999bbdc11c32d2032a0e512c11d5dbd05bb8d1c485a5d2886a7a73"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din6885.14x9x70/fit/model.step",
+            "stl": "parts/din6885.14x9x70/fit/model.stl",
+            "stepSha256": "7353e1c5b6be83f39b678a3020840a8d033e5f0b2239369b2cba7945f22a843d",
+            "stlSha256": "e077c30222999bbdc11c32d2032a0e512c11d5dbd05bb8d1c485a5d2886a7a73"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4087,7 +4917,7 @@
       "spec": "Ø4×20",
       "standard": "ISO 2338",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4097,13 +4927,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.4x20/fit/model.step",
+            "stl": "parts/iso2338.4x20/fit/model.stl",
+            "stepSha256": "2defb5d4e97a5c6f54dea1b729f19f0568b8042daa7d580a89abf43a5fbe37e2",
+            "stlSha256": "821b8a83ac79644c04ec15be5ea8cc762971d58a9e57b57fb408599b08eb314f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.4x20/fit/model.step",
+            "stl": "parts/iso2338.4x20/fit/model.stl",
+            "stepSha256": "2defb5d4e97a5c6f54dea1b729f19f0568b8042daa7d580a89abf43a5fbe37e2",
+            "stlSha256": "821b8a83ac79644c04ec15be5ea8cc762971d58a9e57b57fb408599b08eb314f"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4128,7 +4968,7 @@
       "spec": "Ø5×25",
       "standard": "ISO 2338",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4138,13 +4978,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.5x25/fit/model.step",
+            "stl": "parts/iso2338.5x25/fit/model.stl",
+            "stepSha256": "20a56c8879b5a634c37fc674438605d760abfd3c5ed409a927b9be6d1225fd30",
+            "stlSha256": "db074578547e7dfb41116f8dd62e513ad795bc3305d3b0dafe41505c31d71a7d"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.5x25/fit/model.step",
+            "stl": "parts/iso2338.5x25/fit/model.stl",
+            "stepSha256": "20a56c8879b5a634c37fc674438605d760abfd3c5ed409a927b9be6d1225fd30",
+            "stlSha256": "db074578547e7dfb41116f8dd62e513ad795bc3305d3b0dafe41505c31d71a7d"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4169,7 +5019,7 @@
       "spec": "Ø6×30",
       "standard": "ISO 2338",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4179,13 +5029,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.6x30/fit/model.step",
+            "stl": "parts/iso2338.6x30/fit/model.stl",
+            "stepSha256": "c59a1c01f325990bd43f437e459c6f15dd4cabb74e241eea2cf7f02d731aa336",
+            "stlSha256": "e07d4585b617d63f24e45d1b93ab57df8d0477b685034078fec1e08506f103d2"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.6x30/fit/model.step",
+            "stl": "parts/iso2338.6x30/fit/model.stl",
+            "stepSha256": "c59a1c01f325990bd43f437e459c6f15dd4cabb74e241eea2cf7f02d731aa336",
+            "stlSha256": "e07d4585b617d63f24e45d1b93ab57df8d0477b685034078fec1e08506f103d2"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4210,7 +5070,7 @@
       "spec": "Ø8×40",
       "standard": "ISO 2338",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4220,13 +5080,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.8x40/fit/model.step",
+            "stl": "parts/iso2338.8x40/fit/model.stl",
+            "stepSha256": "ce256347abde267974ef147599dc0d365180a77a5c58eb2ad09214e8bfaf7b50",
+            "stlSha256": "36b0a611f7f291c2026eb8f2dc0fd83123f6bf40037893894f8803cf7a1ccc21"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.8x40/fit/model.step",
+            "stl": "parts/iso2338.8x40/fit/model.stl",
+            "stepSha256": "ce256347abde267974ef147599dc0d365180a77a5c58eb2ad09214e8bfaf7b50",
+            "stlSha256": "36b0a611f7f291c2026eb8f2dc0fd83123f6bf40037893894f8803cf7a1ccc21"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4251,7 +5121,7 @@
       "spec": "Ø10×50",
       "standard": "ISO 2338",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4261,13 +5131,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.10x50/fit/model.step",
+            "stl": "parts/iso2338.10x50/fit/model.stl",
+            "stepSha256": "b2f0185d82a63773cc3ad351192ccac56f712690f0f293c0594f8c398210b1fa",
+            "stlSha256": "77339e0100754405e6c873a97fa8f5590efc9c66f6ada044cf51dd4fb75a8187"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/iso2338.10x50/fit/model.step",
+            "stl": "parts/iso2338.10x50/fit/model.stl",
+            "stepSha256": "b2f0185d82a63773cc3ad351192ccac56f712690f0f293c0594f8c398210b1fa",
+            "stlSha256": "77339e0100754405e6c873a97fa8f5590efc9c66f6ada044cf51dd4fb75a8187"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4292,7 +5172,7 @@
       "spec": "w0.8×OD8×L20",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4302,13 +5182,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.0.8x8x20/fit/model.step",
+            "stl": "parts/din2098.0.8x8x20/fit/model.stl",
+            "stepSha256": "307a9cf85b2d1617257cca5cb4d7371e12873d9b9be468e0c98d053b2da1dac0",
+            "stlSha256": "2b7c67df5605d915d8d6a85d438bc7682e22ac1ff3feec5c83f7ee7ecb0a6cbe"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.0.8x8x20/visual/model.step",
+            "stl": "parts/din2098.0.8x8x20/visual/model.stl",
+            "stepSha256": "0d3d2be22321711f9b1f88750dbfd0652390d8f1b113131db4c8ed105f0fc7f7",
+            "stlSha256": "8b83562b3bfd4b302a4d72314e1c9bb52d24eb54e704ad5f0975326145f0874e"
+          },
           "mode": "distinct"
         }
       },
@@ -4334,7 +5224,7 @@
       "spec": "w1×OD10×L25",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4344,13 +5234,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1x10x25/fit/model.step",
+            "stl": "parts/din2098.1x10x25/fit/model.stl",
+            "stepSha256": "1890c9db4aa46e670b0722146deeb7b07af6ba4165f1515d6c160edb283698ea",
+            "stlSha256": "28e252388789f959c923e65e8409199fd8d1476951f2aa2c2b1c528f183a6d13"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1x10x25/visual/model.step",
+            "stl": "parts/din2098.1x10x25/visual/model.stl",
+            "stepSha256": "a36de679031c2e27225627fdecdb28c2322a9481755712daa6a5c0c451da8326",
+            "stlSha256": "4b1cec647c5e5fb20bc570142eb679cdee14a5cd809a7e8e11e9a28ec992fd1b"
+          },
           "mode": "distinct"
         }
       },
@@ -4376,7 +5276,7 @@
       "spec": "w1.2×OD12×L30",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4386,13 +5286,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1.2x12x30/fit/model.step",
+            "stl": "parts/din2098.1.2x12x30/fit/model.stl",
+            "stepSha256": "a2da2a7b33fec953af85af7ac599bf6ccc458b85fde47e8d6d19f48215be90d0",
+            "stlSha256": "18535df589f1bf6c85699e6a2cb0561d007a666092494326ca2aeba9a9d64e2f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1.2x12x30/visual/model.step",
+            "stl": "parts/din2098.1.2x12x30/visual/model.stl",
+            "stepSha256": "35a7acb3841a3d372d11871268b7acbfe8c32e126bf590a25ba312efe0c1bd32",
+            "stlSha256": "893a619a03b27db73b5a067c5710a4f3e7debb4772b1eb5e80f805763dc72852"
+          },
           "mode": "distinct"
         }
       },
@@ -4418,7 +5328,7 @@
       "spec": "w1.5×OD16×L40",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4428,13 +5338,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1.5x16x40/fit/model.step",
+            "stl": "parts/din2098.1.5x16x40/fit/model.stl",
+            "stepSha256": "35db5a148f3e97e2ade74d2132a00a3697b8dfd1d8faba09ea94c4235ea2e519",
+            "stlSha256": "8901af8b47df535ef6af4e6aa35444a8d7d426f2b1ef551300db7017184f7b1f"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.1.5x16x40/visual/model.step",
+            "stl": "parts/din2098.1.5x16x40/visual/model.stl",
+            "stepSha256": "ca9cc74cfff101e1e6d84bf8748171ec05e49cf0fdd758ba285d637dfd7ca30a",
+            "stlSha256": "1155d6ab1e6233ea0f183c3b754199139ad9d39ff7aca18e96907ee7facef40f"
+          },
           "mode": "distinct"
         }
       },
@@ -4460,7 +5380,7 @@
       "spec": "w2×OD20×L50",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4470,13 +5390,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.2x20x50/fit/model.step",
+            "stl": "parts/din2098.2x20x50/fit/model.stl",
+            "stepSha256": "cd51830b5d3ddef54f7a3cc2687201ada8bba482e3820f99d81ccbb85e8c69bf",
+            "stlSha256": "8610d143296dc3289839833599099571b71547249307bcfccc3fb90713a83d82"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.2x20x50/visual/model.step",
+            "stl": "parts/din2098.2x20x50/visual/model.stl",
+            "stepSha256": "8b8fe9aed38979a8d217ee93f795cc46f8c2049fb8ad1ccfae17e4b5506d4773",
+            "stlSha256": "9ce6c5aa250b43f385ad588f2e8191d51be2263ead9f86ff7a7ab5fbbf1fc123"
+          },
           "mode": "distinct"
         }
       },
@@ -4502,7 +5432,7 @@
       "spec": "w2.5×OD25×L60",
       "standard": "DIN 2098",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4512,13 +5442,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.2.5x25x60/fit/model.step",
+            "stl": "parts/din2098.2.5x25x60/fit/model.stl",
+            "stepSha256": "76ae0a5ea7503d086a97b42f6088ac5b791e84d53e63d82e08a06156489e8d4d",
+            "stlSha256": "e9fc253bb62b73abfcc29a7fd35ebcd73baf8367f9d336ee663a786a47447fc0"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/din2098.2.5x25x60/visual/model.step",
+            "stl": "parts/din2098.2.5x25x60/visual/model.stl",
+            "stepSha256": "e75a43dfb77c9d390d9dde7b87415b9c340c7f6ab7b73a49ed415d5f24bd9ec3",
+            "stlSha256": "653b9540fa2172ea4019b9ec59aa692ae68037a3a80053cef5208b7aa9f355bd"
+          },
           "mode": "distinct"
         }
       },
@@ -4544,7 +5484,7 @@
       "spec": "Ø6",
       "standard": "generic shaft collar",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4554,13 +5494,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.6/fit/model.step",
+            "stl": "parts/shaft-collar.6/fit/model.stl",
+            "stepSha256": "d622f3c59587d7967f6b1b9bcfc5b3cde3ca2f7a0095d878a7c38e7171357b25",
+            "stlSha256": "1468f7673de567cb8f25413dc26d03970d958446f850fc91dba1e5ac3b358948"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.6/fit/model.step",
+            "stl": "parts/shaft-collar.6/fit/model.stl",
+            "stepSha256": "d622f3c59587d7967f6b1b9bcfc5b3cde3ca2f7a0095d878a7c38e7171357b25",
+            "stlSha256": "1468f7673de567cb8f25413dc26d03970d958446f850fc91dba1e5ac3b358948"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4586,7 +5536,7 @@
       "spec": "Ø8",
       "standard": "generic shaft collar",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4596,13 +5546,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.8/fit/model.step",
+            "stl": "parts/shaft-collar.8/fit/model.stl",
+            "stepSha256": "230677f5a8a51c26631f2ed9852d23f31c82e7d32a56a1515bbc2e8eccc0e2a8",
+            "stlSha256": "fb94aaf96d212efb499a264f42135e660306478fb4d9686c557d97f94edb0565"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.8/fit/model.step",
+            "stl": "parts/shaft-collar.8/fit/model.stl",
+            "stepSha256": "230677f5a8a51c26631f2ed9852d23f31c82e7d32a56a1515bbc2e8eccc0e2a8",
+            "stlSha256": "fb94aaf96d212efb499a264f42135e660306478fb4d9686c557d97f94edb0565"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4628,7 +5588,7 @@
       "spec": "Ø10",
       "standard": "generic shaft collar",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4638,13 +5598,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.10/fit/model.step",
+            "stl": "parts/shaft-collar.10/fit/model.stl",
+            "stepSha256": "6eccda4779415eacb350a5a3a38c70ecbd4ba448d3e5ec78adf576e7d443783a",
+            "stlSha256": "ae4f71b442c65d58a42375e7f6508625ed9470136d96c7c78dc28d72f056eb6e"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.10/fit/model.step",
+            "stl": "parts/shaft-collar.10/fit/model.stl",
+            "stepSha256": "6eccda4779415eacb350a5a3a38c70ecbd4ba448d3e5ec78adf576e7d443783a",
+            "stlSha256": "ae4f71b442c65d58a42375e7f6508625ed9470136d96c7c78dc28d72f056eb6e"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4670,7 +5640,7 @@
       "spec": "Ø12",
       "standard": "generic shaft collar",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4680,13 +5650,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.12/fit/model.step",
+            "stl": "parts/shaft-collar.12/fit/model.stl",
+            "stepSha256": "28f1da3d57552cc8b4ce71d952ffc7058a01c87ed2f1e2305f40028639d9abcc",
+            "stlSha256": "89c1298e068f10c71cd56d3eeb01dbfe376df8f36b5f80d8b73834c563d0a925"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.12/fit/model.step",
+            "stl": "parts/shaft-collar.12/fit/model.stl",
+            "stepSha256": "28f1da3d57552cc8b4ce71d952ffc7058a01c87ed2f1e2305f40028639d9abcc",
+            "stlSha256": "89c1298e068f10c71cd56d3eeb01dbfe376df8f36b5f80d8b73834c563d0a925"
+          },
           "mode": "alias-fit"
         }
       },
@@ -4712,7 +5692,7 @@
       "spec": "Ø16",
       "standard": "generic shaft collar",
       "package": "core",
-      "status": "planned",
+      "status": "generated",
       "source": "purchased",
       "frequency": {
         "source": "assumed",
@@ -4722,13 +5702,23 @@
       "lod": {
         "fit": {
           "role": "fit",
-          "status": "planned",
-          "model": null
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.16/fit/model.step",
+            "stl": "parts/shaft-collar.16/fit/model.stl",
+            "stepSha256": "4996e7b26376cfb73bdda7011981a705f8f5d77e096d5cc3f20b96352dfe38b5",
+            "stlSha256": "cc062cd1c707ed25d2c96c60dfb9eacc41473b8f10642dd437a89b84a94f4a31"
+          }
         },
         "visual": {
           "role": "render",
-          "status": "planned",
-          "model": null,
+          "status": "generated",
+          "model": {
+            "step": "parts/shaft-collar.16/fit/model.step",
+            "stl": "parts/shaft-collar.16/fit/model.stl",
+            "stepSha256": "4996e7b26376cfb73bdda7011981a705f8f5d77e096d5cc3f20b96352dfe38b5",
+            "stlSha256": "cc062cd1c707ed25d2c96c60dfb9eacc41473b8f10642dd437a89b84a94f4a31"
+          },
           "mode": "alias-fit"
         }
       },

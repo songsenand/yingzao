@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso15.6003",
+  "family": "iso15",
+  "spec": "6003",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:21.351086+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "ISO 15 6000-series boundary dimensions",
+  "datums": {
+    "bore-axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "inner-face": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "outer-face": {
+      "point": [
+        0,
+        0,
+        10.0
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -17.5,
+      -17.5,
+      0.0
+    ],
+    "max": [
+      17.5,
+      17.5,
+      10.0
+    ],
+    "size": [
+      35.0,
+      35.0,
+      10.0
+    ]
+  },
+  "volumeMm3": 3528.6369,
+  "fit": {
+    "step": "parts/iso15.6003/fit/model.step",
+    "stl": "parts/iso15.6003/fit/model.stl",
+    "stepSha256": "ea67a97ff253c6f19bbcb043555f13ba354fd469f5944a3915cf0254cf3a6ead",
+    "stlSha256": "bd7c8c2f1f6868dc562c395359cabfdc1d9821b234a0a0568de0e847ecf92e2c",
+    "triangles": 672
+  },
+  "visual": {
+    "step": "parts/iso15.6003/visual/model.step",
+    "stl": "parts/iso15.6003/visual/model.stl",
+    "stepSha256": "a922b04e586b24567388ac9aa8ba56cfaf784b61b6a6bc1d0f59da1429be6fe4",
+    "stlSha256": "00eef7c18fa15e4c0200dec6c18c733767bc7448a3a1547e9de3c63e369d9288",
+    "mode": "distinct",
+    "triangles": 7616,
+    "bboxMm": {
+      "min": [
+        -17.5,
+        -17.5,
+        0.0
+      ],
+      "max": [
+        17.5,
+        17.5,
+        10.0
+      ],
+      "size": [
+        35.0,
+        35.0,
+        10.0
+      ]
+    }
+  }
+}

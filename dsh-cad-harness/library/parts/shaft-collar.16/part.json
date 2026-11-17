@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "shaft-collar.16",
+  "family": "shaft-collar",
+  "spec": "Ø16",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:25.998649+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal generic collar table; not a standard",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "face": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -14.0,
+      -14.0,
+      0.0
+    ],
+    "max": [
+      14.0,
+      14.0,
+      12.0
+    ],
+    "size": [
+      28.0,
+      28.0,
+      12.0
+    ]
+  },
+  "volumeMm3": 4976.2828,
+  "fit": {
+    "step": "parts/shaft-collar.16/fit/model.step",
+    "stl": "parts/shaft-collar.16/fit/model.stl",
+    "stepSha256": "4996e7b26376cfb73bdda7011981a705f8f5d77e096d5cc3f20b96352dfe38b5",
+    "stlSha256": "cc062cd1c707ed25d2c96c60dfb9eacc41473b8f10642dd437a89b84a94f4a31",
+    "triangles": 336
+  },
+  "visual": {
+    "step": "parts/shaft-collar.16/fit/model.step",
+    "stl": "parts/shaft-collar.16/fit/model.stl",
+    "stepSha256": "4996e7b26376cfb73bdda7011981a705f8f5d77e096d5cc3f20b96352dfe38b5",
+    "stlSha256": "cc062cd1c707ed25d2c96c60dfb9eacc41473b8f10642dd437a89b84a94f4a31",
+    "mode": "alias-fit",
+    "triangles": 336,
+    "bboxMm": {
+      "min": [
+        -14.0,
+        -14.0,
+        0.0
+      ],
+      "max": [
+        14.0,
+        14.0,
+        12.0
+      ],
+      "size": [
+        28.0,
+        28.0,
+        12.0
+      ]
+    }
+  }
+}

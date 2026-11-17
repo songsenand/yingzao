@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "iso4026.M5x8",
+  "family": "iso4026",
+  "spec": "M5×8",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.590500+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 4026; plain shank/point only",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "end": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -2.5,
+      -2.5,
+      0.0
+    ],
+    "max": [
+      2.5,
+      2.5,
+      8.0
+    ],
+    "size": [
+      5.0,
+      5.0,
+      8.0
+    ]
+  },
+  "volumeMm3": 157.0796,
+  "fit": {
+    "step": "parts/iso4026.M5x8/fit/model.step",
+    "stl": "parts/iso4026.M5x8/fit/model.stl",
+    "stepSha256": "f81d33cd2f08033d75b800df7ff2d362df645bfe20f71440b3800270548a81f1",
+    "stlSha256": "234a7b505730cda6d8f9e6abbd7285835b9ed0b9ec47501470760e1080271652",
+    "triangles": 164
+  },
+  "visual": {
+    "step": "parts/iso4026.M5x8/fit/model.step",
+    "stl": "parts/iso4026.M5x8/fit/model.stl",
+    "stepSha256": "f81d33cd2f08033d75b800df7ff2d362df645bfe20f71440b3800270548a81f1",
+    "stlSha256": "234a7b505730cda6d8f9e6abbd7285835b9ed0b9ec47501470760e1080271652",
+    "mode": "alias-fit",
+    "triangles": 164,
+    "bboxMm": {
+      "min": [
+        -2.5,
+        -2.5,
+        0.0
+      ],
+      "max": [
+        2.5,
+        2.5,
+        8.0
+      ],
+      "size": [
+        5.0,
+        5.0,
+        8.0
+      ]
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "din127.M6",
+  "family": "din127",
+  "spec": "M6",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.964676+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal DIN 127 spring-washer table; split-ring representation",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -5.9,
+      -5.9,
+      0.0
+    ],
+    "max": [
+      5.8214,
+      5.9,
+      1.6
+    ],
+    "size": [
+      11.7214,
+      11.8,
+      1.6
+    ]
+  },
+  "volumeMm3": 119.3827,
+  "fit": {
+    "step": "parts/din127.M6/fit/model.step",
+    "stl": "parts/din127.M6/fit/model.stl",
+    "stepSha256": "2f913890a6a6b1208bf433d838a291f2be30dd904dec568811451bb5ee17090b",
+    "stlSha256": "3e1b1ad6bea397d5e71d9337596ad8d01f793c960642775f08e4c7b1949d7378",
+    "triangles": 316
+  },
+  "visual": {
+    "step": "parts/din127.M6/fit/model.step",
+    "stl": "parts/din127.M6/fit/model.stl",
+    "stepSha256": "2f913890a6a6b1208bf433d838a291f2be30dd904dec568811451bb5ee17090b",
+    "stlSha256": "3e1b1ad6bea397d5e71d9337596ad8d01f793c960642775f08e4c7b1949d7378",
+    "mode": "alias-fit",
+    "triangles": 316,
+    "bboxMm": {
+      "min": [
+        -5.9,
+        -5.9,
+        0.0
+      ],
+      "max": [
+        5.8214,
+        5.9,
+        1.6
+      ],
+      "size": [
+        11.7214,
+        11.8,
+        1.6
+      ]
+    }
+  }
+}

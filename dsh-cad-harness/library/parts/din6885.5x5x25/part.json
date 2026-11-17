@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "id": "din6885.5x5x25",
+  "family": "din6885",
+  "spec": "5×5×25",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:21.984394+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "catalog key dimensions; chamfered box",
+  "datums": {
+    "center": {
+      "point": [
+        0,
+        0,
+        0
+      ]
+    },
+    "long-axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        1,
+        0,
+        0
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -12.5,
+      -2.5,
+      -2.5
+    ],
+    "max": [
+      12.5,
+      2.5,
+      2.5
+    ],
+    "size": [
+      25.0,
+      5.0,
+      5.0
+    ]
+  },
+  "volumeMm3": 617.0,
+  "fit": {
+    "step": "parts/din6885.5x5x25/fit/model.step",
+    "stl": "parts/din6885.5x5x25/fit/model.stl",
+    "stepSha256": "1a07730550c3140f182cbe78bd059604f242447be3022fd93d95face15b6eec6",
+    "stlSha256": "ee8bd886a6c5789a5dacdd04fe5d9a67d319557c97f029f97367531dbc979e45",
+    "triangles": 28
+  },
+  "visual": {
+    "step": "parts/din6885.5x5x25/fit/model.step",
+    "stl": "parts/din6885.5x5x25/fit/model.stl",
+    "stepSha256": "1a07730550c3140f182cbe78bd059604f242447be3022fd93d95face15b6eec6",
+    "stlSha256": "ee8bd886a6c5789a5dacdd04fe5d9a67d319557c97f029f97367531dbc979e45",
+    "mode": "alias-fit",
+    "triangles": 28,
+    "bboxMm": {
+      "min": [
+        -12.5,
+        -2.5,
+        -2.5
+      ],
+      "max": [
+        12.5,
+        2.5,
+        2.5
+      ],
+      "size": [
+        25.0,
+        5.0,
+        5.0
+      ]
+    }
+  }
+}

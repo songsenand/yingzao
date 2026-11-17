@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso4014.M4x20",
+  "family": "iso4014",
+  "spec": "M4×20",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.045859+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 4014 head/shank table; not a compliance certificate",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "top": {
+      "point": [
+        0,
+        0,
+        2.8
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -4.0415,
+      -3.5,
+      -20.0
+    ],
+    "max": [
+      4.0415,
+      3.5,
+      2.8
+    ],
+    "size": [
+      8.0829,
+      7.0,
+      22.8
+    ]
+  },
+  "volumeMm3": 370.1461,
+  "fit": {
+    "step": "parts/iso4014.M4x20/fit/model.step",
+    "stl": "parts/iso4014.M4x20/fit/model.stl",
+    "stepSha256": "9a49b3e86c189442e51fa4390548ed36d219c3d53bc530215350f29ed11735e2",
+    "stlSha256": "0335db14ffccb0bec0374f336f0a8835b3ea4c13bdc9ec3913c15e763238c0d9",
+    "triangles": 188
+  },
+  "visual": {
+    "step": "parts/iso4014.M4x20/visual/model.step",
+    "stl": "parts/iso4014.M4x20/visual/model.stl",
+    "stepSha256": "3b85858334639842e70833fc02c17cdf28171005511b3c34716bce111b6cc293",
+    "stlSha256": "02ca320abb964f7b4cddaf957dde4340b3b7eea389db383f42ea8be8915ccfbd",
+    "mode": "distinct",
+    "triangles": 212,
+    "bboxMm": {
+      "min": [
+        -3.9165,
+        -3.5,
+        -20.0
+      ],
+      "max": [
+        3.9165,
+        3.5,
+        2.8
+      ],
+      "size": [
+        7.8329,
+        7.0,
+        22.8
+      ]
+    }
+  }
+}

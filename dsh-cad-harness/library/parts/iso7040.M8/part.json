@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso7040.M8",
+  "family": "iso7040",
+  "spec": "M8",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.866939+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 7040 M8; nylon insert is visual only",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "top": {
+      "point": [
+        0,
+        0,
+        6.5
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -7.5056,
+      -6.5,
+      0.0
+    ],
+    "max": [
+      7.5056,
+      6.5,
+      6.5
+    ],
+    "size": [
+      15.0111,
+      13.0,
+      6.5
+    ]
+  },
+  "volumeMm3": 608.0628,
+  "fit": {
+    "step": "parts/iso7040.M8/fit/model.step",
+    "stl": "parts/iso7040.M8/fit/model.stl",
+    "stepSha256": "67620a82d3595653d9b0c946c5b500efffe0612b33b5e9279b5bb030d559492b",
+    "stlSha256": "7e1b97d9d8f24631402fc01d7758eab89aa10c8241ad0838e814b59ad0eadaa5",
+    "triangles": 192
+  },
+  "visual": {
+    "step": "parts/iso7040.M8/visual/model.step",
+    "stl": "parts/iso7040.M8/visual/model.stl",
+    "stepSha256": "1908cc67d1335b069bf32a8fcb0f149f1afa4de6d7958dba5f75ef838e111fe6",
+    "stlSha256": "7e1b97d9d8f24631402fc01d7758eab89aa10c8241ad0838e814b59ad0eadaa5",
+    "mode": "distinct",
+    "triangles": 192,
+    "bboxMm": {
+      "min": [
+        -7.5056,
+        -6.5,
+        0.0
+      ],
+      "max": [
+        7.5056,
+        6.5,
+        6.5
+      ],
+      "size": [
+        15.0111,
+        13.0,
+        6.5
+      ]
+    }
+  }
+}

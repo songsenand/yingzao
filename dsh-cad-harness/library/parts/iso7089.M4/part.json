@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso7089.M4",
+  "family": "iso7089",
+  "spec": "M4",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.876856+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 7089 washer table",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "top": {
+      "point": [
+        0,
+        0,
+        0.8
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -4.5,
+      -4.5,
+      0.0
+    ],
+    "max": [
+      4.5,
+      4.5,
+      0.8
+    ],
+    "size": [
+      9.0,
+      9.0,
+      0.8
+    ]
+  },
+  "volumeMm3": 39.2762,
+  "fit": {
+    "step": "parts/iso7089.M4/fit/model.step",
+    "stl": "parts/iso7089.M4/fit/model.stl",
+    "stepSha256": "2faeeabe4045a0a5b092fb54014b11f7037e004e75297c107c29a966503ca2a6",
+    "stlSha256": "706a3b4dcda210905509d460704be06c3967a0a519dccc098ca46b264244433a",
+    "triangles": 336
+  },
+  "visual": {
+    "step": "parts/iso7089.M4/fit/model.step",
+    "stl": "parts/iso7089.M4/fit/model.stl",
+    "stepSha256": "2faeeabe4045a0a5b092fb54014b11f7037e004e75297c107c29a966503ca2a6",
+    "stlSha256": "706a3b4dcda210905509d460704be06c3967a0a519dccc098ca46b264244433a",
+    "mode": "alias-fit",
+    "triangles": 336,
+    "bboxMm": {
+      "min": [
+        -4.5,
+        -4.5,
+        0.0
+      ],
+      "max": [
+        4.5,
+        4.5,
+        0.8
+      ],
+      "size": [
+        9.0,
+        9.0,
+        0.8
+      ]
+    }
+  }
+}

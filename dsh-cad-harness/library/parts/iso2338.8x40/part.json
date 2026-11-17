@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "iso2338.8x40",
+  "family": "iso2338",
+  "spec": "Ø8×40",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:22.039038+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "catalog pin dimensions; chamfered cylinder",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "end": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -4.0,
+      -4.0,
+      0.0
+    ],
+    "max": [
+      4.0,
+      4.0,
+      40.0
+    ],
+    "size": [
+      8.0,
+      8.0,
+      40.0
+    ]
+  },
+  "volumeMm3": 2010.6193,
+  "fit": {
+    "step": "parts/iso2338.8x40/fit/model.step",
+    "stl": "parts/iso2338.8x40/fit/model.stl",
+    "stepSha256": "ce256347abde267974ef147599dc0d365180a77a5c58eb2ad09214e8bfaf7b50",
+    "stlSha256": "36b0a611f7f291c2026eb8f2dc0fd83123f6bf40037893894f8803cf7a1ccc21",
+    "triangles": 164
+  },
+  "visual": {
+    "step": "parts/iso2338.8x40/fit/model.step",
+    "stl": "parts/iso2338.8x40/fit/model.stl",
+    "stepSha256": "ce256347abde267974ef147599dc0d365180a77a5c58eb2ad09214e8bfaf7b50",
+    "stlSha256": "36b0a611f7f291c2026eb8f2dc0fd83123f6bf40037893894f8803cf7a1ccc21",
+    "mode": "alias-fit",
+    "triangles": 164,
+    "bboxMm": {
+      "min": [
+        -4.0,
+        -4.0,
+        0.0
+      ],
+      "max": [
+        4.0,
+        4.0,
+        40.0
+      ],
+      "size": [
+        8.0,
+        8.0,
+        40.0
+      ]
+    }
+  }
+}

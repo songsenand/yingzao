@@ -1,34 +1,57 @@
-# Standard parts library — catalog v0
+# Standard parts library — catalog + geometry v0
 
-This directory is the **data-only** v0 of the standard-parts library. It contains
-the 99-spec core selection and its schema; **no STEP/STL geometry is generated
-yet**. Members with `status: "planned"` and `model: null` are the contract for
-the next generator step.
+v0 core: **99 specs / 14 families**, each with a `fit` LOD and a `visual` LOD.
+Geometry is generated and committed; the plugin runtime reads STEP/STL and
+`part.json` and needs no CAD kernel.
+
+## File count
+
+- 99 specs × 2 formats = **198 files** if only one LOD is shipped.
+- 99 specs × 2 LODs × 2 formats = **396 files** if every visual is distinct.
+- Actual v0: **286 geometry files + 99 `part.json` = 385 files**
+  - 55 specs use `visual.mode: "alias-fit"` (washers/keys/pins/O-rings/retaining
+    rings/collars/set screws): visual points at the fit files, no duplicate.
+  - 44 specs have distinct visual geometry (threaded fasteners, bearings,
+    springs).
+  - 286 = 143 STEP + 143 STL; 143 = 99 fit + 44 distinct visual.
+
+Total size: about **22 MB** in `library/parts`.
 
 ## Layout
 
 ```text
 library/
-  catalog.json            # 99 core specs; package + frequency + LOD metadata
-  catalog.schema.json     # JSON Schema 2020-12
-  README.md
+  catalog.json                 # 99 specs, package + frequency + LOD metadata
+  catalog.schema.json          # JSON Schema 2020-12
+  parts/<id>/
+    fit/model.step
+    fit/model.stl
+    visual/model.step          # only for distinct visuals
+    visual/model.stl
+    part.json                  # datums, bbox, volume, generator, hashes
+  generator/generate.py        # CadQuery authoring tool (not runtime)
+  generator/dimensions.py      # nominal v0 dimension tables
+  generator/requirements.txt   # cadquery==2.8.0
 ```
+
+Every generated spec has `status: "generated"`; `lod.fit.model` and
+`lod.visual.model` carry relative paths and SHA-256 hashes. `part.json` carries
+the datums and measured bbox/volume.
 
 ## What v0 is
 
-- **Core = 99 specs / 14 families**, under the `core.maxSpecs: 100` budget.
-- Every spec carries both LOD slots:
-  - `fit` — contract/fit geometry (simplified; not generated yet);
-  - `visual` — render geometry (not generated yet), or `alias-fit` where the
-    visual model would add nothing (washers, keys, pins, O-rings, retaining
-    rings).
-- `frequency.source: "assumed"` on every spec. **This is an experience
-  baseline, not usage data.** No `score` is invented.
-- `package` is metadata, never part of the ID:
-  - `iso4014.M16x60` is stable;
-  - `core/iso4014.M16x60` is forbidden.
-- No geometry paths exist before generation. Do not add fake hashes or empty
-  model files.
+- **Core = 99 specs**, under the `core.maxSpecs: 100` budget.
+- **fit** is the assembly/contract representation: simplified, nominal
+  dimensions, no helical threads, no bearing balls, spring envelope.
+- **visual** is display-only: thread relief/chamfers, bearing balls, real spring
+  coils; a visual bbox must stay inside the fit envelope.
+- **LOD is chosen by the agent at use time**, not by package membership. Checks
+  default to fit, rendering to visual; explicit selection wins; a missing LOD is
+  an error, not a silent fallback.
+- `frequency.source: "assumed"` on every spec. This is an experience baseline,
+  not usage data. No score is invented.
+- `package` is metadata, never part of the ID: `iso4014.M16x60` is stable;
+  `core/iso4014.M16x60` is forbidden.
 
 ## Family coverage (v0)
 
@@ -42,57 +65,52 @@ library/
 | `iso7089` flat washer | 8 | `din2098` compression spring | 6 |
 | `din127` spring washer | 7 | `shaft-collar` | 5 |
 
-The M16 sizes are included for DN100 ball-valve coverage; DN100 gaskets are
-deliberately left to the optional `full` bundle because they are
-application-specific.
+M16 sizes cover DN100 ball-valve flanges; DN100 gaskets are left to the optional
+`full` bundle because they are application-specific.
 
 ## Package movement
 
-The `core` and `full` packages are two **ID lists**, not two copies of a part.
+The `core` and `full` packages are two **ID lists**, not two copies.
 
-- **full → core (promotion)**: safe. Keep the ID; add it to core and remove it
-  from full. Existing assemblies keep resolving.
-- **core → full (demotion)**: breaking. Only in a major release, with an alias
-  or deprecation window, because users without `full` would lose the part.
-- Core has a soft budget of 100. A promotion can briefly exceed it; rebalance
-  in the next release, and do not silently demote.
+- **full → core (promotion)**: safe; keep the ID, add to core, remove from full.
+- **core → full (demotion)**: breaking; major release + alias/deprecation only.
+- Core has a soft budget of 100. A promotion can briefly exceed it; do not
+  silently demote.
 - `full` is currently empty. The optional data bundle will contain only specs
-  **not** in core; the resolver merges by ID and rejects duplicates.
+  **not** in core; resolver merges by ID and rejects duplicates.
 
-## Frequency data
+Frequency data is not collected yet. The eventual ledger should count distinct
+projects/assemblies per `libRef`, not raw quantity in one BOM.
 
-`frequency` is reserved for real usage data. The eventual resolver can write a
-local, opt-in ledger keyed by `libRef` and project hash; do not upload geometry.
-Until then, every entry stays `assumed`.
-
-Ranking should count **distinct projects/assemblies**, not raw quantity in one
-BOM, and should preserve family coverage and mating sets.
-
-## LOD selection
-
-The library exposes both LODs; the agent chooses at use time. The library does
-not declare one LOD universally authoritative:
-
-- checks/measurement default to `fit`;
-- rendering/screenshots default to `visual`;
-- an explicit `lod` wins;
-- a missing requested LOD is an error listing the available LODs, not a silent
-  fallback;
-- using `visual` for a contract check is allowed but must be reported as
-  render-only, not as fit evidence.
-
-## Validation
+## Regenerate
 
 ```bash
-cd dsh-cad-harness
+# from dsh-cad-harness/
+uv pip install --target .tmp-cadquery \
+  --index-url https://mirrors.aliyun.com/pypi/simple cadquery
+
+PYTHONPATH=$PWD/.tmp-cadquery \
+  /home/songsenand/.dsh/cad/runtime/venv/bin/python \
+  library/generator/generate.py
+```
+
+The generator deletes `library/parts` and regenerates all 99 specs, then updates
+`catalog.json`. It fails if a visual bbox escapes its fit envelope. Nominal
+dimensions are in `generator/dimensions.py`; each `part.json` records
+`dimensionSource` (v0 is **not** a compliance certificate).
+
+## Validate
+
+```bash
 node scripts/accept-library-catalog.mjs
 ```
 
-The script checks the 99/14 counts, core budget, stable IDs, package
-disjointness, assumed-frequency labelling, fit/visual presence and the
-"no geometry yet" state.
+Checks: 99/14 counts, core budget, stable IDs, package disjointness,
+assumed-frequency labelling, generated fit+visual models, file existence and
+SHA-256, visual bbox containment, alias-fit reuse, and the 286 + 99 = 385 file
+count.
 
-JSON Schema validation (optional, requires Python `jsonschema`):
+Optional JSON Schema check:
 
 ```bash
 python3 - <<'EOF'
@@ -105,10 +123,6 @@ EOF
 
 ## Next
 
-1. Generate the 99 core specs (fit + visual) with CadQuery; fill `model` and
-   `status: "generated"` only after validation.
-2. Add the resolver/catalog merge and `library.lock` (no runtime CAD kernel).
-3. Build the optional `full` data bundle from the same catalog source; full
-   excludes core IDs.
-4. Replace `frequency.source: "assumed"` with observed data only after real
-   project usage.
+1. Resolver/catalog merge + `library.lock`.
+2. Optional `full` data bundle built from the same catalog source, excluding core IDs.
+3. Replace `frequency.source: "assumed"` only after real usage data exists.

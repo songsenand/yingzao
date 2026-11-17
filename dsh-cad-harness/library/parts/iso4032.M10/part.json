@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso4032.M10",
+  "family": "iso4032",
+  "spec": "M10",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.776817+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 4032 nut table; bore represented with clearance",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "top": {
+      "point": [
+        0,
+        0,
+        8.0
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -9.2376,
+      -8.0,
+      0.0
+    ],
+    "max": [
+      9.2376,
+      8.0,
+      8.0
+    ],
+    "size": [
+      18.4752,
+      16.0,
+      8.0
+    ]
+  },
+  "volumeMm3": 1119.9174,
+  "fit": {
+    "step": "parts/iso4032.M10/fit/model.step",
+    "stl": "parts/iso4032.M10/fit/model.stl",
+    "stepSha256": "8bf625d843408501f5a9840fe3751561b60044b75ef322f2ecc70bf29370f0a8",
+    "stlSha256": "d199d173148ebaf0913f96830a5230dd84cc6897a74e5759b0b33fc7be59328b",
+    "triangles": 192
+  },
+  "visual": {
+    "step": "parts/iso4032.M10/visual/model.step",
+    "stl": "parts/iso4032.M10/visual/model.stl",
+    "stepSha256": "b3774728a928f12af4d33a7504f3738e74bd4ab23fbcc0607dd0f8194cd384ea",
+    "stlSha256": "b5f38b4c345323f03e2475f310637f0b21ad7593ad4b72e18bf1848fbd2db22e",
+    "mode": "distinct",
+    "triangles": 216,
+    "bboxMm": {
+      "min": [
+        -9.0876,
+        -8.0,
+        0.0
+      ],
+      "max": [
+        9.0876,
+        8.0,
+        8.0
+      ],
+      "size": [
+        18.1752,
+        16.0,
+        8.0
+      ]
+    }
+  }
+}

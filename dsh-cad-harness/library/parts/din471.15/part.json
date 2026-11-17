@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "din471.15",
+  "family": "din471",
+  "spec": "Ø15",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:21.900046+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "approximate DIN 471 v0 table; C-ring representation",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "face": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -8.4,
+      -8.4,
+      0.0
+    ],
+    "max": [
+      8.3785,
+      8.4,
+      1.0
+    ],
+    "size": [
+      16.7785,
+      16.8,
+      1.0
+    ]
+  },
+  "volumeMm3": 61.7415,
+  "fit": {
+    "step": "parts/din471.15/fit/model.step",
+    "stl": "parts/din471.15/fit/model.stl",
+    "stepSha256": "bab2bded50ecb28870304956009346c20b5241ef07f52b88828e3301c2c9492c",
+    "stlSha256": "1499f25b034335309c30cbb5300bf796094ac775b27f8fd855e7a5710f22fe63",
+    "triangles": 332
+  },
+  "visual": {
+    "step": "parts/din471.15/fit/model.step",
+    "stl": "parts/din471.15/fit/model.stl",
+    "stepSha256": "bab2bded50ecb28870304956009346c20b5241ef07f52b88828e3301c2c9492c",
+    "stlSha256": "1499f25b034335309c30cbb5300bf796094ac775b27f8fd855e7a5710f22fe63",
+    "mode": "alias-fit",
+    "triangles": 332,
+    "bboxMm": {
+      "min": [
+        -8.4,
+        -8.4,
+        0.0
+      ],
+      "max": [
+        8.3785,
+        8.4,
+        1.0
+      ],
+      "size": [
+        16.7785,
+        16.8,
+        1.0
+      ]
+    }
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "iso4014.M12x40",
+  "family": "iso4014",
+  "spec": "M12×40",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:20.320940+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "nominal ISO 4014 head/shank table; not a compliance certificate",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "seat": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        -1
+      ]
+    },
+    "top": {
+      "point": [
+        0,
+        0,
+        7.5
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -10.3923,
+      -9.0,
+      -40.0
+    ],
+    "max": [
+      10.3923,
+      9.0,
+      7.5
+    ],
+    "size": [
+      20.7846,
+      18.0,
+      47.5
+    ]
+  },
+  "volumeMm3": 6628.3352,
+  "fit": {
+    "step": "parts/iso4014.M12x40/fit/model.step",
+    "stl": "parts/iso4014.M12x40/fit/model.stl",
+    "stepSha256": "5fc4f60d24a7f97912ba81ca537db80397a8f9f7e0f5e5d1dd5ad1fe80131cf8",
+    "stlSha256": "052ab59777575ba76e84fe2c6a063c170f41c4e1394c852082422ae9ff6bbdf4",
+    "triangles": 188
+  },
+  "visual": {
+    "step": "parts/iso4014.M12x40/visual/model.step",
+    "stl": "parts/iso4014.M12x40/visual/model.stl",
+    "stepSha256": "12a891fc1f224fb56936d9f721cbca3f51d1d8e4e1666075455c3d698cd1c14d",
+    "stlSha256": "f6a0c8a2a8a58f634375d5d6d0e3cb88341ab8820a8e49e6be0c8a85711ddf83",
+    "mode": "distinct",
+    "triangles": 212,
+    "bboxMm": {
+      "min": [
+        -10.2673,
+        -9.0,
+        -40.0
+      ],
+      "max": [
+        10.2673,
+        9.0,
+        7.5
+      ],
+      "size": [
+        20.5346,
+        18.0,
+        47.5
+      ]
+    }
+  }
+}

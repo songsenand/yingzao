@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "iso3601.30x3",
+  "family": "iso3601",
+  "spec": "30×3",
+  "package": "core",
+  "generatedAt": "2026-11-17T08:07:21.694501+00:00",
+  "generator": {
+    "name": "cadquery",
+    "version": "2.8.0",
+    "toleranceMm": 0.05,
+    "angularToleranceRad": 0.3,
+    "versionTag": "0.1.0-v0"
+  },
+  "dimensionSource": "O-ring ID/CS from catalog; torus representation",
+  "datums": {
+    "axis": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        0,
+        1
+      ]
+    },
+    "center-plane": {
+      "point": [
+        0,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "bboxMm": {
+    "min": [
+      -18.0,
+      -18.0,
+      -1.5
+    ],
+    "max": [
+      18.0,
+      18.0,
+      1.5
+    ],
+    "size": [
+      36.0,
+      36.0,
+      3.0
+    ]
+  },
+  "volumeMm3": 732.8181,
+  "fit": {
+    "step": "parts/iso3601.30x3/fit/model.step",
+    "stl": "parts/iso3601.30x3/fit/model.stl",
+    "stepSha256": "beac97aca8a8854ee950e864fcf0511f706787bc0a0e55550940af0e86a90410",
+    "stlSha256": "6d5199f8f7f909c25c4aa745df4821d0750bb4c159fc3f4e19e251194a261813",
+    "triangles": 3528
+  },
+  "visual": {
+    "step": "parts/iso3601.30x3/fit/model.step",
+    "stl": "parts/iso3601.30x3/fit/model.stl",
+    "stepSha256": "beac97aca8a8854ee950e864fcf0511f706787bc0a0e55550940af0e86a90410",
+    "stlSha256": "6d5199f8f7f909c25c4aa745df4821d0750bb4c159fc3f4e19e251194a261813",
+    "mode": "alias-fit",
+    "triangles": 3528,
+    "bboxMm": {
+      "min": [
+        -18.0,
+        -18.0,
+        -1.5
+      ],
+      "max": [
+        18.0,
+        18.0,
+        1.5
+      ],
+      "size": [
+        36.0,
+        36.0,
+        3.0
+      ]
+    }
+  }
+}
