@@ -1,6 +1,6 @@
 # 0.1.0-preview.2 发布说明（2026-11-17）
 
-> **基线**：`v0.1.0-preview.1` → 本版（55 个提交）。预览语义不变：**这不是生产放行系统**。
+> **基线**：`v0.1.0-preview.1` → 本版（提交数见 `git rev-list --count v0.1.0-preview.1..HEAD`）。预览语义不变：**这不是生产放行系统**。
 > **证据口径**：只认能指名观察的结论；发布门禁见 §4。
 > **标签**：`v0.1.0-preview.2`（打 tag 即触发 `.github/workflows/preview.yml`）。
 
@@ -25,7 +25,7 @@
 - 99 个规范件的核心目录，预生成 STEP/STL（fit / visual 两档 LOD），随包分发。
 - CadQuery 生成环境不随包；安装时只解压/校验，不在用户机上装 CAD 内核
   （依据：`experiments/20261117_install_time_step_stl_benchmark.md`）。
-- 代价：tarball 从 118 files / ~4.5 MB 增到 **521 files / ~12 MB**（visual STL 是大头）。
+- 代价：tarball 从 118 files / ~4.5 MB 增到 **521 files / 11.7 MB packed（38.6 MB unpacked）**（visual STL 是大头）。
 
 ### 1.3 示例
 
@@ -86,10 +86,11 @@ npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 | 门禁 | 结果 |
 |---|---|
 | `npm run rehearse:preview` | **PASS**：build → accept:preview → pack → extract → setup → setup --check → doctor → 打包后的 verify-cli |
-| tarball | 521 files / ~12 MB；含 LICENSE/NOTICE；无 `/home/` 路径、无 BOSL2/AppImage/node_modules/CadQuery 环境 |
+| tarball | **521 files / 11.7 MB packed / 38.6 MB unpacked**；含 LICENSE/NOTICE；library 393 条目；无 `/home/` 路径、无 BOSL2/AppImage/node_modules/CadQuery 环境、无 `.venv` |
 | `doctor`（checkout） | `kind=degraded`，唯一非 pass 是 OpenSCAD 2021.01（已知边界），无 fail |
-| 全量 accept | 172 脚本：171 绿 / 1 红（`accept-verify`），0 超时；7502 条 PASS。唯一的红随后按当前语料修正并**单独复跑通过**；提交后未再跑第二次全量 |
-| 覆盖率 | `src/` 行 **89.0%**、函数 **83.0%**；工具边界 **39/39**（253 次调用） |
+| 全量 `npm run accept` | **5320 PASS / 0 FAIL**，exit 0；49 个脚本调用（含新增 library catalog 验收） |
+| `accept:verify`（单独） | **PASS**；包含 claim/run/stale/exception/CLI 退出码用例 |
+| 覆盖率 | 非本次发布门禁；上一轮记录 `src/` 行 89.0%、函数 83.0%、工具边界 39/39，本次未复跑 |
 | 干净安装 smoke | rehearsal 内完成：解包 → setup → `--check` → doctor（非 fail）→ 打包后的 `dsh-cad-verify` 可跑 |
 
 复跑：
@@ -101,6 +102,18 @@ node scripts/coverage-tools.mjs --json coverage.json   # 需要 Python 运行时
 ```
 
 ---
+
+## 4.1 发布判断
+
+本地发布门禁已经通过：`rehearse:preview`、全量 `accept`、`accept:verify`、打包/解包、setup/doctor、打包后的 verify-cli 均有本机证据；没有本地 FAIL。
+
+但以下 DoD 仍**没有**真实证据，不能把本地 rehearsal 当成已通过：
+
+1. **干净机器/陌生用户 15 分钟 DoD**：目前是同一台机器上的解包 smoke，不是干净 VM；需要一次真实干净 Linux（最好加 macOS）演练。
+2. **GitHub Actions 实际运行**：workflow 只在本地等价演练过；第一次推 `v0.1.0-preview.2` tag 才会真实跑。
+3. **真实断网/磁盘满注入**：分类与 state 落盘已测，真实故障注入未跑。
+
+结论：**可以打 tag 进入 CI，但不能宣称“干净机 DoD 已完成”**；tag 后按 §6 收 CI 结果，并在发布正文保留 §3 的 known issues。
 
 ## 5. 下一版（0.2 / 0.1.1）
 
