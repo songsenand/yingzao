@@ -174,8 +174,23 @@ export async function startCompileJob(opts: {
       void finish('failed', String(error?.message ?? error));
     });
     timer = setTimeout(() => {
-      if (child?.pid) { killGroup(child.pid); alive.delete(child.pid); }
-      void finish('timeout', `exceeded ${timeoutMs} ms`);
+      timer = null;
+      // Claim the row BEFORE killing, for the reason cancelJob documents: the
+      // child's exit handler runs on its own tick, and whichever write lands
+      // first wins. Killing first let a timeout be recorded as
+      // `failed: SIGTERM` on macOS CI, where the exit event beats the timer's
+      // own write. Claiming first makes the verdict deterministic.
+      void (async () => {
+        const claimed = read(opts.store, id) ?? job;
+        if (claimed.status === 'running') {
+          claimed.status = 'timeout';
+          claimed.updatedAt = now();
+          claimed.finishedAt = claimed.updatedAt;
+          claimed.error = `exceeded ${timeoutMs} ms`;
+          await write(opts.store, claimed);
+        }
+        if (child?.pid) { killGroup(child.pid); alive.delete(child.pid); }
+      })();
     }, timeoutMs);
   } catch (error) {
     await finish('failed', String((error as Error)?.message ?? error));
