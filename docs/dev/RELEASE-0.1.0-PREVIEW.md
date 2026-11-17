@@ -3,6 +3,7 @@
 > **状态**：P0 13/13 完成；P1 5/6 收口 + N15 只交付 **OpenSCAD 编译 job**（2026-11-13）。证据见 [TODO.md](TODO.md)。
 > **英文入口**：README.en.md + docs/en/user 全套 + docs/en/llm + HARNESS.en.md；客户端 UI 文案已全量英文化（`accept:ui-i18n`）。
 > **总索引**：[TODO.md](TODO.md)（顺序/状态）；本文件是 0.1.0-preview 的详细设计。
+> **preview.2**：发布说明与门禁证据见 [RELEASE-NOTES-0.1.0-preview.2.md](RELEASE-NOTES-0.1.0-preview.2.md)。
 > **目标**：不是把 L2 全部做完，而是让 `0.1.0-preview` 达到四条底线：
 > **装得上、查得出、拦得住（但允许带风险导出）、退得回。**
 > **口径**：只认能指名观察的证据；"完成"必须能说出哪个观察会证伪它（HARNESS §11.9）。

@@ -62,6 +62,18 @@
 | Q3 | OpenSCAD 最低版本 | **2025.06+（Manifold）**，旧版回落 CGAL 并警告 | N03/N07 |
 | Q4 | L1 放在哪个预览 | **preview.2 或 preview.3**，不塞进 preview.1 | 中远期起始时间 |
 
+**2026-11-17：preview.2 发布准备**
+
+- 门禁：`npm run rehearse:preview` **PASS**（build → accept:preview → pack → extract → setup → doctor → 打包后 verify）；
+  tarball 521 files / ~12 MB；`doctor` 仅 OpenSCAD 2021 degraded；全量 accept 172 脚本 171 绿 + 1 红
+  （`accept-verify`，已按当前语料修正并单独复跑通过）。
+- 模型面：39 工具 → **9 个作业面**；`measure_*` 五个合并为 `measure(kind=…)`。
+- 标准件库 v0：99 个规范件，预生成 STEP/STL；包体从 4.5 MB 增到 12 MB。
+- **示例语料重跑推迟到 0.2**（用户 2026-11-17 指定）。`windup-frog` 当前 verify = **blocked**
+  （motion r028/r063 干涉、printability r042 最薄 0.028 mm），其 README 仍写 difficult；0.2 重跑后
+  同步 README 与 `accept-verify` 的期望。
+- 下一步：打 `v0.1.0-preview.2` 触发 CI；tag 后补 GitHub Actions 实跑与真实断网/磁盘满注入。
+
 ---
 
 ## 1. 近期 TODO（0–6 周）
@@ -157,6 +169,7 @@
 | L13 | P2 | planned | 平台与分发：npm、Win/mac 全矩阵、插件市场 | 预览只承诺 tarball + Linux/macOS | npm 包、三平台 CI、安装/升级路径 | README；RELEASE |
 | L14 | P3 | triggered | 多用户/云/移动 | 单用户本地够用 | 按 PROJECT-SCOPE 触发条件再评估 | DESIGN §2.2 |
 | L15 | P2 | planned | 仿真/装配视图内直接选中零件 | 现在只能看，不能点：`in_asm`/`out_asm` 这类同轴复合件在 64:1 会话里被反复认错（颜色、图例、拾取都没有同一套身份） | 视口内点选 → 高亮 + 显示零件名/版本/颜色/BOM 行；与 manifest 的 `color` 共用同一身份 | DECISION-LOG 2026-11-16（零件颜色） |
+| L16 | P1 | planned | 示例语料重跑（windup 等） | 用户 2026-11-17：示例重跑交给 0.2。当前 `windup-frog` verify=blocked（motion r028/r063 干涉、printability r042 最薄 0.028mm），README 仍写 difficult | 每个示例的 verify/README/截图一致；`accept-verify` 的期望随语料更新；重跑记录写进示例 README | 用户 2026-11-17 |
 
 ---
 

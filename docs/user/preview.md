@@ -8,6 +8,10 @@
 ## 这一版有什么
 
 - 自然语言 → OpenSCAD 零件 → 编译、渲染、版本库；
+- 模型调用面从 39 个工具收成 **9 个作业面**（`cad_session`/`cad_part`/`cad_assembly`/
+  `cad_check`/`cad_simulate`/`cad_inspect`/`cad_see`/`cad_python`/`cad_deliver`），
+  参数按 `action` 展开；
+- 标准件库 v0：99 个规范件，预生成 STEP/STL（fit / visual 两档），随包分发；
 - 五层验证：几何 / 装配 / 刚体与机构 / 流体 / 工艺；
 - 装配契约（BOM + ICD）、交付审计、证据 CLI；
 - 回放导出：运动回放的工具栏有 **GIF** 和 **WebM** 两个按钮，按**当前视角**导出整段轨迹（浏览器内完成，不上传）；GIF 用自带的 256 色调色板编码器。
@@ -43,7 +47,8 @@ OpenSCAD 由 `setup --openscad=auto` 自动准备：已有 2025.06+ 系统版本
 - **BOSL2**：可选；标准件需要，缺失时报告会说明，不会静默产出空几何。
 - **内核**：预览版只有 OpenSCAD。第二内核已列入中远期第一项，不是本版承诺。
 - **长任务**：后台编译 job 已有 submit/status/cancel/timeout/重启恢复；渲染、仿真仍同步，超时会被报告，不会被当成通过。
-- **英文界面**：本版先覆盖标签页、环境提示、导出弹窗和主要空状态；深层面板仍以中文为主（完整双语在 preview.2）。
+- **英文界面**：客户端可见文案已全部走 i18n（zh/en 同 key，`accept:ui-i18n` 校验字面量），
+  深层面板也已英文化（preview.2 起）。host 的模型侧工具输出/诊断仍是中文。
 - **英文文档**：英文用户文档已全套（README、install、preview、limits、workflow、verification、configuration、troubleshooting、advanced），HARNESS 也有英文版；`docs/llm` 也有英文版；`docs/dev` 暂时中文。
 - **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。`difficult` 导出会弹一次警告，但文件名不变。
 - **schema/迁移**：旧项目可开；未知的新 schemaVersion 会被 `doctor` 拒绝；没有自动迁移器，迁移前必须备份。
@@ -67,6 +72,6 @@ OpenSCAD 由 `setup --openscad=auto` 自动准备：已有 2025.06+ 系统版本
 
 ## 这一版之后
 
-近期优先：渲染/仿真 job、Python 首启进度、深层面板完整双语。
+近期优先：渲染/仿真 job、Python 首启进度；示例语料重跑（windup 等）安排在 0.2。
 中远期第一项：第二几何内核（CadQuery 优先）。完整顺序见
 [`docs/dev/TODO.md`](../dev/TODO.md)。

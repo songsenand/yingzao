@@ -7,6 +7,11 @@
 ## What is in this release
 
 - Natural language → OpenSCAD part → compile, render, version store;
+- The model-facing catalog is compressed from 39 tools to **9 job surfaces**
+  (`cad_session`/`cad_part`/`cad_assembly`/`cad_check`/`cad_simulate`/`cad_inspect`/
+  `cad_see`/`cad_python`/`cad_deliver`), with arguments under `action`;
+- Standard-parts library v0: 99 catalogue items with pre-generated STEP/STL
+  (fit and visual LOD), shipped in the package;
 - Five verification layers: geometry / assembly / rigid body & mechanism / fluid / process;
 - Assembly contract (BOM + executable ICD), delivery audit, evidence CLI;
 - Risk-annotated export: a blocked delivery can still be exported, but the panel asks for confirmation, the filename carries `_UNVERIFIED`, and the project `exports/<id>/` keeps a manifest and the findings;
@@ -38,7 +43,9 @@ OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system ins
 - **BOSL2**: optional; standard parts need it, and a missing copy is reported rather than silently producing empty geometry.
 - **Kernel**: OpenSCAD only in this preview. A second kernel is the first mid-term item, not a promise for this release.
 - **Long tasks**: background **compile** jobs have submit/status/cancel/timeout/restart recovery; rendering and simulation are still synchronous. A timeout is reported, never treated as a pass.
-- **English UI**: this release covers the tab title, environment notices, export dialog and main empty states. The deep panel is still mostly Chinese; full bilingual UI is preview.2.
+- **English UI**: all client-visible strings go through i18n (same keys in zh/en;
+  `accept:ui-i18n` scans literals), and the deep panel is English too as of preview.2.
+  Host-side model-facing tool output/diagnostics remain Chinese.
 - **English docs**: the complete English user set is available under `docs/en/user/`; HARNESS also has an English version. `docs/llm` has an English version too; `docs/dev` stays Chinese for now.
 - **Export**: `_UNVERIFIED` is a warning, not a security boundary; renaming the file does not change the manifest verdict. A `difficult` export shows one warning before the download but keeps the original filename.
 - **Schema/migration**: old projects open; an unknown newer `schemaVersion` is refused by `doctor`; there is no automatic migrator, so back up before migrating.
@@ -62,5 +69,6 @@ Please include:
 
 ## After this release
 
-Near term: render/simulation jobs, the full bilingual UI, Python first-run progress.
+Near term: render/simulation jobs, Python first-run progress; re-running the example
+corpora (windup and friends) is scheduled for 0.2.
 First mid-term item: a second geometry kernel (CadQuery first). Full order: [`docs/dev/TODO.md`](../../dev/TODO.md) (Chinese).
