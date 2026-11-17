@@ -25,7 +25,7 @@
 - 99 个规范件的核心目录，预生成 STEP/STL（fit / visual 两档 LOD），随包分发。
 - CadQuery 生成环境不随包；安装时只解压/校验，不在用户机上装 CAD 内核
   （依据：`experiments/20261117_install_time_step_stl_benchmark.md`）。
-- 代价：tarball 从 118 files / ~4.5 MB 增到 **521 files / 11.7 MB packed（38.6 MB unpacked）**（visual STL 是大头）。
+- 代价：tarball 从 118 files / ~4.5 MB 增到 **503 files / 11.1 MB packed（37.2 MB unpacked）**（visual STL 是大头）。
 
 ### 1.3 示例
 
@@ -86,7 +86,7 @@ npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 | 门禁 | 结果 |
 |---|---|
 | `npm run rehearse:preview` | **PASS**：build → accept:preview → pack → extract → setup → setup --check → doctor → 打包后的 verify-cli |
-| tarball | **521 files / 11.7 MB packed / 38.6 MB unpacked**；含 LICENSE/NOTICE；library 393 条目；无 `/home/` 路径、无 BOSL2/AppImage/node_modules/CadQuery 环境、无 `.venv` |
+| tarball | **503 files / 11.1 MB packed / 37.2 MB unpacked**；含 LICENSE/NOTICE；library 393 条目；无 `/home/` 路径、无 BOSL2/AppImage/node_modules/CadQuery 环境、无 `.venv`、无 `__pycache__`/Numba cache |
 | `doctor`（checkout） | **`kind=ok`**；OpenSCAD 2026.09.23 snapshot 优先于 PATH 的 2021.01（doctor 候选顺序已与 compile 对齐） |
 | 全量 `npm run accept` | **5320 PASS / 0 FAIL**，exit 0；49 个脚本调用（含新增 library catalog 验收） |
 | `accept:verify`（单独） | **PASS**；包含 claim/run/stale/exception/CLI 退出码用例 |

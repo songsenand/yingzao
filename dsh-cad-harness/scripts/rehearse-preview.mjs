@@ -46,6 +46,7 @@ try {
   check('tarball has NOTICE', listing.includes('package/NOTICE'));
   check('tarball has no AppImage', !listing.includes('.AppImage'));
   check('tarball has no BOSL2', !listing.includes('BOSL2'));
+  check('tarball has no Python bytecode/cache', !/__pycache__|\.pyc|\.nbc|\.nbi/.test(listing));
   const pkg = join(files, 'package');
   check('package has lib/index.js', existsSync(join(pkg, 'lib', 'index.js')));
   check('package has lib/verify.js', existsSync(join(pkg, 'lib', 'verify.js')));
