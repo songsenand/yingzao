@@ -6326,3 +6326,5 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** `experiments/20261021_openscad_text_engraving.md` §5 的同模型对比；`scanner-bin/rules/*.ts` 无域名白名单（换源不改变 vet 判定），站点静态档只有严重/高/低；`accept-provision` 22 项 PASS（含新增 5 项：镜像覆盖、非法 scheme 拒绝、未验证归档拒绝、提示 bypass、bypass 生效）；`accept-mirror-manifest` 9 项 PASS。
 
 **影响：** `scripts/provision-lib.mjs`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、`src/host/compile.ts`、`mirror/`、`NOTICE`、README 双语、`docs/THIRD-PARTY-AUDIT.md`、`package.json`（`files` 增加 `mirror/`）；后续新增平台或换快照须同时更新 pin 表并重生成 manifest，否则 `accept-mirror-manifest` 失败。
+
+**补记（2026-11-17 晚）：** 镜像合规三件套已实际上传到 `openscad/2025.12.30/`（LICENSE.GPL-2.0、SOURCE-OFFER.md、manifest.json，公网可读），并核对了该前缀下三个二进制与 `SHA256SUMS` 的存在。快照 pin 暂保持 2025.12.30：用户确认"选择版本并无特别理由"，但对齐到实验里实测的 2026.09.23 需要重新下载三个官方 archive（zip 66 MB / AppImage / dmg），而上游从本机实测约 **12.5 KB/s**，全量约需 4 小时，故不在发布前夜做这件事；`provision-lib.mjs` 的常量上方已写明换版四步。

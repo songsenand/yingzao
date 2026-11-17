@@ -12,6 +12,13 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { basename, join } from 'node:path';
 
+// The pinned snapshot is the build the mirror carries and every user installs.
+// It was chosen without a special reason, so treat the pin as provisional:
+// moving it means (1) fetching the three official archives, (2) updating ASSET
+// below, (3) `node scripts/build-mirror-manifest.mjs`, (4) uploading the
+// archives plus the manifest to the mirror. Upstream measured ~12.5 KB/s from
+// the mirror's region, which is why the mirror exists — fetch the archives from
+// a faster link rather than from files.openscad.org.
 export const OPENSCAD_VERSION = '2025.12.30';
 const OFFICIAL = 'https://files.openscad.org/snapshots';
 const DEFAULT_MIRROR = 'https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30';
