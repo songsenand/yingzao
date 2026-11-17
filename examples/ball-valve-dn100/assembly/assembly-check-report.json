@@ -1,7 +1,7 @@
 {
-  "runId": "r016",
-  "checkedAt": "2026-11-17T01:19:20.639Z",
+  "runId": "r020",
+  "checkedAt": "2026-11-17T01:35:35.789Z",
   "manifestPath": "/home/songsenand/Project/ToyMarker/examples/ball-valve-dn100/assembly/assembly.json",
-  "manifestHash": "8dcdc1ca",
+  "manifestHash": "c9b9127e",
   "schema": "assembly-check-pointer/v1"
 }

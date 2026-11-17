@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-17T01:20:01.815Z",
+  "generatedAt": "2026-11-17T01:35:42.161Z",
   "project": "/home/songsenand/Project/ToyMarker/examples/ball-valve-dn100",
   "claims": [
     {
@@ -9,7 +9,7 @@
     },
     {
       "kind": "motion",
-      "statement": "启闭组件相对阀体 0→90° 回转（r002）：24 个位姿、4 对候选、0 干涉，采样间隔 ≤3.9°，关节漂移 0"
+      "statement": "启闭组件相对阀体 0→90° 回转（r019，当前 v019 阀座）：24 个位姿、4 对候选、0 干涉，采样间隔 ≤3.9°，关节漂移 0"
     },
     {
       "kind": "appearance",
@@ -26,12 +26,12 @@
     {
       "severity": "warn",
       "code": "versions-never-cited",
-      "detail": "10/21 versions were never used by any run: v021, v018, v017, v016, v015, v014, v013, v004, v002, v001"
+      "detail": "8/21 versions were never used by any run: v021, v016, v015, v014, v013, v004, v002, v001"
     },
     {
       "severity": "warn",
       "code": "stale-evidence",
-      "detail": "1/16 runs cite geometry that has since been replaced — e.g. r001(assembly, superseded v005)"
+      "detail": "1/20 runs cite geometry that has since been replaced — e.g. r001(assembly, superseded v005)"
     },
     {
       "severity": "info",
@@ -46,12 +46,12 @@
     {
       "severity": "info",
       "code": "duplicate-runs",
-      "detail": "2 group(s) repeat the same kind+geometry+outcome — 6 run(s) spent without new information"
+      "detail": "3 group(s) repeat the same kind+geometry+outcome — 8 run(s) spent without new information"
     },
     {
       "severity": "info",
       "code": "overlay-backed-runs",
-      "detail": "16 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+      "detail": "20 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
     }
   ],
   "visual": {
@@ -64,8 +64,6 @@
     "total": 21,
     "neverCited": [
       "v021",
-      "v018",
-      "v017",
       "v016",
       "v015",
       "v014",
@@ -82,7 +80,7 @@
     "newestNeverValidated": []
   },
   "runs": {
-    "total": 16,
+    "total": 20,
     "stale": [
       {
         "id": "r001",
@@ -134,14 +132,28 @@
       },
       {
         "signature": "assembly-check|v003+v006+v007+v008+v009+v010+v011+v012+v019|pass",
+        "count": 3
+      },
+      {
+        "signature": "motion|v007+v008+v009+v019+v020|pass",
         "count": 2
       }
     ],
     "latestByKind": {
       "assembly-check": {
-        "id": "r016",
+        "id": "r020",
         "status": "pass",
-        "timestamp": "2026-11-17T01:19:20.779Z"
+        "timestamp": "2026-11-17T01:35:35.938Z"
+      },
+      "motion": {
+        "id": "r019",
+        "status": "pass",
+        "timestamp": "2026-11-17T01:35:15.451Z"
+      },
+      "fluid": {
+        "id": "r018",
+        "status": "check",
+        "timestamp": "2026-11-17T01:21:58.592Z"
       },
       "assembly": {
         "id": "r015",
@@ -157,16 +169,6 @@
         "id": "r012",
         "status": "check",
         "timestamp": "2026-11-17T01:10:09.598Z"
-      },
-      "fluid": {
-        "id": "r009",
-        "status": "check",
-        "timestamp": "2026-11-17T01:03:53.167Z"
-      },
-      "motion": {
-        "id": "r002",
-        "status": "pass",
-        "timestamp": "2026-11-17T00:54:24.423Z"
       }
     }
   },
@@ -244,5 +246,5 @@
     "truncated": false
   },
   "judgement": "difficult",
-  "summary": "21 versions / 13 parts / 16 runs · 0 blocked · 2 warn · 5 info · stale runs 1 · newest-unvalidated parts 0"
+  "summary": "21 versions / 13 parts / 20 runs · 0 blocked · 2 warn · 5 info · stale runs 1 · newest-unvalidated parts 0"
 }
