@@ -423,9 +423,17 @@ trimesh.proximity.thickness(mesh, points, exterior=False, normals=None, method="
 其许可为 **BSD 2-Clause**（Copyright (c) 2015-2024 Revar Desmera），本项目提供
 `dsh-cad-harness/scripts/accept-bosl2.mjs` 作为使用者的**校验**入口（它只编译一个测试齿轮核对接线，不负责下载）。
 
-**运行期由用户获取、本项目不分发：** OpenSCAD（GPL-2.0，独立程序调用，非链接）、
-Python 运行时与科学计算包（`python_runtime` 在用户机器上下载）、题库第三方素材
-（Pixabay 等，**物化不入库**，逐项登记见 `examples/bench/ATTRIBUTION.md`）。
+**运行期由用户获取：** Python 运行时与科学计算包（`python_runtime` 在用户机器上下载）、
+题库第三方素材（Pixabay 等，**物化不入库**，逐项登记见 `examples/bench/ATTRIBUTION.md`）。
+
+**OpenSCAD 经镜像再分发（GPL-2.0）：** 正常情况下由用户机器的 provisioner 从官方快照下载；
+官方源不可达或过慢时改用 OSS 镜像，镜像是与官方**逐字相同**的未修改二进制——因此这是
+GPL-2.0 意义上的再分发，而非"仅提供链接"。义务落在三件随镜像发布的文件上：
+`dsh-cad-harness/mirror/LICENSE.GPL-2.0`（许可证全文）、`SOURCE-OFFER.md`（§3(b) 源码书面
+要约，含联系方式与三年有效期）、`manifest.json`（逐文件 sha256，可对照官方校验）。
+`dsh-cad-harness/scripts/accept-mirror-manifest.mjs` 卡住"清单漂移"，避免镜像声明的哈希
+与安装器实际执行的哈希不一致。OpenSCAD 仍以**独立进程**调用，不链接、不进 npm 包，
+所以 Apache-2.0 主体不产生 copyleft 牵连。
 
 **结论：** 以 Apache-2.0 发布不存在 copyleft 牵连；`NOTICE` 与本节共同满足 Apache-2.0 的声明义务。
 

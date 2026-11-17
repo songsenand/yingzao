@@ -66,6 +66,7 @@
     "scripts/accept-error-envelope.mjs",
     "LICENSE",
     "NOTICE",
+    "mirror/",
     "scripts/accept-i18n.mjs",
     "README.en.md",
     "scripts/accept-run-facts.mjs",
@@ -163,12 +164,14 @@
     "accept:run-chart": "node scripts/accept-run-chart.mjs",
     "accept:ui-i18n": "node scripts/accept-ui-i18n.mjs",
     "accept:provision": "node scripts/accept-provision.mjs",
+    "accept:mirror-manifest": "node scripts/accept-mirror-manifest.mjs",
+    "mirror:manifest": "node scripts/build-mirror-manifest.mjs",
     "accept:error-envelope": "node scripts/accept-error-envelope.mjs",
     "accept:jobs": "node scripts/accept-jobs.mjs",
     "accept:viewport-orbit": "node scripts/accept-viewport-orbit.mjs",
     "accept:cad-activity": "node scripts/accept-cad-activity.mjs",
     "rehearse:preview": "node scripts/rehearse-preview.mjs",
-    "accept:preview": "npm run accept:setup && npm run accept:export-gate && npm run accept:export-http && npm run accept:export-dialog && npm run accept:backend && npm run accept:bundle-load && npm run accept:plugin-add && npm run accept:license && npm run accept:clean && npm run accept:scope && npm run accept:i18n && npm run accept:run-facts && npm run accept:run-chart && npm run accept:ui-i18n && npm run accept:provision && npm run accept:error-envelope && npm run accept:jobs && npm run accept:viewport-orbit && npm run accept:cad-activity && npm run accept:doctor && npm run accept:verify-cli && npm run accept:python-failure"
+    "accept:preview": "npm run accept:setup && npm run accept:export-gate && npm run accept:export-http && npm run accept:export-dialog && npm run accept:backend && npm run accept:bundle-load && npm run accept:plugin-add && npm run accept:license && npm run accept:clean && npm run accept:scope && npm run accept:i18n && npm run accept:run-facts && npm run accept:run-chart && npm run accept:ui-i18n && npm run accept:provision && npm run accept:mirror-manifest && npm run accept:error-envelope && npm run accept:jobs && npm run accept:viewport-orbit && npm run accept:cad-activity && npm run accept:doctor && npm run accept:verify-cli && npm run accept:python-failure"
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",

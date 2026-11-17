@@ -7,9 +7,9 @@
 
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { assetFor, downloadWithFallback, OPENSCAD_VERSION, sourcesFor } from './provision-lib.mjs';
+import { assetFor, downloadWithFallback, OPENSCAD_VERSION, sha256File, sourcesFor, SPEED_NOTE } from './provision-lib.mjs';
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -21,8 +21,12 @@ const json = has('--json');
 const check = has('--check');
 const force = has('--force');
 const dryRun = has('--dry-run');
+const allowUnverified = has('--allow-unverified') || process.env.CAD_OPENSCAD_ALLOW_UNVERIFIED === '1';
 const sourceMode = valueOf('--source') ?? 'auto';
-const fromFile = valueOf('--from');
+// --from wins over the environment: a one-off install should not require
+// unsetting a deployment-wide default.
+const envArchive = process.env.CAD_OPENSCAD_ARCHIVE?.trim();
+const fromFile = valueOf('--from') ?? (envArchive ? resolve(envArchive) : undefined);
 const home = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'));
 
 function out(text) {
@@ -44,6 +48,30 @@ function versionOf(bin) {
 function versionScore(text) {
   const m = /20(\d{2})\.(\d{2})/.exec(text ?? '');
   return m ? Number(`20${m[1]}${m[2]}`) : 0;
+}
+
+/**
+ * A locally supplied archive is trusted only when it is the pinned asset.
+ * A vendor build or a different snapshot still installs, but only when the
+ * caller says so explicitly — otherwise a stale archive would silently replace
+ * the version the rest of the harness is tested against.
+ */
+async function verifyArchive(file, asset) {
+  const size = statSync(file).size;
+  const actual = await sha256File(file);
+  if (basename(file) === asset.filename && actual === asset.sha256) {
+    return { verified: true, actual, note: `sha256 ${actual.slice(0, 12)}… matches the pinned ${OPENSCAD_VERSION}` };
+  }
+  if (!allowUnverified) {
+    const reason = basename(file) !== asset.filename
+      ? `the file is named ${basename(file)}, but the pinned asset is ${asset.filename}`
+      : `sha256 ${actual.slice(0, 12)}… != pinned ${asset.sha256.slice(0, 12)}…`;
+    throw new Error(
+      `local archive is not the pinned ${OPENSCAD_VERSION} build — ${reason}. `
+      + 'Install the pinned archive, or pass --allow-unverified (CAD_OPENSCAD_ALLOW_UNVERIFIED=1) to use a different build on purpose.',
+    );
+  }
+  return { verified: false, actual, note: `unverified local archive (${size} bytes, sha256 ${actual.slice(0, 12)}…)` };
 }
 
 function systemOpenScad() {
@@ -160,9 +188,15 @@ async function main() {
   --check              report whether OpenSCAD is already usable; never download
   --json               machine-readable output
   --source auto|official|mirror  default auto: official first, mirror on slow/failure
-  --from <file>        install from a local archive (no network)
+  --from <file>        install from a local archive (no network); same as CAD_OPENSCAD_ARCHIVE
+  --allow-unverified   accept a local archive that is not the pinned build
   --force              reinstall even when a usable version exists
   --dry-run            print the selected sources without downloading
+
+Environment:
+  CAD_OPENSCAD_MIRROR            base URL of the mirror (default: the public OSS copy)
+  CAD_OPENSCAD_ARCHIVE           local archive path; skips the network entirely
+  CAD_OPENSCAD_ALLOW_UNVERIFIED  1 accepts an archive that is not the pinned build
 
 Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
     process.exit(0);
@@ -176,11 +210,17 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
   const existing = installed();
   if (check) {
     const ready = system?.score >= 202506 ? { ...system, source: 'system' } : existing;
-    const payload = ready ?? { ok: false, reason: 'no usable OpenSCAD 2025.06+', home };
+    const payload = ready ?? { ok: false, reason: 'no usable OpenSCAD 2025.06+', speed: SPEED_NOTE, home };
     if (json) console.log(JSON.stringify({ ok: Boolean(ready), ...payload }, null, 2));
     else if (ready) console.log(`OpenSCAD ready: ${ready.bin} (${ready.version}; ${ready.source})`);
-    else console.log('OpenSCAD not ready: install 2025.06+ or run dsh-cad-provision');
+    else console.log(`OpenSCAD not ready: install 2025.06+ or run dsh-cad-provision — ${SPEED_NOTE}`);
     process.exit(ready ? 0 : 1);
+  }
+
+  // Say why an older binary is not "good enough" instead of silently replacing
+  // it: the gap is a 36x render time, not a version-number preference.
+  if (!force && !fromFile && system && system.score > 0 && system.score < 202506) {
+    out(`system OpenSCAD ${system.version} predates 2025.06 — Manifold is off, and the same model took ${SPEED_NOTE}`);
   }
 
   if (!force && !fromFile && system?.score >= 202506) {
@@ -212,11 +252,14 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
     process.exit(0);
   }
 
+  let archiveCheck;
   if (fromFile) {
     if (!existsSync(archive)) {
       console.error(`dsh-cad-provision: no such file ${archive}`);
       process.exit(1);
     }
+    archiveCheck = await verifyArchive(archive, asset);
+    out(archiveCheck.verified ? `local archive verified: ${archiveCheck.note}` : `warning: ${archiveCheck.note}`);
   } else {
     const sources = sourcesFor(asset, sourceMode);
     out(`OpenSCAD ${OPENSCAD_VERSION}: ${sources.map((s) => s.label).join(' → ')}`);
@@ -245,12 +288,14 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
   const version = versionOf(bin);
   if (!version) throw new Error(`installed binary does not answer --version: ${bin}`);
   const config = writeBackend(bin);
-  const payload = { ok: true, source: fromFile ? 'local' : 'download', bin, version, config, root };
+  const verified = archiveCheck ? archiveCheck.verified : true;
+  const payload = { ok: true, source: fromFile ? 'local' : 'download', verified, bin, version, config, root };
   if (json) console.log(JSON.stringify(payload, null, 2));
   else {
     console.log(`OpenSCAD ${version}`);
     console.log(`binary: ${bin}`);
     console.log(`backend: ${config}`);
+    if (archiveCheck && !archiveCheck.verified) console.log(`warning: ${archiveCheck.note}`);
   }
 }
 

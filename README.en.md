@@ -123,7 +123,19 @@ Source: [docs/readme-models/gear-pair.scad](docs/readme-models/gear-pair.scad)
 
 ## Quick start
 
-`setup --openscad=auto` prepares OpenSCAD (2021.01 works but `doctor` reports `degraded`; 2025.06+ / Manifold is recommended). An existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s. You can also prepare it manually with `--openscad=off`, or point `CAD_OPENSCAD_BIN` at an existing binary.
+`setup --openscad=auto` prepares OpenSCAD (2021.01 works but `doctor` reports `degraded`; 2025.06+ / Manifold is recommended). An existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s.
+
+**The version is a capability, not a preference**: on the same `plate.scad`, 2021.01 (CGAL) measured **2467 ms** against **69 ms** on a Manifold build — 36x, and the gap grows with model complexity. Below 2025.06, `doctor` reports that number and `compile.ts` warns once when it first resolves an older binary.
+
+Network and offline (three switches; none of them changes how the package is distributed):
+
+| Variable | Effect |
+|---|---|
+| `CAD_OPENSCAD_BIN` | Use an existing binary; skip the download |
+| `CAD_OPENSCAD_MIRROR` | Override the mirror base (intranet or regional mirror); the pinned SHA-256 still decides |
+| `CAD_OPENSCAD_ARCHIVE` | Local offline archive, same as `--from`; no network at all |
+
+The mirror publishes `LICENSE.GPL-2.0`, `SOURCE-OFFER.md` (GPL-2.0 §3(b) written offer) and `manifest.json` (per-file SHA-256) next to the binaries; see [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/).
 
 > OpenSCAD is prepared during `setup`; the Python runtime is about 400 MB and is installed on first calculation. Neither is shipped in the tarball.
 

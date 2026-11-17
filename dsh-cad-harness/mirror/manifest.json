@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "version": "2025.12.30",
+  "license": "GPL-2.0",
+  "licenseFile": "LICENSE.GPL-2.0",
+  "sourceOffer": "SOURCE-OFFER.md",
+  "officialBase": "https://files.openscad.org/snapshots",
+  "assets": [
+    {
+      "filename": "OpenSCAD-2025.12.30-x86-64.zip",
+      "platform": "win32",
+      "archive": "zip",
+      "size": 41511427,
+      "sha256": "f04d315b1f1fbe20b363383f45ea8ed65713fe9913b4368d90a94175b71423cb",
+      "official": "https://files.openscad.org/snapshots/OpenSCAD-2025.12.30-x86-64.zip",
+      "mirror": "https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30/OpenSCAD-2025.12.30-x86-64.zip"
+    },
+    {
+      "filename": "OpenSCAD-2025.12.30.ai30275-x86_64.AppImage",
+      "platform": "linux",
+      "archive": "appimage",
+      "size": 84621816,
+      "sha256": "380836a0dac0321d0b6d7f057266dc40ab6f8e35884587f07af5a38e80f6c65c",
+      "official": "https://files.openscad.org/snapshots/OpenSCAD-2025.12.30.ai30275-x86_64.AppImage",
+      "mirror": "https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30/OpenSCAD-2025.12.30.ai30275-x86_64.AppImage"
+    },
+    {
+      "filename": "OpenSCAD-2025.12.30.dmg",
+      "platform": "darwin",
+      "archive": "dmg",
+      "size": 62687889,
+      "sha256": "fbc17e223979884fc17a4bc19b76a50c8797646cbc2f3083cd407389d90a1060",
+      "official": "https://files.openscad.org/snapshots/OpenSCAD-2025.12.30.dmg",
+      "mirror": "https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30/OpenSCAD-2025.12.30.dmg"
+    }
+  ]
+}

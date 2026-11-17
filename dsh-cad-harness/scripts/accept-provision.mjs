@@ -145,6 +145,34 @@ try {
     const openscadCheck = report?.checks?.find((c) => c.id === 'openscad');
     check('doctor honors provisioned binaryPath', openscadCheck?.status === 'pass', openscadCheck?.detail);
   }
+
+  // 8. CAD_OPENSCAD_MIRROR overrides the mirror base, and only over http(s)
+  {
+    const asset = assetFor('linux', { CAD_OPENSCAD_MIRROR: 'https://mirror.example.com/openscad//' });
+    check('CAD_OPENSCAD_MIRROR overrides the mirror base',
+      asset.mirror === `https://mirror.example.com/openscad/${asset.filename}`, asset.mirror);
+    check('the default mirror survives an unrelated env', assetFor('linux', {}).mirror.includes('aliyuncs.com'));
+    let rejected = false;
+    try { assetFor('linux', { CAD_OPENSCAD_MIRROR: 'ftp://mirror.example.com' }); } catch { rejected = true; }
+    check('a non-http mirror is rejected', rejected);
+  }
+
+  // 9. a local archive is only accepted when it is the pinned build
+  {
+    const provision = new URL('./provision-openscad.mjs', import.meta.url).pathname;
+    const bogus = join(tmp, assetFor('win32').filename);
+    writeFileSync(bogus, 'not the pinned archive');
+    const run = (extra) => spawnSync(process.execPath, [provision, '--from', bogus, '--json'], {
+      encoding: 'utf8', timeout: 30000, env: { ...process.env, DSH_HOME: join(tmp, 'archive-home'), ...extra },
+    });
+    const denied = run({});
+    check('unverified local archive is refused',
+      denied.status === 1 && /not the pinned/.test(`${denied.stderr}${denied.stdout}`), denied.stderr.trim());
+    check('the refusal names the bypass', /allow-unverified/.test(`${denied.stderr}${denied.stdout}`), denied.stderr.trim());
+    const allowed = run({ CAD_OPENSCAD_ALLOW_UNVERIFIED: '1' });
+    check('CAD_OPENSCAD_ALLOW_UNVERIFIED bypasses the gate',
+      !/not the pinned/.test(`${allowed.stderr}${allowed.stdout}`), allowed.stderr.trim());
+  }
 } finally {
   server.close();
   rmSync(tmp, { recursive: true, force: true });

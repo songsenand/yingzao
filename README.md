@@ -124,7 +124,19 @@
 
 ## 快速开始
 
-`setup --openscad=auto` 会准备 OpenSCAD（2021.01 可运行但 `doctor` 报 degraded；推荐 2025.06+ / Manifold）。已有 2025.06+ 系统版本则直接使用；否则优先下载官方快照，官方源不可达或持续低于 256 KB/s 时才切换到 OSS 镜像。也可以用 `--openscad=off` 手动准备，或用 `CAD_OPENSCAD_BIN` 指定已有二进制。
+`setup --openscad=auto` 会准备 OpenSCAD（2021.01 可运行但 `doctor` 报 degraded；推荐 2025.06+ / Manifold）。已有 2025.06+ 系统版本则直接使用；否则优先下载官方快照，官方源不可达或持续低于 256 KB/s 时才切换到 OSS 镜像。
+
+**版本不是偏好，是能力**：同一个 `plate.scad`，2021.01（CGAL）实测 **2467 ms**，带 Manifold 的构建 **69 ms**——差 36 倍，模型越复杂差距越大。低于 2025.06 时 `doctor` 会给出这条实测数据，`compile.ts` 也会在首次解析到旧版时提示一次。
+
+网络与离线（三个开关，都不改分发形态）：
+
+| 环境变量 | 作用 |
+|---|---|
+| `CAD_OPENSCAD_BIN` | 已有二进制，跳过下载 |
+| `CAD_OPENSCAD_MIRROR` | 覆盖镜像地址（内网/区域镜像），仍按固定 sha256 校验 |
+| `CAD_OPENSCAD_ARCHIVE` | 本地离线归档，等同 `--from`，完全不走网络 |
+
+镜像目录里随二进制一起发布 `LICENSE.GPL-2.0`、`SOURCE-OFFER.md`（GPL-2.0 §3(b) 源码书面要约）和 `manifest.json`（逐文件 sha256），见 [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/)。
 
 > OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算时安装。两者都不随 tarball 分发。
 

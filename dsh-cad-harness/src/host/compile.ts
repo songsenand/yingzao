@@ -153,6 +153,12 @@ async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
     if (pref === 'cgal') backendArgs = [];
     else if (pref === 'manifold') backendArgs = ['--backend=Manifold'];
     else backendArgs = year >= 25 ? ['--backend=Manifold'] : [];
+    // The version is a capability, not a preference: without Manifold the same
+    // model measured 2467 ms instead of 69 ms (experiments/20261021_openscad_text_engraving.md).
+    // Say it once, where the slow render will otherwise look like a plugin bug.
+    if (year > 0 && year < 25) {
+      console.warn(`[cad] OpenSCAD ${probe.trim().split('\n')[0]} predates 2025.06: Manifold is off and rendering is far slower. Run \`npx dsh-cad-provision\` to install the pinned snapshot.`);
+    }
     // Extracted AppImages need their bundled libs on the loader path.
     if (candidate.includes('squashfs-root') && existsSync(snapshotLibDir)) {
       binaryEnv = { ...process.env, LD_LIBRARY_PATH: `${snapshotLibDir}${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}` };

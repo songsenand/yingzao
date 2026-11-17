@@ -14,7 +14,20 @@ import { basename, join } from 'node:path';
 
 export const OPENSCAD_VERSION = '2025.12.30';
 const OFFICIAL = 'https://files.openscad.org/snapshots';
-const MIRROR = 'https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30';
+const DEFAULT_MIRROR = 'https://blog-songsenand.oss-cn-hangzhou.aliyuncs.com/openscad/2025.12.30';
+
+// A private or regional mirror is a deployment fact, not a code change: an
+// enterprise intranet, a caching proxy, or a faster region points this at its
+// own copy of the SAME pinned bytes. The sha256 below still decides, so a
+// wrong mirror fails loudly instead of installing something else.
+export function mirrorBase(env = process.env) {
+  const raw = env.CAD_OPENSCAD_MIRROR?.trim();
+  if (!raw) return DEFAULT_MIRROR;
+  if (!/^https?:\/\//i.test(raw)) {
+    throw new Error('CAD_OPENSCAD_MIRROR must be an http(s) URL');
+  }
+  return raw.replace(/\/+$/, '');
+}
 const ASSET = {
   'OpenSCAD-2025.12.30-x86-64.zip': {
     platform: 'win32', archive: 'zip', sha256: 'f04d315b1f1fbe20b363383f45ea8ed65713fe9913b4368d90a94175b71423cb', size: 41511427,
@@ -27,7 +40,7 @@ const ASSET = {
   },
 };
 
-export function assetFor(platform = process.platform) {
+export function assetFor(platform = process.platform, env = process.env) {
   const found = Object.entries(ASSET).find(([, v]) => v.platform === platform);
   if (!found) return null;
   const [filename, meta] = found;
@@ -35,9 +48,15 @@ export function assetFor(platform = process.platform) {
     filename,
     ...meta,
     official: `${OFFICIAL}/${filename}`,
-    mirror: `${MIRROR}/${filename}`,
+    mirror: `${mirrorBase(env)}/${filename}`,
   };
 }
+
+// Measured on one real model (experiments/20261021_openscad_text_engraving.md §5):
+// the same plate.scad takes 2467 ms on the 2021.01 CGAL build and 69 ms on a
+// Manifold build. That ratio, not the download source, is why the pinned
+// snapshot matters — keep it in one place so doctor and provision agree.
+export const SPEED_NOTE = '2467 ms vs 69 ms on the same plate.scad (2021.01 CGAL vs Manifold build)';
 
 export function sourcesFor(asset, mode = 'auto') {
   if (mode === 'official') return [{ label: 'official', url: asset.official }];

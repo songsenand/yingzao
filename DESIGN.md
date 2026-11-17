@@ -1306,6 +1306,8 @@ npm run setup
 ### v2.1（2026-09-25）实现修订
 
 - **OpenSCAD 升级**：改用 2026.09.23 snapshot（Manifold 后端），弃用 2021.01 CGAL。性能实测：简单件 1.2×、法兰 7×、螺纹件 STL 17.3× / 渲染 8.2×。二进制解析链：`CAD_OPENSCAD_BIN` → `bin/squashfs-root/usr/bin/openscad` → 系统 openscad；Manifold 后端显式启用；快照二进制自动补 `LD_LIBRARY_PATH`。
+  - **供给开关（2026-11-17）**：`CAD_OPENSCAD_MIRROR` 覆盖镜像基址（内网/区域镜像，仍需命中固定 sha256）；`CAD_OPENSCAD_ARCHIVE` 指向本地离线归档，等同 `--from`，完全不走网络；`CAD_OPENSCAD_ALLOW_UNVERIFIED=1` 才允许装入非 pin 归档。镜像随二进制发布 `mirror/LICENSE.GPL-2.0`、`mirror/SOURCE-OFFER.md`（GPL-2.0 §3(b)）、`mirror/manifest.json`（逐文件 sha256），由 `build-mirror-manifest.mjs` 生成、`accept-mirror-manifest.mjs` 卡漂移。
+  - **版本门槛显性化**：低于 2025.06 时 `doctor` 与 `compile.ts`（首次解析）都给出实测对比 2467 ms（CGAL）vs 69 ms（Manifold），而不是只报 degraded。
 - **渲染管线提速**：`xvfb-run` 每调用 ~3s 的 X server 启动税是原瓶颈（5 次调用 ≈ 15s）。改为进程内共享一个 Xvfb（`-displayfd` 自选空闲显示号 + GL 预热 + 渲染重试），全管线 15.7s → ~1s（15.6×）。
 - **BOSL2 标准件库内置**：`lib/BOSL2`，经 `OPENSCADPATH` 对所有 openscad 调用生效；generate_part 工具描述已声明可用（螺纹/齿轮/圆角/结构件用 BOSL2，不手搓）。
 - **新工具**：`render_part`（模型主动按视角/旋转/缩放/剖切渲染，~300ms/帧）、`measure_part`（包围盒/体积/表面积/质心/genus/水密——数值真值核对）。

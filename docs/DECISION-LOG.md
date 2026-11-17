@@ -6308,3 +6308,21 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** `library/catalog.json` 99 specs / 14 families，`accept-library-catalog` PASS；300 件 benchmark fit 3.7 MB ZIP vs visual 56.1 MB ZIP，说明 LOD 是体积因素但不是分包依据；CadQuery 完整安装 1.7 GB vs fit 包 3.7 MB，支持预生成分发。
 
 **影响：** 新增 `library/catalog.json`、schema、README 和验收；后续 resolver 必须合并 core/full、拒绝重复 ID、记录 `library.lock`；core→full 只能作为 breaking change 处理。
+
+## 2026-11-17：OpenSCAD 供给改为"版本门槛显性化 + 可换源 + 可离线"，镜像留在国内 OSS 并补齐 GPL 再分发义务
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（分发形态与合规口径，回退成本高）+ 第 4 条（provisioner、doctor、compile 三处共用同一套语义）。
+
+**要解决的问题：** 公开发布前的三条约束互相拉扯：① 新版 OpenSCAD 是性能前提——同一 `plate.scad` 实测 2467 ms（2021.01 / CGAL）vs 69 ms（Manifold 构建），退版本不可接受；② 国内到 GitHub / 官方快照慢，镜像必须留在阿里云 OSS；③ 但镜像托管 GPL-2.0 二进制构成再分发，而 `NOTICE` 与审计文档当时的措辞是"本项目不分发 / 只托管官方二进制"，与事实不符。用户明确否决了"镜像迁 GitHub Release"（国内不可达）与"随包分发"（190 MB/版、需推翻"GPL 不可捆绑"）。
+
+**决策内容：**
+1. 分发形态不动：仍由 provisioner 在 `setup` 期下载，仍优先官方源、阿里云镜像兜底；不随包分发 OpenSCAD。
+2. 新增两个部署开关：`CAD_OPENSCAD_MIRROR`（覆盖镜像基址，内部网/区域镜像用，仍按固定 sha256 判定）、`CAD_OPENSCAD_ARCHIVE`（本地离线归档，等同 `--from`，完全不走网络）；本地归档若不是 pinned 构建，默认拒绝，需 `--allow-unverified` / `CAD_OPENSCAD_ALLOW_UNVERIFIED=1` 显式放行。
+3. 镜像合规三件套随二进制发布：`mirror/LICENSE.GPL-2.0`、`mirror/SOURCE-OFFER.md`（GPL §3(b) 书面要约，含联系方式与三年期）、`mirror/manifest.json`（逐文件 sha256，由 `build-mirror-manifest.mjs` 从 pin 表生成，`accept-mirror-manifest.mjs` 卡漂移）。`NOTICE` 与 `docs/THIRD-PARTY-AUDIT.md` 口径改为"逐字镜像 + 附许可证与源码要约"。
+4. 版本门槛显性化：低于 2025.06 时 `doctor`、`dsh-cad-provision`、`compile.ts`（首次解析一次）都给出 2467 ms vs 69 ms 的实测对比，而不是只报 degraded。
+
+**理由：** 性能由"是否带 Manifold"决定，与下载源无关；因此"守住版本"和"选哪台服务器"必须解耦。合规问题也不需要换托管解决——把许可证、源码要约和可校验的哈希清单放进镜像目录即可，速度不变、体积不变、扫描档位不变。随包分发只在"大量离线/内网"成立时才值得，当前不成立。
+
+**依据：** `experiments/20261021_openscad_text_engraving.md` §5 的同模型对比；`scanner-bin/rules/*.ts` 无域名白名单（换源不改变 vet 判定），站点静态档只有严重/高/低；`accept-provision` 22 项 PASS（含新增 5 项：镜像覆盖、非法 scheme 拒绝、未验证归档拒绝、提示 bypass、bypass 生效）；`accept-mirror-manifest` 9 项 PASS。
+
+**影响：** `scripts/provision-lib.mjs`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、`src/host/compile.ts`、`mirror/`、`NOTICE`、README 双语、`docs/THIRD-PARTY-AUDIT.md`、`package.json`（`files` 增加 `mirror/`）；后续新增平台或换快照须同时更新 pin 表并重生成 manifest，否则 `accept-mirror-manifest` 失败。

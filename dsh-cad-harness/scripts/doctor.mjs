@@ -16,6 +16,7 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { listSkillFiles } from './preset-lib.mjs';
+import { SPEED_NOTE } from './provision-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(argValue('--root') ?? join(HERE, '..'));
@@ -136,7 +137,9 @@ if (!openscad) {
   const year = Number(/20(\d{2})/.exec(openscadVersion ?? '')?.[1] ?? 0);
   add('openscad', 'pass', `${openscad} — ${openscadVersion}`, undefined);
   if (year > 0 && year < 25) {
-    add('openscad-backend', 'warn', 'OpenSCAD is older than 2025.06; the Manifold backend is off', 'install 2025.06+ for the fast/robust backend');
+    add('openscad-backend', 'warn',
+      `OpenSCAD older than 2025.06 — Manifold is off; measured ${SPEED_NOTE}`,
+      'run `npx dsh-cad-provision` (installs the pinned snapshot) or install OpenSCAD 2025.06+');
   } else {
     add('openscad-backend', 'pass', year >= 25 ? 'Manifold-capable (2025.06+)' : 'version not parsed; backend left to OpenSCAD');
   }
