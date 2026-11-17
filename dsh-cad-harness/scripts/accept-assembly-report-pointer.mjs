@@ -34,6 +34,16 @@ const written = await saveAssemblyCheckPointer(manifestPath, {
   runId: 'r007', checkedAt: '2026-10-23T00:00:00.000Z', manifestPath, schema: 'assembly-check-pointer/v1',
 });
 check(written === join(dir, 'assembly', 'assembly-check-report.json'), 'the pointer lands under the historical filename');
+
+// An alternate manifest gets its own pointer; it must not overwrite the
+// canonical pointer for assembly.json.
+const altManifest = join(dir, 'assembly', 'assembly-review.json');
+const altWritten = await saveAssemblyCheckPointer(altManifest, {
+  runId: 'r008', checkedAt: '2026-10-23T00:01:00.000Z', manifestPath: altManifest, schema: 'assembly-check-pointer/v1',
+});
+check(altWritten === join(dir, 'assembly', 'assembly-review-check-report.json'), 'an alternate manifest gets a scoped pointer');
+const canonicalAfterAlt = JSON.parse(await readFile(written, 'utf8'));
+check(canonicalAfterAlt.runId === 'r007', 'the alternate check does not overwrite the canonical pointer', canonicalAfterAlt.runId);
 const parsed = JSON.parse(await readFile(written, 'utf8'));
 check(parsed.schema === 'assembly-check-pointer/v1', 'it declares what it is', parsed.schema);
 check(parsed.runId === 'r007', 'it names the immutable run', parsed.runId);

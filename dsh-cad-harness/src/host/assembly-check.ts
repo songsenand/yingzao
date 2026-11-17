@@ -18,7 +18,7 @@
 import { citedRunId } from './evidence-pointer.ts';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { compileStlOnly, type DatumSet } from './compile.ts';
 import { buildSolid, pairMinDistance, type PartTransform } from './assembly.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
@@ -1391,8 +1391,11 @@ export async function runAssemblyCheck(
 }
 
 /**
- * A POINTER to the immutable run, written next to the manifest under the historical
- * filename. It is not a second copy of the report (2026-10-23 audit, FIX-C1).
+ * A POINTER to the immutable run, written next to the manifest under a name derived
+ * from that manifest (`assembly.json` -> `assembly-check-report.json`). A check of an
+ * ALTERNATE manifest must not overwrite the canonical pointer; the 2026-11-17 feature
+ * verification did exactly that before this was scoped. It is not a second copy of
+ * the report (2026-10-23 audit, FIX-C1).
  *
  * WHY: the report used to be written here AND into the run store. Two copies of the same
  * conclusion drift — microscope2 still holds two `assembly-check-report.json` files that
@@ -1420,7 +1423,8 @@ export async function saveAssemblyCheckPointer(
   manifestPath: string,
   pointer: AssemblyCheckPointer,
 ): Promise<string> {
-  const path = join(manifestPath, '..', 'assembly-check-report.json');
+  const base = basename(manifestPath).replace(/\.json$/i, '');
+  const path = join(manifestPath, '..', `${base}-check-report.json`);
   await mkdir(join(manifestPath, '..'), { recursive: true });
   const tmp = `${path}.tmp`;
   await writeFile(tmp, JSON.stringify(pointer, null, 2));
