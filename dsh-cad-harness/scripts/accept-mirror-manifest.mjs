@@ -32,7 +32,11 @@ check('manifest hashes equal the install path hashes',
   manifest.assets.every((a) => a.sha256 === assetFor(a.platform).sha256));
 check('manifest mirrors point at the pinned version',
   manifest.assets.every((a) => a.mirror.includes(`/${OPENSCAD_VERSION}/`)));
-check('license text is present', existsSync(join(MIRROR, manifest.licenseFile)));
+// The GPL text is published with the binaries, not tracked here: a second
+// license file in this Apache-2.0 repository makes SPDX detection ambiguous.
+// The manifest still names it, so assert the name rather than a local file.
+check('manifest names the GPL text published with the binaries',
+  manifest.licenseFile === 'LICENSE.GPL-2.0' && !existsSync(join(MIRROR, manifest.licenseFile)));
 
 const offer = readFileSync(join(MIRROR, manifest.sourceOffer), 'utf8');
 check('source offer cites GPL-2.0 section 3(b)', /3\(b\)/.test(offer));

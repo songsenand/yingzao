@@ -428,9 +428,11 @@ trimesh.proximity.thickness(mesh, points, exterior=False, normals=None, method="
 
 **OpenSCAD 经镜像再分发（GPL-2.0）：** 正常情况下由用户机器的 provisioner 从官方快照下载；
 官方源不可达或过慢时改用 OSS 镜像，镜像是与官方**逐字相同**的未修改二进制——因此这是
-GPL-2.0 意义上的再分发，而非"仅提供链接"。义务落在三件随镜像发布的文件上：
-`dsh-cad-harness/mirror/LICENSE.GPL-2.0`（许可证全文）、`SOURCE-OFFER.md`（§3(b) 源码书面
-要约，含联系方式与三年有效期）、`manifest.json`（逐文件 sha256，可对照官方校验）。
+GPL-2.0 意义上的再分发，而非"仅提供链接"。义务落在随镜像发布的 `LICENSE.GPL-2.0`（许可证
+全文）、`SOURCE-OFFER.md`（§3(b) 源码书面要约，含联系方式与三年有效期）与
+`manifest.json`（逐文件 sha256，可对照官方校验）上。**许可证全文只在镜像前缀里，不入仓库**：
+仓库内已有一份 Apache-2.0 `LICENSE`，再放一份 GPL 文本会让自动化 SPDX 识别拿到两个候选而
+无法判定（这正是 dsh.so 检查器报的"找到许可证文件，但无法确定 SPDX 标识"）。
 `dsh-cad-harness/scripts/accept-mirror-manifest.mjs` 卡住"清单漂移"，避免镜像声明的哈希
 与安装器实际执行的哈希不一致。OpenSCAD 仍以**独立进程**调用，不链接、不进 npm 包，
 所以 Apache-2.0 主体不产生 copyleft 牵连。

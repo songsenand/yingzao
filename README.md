@@ -146,7 +146,7 @@
 | `CAD_OPENSCAD_MIRROR` | 覆盖镜像地址（内网/区域镜像），仍按固定 sha256 校验 |
 | `CAD_OPENSCAD_ARCHIVE` | 本地离线归档，等同 `--from`，完全不走网络 |
 
-镜像目录里随二进制一起发布 `LICENSE.GPL-2.0`、`SOURCE-OFFER.md`（GPL-2.0 §3(b) 源码书面要约）和 `manifest.json`（逐文件 sha256），见 [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/)。
+`LICENSE.GPL-2.0`、`SOURCE-OFFER.md`（GPL-2.0 §3(b) 源码书面要约）和 `manifest.json`（逐文件 sha256）随二进制发布在同一镜像前缀下；仓库里只保留后两者，避免第二个许可证文件干扰 SPDX 识别，见 [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/)。
 
 > OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算时安装。两者都不随 tarball 分发。
 

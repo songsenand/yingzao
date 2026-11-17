@@ -6328,3 +6328,5 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `scripts/provision-lib.mjs`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、`src/host/compile.ts`、`mirror/`、`NOTICE`、README 双语、`docs/THIRD-PARTY-AUDIT.md`、`package.json`（`files` 增加 `mirror/`）；后续新增平台或换快照须同时更新 pin 表并重生成 manifest，否则 `accept-mirror-manifest` 失败。
 
 **补记（2026-11-17 晚）：** 镜像合规三件套已实际上传到 `openscad/2025.12.30/`（LICENSE.GPL-2.0、SOURCE-OFFER.md、manifest.json，公网可读），并核对了该前缀下三个二进制与 `SHA256SUMS` 的存在。快照 pin 暂保持 2025.12.30：用户确认"选择版本并无特别理由"，但对齐到实验里实测的 2026.09.23 需要重新下载三个官方 archive（zip 66 MB / AppImage / dmg），而上游从本机实测约 **12.5 KB/s**，全量约需 4 小时，故不在发布前夜做这件事；`provision-lib.mjs` 的常量上方已写明换版四步。
+
+**补记（2026-11-18）：** dsh.so 检查器报「找到许可证文件，但无法确定 SPDX 标识」。原因不是缺少许可证，而是仓库里同时存在 `LICENSE`（Apache-2.0）与 `dsh-cad-harness/mirror/LICENSE.GPL-2.0`（GPL-2.0），自动识别拿到两个候选因而无法判定。处置：GPL 文本从仓库与 npm 包中移除，**只随镜像二进制发布**（OSS 前缀内仍在，公网可读）；仓库保留 `SOURCE-OFFER.md` 与 `manifest.json`，`accept-mirror-manifest` 改为断言"manifest 命名了该文件且仓库内不再存在"。合规义务不变（许可证与源码要约仍与二进制同处发布），但仓库回到单一 Apache-2.0 许可证，SPDX 可判定。相应发布 `0.1.0-preview.4`。

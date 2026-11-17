@@ -146,7 +146,7 @@ Network and offline (three switches; none of them changes how the package is dis
 | `CAD_OPENSCAD_MIRROR` | Override the mirror base (intranet or regional mirror); the pinned SHA-256 still decides |
 | `CAD_OPENSCAD_ARCHIVE` | Local offline archive, same as `--from`; no network at all |
 
-The mirror publishes `LICENSE.GPL-2.0`, `SOURCE-OFFER.md` (GPL-2.0 §3(b) written offer) and `manifest.json` (per-file SHA-256) next to the binaries; see [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/).
+`LICENSE.GPL-2.0`, `SOURCE-OFFER.md` (GPL-2.0 §3(b) written offer) and `manifest.json` (per-file SHA-256) are published next to the binaries under the same mirror prefix; only the latter two are tracked here, so the repository keeps a single license file and automated SPDX detection stays unambiguous. See [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/).
 
 > OpenSCAD is prepared during `setup`; the Python runtime is about 400 MB and is installed on first calculation. Neither is shipped in the tarball.
 
