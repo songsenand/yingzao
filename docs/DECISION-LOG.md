@@ -6290,3 +6290,21 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 
 **影响：** 后续若把阀杆密封改成外购 O 圈，不再需要“新增模压工艺”的确认；球面镀硬铬仍需要。
 另：上一条里的运动证据 r002 用的是旧阀座 v005，已按当前 v019 重跑为 r019（90°/24 位姿/0 干涉）。
+
+## 2026-11-17：标准件库按使用频率拆 core/full，fit/visual 不拆包
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响库、插件分发、catalog/lock）。
+
+**要解决的问题：** 30 类标准件全量分发过重；按 fit/visual 拆会把同一零件的两种表示拆成两个包，语义错误；目前没有真实使用频率数据。
+
+**决策内容：**
+- v0 先按经验选 99 个 core 规格（<100），全部带 fit+visual；full 作为可选数据 bundle，只放 core 之外的规格；
+- 包归属是 catalog 元数据，`libRef` 不带包名；full→core 可 promotion，core→full 是 breaking，只在大版本做；
+- 频率标 `assumed`，后续用本地 `libRef` 使用账本（按项目/装配计数）重排；
+- fit/visual 是同一零件的两种 LOD，由 agent 使用时选；不做包拆分；检查默认 fit、渲染默认 visual，显式选择优先，visual 用于契约必须标注 render-only。
+
+**理由：** 用户需要的是“常见装配默认可用、长尾按需安装”，不是“所有零件都随主插件走”；LOD 影响体积和时间，但不改变零件身份，拆包应服从使用频率。先凭经验是允许的，只要标成 assumed、后续可迁移。
+
+**依据：** `library/catalog.json` 99 specs / 14 families，`accept-library-catalog` PASS；300 件 benchmark fit 3.7 MB ZIP vs visual 56.1 MB ZIP，说明 LOD 是体积因素但不是分包依据；CadQuery 完整安装 1.7 GB vs fit 包 3.7 MB，支持预生成分发。
+
+**影响：** 新增 `library/catalog.json`、schema、README 和验收；后续 resolver 必须合并 core/full、拒绝重复 ID、记录 `library.lock`；core→full 只能作为 breaking change 处理。

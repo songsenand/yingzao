@@ -1,0 +1,4752 @@
+{
+  "schemaVersion": 1,
+  "library": "yingzao-standard-parts",
+  "catalogVersion": "0.1.0-v0",
+  "generatedAt": "2026-11-17",
+  "units": "mm",
+  "description": "v0 heuristic catalog. Package membership is metadata, not part identity; geometry is not generated yet.",
+  "dimensionPolicy": "Spec params are selection values; standard dimension tables are resolved by the generator at build time. Nulls are not stored.",
+  "packages": {
+    "core": {
+      "maxSpecs": 100,
+      "status": "planned",
+      "description": "Most common specs; both fit and visual LODs; shipped with the main plugin."
+    },
+    "full": {
+      "maxSpecs": null,
+      "status": "planned",
+      "description": "Optional data bundle; every spec outside core; both fit and visual LODs."
+    }
+  },
+  "families": {
+    "iso4014": {
+      "name": "六角头螺栓",
+      "standard": "ISO 4014 / ISO 4017",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "lengthMm",
+        "pitchMm",
+        "propertyClass",
+        "threadLength"
+      ],
+      "fitRule": "六角头 + 光杆；杆径=公称大径；不建螺旋螺纹；保留轴线与支承面",
+      "visualRule": "可在 fit 基础上加低分辨率螺纹装饰；全螺旋螺纹单独做 printed LOD，不用于契约",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    "iso4762": {
+      "name": "内六角圆柱头螺钉",
+      "standard": "ISO 4762",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "lengthMm",
+        "pitchMm",
+        "propertyClass"
+      ],
+      "fitRule": "圆柱头 + 光杆；杆径=公称大径；不建内六角螺纹",
+      "visualRule": "可加低分辨率螺纹/内六角装饰；不用于契约",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    "iso4026": {
+      "name": "紧定螺钉",
+      "standard": "ISO 4026",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "lengthMm",
+        "pitchMm",
+        "point"
+      ],
+      "fitRule": "光杆 + 平端/锥端；不建螺纹",
+      "visualRule": "visual 复用 fit（几何增量无意义）",
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    "iso4032": {
+      "name": "六角螺母",
+      "standard": "ISO 4032",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "pitchMm",
+        "propertyClass"
+      ],
+      "fitRule": "六方 + 光孔；孔用配合/间隙表示，不建内螺纹",
+      "visualRule": "可加低分辨率内螺纹装饰；不用于契约",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    "iso7040": {
+      "name": "尼龙锁紧螺母",
+      "standard": "ISO 7040 / ISO 7041",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "pitchMm",
+        "propertyClass",
+        "insert"
+      ],
+      "fitRule": "六方 + 光孔；尼龙圈只做包络/元数据，不做接触",
+      "visualRule": "visual 可显示尼龙圈；不用于预紧/强度判定",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "lock-nut",
+        "metric"
+      ]
+    },
+    "iso7089": {
+      "name": "平垫圈",
+      "standard": "ISO 7089 / ISO 7090",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "innerDiameterMm",
+        "outerDiameterMm",
+        "thicknessMm",
+        "hardness"
+      ],
+      "fitRule": "同轴圆环；内径/外径/厚度为配合尺寸",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    "din127": {
+      "name": "弹簧垫圈",
+      "standard": "DIN 127",
+      "category": "fastener",
+      "params": [
+        "thread",
+        "innerDiameterMm",
+        "outerDiameterMm",
+        "thicknessMm"
+      ],
+      "fitRule": "开口圆环；保留自由高度/开口，不建弹力",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    "iso15": {
+      "name": "深沟球轴承 6000 系列",
+      "standard": "ISO 15:2017, 6000 series",
+      "category": "bearing",
+      "params": [
+        "boreMm",
+        "outerDiameterMm",
+        "widthMm",
+        "shield"
+      ],
+      "fitRule": "内圈+外圈；保留 bore/OD/width；不建滚珠/保持架",
+      "visualRule": "加滚珠/保持架/防尘盖；滚珠不得超出 fit 包络；不用于契约",
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    "iso3601": {
+      "name": "O 形圈",
+      "standard": "ISO 3601",
+      "category": "seal",
+      "params": [
+        "innerDiameterMm",
+        "crossSectionMm",
+        "material",
+        "hardness"
+      ],
+      "fitRule": "圆环；ID/CS 精确；不建沟槽",
+      "visualRule": "visual 复用 fit（几何相同）",
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    "din471": {
+      "name": "轴用卡簧",
+      "standard": "DIN 471",
+      "category": "retaining",
+      "params": [
+        "shaftDiameterMm",
+        "thicknessMm",
+        "freeDiameterMm"
+      ],
+      "fitRule": "开口环；保留轴径/厚度/自由外径；不建弹性",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    "din6885": {
+      "name": "平键",
+      "standard": "DIN 6885 A/B",
+      "category": "key",
+      "params": [
+        "widthMm",
+        "heightMm",
+        "lengthMm",
+        "form"
+      ],
+      "fitRule": "长方体；宽/高/长为配合尺寸；可保留端部倒角",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    "iso2338": {
+      "name": "圆柱销",
+      "standard": "ISO 2338",
+      "category": "pin",
+      "params": [
+        "diameterMm",
+        "lengthMm",
+        "tolerance"
+      ],
+      "fitRule": "圆柱 + 端部倒角；直径/长度为配合尺寸",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    "din2098": {
+      "name": "压缩弹簧",
+      "standard": "DIN 2098",
+      "category": "spring",
+      "params": [
+        "wireDiameterMm",
+        "outerDiameterMm",
+        "freeLengthMm",
+        "rateNPerMm",
+        "ends"
+      ],
+      "fitRule": "外径/内径包络圆柱；不建螺旋；k/自由长/固体高放元数据",
+      "visualRule": "真实螺旋钢丝；visual bbox 必须在 fit 包络内；不用于刚度/预紧判定",
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "defaultLod": "fit",
+      "visualDefault": "distinct",
+      "source": "purchased",
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    "shaft-collar": {
+      "name": "轴环（紧定/夹紧）",
+      "standard": "generic shaft collar",
+      "category": "shaft",
+      "params": [
+        "boreMm",
+        "outerDiameterMm",
+        "widthMm",
+        "locking"
+      ],
+      "fitRule": "圆环/开口环；bore/OD/width 为配合尺寸；紧定螺钉只做孔包络",
+      "visualRule": "visual 复用 fit",
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "defaultLod": "fit",
+      "visualDefault": "alias-fit",
+      "source": "purchased",
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    }
+  },
+  "specs": [
+    {
+      "id": "iso4014.M3x10",
+      "family": "iso4014",
+      "spec": "M3×10",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "lengthMm": 10,
+        "pitchMm": 0.5,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M3x16",
+      "family": "iso4014",
+      "spec": "M3×16",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "lengthMm": 16,
+        "pitchMm": 0.5,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M4x12",
+      "family": "iso4014",
+      "spec": "M4×12",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "lengthMm": 12,
+        "pitchMm": 0.7,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M4x20",
+      "family": "iso4014",
+      "spec": "M4×20",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "lengthMm": 20,
+        "pitchMm": 0.7,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M5x16",
+      "family": "iso4014",
+      "spec": "M5×16",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "lengthMm": 16,
+        "pitchMm": 0.8,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M5x25",
+      "family": "iso4014",
+      "spec": "M5×25",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "lengthMm": 25,
+        "pitchMm": 0.8,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M6x20",
+      "family": "iso4014",
+      "spec": "M6×20",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "lengthMm": 20,
+        "pitchMm": 1.0,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M6x30",
+      "family": "iso4014",
+      "spec": "M6×30",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "lengthMm": 30,
+        "pitchMm": 1.0,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M8x25",
+      "family": "iso4014",
+      "spec": "M8×25",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "lengthMm": 25,
+        "pitchMm": 1.25,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M8x40",
+      "family": "iso4014",
+      "spec": "M8×40",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "lengthMm": 40,
+        "pitchMm": 1.25,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M10x30",
+      "family": "iso4014",
+      "spec": "M10×30",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M10",
+        "lengthMm": 30,
+        "pitchMm": 1.5,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M10x50",
+      "family": "iso4014",
+      "spec": "M10×50",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M10",
+        "lengthMm": 50,
+        "pitchMm": 1.5,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M12x40",
+      "family": "iso4014",
+      "spec": "M12×40",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M12",
+        "lengthMm": 40,
+        "pitchMm": 1.75,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M12x60",
+      "family": "iso4014",
+      "spec": "M12×60",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M12",
+        "lengthMm": 60,
+        "pitchMm": 1.75,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M16x60",
+      "family": "iso4014",
+      "spec": "M16×60",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M16",
+        "lengthMm": 60,
+        "pitchMm": 2.0,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4014.M16x80",
+      "family": "iso4014",
+      "spec": "M16×80",
+      "standard": "ISO 4014 / ISO 4017",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M16",
+        "lengthMm": 80,
+        "pitchMm": 2.0,
+        "propertyClass": "8.8",
+        "threadLength": "partial"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4032",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "bolt",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M3x10",
+      "family": "iso4762",
+      "spec": "M3×10",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "lengthMm": 10,
+        "pitchMm": 0.5,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M4x12",
+      "family": "iso4762",
+      "spec": "M4×12",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "lengthMm": 12,
+        "pitchMm": 0.7,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M5x16",
+      "family": "iso4762",
+      "spec": "M5×16",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "lengthMm": 16,
+        "pitchMm": 0.8,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M6x20",
+      "family": "iso4762",
+      "spec": "M6×20",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "lengthMm": 20,
+        "pitchMm": 1.0,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M8x25",
+      "family": "iso4762",
+      "spec": "M8×25",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "lengthMm": 25,
+        "pitchMm": 1.25,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M8x40",
+      "family": "iso4762",
+      "spec": "M8×40",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "lengthMm": 40,
+        "pitchMm": 1.25,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4762.M10x30",
+      "family": "iso4762",
+      "spec": "M10×30",
+      "standard": "ISO 4762",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M10",
+        "lengthMm": 30,
+        "pitchMm": 1.5,
+        "propertyClass": "12.9"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "socket",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4026.M3x5",
+      "family": "iso4026",
+      "spec": "M3×5",
+      "standard": "ISO 4026",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "lengthMm": 5,
+        "pitchMm": 0.5,
+        "point": "flat"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4026.M4x6",
+      "family": "iso4026",
+      "spec": "M4×6",
+      "standard": "ISO 4026",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "lengthMm": 6,
+        "pitchMm": 0.7,
+        "point": "flat"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4026.M5x8",
+      "family": "iso4026",
+      "spec": "M5×8",
+      "standard": "ISO 4026",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "lengthMm": 8,
+        "pitchMm": 0.8,
+        "point": "flat"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4026.M6x10",
+      "family": "iso4026",
+      "spec": "M6×10",
+      "standard": "ISO 4026",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "lengthMm": 10,
+        "pitchMm": 1.0,
+        "point": "flat"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4026.M8x12",
+      "family": "iso4026",
+      "spec": "M8×12",
+      "standard": "ISO 4026",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "lengthMm": 12,
+        "pitchMm": 1.25,
+        "point": "flat"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [
+        "shaft-collar"
+      ],
+      "tags": [
+        "fastener",
+        "set-screw",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M3",
+      "family": "iso4032",
+      "spec": "M3",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "pitchMm": 0.5,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M4",
+      "family": "iso4032",
+      "spec": "M4",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "pitchMm": 0.7,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M5",
+      "family": "iso4032",
+      "spec": "M5",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "pitchMm": 0.8,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M6",
+      "family": "iso4032",
+      "spec": "M6",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "pitchMm": 1.0,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M8",
+      "family": "iso4032",
+      "spec": "M8",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "pitchMm": 1.25,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M10",
+      "family": "iso4032",
+      "spec": "M10",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M10",
+        "pitchMm": 1.5,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M12",
+      "family": "iso4032",
+      "spec": "M12",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M12",
+        "pitchMm": 1.75,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso4032.M16",
+      "family": "iso4032",
+      "spec": "M16",
+      "standard": "ISO 4032",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M16",
+        "pitchMm": 2.0,
+        "propertyClass": "8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso7089"
+      ],
+      "tags": [
+        "fastener",
+        "nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7040.M8",
+      "family": "iso7040",
+      "spec": "M8",
+      "standard": "ISO 7040 / ISO 7041",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "pitchMm": 1.25,
+        "propertyClass": "8",
+        "insert": "nylon"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014"
+      ],
+      "tags": [
+        "fastener",
+        "lock-nut",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M3",
+      "family": "iso7089",
+      "spec": "M3",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M3",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M4",
+      "family": "iso7089",
+      "spec": "M4",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M4",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M5",
+      "family": "iso7089",
+      "spec": "M5",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M5",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M6",
+      "family": "iso7089",
+      "spec": "M6",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M6",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M8",
+      "family": "iso7089",
+      "spec": "M8",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M8",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M10",
+      "family": "iso7089",
+      "spec": "M10",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M10",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M12",
+      "family": "iso7089",
+      "spec": "M12",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M12",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "iso7089.M16",
+      "family": "iso7089",
+      "spec": "M16",
+      "standard": "ISO 7089 / ISO 7090",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M16",
+        "hardness": "200HV"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "metric"
+      ]
+    },
+    {
+      "id": "din127.M3",
+      "family": "din127",
+      "spec": "M3",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M3"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M4",
+      "family": "din127",
+      "spec": "M4",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M4"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M5",
+      "family": "din127",
+      "spec": "M5",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M5"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M6",
+      "family": "din127",
+      "spec": "M6",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M6"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M8",
+      "family": "din127",
+      "spec": "M8",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M8"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M10",
+      "family": "din127",
+      "spec": "M10",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M10"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "din127.M12",
+      "family": "din127",
+      "spec": "M12",
+      "standard": "DIN 127",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "thread": "M12"
+      },
+      "datums": [
+        "axis",
+        "seat"
+      ],
+      "compatibleWith": [
+        "iso4014",
+        "iso4032"
+      ],
+      "tags": [
+        "fastener",
+        "washer",
+        "spring"
+      ]
+    },
+    {
+      "id": "iso15.6000",
+      "family": "iso15",
+      "spec": "6000",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 10,
+        "outerDiameterMm": 26,
+        "widthMm": 8,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso15.6001",
+      "family": "iso15",
+      "spec": "6001",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 12,
+        "outerDiameterMm": 28,
+        "widthMm": 8,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso15.6002",
+      "family": "iso15",
+      "spec": "6002",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 15,
+        "outerDiameterMm": 32,
+        "widthMm": 9,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso15.6003",
+      "family": "iso15",
+      "spec": "6003",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 17,
+        "outerDiameterMm": 35,
+        "widthMm": 10,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso15.6004",
+      "family": "iso15",
+      "spec": "6004",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 20,
+        "outerDiameterMm": 42,
+        "widthMm": 12,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso15.6005",
+      "family": "iso15",
+      "spec": "6005",
+      "standard": "ISO 15:2017, 6000 series",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "boreMm": 25,
+        "outerDiameterMm": 47,
+        "widthMm": 12,
+        "shield": "open"
+      },
+      "datums": [
+        "bore-axis",
+        "inner-face",
+        "outer-face"
+      ],
+      "compatibleWith": [
+        "din471"
+      ],
+      "tags": [
+        "bearing",
+        "ball",
+        "6000"
+      ]
+    },
+    {
+      "id": "iso3601.10x2",
+      "family": "iso3601",
+      "spec": "10×2",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 10,
+        "crossSectionMm": 2.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.15x2.5",
+      "family": "iso3601",
+      "spec": "15×2.5",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 15,
+        "crossSectionMm": 2.5,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.20x2.5",
+      "family": "iso3601",
+      "spec": "20×2.5",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 20,
+        "crossSectionMm": 2.5,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.25x3",
+      "family": "iso3601",
+      "spec": "25×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 25,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.30x3",
+      "family": "iso3601",
+      "spec": "30×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 30,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.40x3",
+      "family": "iso3601",
+      "spec": "40×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 40,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.50x3",
+      "family": "iso3601",
+      "spec": "50×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 50,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.60x3",
+      "family": "iso3601",
+      "spec": "60×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 60,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.75x3",
+      "family": "iso3601",
+      "spec": "75×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 75,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "iso3601.100x3",
+      "family": "iso3601",
+      "spec": "100×3",
+      "standard": "ISO 3601",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "innerDiameterMm": 100,
+        "crossSectionMm": 3.0,
+        "material": "NBR 70",
+        "hardness": "70 Shore A"
+      },
+      "datums": [
+        "axis",
+        "center-plane"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "seal",
+        "o-ring"
+      ]
+    },
+    {
+      "id": "din471.10",
+      "family": "din471",
+      "spec": "Ø10",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 10
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.12",
+      "family": "din471",
+      "spec": "Ø12",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 12
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.15",
+      "family": "din471",
+      "spec": "Ø15",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 15
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.20",
+      "family": "din471",
+      "spec": "Ø20",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 20
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.25",
+      "family": "din471",
+      "spec": "Ø25",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 25
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.30",
+      "family": "din471",
+      "spec": "Ø30",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 30
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.40",
+      "family": "din471",
+      "spec": "Ø40",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 40
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din471.50",
+      "family": "din471",
+      "spec": "Ø50",
+      "standard": "DIN 471",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "shaftDiameterMm": 50
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso15"
+      ],
+      "tags": [
+        "retaining",
+        "ring",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.4x4x20",
+      "family": "din6885",
+      "spec": "4×4×20",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 4,
+        "heightMm": 4,
+        "lengthMm": 20,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.5x5x25",
+      "family": "din6885",
+      "spec": "5×5×25",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 5,
+        "heightMm": 5,
+        "lengthMm": 25,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.6x6x30",
+      "family": "din6885",
+      "spec": "6×6×30",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 6,
+        "heightMm": 6,
+        "lengthMm": 30,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.8x7x40",
+      "family": "din6885",
+      "spec": "8×7×40",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 8,
+        "heightMm": 7,
+        "lengthMm": 40,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.10x8x50",
+      "family": "din6885",
+      "spec": "10×8×50",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 10,
+        "heightMm": 8,
+        "lengthMm": 50,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.12x8x60",
+      "family": "din6885",
+      "spec": "12×8×60",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 12,
+        "heightMm": 8,
+        "lengthMm": 60,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "din6885.14x9x70",
+      "family": "din6885",
+      "spec": "14×9×70",
+      "standard": "DIN 6885 A/B",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "widthMm": 14,
+        "heightMm": 9,
+        "lengthMm": 70,
+        "form": "A"
+      },
+      "datums": [
+        "center",
+        "long-axis"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "key",
+        "shaft"
+      ]
+    },
+    {
+      "id": "iso2338.4x20",
+      "family": "iso2338",
+      "spec": "Ø4×20",
+      "standard": "ISO 2338",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "diameterMm": 4,
+        "lengthMm": 20,
+        "tolerance": "m6"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    {
+      "id": "iso2338.5x25",
+      "family": "iso2338",
+      "spec": "Ø5×25",
+      "standard": "ISO 2338",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "diameterMm": 5,
+        "lengthMm": 25,
+        "tolerance": "m6"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    {
+      "id": "iso2338.6x30",
+      "family": "iso2338",
+      "spec": "Ø6×30",
+      "standard": "ISO 2338",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "diameterMm": 6,
+        "lengthMm": 30,
+        "tolerance": "m6"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    {
+      "id": "iso2338.8x40",
+      "family": "iso2338",
+      "spec": "Ø8×40",
+      "standard": "ISO 2338",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "diameterMm": 8,
+        "lengthMm": 40,
+        "tolerance": "m6"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    {
+      "id": "iso2338.10x50",
+      "family": "iso2338",
+      "spec": "Ø10×50",
+      "standard": "ISO 2338",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "diameterMm": 10,
+        "lengthMm": 50,
+        "tolerance": "m6"
+      },
+      "datums": [
+        "axis",
+        "end"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "pin",
+        "dowel"
+      ]
+    },
+    {
+      "id": "din2098.0.8x8x20",
+      "family": "din2098",
+      "spec": "w0.8×OD8×L20",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 0.8,
+        "outerDiameterMm": 8,
+        "freeLengthMm": 20,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "din2098.1x10x25",
+      "family": "din2098",
+      "spec": "w1×OD10×L25",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 1.0,
+        "outerDiameterMm": 10,
+        "freeLengthMm": 25,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "din2098.1.2x12x30",
+      "family": "din2098",
+      "spec": "w1.2×OD12×L30",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 1.2,
+        "outerDiameterMm": 12,
+        "freeLengthMm": 30,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "din2098.1.5x16x40",
+      "family": "din2098",
+      "spec": "w1.5×OD16×L40",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 1.5,
+        "outerDiameterMm": 16,
+        "freeLengthMm": 40,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "din2098.2x20x50",
+      "family": "din2098",
+      "spec": "w2×OD20×L50",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 2.0,
+        "outerDiameterMm": 20,
+        "freeLengthMm": 50,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "din2098.2.5x25x60",
+      "family": "din2098",
+      "spec": "w2.5×OD25×L60",
+      "standard": "DIN 2098",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "distinct"
+        }
+      },
+      "params": {
+        "wireDiameterMm": 2.5,
+        "outerDiameterMm": 25,
+        "freeLengthMm": 60,
+        "ends": "closed-ground"
+      },
+      "datums": [
+        "axis",
+        "end-face"
+      ],
+      "compatibleWith": [],
+      "tags": [
+        "spring",
+        "compression"
+      ]
+    },
+    {
+      "id": "shaft-collar.6",
+      "family": "shaft-collar",
+      "spec": "Ø6",
+      "standard": "generic shaft collar",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "boreMm": 6,
+        "locking": "set-screw"
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    },
+    {
+      "id": "shaft-collar.8",
+      "family": "shaft-collar",
+      "spec": "Ø8",
+      "standard": "generic shaft collar",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "boreMm": 8,
+        "locking": "set-screw"
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    },
+    {
+      "id": "shaft-collar.10",
+      "family": "shaft-collar",
+      "spec": "Ø10",
+      "standard": "generic shaft collar",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "boreMm": 10,
+        "locking": "set-screw"
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    },
+    {
+      "id": "shaft-collar.12",
+      "family": "shaft-collar",
+      "spec": "Ø12",
+      "standard": "generic shaft collar",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "boreMm": 12,
+        "locking": "set-screw"
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    },
+    {
+      "id": "shaft-collar.16",
+      "family": "shaft-collar",
+      "spec": "Ø16",
+      "standard": "generic shaft collar",
+      "package": "core",
+      "status": "planned",
+      "source": "purchased",
+      "frequency": {
+        "source": "assumed",
+        "score": null,
+        "note": "v0 heuristic; no usage data yet"
+      },
+      "lod": {
+        "fit": {
+          "role": "fit",
+          "status": "planned",
+          "model": null
+        },
+        "visual": {
+          "role": "render",
+          "status": "planned",
+          "model": null,
+          "mode": "alias-fit"
+        }
+      },
+      "params": {
+        "boreMm": 16,
+        "locking": "set-screw"
+      },
+      "datums": [
+        "axis",
+        "face"
+      ],
+      "compatibleWith": [
+        "iso4026"
+      ],
+      "tags": [
+        "shaft",
+        "collar"
+      ]
+    }
+  ]
+}
