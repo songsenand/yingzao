@@ -303,3 +303,53 @@ Python 子进程内部的覆盖（worker 是独立解释器，V8 看不到）；
 ### 9.5 顺手发现、未改的一处测试卫生问题
 
 `accept-assembly.mjs` 直接 `openVersionStore(<plugin>/data)`，每跑一次就往仓库的 `data/` 里写新版本（本轮把 `assembly.good.json` 的 v111 改成 v141）。本轮已把 `data/` 回滚；建议后续让它用临时 `DSH_HOME`，和其余测试一样不碰仓库夹具。
+
+---
+
+## 10. 把跳过的测试跑起来（2026-11-17 下午）
+
+上一轮剩下的 4 个红里有 3 个是环境/夹具问题。本轮在**有 Python 运行时 + Firefox** 的机器上重跑，
+并把「跳过」按可运行处理：
+
+| 指标 | 现在 | §9（上一轮） |
+|---|---|---|
+| accept 脚本 | **172**（171 绿 / 1 红；唯一红 `accept-verify` 修完后单独复跑通过） | 170：166 绿 |
+| PASS 断言 | **7502**（其中 `accept-library-catalog` 4454 条） | 2994 |
+| 超时 | **0** | 2 |
+| `src/` 行覆盖 | **89.0%**（37532/42193） | 88.3% |
+| `src/` 函数覆盖 | **83.0%**（1991/2400） | 82.7% |
+| 工具边界 | **39/39**（253 次调用，14 个有错误路径） | 37/39 |
+
+模块变化（行 / 函数）：`tools.ts` 86.2% / 65.6%，`tar-extract.ts` 27.6% → **76.3%**（import 类测试终于跑起来），
+`python-tools.ts` 50.5% → **76.9%**，`features.ts` 76.6%，`assembly-check.ts` 93.4% / 96%；
+仍是短板的：`deliver-plan.ts` 47.7%、`fluid.ts` 64.8%、`stress.ts` 78.3%、`run-chart.ts` 43%、`heat.ts` 48.9%。
+
+### 10.1 解除的跳过（6 个，原因各不相同）
+
+| 测试 | 之前 | 处理 |
+|---|---|---|
+| `accept-ui` | 150s 超时 | 机器上有 **Firefox 160 + xvfb-run**；无代码改动，15/15 场景通过（含 WebGL 与 no-GL 两条路径）。超时提到 600s |
+| `accept-python` | 现场 provisioning 超时 + store 断言红 | fixture 移到 `tmpdir()`（此前落在仓库 workspace 内，project-root 解析会走到祖先，store 断言看错路径）；运行时复用 `DSH_CAD_PYTHON_ROOT`/`--runtime-root`；store 断言改用 `projectStores()` 的真实根。全绿 |
+| `accept-tool-scope` | skill-root 断言红 | 只在 `--dump-config` 的前 8000 字符里找 skills 行；声明变长后越界。改为搜整个 dump |
+| `accept-attention-source` | 2 条断言红 | 文案已移入 `i18n.ts`（`ui.hint.heatFallback` / `ui.hint.heatSource`）。断言改为「panel 调用 key + i18n 里有那句 + 图例带 `{run}`」 |
+| `accept-worker-exit` | 一直 SKIP（runtime 写死 `.tmp-cad-runtime`） | 父/子进程都改为尊重 `DSH_CAD_PYTHON_ROOT`。真实跑通：2.5s 退出、2863 个场采样、无残留 worker |
+| `accept-verify` | 1 红 | `windup` 语料现在有 current failing runs（motion r028/r063、printability r042），按 2026-11-17 的新规则 verdict 是 **blocked**，不再是 README 里写的 difficult；CLI 的 warn 退出码改用 `roberval + 有效 exception` 覆盖 |
+
+另外，语料/运行时到位后自动从 SKIP 转为执行的有：`accept-analyze` 的 toy-balance 对照（v069/v077）、
+`accept-delivery-audit` 的 microscope5、`accept-measure-*`/`list-features` 的真实语料段、各 parity 测试。
+
+### 10.2 仍未消除的 SKIP（3 处，缺的是数据不是环境）
+
+| 测试 | SKIP 原因 |
+|---|---|
+| `accept-check-assembly-parity` | `examples/microscope3`、`examples/toy-balance2` 的装配清单未落盘（语料 gitignored） |
+| `accept-list-features` | `.tmp-04-corpus/out/stackConnectorBottom_P.bin.stl`（bench 产物，第三方倒角件）不存在 |
+
+这些需要语料本身，不能靠环境放权生成；其余脚本的 SKIP 均已转为真实执行。
+
+### 10.3 顺带发现，需要拍板
+
+1. **windup-frog 的 README 与代码矛盾**：README §9 写「verdict 是 difficult，不是 blocked」，
+   但当前语料下 verify 判 blocked（motion r028/r063 干涉、printability r042 最薄 0.028mm）。
+   是更新 README/重跑语料，还是把这些历史失败标成 superseded，需要所有者决定。
+2. `accept-assembly.mjs` 仍往仓库 `data/` 写版本（§9.5），本轮未改。
