@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "id": "sand-casting-wcb",
+  "process": "casting",
+  "material": "ASTM A216 WCB (carbon steel, cast)",
+  "machine": "green-sand / no-bake sand mold, generic foundry template (not a specific shop)",
+  "description": "Sand casting of a DN100 WCB valve body: wall/feature/gap plus 2 deg pattern draft, judged by the best-pull-direction draft solver; cored holes are judged by aspect only. Shrinkage, porosity, sand defects, pattern allowance and cast fillet radii are handoffs - the profile schema has no rule field for them, so they are stated in `detail`/`notes`, never silently dropped.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 6,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "foundry practice for WCB green sand: ~6 mm minimum section to fill and feed"
+      },
+      "detail": "6 mm is the floor, not a target: a DN100 pressure body is typically 8-12 mm and must be screened against that, not squeezed down to 6."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "isolated ribs/bosses below ~3 mm do not fill in green sand"
+      },
+      "detail": "Cast fillet radius (>= 3 mm internal) has NO rule field in process-profile.schema.json; it is declared here and is a manual check. Sharp internal corners hot-tear."
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "as-cast slots/gaps below ~3 mm bridge and close; a gap that must stay open is a core/mold feature"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Sand casting fills a mold; a down-facing face is not a support limit, so print-overhang does not govern this process."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "The sand mold supports the cavity; no unsupported span is created."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "as-cast cored hole L/D; beyond ~2 the core deflects or floats"
+      },
+      "detail": "Cored holes only. Holes drilled after casting are governed by cnc-3axis-cast-steel, not by this profile."
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "pattern draft practice for green sand: ~1-3 deg on vertical faces, 2 deg used as the value"
+      },
+      "detail": "Not a single-clause standard: foundries quote 1-3 deg by pattern depth. The draft solver answers whether a pull direction exists, not whether the pattern can be made."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder or resin in a sand mold."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process; cast corner radii are a pattern feature, not a cutter."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 1.5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "ISO 8062-3 DCTG 5-6 is the usual order for sand-cast steel of this size; 1.5 mm is the starting value and grade selection is a judgement"
+      },
+      "detail": "A capability, not a geometric fact: excluding on it needs a tolerance requirement declared elsewhere."
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 12.5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "as-cast sand surface Ra ~12.5-25 um; mold wash and scale dominate"
+      },
+      "detail": "Reported for information only; never used to exclude."
+    }
+  },
+  "notes": "DRAFT, authored 2026-11-17 for ball-valve-dn100 and NOT calibrated: every number is a rule-of-thumb starting point, to be replaced by the chosen foundry's measured capability. Process ids: the process catalog (docs/llm/processes.md) calls this `sand-casting`, the schema's `process` enum calls the family `casting`, and this profile's `id` is `sand-casting-wcb`. Schema gaps stated rather than dropped: (1) machining allowance - 3 mm per machined face on the pattern - has no rule field; (2) cast fillet radius (>= 3 mm) has no rule field; (3) WCB linear shrinkage ~1.5-2% is a pattern dimension. All three are handoffs. Shrinkage/porosity/sand inclusions and gating/risering are not mesh-decidable and stay with the foundry engineer. `not-excluded` from this profile means no geometric counter-example was found, never that the body can be cast."
+}

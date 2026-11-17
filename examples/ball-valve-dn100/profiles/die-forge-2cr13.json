@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "id": "die-forge-2cr13",
+  "process": "forging",
+  "material": "2Cr13 / AISI 420 martensitic stainless",
+  "machine": "closed-die hot forging press, generic die template (not a specific shop)",
+  "description": "Closed-die (hot) forging of the DN100 valve ball and stem blanks in 2Cr13: wall/feature/gap plus 3 deg die draft, judged by the best-pull-direction draft solver. Grain flow, laps/underfill, flash, die wear and cracks are handoffs; the parting line is not modelled.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 4,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "hot closed-die forging of stainless: ~4 mm minimum web/wall"
+      },
+      "detail": "Governs webs and flanges, not the ball itself: thinner sections run cold against the die and underfill."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "small forged ribs/bosses below ~3 mm do not fill; die chill at stainless temperatures"
+      },
+      "detail": "Die fillet radius (>= 3 mm on the part, larger in the die) has NO rule field in process-profile.schema.json; it is declared here and is a die-design handoff."
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "gaps below ~2 mm between forged features become flash/fill failures; the parting line is not modelled"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Hot forging has no support overhang; the die closes the cavity."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span is created; the die carries the material."
+    },
+    "holeAspectMax": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Through/blind holes are punched or drilled after forging; the die does not form them."
+    },
+    "draftMinDeg": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "closed-die hot forging draft ~3-7 deg on walls; 3 deg is the floor with good die lubrication"
+      },
+      "detail": "Internal draft is usually larger than external. The parting line is not modelled; the solver answers only whether a pull direction exists."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder or resin."
+    },
+    "toolRadiusMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Not a cutting process. Die fillet radii are a die-design rule, declared under featureMinMm and in notes."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.5,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "hot die forging general tolerance ~±0.5 mm for a blank of this size; die wear and thermal contraction dominate"
+      },
+      "detail": "A capability; excluding on it needs a tolerance requirement declared elsewhere."
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 6.3,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "as-forged stainless Ra ~3.2-12.5 um, scale included"
+      },
+      "detail": "Reported for information only; never used to exclude."
+    }
+  },
+  "notes": "DRAFT, authored 2026-11-17 for ball-valve-dn100 and NOT calibrated. Process id: the catalog has one forging id (`forging`), which is also the schema `process` family - there is no separate 'die-forging' vocabulary id, so the blank type lives in the profile id `die-forge-2cr13`. Schema gaps stated rather than dropped: (1) die fillet radius (>= 3 mm) has no rule field; (2) machining allowance (1.5-2 mm per machined face on the ball/stem, since the ball seat and stem are ground/machined after forging) has no rule field. Both are handoffs. Forging defects (laps, underfill, flash, die wear, grain flow), heat treatment and the parting line are not mesh-decidable. `not-excluded` means no geometric counter-example was found, never that the blank can be forged."
+}

@@ -12,6 +12,7 @@
 
 | 示例 | 角色 | 最后活动 | 本地语料 | 当前证据 / 说明 |
 |---|---|---:|---:|---|
+| [ball-valve-dn100](ball-valve-dn100/README.md) | DN100 PN16 两片式法兰浮动球阀（铸造+锻造+CNC，不外购成品件） | 2026-11-17 | 本地 | r002(90° motion 0 干涉) / r017-r018(流体) / r015(assembly) / r016(29/29 接口) |
 | [roberval-balance](roberval-balance/README.md) | 准生产罗伯威尔天平；物理/运动闭环修复的主证据 | 2026-11-02 | 24MB | r038（physics）/ r042（当前版本 motion）/ r043（assembly 26/26）；r001/r002 为旧引擎负结果，已 superseded |
 | [windup-frog](windup-frog/README.md) | 发条青蛙机芯 | 2026-11-02 | 41MB | r066（凸轮—滑块 motion）/ r068（assembly 14/14）/ r069（12 件 0 干涉）；r064 演示未重跑 |
 | [toy-balance2](toy-balance2/README.md) | 玩具天平 v2（干净上下文复跑） | 2026-11-02 | 38MB | r118（motion）/ r120（assembly 25/25，11 undeclared） |

@@ -1,0 +1,870 @@
+{
+  "schemaVersion": 1,
+  "name": "DN100 PN16 两片式法兰浮动球阀",
+  "unit": "mm",
+  "up": "z",
+  "root": {
+    "id": "valve",
+    "kind": "assembly",
+    "name": "DN100 PN16 两片式法兰浮动球阀",
+    "brief": {
+      "buyVsMake": [
+        {
+          "item": "紧固件（8×M16 中法兰、4×M10 压盖、1×M20 手柄锁紧螺母）与铭牌",
+          "decision": "buy",
+          "by": "user",
+          "note": "用户确认按标准件外购；其余承压件与功能件全部自制"
+        },
+        {
+          "item": "PTFE 棒料/板材（阀座、填料、中法兰垫片毛坯）",
+          "decision": "buy",
+          "by": "user",
+          "note": "买材料不买零件，车削/切割在本项目内完成"
+        },
+        {
+          "item": "阀体、端盖毛坯",
+          "decision": "make",
+          "by": "user",
+          "note": "WCB 砂型铸造 + CNC 精加工"
+        },
+        {
+          "item": "球体、阀杆、手柄毛坯",
+          "decision": "make",
+          "by": "user",
+          "note": "2Cr13/钢模锻 + CNC"
+        }
+      ],
+      "processes": [
+        "sand-casting",
+        "forging",
+        "cnc-3axis",
+        "cnc-turning"
+      ],
+      "processesBy": "user",
+      "verify": [
+        "assembly",
+        "motion",
+        "flow"
+      ],
+      "verifyBy": "user",
+      "assumptions": [
+        {
+          "text": "介质为纯水；入口 2.0 m/s（≈56 m³/h）按 DN100 常用经济流速取，用户只指定了介质"
+        },
+        {
+          "text": "结构取两片式/法兰/浮动球，面到面 229 mm（EN 558-1 series 14），管道法兰按 EN 1092-1 PN16 DN100（Ø220 / Ø180 / 8×Ø18 / RF Ø158×3）"
+        },
+        {
+          "text": "球 Ø160 全通径、座孔 Ø104；密封面与球留 0.2 mm 预紧间隙（PTFE 受压变形未仿真）"
+        },
+        {
+          "text": "中法兰 Ø236 大于管道法兰 Ø220：Ø160 球必须从 Ø164 开口装入，螺栓只能落在腔体之外"
+        },
+        {
+          "text": "阀杆顶部 M20×1.5 螺纹与锁紧螺母未建几何（螺母为外购件）"
+        },
+        {
+          "text": "铸造/锻造的拔模斜度与圆角未建在 CAD 里（由模具/砂型保证），工艺筛查会因此给出 draft 见证"
+        },
+        {
+          "text": "手柄 400 mm；按 DN100 软密封操作扭矩约 130 N·m 计，手力约 325 N"
+        },
+        {
+          "text": "流体仿真为固定边界 MPM：只给方向性证据（到达率/死区/速度剖面形状），不给压降或流量系数"
+        }
+      ]
+    },
+    "children": [
+      {
+        "id": "body",
+        "kind": "part",
+        "name": "阀体",
+        "version": "v007",
+        "source": "imported",
+        "qty": 1,
+        "material": "WCB",
+        "color": "#7a8a99",
+        "process": {
+          "id": "sand-casting",
+          "source": "policy",
+          "rationale": "承压壳体，砂型铸造 WCB，法兰面/座孔/颈部孔 CNC 精加工"
+        }
+      },
+      {
+        "id": "cap",
+        "kind": "part",
+        "name": "端盖",
+        "version": "v008",
+        "source": "imported",
+        "qty": 1,
+        "material": "WCB",
+        "color": "#8a9aa9",
+        "process": {
+          "id": "sand-casting",
+          "source": "policy",
+          "rationale": "承压件，砂型铸造 + CNC 精加工座孔与法兰面"
+        }
+      },
+      {
+        "id": "ball",
+        "kind": "part",
+        "name": "球体",
+        "version": "v003",
+        "source": "imported",
+        "qty": 1,
+        "material": "2Cr13",
+        "color": "#b6bec6",
+        "process": {
+          "id": "forging",
+          "source": "policy",
+          "rationale": "Ø160 全通径球，模锻毛坯 + CNC 车/磨球面与 Ø100 通孔"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "seat_R",
+        "kind": "part",
+        "name": "阀座（右）",
+        "version": "v019",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#e6ddcc",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "PTFE 棒料车削，45° 密封锥面一次装夹成形"
+        }
+      },
+      {
+        "id": "seat_L",
+        "kind": "part",
+        "name": "阀座（左）",
+        "version": "v019",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#e6ddcc",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "同一零件翻转 180° 装入左座孔"
+        },
+        "transform": {
+          "rotate": [
+            0,
+            180,
+            0
+          ]
+        }
+      },
+      {
+        "id": "stem",
+        "kind": "part",
+        "name": "阀杆",
+        "version": "v006",
+        "source": "imported",
+        "qty": 1,
+        "material": "2Cr13",
+        "color": "#c8d0d8",
+        "process": {
+          "id": "forging",
+          "source": "policy",
+          "rationale": "模锻 + CNC 车削、铣 22×22 方头"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "gland",
+        "kind": "part",
+        "name": "压盖",
+        "version": "v009",
+        "source": "imported",
+        "qty": 1,
+        "material": "2Cr13",
+        "color": "#9aa2aa",
+        "process": {
+          "id": "cnc-3axis",
+          "source": "policy",
+          "rationale": "棒料 CNC：压盖法兰 + 90° 限位销一次装夹"
+        }
+      },
+      {
+        "id": "handle",
+        "kind": "part",
+        "name": "手柄",
+        "version": "v010",
+        "source": "imported",
+        "qty": 1,
+        "material": "45钢",
+        "color": "#d0a050",
+        "process": {
+          "id": "forging",
+          "source": "policy",
+          "rationale": "模锻手柄 + CNC 铣 22×22 方孔与限位凸台"
+        }
+      },
+      {
+        "id": "packing1",
+        "kind": "part",
+        "name": "填料环 1",
+        "version": "v011",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#efe6d8",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "PTFE 棒料车削，4 件一组"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            130
+          ]
+        }
+      },
+      {
+        "id": "packing2",
+        "kind": "part",
+        "name": "填料环 2",
+        "version": "v011",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#efe6d8",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "PTFE 棒料车削"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            136
+          ]
+        }
+      },
+      {
+        "id": "packing3",
+        "kind": "part",
+        "name": "填料环 3",
+        "version": "v011",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#efe6d8",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "PTFE 棒料车削"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            142
+          ]
+        }
+      },
+      {
+        "id": "packing4",
+        "kind": "part",
+        "name": "填料环 4",
+        "version": "v011",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#efe6d8",
+        "process": {
+          "id": "cnc-turning",
+          "source": "policy",
+          "rationale": "PTFE 棒料车削"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            148
+          ]
+        }
+      },
+      {
+        "id": "gasket",
+        "kind": "part",
+        "name": "中法兰垫片",
+        "version": "v012",
+        "source": "imported",
+        "qty": 1,
+        "material": "PTFE",
+        "color": "#f2ead9",
+        "process": {
+          "id": "cnc-3axis",
+          "source": "policy",
+          "rationale": "PTFE 板材 CNC 铣/割 Ø170/Ø182 环"
+        },
+        "transform": {
+          "translate": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "bolt_mid",
+        "kind": "part",
+        "name": "中法兰螺栓 M16×60",
+        "source": "stock",
+        "qty": 8,
+        "material": "8.8级",
+        "role": "purchased"
+      },
+      {
+        "id": "nut_mid",
+        "kind": "part",
+        "name": "中法兰螺母 M16",
+        "source": "stock",
+        "qty": 8,
+        "material": "8级",
+        "role": "purchased"
+      },
+      {
+        "id": "bolt_gland",
+        "kind": "part",
+        "name": "压盖螺栓 M10×30",
+        "source": "stock",
+        "qty": 4,
+        "material": "8.8级",
+        "role": "purchased"
+      },
+      {
+        "id": "nut_handle",
+        "kind": "part",
+        "name": "手柄锁紧螺母 M20×1.5",
+        "source": "stock",
+        "qty": 1,
+        "material": "8级",
+        "role": "purchased"
+      },
+      {
+        "id": "nameplate",
+        "kind": "part",
+        "name": "铭牌",
+        "source": "stock",
+        "qty": 1,
+        "material": "铝",
+        "role": "purchased"
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "I1",
+        "a": "body.中法兰面",
+        "b": "cap.中法兰面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0.3
+        },
+        "tolerance": {
+          "min": 0.25,
+          "max": 0.35
+        },
+        "note": "PTFE 中法兰垫片 1.9 mm 在体内槽 1.6 mm 中压缩 0.3 mm"
+      },
+      {
+        "id": "I2",
+        "a": "body.管轴",
+        "b": "cap.管轴_R",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "note": "两片阀体同轴；8×M16 拉紧后由配合面定位"
+      },
+      {
+        "id": "I3",
+        "a": "cap.座孔_R",
+        "b": "seat_R.外圆",
+        "type": "间隙",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": 0,
+          "max": 0.1
+        },
+        "note": "右座在端盖 Ø148 座孔内可浮动"
+      },
+      {
+        "id": "I4",
+        "a": "body.座孔_L",
+        "b": "seat_L.外圆",
+        "type": "间隙",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": 0,
+          "max": 0.1
+        },
+        "note": "左座在阀体 Ø148 座孔内可浮动"
+      },
+      {
+        "id": "I5",
+        "a": "seat_R.密封面",
+        "b": "ball.球心",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 57.3
+        },
+        "tolerance": {
+          "min": 57.1,
+          "max": 57.5
+        },
+        "note": "球心到右座密封面 57.3 mm；球面与座留 0.2 mm 预紧间隙"
+      },
+      {
+        "id": "I6",
+        "a": "seat_L.密封面",
+        "b": "ball.球心",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 57.3
+        },
+        "tolerance": {
+          "min": 57.1,
+          "max": 57.5
+        },
+        "note": "左座对称"
+      },
+      {
+        "id": "I7",
+        "a": "body.阀杆轴",
+        "b": "stem.轴线",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "note": "阀杆轴线与颈部孔同轴"
+      },
+      {
+        "id": "I8",
+        "a": "stem.方头顶面",
+        "b": "body.颈部顶面",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 45
+        },
+        "tolerance": {
+          "min": 44.8,
+          "max": 45.2
+        },
+        "note": "阀杆轴向位置由 Ø44 台肩坐在颈部 Ø40 肩上（130）决定"
+      },
+      {
+        "id": "I9",
+        "a": "stem.台肩",
+        "b": "ball.球心",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 130
+        },
+        "tolerance": {
+          "min": 129.7,
+          "max": 130.3
+        },
+        "note": "球槽底 68 / 台肩 130，锁定球与阀杆轴向关系"
+      },
+      {
+        "id": "I10",
+        "a": "gland.底面",
+        "b": "body.颈部顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "note": "压盖坐在颈部顶面，4×M10 压紧填料"
+      },
+      {
+        "id": "I11",
+        "a": "gland.轴线",
+        "b": "body.阀杆轴",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "note": "压盖与阀杆同轴"
+      },
+      {
+        "id": "I12",
+        "a": "handle.方孔",
+        "b": "stem.方头",
+        "type": "紧固",
+        "severity": "hard",
+        "check": "coaxial",
+        "tolerance": {
+          "min": -0.05,
+          "max": 0.05
+        },
+        "note": "手柄 22.3 方孔套在 22 方头上"
+      },
+      {
+        "id": "I13",
+        "a": "handle.顶面",
+        "b": "stem.方头顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "note": "方孔盲端坐到方头顶面，螺母从上方锁住"
+      },
+      {
+        "id": "I14",
+        "a": "packing1.底面",
+        "b": "stem.台肩",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.2,
+          "max": 0.2
+        },
+        "note": "4×6 mm 填料自 130 叠到 154"
+      },
+      {
+        "id": "I15",
+        "a": "packing2.底面",
+        "b": "packing1.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        }
+      },
+      {
+        "id": "I16",
+        "a": "packing3.底面",
+        "b": "packing2.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        }
+      },
+      {
+        "id": "I17",
+        "a": "packing4.底面",
+        "b": "packing3.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        }
+      },
+      {
+        "id": "I18",
+        "a": "gasket.右端面",
+        "b": "cap.中法兰面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 0
+        },
+        "tolerance": {
+          "min": -0.1,
+          "max": 0.1
+        },
+        "note": "垫片外端面贴端盖"
+      },
+      {
+        "id": "I19",
+        "a": "gasket.左端面",
+        "b": "body.中法兰面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 1.6
+        },
+        "tolerance": {
+          "min": 1.5,
+          "max": 1.7
+        },
+        "note": "体内槽深 1.6"
+      },
+      {
+        "id": "I20",
+        "a": "handle.底面",
+        "b": "gland.顶面",
+        "type": "转动副",
+        "severity": "hard",
+        "check": "motion-clearance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 9
+        },
+        "tolerance": {
+          "min": 8.5,
+          "max": 9.5
+        },
+        "evidence": {
+          "runId": "r002",
+          "note": "90° 回转全行程 24 个位姿无干涉；手柄底板与限位板保持 9 mm"
+        },
+        "note": "启闭组件相对阀体 0→90° 回转的静态间隙 + 运动证据",
+        "params": {
+          "runId": "r002"
+        }
+      },
+      {
+        "id": "I21",
+        "a": "gland.底面",
+        "b": "packing4.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 16
+        },
+        "tolerance": {
+          "min": 15.8,
+          "max": 16.2
+        },
+        "note": "压盖 Ø39.7 凸台从 170 伸到 154，压住填料顶面"
+      },
+      {
+        "id": "I22",
+        "a": "stem.方头顶面",
+        "b": "gland.顶面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 33
+        },
+        "tolerance": {
+          "min": 32.8,
+          "max": 33.2
+        },
+        "note": "阀杆方头 33 mm 高出压盖顶面；方肩坐在压盖顶面承受向下推力"
+      },
+      {
+        "id": "I23",
+        "a": "stem.台肩",
+        "b": "packing2.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 6
+        },
+        "tolerance": {
+          "min": 5.8,
+          "max": 6.2
+        },
+        "note": "填料叠装位置（第 2 道）"
+      },
+      {
+        "id": "I24",
+        "a": "stem.台肩",
+        "b": "packing3.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 12
+        },
+        "tolerance": {
+          "min": 11.8,
+          "max": 12.2
+        },
+        "note": "填料叠装位置（第 3 道）"
+      },
+      {
+        "id": "I25",
+        "a": "stem.台肩",
+        "b": "packing4.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 18
+        },
+        "tolerance": {
+          "min": 17.8,
+          "max": 18.2
+        },
+        "note": "填料叠装位置（第 4 道）"
+      },
+      {
+        "id": "I26",
+        "a": "body.颈部顶面",
+        "b": "packing1.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 40
+        },
+        "tolerance": {
+          "min": 39.7,
+          "max": 40.3
+        },
+        "note": "填料顶面距颈部顶面 40（填料孔深 40）"
+      },
+      {
+        "id": "I27",
+        "a": "body.颈部顶面",
+        "b": "packing2.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 34
+        },
+        "tolerance": {
+          "min": 33.7,
+          "max": 34.3
+        }
+      },
+      {
+        "id": "I28",
+        "a": "body.颈部顶面",
+        "b": "packing3.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 28
+        },
+        "tolerance": {
+          "min": 27.7,
+          "max": 28.3
+        }
+      },
+      {
+        "id": "I29",
+        "a": "body.颈部顶面",
+        "b": "packing4.底面",
+        "type": "贴合",
+        "severity": "hard",
+        "check": "distance",
+        "nominal": {
+          "quantity": "距离",
+          "value": 22
+        },
+        "tolerance": {
+          "min": 21.7,
+          "max": 22.3
+        }
+      }
+    ]
+  },
+  "manufacturing": {
+    "allowed": [
+      {
+        "id": "sand-casting",
+        "note": "WCB 阀体/端盖"
+      },
+      {
+        "id": "forging",
+        "note": "2Cr13 球体/阀杆、钢手柄"
+      },
+      {
+        "id": "cnc-3axis",
+        "note": "压盖、垫片、锻件精加工"
+      },
+      {
+        "id": "cnc-turning",
+        "note": "PTFE 阀座/填料、球面车磨"
+      }
+    ],
+    "approvedBy": "user 2026-11-17（会话确认：CNC+铸造+锻造为主，不外购零件；紧固件/铭牌除外购件）",
+    "delegate": true
+  }
+}

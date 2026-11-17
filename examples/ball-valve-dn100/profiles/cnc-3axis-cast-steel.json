@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "id": "cnc-3axis-cast-steel",
+  "process": "CNC-3axis",
+  "material": "WCB carbon steel (cast body, machined)",
+  "machine": "3-axis VMC / desktop mill, Ø6 mm flat end mill as the smallest cutter (shop template, not a calibrated machine)",
+  "description": "3-axis CNC finishing of a sand-cast WCB valve body: wall/feature/gap, circular-bore cutter radius (Ø6 mm) and hole aspect (depth/diameter). Applied to the geometry AFTER casting, never to the pattern. Non-circular pockets/slots, undercuts, minimum internal radius, setups/fixturing, chatter and cost are handoffs; the report says so whenever toolRadiusMm is declared.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "thin-wall milling of cast steel: ~3 mm minimum machined wall"
+      },
+      "detail": "The wall left after the as-cast skin is removed. Below ~3 mm the wall deflects and rings under a Ø6 cutter."
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 2,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "machined pins/ribs below ~2 mm deflect or break under a Ø6 cutter"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 6,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "derived from the smallest cutter: a slot narrower than 2 x toolRadiusMm (6 mm) cannot be milled with it"
+      },
+      "detail": "Derived, not an independent measurement: gapMinMm = 2 x toolRadiusMm. Non-circular slots are otherwise NOT reachability-checked, only this width floor applies."
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "CNC removes material; there is no support overhang."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Material removal creates no unsupported span."
+    },
+    "holeAspectMax": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 4,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "HSS drill 4:1 conservative; carbide and peck drilling go deeper"
+      },
+      "detail": "Depth / diameter, circular bores only."
+    },
+    "draftMinDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No mold release in machining; draft does not govern this process."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder or resin to evacuate."
+    },
+    "toolRadiusMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "Ø6 mm end mill is the smallest cutter this shop will use - a shop decision, not a measured capability"
+      },
+      "detail": "Circular bores only: a bore radius below the cutter radius cannot be entered. Non-circular pockets/slots are NOT covered - that is a disclosed gap, not a pass."
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.1,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "3-axis mill on cast steel, ±0.1 mm typical for a ~100 mm part"
+      },
+      "detail": "A capability; excluding on it needs a tolerance requirement declared elsewhere."
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 3.2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "end-milled WCB Ra ~1.6-3.2 um; tool marks dominate"
+      },
+      "detail": "Reported for information only; never used to exclude."
+    }
+  },
+  "notes": "DRAFT, authored 2026-11-17 for ball-valve-dn100 and NOT calibrated. This is the second half of a cast-then-machined body: screen the finished geometry here and the as-cast geometry against sand-casting-wcb - screening the pattern against cutter rules, or the finished part against draft rules, is a wrong ruler. Machining allowance has no schema rule field: as-cast skin/scale means ~2-3 mm per machined face must be reserved on the pattern, stated here and in sand-casting-wcb. Every number is a rule-of-thumb except gapMinMm, which is derived from the 6 mm cutter. `not-excluded` means no circular bore was too narrow and no wall was below 3 mm - never that the body can be machined."
+}
