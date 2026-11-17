@@ -62,7 +62,7 @@ Start a new session and choose the **营造模式 (Yingzao mode)** preset — or
 The first calculation downloads a **private Python runtime** into `$DSH_HOME/cad/runtime/`, shared by all projects.
 
 - **Why**: geometry analysis, exact measurement, physics/motion and fluid trends need scientific Python; the machine cannot be assumed to have a clean one.
-- **Warm it early**: ask the agent to run `python_runtime` action `provision` (with progress), or set `DSH_CAD_PYTHON=eager`.
+- **Warm it early**: ask the agent to provision the runtime (with progress), or set `DSH_CAD_PYTHON=eager`.
 - **Use system Python**: `DSH_CAD_PYTHON=system` uses an existing CPython (currently 3.13); dependencies are still installed from the lock.
 - **Cost**: about 380–400 MB; 3–11 minutes depending on network. Mirrors/indexes can be changed.
 

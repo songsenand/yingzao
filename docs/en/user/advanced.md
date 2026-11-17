@@ -32,6 +32,8 @@ When a large project has several components (`components/*/`) or several example
 
 - This is **read-only browsing**: agent writes always stay in the session directory.
 - Switching does not change the session's corpus root; it only changes which corpus you view in the panel.
+- The panel does not pick a default project for you; after you select one it loads that corpus immediately instead of waiting for the next poll.
+- The right-hand panel opens automatically only when CAD activity happens in the current conversation; writes from another conversation in the same project do not raise it.
 
 ## Put an external script's simulation result into the panel
 
@@ -50,5 +52,5 @@ dsh-cad-import-run --project . --trajectory sim/traj.json --kind physics \
 - an imported run is **`check`**, not `pass`: the venue did not witness how the numbers were produced. `--status` can override it, but that is your claim.
 
 It writes through the **same RunWriter the tools use** (same lock, same index), so what the panel
-lists and what `delivery_audit` reads are the same kind of artifact — there is no side channel.
+lists and what the delivery audit reads are the same kind of artifact — there is no side channel.
 

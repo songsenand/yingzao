@@ -2,7 +2,7 @@
 
 # 营造 · Yingzao
 
-**用自然语言描述零件；多模态大模型通过 DeepSeek Harness 插件调用 CAD 引擎，得到经过验证、可交付的模型。**
+**用自然语言描述零件或装配体；多模态大模型通过 DeepSeek Harness 插件调用 CAD 引擎，得到经过验证、可交付的模型。**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
@@ -15,6 +15,7 @@
 
 ## 目录
 
+- [适合谁用，不适合谁用](#适合谁用不适合谁用)
 - [关于本项目](#关于本项目)
 - [示例](#示例)
 - [技术栈](#技术栈)
@@ -25,6 +26,33 @@
 - [文档](#文档)
 - [参与贡献](#参与贡献)
 - [许可证](#许可证)
+
+## 适合谁用，不适合谁用
+
+营造的定位是为 Agent 提供场地：以规范、稳定的方式产出机械构件，并保留回看、复算与交付的通道。它不承担提升 Agent 3D 能力的职责。几何能力取决于模型本身，这不是单个插件能够承担的工作。
+
+### 适合
+
+- 你已有明确的设计意图和验收标准，愿意用文字描述需求，并接受 Agent 以参数化代码建模，而非拖拽特征。
+- 你需要的是可制造、可装配、功能可实现的零件或装配体，而不只是视觉上成立的渲染图。
+- 你主要做装配体，且复杂度处于 Agent 能力范围之内。复杂度越高，收益通常越明显：收益不在于让原本无法设计的对象变得可设计，而在于对“能够设计、却无法制造、无法装配或功能无法实现”的部分进行纠偏，并尽量在交付前发现。
+- 你愿意依据证据判断：版本、数值报告、干涉与行程检查；同时接受最终判断仍由人作出。
+- 你看重下限：减少 Agent 表现最差的情况，而不是依赖偶发的高水平输出。
+
+### 不适合
+
+- 希望获得“一句话出图”的演示效果，或将 3D 生成能力本身作为卖点。
+- 需要原生 CAD 的交互方式：草图约束、特征树、拖拽编辑。
+- 需要认证级精度：工业公差、工程图、精确 FEA/CFD、量产 BOM。这里提供趋势判断和边界内的数值，不提供认证。
+- 期待插件降低 token 消耗，见下一节。
+
+以上是使用预期，不是准入条件。需求若属于后者，专业工具通常更合适。
+
+### 关于 token：不期待更省，而期待更可预期
+
+（内部实测，样本有限。）同一任务中，使用插件的平均 token 消耗不低于不使用插件，反而略高；但消耗的方差显著更小，单轮成本可以提前估算，不易出现大幅波动。
+
+降低 token 消耗在计划之内，但优先级低于能力建设：不会为了节省 token 而削减验证或必要的检查。合理的预期是成本可预期、投入有效，而不是成本更低。
 
 ## 关于本项目
 
@@ -37,7 +65,7 @@
 - **迭代**：每一版都能浏览、钉住、对比；旧版本和旧运行不会被覆盖；
 - **交付**：导出单个版本，或整个项目（每个零件的 STL + 装配清单 + 说明）；也可按装配位姿合并成整机。
 
-它不是聊天框里“画一个零件”的 demo：**多模态大模型**负责读写 SCAD、看渲染图、判断下一步；**DSH 插件**提供 CAD 工具、不可变版本、数值验证和交付门。需要判断的环节保留给人——它不是“全自动建模”，而是把重复的生成和检查交给 Agent，把设计判断留给你。
+它面向的不是聊天框里“画一个零件”的演示。**多模态大模型**负责读写 SCAD、查看渲染图并决定下一步；**DSH 插件**提供 CAD 工具、不可变版本、数值验证和交付门。它不追求全自动建模：重复的生成和检查交给 Agent，设计判断留给你。
 
 ## 示例
 
@@ -57,13 +85,15 @@
 | 螺栓 | M8×30，六角头对边 13 |
 | 外形包围盒 | 13.00 × 14.88 × 35.50 mm |
 | 体积 | **2.44 cm³**（STL 实测） |
-| 螺纹几何 | BOSL2 `threaded_rod` / `threaded_nut`，不是贴图，也不是光孔 |
+| 螺纹几何 | BOSL2 `threaded_rod` / `threaded_nut` 生成的真实螺纹，不是光孔 |
 
 源码：[docs/readme-models/m8-bolt-nut.scad](docs/readme-models/m8-bolt-nut.scad)
 
 ### 20T / 10T 齿轮组
 
 > 20 齿和 10 齿直齿轮，模数 1.5，厚 6，轴孔 5；按实际中心距啮合，不要只是两个圆柱摆在一起。
+
+![20T / 10T 齿轮组，模数 1.5](docs/images/readme/gear-pair-blender.png)
 
 | 检查项 | 结果 |
 |---|---|
@@ -80,7 +110,7 @@
 > 这两个例子用于展示几何与结果，不是完整证据链样本；材料强度、磨损、噪声、打印方向仍要单独验证。渲染脚本同样是仓库内的可复跑工具，不是运行时依赖：
 > [docs/readme-models/render.py](docs/readme-models/render.py)。
 >
-> 早期示例里的螺钉/螺母有不少是光孔或简化圆柱，优先验证装配关系；本页不再沿用那种示意件。
+> 早期示例里的螺钉、螺母有不少是光孔或简化圆柱，只够验证装配关系；本页不再沿用这类示意件。
 
 ## 技术栈
 
@@ -90,15 +120,13 @@
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |
-| 证据 | 不可变版本、JSON 报告、六行 evidence、claims / policy / delivery audit |
+| 证据 | 不可变版本、JSON 报告、六类证据、claims / policy / delivery audit |
 
 ## 快速开始
 
-`setup --openscad=auto` 会准备 OpenSCAD（2021.01 可运行但 `doctor` 报 degraded；推荐
-2025.06+ / Manifold）：已有 2025.06+ 系统版本就直接用；没有则从**官方快照优先**下载，官方不可达或持续低于 256 KB/s
-时才切到 OSS 镜像。也可以用 `--openscad=off` 手动准备，或用 `CAD_OPENSCAD_BIN` 指定已有二进制。
+`setup --openscad=auto` 会准备 OpenSCAD（2021.01 可运行但 `doctor` 报 degraded；推荐 2025.06+ / Manifold）。已有 2025.06+ 系统版本则直接使用；否则优先下载官方快照，官方源不可达或持续低于 256 KB/s 时才切换到 OSS 镜像。也可以用 `--openscad=off` 手动准备，或用 `CAD_OPENSCAD_BIN` 指定已有二进制。
 
-> OpenSCAD 在 `setup` 时准备；约 400MB 的 Python 运行时装在首次计算时准备。两者都不随 tarball 分发。
+> OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算时安装。两者都不随 tarball 分发。
 
 ### 方式 A：tarball（预览版，不需要构建）
 
@@ -121,13 +149,13 @@ npx dsh-cad-doctor
 
 ### 开启营造模式
 
-1. 新建会话时选择预设 **「营造模式」**；普通会话看不到 CAD 工具，这是有意的。
+1. 新建会话时选择预设 **「营造模式」**；普通会话看不到 CAD 工具，这是有意为之。
 2. 在右侧打开 **CAD 预览** 标签页。如果标签页不存在，先重启 dsh，再新建一个营造模式会话。
 3. 直接描述需求：
 
 > 做一个 60×40×8 的安装板，四角 M3 沉头孔，中心一个 20 mm 通孔。
 
-打开后是这样（示例为发条青蛙装配，12 个零件 / 12 个版本）：
+打开后界面如下（示例为发条青蛙装配，12 个零件 / 12 个版本）：
 
 ![模型预览页面：版本选择、装配视口、验证状态和导出入口](docs/images/readme/model-preview.png)
 
@@ -142,19 +170,19 @@ npx dsh-cad-doctor
 
 > 面板是**只读视口 + 人的指认通道**：它不替代 Agent 写代码，也不替代引擎给真值；它让人能看见、能量、能指出问题。
 
-4. 下一步看 [从描述到交付](docs/user/workflow.md)，或 [验证能力](docs/user/verification.md)。
+下一步：阅读 [从描述到交付](docs/user/workflow.md)，或 [验证能力](docs/user/verification.md)。
 
 ## 用法
 
-一次典型的对话不是“一句话出图”，而是：
+一次典型的对话分五步：
 
 1. 你描述需求、约束和验收标准；
 2. Agent 生成参数化 SCAD，登记为 `v001`；
 3. 引擎运行尺寸、壁厚、间隙、打印性、装配等检查，并把结果写成报告；
 4. Agent 读渲染图和报告，发现问题后生成 `v002`；
-5. 你确认后导出 STL / 3MF / 整机装配，或交给下游。
+5. 你确认后导出单版本（STL / 3MF 等）或整机装配，也可以交给下游。
 
-版本不可变：`v002` 不会改写 `v001`；检查报告绑定到它实际检查的那个版本。旧结果不会“自动变成当前版本”的证据。
+版本不可变：`v002` 不会改写 `v001`；检查报告绑定到它实际检查的版本，旧版本的报告不会自动成为当前版本的证据。
 
 ## 验证
 
@@ -173,18 +201,18 @@ node scripts/verify.mjs /path/to/project --advisory
 
 - 默认 advisory（exit 0）；`--block` 时 pass 0 / warn 1 / blocked|fail 2 / 用法错误 3；`--strict` 让 warn 也返回 2。
 - claims：`<project>/claims.json` 或 `--claims <file>`；policy：`<project>/evidence-policy.json` 或 `--policy <file>`；没有 policy 就是 advisory。
-- 项目特定判据写成 `<project>/checks/<id>/`，先 `check-register` 注册，再用 `--checks` 启用；负样本先过门，逐判据对账，写项目即作废。
+- 项目特定判据放在 `<project>/checks/<id>/`：先 `check-register` 注册，再用 `--checks` 启用。注册时会跑负样本，负样本通过则拒收；每条判据都要有 finding 或 skipped；检查不得写项目。
 - 详见 [docs/llm/verify.md](docs/llm/verify.md)。
 
 ## 已知边界
 
 - **不是原生 CAD**：没有特征树、草图约束和拖拽编辑，几何源头是代码，STEP 能进不能出。
 - **起点是个人自用**：效果超出预期后才补文档和验收，早期提交历史比较乱。
-- **题库没有正式基线**：成本问题，`examples/bench` 只有一轮 N=1 探索运行（81.41M tokens，已跑 6 题 P 列全 0，03 因 429 未完成），不是可比较的 benchmark。
-- **工具成熟度不齐**：`check_printability` / `check_assembly` 相对成熟，CNC、EDM、钣金、车削、压铸等仍是 `partial`，动态仿真受求解器限制。
+- **题库没有正式基线**：`examples/bench` 只有一轮 N=1 探索运行，6 题机检通过数均为 0，03 因服务端配额上限（429）未完成，不是可比较的 benchmark。
+- **工具成熟度不齐**：打印性检查 / 装配检查相对成熟，CNC、EDM、钣金、车削、压铸等仍是 `partial`，动态仿真受求解器限制。
 - **示例不能全部一键复跑**：`examples/*/cad-data/` 被 gitignore，历史示例只保留文档、源码和渲染。
-- **英文是机器翻译**：英文用户文档、`docs/en/llm`、`HARNESS.en.md` 未经人工润色；客户端 UI 已英文化，host 模型侧输出仍可能中文。
-- **不便宜**：一轮 N=1 题库探索消耗 81.41M tokens；长任务的上下文成本是真实成本。
+- **英文是机器翻译**：英文用户文档、`docs/en/llm`、`HARNESS.en.md` 未经人工润色；客户端 UI 已英文化，模型侧输出仍可能为中文。
+- **成本不低**：那一轮探索消耗 81.41M tokens；长任务的上下文成本是真实成本。
 
 ## 文档
 
@@ -207,8 +235,8 @@ node scripts/verify.mjs /path/to/project --advisory
 
 ## 许可证
 
-Apache License 2.0 —— 全文见 [LICENSE](LICENSE)，第三方声明见 [NOTICE](NOTICE)，审计明细见 [docs/THIRD-PARTY-AUDIT.md](docs/THIRD-PARTY-AUDIT.md)。
+Apache License 2.0。全文见 [LICENSE](LICENSE)，第三方声明见 [NOTICE](NOTICE)，审计明细见 [docs/THIRD-PARTY-AUDIT.md](docs/THIRD-PARTY-AUDIT.md)。
 
-允许商业使用、修改、闭源再分发与售卖，只需保留版权与许可声明；另含显式专利授权与专利报复条款。
+允许商业使用、修改、闭源再分发与售卖；条件是随分发附上许可证副本、保留版权与 NOTICE 声明，并在修改过的文件中标注改动。另含显式专利授权与专利报复条款。
 
 BOSL2（BSD-2-Clause）**不随仓库分发**：自行下载放到 `lib/BOSL2/`（已 gitignore）。

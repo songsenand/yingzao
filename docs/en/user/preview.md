@@ -33,7 +33,7 @@ OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system ins
 
 ## Known limits
 
-- **Approval/rollback**: browse, pin and compare versions; there is no approve or one-click rollback.
+- **Approval/rollback**: browse, pin and compare versions. The agent can propose a revert; approving it in the panel creates a new version. There is no separate version sign-off workflow.
 - **Python runtime**: the first use downloads about 400 MB and may take minutes; offline failure gives the next step.
 - **BOSL2**: optional; standard parts need it, and a missing copy is reported rather than silently producing empty geometry.
 - **Kernel**: OpenSCAD only in this preview. A second kernel is the first mid-term item, not a promise for this release.

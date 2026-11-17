@@ -5,6 +5,7 @@
 > **Historical (2026-11-06).** The pearl execution layer is demoted; V1 evidence verification
 > supersedes it on the model-facing surface. Decision:
 > `docs/PEARL-TO-VERIFY-DECISION-2026-11-06.md`. Kept as an implementation record.
+> 文中的六珍珠名（`brief` / `model` / `fit` / `make` / `review` / `deliver`）是历史工作流名；旧工具 `pearl_run` 的调用面现在是 `cad_deliver` (`action: "pearl"`)，9 个 surface 表见 `docs/llm/README.md`。
 
 A pearl answers one question. Six pearls: `brief`, `model`, `fit`, `make`, `review`,
 `deliver`. A template is the task-class implementation; a rule pack supplies domain
@@ -22,14 +23,14 @@ is idempotent.
 
 ## Gate vs execute
 
-- `pearl_run({})` is the read-only gate. It plans the selected template against the
+- `cad_deliver({ action: "pearl", args: {} })` is the read-only gate. It plans the selected template against the
   project budget, observes the six pearls from existing evidence, and returns
   `status` + localized failures. A missing `pearl-profile.json` blocks.
-- `pearl_run({execute:true, inputs})` dispatches the template steps through the same
+- `cad_deliver({ action: "pearl", args: { execute: true, inputs } })` dispatches the template steps through the same
   tool registry. `inputs` fills bindings that cannot be derived from project artifacts
   (`gap`, `motion`, `contract`, `versionId`, `claims`, ...).
 
-No profile → no gate; `preflight` lists the pearl step as `notCovered`, never green.
+No profile → no gate; `cad_deliver` (`action: "preflight"`) lists the pearl step as `notCovered`, never green.
 
 ## Step inputs
 
@@ -107,7 +108,7 @@ A profile selects it explicitly:
 ```
 
 `mountProbe` still checks `pearl.probe.allowed`, version, pearl ownership and
-negative samples; `pearl_run` reports `probe.report` and blocks on fail/error.
+negative samples; `cad_deliver` (`action: "pearl"`) reports `probe.report` and blocks on fail/error.
 
 This is feasible, but:
 
@@ -124,7 +125,7 @@ motion clearance, static stability, printability. These can be gates inside `fit
 the balance by >=2 deg"). It is a `deliver` claim witness, not a default gate; without a
 scenario/target it is `unobserved`/`not-applicable`, never pass.
 
-`fit/mechanism` already uses `simulate_motion` for consistency. The missing pieces are a
+`fit/mechanism` already uses `cad_simulate` (`action: "motion"`) for consistency. The missing pieces are a
 `brief` acceptance/scenario contract and a `deliver` functional template that runs
 `simulate_*` and compares the metric to the target.
 

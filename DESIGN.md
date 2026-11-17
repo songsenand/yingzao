@@ -20,6 +20,11 @@
 > 代码里的事实若已有提交/决策出处，就是文档滞后（改本文件）；若代码违背的是一条原则或契约
 > 且找不到推翻它的决策，就是实现违约（改代码）。**不允许用改文档的方式消解 HARNESS 层的矛盾。**
 
+> **模型可见工具面（2026-11-16 起）**：生产会话只暴露 **9 个 surface / 39 个 op**（§26.4）。
+> 本文件的历史章节仍用当时的内部 op 名（如 `generate_part`、`check_assembly`、`simulate_motion`）——
+> 它们是实现/委托名，不是模型可调用的名字；当前调用写法一律是
+> `cad_<surface>({ action: "<op>", args: { … } })`。`TOOL-CONTRACTS.md` 也按内部 op 名索引参数。
+
 ---
 
 ## 1. 项目概述
@@ -2786,6 +2791,8 @@ MPM 纯流体且无 F 路径）。但 `sdf.ts` 的**逐格体素化**（`solidMa
 
 ### 25.7 注意力义务：检查/仿真工具**不许沉默**（承 HARNESS §11.14，2026-10-19）
 
+> 本节仍用内部 op 名；模型调用面见 §26.4（9 个 surface）。
+
 HARNESS §11.14 已经把"注意力引导"定为**产出的义务**，判据是：把一条通过结论交给没见过这个
 零件的人，他应当知道下一步去看哪里。对检查/仿真工具，这条推论出三条硬要求：
 
@@ -3099,10 +3106,28 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 
 ### 26.4 工具面与用法
 
-> **工具名的时间线（2026-10-23 核对）**：下面按批次记录的是**迁移当时**的工具名。
+> **工具名的时间线（2026-11-17 更新）**：下面按批次记录的是**迁移当时**的工具名。
 > 2026-10-11 合并之后：`measure_closest` + `measure_distance` → **`measure_gap`**；
 > `check_connectivity` + `measure_extent` → **`measure_part`** 的一部分。
-> 历史名字保留（它们说明了当时的边界），但**今天按新名字查**。
+> 2026-11-16 再合并：`measure_part` / `measure_gap` / `measure_thickness` / `measure_section` /
+> `measure_angle` → 单个 **`measure(kind=…)`**（43 → 39 个 op），并把生产工具面切到 9 个 surface。
+> 历史名字保留（它们说明了当时的边界），但**今天按 surface + action 调用**。
+>
+> | surface | actions |
+> |---|---|
+> | `cad_session` | `info` · `init` · `bind` · `review` |
+> | `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
+> | `cad_assembly` | `write` · `validate` · `check` · `datums` |
+> | `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
+> | `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+> | `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
+> | `cad_see` | `render` · `review` · `reference` |
+> | `cad_python` | `run` · `runtime` |
+> | `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） |
+>
+> 每个工具在注册处自带 `surface: { id, action }`；`buildSurfaceFromToolMeta` 据此生成 surface，
+> 删除手写 9×members 表。`hideLegacy: all` 后旧名不进入模型 catalog，但仍是内部委托目标；
+> `TOOL-CONTRACTS.md` 按旧名索引参数，调用名以上表为准。
 
 - **常驻 worker（batch 0，2026-10-08 落地）**：`python/cad_worker/worker.py` + 宿主侧
   `PythonWorker` / `ensurePythonWorker()`（单例、崩溃重启）。协议 `{id, op, params}` →
@@ -3485,6 +3510,8 @@ pypi.org 降为兜底）——实测 pypi.org 的 files 通道对大闭包会拖
 ---
 
 ## 30. 人的通道：面板与图像纪律（承 HARNESS §4，2026-10-16 迁入）
+
+> 本节仍用内部 op 名；模型调用面见 §26.4（9 个 surface）。
 
 > 本节是**当前有效的设计纪律**。原在 `HARNESS.md` §4 的实机踩坑叙事（四条静默失败的
 > 复盘）已迁入 `docs/DECISION-LOG.md` 2026-10-01 补记；此处只留结论与可验收的判据。

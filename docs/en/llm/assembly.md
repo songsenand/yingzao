@@ -55,7 +55,7 @@ Four facts the shape does not make obvious:
   model (policy, mix, exceptions), not a per-part confirmation loop. `source: "user"`
   is an explicit per-part decision; `source: "agent"` is a recommendation that needs confirmation
   unless an approved `delegate` policy covers it. An unconfirmed policy/recommendation is
-  `unobserved` in `deliver`; it never runs a printability verdict on it. This is the field that
+  `unobserved` in `cad_deliver` (`action: "plan"`); it never runs a printability verdict on it. This is the field that
   lets "the user only has an FDM printer" narrow the allowed set once, instead of being asked at
   every part. The id vocabulary and the **supported / partial / planned** status live in
   [`processes.md`](processes.md): `allowed` is the decision space, an evaluator is a separate fact,
@@ -80,7 +80,7 @@ then model:
 - **verify** — what "working" means here: assembly / motion / strength. It decides which runs the
   delivery must carry.
 
-Every entry carries `by: "user"` or `by: "assumed"`. `delivery_audit` lists the assumed ones
+Every entry carries `by: "user"` or `by: "assumed"`. `cad_deliver` (`action: "audit"`) lists the assumed ones
 (`info`) — an unasked assumption is how a delivery drifts from the brief.
 
 **Part colour**: any child may carry `color` (`#rrggbb`). It is a COMMUNICATION label — not a
@@ -90,7 +90,7 @@ reports, tables and contracts never use it. Worth setting when a machine has coa
 gears or mating pairs, which are exactly the parts people misname by colour.
 
 **`verify` is enforced; everything else is a record.** Declaring `motion` / `strength` requires a
-FRESH run of that kind citing the newest version, or `delivery_audit` is `blocked`
+FRESH run of that kind citing the newest version, or `cad_deliver` (`action: "audit"`) is `blocked`
 (`verify-required-motion` / `verify-required-strength`). **With no `brief` at all**, any
 `转动副` / `滑动副` / `弹簧` interface makes `motion` required by derivation (`verify-derived` says
 so) — the patch for the wind-up frog shipping with “未测 live simulation” in its README. Narrowing
@@ -99,7 +99,7 @@ the scope means the USER writes `brief.verify` (e.g. `["assembly"]`); the audit 
 
 ## Where this sits in the delivery discipline (updated 2026-10-20)
 
-`check_assembly` is a **delivery tool**: `validate_assembly` measures, this one judges against
+`cad_assembly` (`action: "check"`) is a **delivery tool**: `cad_assembly` (`action: "validate"`) measures, this one judges against
 the contract. Read its **`judgement`**, not `overallStatus`:
 
 | what happened | judgement |
@@ -110,15 +110,15 @@ the contract. Read its **`judgement`**, not `overallStatus`:
 
 `judgedBy` breaks those counts down so the reader does not have to re-count the arrays.
 
-**`preflight` does not orchestrate this yet** (its contract evaluation lives inside the tool
-closure; extracting it is gated on this lane being quiet). Until then: run `check_assembly`
-yourself and declare the result as an `assembly` claim to `delivery_audit` / `preflight` —
+**`cad_deliver` (`action: "preflight"`) does not orchestrate this yet** (its contract evaluation lives inside the tool
+closure; extracting it is gated on this lane being quiet). Until then: run `cad_assembly` (`action: "check"`)
+yourself and declare the result as an `assembly` claim to `cad_deliver` (`action: "audit"`) / `cad_deliver` (`action: "preflight"`) —
 a claim with no fresh check comes back as `claim-without-evidence`, which is the gate
 working, not an error.
 
 ## Facts that are not obvious from the tool descriptions
 
-- **`check_assembly` machine-checks seven operators.** `distance` is datum-kind
+- **`cad_assembly` (`action: "check"`) machine-checks seven operators.** `distance` is datum-kind
   aware: **plane/plane → perpendicular plane distance** (lateral anchor offset is
   not a gap), **plane/point → point-to-plane**, anything else → point-to-point.
   `diameter-match` (`datum_cyl`) is pure geometry. `coaxial` measures the
@@ -168,22 +168,22 @@ working, not an error.
   manifest node: the part rotates about its OWN datum axis and the datums follow.
   A whole-part `rotate` would also swing the D-flat, the keyway and every anchor
   with it — microscope3 rejected that route for exactly that reason.
-  `validate_assembly` parts accept the same `pose` argument.
-- **A threshold is a choice, so the report states it.** `validate_assembly`'s
-  `clearanceThreshold` (default 0.75mm) decides what counts as "too tight", and
-  `check_assembly`'s `adjacencyThresholdMm` decides what counts as "near" in the
+  `cad_assembly` (`action: "validate"`) parts accept the same `pose` argument.
+- **A threshold is a choice, so the report states it.** The `clearanceThreshold` of
+  `cad_assembly` (`action: "validate"`) (default 0.75mm) decides what counts as "too tight", and
+  `adjacencyThresholdMm` on `cad_assembly` (`action: "check"`) decides what counts as "near" in the
   undeclared-pair discovery. A 1.0mm deliberate gap is invisible at 0.75: raise
   the threshold when the design keeps clearance gaps you want listed, and say
   which threshold a verdict came from. Printed threads polygonise: a sub-µm³
   interference residual is discretisation, and `interferenceEpsilonMm3`
-  (default 1e-3) tells `validate_assembly` where residual ends and clash begins.
+  (default 1e-3) tells `cad_assembly` (`action: "validate"`) where residual ends and clash begins.
 - **An imported part has no datums until you declare them.** Generated parts get
   them from `datum()` / `datum_cyl()` in their SCAD; an STL carries none, so
-  either `import_part`'s `datums` argument or `set_datums` afterwards makes the
-  part an interface endpoint. `set_datums` in write mode creates a NEW version
+  either the `datums` argument of `cad_part` (`action: "import"`) or `cad_assembly` (`action: "datums"`) afterwards makes the
+  part an interface endpoint. `cad_assembly` (`action: "datums"`) in write mode creates a NEW version
   (the mesh is copied, not changed) — point the manifest at the returned id.
   Without either, the part is still fully measurable and assemblable, just not
-  *addressable* by `check_assembly`.
+  *addressable* by `cad_assembly` (`action: "check"`).
 - **Stock (purchased) parts WITH a version are ordinary parts.** Give the node a
   version (import, library release, or a copied vendor model) and it is measured,
   checked for interference and usable as an interface endpoint — `source:
@@ -191,12 +191,12 @@ working, not an error.
   stock part **without** a version is BOM-only: no geometry, no endpoint.
 - **`features` are CHECK-ONLY declarations.** v1 supports `hole-pattern`:
   `{kind:"hole-pattern", axis:[x,y,z], centerMm:[x,y,z], pcdMm, count,
-  diameterMm, toleranceMm?, through?}` on a part node. `check_assembly` compares
-  the declaration with the version's mesh (`list_features`) and reports
+  diameterMm, toleranceMm?, through?}` on a part node. `cad_assembly` (`action: "check"`) compares
+  the declaration with the version's mesh via `cad_inspect` (`action: "features"`) and reports
   missing/off-PCD/wrong-diameter/not-through holes; it **never generates
   geometry** from the declaration. A BOM-only stock part's feature is
   `skipped`, not passed, and a skipped feature makes the judgement `difficult`.
-  v1 matches holes that `list_features` reports on **planar faces**; it checks
+  v1 matches holes that `cad_inspect` (`action: "features"`) reports on **planar faces**; it checks
   count / PCD / diameter / axis / through, **not angular spacing**. A hole whose
   opening is on a curved surface is outside v1, and an even angular distribution
   still needs a datum/coaxial interface if orientation matters.

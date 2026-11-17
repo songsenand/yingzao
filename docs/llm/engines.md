@@ -2,19 +2,19 @@
 
 # 引擎边界：它们模型什么，不能回答什么
 
-五个引擎，五种“能信”的范围。**运动/物理/流体/LBM 都不报告力或扭矩；应力报告反力与截面力，但那不是安全系数，也不是驱动扭矩或功率。没有一个能替代认证。** 轴向弹簧/卡扣的静力不在这五个引擎里，而在 `check_assembly` 的 `spring-behaviour` / `snap-fit` 静态契约检查中；它不是动力学、接触或疲劳。
+五个引擎，五种“能信”的范围。**运动/物理/流体/LBM 都不报告力或扭矩；应力报告反力与截面力，但那不是安全系数，也不是驱动扭矩或功率。没有一个能替代认证。** 轴向弹簧/卡扣的静力不在这五个引擎里，而在 `cad_assembly` (`action: "check"`) 的 `spring-behaviour` / `snap-fit` 静态契约检查中；它不是动力学、接触或疲劳。
 
 ## 回放：运动的默认表达方式
 
-每条 `simulate_*` 运行都会把 `runs/<id>/trajectory.json`（流体是 `frames.json` + 帧二进制）写进 run 目录，**面板的「运行 → 回放」直接读这些文件**：可暂停、拖动、带事件标记和曲线。工具回复里带 `runId` 与 `playback`，把用户指到那里即可。
+每条仿真运行都会把 `runs/<id>/trajectory.json`（流体是 `frames.json` + 帧二进制）写进 run 目录，**面板的「运行 → 回放」直接读这些文件**：可暂停、拖动、带事件标记和曲线。工具回复里带 `runId` 与 `playback`，把用户指到那里即可。
 
-**齿轮 run 的“穿透 0”不是齿面证据。** 用 `gear` 关节时该对的接触是**关闭**的（比率是给定约束），所以 `penetration 0` 是构造出来的；`metrics.gearContactsDisabled` 列出这些对，report 里也有一条专门的 note。要证明齿面不打架，用**不带 gear 关节的接触 run**，或 `validate_assembly`。求解器可用 `solverIterations`（默认 4）和 `ccdSubsteps`（默认 1）调，生效值回显在 `metrics.solver`——但薄齿 + 0.03mm 侧隙这类几何，调参未必有用，报告里该怎么判就怎么写。
+**齿轮 run 的“穿透 0”不是齿面证据。** 用 `gear` 关节时该对的接触是**关闭**的（比率是给定约束），所以 `penetration 0` 是构造出来的；`metrics.gearContactsDisabled` 列出这些对，report 里也有一条专门的 note。要证明齿面不打架，用**不带 gear 关节的接触 run**，或 `cad_assembly` (`action: "validate"`)。求解器可用 `solverIterations`（默认 4）和 `ccdSubsteps`（默认 1）调，生效值回显在 `metrics.solver`——但薄齿 + 0.03mm 侧隙这类几何，调参未必有用，报告里该怎么判就怎么写。
 
 **外部脚本算出的轨迹用 `dsh-cad-import-run` 进场**（`--trajectory` + 可选 `--stl-dir`），它和工具写的 run 走同一个写入器、同一把锁、同一个索引；导入默认记 `check`（场地没见证计算过程）。所以“工具做不到这个仿真”时，正确动作是**用脚本算、再导入**，而不是去改插件源码。
 
 **图片是快照，运动是回放。** 自己生成 GIF 或帧序列会造出第二条通道：面板不能暂停它、不能标注它，也无法和报告里的数字对齐。现有通道表达不了时要说出来，并指出缺什么——不要另造一个。
 
-## 运动（`simulate_motion`）
+## 运动（`cad_simulate` action `motion`）
 
 - **运动学 + 精确干涉时间线**，没有重力。它回答“按这个驱动，零件会不会撞、行程够不够”。
 - **绕 pivot 转，不绕世界原点。** 语料里的零件是世界坐标，仿真体从 (0,0,0) 开始；工具会把几何重基到 pivot（默认：第一个命名它的 joint 的 anchor，否则几何中心），否则 z=265 的齿轮会绕 265mm 的臂摆。`pivots` 回报实际用的 pivot。
@@ -23,12 +23,12 @@
 - **干涉覆盖是判定的一部分。** 每次运行至少 24 个采样位姿，且必采最终位姿；`interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` 回报覆盖。**0 次检查不是 0 碰撞。** 行程太小放不下 24 位姿时判 `check`，不判 pass。
 - **被 revolute joint 连接的一对零件之间的重叠不报**——那是轴承。也正因如此，限位挡块恰好落在这一对上时，要另找方式验证。
 - **`cycles` 接受小数。** 摆杆 ±14° 只扫 0.078 圈；整圈会变成风车并撞上一切。
-- **`drive` 是运动学：它规定曲柄转角，不解决接触传力。** 它回答“连杆会不会撞、行程够不够”，不回答“电机带不带得动”——后者是 `simulate_physics` 的 `motor`。
+- **`drive` 是运动学：它规定曲柄转角，不解决接触传力。** 它回答“连杆会不会撞、行程够不够”，不回答“电机带不带得动”——后者是 `cad_simulate` (`action: "physics"`) 的 `motor`。
 - **没有曲柄也能跑。** `drive` 是可选的：全部运动件都是 `oscillators`（规定轨迹的导向件/阀门）时不需要曲柄，时间基取**振荡周期**；回复里 `hasCrank: false`。只有“既无 drive 又无 oscillator”才拒绝——那意味着什么都不动。
 - **闭环是事实，不是判定。** `closedLoop` / `loopJoints` 由关节图的 union-find 给出：树为 false / []，罗伯威尔天平（5 件 6 铰）为 true / 2 个闭合边。闭环可以 pass——它只是让读者不必自己重推连通性。
 - **几何合理性是事实，不是判定。** 每个零件对最近零件的间隙 ÷ 自身包围盒对角线 > 5 → `离群`；≤ 24 个三角面 → `简单盒体`。两者都**不改变** pass/fail，但 `geometrySuspects` 非空时，“干涉 0 次”可能什么都没证明：fructose r013 的两个假件停在 500mm 外，报告照样通过。规则本身写在 `geometrySuspectRule` 里随结果一起返回。
 
-## 物理（`simulate_physics`）
+## 物理（`cad_simulate` action `physics`）
 
 - **刚体 + 重力**；回答“会不会倒、能不能停住”。
 - **坡度用 `tiltDeg`，不要手算重力向量。** `tiltDeg: 5` 绕 `[0,1,0]` 倾斜 5°；只有 `tiltDeg` 说不出的方向才显式传 `gravity`。
@@ -41,28 +41,28 @@
 - **不同朝向的件之间的关节要逐体轴。** `axis` 是“两个 body 用同一个局部向量”，只在两件坐标系平行时正确；旋转过的件用 `axisA` + `axisB`，或 `axisWorld`（工具换算到各自局部系）。r002 的上横梁 [90,0,0] 用单 `axis` 会把整个框架拧掉。
 - **倾倒相对“ authored 姿态”算，不相对世界 up。** 一个本来就 90° 装着的横梁不是 t=0 就倒了；30° 标事件，60° 才置 `fellOver`。
 - **要它转，必须给 `motor`。** 没有电机时唯一的运动输入是 `initialAngularVelocity`——那是**冲量不是驱动**：减速器那次给蜗杆 30 rad/s，它走 7.5°、吃光 0.056mm 侧隙、撞上第一个齿面就停住，六帧关键帧是同一个位姿。那不是“打滑”，是“没人驱动它”。revolute joint 上给 `motor: { targetVelocityRadPerSec, maxTorqueNm }`，它会持续驱动；`metrics.motors` 回报指令值 vs 实测值（`measuredRadPerSec` / `turnedDeg` / `reachedTarget`），卡死会同时写进 `notes`。
-- **传动比是约束，不是接触结果。** `joints: [{ type: 'gear', bodyA, bodyB, ratio, axisA, axisB }]` 规定“A 转一圈 B 转多少圈”（带符号；外啮合 = −z_A/z_B，12:1 蜗杆 = −1/12）。它精确且与时间步无关，因为它是**规定**的、不是解出来的——`metrics.gears` 会印出这次跑出来的比率，它等于你给的。两条边界：不传扭矩（打滑不在范围内），且这一对**不参与碰撞**（因此出现在 `contactsDisabled` 里）。“齿到底咬不咬得动”是**去掉 gear 关节**的接触 run；“这个比率下会不会撞”是 `simulate_motion` 的精确干涉时间线。
+- **传动比是约束，不是接触结果。** `joints: [{ type: 'gear', bodyA, bodyB, ratio, axisA, axisB }]` 规定“A 转一圈 B 转多少圈”（带符号；外啮合 = −z_A/z_B，12:1 蜗杆 = −1/12）。它精确且与时间步无关，因为它是**规定**的、不是解出来的——`metrics.gears` 会印出这次跑出来的比率，它等于你给的。两条边界：不传扭矩（打滑不在范围内），且这一对**不参与碰撞**（因此出现在 `contactsDisabled` 里）。“齿到底咬不咬得动”是**去掉 gear 关节**的接触 run；“这个比率下会不会撞”是 `cad_simulate` (`action: "motion"`) 的精确干涉时间线。
 - **摩擦系数要自己声明，默认 0.5 没人选过。** 每个零件可给 `friction`，实际生效值在 `metrics.frictions` 里回读。单头蜗杆升角 7.1°：μ=0.5 对应摩擦角 26.6°，深度自锁（η≈19%）；POM 对 POM 的 μ≈0.15 是另一台机器（η≈40%）。不声明 μ 的“它卡住了”，说的是 rapier 的默认值，不是你的设计。
 - **`timestepSec` 是输入，1/60 只对慢速接触安全。** 表面速度 v mm/s 时每步走 v·dt；当它和间隙（0.03–0.15mm 侧隙）同量级，求解器会把齿面当成过盈。取 v·dt ≤ 间隙/10：4mm 节圆上 20 rad/s 的轴要 1/2000 量级。步数与耗时线性增长，`stepsRun` 回报实际用了多少步。
 - **`maxTorqueNm` 是硬上限，也是“卡死”能成为结论的原因。** 单位 N·m（内部按 mm/mN 世界 ×1e6）；上限低于负载它就带不动，`reachedTarget:false`。实测边际带是真的：3 rad/s 的驱动配 5e-4 N·m 上限去拱 5.3e-4 N·m 的摆，只到 1.87 rad/s。上限为 0 或缺失会被拒绝——没有上限的电机不是任何东西的模型。
-- **target 0 的电机是“刹车”不是“夹紧”。** 它是带力上限的速度伺服，恒定负载下仍会缓慢爬行；问“会不会停住”要用 `staticFriction` / `check_assembly`。
+- **target 0 的电机是“刹车”不是“夹紧”。** 它是带力上限的速度伺服，恒定负载下仍会缓慢爬行；问“会不会停住”要用 `staticFriction` / `cad_assembly` (`action: "check"`)。
 - **没有力/扭矩输出。** 电机是**输入**，不是测量：报告不告诉你传过去的扭矩、功率或效率。
 - **同一条几何合理性检查也在这里跑。** 零件与最近零件的间隙 ÷ 自身对角线 > 5 报「离群」，≤24 面报「简单盒体」；`geometrySuspects` 非空说明"稳态穿透 0"可能只是因为它掉在一片空场里。不改变 pass/fail。
 
-## 流体（`simulate_fluid`）
+## 流体（`cad_simulate` action `fluid`）
 
 - **固定边界 MPM**：流体在零件边界内流动；回答流向、死区、压降趋势。
 - **没有流固耦合**：流体不推动零件，零件也不因流体变形。需要两者时拆成“刚体检查 + 流体检查”，或明说限制。
 - **不是工业级 CFD**：不要拿它当验收数据。
 
-## LBM（`simulate_lbm`）
+## LBM（`cad_simulate` action `lbm`）
 
 - **格点单位，不是毫米。** `latticeVelocity` 和返回的剖面都是 cell/step；换算成 m/s 需要你选长度尺度和粘度，并**写明**。保持 `latticeVelocity ≤ 0.1`（弱可压格式）；拿 `metrics.peakUx` 对 `1.5×latticeVelocity`（槽道解析峰值）。
 - **发展长度随 Re 增长。** `overallStatus: developing` 表示抛物线还在形成：只引对称性和形状趋势，不引阻力/剪切数，直到 `developed`；`steps` 要随 `reynolds` 一起加。
 - **Stage A 没有嵌入固体。** 只有箱壁：没有零件在流里，没有热，没有自由表面，没有多相。“绕我的零件流动”目前超出范围——直接说，不要跑一个假答案。
 - **`overallStatus: diverged` 是发散，不是部分答案。**
 
-## 应力（`simulate_stress`）
+## 应力（`cad_simulate` action `stress`）
 
 - **线弹性、各向同性。** 它不知道 FDM 的层方向——通常最先断的那条——所以峰值不是安全系数。
 - **不要问“最大单元应力”**：没有这个字段。曲率/缺口边界上它会随网格细化无界增长（实测 1.002 → 1.184，填充比加权也没修好）。

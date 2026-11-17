@@ -81,14 +81,25 @@ function exampleCall(t) {
     : Object.keys(ps.properties).filter((n) => ps.properties[n]?.required === true);
   const used = req.length ? req : Object.keys(ps.properties).slice(0, 1);
   const args = used.map((n) => `${n}: ${placeholder(ps.properties[n])}`).join(', ');
+  // The model never calls the internal op name after the 2026-11-16 cutover.
+  // Keep the section keyed by the op (tests and the sheet parser rely on it) but
+  // make the runnable example use the surface/action the model actually has.
+  if (t.surface?.id && t.surface?.action) {
+    return `${t.surface.id}({ action: "${t.surface.action}", args: { ${args} } })`;
+  }
   return `${t.name}({ ${args} })`;
 }
 
 /** The sheet's full text — ONE builder, used by both --write and --check. */
 function sheetText() {
-  const lines = ['# Tool contracts (generated — do not edit by hand)', '', '> `node scripts/audit-tool-contracts.mjs --write`', ''];
+  const lines = ['# Tool contracts (generated — do not edit by hand)', '', '> `node scripts/audit-tool-contracts.mjs --write`', '',
+    '> **Call surface:** production exposes 9 surfaces; each section below documents an internal op. Call the `Model-facing call` surface/action, not the section heading.', ''];
   for (const t of tools.slice().sort((a, b) => a.name.localeCompare(b.name))) {
-    lines.push(`## \`${t.name}\``, '', String(t.description ?? '').trim(), '', '| parameter | type | default | meaning |', '|---|---|---|---|');
+    lines.push(`## \`${t.name}\``, '');
+    if (t.surface?.id && t.surface?.action) {
+      lines.push(`Model-facing call: \`${t.surface.id}\` action \`${t.surface.action}\` (this section documents the internal op).`, '');
+    }
+    lines.push(String(t.description ?? '').trim(), '', '| parameter | type | default | meaning |', '|---|---|---|---|');
     const ps2 = t.parameters?.properties ? t.parameters : { properties: t.parameters ?? {}, required: [] };
     const req2 = new Set(ps2.required ?? []);
     for (const [n, p] of Object.entries(ps2.properties)) {

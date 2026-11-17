@@ -2,7 +2,11 @@
 
 > `node scripts/audit-tool-contracts.mjs --write`
 
+> **Call surface:** production exposes 9 surfaces; each section below documents an internal op. Call the `Model-facing call` surface/action, not the section heading.
+
 ## `analyze`
+
+Model-facing call: `cad_inspect` action `analyze` (this section documents the internal op).
 
 EXPERIMENTAL — do not base a delivery claim on this yet. The POINT map is thin-wall (lower side) + reentrant corners + (when `stressRunId` is given) STRENGTH from that stress run; PRINT overhang and thick-wall are PER-PART facts (area / thickness), never points — scoring them per sample painted whole rims red and buried the real corner signals (fixed 2026-10-21). The remaining caveats: the print-overhang fact is AREA-based, not mass-based; `support` is a mass-based estimate not verified on real prints; the |u| bands are declared, not calibrated. Build the risk map for a version and say where to LOOK: reentrant corners + mesh health (multi-body / non-manifold / degenerate) + non-planar boolean seams (scan_attention) + measured wall thickness (thin side), each normalised to |u| in [0,1] against its own DECLARED band (dead band + saturating scales; a one-sided quantity is an open band), then fused as max|u| plus an agreement count. When `stressRunId` is given, that run's local stress peaks also enter as `strength-concentration` at |u|=0.5 (a LOOK, not a risk); the absolute `strength` layer may be silent. Overhang area / thick-wall are reported once per part in `partNotes`; the mass-based unsupported regions are in `support`. It never gates and never returns a verdict: a peak means "look here", not "this will break". Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".
 
@@ -19,13 +23,15 @@ EXPERIMENTAL — do not base a delivery claim on this yet. The POINT map is thin
 | `bridgeMaxMm` | number | — | Horizontal span a printer can bridge without support (default 10 mm, declared). |
 
 ```js
-analyze({ versionId: "…" })
+cad_inspect({ action: "analyze", args: { versionId: "…" } })
 ```
 
 returns: `peaks`, `layers`, `notMapped`, `partNotes`, `stress`, `support`, `bands`, `note`, `timings`
 
 
 ## `attach_appearance`
+
+Model-facing call: `cad_part` action `appearance` (this section documents the internal op).
 
 Attach a self-contained GLB color/material design to a saved version as a sidecar. The version keeps model.stl as geometry truth; the GLB is stored as versions/<id>/appearance.glb + appearance.json for external viewers and future panel work. There is no Blender/bpy render path and the panel still previews STL. The GLB must be v2, contain at least one mesh and one material, and embed its buffers/images.
 
@@ -36,13 +42,15 @@ Attach a self-contained GLB color/material design to a saved version as a sideca
 | `note` | string | — | Optional human note recorded in appearance.json (e.g. "three-color panel"). |
 
 ```js
-attach_appearance({ versionId: "…", file: "…" })
+cad_part({ action: "appearance", args: { versionId: "…", file: "…" } })
 ```
 
 returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replaced`, `note`
 
 
 ## `bind_project`
+
+Model-facing call: `cad_session` action `bind` (this section documents the internal op).
 
 Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-selected session — a wrong target is fixed by a new session, not by moving data after the fact.
 
@@ -51,13 +59,15 @@ Explicitly select an EXISTING project by path before any CAD tool. There is NO d
 | `dir` | string | **required** | Existing project root (absolute, or relative to the live cwd). Required: there is no default. |
 
 ```js
-bind_project({ dir: "…" })
+cad_session({ action: "bind", args: { dir: "…" } })
 ```
 
 returns: `root`, `marker`, `boundAt`, `note`
 
 
 ## `check_appearance`
+
+Model-facing call: `cad_check` action `appearance` (this section documents the internal op).
 
 Appearance screen over a whole SET (assembly manifest), never a single part: proportion, alignment and repetition are relations, and a part-level report is mostly invalid because the assembly hides 29-39% of its sharp edges (measured). Read-only: it never changes geometry, never scores "beauty", and never claims a part is attractive — it reports WHERE a declared visual rule is violated and by how much. Three rules: visible convex sharp-edge LENGTH (not count: a fillet adds short segments, so the count rises while the length falls); TERMINATION (a flat cap at the end of a slender member whose boundary is all 90 degrees — the "just cut off" signature); and SILHOUETTE descriptors (width profile, waists, top-vs-base ratio, symmetry) which are ATTENTION ONLY. Visibility is sampled from N viewpoints; clusters seen from fewer than the threshold are counted, never silently dropped. Caps inside a declared axis/cylinder datum (datums.json) are functional openings and are exempted by name. Purchased/reference parts occlude but are never judged. VERDICT: without a declared budget (budgetPath) or a declared maxVisibleSharpMm the verdict is "check" and only the numbers are returned — running on an existing project without declaring one of them tells you how rough it is, never that it is acceptable. mm, z-up.
 
@@ -73,13 +83,15 @@ Appearance screen over a whole SET (assembly manifest), never a single part: pro
 | `budgetPath` | string | — | Optional assembly/budget.json: per-group envelope {x,y,z:[lo,hi]}. A GROUP IS A PARTITION OF PARTS (the manifest `group` field), never a spatial region; its envelope is measured as the union of its members. At most one group per part, and a small part may have none. |
 
 ```js
-check_appearance({ manifestPath: "…" })
+cad_check({ action: "appearance", args: { manifestPath: "…" } })
 ```
 
 returns: `scope`, `manifest`, `parts`, `verdict`, `judgement`, `attention`, `budget`, `note`
 
 
 ## `check_assembly`
+
+Model-facing call: `cad_assembly` action `check` (this section documents the internal op).
 
 Validate the assembly manifest (BOM + interface contracts): distance (datum-kind aware: plane/plane → perpendicular distance, plane/point → point-to-plane, otherwise point-to-point), diameter-match and coaxial (axis-to-axis offset between datum_axis/datum_cyl endpoints) checks, motion-clearance (static distance plus the motion run you cite in params.runId), spring-preload (stiffness × deflection from the measured installed length), spring-behaviour (axial spring: installed/free/deflection/force with an order-of-magnitude band, direction, solid-height, travel, force at the travel endpoint, buckling attention, optional standardId from the seed catalog, and a USER-DECLARED forceBudgetN/tolerance comparison; no built-in product thresholds), snap-fit (卡扣: lobe beam model → radial force, wedge-model insertion, root strain, self-lock; L1 headline + worst + nextLook, L2 via detail: "checks"; all limits user-declared), plus a discovery pass for undeclared near-touching pairs. Declared `features` (v1: hole-pattern) are CHECKED against the version mesh — never generated from the declaration; a missing/off-PCD/wrong-diameter hole is a feature failure, and the feature of a BOM-only stock part is skipped (not a pass). Nodes accept transform.pose {datum, angleDeg} to rotate a part about its own datum axis (assembly/meshing pose) with the datums following. Interfaces with no implementable operator OR no declared tolerance come back in `skipped` with what would make them checkable — a missing criterion is not a pass. A structurally invalid manifest is rejected with path-addressed issues and a minimal example (schema: schemas/assembly-manifest.schema.json). mm, z-up. A relative manifestPath resolves against the session workspace first, then the plugin data root.
 
@@ -90,13 +102,15 @@ Validate the assembly manifest (BOM + interface contracts): distance (datum-kind
 | `detail` | string (summary \| checks) | — | Default summary: one headline + worst + nextLook per interface (the attention layer). checks: append the L2 utilization rows (insertion/retention/strain/self-lock) for snap-fit. Raw beam inputs/outputs stay in the run report. |
 
 ```js
-check_assembly({ manifestPath: "…" })
+cad_assembly({ action: "check", args: { manifestPath: "…" } })
 ```
 
 returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `features`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
 ## `check_cnc_access`
+
+Model-facing call: `cad_check` action `cnc` (this section documents the internal op).
 
 CNC 3-AXIS ACCESS SCREEN: sample the mesh and test visibility from ±X/±Y/±Z; report the area reachable from no principal direction and the minimum number of principal setups (greedy cover), against a declared maxSetups. Inaccessible area is a warning unless requireAllAccessible is true. It does NOT model oblique setups, tool length/diameter, collision, fixture rigidity or chatter — those are handoffs. Use together with the cnc-3axis printability profile (wall + circular bores).
 
@@ -108,13 +122,15 @@ CNC 3-AXIS ACCESS SCREEN: sample the mesh and test visibility from ±X/±Y/±Z; 
 | `sampleLimit` | integer | — | Max sampled triangles; default 300, capped at 600 (each sample is 6 ray casts). |
 
 ```js
-check_cnc_access({ versionId: "…", maxSetups: 0 })
+cad_check({ action: "cnc", args: { versionId: "…", maxSetups: 0 } })
 ```
 
 returns: `versionId`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
 
 
 ## `check_edm_access`
+
+Model-facing call: `cad_check` action `edm` (this section documents the internal op).
 
 EDM SINKER ELECTRODE ACCESS: sample the mesh and test the line of sight along ONE burn axis (x|y|z, leading "-" flips it). Reports the area whose first surface hit is itself (reachable) vs occluded (inaccessible). Inaccessible area is a warning unless requireAllReachable is true. It does NOT model electrode shape/side-burn/undercut, wear, minimum feature or surface finish — those are handoffs.
 
@@ -126,13 +142,15 @@ EDM SINKER ELECTRODE ACCESS: sample the mesh and test the line of sight along ON
 | `sampleLimit` | integer | — | Max sampled triangles; default 300, capped at 1000. |
 
 ```js
-check_edm_access({ versionId: "…" })
+cad_check({ action: "edm", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `burnAxis`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
 
 
 ## `check_parts`
+
+Model-facing call: `cad_check` action `parts` (this section documents the internal op).
 
 Screen up to 12 saved versions in ONE call: per version, the measure half (watertight / bodies / volume / bbox) and the SAME profile-aware printability job as check_printability. The printability half writes one printability run per version and returns its runId, so the rows can back a delivery claim; there is no second implementation. Use it to screen a family (which of these 7 is thin?) instead of N single calls; for one part the single tool is equivalent. `checks` defaults to both halves. The reply is deliberately compact — run the single-part tool when you need the full findings/attention for one part.
 
@@ -147,13 +165,15 @@ Screen up to 12 saved versions in ONE call: per version, the measure half (water
 | `samples` | number | — | Approximate surface samples for the wall half. Default 600. |
 
 ```js
-check_parts({ versionIds: [] })
+cad_check({ action: "parts", args: { versionIds: [] } })
 ```
 
 returns: `parts`, `failures`, `summary`
 
 
 ## `check_printability`
+
+Model-facing call: `cad_check` action `printability` (this section documents the internal op).
 
 Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).
 
@@ -168,13 +188,15 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 | `profilesJson` | string | — | An inline JSON array of process profiles (schema: schemas/process-profile.schema.json). Use for a profile you authored; an invalid one is REFUSED with the offending rule named. |
 
 ```js
-check_printability({ versionId: "…" })
+cad_check({ action: "printability", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `printOrientationDeg`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
 ## `check_sheet2d`
+
+Model-facing call: `cad_check` action `sheet2d` (this section documents the internal op).
 
 2D CUT SCREEN for a flat sheet/plate part: section it at mid-thickness (axis/fraction) and check round-hole diameter, hole-to-outside wall and hole-to-hole spacing AFTER the kerf. Inputs are declared: kerfMm, minHoleMm, minFeatureMm, minSpacingMm — no silent defaults. It does NOT check non-circular hole width, outer tabs, flat pattern/K-factor, heat-affected zone or taper. With bendLines it also checks hole-to-bend distance, min flange and a bend-relief heuristic; flat pattern/K-factor remain handoffs. A `not-excluded` result is a section-level screen, not a cut certificate.
 
@@ -194,13 +216,15 @@ returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinS
 | `minBendReliefMm` | number | — | Max distance from a bend-line end to a free edge/hole before it counts as "no relief", mm (needs bendLines). |
 
 ```js
-check_sheet2d({ versionId: "…", kerfMm: 0, minHoleMm: 0, minFeatureMm: 0, minSpacingMm: 0 })
+cad_check({ action: "sheet2d", args: { versionId: "…", kerfMm: 0, minHoleMm: 0, minFeatureMm: 0, minSpacingMm: 0 } })
 ```
 
 returns: `versionId`, `axisMm`, `atMm`, `uAxisMm`, `vAxisMm`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `section`, `runId`
 
 
 ## `check_turning`
+
+Model-facing call: `cad_check` action `turning` (this section documents the internal op).
 
 TURNING SCREEN: fit the declared bar stock diameter, check length/diameter against a declared L/D limit, and measure rotational-symmetry deviation about the declared spindle axis (axes through the bbox centre). No silent defaults: barDiameterMm, maxLdRatio and symmetryToleranceMm are required. It does NOT measure undercut/tool access along the profile, chatter, surface finish or bar-feeder limits — those are handoffs. A non-symmetric part is a warning (secondary milling/mill-turn), not automatically excluded unless requireSymmetry is true.
 
@@ -214,13 +238,15 @@ TURNING SCREEN: fit the declared bar stock diameter, check length/diameter again
 | `requireSymmetry` | boolean | — | true = symmetry deviation is a witness (excluded); false = warning only. Default false. |
 
 ```js
-check_turning({ versionId: "…", barDiameterMm: 0, maxLdRatio: 0, symmetryToleranceMm: 0 })
+cad_check({ action: "turning", args: { versionId: "…", barDiameterMm: 0, maxLdRatio: 0, symmetryToleranceMm: 0 } })
 ```
 
 returns: `versionId`, `spindleAxis`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
 
 
 ## `create_part`
+
+Model-facing call: `cad_part` action `create` (this section documents the internal op).
 
 Name a part before any geometry exists; idempotent. generate_part creates a part automatically, so call this only to open a subject the user has merely talked about.
 
@@ -229,13 +255,15 @@ Name a part before any geometry exists; idempotent. generate_part creates a part
 | `name` | string | **required** | The name a human would call it, e.g. "调焦轴". Used as the part label in the panel. |
 
 ```js
-create_part({ name: "…" })
+cad_part({ action: "create", args: { name: "…" } })
 ```
 
 returns: `partId`, `name`, `created`
 
 
 ## `deliver`
+
+Model-facing call: `cad_deliver` action `plan` (this section documents the internal op).
 
 Read-only delivery PLAN derived from the BOM/ICD, parts roles, claims and the run graph. Returns per-target rows (part printability/review, interface contract/joint, assembly interference, claims): status, witness run/check, where to look, and the atomic tool call that would fill a gap. `planVerdict` is scoped to the BOM's process (`source:user`, or an agent recommendation the user confirmed) or the argument; `corpusVerdict` is the corpus audit — when they differ, the plan names it (usually the audit is counting a run under another process). Process decisions are BATCHED, not per part: the BOM `manufacturing` policy (a user-approved allowed set) plus one `M:mix` summary cover every part; the agent assigns each part from the allowed set. Only a part outside the set becomes one exception question. An unconfirmed policy/recommendation is `unobserved` — the plan asks once, never N times. Allowed ids come from the process catalog: each is tagged [supported|partial|planned]; a planned process (e.g. laser-cut-sheet, die-casting) has a defined method/criteria/inputs but no evaluator yet — its parts are `unobserved` with that method, never checked with a printability profile. This tool DOES NOT run CAD, write runs or decide delivery: a plan pass is not a claim. A missing process/profile/run is `unobserved` with the declaration or call that would fill it — never a silent pass. Use it before delivery to see the whole board, then run the named tools; use `verify`/`delivery_audit` for the gate.
 
@@ -244,13 +272,15 @@ Read-only delivery PLAN derived from the BOM/ICD, parts roles, claims and the ru
 | `process` | string | — | User-confirmed process/profile override for printed parts (e.g. injection-pp, fdm-pla-0.4). The BOM's per-part or root `process` is preferred; omit this unless you are confirming on the user's behalf. |
 
 ```js
-deliver({ process: "…" })
+cad_deliver({ action: "plan", args: { process: "…" } })
 ```
 
 returns: `planVerdict`, `corpusVerdict`, `process`, `processSource`, `summary`, `rows`, `gaps`, `next`, `verification`
 
 
 ## `delivery_audit`
+
+Model-facing call: `cad_deliver` action `audit` (this section documents the internal op).
 
 Audit the corpus before delivering: failing runs that are still the newest of their kind, parts whose newest version no run ever checked, runs citing superseded geometry (stale evidence), contract gaps (e.g. no motion-clearance interface while the assembly has several parts), contract nodes pointing at replaced versions, repeated runs that add no information, and mesh files on disk that NO version accounts for (a part written straight to a file never reaches the panel or any tool — a human cannot see it). Run this BEFORE any delivery claim; a blocked verdict means the corpus itself contradicts the claim.
 
@@ -263,13 +293,15 @@ Audit the corpus before delivering: failing runs that are still the newest of th
 | `visualReview` | string (required \| off) | — | Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info. |
 
 ```js
-delivery_audit({ manifestPath: "…" })
+cad_deliver({ action: "audit", args: { manifestPath: "…" } })
 ```
 
 returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `runs`, `contract`, `brief`, `unregistered`, `visual`
 
 
 ## `generate_part`
+
+Model-facing call: `cad_part` action `generate` (this section documents the internal op).
 
 Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. G2 (2026-10-29): datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; OpenSCAD positional arguments are silent, so a swap compiles and corrupts the contract (roberval v048). A zero direction is a compile error; a direction that dwarfs its own point comes back as a compile warning naming the datum. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
 
@@ -282,13 +314,15 @@ Compile OpenSCAD into a new part version; renders top/front/side/iso (all four a
 | `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded. |
 
 ```js
-generate_part({ scadCode: "…", userIntent: "…" })
+cad_part({ action: "generate", args: { scadCode: "…", userIntent: "…" } })
 ```
 
 returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `minWallMm`, `minWallAtMm`, `part`
 
 
 ## `import_part`
+
+Model-facing call: `cad_part` action `import` (this section documents the internal op).
 
 Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellation) or 3MF (trimesh; a 3MF must contain ONE object — a plate of objects is refused, not stored as a multi-body part) or DXF (closed 2D profiles extruded by depthMm, or 3D mesh entities) as a new version of a part, so it can be measured, assembled and simulated like any generated part. STEP and 3MF carry their own units, honored and folded to mm; STL and DXF take the declared `unit`. This is the DEFAULT landing path for geometry produced outside generate_part: a file written straight to disk is invisible to the panel and to every tool, so anything the human must see or a check must address has to become a version. Runs the same truth engine on it and REFUSES a mesh that is not a closed solid unless allowNonSolid. IGES is not readable — re-export STEP or STL instead.
 
@@ -308,13 +342,15 @@ Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellati
 | `render` | boolean | — | Render four views into the conversation (default true, same views as generate_part). |
 
 ```js
-import_part({ file: "…" })
+cad_part({ action: "import", args: { file: "…" } })
 ```
 
 returns: `versionId`, `part`, `format`, `solid`, `watertight`, `repaired`, `triangles`, `shells`, `genus`, `volumeMm3`, `sizeMm`, `unit`, `scaleApplied`, `sha256`, `sourcePath`, `datums`, `warnings`, `durationMs`, `views`
 
 
 ## `init_project`
+
+Model-facing call: `cad_session` action `init` (this section documents the internal op).
 
 Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. Use bind_project({dir}) instead for an existing marker. A directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.
 
@@ -324,13 +360,15 @@ Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, 
 | `title` | string | — | Human title for project.json (default: the directory basename). |
 
 ```js
-init_project({ dir: "…" })
+cad_session({ action: "init", args: { dir: "…" } })
 ```
 
 returns: `root`, `key`, `created`, `bound`, `inheritedFrom`, `note`
 
 
 ## `list_features`
+
+Model-facing call: `cad_inspect` action `features` (this section documents the internal op).
 
 The coordinate inventory of a saved version: planar faces (normal, a point on the plane, area, centroid), the HOLES in them (centre, diameter, and whether each is through or how deep), and cylindrical surfaces (axis, diameter, length, and bore-vs-boss). Use this FIRST whenever you must measure or assemble geometry you did not generate — an imported STL, an existing corpus part — because measure_distance needs a point on a surface and this is where those coordinates come from. Each face also reports the smooth region it belongs to, so a 5.9mm² facet that is one of 64 in a 377mm² non-planar region is readable as a bore segment rather than a face. Thresholds (`minFaceAreaMm2`, `smoothDeg`) are choices and are echoed in the result, together with how many faces and curved segments were left out. Holes are detected on planar faces only. mm, z-up.
 
@@ -344,13 +382,15 @@ The coordinate inventory of a saved version: planar faces (normal, a point on th
 | `withHoleDepth` | boolean | — | Probe each hole along its axis to report depth / through-hole. Default true (one ray per hole). |
 
 ```js
-list_features({ versionId: "…" })
+cad_inspect({ action: "features", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `watertight`, `triangles`, `thresholds`, `faces`, `facesOmitted`, `curvedSegmentFacets`, `cylinders`, `curvedSurfaces`, `faceCount`, `holeCount`, `cylinderCount`, `warnings`
 
 
 ## `measure`
+
+Model-facing call: `cad_inspect` action `measure` (this section documents the internal op).
 
 Geometry ground truth about a saved version — one entry point, five kinds. Pick kind first:
   kind="part"      → whole-part numbers: bbox (size AND min/max), volume, area, centre of mass, triangles, watertight, genus, and the disconnected BODIES; add axis/axisVector for a projection and the two extremal vertices.
@@ -398,13 +438,15 @@ All measurements are mm, z-up, and read the SAVED version: the answer is about t
 | `parallelToleranceDeg` | number | — | angle: within this many degrees of 0 the lines count as parallel (90 = perpendicular). Default 0.5. |
 
 ```js
-measure({ kind: "part" })
+cad_inspect({ action: "measure", args: { kind: "part" } })
 ```
 
 returns: `kind`, `versionId`
 
 
 ## `merge_parts`
+
+Model-facing call: `cad_part` action `merge` (this section documents the internal op).
 
 Union two or more parts, each at its assembly placement, into ONE new solid part version. Use it when the whole machine must be a single rigid body: simulate_physics topple/stability, or a whole-assembly measure_part. Replaces hand-merging STLs in OpenSCAD. mm, z-up; rotate first (degrees in R = Rz·Ry·Rx — the OpenSCAD/Manifold composition; three.js order `ZYX`), then translate. G4 (2026-10-29): the merged part is marked role=research (an analysis body, not a printed part) unless it already carries an explicit role — the delivery audit then exempts it from the printability and newest-validated checks; set_part_role back to printed if it IS printed.
 
@@ -415,13 +457,15 @@ Union two or more parts, each at its assembly placement, into ONE new solid part
 | `part` | string | — | Which part the merged version belongs to. Defaults to a name derived from userIntent. Pass this to re-merge into an existing part. |
 
 ```js
-merge_parts({ parts: [], userIntent: "…" })
+cad_part({ action: "merge", args: { parts: [], userIntent: "…" } })
 ```
 
 returns: `versionId`, `part`, `triangles`, `volumeMm3`, `sizeMm`, `shells`, `sources`, `warnings`, `durationMs`, `views`
 
 
 ## `pearl_run`
+
+Model-facing call: `cad_deliver` action `pearl` (this section documents the internal op).
 
 DEPRECATED / experimental — the pearl execution layer is demoted; use the V1 `verify` evidence report or the atomic tools. Kept for the historical implementation. Run the pearl gate, or execute the selected template when execute:true. Gate mode auto-loads pearl-profile.json, plans against the project budget, observes all six pearls and returns localized failures. Execute mode resolves template step bindings, dispatches the named CAD tools through the same registry, applies transient retry and returns the on_fail route. Missing inputs are errors, not guesses.
 
@@ -433,6 +477,8 @@ DEPRECATED / experimental — the pearl execution layer is demoted; use the V1 `
 
 ## `preflight`
 
+Model-facing call: `cad_deliver` action `preflight` (this section documents the internal op).
+
 Run the mandatory delivery sequence in one call: printability for every part (newest version, against the `profileIds` you declare), mesh health, support cost, the assembly contract and the corpus audit with your `claims`. `judgement` is the worst step that RAN; a step that was attempted and failed forces `difficult`, and it never averages away. Steps this cut does not orchestrate at all (simulation evidence, the assembly render) are listed in `coverage.notCovered` with a reason — they are named, not silently green, and they do not enter the judgement. Read `unevaluable` before claiming anything: not-excluded means "no counter-example", never "ok" and never "safe".
 
 | parameter | type | default | meaning |
@@ -443,7 +489,7 @@ Run the mandatory delivery sequence in one call: printability for every part (ne
 | `exempt` | array | — | Declared exceptions for files intentionally left as files: {path, reason} (same meaning as in delivery_audit). |
 
 ```js
-preflight({ claims: [] })
+cad_deliver({ action: "preflight", args: { claims: [] } })
 ```
 
 returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summary`, `timings`
@@ -451,19 +497,23 @@ returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summ
 
 ## `project_info`
 
+Model-facing call: `cad_session` action `info` (this section documents the internal op).
+
 Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 
 ```js
-project_info({  })
+cad_session({ action: "info", args: {  } })
 ```
 
 returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `selected`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
 
 
 ## `python_runtime`
+
+Model-facing call: `cad_python` action `runtime` (this section documents the internal op).
 
 Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; "provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; "install" adds packages to the user overlay — the runtime is the user's machine, so installing is a normal act, not a favour: the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; agree it with the human first and expect runs to carry it in pythonOverlay.overrides. Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.
 
@@ -475,13 +525,15 @@ Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.
 | `reason` | string | — | action=install + override: why the locked version cannot be used. Recorded with the install and carried into run provenance — this is the declaration, not ceremony. |
 
 ```js
-python_runtime({ action: "status" })
+cad_python({ action: "runtime", args: { action: "status" } })
 ```
 
 returns: `action`, `state`, `root`, `target`, `pythonVersion`, `mode`, `source`, `interpreter`, `venvPython`, `installedAt`, `phase`, `error`, `occupiedBytes`, `occupied`, `skipped`, `missingPackages`, `overlay`, `installed`, `overrides`, `shadowed`, `provisionLog`, `summary`
 
 
 ## `recall_reference_image`
+
+Model-facing call: `cad_see` action `reference` (this section documents the internal op).
 
 Re-attach a user-uploaded reference image (or any earlier attachment) as a fresh image on this tool result. Use it when a reference image has been pruned from context (its placeholder reads "image omitted; <name>; path=<path>") and the task depends on seeing it again — comparing a build against a reference, matching proportions or colors. Pass the `path` from the placeholder, or the `attachmentId`. The recalled image becomes the NEWEST image in context, so it survives pruning for the following rounds; recall again when needed.
 
@@ -492,13 +544,15 @@ Re-attach a user-uploaded reference image (or any earlier attachment) as a fresh
 | `name` | string | — | Display name to keep for the recalled image; defaults to the file name or the attachment id. |
 
 ```js
-recall_reference_image({ path: "…" })
+cad_see({ action: "reference", args: { path: "…" } })
 ```
 
 returns: `recalled`, `source`, `mediaType`, `bytes`, `attached`, `recallToken`
 
 
 ## `render_part`
+
+Model-facing call: `cad_see` action `render` (this section documents the internal op).
 
 One image of a saved version with explicit camera control: preset view, custom rotation, zoom, optional section cut. Sub-second, so request freely.
 
@@ -512,13 +566,15 @@ One image of a saved version with explicit camera control: preset view, custom r
 | `section` | object | — | Optional cross-section cut. |
 
 ```js
-render_part({ versionId: "…" })
+cad_see({ action: "render", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `label`, `file`
 
 
 ## `request_review`
+
+Model-facing call: `cad_session` action `review` (this section documents the internal op).
 
 Ask the human to look at something (a version, a run, a part) or to consider a rollback — queued, never a popup. The panel badges the queue; the human opens it when they choose. Limits: 3 items per call, 6 calls per 10 minutes, 20 unread; repeating the same target within 10 minutes updates that item instead of adding another.
 
@@ -527,13 +583,15 @@ Ask the human to look at something (a version, a run, a part) or to consider a r
 | `items` | array | **required** | Up to 3 items. Each is one thing to look at, with a one-line title. |
 
 ```js
-request_review({ items: [] })
+cad_session({ action: "review", args: { items: [] } })
 ```
 
 returns: `queued`, `merged`, `dropped`, `unread`, `rateLimited`
 
 
 ## `review_visual`
+
+Model-facing call: `cad_see` action `review` (this section documents the internal op).
 
 MANDATORY before delivering a printed part: render the version from top and iso (plus an optional section), attach the images to THIS reply, and write a per-version visual-review record. `note` must say what you actually checked and what could be wrong — a bare "looks good" is not a review. A version changed after its last review is UNREVIEWED; call this again. delivery_audit blocks the newest printed part of every assembly whose version has no fresh top+iso review. The images are attached here, so this call spends image context by design; that is the point — do not save tokens by skipping it.
 
@@ -545,13 +603,15 @@ MANDATORY before delivering a printed part: render the version from top and iso 
 | `imgSize` | integer | — | Image size in px (default 512). |
 
 ```js
-review_visual({ items: [] })
+cad_see({ action: "review", args: { items: [] } })
 ```
 
 returns: `reviewId`, `reviewed`
 
 
 ## `run_python`
+
+Model-facing call: `cad_python` action `run` (this section documents the internal op).
 
 Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user's own machine, not an exception — the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.
 
@@ -564,13 +624,15 @@ Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy
 | `timeoutSec` | number | — | Wall-clock budget in seconds (default 120, maximum 600). On expiry the process group is killed and the result says so. |
 
 ```js
-run_python({ code: "…" })
+cad_python({ action: "run", args: { code: "…" } })
 ```
 
 returns: `ok`, `python`, `runtimeSource`, `scriptPath`, `exitCode`, `signal`, `timedOut`, `durationMs`, `stdout`, `stderr`, `traceback`, `truncated`, `protocolVersion`, `provisionLog`
 
 
 ## `scan_attention`
+
+Model-facing call: `cad_inspect` action `attention` (this section documents the internal op).
 
 Where to LOOK on a saved version — not a verdict. Mesh health (watertight, body count) plus REENTRANT CORNERS: concave edges whose face normals turn by more than `concaveMinDeg` (default 100°), chained and located. θ=90° is an ordinary T-junction (not reported); θ=135° is a 45° V-notch; θ→180° is a knife slit. Plus MESH HEALTH (multi-body / non-manifold / degenerate) and NON-PLANAR CLOSED SHARP LOOPS (`boolean-seam`, 80° edges): a curved/angled boolean seam, the trace a missed difference/union often leaves. Flat hole rims and 90° pocket rims are excluded on purpose, so a molecule with many bond necks does not flood the list; at most 8 seams are returned, the count is in stats. A notch is where printed parts initiate cracks, so each one comes back with a coordinate, a bbox and a runnable next observation. Run it on a new part, and again after any geometry change: it is how a fix is shown to have worked (the repaired part must go quiet).
 
@@ -581,13 +643,15 @@ Where to LOOK on a saved version — not a verdict. Mesh health (watertight, bod
 | `minChainMm` | number | — | Ignore chained edges shorter than this, mm. Default 0.5. |
 
 ```js
-scan_attention({ versionId: "…" })
+cad_inspect({ action: "attention", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `stats`, `suspects`
 
 
 ## `set_datums`
+
+Model-facing call: `cad_assembly` action `datums` (this section documents the internal op).
 
 Read or declare the datum anchors of a version. Call it with only versionId to list what that version declares (names and world coordinates) — the input you need to write assembly interfaces. Call it with datums to record anchors; because an anchor is what an interface RESOLVES against, declaring them creates a NEW version (parent = the given one) instead of rewriting history: a run that cited the old anchors must keep meaning what it meant (§22 evidence). The mesh is copied byte-for-byte, so the geometry is identical. G2 (2026-10-29): a zero dir/normal is REFUSED (an axis with no direction can never be an assembly endpoint), and an axis whose direction dwarfs its own point warns as a probable p/dir swap — the anchor is still recorded, because this tool is also the repair path (roberval v048).
 
@@ -598,13 +662,15 @@ Read or declare the datum anchors of a version. Call it with only versionId to l
 | `replace` | boolean | — | true = drop the existing anchors and keep only these. Default false = merge by name (an incoming anchor of the same name replaces the old one). |
 
 ```js
-set_datums({ versionId: "…" })
+cad_assembly({ action: "datums", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `previousVersionId`, `userIntent`, `mode`, `datums`, `counts`, `warnings`
 
 
 ## `set_part_role`
+
+Model-facing call: `cad_part` action `role` (this section documents the internal op).
 
 Declare what a part IS: printed (default — full printability and delivery expectations), stock (purchased hardware modelled for reference, e.g. an M3 screw), or research (an analysis/merged body, e.g. a kinematic stand-in). The delivery audit exempts stock/research parts from the printability-for-every-part claim and from the newest-version-unvalidated check, and reports the exemption as an info finding — a declared exemption, never an inference from the name. merge_parts marks its output research automatically. If a part actually ships as a printed part, its role must be printed.
 
@@ -614,13 +680,15 @@ Declare what a part IS: printed (default — full printability and delivery expe
 | `role` | string | **required** | One of printed \| stock \| research. |
 
 ```js
-set_part_role({ part: "…", role: "…" })
+cad_part({ action: "role", args: { part: "…", role: "…" } })
 ```
 
 returns: `partId`, `name`, `role`, `previousRole`, `effect`
 
 
 ## `simulate_fluid`
+
+Model-facing call: `cad_simulate` action `fluid` (this section documents the internal op).
 
 MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.
 
@@ -636,13 +704,15 @@ MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conse
 | `gravityMmPerSec2` | array | — | Gravity [x,y,z] mm/s². Default [0,0,-98.1]; use [0,0,0] for pure driven flow. |
 
 ```js
-simulate_fluid({ pipeScad: "…" })
+cad_simulate({ action: "fluid", args: { pipeScad: "…" } })
 ```
 
 returns: `runId`, `overallStatus`, `metrics`, `frames`
 
 
 ## `simulate_lbm`
+
+Model-facing call: `cad_simulate` action `lbm` (this section documents the internal op).
 
 Lattice-Boltzmann channel flow (XLB, CPU): developed velocity profile vs the Poiseuille parabola, mirror symmetry and stability at a chosen Reynolds number. Stage-A template — the domain is a rectangular channel with box walls; no embedded solids, no heat, single phase.
 
@@ -654,13 +724,15 @@ Lattice-Boltzmann channel flow (XLB, CPU): developed velocity profile vs the Poi
 | `steps` | number | — | Time steps. Default 20000 (≈75% developed on the default grid); quote numbers only near the developed end. |
 
 ```js
-simulate_lbm({ cells: [] })
+cad_simulate({ action: "lbm", args: { cells: [] } })
 ```
 
 returns: `overallStatus`, `metrics`
 
 
 ## `simulate_motion`
+
+Model-facing call: `cad_simulate` action `motion` (this section documents the internal op).
 
 Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.
 
@@ -673,13 +745,15 @@ Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoi
 | `cycles` | number | — | Drive cycles to simulate. Default 2. FRACTIONAL values are meaningful and are honoured: a balance whose design range is ±14° sweeps 0.078 of a turn, and asking for a whole turn instead answers a different question (the beam becomes a windmill and every part of it collides). |
 
 ```js
-simulate_motion({ parts: [], joints: [] })
+cad_simulate({ action: "motion", args: { parts: [], joints: [] } })
 ```
 
 returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `closedLoop`, `loopJoints`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `runId`, `playback`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`
+
+Model-facing call: `cad_simulate` action `physics` (this section documents the internal op).
 
 Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled penetration, toppling, joint violations, drift, plus keyframe images. Joints may be revolute (hinge) or prismatic (slide). Contact model: convex dynamic parts use a hull, concave parts their EXACT mesh (a hull would fill a fork/cavity and report phantom penetration); the two bodies of a joint do NOT collide by default — a bearing is designed to overlap in clearance (pass jointContacts:true only for a stopper that must). t=0 anchors >2mm apart are REFUSED, not warmed up. Topple is measured relative to the authored pose, not world up, so a part authored at 90° is not "toppled" at t=0. For a joint between differently-oriented bodies use axisA+axisB or axisWorld; a bare axis is one local vector for both and is only right for parallel frames. A revolute joint may carry a torque-limited motor (`motor`): with one the mechanism is DRIVEN and keeps turning; without one the only input is an impulse (initialAngularVelocity) that dies at the first tooth/stop — a still keyframe then means "nothing drove it", not "it slips". Joints may also be `gear` (a kinematic ratio coupling between two shafts — rapier has no gear constraint, so it is prescribed, not solved). `metrics.motors` reports commanded vs measured so a stall is a number. Two more INPUTS decide whether that verdict means anything: `friction` per part (default rapier 0.5, echoed in `metrics.frictions` — a self-locking worm is η≈19% at 0.5 and η≈40% at POM's 0.15) and `timestepSec` (default 1/60, too coarse for fast contact: keep v·dt ≤ clearance/10, e.g. 1/2000 for a 20 rad/s shaft).
 
@@ -697,13 +771,15 @@ Rigid-body simulation (rapier, z-up, millimetres) over discrete parts: settled p
 | `jointContacts` | boolean | — | Default false: the two bodies of a JOINT do not collide, because a bearing is designed to have its parts inside one another's clearance. Set true only when a stopper really is supposed to collide on the jointed pair. |
 
 ```js
-simulate_physics({ parts: [] })
+cad_simulate({ action: "physics", args: { parts: [] } })
 ```
 
 returns: `overallStatus`, `settledPenetrationMm`, `geometrySuspects`, `geometrySuspectRule`, `maxPenetrationMm`, `fellOver`, `jointViolations`, `initialJointGaps`, `jointToleranceMm`, `contactsDisabled`, `colliders`, `closedLoop`, `loopJoints`, `holdAnalysis`, `motors`, `gears`, `frictions`, `notes`, `keyframes`, `runId`, `playback`
 
 
 ## `simulate_stress`
+
+Model-facing call: `cad_simulate` action `stress` (this section documents the internal op).
 
 Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG). You must declare the CASE — material, supports and loads — because "the stress" without one is not a number. SELF-WEIGHT IS A LOAD CASE NOW (2026-10-29): `includeSelfWeight` defaults to true and applies rho*g; `loads` is then optional. Use `supports: [{ground:true}]` for a part resting on the bed; ground is a HELD FACE, not a frictional/unilateral contact. `loadCase` reports gravity / service / combined; "gravity stress" / "structural overhang" is valid only when the reply says so. TRUST from this tool: the integrals (reaction, section force/moment, compliance, strain energy), the hot-spot LOCATIONS, and the surface stress recovered by extrapolating the depth profile inward from each hot spot. DO NOT ASK IT FOR "the largest element stress": there is no such field, because on a curved or notched boundary it grows without bound under refinement (measured 1.002 → 1.184, and fill-ratio weighting did not fix it). DO NOT read a tier or a peak as a safety factor: the model is isotropic, so an FDM part's layer-direction weakness — usually what breaks first — is invisible to it. Peaks are read at `criticalDistanceMm` inside the surface (a declared distance; the distance actually used comes back as effectiveSampleDistanceMm) — that declared-distance reading is the number to quote. A region's `surfaceExtrapolatedMPa` (the depth profile fitted out to the surface) is a HIGHER estimate and is only quoted when it passes BOTH its own fit check and a cross-resolution check (`extrapolationCrossResolutionPct`), because a good fit R^2 is not sufficient: on a fillet the fit looked fine (R^2 0.90) while the value moved 17% between grids. Every region also carries the wall thickness it tunnels through in cells and a `trustworthy` flag with `whyUntrustworthy`; an untrustworthy region means the position/value may not be quoted — refine dxMm. Deliver against `delivery` (excluded / difficult / not-excluded, with witnesses), NOT against `verdict`: a missing number is not a pass, and the geometry suspects in `attention` are DETECTION (where to look), never delivery evidence. THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.
 
@@ -725,13 +801,15 @@ Static linear-elastic stress of a saved version (voxel hex8 FEM, matrix-free CG)
 | `runConvergence` | boolean | — | Also solve a coarser grid and report the deltas (default true; costs ~30% more). A drifting verdict means refine before quoting. |
 
 ```js
-simulate_stress({ versionId: "…" })
+cad_simulate({ action: "stress", args: { versionId: "…" } })
 ```
 
 returns: `versionId`, `nextLook`, `verdict`, `delivery`, `material`, `loadCase`, `selfWeight`, `method`, `checks`, `resultants`, `capability`, `attention`
 
 
 ## `validate_assembly`
+
+Model-facing call: `cad_assembly` action `validate` (this section documents the internal op).
 
 Static multi-part check: watertightness plus, for every pair, exact interference volume and minimum clearance, in the poses you give. Behaviour under gravity or motion is simulate_physics.
 
@@ -742,13 +820,15 @@ Static multi-part check: watertightness plus, for every pair, exact interference
 | `interferenceEpsilonMm3` | number | — | Interference below this volume (mm³) counts as polygonal-fit residual, not a clash. Default 1e-3. Raise it (e.g. 1) when a printed thread's segmentation noise keeps drowning the report. |
 
 ```js
-validate_assembly({ parts: [] })
+cad_assembly({ action: "validate", args: { parts: [] } })
 ```
 
 returns: `overallStatus`, `judgement`, `judgedBy`, `parts`, `pairs`
 
 
 ## `write_assembly`
+
+Model-facing call: `cad_assembly` action `write` (this section documents the internal op).
 
 Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit. Give each part a `color` (#rrggbb) when the project is discussed with a human: the panel renders assembly and playback with it, so the agent and the human name the same part. It is a communication label, not a material or a spec, and it is only used where colour already exists (assembly + playback) — never to decorate reports or tables. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.
 
@@ -761,7 +841,7 @@ Write or update assembly/assembly.json as a typed contract. This is NOT a generi
 | `remove` | object | — | Explicit root-level deletions; omitted ids are preserved, never deleted implicitly. |
 
 ```js
-write_assembly({ manifestPath: "…" })
+cad_assembly({ action: "write", args: { manifestPath: "…" } })
 ```
 
 returns: `manifestPath`, `manifestHash`, `mode`, `changed`, `counts`, `warnings`

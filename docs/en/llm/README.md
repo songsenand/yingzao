@@ -4,11 +4,29 @@
 
 This is the reference layer for **agents**. User docs live in `docs/user/`; do not mix them.
 
+## Call surface (since 2026-11-16)
+
+A production session exposes **9 surfaces / 39 ops**. The call form is `cad_<surface>({ action: "<op>", args: { … } })`; this directory uses that form. Legacy tool names (`generate_part`, `check_assembly`, …) are internal op names; calling them directly fails with `unknown tool`.
+
+| surface | actions |
+|---|---|
+| `cad_session` | `info` · `init` · `bind` · `review` |
+| `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
+| `cad_assembly` | `write` · `validate` · `check` · `datums` |
+| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
+| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+| `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
+| `cad_see` | `render` · `review` · `reference` |
+| `cad_python` | `run` · `runtime` |
+| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl` (deprecated) |
+
+`catalog` / `help` are read-only actions on every surface: `catalog` lists the ops, `help` gives the legacy parameters.
+
 ## Reading order
 
 1. **`skills/cad-toolbox`** — read the router first: which question belongs to which tool, and what each output family may claim.
 2. **`docs/en/llm/` (this directory)** — read deeper when needed: engine boundaries, traps, delivery discipline, coordinate/manifest conventions.
-3. **`docs/TOOL-CONTRACTS.md`** — the **single authority** for parameters and fields (generated; do not hand-edit).
+3. **`dsh-cad-harness/docs/TOOL-CONTRACTS.md`** — the authority for each internal op's parameters and fields (generated; do not hand-edit; call names are the table above).
 4. **`HARNESS.en.md` / `DESIGN.md`** — only when the question is “why was it designed this way?”.
 
 ## In this directory
@@ -38,7 +56,8 @@ This is the reference layer for **agents**. User docs live in `docs/user/`; do n
 
 | Fact | Authority |
 |---|---|
-| Parameters, fields, return shape | `docs/TOOL-CONTRACTS.md` (generated) |
+| Call names / actions | the table above + `skills/cad-toolbox` |
+| Parameters, fields, return shape | `dsh-cad-harness/docs/TOOL-CONTRACTS.md` (generated; indexed by internal op name) |
 | Which tool, when | `skills/cad-toolbox` |
 | Field meaning and traps | this directory + tool descriptions |
 | Current design/architecture | `DESIGN.md` |

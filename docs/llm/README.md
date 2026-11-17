@@ -4,11 +4,29 @@
 
 这是给 **Agent** 看的参考层。用户文档在 `docs/user/`，不要混。
 
+## 调用面（2026-11-16 起）
+
+生产会话只暴露 **9 个 surface / 39 个 op**。调用格式是 `cad_<surface>({ action: "<op>", args: { … } })`；本文档统一用这个写法。旧工具名（如 `generate_part`、`check_assembly`）只是内部 op 名，直接调用会报 `unknown tool`。
+
+| surface | actions |
+|---|---|
+| `cad_session` | `info` · `init` · `bind` · `review` |
+| `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
+| `cad_assembly` | `write` · `validate` · `check` · `datums` |
+| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
+| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+| `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
+| `cad_see` | `render` · `review` · `reference` |
+| `cad_python` | `run` · `runtime` |
+| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） |
+
+`catalog` / `help` 是每个 surface 自带的两个只读 action：`catalog` 列 op，`help` 给旧参数。
+
 ## 阅读顺序
 
 1. **`skills/cad-toolbox`** —— 先读路由：哪个问题找哪个工具、三组输出各允许说什么。
 2. **`docs/llm/`（本目录）** —— 需要深度时读：引擎边界、陷阱、交付纪律、坐标/清单约定。
-3. **`docs/TOOL-CONTRACTS.md`** —— 参数与字段的**唯一权威**（生成物，不手改）。
+3. **`dsh-cad-harness/docs/TOOL-CONTRACTS.md`** —— 每个内部 op 的参数与字段权威（生成物，不手改；调用名以上表为准）。
 4. **`HARNESS.md` / `DESIGN.md`** —— 只在问“为什么这样设计”时读。
 
 ## 本目录
@@ -38,7 +56,8 @@
 
 | 事实 | 权威 |
 |---|---|
-| 参数、字段、返回形状 | `docs/TOOL-CONTRACTS.md`（生成物） |
+| 调用名 / action | 本文档上表 + `skills/cad-toolbox` |
+| 参数、字段、返回形状 | `dsh-cad-harness/docs/TOOL-CONTRACTS.md`（生成物，按内部 op 名索引） |
 | 哪个工具、什么时候用 | `skills/cad-toolbox` |
 | 字段的语义与陷阱 | 本目录 + 工具描述 |
 | 当前设计/架构 | `DESIGN.md` |

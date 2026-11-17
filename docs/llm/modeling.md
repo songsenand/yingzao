@@ -5,24 +5,24 @@
 > 长解释参考；短规则在 `skills/cad-modeling-measure/SKILL.md`。
 
 
-The hard part is almost never the arithmetic — it is naming the thing you want measured. `list_features` gives you coordinates for geometry you did not author.
+The hard part is almost never the arithmetic — it is naming the thing you want measured. `cad_inspect` (`action: "features"`) gives you coordinates for geometry you did not author.
 
 ## Facts that are not obvious from the tool descriptions
 
-- **`import_part` refuses a mesh that is not a closed solid, and that is a
+- **`cad_part` (`action: "import"`) refuses a mesh that is not a closed solid, and that is a
   feature.** It runs Manifold on the file first; if the surface has holes,
   T-junctions or inside-out winding, nothing is stored. Storing it would let
-  `measure`（`kind="part"`）, `validate_assembly` and the simulators report confident numbers
+  `cad_inspect` (`action: "measure"`, `kind="part"`), `cad_assembly` (`action: "validate"`) and the simulators report confident numbers
   about a shape that is not a body. `allowNonSolid:true` exists only to look at
   broken geometry, and it brands the version so the geometric tools refuse it.
-- **STL has no unit.** `import_part`'s `unit` (mm/cm/m/inch) and `scale` are your
+- **STL has no unit.** The `unit` of `cad_part` (`action: "import"`) (mm/cm/m/inch) and `scale` are your
   declaration, applied once before measurement and recorded in the version's
   provenance. A 25.4x wrong part is the classic failure here, so check the
   reported `sizeMm` against what you expected before trusting anything else.
   STEP, 3MF and DXF carry their own units: STEP self-declares and 3MF declares
   `model@unit` (both accept only `mm`/omitted — the file wins; `scale` still
   works); DXF `$INSUNITS` wins when set, otherwise your `unit`.
-- **Formats: STL / STEP / 3MF / DXF in — IGES and OBJ/OFF out.** `import_part`
+- **Formats: STL / STEP / 3MF / DXF in — IGES and OBJ/OFF out.** `cad_part` (`action: "import"`)
   reads STEP/STP (tessellated through OpenCASCADE in the worker), 3MF (trimesh's
   reader: build transforms and `<components>` are baked; the result is a mesh, so
   accuracy is bounded by the tessellation) and DXF (closed 2D profiles become a
@@ -31,24 +31,24 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   is refused with the body count, because this harness's unit is one connected
   part. **IGES is not readable**: the tool says so with the conversion route
   (re-export STEP or STL) instead of failing mysteriously.
-- **Color is not an import format here.** GLB/OBJ are not `import_part` inputs;
+- **Color is not an import format here.** GLB/OBJ are not `cad_part` (`action: "import"`) inputs;
   3MF is read as geometry, and the color/material payload is not validated. A GLB
-  color design can be stored as a sidecar with `attach_appearance`; it is not a
-  render path and the panel still previews STL. Do not use `import_part` as a color
+  color design can be stored as a sidecar with `cad_part` (`action: "appearance"`); it is not a
+  render path and the panel still previews STL. Do not use `cad_part` (`action: "import"`) as a color
   handoff.
 - **Tessellation is a choice you own for STEP/3MF.** `tolLinear` (mm) and
   `tolAngular` (rad) trade triangles for fidelity: at 0.01 mm a small bracket was
   3074 triangles, at 0.002 mm 12254, with <0.3% volume change — so the default is
   fine for measurement and you lower it only when curvature IS the question (a
   thread, a fillet radius). STL/DXF ignore both (the mesh is already given).
-- **`merge_parts` is for "one rigid body", not for tidying a corpus.** Use it when
-  a whole machine has to be a single body (`simulate_physics` topple, a
-  whole-assembly `measure`（`kind="part"`）), because `simulate_physics` takes only
+- **`cad_part` (`action: "merge"`) is for "one rigid body", not for tidying a corpus.** Use it when
+  a whole machine has to be a single body (`cad_simulate` (`action: "physics"`) topple, a
+  whole-assembly `cad_inspect` (`action: "measure"`, `kind="part"`)), because `cad_simulate` (`action: "physics"`) takes only
   revolute/prismatic joints and cannot hold a machine together by itself. It reports
   the number of **shells**: more than one means the parts you merged do not all
   touch, so the body is not a machine but a pile.
 - **`genus` is only meaningful for ONE connected solid.** A multi-body mesh
-  reports a negative genus; use `measure`（`kind="part"`） (its `bodies` uses the shared-edge
+  reports a negative genus; use `cad_inspect` (`action: "measure"`, `kind="part"`) (its `bodies` uses the shared-edge
   criterion — two solids touching at a single vertex are two bodies) for the count.
 - **`// PARAMS`** turns a top-level `name = number; // PARAMS <label>` line into a
   panel tunable for that version.
@@ -76,14 +76,14 @@ The hard part is almost never the arithmetic — it is naming the thing you want
 - **A render that exits 0 is not a render that did what you asked.** OpenSCAD
   reports an unknown parameter as `WARNING:` and carries on — `rotate(m=…)`
   (there is no such parameter; a matrix goes through `multmatrix`) silently
-  degenerated to the identity, so every `simulate_motion` keyframe was the same
+  degenerated to the identity, so every `cad_simulate` (`action: "motion"`) keyframe was the same
   picture until 2026-10-11. Read the renderer's warnings, or you will attach
   evidence that shows nothing.
 - **Old images are pruned oldest-first, and the user's reference image is
   always the oldest.** When you see a block like
   `image omitted; 参考图.png; path=/…/attachments/…` and the task depends on
   that picture (matching proportions, colors, a bought part's shape), call
-  `recall_reference_image({ path })` — do not work "from memory". The recalled
+  `cad_see({ action: "reference", args: { path } })` — do not work "from memory". The recalled
   image becomes the newest in context, so it survives for the following rounds;
   recall again whenever you need to look at it once more. Before delivering
   anything claimed to "match the reference", make sure the reference is

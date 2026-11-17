@@ -23,15 +23,15 @@
 | `sand-casting` | 砂型铸造 | **partial** | 壁厚/特征/间隙 + 拔模（最佳起模方向） | 最小拔模、加工余量 | 收缩/气孔/砂眼、浇注/冒口 |
 | `forging` | 模锻 | **partial** | 壁厚/特征/间隙 + 拔模（最佳模具方向） | 最小拔模、分型面 | 流线/飞边/模具磨损/裂纹 |
 | `vacuum-forming` | 真空成型 | **partial** | 壁厚/特征/间隙 + 拔模（最佳脱模方向） | 板厚、最小拔模 | 拉伸比、壁厚分布、拉丝、冷却 |
-| `cnc-3axis` | CNC 铣（含桌面） | **partial** | 壁厚/特征/间隙 + 圆孔刀具半径 + 深径比（`check_printability` + `cnc-3axis` 档案）；**六方向可达 + 最少装夹数**（`check_cnc_access`） | 刀具半径、深径比、壁厚规则、`maxSetups`、`requireAllAccessible` | 斜装夹/第四轴、刀具长度/直径/碰撞、夹具刚性、振刀/成本 |
-| `cnc-turning` | 车削 | **partial** | 棒料直径 + L/D + 回转对称偏差（`check_turning`，绕主轴） | `barDiameterMm`、`maxLdRatio`、`symmetryToleranceMm`、`requireSymmetry` | 倒扣/沿轮廓刀具可达、振刀、表面、送料限制 |
-| `laser-cut-sheet` | 激光切割 | **partial** | 2D 截面：圆孔直径/孔到外轮廓/孔间距，扣割缝（`check_sheet2d`） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 非圆孔宽度、外轮廓窄筋、热影响区、锥度、表面 |
-| `waterjet` | 水刀 | **partial** | 2D 截面：圆孔直径/孔到外轮廓/孔间距，扣割缝（`check_sheet2d`） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 非圆孔宽度、外轮廓窄筋、锥度随厚度、表面、磨料成本 |
-| `sheet-metal-bend` | 钣金折弯 | **partial** | 切割特征（圆孔/壁/间距，扣割缝）+ 可选折弯检查：**孔到折弯、最小翻边、折弯让位启发式**（`check_sheet2d` + `bendLines`） | `kerfMm`、min 孔/壁/间距、`bendLines`（u/v）、`minHoleToBendMm`、`minFlangeMm`、`minBendReliefMm` | 展开图/K 因子、让位槽几何、回弹、模具限制 |
-| `edm` | 电火花 | **partial** | 壁厚/特征/间隙 + 圆孔电极/丝半径 + 深径比（`check_printability` + `edm` 档案）；线切割 2D 特征（`check_sheet2d`）；沉模**单轴电极可达**（`check_edm_access`） | 电极/丝半径、深径比、线割 `kerf`/min 孔/壁/间距、`burnAxis`/`requireAllReachable` | 电极形状/侧蚀/倒扣、电极损耗、最小特征、表面、加工时间 |
-| `extrusion` | 型材挤出 | **partial** | 2D 截面：壁厚/圆孔/间距，扣割缝（`check_sheet2d`） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 等截面校验、挤出胀大、冷却/翘曲、牵引速度、中空截面规则 |
+| `cnc-3axis` | CNC 铣（含桌面） | **partial** | 壁厚/特征/间隙 + 圆孔刀具半径 + 深径比（`cad_check` (`action: "printability"`) + `cnc-3axis` 档案）；**六方向可达 + 最少装夹数**（`cad_check` (`action: "cnc"`)） | 刀具半径、深径比、壁厚规则、`maxSetups`、`requireAllAccessible` | 斜装夹/第四轴、刀具长度/直径/碰撞、夹具刚性、振刀/成本 |
+| `cnc-turning` | 车削 | **partial** | 棒料直径 + L/D + 回转对称偏差（`cad_check` (`action: "turning"`)，绕主轴） | `barDiameterMm`、`maxLdRatio`、`symmetryToleranceMm`、`requireSymmetry` | 倒扣/沿轮廓刀具可达、振刀、表面、送料限制 |
+| `laser-cut-sheet` | 激光切割 | **partial** | 2D 截面：圆孔直径/孔到外轮廓/孔间距，扣割缝（`cad_check` (`action: "sheet2d"`)） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 非圆孔宽度、外轮廓窄筋、热影响区、锥度、表面 |
+| `waterjet` | 水刀 | **partial** | 2D 截面：圆孔直径/孔到外轮廓/孔间距，扣割缝（`cad_check` (`action: "sheet2d"`)） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 非圆孔宽度、外轮廓窄筋、锥度随厚度、表面、磨料成本 |
+| `sheet-metal-bend` | 钣金折弯 | **partial** | 切割特征（圆孔/壁/间距，扣割缝）+ 可选折弯检查：**孔到折弯、最小翻边、折弯让位启发式**（`cad_check` (`action: "sheet2d"`) + `bendLines`） | `kerfMm`、min 孔/壁/间距、`bendLines`（u/v）、`minHoleToBendMm`、`minFlangeMm`、`minBendReliefMm` | 展开图/K 因子、让位槽几何、回弹、模具限制 |
+| `edm` | 电火花 | **partial** | 壁厚/特征/间隙 + 圆孔电极/丝半径 + 深径比（`cad_check` (`action: "printability"`) + `edm` 档案）；线切割 2D 特征（`cad_check` (`action: "sheet2d"`)）；沉模**单轴电极可达**（`cad_check` (`action: "edm"`)） | 电极/丝半径、深径比、线割 `kerf`/min 孔/壁/间距、`burnAxis`/`requireAllReachable` | 电极形状/侧蚀/倒扣、电极损耗、最小特征、表面、加工时间 |
+| `extrusion` | 型材挤出 | **partial** | 2D 截面：壁厚/圆孔/间距，扣割缝（`cad_check` (`action: "sheet2d"`)） | `kerfMm`、`minHoleMm`、`minFeatureMm`、`minSpacingMm` | 等截面校验、挤出胀大、冷却/翘曲、牵引速度、中空截面规则 |
 
-## `deliver` 怎么用
+## `cad_deliver` action `plan` 怎么用
 
 - `M:policy` 把每个 `allowed` 标成 `[supported]` / `[partial]` / `[planned]`；
 - 允许集里有 `planned` 工艺 → 缺口 `process-planned`：“方法已定义，评估器未实现；不要读成 pass”；
@@ -40,11 +40,11 @@
 
 ## 实现顺序（每条都能独立验收）
 
-1. **工艺流程档案（已完成，partial）**——CNC 3 轴、注塑、压铸、真空、砂铸、模锻、SLA、SLS 共用现有 `check_printability`：壁厚/特征/间隙 + **draft 求解器**（拔模/倒扣）+ **escape 可达性**（排液/清粉）。没有另造 `check_moldability`，因为 draft 求解器已经覆盖同一族几何。
-2. **`check_sheet2d`（已完成，partial）**——对平板的截面做 2D 切割筛查：圆孔直径、孔到外轮廓、孔间距，扣割缝；覆盖激光、水刀、钣金、挤出。钣金可另传 `bendLines`（u/v）检查孔到折弯、最小翻边、折弯让位（启发式）；展开图/K 因子、让位槽几何仍是 handoff。
-3. **EDM（已完成，partial）**——`schemas/examples/edm.json` 用 `toolRadiusMm`/`holeAspectMax`/壁厚规则覆盖**圆孔**电极/丝半径；线切割可再用 `check_sheet2d` 验 2D 轮廓/割缝；线切割 2D 用 `check_sheet2d`；沉模单轴可达用 `check_edm_access`；电极形状/侧蚀/损耗、表面、烧伤仍是 handoff。
-4. **车削（已完成，partial）**——`check_turning` 验棒料直径/L/D/回转对称偏差；倒扣/沿轮廓刀具可达/振刀/送料仍是 handoff。
-5. **CNC 六方向可达 + 装夹数（已完成，partial）**——`check_cnc_access` 用 ±X/±Y/±Z 可见性 + 贪心覆盖给出不可达面积和最少主方向装夹；斜装夹/刀具长度/夹具/振刀仍是 handoff，体素/斜方向可达可继续升 supported。
+1. **工艺流程档案（已完成，partial）**——CNC 3 轴、注塑、压铸、真空、砂铸、模锻、SLA、SLS 共用现有 `cad_check` (`action: "printability"`)：壁厚/特征/间隙 + **draft 求解器**（拔模/倒扣）+ **escape 可达性**（排液/清粉）。没有另造 `check_moldability`，因为 draft 求解器已经覆盖同一族几何。
+2. **`cad_check` (`action: "sheet2d"`)（已完成，partial）**——对平板的截面做 2D 切割筛查：圆孔直径、孔到外轮廓、孔间距，扣割缝；覆盖激光、水刀、钣金、挤出。钣金可另传 `bendLines`（u/v）检查孔到折弯、最小翻边、折弯让位（启发式）；展开图/K 因子、让位槽几何仍是 handoff。
+3. **EDM（已完成，partial）**——`schemas/examples/edm.json` 用 `toolRadiusMm`/`holeAspectMax`/壁厚规则覆盖**圆孔**电极/丝半径；线切割可再用 `cad_check` (`action: "sheet2d"`) 验 2D 轮廓/割缝；线切割 2D 用 `cad_check` (`action: "sheet2d"`)；沉模单轴可达用 `cad_check` (`action: "edm"`)；电极形状/侧蚀/损耗、表面、烧伤仍是 handoff。
+4. **车削（已完成，partial）**——`cad_check` (`action: "turning"`) 验棒料直径/L/D/回转对称偏差；倒扣/沿轮廓刀具可达/振刀/送料仍是 handoff。
+5. **CNC 六方向可达 + 装夹数（已完成，partial）**——`cad_check` (`action: "cnc"`) 用 ±X/±Y/±Z 可见性 + 贪心覆盖给出不可达面积和最少主方向装夹；斜装夹/刀具长度/夹具/振刀仍是 handoff，体素/斜方向可达可继续升 supported。
 6. 每个评估器落地后，把目录里的 `support` 从 `planned` 改成 `partial/supported`，并写清 `handoff`。
 
 ## 什么不能被几何验证

@@ -14,7 +14,7 @@ These are **known limits**, not bug reports waiting to be fixed. Knowing them is
 
 - **No exact FEA / stress analysis.** Trends and hot spots, not a safety factor.
 - **Fluid is a trend judgement, not industrial CFD.** Flow direction, dead zones and pressure-drop trends; do not use it as acceptance data.
-- **Rigid body / mechanism is kinematics plus an interference timeline.** It answers “will it collide, is the stroke enough”, not “how much force”. The exception is `check_assembly`'s axial spring/snap static screening: installation force, end-stop force and snap insertion/retention force, but not contact, fatigue or certification.
+- **Rigid body / mechanism is kinematics plus an interference timeline.** It answers “will it collide, is the stroke enough”, not “how much force”. The exception is the assembly check's axial spring/snap static screening: installation force, end-stop force and snap insertion/retention force, but not contact, fatigue or certification.
 
 ## Meshes
 
@@ -24,7 +24,7 @@ These are **known limits**, not bug reports waiting to be fixed. Knowing them is
 
 ## Versions
 
-- **Browse, pin and compare; there is no approve or rollback action.** Approval and one-click rollback are not implemented.
+- **Browse, pin and compare.** The agent can propose a revert; approving it in the panel creates a new version (history is not rewritten). There is no separate version sign-off workflow.
 - Every generation/edit is a new version; old versions remain. Which one is “official” is your record, not the tool's seal.
 
 ## Import formats
@@ -47,12 +47,12 @@ These are **known limits**, not bug reports waiting to be fixed. Knowing them is
 | Platform | Difference |
 |---|---|
 | Linux x64, macOS arm64, Windows x64 | Full capability |
-| macOS Intel | Physics/motion use the built-in engine (usable results); no Python physics library |
+| macOS Intel (x64) | **Not supported**: no bundled Python runtime build for this platform (retired 2026-11-16); use Apple Silicon, Linux or Windows |
 | musl (Alpine etc.) | STEP import and general CFD unavailable; the rest works |
 
 ## Other
 
-- **A session must explicitly select a project** (`bind_project` / `init_project`) and stays there; `cd` does not switch it. Start a new session to change projects.
+- **A session must explicitly select a project** (the agent selects or creates one) and stays there; `cd` does not switch it. Start a new session to change projects.
 - **No multi-user, permissions, cloud or mobile.** Local single-user tool.
 - **Very image-heavy sessions may be rejected upstream.** The default window keeps 24 images; headless sessions can lower it.
 

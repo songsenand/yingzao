@@ -1,39 +1,143 @@
+<div align="center">
+
 # Yingzao (营造) · dsh-cad-harness
+
+**Describe a part or assembly in natural language; a multimodal LLM calls CAD engines through a DeepSeek Harness plugin to produce a verified, deliverable model.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/en/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/en/user/limits.md)
 [![Status](https://img.shields.io/badge/status-0.1.0%20preview-orange.svg)](docs/en/user/preview.md)
 
-[中文](README.md) | English
+[中文](README.md) · [Quick start](#quick-start) · [Verification](#verification) · [Documentation](#documentation)
 
-> **Yingzao (营造) — describe a part in natural language; a multimodal LLM drives CAD tools through a DeepSeek Harness plugin to produce a verified, deliverable model.**
+</div>
 
-This is not a modelling UI. Geometry generation is no longer the bottleneck; **knowing whether the result is correct** is. A system that can generate but cannot verify produces things that only "look right". This plugin closes the loop **generate → verify → iterate → deliver**, and keeps the judgement calls with the human.
+## Contents
 
-- The **multimodal LLM** writes code, compiles, renders, and **reads the images itself** before presenting a result
-- The engine returns **numbers**: dimensions, volume, wall thickness, clearance, interference, motion stroke, fluid trends
-- Every revision is an **immutable version** you can browse, pin and compare
-- Third-party geometry (STL / STEP / 3MF / DXF) enters the same checks and assemblies
-- Export a **single version** (STL/3MF/OBJ/OFF/WRL) or the **whole project**: a ZIP with every part STL + assembly manifest + README, plus an optional placed whole-machine STL
+- [Who it's for, and who it isn't](#who-its-for-and-who-it-isnt)
+- [About the project](#about-the-project)
+- [Examples](#examples)
+- [Technology stack](#technology-stack)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [Verification](#verification)
+- [Known limits](#known-limits)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
-**Docs have three audiences**: users → [docs/user/](docs/user/) and [docs/en/user/](docs/en/user/), agents → [docs/en/llm/](docs/en/llm/) (English) or [docs/llm/](docs/llm/) (Chinese), maintainers → [docs/dev/](docs/dev/) (Chinese).
+## Who it's for, and who it isn't
+
+Yingzao's role is to provide a venue for the agent: a standard, stable way to produce mechanical parts, with channels for reviewing, recomputing and delivering them. It does not take on the job of improving the agent's 3D capability. Geometry ability depends on the model itself; that is not something a single plugin can take responsibility for.
+
+### It fits
+
+- You already have a design intent and acceptance criteria, are willing to describe them in words, and accept that the agent writes parametric code rather than dragging features.
+- You need parts or assemblies that can be manufactured, assembled and made to function, not merely renders that look plausible.
+- You work mainly on assemblies, at a complexity within the agent's ability. The benefit usually grows with complexity: not because objects that could not be designed become designable, but because cases that can be designed yet cannot be manufactured, assembled or made to function are corrected and caught before delivery.
+- You are willing to judge from evidence: versions, numerical reports, interference and stroke checks; and you accept that the final judgement remains with the human.
+- You care about the floor: fewer of the agent's worst outcomes, rather than relying on occasional high-quality output.
+
+### It does not fit
+
+- You want a "one sentence, one picture" demo, or treat 3D generation itself as the selling point.
+- You need native CAD interaction: sketch constraints, feature trees, drag editing.
+- You need certified precision: industrial tolerances, engineering drawings, precise FEA/CFD, production BOMs. This provides trend judgements and numbers within its boundaries, not certification.
+- You expect the plugin to reduce token consumption; see the next section.
+
+These are usage expectations, not admission criteria. If your need falls into the second list, a professional tool is usually a better fit.
+
+### On tokens: not cheaper, but more predictable
+
+(Internal measurement, small sample.) On the same task, average token consumption with the plugin is not lower than without it; it is slightly higher. The variance, however, is significantly smaller: the cost of a run can be estimated in advance and is less likely to fluctuate widely.
+
+Reducing token consumption is planned, but it ranks below capability: we will not cut verification or necessary checks to save tokens. The reasonable expectation is predictable cost and effective investment, not lower cost.
+
+## About the project
+
+Geometry generation is no longer the bottleneck; **knowing whether the result is correct** is. A system that can generate but cannot verify produces things that only "look right".
+
+Yingzao closes the loop **generate → verify → iterate → deliver**:
+
+- **Generate**: the agent writes parametric code (OpenSCAD) and compiles it into immutable versions.
+- **Verify**: dimensions, volume, wall thickness, clearance, interference, motion stroke and fluid trends are numbers from the engine, not the language model "eyeballing" it.
+- **Iterate**: every version can be browsed, pinned and compared; old versions and old runs are never overwritten.
+- **Deliver**: export a single version, or the whole project (every part STL + assembly manifest + notes); a whole-machine STL can also be merged from assembly poses.
+
+It is not aimed at the chat-box demo of "draw me a part". The **multimodal LLM** reads and writes SCAD, looks at renders and decides the next step; the **DSH plugin** provides CAD tools, immutable versions, numerical verification and the delivery gate. It does not pursue fully automatic modelling: repeated generation and checking go to the agent, design judgement stays with you.
+
+## Examples
+
+The two examples are deliberately simple: **basic geometry such as threads and gears is exactly what "looks right" can fake.** The images are rendered from STL exported from the `.scad` sources in this repository; dimensions, volume and centre distance can be recomputed from the source.
+
+![M8 bolt and nut, real M8×1.25 thread](docs/images/readme/m8-bolt-nut.png)
+
+### M8 bolt and nut
+
+> Make an M8×30 hex bolt and an M8 hex nut; thread M8×1.25, nut across-flats 13, thickness 6.5; real threads, not plain holes.
+
+| Check | Result |
+|---|---|
+| Thread | **M8×1.25**, nut 6.5 mm high, about **5.2 turns** engaged |
+| Nut across-flats / height | **13.00 / 6.50 mm** |
+| Bolt | M8×30, hex head across-flats 13 |
+| Bounding box | 13.00 × 14.88 × 35.50 mm |
+| Volume | **2.44 cm³** (measured from STL) |
+| Thread geometry | real threads generated by BOSL2 `threaded_rod` / `threaded_nut`, not plain holes |
+
+Source: [docs/readme-models/m8-bolt-nut.scad](docs/readme-models/m8-bolt-nut.scad)
+
+### 20T / 10T gear pair
+
+> Two spur gears, 20 and 10 teeth, module 1.5, thickness 6, bore 5; mesh at the actual centre distance, not two cylinders parked next to each other.
+
+![20T / 10T gear pair, module 1.5](docs/images/readme/gear-pair-blender.png)
+
+| Check | Result |
+|---|---|
+| Teeth / module | **20T / 10T**, m = **1.5** |
+| Ratio | **2.00 : 1** |
+| Pitch diameter | 30 / 15 mm |
+| Actual centre distance | **23.07 mm** (after the 10T profile shift; not the nominal 22.5) |
+| Face width / bore | 6.0 / 5.0 mm |
+| Volume | **5.10 cm³** (measured from STL) |
+| Solid interference | `intersection()` is empty at that centre distance |
+
+Source: [docs/readme-models/gear-pair.scad](docs/readme-models/gear-pair.scad)
+
+> These two examples demonstrate geometry and results, not a complete evidence chain; material strength, wear, noise and print orientation still need separate verification. The render script is also a rerunnable repository tool, not a runtime dependency:
+> [docs/readme-models/render.py](docs/readme-models/render.py).
+>
+> Early examples had screws and nuts that were plain holes or simplified cylinders, good only for checking assembly relationships; this page no longer uses those placeholders.
+
+## Technology stack
+
+| Layer | Used |
+|---|---|
+| Geometry kernel | **OpenSCAD** + **Manifold** backend; BOSL2 provides threads, gears and other standard parts |
+| Numerical checks | Python, trimesh, manifold3d, numpy, shapely |
+| Host | **DeepSeek Harness** plugin; Node.js ≥ 20, TypeScript |
+| Panel | React + WebGL viewport, running inside the DSH Web GUI |
+| Evidence | immutable versions, JSON reports, six evidence rows, claims / policy / delivery audit |
 
 ## Quick start
 
-`setup --openscad=auto` prepares OpenSCAD: an existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or too slow. 2021.01 works but `doctor` reports `degraded`; 2025.06+ is recommended for Manifold.
+`setup --openscad=auto` prepares OpenSCAD (2021.01 works but `doctor` reports `degraded`; 2025.06+ / Manifold is recommended). An existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s. You can also prepare it manually with `--openscad=off`, or point `CAD_OPENSCAD_BIN` at an existing binary.
 
-**A. Tarball (preview release; no build)**
+> OpenSCAD is prepared during `setup`; the Python runtime is about 400 MB and is installed on first calculation. Neither is shipped in the tarball.
+
+### A. Tarball (preview release; no build)
 
 ```bash
 tar -xzf dsh-cad-harness-0.1.0.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup --openscad=auto   # preset + OpenSCAD
-npx dsh-cad-doctor         # kind=ok, or an explained degraded
+npx dsh-cad-doctor                  # kind=ok, or an explained degraded
 ```
 
-**B. Source checkout (development)**
+### B. Source checkout
 
 ```bash
 dsh plugin --profile <your-profile> add -w /path/to/dsh-cad-harness
@@ -42,7 +146,11 @@ node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```
 
-Then read the [0.1.0 preview notes](docs/en/user/preview.md), start a session with the **营造模式 (Yingzao mode)** preset, open the **CAD Preview** tab on the right, and describe the part:
+### Turn on Yingzao mode
+
+1. Start a new session and choose the **营造模式 (Yingzao mode)** preset; normal sessions do not see CAD tools, on purpose.
+2. Open the **CAD Preview** tab on the right. If the tab is missing, restart dsh and start a new Yingzao mode session.
+3. Describe what you need:
 
 > Make a 60×40×8 mounting plate, four M3 countersunk holes, one 20 mm through hole in the centre.
 
@@ -52,56 +160,83 @@ This is what it looks like (windup-frog assembly, 12 parts / 12 versions):
 
 The panel gives you:
 
-- **Version history** — `v001`, `v002`, … every generation/modification is immutable; open, compare, pin, revisit.
-- **3D viewport** — orbit, zoom, pan; top/front/side/iso views with bounding-box numbers.
-- **Measure and annotate** — two-point distance, wall thickness, section cuts, red-box annotations sent back to the session.
-- **Run playback** — motion, rigid-body and fluid timelines; pause on a frame.
-- **Verification state** — assembly checks, printability and delivery audit, including “needs review”.
-- **Export** — single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
+- **Version history**: `v001`, `v002`, … every generation/modification is an immutable version; open, compare, pin, revisit.
+- **3D viewport**: orbit, zoom and pan; top/front/side/iso views with bounding-box numbers.
+- **Measure and annotate**: two-point distance, wall thickness, section cuts, red-box annotations, and send the annotation back to the session.
+- **Run playback**: motion, rigid-body and fluid timelines; pause on a frame.
+- **Verification state**: assembly checks, printability and delivery audit results, including "needs review".
+- **Export**: single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
 
-> The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the model writing code or the engine producing truth. It lets you see, measure and point at the problem.
+> The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the agent writing code or the engine producing truth; it lets you see, measure and point at the problem.
 
-CAD tools are only visible to the **营造模式 (Yingzao mode)** preset; standard coding sessions intentionally do not pay the tool-catalog cost.
+Next: read [From description to delivery](docs/en/user/workflow.md) or [Verification](docs/en/user/verification.md).
 
-Next:
+## Usage
 
-- Full workflow and the decisions you own → [workflow](docs/user/workflow.md) (Chinese)
-- What each verification layer answers → [verification](docs/user/verification.md) (Chinese)
-- What it cannot do yet → [limits](docs/en/user/limits.md)
-- Install, first run, troubleshooting → [install](docs/en/user/install.md) / [troubleshooting](docs/user/troubleshooting.md) (Chinese)
+A typical conversation has five steps:
 
-## Evidence verification (V1)
+1. You describe the requirement, constraints and acceptance criteria.
+2. The agent generates parametric SCAD and registers it as `v001`.
+3. The engine runs dimension, wall thickness, clearance, printability and assembly checks, and writes the results into reports.
+4. The agent reads the renders and reports, finds problems and generates `v002`.
+5. After you confirm, export a single version (STL / 3MF etc.) or the assembly, or hand it to a downstream process.
+
+Versions are immutable: `v002` never rewrites `v001`; a report is bound to the version it actually checked, and an old version's report does not automatically become evidence for the current version.
+
+## Verification
 
 ```bash
+# after tarball install
+npx dsh-cad-verify /path/to/project --advisory
+npx dsh-cad-verify /path/to/project --block --strict
+
+# source checkout
 cd dsh-cad-harness
 node scripts/verify.mjs /path/to/project --advisory
-node scripts/verify.mjs /path/to/project --block --strict
 ```
 
 `verify` is read-only: it checks the six rows `requirements / model / fit / make / review / delivery`, reports missing/stale evidence and claim witnesses, and never runs CAD, writes a run, or judges the design.
 
 - Default advisory (exit 0); `--block`: pass 0 / warn 1 / blocked|fail 2 / usage 3; `--strict` turns warn into 2.
 - Claims: `<project>/claims.json` or `--claims <file>`; policy: `<project>/evidence-policy.json` or `--policy <file>`. No policy means advisory.
-- Project-specific criteria live in `<project>/checks/<id>/`; register with `check-register`, enable with `--checks`. Negative samples must pass the gate; write to the project invalidates the check.
-- Details: [docs/llm/verify.md](docs/llm/verify.md) (Chinese).
+- Project-specific criteria live in `<project>/checks/<id>/`: register with `check-register`, enable with `--checks`. Registration runs the negative samples; a check whose negative sample passes is refused. Every check must account for each criterion with a finding or `skipped`, and a check must not write to the project.
+- Details: [docs/en/llm/verify.md](docs/en/llm/verify.md).
 
-## Documentation map
+## Known limits
+
+- **Not native CAD**: no feature tree, sketch constraints or drag editing; the source of geometry is code, and STEP can come in but cannot go out.
+- **Started as a personal tool**: documentation and acceptance were added after the results exceeded expectations; the early commit history is messy.
+- **No formal benchmark baseline**: `examples/bench` has only one N=1 exploratory run; none of the 6 tasks passed the machine checks, and 03 was left unfinished because of the server-side quota (429). It is not a comparable benchmark.
+- **Uneven tool maturity**: printability and assembly checks are relatively mature; CNC, EDM, sheet metal, turning and die casting remain `partial`; dynamic simulation is limited by the solver.
+- **Not every example is one-command rerunnable**: `examples/*/cad-data/` is gitignored; historical examples keep only documentation, source and renders.
+- **English is machine-translated**: the English user docs, `docs/en/llm` and `HARNESS.en.md` have not been human-polished; the client UI is in English, but model-side output may still be Chinese.
+- **Not cheap**: that exploratory run consumed 81.41M tokens; the context cost of long tasks is real.
+
+## Documentation
 
 | Document | What it covers |
 |---|---|
-| [README.md](README.md) | Chinese entry point; authoritative for the project |
-| [docs/en/user/preview.md](docs/en/user/preview.md) | 0.1.0 preview scope and known limits |
-| [docs/en/user/install.md](docs/en/user/install.md) | Install, setup, first run |
-| [docs/en/user/limits.md](docs/en/user/limits.md) | Known boundaries |
-| [HARNESS.en.md](HARNESS.en.md) | What it is and is not; positioning |
-| [docs/en/llm/README.md](docs/en/llm/README.md) | Agent reference: engines, assembly, manufacturing, delivery, traps, verify |
-| [DESIGN.md](DESIGN.md) | Current design and module map (Chinese) |
+| [docs/en/user/](docs/en/user/) | User guide: install, workflow, verification, limits, troubleshooting |
+| [docs/en/llm/](docs/en/llm/) | Agent reference: engine boundaries, traps, delivery discipline |
+| [docs/dev/](docs/dev/) | Maintainer entry: architecture, design, decisions, plans, audits (Chinese) |
+| [examples/README.md](examples/README.md) | Examples index: current / historical / fixtures / benchmark / sandbox |
+| [HARNESS.en.md](HARNESS.en.md) | What it is, what it is not, boundaries and trade-off principles |
+| [DESIGN.md](DESIGN.md) | Current design: architecture, modules, interfaces, full environment-variable list (Chinese) |
+| [docs/README.md](docs/README.md) | Documentation map and "one authority per fact" (Chinese) |
 
-The English **user** and **agent** documentation is complete for this preview. Maintainer docs (`docs/dev`, `DESIGN.md`) remain Chinese until preview.2.
+The English **user** and **agent** documentation is complete for this preview. Maintainer docs (`docs/dev`, `DESIGN.md`) remain Chinese until preview.2. The Chinese [README.md](README.md) is the authoritative entry point.
 
 ## Contributing
 
-- Every commit must be signed off (`git commit -s`, DCO 1.1); DCO is not a CLA.
+- Full rules are in [CONTRIBUTING.md](CONTRIBUTING.md): every commit must be signed off with `git commit -s` (DCO 1.1); DCO is not a CLA.
 - Commit messages follow [AGENTS.md](AGENTS.md): `Why` / `Verified` / `Risk` (plus `Decision` when a direction was chosen). `Verified` must name a falsifiable observation.
 - Directional decisions go to [docs/DECISION-LOG.md](docs/DECISION-LOG.md) (append-only).
 - Third-party assets in the benchmark corpus are materialised at use time, never committed (see [examples/bench/ATTRIBUTION.md](examples/bench/ATTRIBUTION.md)).
+
+## License
+
+Apache License 2.0. The full text is in [LICENSE](LICENSE), third-party notices in [NOTICE](NOTICE), and the audit detail in [docs/THIRD-PARTY-AUDIT.md](docs/THIRD-PARTY-AUDIT.md).
+
+Commercial use, modification, closed-source redistribution and sale are permitted; the conditions are to include a copy of the license with any distribution, keep the copyright and NOTICE notices, and mark modified files. It also contains an explicit patent grant and a patent-retaliation clause.
+
+BOSL2 (BSD-2-Clause) is **not distributed with this repository**: download it yourself into `lib/BOSL2/` (gitignored).

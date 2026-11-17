@@ -89,7 +89,7 @@ mean the manifest cites the newest geometry — that gap is `contract-stale-node
 
 ## Two rulers: contract tolerance vs global clearance
 
-`validate_assembly` flags **any** pair closer than its threshold as `too_tight`, regardless of
+`cad_assembly` (`action: "validate"`) flags **any** pair closer than its threshold as `too_tight`, regardless of
 intent. A declared zero-gap fit therefore looks like a failure until someone reads the contract.
 
 `verify` splits the count:
@@ -102,7 +102,7 @@ intent. A declared zero-gap fit therefore looks like a failure until someone rea
 
 The message carries the split (`too-tight=17 (9 declared fit(s), 8 undeclared)`) and the witness
 carries `tightDeclared` / `tightUndeclared`. This is evidence interpretation, not re-measurement:
-an out-of-tolerance declared fit is still caught by `check_assembly`'s `hard-interface`.
+an out-of-tolerance declared fit is still caught by `hard-interface` on `cad_assembly` (`action: "check"`).
 
 ## Claims
 
@@ -130,7 +130,7 @@ not prove the functional claim by itself; a custom check should read its witness
 - With `runId`: the run must exist, have the right kind, and be fresh for the claimed
   versions.
 - Without `runId`: V1 checks for a fresh run of the required kind; `manufacturability`
-  stays with `delivery_audit` (it needs **every** printed part).
+  stays with `cad_deliver` (`action: "audit"`) (it needs **every** printed part).
 - No claims: the corpus is audited and `requirements` is `warn` ("corpus audit only").
   `--require-claims` makes it `blocked`.
 

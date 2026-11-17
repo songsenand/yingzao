@@ -64,7 +64,7 @@ npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
 首次用到计算功能时，插件会下载并安装一个**自带的 Python 运行时**，放在 `$DSH_HOME/cad/runtime/`，之后所有项目共用。
 
 - **原因**：几何分析、精确测量、物理与机构仿真、流体趋势依赖成熟的科学计算库，而无法假定目标机器上存在干净可用的 Python。
-- **提前准备**：让 Agent 执行运行时的 `provision`（带进度日志），或设置 `DSH_CAD_PYTHON=eager` 在启动时后台预热。
+- **提前准备**：让 Agent 准备运行时（带进度日志），或设置 `DSH_CAD_PYTHON=eager` 在启动时后台预热。
 - **改用系统解释器**：`DSH_CAD_PYTHON=system` 使用机器上已有的 CPython（当前要求 **3.13**；依赖仍按锁定版本安装）。
 - **代价**：约 380–400MB 磁盘；本机实测 3–11 分钟（取决于网络），可更换镜像/索引源。
 

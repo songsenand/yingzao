@@ -6,7 +6,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 
 # CAD toolbox: which tool, when, and how not to waste a round
 
-> **生产工具面（2026-11-16）**：模型只看到 9 个 surface。旧工具名（`project_info`、`cad_inspect` (`action: "measure"`)、`render_part` 等）只是内部实现名，直接调用会报 `unknown tool`。
+> **生产工具面（2026-11-16）**：模型只看到 9 个 surface。旧工具名（如 `project_info`、`render_part`）只是内部实现名，直接调用会报 `unknown tool`。
 > 调用格式：`cad_session` / `cad_part` / `cad_assembly` / `cad_check` / `cad_simulate` / `cad_inspect` / `cad_see` / `cad_python` / `cad_deliver` + `action` + `args`。
 
 Nine job surfaces (39 ops), but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
@@ -19,7 +19,7 @@ Nine job surfaces (39 ops), but **three jobs first**. Pick the group, not the to
 
 `instrument` 组只装“读数/坐标/写契约”类工具（`cad_inspect` (`action: "measure"`)、`cad_inspect` (`action: "features"`)、`cad_part` (`action: "generate"`)、`cad_see` (`action: "render"`)、`cad_assembly` (`action: "write"`) 等）；它不是交付判据。声明 `groups` 时不要把 `instrument` 和三个 job 组混为一谈。
 
-> **不要用通用 `edit`/`write` 改 `assembly/assembly.json`**：通用编辑不会跑契约校验，而且会被“未读先写”策略挡住。用 `cad_assembly` (`action: "write"`)。同理，`set_datums` 生成的新版本是元数据版本；它的渲染由工具从父版本复制，不要假设 `versions/<new>/render_*.png` 一定存在，视觉复核图在 `cad-data/render/<v>-review-*.png`。
+> **不要用通用 `edit`/`write` 改 `assembly/assembly.json`**：通用编辑不会跑契约校验，而且会被“未读先写”策略挡住。用 `cad_assembly` (`action: "write"`)。同理，`cad_assembly` (`action: "datums"`) 生成的新版本是元数据版本；它的渲染由工具从父版本复制，不要假设 `versions/<new>/render_*.png` 一定存在，视觉复核图在 `cad-data/render/<v>-review-*.png`。
 
 ## Six rules
 
@@ -28,7 +28,7 @@ Nine job surfaces (39 ops), but **three jobs first**. Pick the group, not the to
 3. **交付要主张，主张要证据**：`cad_deliver` (`action: "audit"`) with `{claims}` 声明你要主张什么——`strength` / `motion` / `assembly` / `manufacturability` / `appearance` / `review`。不声明 claim 时它只审语料一致性（`no-claims-declared`）：绿色语料不等于已交付。**每个交付打印件的最新版本必须先过 `cad_see` (`action: "review"`)（top+iso，带 note）；没有 fresh 记录，`cad_deliver` (`action: "audit"`) 直接 blocked。`cad_part` (`action: "generate"`) with `{views:[]}` 会被强制改成 top+iso，不要再靠“只登记不看图”省图。****外购件/研究体用 `cad_part` (`action: "role"`) 声明** `stock` / `research`（`cad_part` (`action: "merge"`) 输出自动标 research）：审计对它们豁免 printability 与 newest-validated 要求，但豁免会作为 info 可见（G4, 2026-10-29）。
 4. **检测 ≠ 交付**：`attention` 里的位置是“去看这里”，不是判定证据；反过来，工具沉默是检测的失败，“检测到嫌疑”也不构成交付失败。
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
-6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `cad_part` (`action: "generate"`) / `cad_part` (`action: "import"`) 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`cad_deliver` (`action: "audit"`) 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`cad_part` (`action: "import"`) with `{render:false}` 或 `generate_part({views: []})`。
+6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `cad_part` (`action: "generate"`) / `cad_part` (`action: "import"`) 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`cad_deliver` (`action: "audit"`) 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`cad_part` (`action: "import"`) with `{render:false}` 或 `cad_part({ action: "generate", args: { views: [] } })`。
 
 ## Evidence verification (V1; 2026-11-06)
 
@@ -90,7 +90,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 
 ## Default path
 
-想知道**往哪看** → `cad_inspect` (`action: "analyze"`)（|u| 风险图 + 峰表；`attention.json` 的 `fused` 层就是面板画的那张图）。要**交付** → `cad_deliver` (`action: "preflight"`)（一次跑必跑序列，未编排的步骤带原因报出）→ 有强度/运动主张才 `simulate_*` → `cad_deliver` (`action: "audit"`) with `{claims}`。任何一步报 `difficult` / `unevaluable`，回到本文件查该组的原子工具，或加载对应的深度 skill。
+想知道**往哪看** → `cad_inspect` (`action: "analyze"`)（|u| 风险图 + 峰表；`attention.json` 的 `fused` 层就是面板画的那张图）。要**交付** → `cad_deliver` (`action: "preflight"`)（一次跑必跑序列，未编排的步骤带原因报出）→ 有强度/运动主张才跑 `cad_simulate` → `cad_deliver` (`action: "audit"`) with `{claims}`。任何一步报 `difficult` / `unevaluable`，回到本文件查该组的原子工具，或加载对应的深度 skill。
 
 ## Router
 
@@ -135,7 +135,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "before I claim this is delivered" | `cad_deliver` (`action: "plan"`)（只读计划）→ 按每行 `next` 跑原子工具 → `cad_deliver` (`action: "audit"`) | re-reading your own notes; `cad_deliver` (`action: "plan"`) alone is not a claim |
 | "what is missing / what should I run next?", "show me the whole delivery board" | **`cad_deliver` (`action: "plan"`)** (read-only plan derived from BOM/ICD/claims/run graph; each row names its atomic tool) | guessing which check applies, or running `cad_deliver` (`action: "preflight"`) blind |
 | "the human should look at this", "ask them to review", "propose a rollback" | `cad_session` (`action: "review"`) | moving their viewport or opening a modal |
-| "what did v030 look like", "how did this change" | the panel's version gate + compare (the human opens it); or `request_review({items:[{target:"v030"}]})` | re-running old tool calls to "show" it |
+| "what did v030 look like", "how did this change" | the panel's version gate + compare (the human opens it); or `cad_session({ action: "review", args: { items: [{ target: "v030" }] } })` | re-running old tool calls to "show" it |
 | "a check no CAD tool covers" (FEM, optimisation, a custom metric) | `cad_python` (`action: "run"`) | shelling out to the system python |
 | "the runtime is missing / broken / I want it warm" | `cad_python` (`action: "runtime"`) | re-running a failing tool and hoping |
 

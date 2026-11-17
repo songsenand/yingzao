@@ -2,16 +2,16 @@
 
 [中文](../../llm/engines.md) | English
 
-Five engines, five scopes of trust. **Motion/physics/fluid/LBM do not report force or torque; stress reports reactions and section forces, but that is not a safety factor, drive torque or power. None replaces certification.** Axial spring/snap statics are not in these five engines; they live in `check_assembly`'s `spring-behaviour` / `snap-fit` static contract checks. That is not dynamics, contact or fatigue.
+Five engines, five scopes of trust. **Motion/physics/fluid/LBM do not report force or torque; stress reports reactions and section forces, but that is not a safety factor, drive torque or power. None replaces certification.** Axial spring/snap statics are not in these five engines; they live in `spring-behaviour` on `cad_assembly` (`action: "check"`) / `snap-fit` static contract checks. That is not dynamics, contact or fatigue.
 
 ## Playback: how motion is shown
 
-Every `simulate_*` run writes `runs/<id>/trajectory.json` (fluid: `frames.json` + frame
+Every simulation run writes `runs/<id>/trajectory.json` (fluid: `frames.json` + frame
 binaries) into its run directory, and the panel's **run → playback** view reads exactly
 those files: pause, scrub, event markers, chart. The reply carries `runId` and
 `playback`; point the user there.
 
-**A "0 penetration" in a gear run is not evidence about the teeth.** With a `gear` joint the pair's contact is DISABLED (the ratio is prescribed), so the zero is by construction; `metrics.gearContactsDisabled` lists those pairs and the report carries a dedicated note. To show the teeth do not interfere, run the same parts WITHOUT the gear joint (contact mode), or use `validate_assembly`. `solverIterations` (default 4) and `ccdSubsteps` (default 1) are available and echoed in `metrics.solver` — but for thin teeth with a 0.03mm backlash the knobs may not help, and the verdict must say so.
+**A "0 penetration" in a gear run is not evidence about the teeth.** With a `gear` joint the pair's contact is DISABLED (the ratio is prescribed), so the zero is by construction; `metrics.gearContactsDisabled` lists those pairs and the report carries a dedicated note. To show the teeth do not interfere, run the same parts WITHOUT the gear joint (contact mode), or use `cad_assembly` (`action: "validate"`). `solverIterations` (default 4) and `ccdSubsteps` (default 1) are available and echoed in `metrics.solver` — but for thin teeth with a 0.03mm backlash the knobs may not help, and the verdict must say so.
 
 **A trajectory computed by an external script enters through `dsh-cad-import-run`** (`--trajectory`, optional `--stl-dir`): it writes through the same RunWriter, lock and index as the tools, and lands as `check` (the venue did not witness the computation). So when the tool cannot do the simulation, the correct move is **compute with a script and import it**, never edit the plugin source.
 
@@ -20,7 +20,7 @@ yourself invents a second channel that the panel cannot pause, annotate or line 
 the report. When the existing channel cannot express what you mean, say so and name
 what is missing — do not build another one.
 
-## Motion (`simulate_motion`)
+## Motion (`cad_simulate` action `motion`)
 
 - **Kinematics + exact interference timeline**, no gravity. Answers “with this drive, will parts collide, is the stroke enough?”.
 - **Rotates about the pivot, not the world origin.** Corpus parts are in world coordinates; sim bodies start at (0,0,0). The tool rebases geometry to the pivot (default: the first joint anchor naming it, otherwise the geometry centre), so a gear at z=265 does not swing on a 265 mm arm. `pivots` reports the actual pivot.
@@ -29,12 +29,12 @@ what is missing — do not build another one.
 - **Interference coverage is part of the verdict.** Each run samples at least 24 poses, always including the final pose; `interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` report coverage. **0 checks is not 0 collisions.** When travel is too small for 24 poses the result is `check`, not pass.
 - **Overlap between a revolute pair is not reported** — that is a bearing. If a hard stop intentionally collides on that pair, validate it another way.
 - **`cycles` accepts fractions.** A lever at ±14° sweeps 0.078 of a turn; a whole turn turns it into a windmill and it collides with everything.
-- **`drive` is kinematic: it prescribes a crank angle and resolves no contact force.** It answers "does the linkage collide / how far does it travel", never "can a motor carry this load" — that is `simulate_physics` with `motor`.
+- **`drive` is kinematic: it prescribes a crank angle and resolves no contact force.** It answers "does the linkage collide / how far does it travel", never "can a motor carry this load" — that is `cad_simulate` (`action: "physics"`) with `motor`.
 - **A crank is optional.** `drive` is optional: when every moving part is an `oscillator` (a guided part/valve with a prescribed trajectory), the time base is the oscillation period; the reply has `hasCrank: false`. Only “no drive and no oscillator” is refused — that means nothing moves.
 - **A closed loop is a fact, not a verdict.** `closedLoop` / `loopJoints` come from union-find on the joint graph: a tree is false / []; the Roberval balance (5 parts, 6 joints) is true / 2 closing edges. A closed loop can pass — it just saves the reader from re-deriving connectivity.
 - **Geometry sanity is a fact, not a verdict.** For each part, gap to the nearest part ÷ its own bbox diagonal > 5 → `outlier`; ≤ 24 triangles → `simple box`. Neither changes pass/fail, but when `geometrySuspects` is non-empty, “0 interferences” may prove nothing: fructose r013's two fake parts sat 500 mm away and the report still passed. The rule is returned in `geometrySuspectRule`.
 
-## Physics (`simulate_physics`)
+## Physics (`cad_simulate` action `physics`)
 
 - **Rigid bodies + gravity**; answers “will it topple, will it settle?”.
 - **Use `tiltDeg`, do not hand-compute a gravity vector.** `tiltDeg: 5` tilts gravity 5° about `[0,1,0]`; pass `gravity` explicitly only when tiltDeg cannot express the direction.
@@ -47,28 +47,28 @@ what is missing — do not build another one.
 - **Joints between differently oriented parts need per-body axes** (as in motion).
 - **Toppling is measured relative to the authored pose, not world up.** A beam authored at 90° is not “fallen at t=0”; 30° marks an event, 60° sets `fellOver`.
 - **If it is supposed to RUN, it needs a `motor`.** Without one the only motion input is `initialAngularVelocity` — an impulse, not a drive: in the reducer session the worm was given 30 rad/s, travelled 7.5°, spent the 0.056 mm backlash, hit the first tooth face and stopped; six keyframes showed one pose. That is not “it slips”, it is “nothing drove it”. Put `motor: { targetVelocityRadPerSec, maxTorqueNm }` on a revolute joint and it keeps driving; `metrics.motors` reports commanded vs measured (`measuredRadPerSec` / `turnedDeg` / `reachedTarget`), and a stall is also written to `notes`.
-- **A gear ratio is a CONSTRAINT, not a contact result.** `joints: [{ type: 'gear', bodyA, bodyB, ratio, axisA, axisB }]` prescribes turns of B per turn of A (signed; external mesh = −z_A/z_B, a 12:1 worm = −1/12). It is exact and timestep-independent because it is prescribed, not solved — `metrics.gears` prints the ratio the run produced, and it equals the one you asked for. Two boundaries: it transfers no torque (a slipping mesh is out of scope), and the pair does not collide (hence it appears in `contactsDisabled`). "Do the teeth actually drive it" is a contact run WITHOUT the gear joint; "do they collide at this ratio" is `simulate_motion`'s interference timeline.
+- **A gear ratio is a CONSTRAINT, not a contact result.** `joints: [{ type: 'gear', bodyA, bodyB, ratio, axisA, axisB }]` prescribes turns of B per turn of A (signed; external mesh = −z_A/z_B, a 12:1 worm = −1/12). It is exact and timestep-independent because it is prescribed, not solved — `metrics.gears` prints the ratio the run produced, and it equals the one you asked for. Two boundaries: it transfers no torque (a slipping mesh is out of scope), and the pair does not collide (hence it appears in `contactsDisabled`). "Do the teeth actually drive it" is a contact run WITHOUT the gear joint; "do they collide at this ratio" is the interference timeline of `cad_simulate` (`action: "motion"`).
 - **Declare `friction` — the default 0.5 is a number nobody chose.** It is per part, and the value actually used is echoed in `metrics.frictions`. A single-start worm (lead 7.1°) at μ=0.5 has a 26.6° friction angle and is deep in self-locking (η≈19%); POM-on-POM μ≈0.15 is a different machine (η≈40%). Without a declared μ, "it stalls" is a claim about rapier's default, not about your design.
 - **`timestepSec` is an input, and 1/60 is only safe for slow contact.** A surface moving v mm/s advances v·dt per step; when that is comparable to the clearance (0.03–0.15 mm backlash) the solver resolves teeth as interpenetration. Keep v·dt ≤ clearance/10 — a 20 rad/s shaft on a 4 mm pitch radius needs ~1/2000. Steps (and runtime) scale linearly; `stepsRun` says what you got.
 - **`maxTorqueNm` is a hard cap, and the reason a stall can be a conclusion.** Units are N·m (internally ×1e6 into the mm/mN world); below the load the drive loses and `reachedTarget:false`. The marginal band is real: a 3 rad/s drive capped at 5e-4 N·m on a 5.3e-4 N·m pendulum reaches only 1.87 rad/s. A cap of 0, or none at all, is refused — an uncapped motor is not a model of anything.
-- **A motor at target 0 is a brake, not a clamp.** It is a force-capped velocity servo and still creeps under a constant load; for “will it stay put?” use `staticFriction` / `check_assembly`.
+- **A motor at target 0 is a brake, not a clamp.** It is a force-capped velocity servo and still creeps under a constant load; for “will it stay put?” use `staticFriction` / `cad_assembly` (`action: "check"`).
 - **No force/torque output.** A motor is an INPUT, not a measurement: the report does not tell you the torque, power or efficiency that went through it.
 - **The same geometry sanity check runs here.** Gap to nearest ÷ diagonal > 5 → `outlier`; ≤ 24 faces → `simple box`; non-empty `geometrySuspects` means “steady penetration 0” may only mean it fell in an empty field. Does not change pass/fail.
 
-## Fluid (`simulate_fluid`)
+## Fluid (`cad_simulate` action `fluid`)
 
 - **Fixed-boundary MPM**: fluid flows inside part boundaries; answers flow direction, dead zones and pressure-drop trends.
 - **No fluid–structure coupling**: fluid does not push parts, and parts do not deform from fluid. Split into “rigid check + fluid check”, or state the limit.
 - **Not industrial CFD**: do not use it as acceptance data.
 
-## LBM (`simulate_lbm`)
+## LBM (`cad_simulate` action `lbm`)
 
 - **Lattice units, not millimetres.** `latticeVelocity` and returned profiles are cell/step; converting to m/s requires a chosen length scale and viscosity, and must be **stated**. Keep `latticeVelocity ≤ 0.1` (weakly compressible scheme); compare `metrics.peakUx` with `1.5×latticeVelocity` (analytic channel peak).
 - **Development length grows with Re.** `overallStatus: developing` means the parabola is still forming: quote symmetry and shape trends only, not drag/shear numbers, until `developed`; increase `steps` with `reynolds`.
 - **Stage A has no immersed solids.** Only box walls: no part in the flow, no heat, no free surface, no multiphase. “Flow around my part” is currently out of scope — say so, do not run a fake answer.
 - **`overallStatus: diverged` is divergence, not a partial answer.**
 
-## Stress (`simulate_stress`)
+## Stress (`cad_simulate` action `stress`)
 
 - **Linear elastic, isotropic.** It does not know FDM layer direction — usually the first failure path — so a peak is not a safety factor.
 - **Do not ask for “maximum element stress”**: there is no such field. At curvature/notch boundaries it grows without bound under refinement (measured 1.002 → 1.184; fill-ratio weighting did not fix it).

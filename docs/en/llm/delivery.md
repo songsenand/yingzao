@@ -8,10 +8,10 @@
 ## Delivery discipline (non-negotiable, learned the hard way)
 
 1. **Never deliver on green numbers alone.** Before you tell the user a design
-   is done, LOOK at the final state: the assembly renders (validate_assembly
-   attaches them), the panel screenshots, or a fresh render_part of the risky
+   is done, LOOK at the final state: the assembly renders (`cad_assembly` (`action: "validate"`)
+   attaches them), the panel screenshots, or a fresh `cad_see` (`action: "render"`) of the risky
    part. Two microscope deliveries were “all green, obviously fake in the image” because they skipped this step.
-2. **Run `check_printability` on every part before declaring the design done**,
+2. **Run `cad_check` (`action: "printability"`) on every part before declaring the design done**,
    and again after any edit that changes a wall, a boss or an angle. A part can
    be geometrically valid, watertight, interference-free — and still 0.5mm thin
    in a place no number you checked looked at. `verdict: check` means the
@@ -19,8 +19,8 @@
 3. "It compiles / it assembles / the report passes" are three different claims.
    Delivery requires all three PLUS eyes on the shape and a printability pass.
 4. **A part version update invalidates every whole-machine result that names the
-   old version.** Merged rigid bodies (`merge_parts`), `simulate_physics` /
-   `simulate_motion` / `validate_assembly` runs, and `check_assembly` reports are
+   old version.** Merged rigid bodies (`cad_part` (`action: "merge"`)), `cad_simulate` (`action: "physics"`) /
+   `cad_simulate` (`action: "motion"`) / `cad_assembly` (`action: "validate"`) runs, and `cad_assembly` (`action: "check"`) reports are
    all **pinned to a specific version** (run `sourceVersionIds`, manifest node
    `version`, interface `params.runId`). After a part becomes `vNNN+1`, old
    results do not follow — they still say “exists, green, passed”, but describe
@@ -29,7 +29,7 @@
      assembly validation), or state explicitly which version it is based on and
      why it is still valid;
    - update manifest nodes/interfaces that point at the old version, then rerun
-     `check_assembly` (a run citing a superseded run reports `SUPERSEDED`);
+     `cad_assembly` (`action: "check"`) (a run citing a superseded run reports `SUPERSEDED`);
    - never cite an old green run as evidence for the current version — **evidence
      expires with the version it cites**. Test: before saying “passed”, ask
      “which version did it verify?”
@@ -54,10 +54,10 @@
    A motion run now stores its **input** beside the result: `runs/<id>/motion-spec.json`
    holds parts (version or inline code), placement, joints, drive and cycles. Replay it on
    newer versions with `node scripts/replay-motion.mjs <project> <runId> --set part=vNNN`;
-   that is a normal `simulate_motion` call and writes a new run. Runs older than this have
+   that is a normal `cad_simulate` (`action: "motion"`) call and writes a new run. Runs older than this have
    no spec and `verify` reports them as `motion-not-replayable` — for those, re-running
    still means rebuilding the mechanism by hand.
-7. **Run `delivery_audit` before any delivery claim, and answer its findings.**
+7. **Run `cad_deliver` (`action: "audit"`) before any delivery claim, and answer its findings.**
    It reads the corpus (not your memory) and returns: failing runs that are
    still newest of their kind, stale evidence (`stale-evidence`), versions nobody
    checked (`versions-never-cited`, `newest-version-unvalidated`), contract gaps
@@ -69,7 +69,7 @@
    contradicts the claim — fix it, or state the exception explicitly to the user. Citing a green number that the audit
    flags as stale is exactly the failure this step exists to prevent.
 8. **Start the delivery round with the read-only plan, not with a tool hunt.**
-   `deliver` derives a plan from the BOM/ICD, parts roles, claims and the run
+   `cad_deliver` (`action: "plan"`) derives a plan from the BOM/ICD, parts roles, claims and the run
    graph. Each row names the target, the check, the witness (run/check), where to
    look and the atomic tool call that would fill a gap. It runs no CAD and writes
    no run. `planVerdict` is scoped to the process you pass (or the per-part
@@ -85,4 +85,4 @@
    choice needs one user decision. A per-part confirmation loop is a design
    failure, not a rigorous workflow. An unconfirmed policy/recommendation is
    `unobserved`, and the plan asks **once**. **A plan pass is not a claim:** run
-   the named tools, then `verify` / `delivery_audit`.
+   the named tools, then `verify` / `cad_deliver` (`action: "audit"`).

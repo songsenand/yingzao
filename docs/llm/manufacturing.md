@@ -6,7 +6,7 @@
 
 A manufacturing screen answers "does this violate a declared rule". It never answers "which process should I use" — that is a business decision, not a check result.
 
-> **Terminology (2026-10-29).** In this document "overhang" always means **print-overhang**: an FDM surface that is not self-supporting, a support/printability question. It is **not** structural overhang / self-weight stress (internal stress under gravity), which belongs to `simulate_stress`'s **strength** question. That load case now exists (`includeSelfWeight` defaults true; `supports:[{ground:true}]` holds the lowest z face), but it is not physically validated. Do not use unqualified "overhang" for the strength layer.
+> **Terminology (2026-10-29).** In this document "overhang" always means **print-overhang**: an FDM surface that is not self-supporting, a support/printability question. It is **not** structural overhang / self-weight stress (internal stress under gravity), which belongs to the **strength** question of `cad_simulate` (`action: "stress"`). That load case now exists (`includeSelfWeight` defaults true; `supports:[{ground:true}]` holds the lowest z face), but it is not physically validated. Do not use unqualified "overhang" for the strength layer.
 
 ## Printability checklist (volunteer it with the design, don't wait to be asked)
 
@@ -22,11 +22,11 @@ A manufacturing screen answers "does this violate a declared rule". It never ans
 - **Fits**: printed mating pairs get ±0.15mm loose fit; "tight" means a fastener
   or an insert, not a tight print.
 - **Bed and time**: check each part against the bed (e.g. 220×220×250) and the
-  time budget (e.g. ≤6h) with `measure`（`kind="part"`）'s bbox; a part that does not fit is
+  time budget (e.g. ≤6h) with the bbox from `cad_inspect` (`action: "measure"`, `kind="part"`); a part that does not fit is
   split — and the new joint goes into the assembly manifest as an interface.
-- **Color is design data, not a geometric pass.** `check_printability` does not
+- **Color is design data, not a geometric pass.** `cad_check` (`action: "printability"`) does not
   check color; a colored render is not a print-color promise. A GLB can be stored
-  as an appearance sidecar with `attach_appearance`, but it is not a print-color
+  as an appearance sidecar with `cad_part` (`action: "appearance"`), but it is not a print-color
   workflow and the panel still previews STL.
 
 ## Process profiles: a threshold is a declared claim, not a literal
@@ -142,7 +142,7 @@ actually decide this part. Do not present a draft as a standard.
 `'scan'` returns the sampled field only and **no verdict**; `'both'` returns both. The run
 always records both halves — the mode trims the reply, not the record.
 
-**3b. Validate by using it.** Pass the draft to `check_printability` (`profilesJson`). An
+**3b. Validate by using it.** Pass the draft to `cad_check` (`action: "printability"`) (`profilesJson`). An
 invalid profile is REFUSED with the offending rule named — there is no separate validator
 tool, and no partial application: a profile with one bad rule is not "mostly fine".
 
