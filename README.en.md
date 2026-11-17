@@ -150,21 +150,27 @@ The mirror publishes `LICENSE.GPL-2.0`, `SOURCE-OFFER.md` (GPL-2.0 §3(b) writte
 
 > OpenSCAD is prepared during `setup`; the Python runtime is about 400 MB and is installed on first calculation. Neither is shipped in the tarball.
 
-### A. Tarball (preview release; no build)
+### Install (recommended: npm)
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
-dsh plugin --profile <your-profile> add -w "$PWD/package"
-cd package
+dsh plugin --profile <your-profile> add dsh-cad-harness
+```
+
+Then run the one-time setup so the preset and OpenSCAD are in place:
+
+```bash
 npx dsh-cad-setup --openscad=auto   # preset + OpenSCAD
 npx dsh-cad-doctor                  # kind=ok, or an explained degraded
 ```
 
-### B. Source checkout
+Behind a Chinese network, point npm at npmmirror so the package comes from the registry mirror; OpenSCAD still comes from the official snapshot or this project's mirror (the three switches above).
+
+### Alternative: source checkout (contributors)
 
 ```bash
-dsh plugin --profile <your-profile> add -w /path/to/dsh-cad-harness
-cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
+git clone https://github.com/songsenand/yingzao.git
+cd yingzao/dsh-cad-harness && pnpm install && npm run build
+dsh plugin --profile <your-profile> add -w "$PWD"
 node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```

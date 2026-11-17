@@ -150,21 +150,27 @@
 
 > OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算时安装。两者都不随 tarball 分发。
 
-### 方式 A：tarball（预览版，不需要构建）
+### 安装（推荐：npm）
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
-dsh plugin --profile <你的 profile> add -w "$PWD/package"
-cd package
+dsh plugin --profile <你的 profile> add dsh-cad-harness
+```
+
+装完后跑一次准备，把预设和 OpenSCAD 就位：
+
+```bash
 npx dsh-cad-setup --openscad=auto   # 预设 + 自动准备 OpenSCAD
 npx dsh-cad-doctor                  # kind=ok，或有解释的 degraded
 ```
 
-### 方式 B：源码 checkout
+国内网络建议把 npm 源设为 npmmirror，安装会走镜像缓存；OpenSCAD 本身仍从官方快照或本项目镜像下载（见上文三个开关）。
+
+### 备选：源码 checkout（贡献者）
 
 ```bash
-dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
-cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
+git clone https://github.com/songsenand/yingzao.git
+cd yingzao/dsh-cad-harness && pnpm install && npm run build
+dsh plugin --profile <你的 profile> add -w "$PWD"
 node scripts/setup.mjs --openscad=auto
 npx dsh-cad-doctor
 ```

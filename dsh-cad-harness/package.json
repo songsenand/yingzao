@@ -1,8 +1,7 @@
 {
   "name": "dsh-cad-harness",
   "description": "营造（Yingzao）：LLM-driven part and assembly design with a verification loop (OpenSCAD + Manifold compile/render; layered validation: geometry / rigid body / mechanism / MPM fluid), version store and human review channel",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.0-preview.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -204,9 +203,15 @@
     "dsh-cad-import-run": "./scripts/import-run.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
   "cad": {
     "dshRuntime": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/songsenand/yingzao.git",
+    "directory": "dsh-cad-harness"
   }
 }
