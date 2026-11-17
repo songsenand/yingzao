@@ -118,8 +118,11 @@ const candidates = explicitOpenScad
   : [
       process.env.CAD_OPENSCAD_BIN,
       backendConfig.binaryPath,
-      onPath('openscad'),
+      // Match compile.ts: prefer the provisioned checkout snapshot over a
+      // stale system OpenSCAD on PATH. The snapshot is gitignored and absent in
+      // a tarball; there the provisioned binaryPath/PATH remains the fallback.
       existsSync(repoSandbox) ? repoSandbox : null,
+      onPath('openscad'),
     ].filter(Boolean);
 let openscad = null;
 let openscadVersion = null;

@@ -2,7 +2,7 @@
 // B1 acceptance: doctor must separate fail / degraded / ok, not print a wall of
 // green. The injected failures below are the point.
 
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -28,6 +28,15 @@ check('doctor reports a kind', ['ok', 'degraded', 'fail'].includes(baseReport?.k
 check('doctor reports plugin/node/dsh versions', Boolean(baseReport?.version?.plugin && baseReport?.version?.node && baseReport?.version?.dsh));
 check('doctor includes the required checks', ['node', 'plugin-package', 'openscad', 'python-runtime', 'skills', 'preset-skill-path'].every((id) => baseReport?.checks?.some((c) => c.id === id)));
 check('doctor exits 0/1/2 consistently', (base.status === 0 && baseReport.kind === 'ok') || (base.status === 1 && baseReport.kind === 'degraded') || (base.status === 2 && baseReport.kind === 'fail'), `status=${base.status} kind=${baseReport?.kind}`);
+
+// The checkout ships a modern snapshot under bin/ (gitignored). doctor must
+// prefer it over a stale system OpenSCAD on PATH, matching compile.ts; the CI
+// tarball has no bin/, so there the provisioned path/PATH fallback is expected.
+const snapshot = new URL('../../bin/squashfs-root/usr/bin/openscad', import.meta.url).pathname;
+if (existsSync(snapshot)) {
+  const openscadCheck = baseReport?.checks?.find((c) => c.id === 'openscad');
+  check('doctor prefers the provisioned snapshot over PATH', openscadCheck?.detail?.includes(snapshot) && /202[5-9]\./.test(openscadCheck?.detail ?? ''), openscadCheck?.detail);
+}
 
 const missingOpenScad = run(['--json', '--openscad', '/nonexistent/openscad']);
 const missingReport = parse(missingOpenScad);

@@ -73,7 +73,7 @@ npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 | **示例语料重跑** | 推迟到 **0.2**（用户 2026-11-17 指定）。`windup-frog` 的 verify 当前判 **blocked**（motion r028/r063 干涉、printability r042 最薄 0.028mm），其 README 仍写 difficult——以 verify 输出为准；`accept-verify` 对该示例的期望在 0.2 重跑后同步更新 |
 | 第二几何内核 | 没有。CadQuery/FreeCAD 在目录里是 `planned`，不可选、不静默回退 |
 | 后台 job | 只有 OpenSCAD 编译；渲染/仿真仍同步 |
-| OpenSCAD 版本 | 2021.01 可跑但 `doctor` 报 degraded（Manifold 需要 2025.06+） |
+| OpenSCAD 版本 | checkout 的 `bin/squashfs-root` 是 2026.09.23，`doctor` 现在与 `compile` 同序、优先用它；只有 tarball/CI 没有 snapshot 且 PATH 只有 2021.01 时才会 degraded。发布包仍不捆绑 OpenSCAD |
 | GitHub Actions | workflow 已写并在本地 `rehearse:preview` 等价通过，**尚未真实跑过**（首次打 tag 时验证） |
 | 包体 | 12 MB 主要来自标准件 visual STL；fit/visual 分包是后续项 |
 | `_UNVERIFIED` | 是提示，不是安全边界；改名不改变 manifest 判定 |
@@ -87,7 +87,7 @@ npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
 |---|---|
 | `npm run rehearse:preview` | **PASS**：build → accept:preview → pack → extract → setup → setup --check → doctor → 打包后的 verify-cli |
 | tarball | **521 files / 11.7 MB packed / 38.6 MB unpacked**；含 LICENSE/NOTICE；library 393 条目；无 `/home/` 路径、无 BOSL2/AppImage/node_modules/CadQuery 环境、无 `.venv` |
-| `doctor`（checkout） | `kind=degraded`，唯一非 pass 是 OpenSCAD 2021.01（已知边界），无 fail |
+| `doctor`（checkout） | **`kind=ok`**；OpenSCAD 2026.09.23 snapshot 优先于 PATH 的 2021.01（doctor 候选顺序已与 compile 对齐） |
 | 全量 `npm run accept` | **5320 PASS / 0 FAIL**，exit 0；49 个脚本调用（含新增 library catalog 验收） |
 | `accept:verify`（单独） | **PASS**；包含 claim/run/stale/exception/CLI 退出码用例 |
 | 覆盖率 | 非本次发布门禁；上一轮记录 `src/` 行 89.0%、函数 83.0%、工具边界 39/39，本次未复跑 |

@@ -304,7 +304,7 @@ interface CadBackend {
 - **后台 job 只覆盖 OpenSCAD 编译**：submit/status/cancel/timeout/重启恢复/孤儿清理已验收；渲染与仿真仍同步。
 - **GitHub Actions 未实际运行**：workflow 已写并在本地 `rehearse:preview` 通过；推送/tag 待网络。
 - **A4 的真实断网/磁盘满注入未跑**：分类器与 state 落盘已测；真实网络故障仍靠现场。
-- **OpenSCAD 2021.01 可用但 degraded**：2025.06+ 推荐（Manifold）。这不是安装失败。
+- **系统只有 OpenSCAD 2021.01 时可用但 degraded**：checkout 的 `bin/squashfs-root` 是 2026.09.23，`doctor`/`compile` 优先用它；tarball/CI 没有 snapshot 时，推荐 provision 2025.06+。这不是安装失败。
 - **没有第二个几何内核**：CadQuery/FreeCAD 是 planned，不可选、不静默回退。
 - **没有自动迁移器**：schema 不匹配时 doctor 拒绝并给备份说明；迁移需人工。
 - **导出是风险标注，不是放行**：`_UNVERIFIED` 是提示，不是安全边界。
