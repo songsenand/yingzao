@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PY = join(ROOT, '.tmp-cad-runtime', 'venv', 'bin', 'python');
+const PY = join(process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(ROOT, '.tmp-cad-runtime'), 'venv', 'bin', 'python');
 const CORPUS = join(ROOT, '..', 'examples', 'toy-balance', 'cad-data', 'versions', 'v069', 'model.stl');
 const BUDGET_MS = 20_000;
 
@@ -47,7 +47,9 @@ const before = workers();
 const t0 = Date.now();
 const res = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
   cwd: ROOT,
-  env: { ...process.env, DSH_CAD_PYTHON_ROOT: join(ROOT, '.tmp-cad-runtime') },
+  // The child inherits the caller's runtime; forcing `.tmp-cad-runtime` here made
+  // the tripwire fail (status 1) whenever the environment pointed at a real one.
+  env: { ...process.env, DSH_CAD_PYTHON_ROOT: process.env.DSH_CAD_PYTHON_ROOT ?? join(ROOT, '.tmp-cad-runtime') },
   encoding: 'utf8',
   timeout: BUDGET_MS,
 });

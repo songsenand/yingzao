@@ -48,11 +48,18 @@ check(/source: \{ runId: pinnedId/.test(tools), 'the pinned answer names its run
 // ── the panel follows it, and admits the fallback ──────────────────────────
 const panel = await readFile(join(ROOT, 'src', 'client', 'panel.ts'), 'utf8');
 check(/attentionQuery\(\{ run: run \?/.test(panel), 'the panel asks through the shared rule');
-check(/fellBack/.test(panel) && /已显示该版本最新的一份/.test(panel),
+// The sentence moved into the i18n table (panel.ts calls tr('ui.hint.heatFallback')).
+// The invariant is "a substitution is admitted", not "the literal is in panel.ts".
+check(/fellBack/.test(panel) && /ui\.hint\.heatFallback/.test(panel),
   'and tells the human when it substituted another field');
 
 // ── the legend names the source (the earlier half of E5) ───────────────────
-check(/来源 \$\{payload\.source\.runId\}/.test(panel), 'the legend names the run that produced the field');
+const i18n = await readFile(join(ROOT, 'src', 'client', 'i18n.ts'), 'utf8');
+check(/ui\.hint\.heatFallback':\s*'[^']*已显示该版本最新的一份/.test(i18n),
+  'the fallback sentence is the one the human reads');
+check(/ui\.hint\.heatSource':\s*'[^']*来源 \{run\}/.test(i18n)
+  && /heatSource[^\n]*run: payload\.source\.runId/.test(panel),
+  'the legend names the run that produced the field');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nOK');
 process.exit(failures ? 1 : 0);

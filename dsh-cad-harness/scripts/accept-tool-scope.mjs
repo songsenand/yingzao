@@ -216,7 +216,10 @@ function checkPatchComposition() {
     check(/name: '@deepseek-ai\/dsh-agent-preset'/.test(block),
       'the declaration row uses the current preset package', '@deepseek-ai/dsh-agent-preset');
     check(/\n {4}id: cad\n/.test(block), 'the composed declaration names the `cad` preset');
-    check(block.includes(join(ROOT, 'skills')),
+    // Search the WHOLE dump, not the 8000-char window: the declaration grew (persona
+    // text + plugin rows) and the skills line now sits past the window, which made a
+    // correct composition look unmounted.
+    check(out.includes(join(ROOT, 'skills')),
       'the composed declaration mounts this repository\'s skill root', join(ROOT, 'skills'));
     check(/- id: cad-harness-host\n(?:.*\n)*? {4}toolScope: preset/.test(out), 'the CAD plugin row asks for preset scope');
     check(!/patch: entry .* not found|patch: name mismatch/.test(out), 'no patch was skipped (id and name both matched)');

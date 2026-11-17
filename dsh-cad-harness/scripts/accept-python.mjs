@@ -31,6 +31,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractTarGz } from '../src/host/tar-extract.ts';
@@ -48,7 +49,10 @@ const argOf = (flag, fallback) => {
 const QUICK = args.includes('--quick');
 const KEEP = args.includes('--keep');
 const ARCHIVE = argOf('--archive', null);
-const RUNTIME_ROOT = argOf('--runtime-root', null);
+// Reuse the caller's runtime when one is named: a full-suite run must not
+// re-download a runtime the environment already points at (same convention as the
+// parity tests). `--runtime-root` still wins when both are present.
+const RUNTIME_ROOT = argOf('--runtime-root', process.env.DSH_CAD_PYTHON_ROOT?.trim() || null);
 const INDEX_URL = argOf('--index', process.env.DSH_CAD_PYTHON_INDEX_URL ?? PIP_INDEXES[1]);
 
 let failures = 0;
@@ -152,7 +156,11 @@ function tarGz(entries) {
   return gzipSync(Buffer.concat([...entries, end]));
 }
 
-const work = mkdtempSync(join(ROOT, '..', '.tmp-accept-python-'));
+// Hermetic: under the repo root the fixture sits inside the CAD *workspace*
+// (cad-workspace.json), so project-root resolution walks up instead of picking
+// the fixture — and a check about "the store was created for THIS project" then
+// inspects the wrong path. A temp dir has no ancestor marker.
+const work = mkdtempSync(join(tmpdir(), 'cad-accept-python-'));
 try {
   const goodTar = join(work, 'good.tar.gz');
   const longName = `python/${'x'.repeat(140)}.txt`;
@@ -329,7 +337,12 @@ try {
       fakeExec,
     );
     check(viaTool.ok && /tool path ok/.test(viaTool.stdout), 'the tool runs Python in the project directory', viaTool.stdout.trim());
-    check(existsSync(join(projectDir, 'cad-data')), 'the tool call resolves (and creates) the project store');
+    // The invariant is "the call resolved a store for THIS project". Outside a
+    // workspace that root is <project>/cad-data (projectStores names it), and the
+    // fixture now lives in tmpdir() so no ancestor workspace can redirect it.
+    const { projectStores } = await import('../src/host/project.ts');
+    const storeRoot = projectStores(projectDir).root;
+    check(existsSync(storeRoot), 'the tool call resolves (and creates) the project store', storeRoot);
     const statusViaTool = await statusTool.execute({ action: 'status' });
     check(
       statusViaTool.state === 'ready' && /Python runtime: ready/.test(statusViaTool.summary),

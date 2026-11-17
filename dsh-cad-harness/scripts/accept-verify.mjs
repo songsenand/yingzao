@@ -201,7 +201,10 @@ const tmp = await mkdtemp(join(tmpdir(), 'verify-accept-'));
 let positiveRoot = null;
 try {
   // 1) three examples: verdicts fixed by the contract ---------------------
-  const expected = { windup: 'warn', roberval: 'blocked', table: 'blocked' };
+  // windup has current failing runs (motion r028/r063, printability r042) and the
+  // 2026-11-17 rule keeps an older-scope failure visible until a newer run asks the
+  // same question — so it is blocked, not the `difficult` its README still claims.
+  const expected = { windup: 'blocked', roberval: 'blocked', table: 'blocked' };
   for (const [name, dir] of Object.entries(examples)) {
     const r = await verify({ projectRoot: dir });
     check(r.report.verdict === expected[name], `${name}: verdict ${expected[name]}`, r.report.verdict);
@@ -495,8 +498,12 @@ try {
 
   // 7) CLI exit codes -----------------------------------------------------
   check(runCli([examples.windup, '--advisory']).status === 0, 'cli advisory exits 0');
-  check(runCli([examples.windup, '--block']).status === 1, 'cli blocking warn exits 1');
-  check(runCli([examples.windup, '--block', '--strict']).status === 2, 'cli strict warn exits 2');
+  // A warn verdict with a valid exception is the warn fixture now (windup blocks):
+  // the CLI exit-code contract is what matters, not which corpus supplies it.
+  check(runCli([examples.roberval, '--block', '--policy', validPolicy]).status === 1,
+    'cli blocking warn exits 1');
+  check(runCli([examples.roberval, '--block', '--strict', '--policy', validPolicy]).status === 2,
+    'cli strict warn exits 2');
   check(runCli([examples.roberval, '--block']).status === 2, 'cli blocked exits 2');
   check(runCli([positive, '--block']).status === 0, 'cli pass exits 0');
   check(runCli([]).status === 3, 'cli usage error exits 3');
