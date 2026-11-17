@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-17T01:35:42.161Z",
+  "generatedAt": "2026-11-17T01:41:50.140Z",
   "project": "/home/songsenand/Project/ToyMarker/examples/ball-valve-dn100",
   "claims": [
     {
@@ -31,7 +31,7 @@
     {
       "severity": "warn",
       "code": "stale-evidence",
-      "detail": "1/20 runs cite geometry that has since been replaced — e.g. r001(assembly, superseded v005)"
+      "detail": "1/29 runs cite geometry that has since been replaced — e.g. r001(assembly, superseded v005)"
     },
     {
       "severity": "info",
@@ -51,7 +51,7 @@
     {
       "severity": "info",
       "code": "overlay-backed-runs",
-      "detail": "20 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+      "detail": "29 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
     }
   ],
   "visual": {
@@ -80,7 +80,7 @@
     "newestNeverValidated": []
   },
   "runs": {
-    "total": 20,
+    "total": 29,
     "stale": [
       {
         "id": "r001",
@@ -92,6 +92,22 @@
       }
     ],
     "failing": [
+      {
+        "id": "r027",
+        "kind": "turning",
+        "summary": "回转对称是绕“经过包围盒中心的声明主轴”测的；不搜索其他轴偏置。",
+        "sourceVersionIds": [
+          "v019"
+        ]
+      },
+      {
+        "id": "r022",
+        "kind": "printability",
+        "summary": "打印悬垂 0mm² · 最薄 0.026mm · 可疑处 6",
+        "sourceVersionIds": [
+          "v003"
+        ]
+      },
       {
         "id": "r014",
         "kind": "assembly",
@@ -140,6 +156,16 @@
       }
     ],
     "latestByKind": {
+      "turning": {
+        "id": "r029",
+        "status": "pass",
+        "timestamp": "2026-11-17T01:40:45.960Z"
+      },
+      "printability": {
+        "id": "r026",
+        "status": "pass",
+        "timestamp": "2026-11-17T01:40:16.870Z"
+      },
       "assembly-check": {
         "id": "r020",
         "status": "pass",
@@ -164,11 +190,6 @@
         "id": "r013",
         "status": "check",
         "timestamp": "2026-11-17T01:12:33.705Z"
-      },
-      "printability": {
-        "id": "r012",
-        "status": "check",
-        "timestamp": "2026-11-17T01:10:09.598Z"
       }
     }
   },
@@ -246,5 +267,5 @@
     "truncated": false
   },
   "judgement": "difficult",
-  "summary": "21 versions / 13 parts / 20 runs · 0 blocked · 2 warn · 5 info · stale runs 1 · newest-unvalidated parts 0"
+  "summary": "21 versions / 13 parts / 29 runs · 0 blocked · 2 warn · 5 info · stale runs 1 · newest-unvalidated parts 0"
 }

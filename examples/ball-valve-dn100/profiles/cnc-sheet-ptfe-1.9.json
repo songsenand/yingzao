@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "id": "cnc-sheet-ptfe-1.9",
+  "process": "CNC-3axis",
+  "material": "PTFE sheet 1.9 mm",
+  "machine": "CNC router / 2.5D profiling table, Ø3 mm cutter",
+  "description": "2.5D profiling of a 1.9 mm PTFE gasket: the sheet thickness IS the part thickness, so a milled-wall rule of 3 mm is the wrong ruler. Governing limits are the in-plane contour features and the cutter radius.",
+  "rules": {
+    "wallMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.0,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "1.9 mm sheet cannot carry a 3 mm wall rule; 1 mm is the minimum in-plane rib"
+      }
+    },
+    "featureMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 0.8,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "minimum in-plane feature on a 1.9 mm PTFE sheet before it tears"
+      }
+    },
+    "gapMinMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 3,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "derived = 2 x toolRadiusMm (Ø3 cutter)"
+      }
+    },
+    "overhangDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "2D profiling; no overhang."
+    },
+    "bridgeMaxMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No unsupported span."
+    },
+    "holeAspectMax": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "Sheet through-cut; aspect does not govern."
+    },
+    "draftMinDeg": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No mold release."
+    },
+    "escapePassageMinMm": {
+      "applies": false,
+      "decidable": "geometry",
+      "reason": "No trapped powder or resin."
+    },
+    "toolRadiusMm": {
+      "applies": true,
+      "decidable": "geometry",
+      "value": 1.5,
+      "direction": "min",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "Ø3 mm router is the smallest cutter used on sheet"
+      }
+    },
+    "tolMm": {
+      "applies": true,
+      "decidable": "declared-requirement",
+      "value": 0.2,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "sheet profiling ±0.2 mm"
+      }
+    },
+    "surfaceRaUm": {
+      "applies": true,
+      "decidable": "not-decidable",
+      "value": 6.3,
+      "direction": "max",
+      "source": {
+        "kind": "rule-of-thumb",
+        "ref": "cut edge Ra 6.3 um"
+      }
+    }
+  },
+  "notes": "DRAFT 2026-11-17, not calibrated. Authored because the 1.9 mm gasket is sheet stock: screening it against the 3 mm milled-wall profile would exclude a part that is correctly made from sheet. The thickness is the product, not a wall."
+}
