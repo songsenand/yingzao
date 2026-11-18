@@ -1,0 +1,17 @@
+{
+  "name": "yingzao",
+  "version": "0.1.0-preview.4",
+  "private": true,
+  "description": "Scanner-facing manifest for the repository root. The installable package lives in dsh-cad-harness/; this file exists so GitHub-topic indexers and catalog gates that only read the repository root can see that the repository is a DSH plugin.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/songsenand/yingzao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/songsenand/yingzao.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh-cad-harness/cordis.patch.yml"
+    }
+  }
+}

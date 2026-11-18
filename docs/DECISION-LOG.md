@@ -6330,3 +6330,17 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **补记（2026-11-17 晚）：** 镜像合规三件套已实际上传到 `openscad/2025.12.30/`（LICENSE.GPL-2.0、SOURCE-OFFER.md、manifest.json，公网可读），并核对了该前缀下三个二进制与 `SHA256SUMS` 的存在。快照 pin 暂保持 2025.12.30：用户确认"选择版本并无特别理由"，但对齐到实验里实测的 2026.09.23 需要重新下载三个官方 archive（zip 66 MB / AppImage / dmg），而上游从本机实测约 **12.5 KB/s**，全量约需 4 小时，故不在发布前夜做这件事；`provision-lib.mjs` 的常量上方已写明换版四步。
 
 **补记（2026-11-18）：** dsh.so 检查器报「找到许可证文件，但无法确定 SPDX 标识」。原因不是缺少许可证，而是仓库里同时存在 `LICENSE`（Apache-2.0）与 `dsh-cad-harness/mirror/LICENSE.GPL-2.0`（GPL-2.0），自动识别拿到两个候选因而无法判定。处置：GPL 文本从仓库与 npm 包中移除，**只随镜像二进制发布**（OSS 前缀内仍在，公网可读）；仓库保留 `SOURCE-OFFER.md` 与 `manifest.json`，`accept-mirror-manifest` 改为断言"manifest 命名了该文件且仓库内不再存在"。合规义务不变（许可证与源码要约仍与二进制同处发布），但仓库回到单一 Apache-2.0 许可证，SPDX 可判定。相应发布 `0.1.0-preview.4`。
+
+## 2026-11-18（补充）：仓库根加"扫描器用"的瘦 package.json
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（影响分发与市场收录口径）。
+
+**要解决的问题：** dsh.so 的 topic 自动索引在 2026-11-18T01:27Z 重建后仍没有收录本仓库；同时 awesome 的门禁对"指向仓库根"的条目判失败。两处都只读**仓库根**的 `package.json`，而我们的包在 `dsh-cad-harness/` 子目录，根目录什么都没有。
+
+**决策内容：** 根目录新增一个 `private: true` 的瘦 `package.json`，只声明 `dsh.bundle.patch` 指向 `./dsh-cad-harness/cordis.patch.yml`，不含 `main`、不含依赖。它是给"只读根目录"的扫描器用的声明，不是第二个可安装包。
+
+**理由：** 收录与门禁都按根目录判，这是对方实现的既成事实；与其在每次投稿时解释子目录，不如让根目录自己说明。保持 `private: true` 且不写 `dependencies`，避免有人把它当成可安装包——`github:owner/repo` 安装仍不受支持，官方路径是 npm。
+
+**依据：** 索引重建后 `songsenand`/`yingzao` 命中 0；awesome 的 `hasBundle(root)` 在无根清单时返回失败并要求改用子路径 URL。
+
+**影响：** 根目录从此是一个 npm 包（private）；在根执行 `npm install` 会把它当作包，CI 不受影响（工作目录固定在 `dsh-cad-harness/`）。若将来支持整仓安装，需在此文件补 `dependencies` 与入口。
