@@ -2,7 +2,9 @@
 
 # Yingzao (营造) · dsh-cad-harness
 
-**Describe a part or assembly in natural language; a multimodal LLM calls CAD engines through a DeepSeek Harness plugin to produce a verified, deliverable model.**
+**The agent generates. The plugin closes the loop.**
+
+A dsh plugin for mechanical CAD — fit, motion and manufacturability checked before you accept a model, and the final call left to you.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/en/user/install.md)
@@ -13,6 +15,15 @@
 [中文](README.md) · [Quick start](#quick-start) · [Verification](#verification) · [Documentation](#documentation)
 
 </div>
+
+| Part | Assembly | Motion |
+|---|---|---|
+| ![M8 bolt and nut](docs/images/readme/m8-bolt-nut.png) | ![Three-stage 64:1 spur reducer](docs/images/readme/reducer-64.png) | ![DN100 ball valve, 90° travel](docs/images/readme/ball-valve-90.gif) |
+| Real **M8×1.25** thread, about **5.2 turns** engaged | 24 instances / 276 pairs, **0 interference**, ratio **64.000** | **0→90°** travel, 24/24 poses, **0 interference** |
+
+```bash
+dsh plugin --profile <your-profile> add dsh-cad-harness
+```
 
 ## Contents
 

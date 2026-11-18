@@ -2,7 +2,9 @@
 
 # 营造 · Yingzao
 
-**用自然语言描述零件或装配体；多模态大模型通过 DeepSeek Harness 插件调用 CAD 引擎，得到经过验证、可交付的模型。**
+**Agent 负责生成，插件负责闭环。**
+
+dsh 的机械 CAD 插件：验收前替你把配合、运动与可制造性查一遍，最终判断留给你。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
@@ -13,6 +15,15 @@
 [English](README.en.md) · [快速开始](#快速开始) · [验证](#验证) · [文档](#文档)
 
 </div>
+
+| 零件 | 装配 | 运动 |
+|---|---|---|
+| ![M8 螺栓与螺母](docs/images/readme/m8-bolt-nut.png) | ![三级直齿 64:1 减速器](docs/images/readme/reducer-64.png) | ![DN100 球阀 90° 行程](docs/images/readme/ball-valve-90.gif) |
+| 真实 **M8×1.25** 螺纹，约 **5.2 圈**啮合 | 24 实例 / 276 对，**0 干涉**，传动比 **64.000** | **0→90°** 行程，24/24 位姿，**0 干涉** |
+
+```bash
+dsh plugin --profile <你的 profile> add dsh-cad-harness
+```
 
 ## 目录
 
