@@ -104,3 +104,59 @@ jobs:
         with:
           name: dsh-cad-harness-preview
           path: dsh-cad-harness/artifacts/*.tgz
+
+  windows-smoke:
+    name: install smoke (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: dsh-cad-harness
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build host + client + verify CLI
+        run: npm run build
+      - name: Install dsh
+        run: npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+      # Exercises the Windows branch of the provisioner (PowerShell Expand-Archive),
+      # which is the part no other job touches.
+      - name: Provision OpenSCAD (windows)
+        run: node scripts/provision-openscad.mjs --source official --json
+      - name: Setup checkout preset for this runner
+        run: |
+          STD="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml"
+          test -f "$STD"
+          node scripts/setup.mjs --openscad=off --standard "$STD"
+      - name: Windows smoke suites
+        run: |
+          set -o pipefail
+          npm run accept:mirror-manifest 2>&1 | tee "$TEMP/win-smoke.log"
+          npm run accept:provision 2>&1 | tee -a "$TEMP/win-smoke.log"
+          npm run accept:setup 2>&1 | tee -a "$TEMP/win-smoke.log"
+          npm run accept:bundle-load 2>&1 | tee -a "$TEMP/win-smoke.log"
+          npm run accept:doctor 2>&1 | tee -a "$TEMP/win-smoke.log"
+      - name: Doctor (fail only on kind=fail)
+        run: |
+          node scripts/doctor.mjs --json > doctor.json || true
+          node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); for(const c of r.checks||[]) if(c.status==="fail") console.log("::error::"+c.id+": "+c.detail+" (fix: "+(c.fix||"")+")"); if(r.kind==="fail") process.exit(1)'
+      - name: Publish failure summary
+        if: failure()
+        run: |
+          tail -120 "$TEMP/win-smoke.log" >> "$GITHUB_STEP_SUMMARY" || true
+          grep -E 'FAIL' "$TEMP/win-smoke.log" | tail -20 | while IFS= read -r line; do echo "::error::${line}"; done || true
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-smoke-log
+          path: ${{ runner.temp }}/win-smoke.log
+          if-no-files-found: ignore
