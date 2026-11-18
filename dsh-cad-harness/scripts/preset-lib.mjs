@@ -16,9 +16,24 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { basename, join } from 'node:path';
 
 /** Where the shipped `standard.patch.yml` can live, most specific first. */
+/** `npm root -g`, or null. Bounded and silent: a missing npm is not an error. */
+function npmGlobalRoot() {
+  try {
+    const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const result = spawnSync(cmd, ['root', '-g'], {
+      encoding: 'utf8', timeout: 5000, shell: process.platform === 'win32',
+    });
+    const dir = result.status === 0 ? (result.stdout ?? '').trim() : '';
+    return dir && existsSync(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
 export function findStandardPatch(root) {
   const preset = (base) => join(base, '@deepseek-ai', 'dsh-web-app', 'presets', 'standard.patch.yml');
   const nested = (base) => join(base, '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-web-app', 'presets', 'standard.patch.yml');
@@ -26,7 +41,11 @@ export function findStandardPatch(root) {
     process.env.DSH_STANDARD_PATCH,
     join(root, 'node_modules'),
     join(homedir(), '.local', 'lib', 'node_modules'),
+    // npm's global layout differs by platform: <prefix>/lib/node_modules on
+    // POSIX, <prefix>/node_modules on Windows. Ask npm rather than guessing.
     process.env.npm_config_prefix ? join(process.env.npm_config_prefix, 'lib', 'node_modules') : null,
+    process.env.npm_config_prefix ? join(process.env.npm_config_prefix, 'node_modules') : null,
+    npmGlobalRoot(),
     '/usr/local/lib/node_modules',
     '/opt/homebrew/lib/node_modules',
   ].filter(Boolean);
