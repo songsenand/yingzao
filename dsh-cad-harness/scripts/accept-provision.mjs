@@ -7,6 +7,10 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const SELF_DIR = fileURLToPath(new URL('.', import.meta.url));
+const win32 = process.platform === 'win32';
 import { assetFor, downloadWithFallback, readBackendConfig, sourcesFor } from './provision-lib.mjs';
 
 let passed = 0;
@@ -133,17 +137,20 @@ try {
     check('backend config preserves compileBackend', cfg.compileBackend === 'cgal');
     check('backend config reads binaryPath', cfg.binaryPath === null);
 
-    const stub = join(tmp, 'openscad');
-    writeFileSync(stub, '#!/bin/sh\necho "OpenSCAD version 2025.12.30"\n');
-    chmodSync(stub, 0o755);
+    // A #!/bin/sh stub is only executable on POSIX; on Windows spawnSync cannot
+    // run it, so this assertion is skipped rather than failed.
+    const stub = join(tmp, win32 ? 'openscad.cmd' : 'openscad');
+    writeFileSync(stub, win32 ? '@echo OpenSCAD version 2025.12.30\r\n' : '#!/bin/sh\necho "OpenSCAD version 2025.12.30"\n');
+    if (!win32) chmodSync(stub, 0o755);
     writeFileSync(join(dir, 'backend.json'), JSON.stringify({ kernel: 'openscad', compileBackend: 'auto', binaryPath: stub }));
-    const doctor = spawnSync(process.execPath, [new URL('./doctor.mjs', import.meta.url).pathname, '--json'], {
+    const doctor = spawnSync(process.execPath, [fileURLToPath(new URL('./doctor.mjs', import.meta.url)), '--json'], {
       encoding: 'utf8', timeout: 30000, env: { ...process.env, DSH_HOME: home },
     });
     let report = null;
     try { report = JSON.parse(doctor.stdout); } catch { /* assert below */ }
     const openscadCheck = report?.checks?.find((c) => c.id === 'openscad');
-    check('doctor honors provisioned binaryPath', openscadCheck?.status === 'pass', openscadCheck?.detail);
+    if (win32) console.log('  SKIP doctor honors provisioned binaryPath (POSIX stub executable)');
+    else check('doctor honors provisioned binaryPath', openscadCheck?.status === 'pass', openscadCheck?.detail);
   }
 
   // 8. CAD_OPENSCAD_MIRROR overrides the mirror base, and only over http(s)
@@ -159,7 +166,7 @@ try {
 
   // 9. a local archive is only accepted when it is the pinned build
   {
-    const provision = new URL('./provision-openscad.mjs', import.meta.url).pathname;
+    const provision = fileURLToPath(new URL('./provision-openscad.mjs', import.meta.url));
     const bogus = join(tmp, assetFor('win32').filename);
     writeFileSync(bogus, 'not the pinned archive');
     const run = (extra) => spawnSync(process.execPath, [provision, '--from', bogus, '--json'], {
