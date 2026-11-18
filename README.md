@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/user/limits.md)
+[![npm](https://img.shields.io/npm/v/dsh-cad-harness?label=npm)](https://www.npmjs.com/package/dsh-cad-harness)
 [![Status](https://img.shields.io/badge/status-0.1.0%20%E9%A2%84%E8%A7%88%E7%89%88-orange.svg)](docs/user/preview.md)
 
 [English](README.en.md) · [快速开始](#快速开始) · [验证](#验证) · [文档](#文档)
@@ -162,6 +163,8 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 npx dsh-cad-setup --openscad=auto   # 预设 + 自动准备 OpenSCAD
 npx dsh-cad-doctor                  # kind=ok，或有解释的 degraded
 ```
+
+> pnpm 12 首次安装会提示 `Agent skills awaiting approval: dsh-cad-harness`——这是它对包内 skills 的审批提示，不是安装失败；`pnpm approve` 可以查看。
 
 国内网络建议把 npm 源设为 npmmirror，安装会走镜像缓存；OpenSCAD 本身仍从官方快照或本项目镜像下载（见上文三个开关）。
 

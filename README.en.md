@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/en/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/en/user/limits.md)
+[![npm](https://img.shields.io/npm/v/dsh-cad-harness?label=npm)](https://www.npmjs.com/package/dsh-cad-harness)
 [![Status](https://img.shields.io/badge/status-0.1.0%20preview-orange.svg)](docs/en/user/preview.md)
 
 [中文](README.md) · [Quick start](#quick-start) · [Verification](#verification) · [Documentation](#documentation)
@@ -162,6 +163,8 @@ Then run the one-time setup so the preset and OpenSCAD are in place:
 npx dsh-cad-setup --openscad=auto   # preset + OpenSCAD
 npx dsh-cad-doctor                  # kind=ok, or an explained degraded
 ```
+
+> pnpm 12 prints `Agent skills awaiting approval: dsh-cad-harness` on first install. That is its approval prompt for the skills shipped in the package, not a failure; `pnpm approve` reviews them.
 
 Behind a Chinese network, point npm at npmmirror so the package comes from the registry mirror; OpenSCAD still comes from the official snapshot or this project's mirror (the three switches above).
 
