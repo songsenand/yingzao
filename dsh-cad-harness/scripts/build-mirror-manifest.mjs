@@ -78,9 +78,16 @@ if (archiveDir) {
   console.log(`verified ${manifest.assets.length} archive(s) in ${archiveDir}`);
 }
 
+// Compare content, not bytes: a Windows checkout rewrites the file with CRLF
+// (core.autocrlf), and a byte compare then reports "stale" for an unchanged
+// hash table. Parse both sides; formatting drift is not what this gate guards.
+const sameManifest = (a, b) => {
+  if (a === b) return true;
+  try { return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b)); } catch { return false; }
+};
 const current = existsSync(MANIFEST) ? readFileSync(MANIFEST, 'utf8') : null;
 if (check) {
-  if (current === text) {
+  if (sameManifest(current, text)) {
     console.log(`mirror/manifest.json matches the pinned ${OPENSCAD_VERSION} table`);
     process.exit(0);
   }

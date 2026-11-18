@@ -2,3 +2,7 @@
 # source whitespace and must not block commits. STL is binary.
 *.step -whitespace
 *.stl binary
+
+# Generated JSON is compared across platforms; keep the working copy LF so a
+# Windows checkout (core.autocrlf) does not look like a content change.
+*.json text eol=lf
