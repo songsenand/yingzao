@@ -136,27 +136,19 @@ jobs:
           STD="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml"
           test -f "$STD"
           node scripts/setup.mjs --openscad=off --standard "$STD"
-      - name: Windows smoke suites
-        run: |
-          set -o pipefail
-          npm run accept:mirror-manifest 2>&1 | tee "$TEMP/win-smoke.log"
-          npm run accept:provision 2>&1 | tee -a "$TEMP/win-smoke.log"
-          npm run accept:setup 2>&1 | tee -a "$TEMP/win-smoke.log"
-          npm run accept:bundle-load 2>&1 | tee -a "$TEMP/win-smoke.log"
-          npm run accept:doctor 2>&1 | tee -a "$TEMP/win-smoke.log"
+      # One suite per step: a failure then names the suite, and no tee/pipe can
+      # break the step. The job log is the record; no artifact is uploaded.
+      - name: accept:mirror-manifest
+        run: npm run accept:mirror-manifest
+      - name: accept:provision
+        run: npm run accept:provision
+      - name: accept:setup
+        run: npm run accept:setup
+      - name: accept:bundle-load
+        run: npm run accept:bundle-load
+      - name: accept:doctor
+        run: npm run accept:doctor
       - name: Doctor (fail only on kind=fail)
         run: |
           node scripts/doctor.mjs --json > doctor.json || true
           node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); for(const c of r.checks||[]) if(c.status==="fail") console.log("::error::"+c.id+": "+c.detail+" (fix: "+(c.fix||"")+")"); if(r.kind==="fail") process.exit(1)'
-      - name: Publish failure summary
-        if: failure()
-        run: |
-          tail -120 "$TEMP/win-smoke.log" >> "$GITHUB_STEP_SUMMARY" || true
-          grep -E 'FAIL' "$TEMP/win-smoke.log" | tail -20 | while IFS= read -r line; do echo "::error::${line}"; done || true
-      - name: Upload smoke log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: win-smoke-log
-          path: ${{ runner.temp }}/win-smoke.log
-          if-no-files-found: ignore
