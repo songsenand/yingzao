@@ -10,6 +10,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+// Windows exposes the CLI as dsh.cmd, which spawnSync cannot exec directly.
+const win32 = process.platform === 'win32';
+const spawnDsh = (args, options) => spawnSync('dsh', args, { ...options, shell: win32 });
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -26,7 +30,7 @@ const runtime = join(home, 'runtime');
 mkdirSync(runtime, { recursive: true });
 const env = { ...process.env, DSH_HOME: home, XDG_RUNTIME_DIR: runtime };
 try {
-  const add = spawnSync('dsh', ['plugin', '--profile', 'smoke', 'add', '-w', ROOT], {
+  const add = spawnDsh(['plugin', '--profile', 'smoke', 'add', '-w', ROOT], {
     encoding: 'utf8',
     env,
     timeout: 300_000,
@@ -44,7 +48,7 @@ try {
 
   check('dsh plugin add exits 0', add.status === 0, out.slice(-800));
   if (add.status === 0) {
-    const dump = spawnSync('dsh', ['--profile', 'smoke', '--dump-config'], {
+    const dump = spawnDsh(['--profile', 'smoke', '--dump-config'], {
       encoding: 'utf8', env, timeout: 60_000,
     });
     const config = `${dump.stdout ?? ''}\n${dump.stderr ?? ''}`;

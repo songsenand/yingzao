@@ -8,6 +8,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+// Windows exposes the CLI as dsh.cmd, which spawnSync cannot exec directly.
+const win32 = process.platform === 'win32';
+const spawnDsh = (args, options) => spawnSync('dsh', args, { ...options, shell: win32 });
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -30,7 +34,7 @@ try {
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-cad-harness'] } },
   }, null, 2)}\n`);
 
-  const result = spawnSync('dsh', ['--profile', 'smoke', '--dump-config'], {
+  const result = spawnDsh(['--profile', 'smoke', '--dump-config'], {
     encoding: 'utf8',
     env: { ...process.env, DSH_HOME: home },
     timeout: 60_000,

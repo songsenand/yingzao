@@ -4,8 +4,9 @@
 
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const DOCTOR = new URL('./doctor.mjs', import.meta.url);
 let passed = 0;
@@ -15,7 +16,7 @@ function check(name, condition, detail = '') {
   else { failed++; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 function run(args) {
-  return spawnSync(process.execPath, [DOCTOR.pathname, ...args], { encoding: 'utf8', timeout: 30000 });
+  return spawnSync(process.execPath, [fileURLToPath(DOCTOR), ...args], { encoding: 'utf8', timeout: 30000 });
 }
 function parse(result) {
   try { return JSON.parse(result.stdout); } catch { return null; }
@@ -69,19 +70,20 @@ try {
   check('newer assembly schema is a fail', futureAssembly?.checks?.find((c) => c.id === 'assembly-schema')?.status === 'fail');
   const fakeBin = join(tmp, 'bin');
   mkdirSync(fakeBin, { recursive: true });
-  const stub = join(fakeBin, 'dsh');
-  writeFileSync(stub, '#!/bin/sh\necho 0.2.0\n');
-  chmodSync(stub, 0o755);
-  const old = spawnSync(process.execPath, [DOCTOR.pathname, '--json'], {
-    encoding: 'utf8', timeout: 30000, env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+  const win32 = process.platform === 'win32';
+  const stub = join(fakeBin, win32 ? 'dsh.cmd' : 'dsh');
+  writeFileSync(stub, win32 ? '@echo 0.2.0\r\n' : '#!/bin/sh\necho 0.2.0\n');
+  if (!win32) chmodSync(stub, 0o755);
+  const old = spawnSync(process.execPath, [fileURLToPath(DOCTOR), '--json'], {
+    encoding: 'utf8', timeout: 30000, env: { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH}` },
   });
   const oldReport = parse(old);
   const oldCompat = oldReport?.checks?.find((c) => c.id === 'dsh-compat');
   check('older dsh fails compatibility', oldCompat?.status === 'fail', oldCompat?.detail);
 
-  writeFileSync(stub, '#!/bin/sh\necho 0.3.0\n');
-  const future = spawnSync(process.execPath, [DOCTOR.pathname, '--json'], {
-    encoding: 'utf8', timeout: 30000, env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+  writeFileSync(stub, win32 ? '@echo 0.3.0\r\n' : '#!/bin/sh\necho 0.3.0\n');
+  const future = spawnSync(process.execPath, [fileURLToPath(DOCTOR), '--json'], {
+    encoding: 'utf8', timeout: 30000, env: { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH}` },
   });
   const futureCompat = parse(future)?.checks?.find((c) => c.id === 'dsh-compat');
   check('future minor is a warning, not a pass', futureCompat?.status === 'warn', futureCompat?.detail);

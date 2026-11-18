@@ -55,7 +55,11 @@ function onPath(command) {
 }
 
 function versionOf(bin, args = ['--version']) {
-  const result = spawnSync(bin, args, { encoding: 'utf8', timeout: 8000 });
+  // Windows ships the CLI as dsh.CMD; spawnSync cannot exec that without a shell.
+  const viaCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin);
+  const result = viaCmd
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', bin, ...args], { encoding: 'utf8', timeout: 8000 })
+    : spawnSync(bin, args, { encoding: 'utf8', timeout: 8000 });
   if (result.error) return { ok: false, error: result.error.message, output: '' };
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
   return { ok: result.status === 0, output, status: result.status };
