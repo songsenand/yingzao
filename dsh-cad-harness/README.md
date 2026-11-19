@@ -22,6 +22,12 @@ npx dsh-cad-doctor                  # kind=ok, or an explained degraded
 packing machine would be wrong here, so the package ships without it. Restart dsh,
 then start a session with the 「营造模式」 preset.
 
+**After a dsh upgrade, run `npx dsh-cad-setup` again and restart.** The preset is a
+verbatim copy of dsh's `standard.patch.yml`, and dsh removes or renames internal rows
+between releases. A preset mounts as a whole: one stale row and the 「营造模式」 mode
+does not appear at all — no error, just a missing mode. `npx dsh-cad-doctor` reports
+`preset-standard-drift` and names this fix.
+
 > pnpm 12 prints `Agent skills awaiting approval: dsh-cad-harness` on first install.
 > That is its approval prompt for the skills shipped in the package, not a failure.
 

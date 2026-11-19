@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 /** Where the shipped `standard.patch.yml` can live, most specific first. */
 /** `npm root -g`, or null. Bounded and silent: a missing npm is not an error. */
@@ -81,6 +81,9 @@ export function buildPreset({ root, skillDir, standardPatch, withoutSkills = fal
   const workflowPath = join(root, 'presets', 'cad', 'workflow.md');
   const skills = skillDir ?? join(root, 'skills');
   const hasSkills = !withoutSkills && existsSync(skills);
+  // Recorded in the generated header so a stale preset says which dsh it came
+  // from; `doctor` compares it against the installed one (preset-standard-drift).
+  const dshVersion = dshVersionOf(source);
 
   const stdLines = readFileSync(source, 'utf8').split('\n');
   const metaText = readFileSync(metaPath, 'utf8');
@@ -176,7 +179,7 @@ export function buildPreset({ root, skillDir, standardPatch, withoutSkills = fal
 #
 # Regenerate:  npx dsh-cad-setup        (installed package)
 #              node scripts/sync-cad-preset.mjs  (checkout)
-# Source: ${basename(source)} (installed dsh)
+# Source: ${basename(source)}${dshVersion ? ` (dsh ${dshVersion})` : ' (installed dsh)'}
 #
 `;
 
@@ -188,12 +191,30 @@ export function buildPreset({ root, skillDir, standardPatch, withoutSkills = fal
     ...body,
   ].join('\n') + '\n';
 
-  return { text, source, skillDir: skills, hasSkills, rows: body.filter((l) => l.startsWith('          - id:')).length, out };
+  return { text, source, dshVersion, skillDir: skills, hasSkills, rows: body.filter((l) => l.startsWith('          - id:')).length, out };
 }
 
 /** Double-quoted YAML scalar, safe for arbitrary display text. */
 function jsonQuote(text) {
   return JSON.stringify(text);
+}
+
+/** The dsh version whose `standard.patch.yml` this preset was copied from. */
+function dshVersionOf(standardPatch) {
+  let dir = dirname(standardPatch);
+  for (let depth = 0; depth < 6; depth += 1) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
+        if (pkg.name === '@deepseek-ai/dsh' && typeof pkg.version === 'string') return pkg.version;
+      } catch { /* an unreadable manifest is not a version */ }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
 }
 
 /** List the skill bodies the preset is supposed to expose. */

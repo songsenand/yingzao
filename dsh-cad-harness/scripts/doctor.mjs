@@ -15,7 +15,7 @@ import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { listSkillFiles } from './preset-lib.mjs';
+import { buildPreset, listSkillFiles } from './preset-lib.mjs';
 import { SPEED_NOTE } from './provision-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -203,6 +203,36 @@ const presetHasSkill = preset.includes(`- ${skillDir}`);
 add('preset-skill-path', presetHasSkill ? 'pass' : 'fail',
   presetHasSkill ? 'preset points at this machine\'s skill directory' : 'preset does not point at this skill directory (stale or missing)',
   presetHasSkill ? undefined : 'run `npx dsh-cad-setup`, then restart dsh');
+
+// Preset provenance: the file is a verbatim copy of dsh's `standard.patch.yml`,
+// and dsh removes or renames internal rows between releases. A stale copy is
+// still valid YAML, so nothing complains at load time — the whole preset fails
+// to mount and the 「营造模式」 mode is simply absent. Compare against the dsh
+// installed here, which is what will actually load the file.
+const recordedDsh = /^# Source: .*?\(dsh ([^)]+)\)/m.exec(preset)?.[1] ?? 'unknown';
+const stripPreset = (text) => text.replace(/^\s*#.*$/gm, '').replace(/[ \t]+$/gm, '').trim();
+let builtPreset;
+try {
+  builtPreset = buildPreset({ root: ROOT, skillDir });
+} catch (error) {
+  builtPreset = { error: error instanceof Error ? error.message : String(error) };
+}
+if (builtPreset.error) {
+  add('preset-standard-drift', 'warn', `cannot verify the preset against dsh: ${builtPreset.error}`,
+    'install the dsh this package runs under, then run `npx dsh-cad-setup`');
+} else {
+  const inSync = stripPreset(preset) === stripPreset(builtPreset.text);
+  const installedDsh = builtPreset.dshVersion ?? 'unknown';
+  add('preset-standard-drift', inSync ? 'pass' : 'fail',
+    inSync
+      ? `preset matches dsh ${installedDsh}`
+      : recordedDsh === installedDsh
+        ? `preset differs from what dsh ${installedDsh} generates (rows or skill path)`
+        : recordedDsh === 'unknown'
+          ? `preset records no dsh version, and it differs from what dsh ${installedDsh} generates`
+          : `preset was generated from dsh ${recordedDsh}, installed is dsh ${installedDsh}`,
+    inSync ? undefined : 'run `npx dsh-cad-setup`, then restart dsh; the preset copies dsh internals, so it must be regenerated after every dsh upgrade');
+}
 
 // --- temp hygiene ----------------------------------------------------------
 const TEMP_PREFIXES = ['cad-harness-', 'cad-doctor-', 'cad-setup-', 'cad-export-', 'cad-add-', 'cad-bundle-', 'cad-backend-', 'cad-pyfail-', 'cad-rehearse-', 'cad-http-'];

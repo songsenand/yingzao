@@ -128,6 +128,7 @@
     "accept:row-regressions": "node scripts/accept-row-regressions.mjs",
     "prepack": "node scripts/prepack.mjs",
     "postpack": "node scripts/postpack.mjs",
+    "prepublishOnly": "node scripts/setup.mjs --check",
     "setup": "node scripts/setup.mjs",
     "setup:check": "node scripts/setup.mjs --check",
     "doctor": "node scripts/doctor.mjs",

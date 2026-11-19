@@ -175,6 +175,11 @@ npx dsh-cad-setup --openscad=auto   # 预设 + 自动准备 OpenSCAD
 npx dsh-cad-doctor                  # kind=ok，或有解释的 degraded
 ```
 
+**升级 dsh 之后要重跑一次 `npx dsh-cad-setup` 再重启。** 预设是从你装的 dsh 的
+`standard.patch.yml` 逐字复制生成的，dsh 在新版本里会删改内部行；预设是整块挂载的，
+一行对不上，整个「营造模式」就不出现（不会报错，只是没有这个模式）。`npx dsh-cad-doctor`
+会报 `preset-standard-drift` 并给出这行修复命令。
+
 > pnpm 12 首次安装会提示 `Agent skills awaiting approval: dsh-cad-harness`——这是它对包内 skills 的审批提示，不是安装失败；`pnpm approve` 可以查看。
 
 国内网络建议把 npm 源设为 npmmirror，安装会走镜像缓存；OpenSCAD 本身仍从官方快照或本项目镜像下载（见上文三个开关）。

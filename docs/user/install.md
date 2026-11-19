@@ -41,6 +41,11 @@ npx dsh-cad-doctor
 `--openscad=off` 只写预设、不下载；`--openscad=official` / `mirror` 可强制单源。
 `npm run setup:check` 只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
 
+> **升级 dsh 之后要重跑一次 `npx dsh-cad-setup` 再重启。** 预设是照着你装的 dsh 的
+> `standard.patch.yml` 逐字复制生成的，dsh 在新版本里会删改内部行；预设是整块挂载的，
+> 一行对不上，整个「营造模式」就不出现——不报错，只是没有这个模式。`npx dsh-cad-doctor`
+> 会报 `preset-standard-drift` 并给出这行修复命令。
+
 再跑一次环境自检：
 
 ```bash

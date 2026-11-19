@@ -33,6 +33,12 @@ npm run setup
 ships with the CAD skill path omitted on purpose: an absolute path from the
 packing machine would be wrong here.
 
+**After a dsh upgrade, run `node scripts/setup.mjs` again and restart.** The preset is
+a verbatim copy of dsh's `standard.patch.yml`, and dsh removes or renames internal
+rows between releases. A preset mounts as a whole: one stale row and the 「营造模式」
+mode does not appear at all — no error, just a missing mode. `node scripts/doctor.mjs`
+reports `preset-standard-drift` and names this fix.
+
 ## Requirements
 
 - Node.js >= 20
