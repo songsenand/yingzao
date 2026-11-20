@@ -458,7 +458,7 @@ async function downloadArchive(
     const partial = `${cached}.part`;
     try {
       onProgress(`downloading ${target.asset} from ${new URL(url).host}`);
-      const response = await fetch(url, { redirect: 'follow' });
+      const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(5 * 60 * 1000) });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       const hash = createHash('sha256');
       const handle = await import('node:fs/promises').then((fs) => fs.open(partial, 'w'));

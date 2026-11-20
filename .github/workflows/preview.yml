@@ -55,6 +55,7 @@ jobs:
           node scripts/setup.mjs --openscad=off --standard "$STD"
 
       - name: Materialize the bundled Python runtime
+        timeout-minutes: 20
         run: node scripts/provision-python.mjs
 
       - name: Full preview acceptance (P0 + P1 suites)
@@ -192,6 +193,7 @@ jobs:
       - name: Build host + client + verify CLI
         run: npm run build
       - name: Materialize the bundled Python runtime
+        timeout-minutes: 20
         run: node scripts/provision-python.mjs
       - name: Install OpenSCAD (CQ still renders through it)
         run: sudo apt-get update && sudo apt-get install -y openscad
