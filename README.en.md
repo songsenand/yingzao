@@ -193,6 +193,8 @@ npx dsh-cad-doctor
 ### Turn on Yingzao mode
 
 1. Start a new session and choose the **营造模式 (Yingzao mode)** preset; normal sessions do not see CAD tools, on purpose.
+   - **If you work in Yingzao mode most of the time, make it the default**: Settings → **Agent presets** → on the **营造模式** card, click **"Set as new task default"**. New sessions then start in Yingzao mode — no per-session pick, and no risk of the choice applying only to the current blank session.
+   - The trade-off: every new session carries the CAD tool table. If you only need it occasionally, keep the default **Standard mode** and switch per session; to undo, set Standard mode as the new-task default the same way.
 2. Open the **CAD Preview** tab on the right. If the tab is missing, restart dsh and start a new Yingzao mode session.
 3. Describe what you need:
 
