@@ -6,10 +6,11 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { openVersionStore, readManifest, saveVersion } from '../src/host/version.ts';
 import { backendAdapter } from '../src/host/backends/index.ts';
 
-const CLI = new URL('./backend.mjs', import.meta.url).pathname;
+const CLI = fileURLToPath(new URL('./backend.mjs', import.meta.url));
 let passed = 0;
 let failed = 0;
 function check(name, condition, detail = '') {
