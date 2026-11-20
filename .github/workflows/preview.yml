@@ -2,7 +2,9 @@ name: preview
 
 on:
   push:
+    branches: [main]
     tags: ['v0.*']
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -32,7 +34,7 @@ jobs:
       - name: Build host + client + verify CLI
         run: npm run build
       - name: Install dsh (preset source + doctor compatibility check)
-        run: npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+        run: npm install -g @deepseek-ai/dsh@0.2.2-rc.1
       - name: Accept A2 (preset path) / C1 (export gate) / A3 (backend) / C2 (verify CLI)
         run: |
           npm run accept:setup
@@ -126,7 +128,7 @@ jobs:
       - name: Build host + client + verify CLI
         run: npm run build
       - name: Install dsh
-        run: npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+        run: npm install -g @deepseek-ai/dsh@0.2.2-rc.1
       # Exercises the Windows branch of the provisioner (PowerShell Expand-Archive),
       # which is the part no other job touches.
       - name: Provision OpenSCAD (windows)
@@ -146,9 +148,65 @@ jobs:
         run: npm run accept:setup
       - name: accept:bundle-load
         run: npm run accept:bundle-load
+      - name: accept:setup-kernel
+        run: npm run accept:setup-kernel
+      - name: accept:backend
+        run: npm run accept:backend
+      - name: accept:engine-seam
+        run: npm run accept:engine-seam
+      - name: accept:kernel-context
+        run: npm run accept:kernel-context
       - name: accept:doctor
         run: npm run accept:doctor
       - name: Doctor (fail only on kind=fail)
         run: |
           node scripts/doctor.mjs --json > doctor.json || true
           node -e 'const r=require("./doctor.json"); console.log("doctor:", r.kind); for(const c of r.checks||[]) if(c.status==="fail") console.log("::error::"+c.id+": "+c.detail+" (fix: "+(c.fix||"")+")"); if(r.kind==="fail") process.exit(1)'
+
+
+  cadquery:
+    name: CadQuery pack (ubuntu-latest)
+    # The 1.6 GiB pack is a release gate, not a per-commit tax.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: dsh-cad-harness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build host + client + verify CLI
+        run: npm run build
+      - name: Materialize the bundled Python runtime
+        run: node scripts/provision-python.mjs
+      - name: Install OpenSCAD (CQ still renders through it)
+        run: sudo apt-get update && sudo apt-get install -y openscad
+      - name: Install the pinned CadQuery pack
+        run: |
+          python -m pip install --disable-pip-version-check --no-deps --target .ci-cq-pack             'cadquery==2.8.0' 'cadquery-ocp==7.9.3.1.1' 'ezdxf==1.4.5'             'multimethod==1.12' 'nlopt==2.11.0' 'runtype==0.5.3' 'casadi==3.8.2'             'pyparsing==3.3.3' 'scipy==1.18.1' 'numba==0.68.1' 'llvmlite==0.50.0'             'vtk==9.6.2' 'numpy==2.5.5' 'typing_extensions==4.16.0'
+      - name: accept:cadquery
+        env:
+          DSH_CAD_CQ_PACK: ${{ github.workspace }}/dsh-cad-harness/.ci-cq-pack
+          DSH_CAD_REQUIRE_CQ: '1'
+        run: npm run accept:cadquery
+      - name: accept:cadquery-authoring
+        env:
+          DSH_CAD_CQ_PACK: ${{ github.workspace }}/dsh-cad-harness/.ci-cq-pack
+          DSH_CAD_REQUIRE_CQ: '1'
+        run: npm run accept:cadquery-authoring
+      - name: accept:step-validation
+        env:
+          DSH_CAD_CQ_PACK: ${{ github.workspace }}/dsh-cad-harness/.ci-cq-pack
+          DSH_CAD_REQUIRE_CQ: '1'
+        run: npm run accept:step-validation

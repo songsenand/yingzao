@@ -8,6 +8,7 @@
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { assetFor, downloadWithFallback, OPENSCAD_VERSION, sha256File, sourcesFor, SPEED_NOTE } from './provision-lib.mjs';
 
@@ -28,6 +29,8 @@ const sourceMode = valueOf('--source') ?? 'auto';
 const envArchive = process.env.CAD_OPENSCAD_ARCHIVE?.trim();
 const fromFile = valueOf('--from') ?? (envArchive ? resolve(envArchive) : undefined);
 const home = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'));
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, '..');
 
 function out(text) {
   if (json) return;
@@ -115,6 +118,19 @@ function findExecutable(root) {
   return null;
 }
 
+function bundled() {
+  const candidates = [
+    join(ROOT, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'),
+    join(ROOT, 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'),
+  ];
+  for (const bin of candidates) {
+    if (!existsSync(bin)) continue;
+    const version = versionOf(bin);
+    if (version) return { bin, version, source: 'plugin', score: versionScore(version) };
+  }
+  return null;
+}
+
 function installed() {
   const configPath = join(home, 'cad', 'backend.json');
   if (existsSync(configPath)) {
@@ -122,7 +138,7 @@ function installed() {
       const bin = JSON.parse(readFileSync(configPath, 'utf8')).binaryPath;
       if (typeof bin === 'string' && existsSync(bin)) {
         const version = versionOf(bin);
-        if (version) return { bin, version, source: 'backend.json' };
+        if (version) return { bin, version, source: 'backend.json', score: versionScore(version) };
       }
     } catch { /* fall through */ }
   }
@@ -208,13 +224,17 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
 
   const system = systemOpenScad();
   const existing = installed();
+  const plugin = bundled();
+  const ready = [system, existing, plugin]
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || (a.source === 'system' ? -1 : 1))[0] ?? null;
+  const readyHigh = ready && ready.score >= 202506 ? ready : null;
   if (check) {
-    const ready = system?.score >= 202506 ? { ...system, source: 'system' } : existing;
-    const payload = ready ?? { ok: false, reason: 'no usable OpenSCAD 2025.06+', speed: SPEED_NOTE, home };
-    if (json) console.log(JSON.stringify({ ok: Boolean(ready), ...payload }, null, 2));
-    else if (ready) console.log(`OpenSCAD ready: ${ready.bin} (${ready.version}; ${ready.source})`);
+    const payload = readyHigh ?? { ok: false, reason: 'no usable OpenSCAD 2025.06+', speed: SPEED_NOTE, home };
+    if (json) console.log(JSON.stringify({ ok: Boolean(readyHigh), ...payload }, null, 2));
+    else if (readyHigh) console.log(`OpenSCAD ready: ${readyHigh.bin} (${readyHigh.version}; ${readyHigh.source})`);
     else console.log(`OpenSCAD not ready: install 2025.06+ or run dsh-cad-provision — ${SPEED_NOTE}`);
-    process.exit(ready ? 0 : 1);
+    process.exit(readyHigh ? 0 : 1);
   }
 
   // Say why an older binary is not "good enough" instead of silently replacing
@@ -223,18 +243,14 @@ Exit: 0 ok · 1 missing/failed · 2 usage/unsupported platform`);
     out(`system OpenSCAD ${system.version} predates 2025.06 — Manifold is off, and the same model took ${SPEED_NOTE}`);
   }
 
-  if (!force && !fromFile && system?.score >= 202506) {
-    const payload = { ok: true, source: 'system', bin: system.bin, version: system.version };
+  if (!force && !fromFile && readyHigh) {
+    // Highest version wins, not "system first". An old system OpenSCAD must not
+    // shadow a newer plugin/provisioned build; the backend path is rewritten to
+    // the selected binary so compile.ts sees the same decision.
+    writeBackend(readyHigh.bin);
+    const payload = { ok: true, source: readyHigh.source, bin: readyHigh.bin, version: readyHigh.version };
     if (json) console.log(JSON.stringify(payload, null, 2));
-    else console.log(`Using system OpenSCAD: ${system.bin} (${system.version})`);
-    process.exit(0);
-  }
-
-  if (!force && !fromFile && existing) {
-    writeBackend(existing.bin);
-    const payload = { ok: true, source: existing.source, bin: existing.bin, version: existing.version };
-    if (json) console.log(JSON.stringify(payload, null, 2));
-    else console.log(`Using installed OpenSCAD: ${existing.bin} (${existing.version})`);
+    else console.log(`Using ${readyHigh.source} OpenSCAD: ${readyHigh.bin} (${readyHigh.version})`);
     process.exit(0);
   }
 

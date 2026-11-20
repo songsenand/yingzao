@@ -1,0 +1,63 @@
+{
+  "bracket_cq.stl": {
+    "vertices": 1272,
+    "faces": 2556,
+    "bbox": {
+      "min": [
+        -30.0,
+        -20.0,
+        0.0
+      ],
+      "max": [
+        30.0,
+        20.0,
+        6.0
+      ],
+      "len": [
+        60.0,
+        40.0,
+        6.0
+      ]
+    },
+    "volume_mm3": 13935.926384,
+    "is_watertight": true,
+    "is_winding_consistent": true,
+    "euler_number": -6,
+    "body_count": 1
+  },
+  "bracket_scad.stl": {
+    "vertices": 648,
+    "faces": 1308,
+    "bbox": {
+      "min": [
+        -30.0,
+        -20.0,
+        0.0
+      ],
+      "max": [
+        30.0,
+        20.0,
+        6.0
+      ],
+      "len": [
+        60.0,
+        40.0,
+        6.0
+      ]
+    },
+    "volume_mm3": 13936.017885,
+    "is_watertight": true,
+    "is_winding_consistent": true,
+    "euler_number": -6,
+    "body_count": 1
+  },
+  "comparison": {
+    "bbox_delta_mm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "volume_delta_mm3": -0.091501,
+    "volume_delta_pct": -0.000657
+  }
+}

@@ -1,0 +1,324 @@
+{
+  "generatedAt": "2026-11-20T03:51:23.917Z",
+  "results": {
+    "openscad": {
+      "brief": {
+        "file": "/home/songsenand/Project/ToyMarker/experiments/artifacts/20261120_kernel_quality/BRIEF.md",
+        "chars": 1044
+      },
+      "init": {
+        "root": "/tmp/cad-kq-scad-Zk3tbb",
+        "key": "cad-kq-scad-Zk3tbb-cddf6943",
+        "created": true,
+        "bound": true,
+        "note": "created /tmp/cad-kq-scad-Zk3tbb and selected it for this session; CAD tools now use it."
+      },
+      "generated": {
+        "versionId": "v001",
+        "success": true,
+        "kernel": "openscad",
+        "part": "same-prompt plate",
+        "errors": [],
+        "warnings": [
+          "first-version wall screen: thinnest 4.759mm @ [-22.07, -15.25, 4]"
+        ],
+        "durationMs": 2615,
+        "views": [
+          "top",
+          "iso"
+        ],
+        "minWallMm": 4.759,
+        "minWallAtMm": [
+          -22.07,
+          -15.25,
+          4
+        ],
+        "sizeMm": [
+          60,
+          40,
+          6
+        ],
+        "bboxMin": [
+          -30,
+          -20,
+          0
+        ],
+        "bboxMax": [
+          30,
+          20,
+          6
+        ],
+        "watertight": true,
+        "triangles": 1308,
+        "shells": 1
+      },
+      "entry": {
+        "sourceFile": "model.scad",
+        "backend": {
+          "kernel": "openscad",
+          "options": {
+            "compileBackend": "auto"
+          }
+        }
+      },
+      "measured": {
+        "versionId": "v001",
+        "watertight": true,
+        "triangles": 1308,
+        "boundingBoxMm": {
+          "min": [
+            -30,
+            -20,
+            0
+          ],
+          "max": [
+            30,
+            20,
+            6
+          ],
+          "size": [
+            60,
+            40,
+            6
+          ]
+        },
+        "volumeMm3": 13936.018,
+        "surfaceAreaMm2": 6143.231,
+        "centerOfMassMm": [
+          0,
+          0,
+          3
+        ],
+        "genus": 4
+      },
+      "validation": {
+        "versionId": "v001",
+        "designEvidence": "mesh",
+        "stl": {
+          "present": true,
+          "valid": true,
+          "watertight": true,
+          "triangles": 1308,
+          "bboxMm": {
+            "min": [
+              -30,
+              -20,
+              0
+            ],
+            "max": [
+              30,
+              20,
+              6
+            ],
+            "size": [
+              60,
+              40,
+              6
+            ]
+          },
+          "volumeMm3": 13936.018
+        },
+        "step": {
+          "present": false,
+          "valid": false
+        },
+        "datums": {
+          "present": true,
+          "valid": true,
+          "count": 4
+        },
+        "consistent": true,
+        "issues": [
+          {
+            "code": "step_missing",
+            "message": "version v001 has no model.step",
+            "fix": "optional: a CadQuery compile with step:true writes model.step",
+            "severity": "warn"
+          }
+        ]
+      },
+      "files": [
+        "datums.json",
+        "model.scad",
+        "model.stl",
+        "render_front.png",
+        "render_iso.png",
+        "render_side.png",
+        "render_top.png"
+      ],
+      "stepBytes": null,
+      "versionDir": "/tmp/cad-kq-scad-Zk3tbb/cad-data/versions/v001"
+    },
+    "cadquery": {
+      "brief": {
+        "file": "/home/songsenand/Project/ToyMarker/experiments/artifacts/20261120_kernel_quality/BRIEF.md",
+        "chars": 1044
+      },
+      "init": {
+        "root": "/tmp/cad-kq-cq-Wyqmqa",
+        "key": "cad-kq-cq-Wyqmqa-77c20935",
+        "created": true,
+        "bound": true,
+        "note": "created /tmp/cad-kq-cq-Wyqmqa and selected it for this session; CAD tools now use it."
+      },
+      "generated": {
+        "versionId": "v001",
+        "success": true,
+        "kernel": "cadquery",
+        "step": true,
+        "part": "same-prompt plate",
+        "errors": [],
+        "warnings": [
+          "first-version wall screen: thinnest 4.751mm @ [-22.02, -15.25, 1]"
+        ],
+        "durationMs": 1961,
+        "views": [
+          "top",
+          "iso"
+        ],
+        "minWallMm": 4.751,
+        "minWallAtMm": [
+          -22.02,
+          -15.25,
+          1
+        ],
+        "sizeMm": [
+          60,
+          40,
+          6
+        ],
+        "bboxMin": [
+          -30,
+          -20,
+          -3
+        ],
+        "bboxMax": [
+          30,
+          20,
+          3
+        ],
+        "watertight": true,
+        "triangles": 2556,
+        "shells": 1
+      },
+      "entry": {
+        "sourceFile": "model.py",
+        "backend": {
+          "kernel": "cadquery",
+          "version": "2.8.0"
+        },
+        "stepFile": "model.step",
+        "stepSha256": "sha256:5405925d2054d039048f21eba5f518df34dac14ea7812b301567d9c9e0bad6e7",
+        "brep": {
+          "valid": true,
+          "validatedBy": "OCP",
+          "toleranceMm": 0.01
+        },
+        "designEvidence": "mesh"
+      },
+      "measured": {
+        "versionId": "v001",
+        "watertight": true,
+        "triangles": 2556,
+        "boundingBoxMm": {
+          "min": [
+            -30,
+            -20,
+            -3
+          ],
+          "max": [
+            30,
+            20,
+            3
+          ],
+          "size": [
+            60,
+            40,
+            6
+          ]
+        },
+        "volumeMm3": 13935.926,
+        "surfaceAreaMm2": 6143.347,
+        "centerOfMassMm": [
+          0,
+          0,
+          0
+        ],
+        "genus": 4
+      },
+      "validation": {
+        "versionId": "v001",
+        "designEvidence": "mesh",
+        "stl": {
+          "present": true,
+          "valid": true,
+          "watertight": true,
+          "triangles": 2556,
+          "bboxMm": {
+            "min": [
+              -30,
+              -20,
+              -3
+            ],
+            "max": [
+              30,
+              20,
+              3
+            ],
+            "size": [
+              60,
+              40,
+              6
+            ]
+          },
+          "volumeMm3": 13935.926
+        },
+        "step": {
+          "present": true,
+          "valid": true,
+          "brepValid": true,
+          "watertight": true,
+          "triangles": 1052,
+          "volumeMm3": 13936.494,
+          "bboxMm": {
+            "min": [
+              -30,
+              -20,
+              -3
+            ],
+            "max": [
+              30,
+              20,
+              3
+            ],
+            "size": [
+              60,
+              40,
+              6
+            ]
+          },
+          "importedBy": "cascadio"
+        },
+        "datums": {
+          "present": true,
+          "valid": true,
+          "count": 4
+        },
+        "consistent": true,
+        "issues": []
+      },
+      "files": [
+        "datums.json",
+        "model.py",
+        "model.step",
+        "model.stl",
+        "render_front.png",
+        "render_iso.png",
+        "render_side.png",
+        "render_top.png"
+      ],
+      "stepBytes": 50841,
+      "versionDir": "/tmp/cad-kq-cq-Wyqmqa/cad-data/versions/v001"
+    }
+  }
+}

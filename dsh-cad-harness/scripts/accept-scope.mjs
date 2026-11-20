@@ -43,7 +43,8 @@ check('absent explains the first-run download', environmentNotice({ ...base, run
 check('failed names repair', environmentNotice({ ...base, runtime: { state: 'failed', error: 'boom' } })?.includes('action=repair'));
 check('disabled names the env var', environmentNotice({ ...base, runtime: { state: 'disabled' } })?.includes('DSH_CAD_PYTHON'));
 check('unsupported is not a modelling failure', environmentNotice({ ...base, runtime: { state: 'unsupported' } })?.includes('不是建模失败'));
-check('non-openscad kernel is refused', environmentNotice({ ...base, backend: { kernel: 'cadquery', compileBackend: 'auto' } })?.includes('dsh-cad-backend'));
+check('cadquery kernel is accepted', environmentNotice({ ...base, backend: { kernel: 'cadquery', compileBackend: 'auto' } }) === null);
+check('unknown kernel is refused', environmentNotice({ ...base, backend: { kernel: 'freecad', compileBackend: 'auto' } })?.includes('dsh-cad-backend'));
 
 console.log(`\naccept-scope: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

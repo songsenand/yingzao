@@ -1,13 +1,13 @@
 [English](../en/user/preview.md) | 中文
 
-# 0.1.0 预览版说明
+# 0.1.1-preview.1 预览版说明
 
 > **这是预览版，不是生产放行系统。** 它已经能装、能自检、能验证、能交付，但不承诺工业级
 > 公差、认证精度或长期支持。请把它当"可用的实验仪器"，不是"合格证"。
 
 ## 这一版有什么
 
-- 自然语言 → OpenSCAD 零件 → 编译、渲染、版本库；
+- 自然语言 → OpenSCAD 或 CadQuery 零件 → 编译、渲染、版本库；
 - 模型调用面从 39 个工具收成 **9 个作业面**（`cad_session`/`cad_part`/`cad_assembly`/
   `cad_check`/`cad_simulate`/`cad_inspect`/`cad_see`/`cad_python`/`cad_deliver`），
   参数按 `action` 展开；
@@ -25,7 +25,7 @@
 见 [安装与首次准备](install.md)。预览版的最小路径：
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
+tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup          # 写入本机 skill 路径
@@ -37,15 +37,15 @@ npx dsh-cad-verify <project> --advisory  # 六行证据报告（只读）
 
 OpenSCAD 由 `setup --openscad=auto` 自动准备：已有 2025.06+ 系统版本就直接用；否则官方快照优先，
 官方不可达或持续过慢才切 OSS 镜像。2021.01 可跑但 `doctor` 报 degraded。插件不随包分发 OpenSCAD，
-也不要求它必须是唯一后端——预览版只实现了 OpenSCAD 适配器，CadQuery/FreeCAD 在菜单里
-显示为 `planned`，不可选、不静默替代。
+也不要求它必须是唯一后端——本版提供 OpenSCAD 与 CadQuery；CadQuery 需要显式安装约 1.6 GiB pack（setup 不自动下载），
+FreeCAD 仍显示为 planned、不可选。
 
 ## 已知边界
 
 - **审批/回滚**：可以浏览、钉住、对比版本。Agent 可以提议回退，你在面板里批准后生成新版本；没有独立的“版本审批 / 签核”流程。
 - **Python 运行时**：首次使用会下载约 400MB，可能需要几分钟；断网会失败并给出下一步。
 - **BOSL2**：可选；标准件需要，缺失时报告会说明，不会静默产出空几何。
-- **内核**：预览版只有 OpenSCAD。第二内核已列入中远期第一项，不是本版承诺。
+- **内核**：OpenSCAD + 可选 CadQuery；一个项目一个作者内核，旧版本按自身 pin 不变；OpenSCAD 仍是渲染/导出常驻依赖。
 - **长任务**：后台编译 job 已有 submit/status/cancel/timeout/重启恢复；渲染、仿真仍同步，超时会被报告，不会被当成通过。
 - **英文界面**：客户端可见文案已全部走 i18n（zh/en 同 key，`accept:ui-i18n` 校验字面量），
   深层面板也已英文化（preview.2 起）。host 的模型侧工具输出/诊断仍是中文。

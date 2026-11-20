@@ -15,8 +15,9 @@
 | [AUDIT-2026-10-23.md](../AUDIT-2026-10-23.md) | 一次全量审计的发现与修复 | 查已知缺陷/修复依据 |
 | [ASSESSMENT-2026-10-28.md](ASSESSMENT-2026-10-28.md) | 能力评估：玩具→准生产的证据、缺口与路线图 | 排优先级/看现状 |
 | [TEST-COVERAGE-2026-11-16.md](TEST-COVERAGE-2026-11-16.md) | 工具单元测试覆盖率实测：9 surface/39 op、172 个 accept 脚本、src 行 89.0% / 函数 83.0% | 补测试/判断工具面质量 |
-| [TODO.md](TODO.md) | **项目 TODO 总表**：近期（0.1.0-preview）与中远期（第二内核等）的顺序、状态、出口 | 每次开工前/每周 review |
-| [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md) | 0.1.0 预览版发布计划：L2 外壳的 P0/P1 索引；C1 风险标注导出、A3 后端选择、A2 安装时预设 | 排发布/改导出/改后端前 |
+| [TODO.md](TODO.md) | **项目 TODO 总表**：0.1.1（CadQuery）与中远期（L2–L16）的顺序、状态、出口 | 每次开工前/每周 review |
+| [RELEASE-0.1.1.md](RELEASE-0.1.1.md) | 0.1.1 版本目标：CadQuery 成为一等公民；范围、验收、排期；L1.8 预设与 dsh 版本对齐（发布阻断） | 排 0.1.1/改引擎 seam 前 |
+| [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md) | 0.1.0 预览版发布计划：L2 外壳的 P0/P1 索引；C1 风险标注导出、A3 后端选择、A2 安装时预设（历史） | 查预览版设计/历史时 |
 | [RELEASE-NOTES-0.1.0-preview.2.md](RELEASE-NOTES-0.1.0-preview.2.md) | preview.2 发布说明：9 surface、标准件库 v0、球阀示例、证据修复、已知问题与门禁证据 | 打 tag/写 release body 前 |
 | [SCHEMA.md](SCHEMA.md) | 项目 schemaVersion、迁移前备份与拒绝策略 | 改 schema/迁移项目前 |
 | [NAME.md](NAME.md) | 品牌名、包名、插件 id、preset id、CLI/数据目录的改名边界 | 改名前/对外命名前 |

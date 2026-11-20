@@ -30,7 +30,8 @@ check('English translator is active', t('tab.title') === 'Model & checks');
 check('missing-preset notice translates', cadMissingToolsNotice({ toolScope: 'preset', presets: ['cad'], names: { cad: 'Yingzao mode', standard: 'Standard' } }, 'standard', true)?.includes('Preset not active'));
 check('runtime notice translates', environmentNotice({ toolScope: 'global', presets: [], runtime: { state: 'absent' } })?.includes('400 MB'));
 check('interpolation works in English', t('export.more', { count: 3 }) === '3 more finding(s); see the export manifest.');
-check('kernel notice names the CLI', environmentNotice({ toolScope: 'global', presets: [], backend: { kernel: 'cadquery', compileBackend: 'auto' } })?.includes('dsh-cad-backend'));
+check('cadquery kernel has no notice', environmentNotice({ toolScope: 'global', presets: [], backend: { kernel: 'cadquery', compileBackend: 'auto' } }) === null);
+check('unknown kernel notice names the CLI', environmentNotice({ toolScope: 'global', presets: [], backend: { kernel: 'freecad', compileBackend: 'auto' } })?.includes('dsh-cad-backend'));
 
 const seen = [];
 const fakeCtx = {

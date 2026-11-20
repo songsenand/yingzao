@@ -33,6 +33,7 @@ process.env.DSH_HOME = home;
 const { registerCadTools } = await import('../src/host/tools.ts');
 const { projectStores } = await import('../src/host/project.ts');
 const { compileStlOnly } = await import('../src/host/compile.ts');
+const { readVersionEntry } = await import('../src/host/version.ts');
 
 const tools = new Map();
 const ctx = {
@@ -88,6 +89,8 @@ check('  …the result text carries a loud warning',
   textOf(open.blocks).split('\n')[0]);
 check('  …and the structured warnings array carries it too',
   (open.value.warnings ?? []).some((w) => /NOT watertight/.test(w)));
+const openEntry = await readVersionEntry(store, open.value.versionId);
+check('  …and the manifest records solid:false', openEntry?.solid === false, JSON.stringify(openEntry?.solid));
 
 // ================= P0-3: measure tools roar on open meshes ==================
 

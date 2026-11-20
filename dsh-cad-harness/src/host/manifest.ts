@@ -1,7 +1,11 @@
 // Assembly manifest: the BOM + executable-ICD artifact (schema v0.1, see
-// docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md). JSON is the single source of truth and is
-// deliberately language-neutral; every consumer (engine checks, panel, LLM
-// scripts) goes through this module or reads the JSON directly.
+// docs/archive/ASSEMBLY-SCHEMA-PROPOSAL.md). The readable JSON is a MATERIALIZED
+// VIEW: the authoritative history is assembly/changes/, sealed by
+// assembly/assembly.seal, and the only writer is writeAssemblyContract
+// (cad_assembly / dsh-cad-contract). Readers still consume this JSON, but a
+// direct edit no longer matches the seal and is refused. Every consumer
+// (engine checks, panel, LLM scripts) goes through this module or reads the
+// JSON directly — with the sealed-reader guard.
 //
 // Conventions (adjudicated 2026-09-28):
 // - node.id: English kebab-case, immutable (version graph references it)
@@ -18,6 +22,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { STANDARD_SPRINGS, STANDARD_SPRING_IDS } from './standard-parts.ts';
+import { readSeal, sealPathFor, sha256Text } from './assembly-seal.ts';
 
 // ---------- types ----------
 
@@ -256,6 +261,14 @@ export interface AssemblyManifest {
    * loader from the exact bytes it parsed.
    */
   manifestHash?: string;
+  /**
+   * Sealed-contract identity, attached by the loader from assembly.seal.
+   * `unlocked` = a legacy contract written before the sealed writer; readers
+   * accept it with a warning, but the next write creates the first record.
+   */
+  contractRevision?: number;
+  contractHash?: string;
+  contractStatus?: 'sealed' | 'unlocked';
 }
 
 /** An interface together with the path of the node that owns it. */
@@ -350,6 +363,25 @@ export async function loadAssemblyManifest(path: string): Promise<AssemblyManife
   // Hash the bytes we actually parsed (not a re-read): "which revision" must not
   // be a race with whoever edits the file next.
   manifest.manifestHash = createHash('sha256').update(text).digest('hex').slice(0, 8);
+  // A sealed contract must match its binary seal. A direct edit is not a
+  // contract change: refuse it here, so every caller sees the same error.
+  const seal = await readSeal(sealPathFor(path));
+  if (seal) {
+    const actual = sha256Text(text);
+    if (actual !== seal.payloadSha256) {
+      throw new Error(
+        `contract-tampered: ${path} does not match assembly.seal ` +
+        `(seal ${seal.payloadSha256.slice(0, 19)}…, file ${actual.slice(0, 19)}…). ` +
+        'Direct edits are not a contract change. Run `dsh-cad-contract rebuild` to restore the last recorded revision, ' +
+        'or use cad_assembly write with the current revision.',
+      );
+    }
+    manifest.contractRevision = seal.revision;
+    manifest.contractHash = seal.payloadSha256;
+    manifest.contractStatus = 'sealed';
+  } else {
+    manifest.contractStatus = 'unlocked';
+  }
   return manifest;
 }
 

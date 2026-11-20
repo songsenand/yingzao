@@ -42,6 +42,15 @@ These are **known limits**, not bug reports waiting to be fixed. Knowing them is
 - GLB is stored only as a **sidecar**; the panel still previews STL.
 - Colour is not a geometry pass condition: a coloured render does not mean a printed colour, and does not affect printability.
 
+## CadQuery (optional kernel)
+
+- **CadQuery is optional and never replaces OpenSCAD.** Four-view rendering, sections, motion/assembly keyframes, and mesh export still use OpenSCAD.
+- **The pack is 1.4–1.6 GiB**, installed explicitly at `$DSH_HOME/cad/packs/cadquery` (or `DSH_CAD_CQ_PACK`); it is not shipped in the npm tarball and `setup` does not download it.
+- **CadQuery scripts are Python executed with your user privileges**, not sandboxed. The pack's VTK/OCP are import/B-rep dependencies; they are not the renderer.
+- **One authoring kernel per project.** New versions pin `backend.kernel`; old versions are never rewritten and keep their own pin.
+- **STEP is a native artifact, not design evidence.** Design checks still use the STL mesh; a valid B-rep is not a pass.
+- **Windows/macOS status:** the Linux-only `xvfb-run`/path assumptions were removed in code, but no real-machine smoke has been run; do not claim cross-platform verification.
+
 ## Platform differences
 
 | Platform | Difference |

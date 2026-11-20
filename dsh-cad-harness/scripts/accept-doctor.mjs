@@ -28,6 +28,7 @@ check('doctor --json is parseable', baseReport !== null);
 check('doctor reports a kind', ['ok', 'degraded', 'fail'].includes(baseReport?.kind), baseReport?.kind);
 check('doctor reports plugin/node/dsh versions', Boolean(baseReport?.version?.plugin && baseReport?.version?.node && baseReport?.version?.dsh));
 check('doctor includes the required checks', ['node', 'plugin-package', 'openscad', 'python-runtime', 'skills', 'preset-skill-path'].every((id) => baseReport?.checks?.some((c) => c.id === id)));
+check('doctor reports the CadQuery capability', ['pass', 'warn', 'fail'].includes(baseReport?.checks?.find((c) => c.id === 'cadquery')?.status), baseReport?.checks?.find((c) => c.id === 'cadquery')?.detail);
 check('doctor exits 0/1/2 consistently', (base.status === 0 && baseReport.kind === 'ok') || (base.status === 1 && baseReport.kind === 'degraded') || (base.status === 2 && baseReport.kind === 'fail'), `status=${base.status} kind=${baseReport?.kind}`);
 
 // The checkout ships a modern snapshot under bin/ (gitignored). doctor must

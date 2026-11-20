@@ -120,6 +120,14 @@ export interface DeliveryAudit {
     staleNodes: { name: string; version: string; newest: string; newestDatums?: number }[];
     /** True when the newest version is POSTERIOR to the newest contract check. */
     geometryNewerThanCheck: boolean;
+    /** Current sealed contract identity (0/null for a legacy contract). */
+    revision: number;
+    hash: string | null;
+    /** The newest assembly-check's recorded contract identity, when it has one. */
+    checkRevision?: number;
+    checkHash?: string | null;
+    /** True when the current contract differs from the checked one. */
+    changedSinceCheck: boolean;
   };
   /** Mesh files under the scan roots that no version accounts for. */
   unregistered: UnregisteredScan;
@@ -279,6 +287,7 @@ export async function auditDelivery(
   // ── the contract, when there is one ────────────────────────────────────────
   const contract: DeliveryAudit['contract'] = {
     name: null, interfaces: 0, kinematicInterfaces: 0, byCheck: {}, staleNodes: [], geometryNewerThanCheck: false,
+    revision: 0, hash: null, changedSinceCheck: false,
   };
   let contractPath: string | null = null;
   let contractError: string | null = null;
@@ -293,6 +302,8 @@ export async function auditDelivery(
     contractPath = resolved.path;
     const manifest = await loadAssemblyManifest(resolved.path);
     contract.name = manifest.name ?? null;
+    contract.revision = manifest.contractRevision ?? 0;
+    contract.hash = manifest.contractHash ?? manifest.manifestHash ?? null;
     const root: any = (manifest as any).root ?? manifest;
     const walk = (node: any): void => {
       for (const iface of node?.interfaces ?? []) {
@@ -354,6 +365,27 @@ export async function auditDelivery(
     contract.geometryNewerThanCheck = Boolean(
       newestCheck && newestVersion && newestVersion.timestamp > newestCheck.timestamp,
     );
+    if (newestCheck) {
+      try {
+        const report = JSON.parse(await readFile(join(project.root, 'runs', newestCheck.id, 'report.json'), 'utf8')) as {
+          contractRevision?: unknown;
+          contractHash?: unknown;
+          manifestHash?: unknown;
+        };
+        if (typeof report.contractRevision === 'number') contract.checkRevision = report.contractRevision;
+        if (typeof report.contractHash === 'string') contract.checkHash = report.contractHash;
+        else if (typeof report.manifestHash === 'string') contract.checkHash = report.manifestHash;
+        if (contract.checkRevision !== undefined) {
+          contract.changedSinceCheck = contract.revision !== contract.checkRevision;
+        } else if (contract.checkHash && contract.hash) {
+          // Older reports carry the 8-char manifestHash; a sealed contract carries
+          // the full hash. A prefix match is the same revision, not a change.
+          const a = contract.checkHash.replace(/^manifest@/, '');
+          const b = contract.hash;
+          contract.changedSinceCheck = !(a === b || (a.length === 8 && b.startsWith(a)) || (b.length === 8 && a.startsWith(b)));
+        }
+      } catch { /* an unreadable old report is reported as unversioned below */ }
+    }
   } catch (e) {
     // Distinguish "there is no manifest" (normal for a single part) from "a manifest is
     // there and cannot be read" (which silently erased three contract findings — the
@@ -661,6 +693,12 @@ export async function auditDelivery(
   if (contract.geometryNewerThanCheck) {
     push('warn', 'evidence-predates-geometry',
       'the newest version is POSTERIOR to the newest contract check — re-run the check before citing it');
+  }
+  if (contract.changedSinceCheck) {
+    push('warn', 'contract-changed-since-check',
+      `the contract is at revision ${contract.revision} but the newest assembly check audited ` +
+      `${contract.checkRevision ?? '(unversioned)'} — re-run cad_assembly check before citing its verdict; ` +
+      'a contract change is not covered by the old check.');
   }
   if (contract.staleNodes.length > 0) {
     push('warn', 'contract-stale-nodes',

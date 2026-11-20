@@ -1,0 +1,48 @@
+{
+  "platform": "linux-x64-gnu",
+  "python": "3.13.16",
+  "cadquery": "2.8.0",
+  "cadquery_ocp": "7.9.3.1.1",
+  "install": {
+    "command": "pip install --target pack --no-deps cadquery==2.8.0 cadquery-ocp==7.9.3.1.1 ezdxf==1.4.5 multimethod==1.12 nlopt==2.11.0 runtype==0.5.3 casadi==3.8.2 pyparsing==3.3.3 scipy==1.18.1 numba==0.68.1 llvmlite==0.50.0 vtk==9.6.2 numpy==2.5.5 typing_extensions==4.16.0",
+    "wall_s": 196.751,
+    "pack_full_mib": 1599.3,
+    "pack_without_numba_llvmlite_mib": 1398.2,
+    "pycache_mib": 62.4,
+    "download_rate_note": "~2.4 MB/s on this network; not a clean-room measurement"
+  },
+  "runtime": {
+    "import_s_runs": [0.887, 0.881, 0.883],
+    "import_s_median": 0.883,
+    "build_s": 0.0229,
+    "export_s": 0.0126,
+    "script_wall_ms": 1284,
+    "openscad_wall_ms": 232
+  },
+  "modules_after_import_cadquery": {
+    "trame": false,
+    "vtk": true,
+    "vtkmodules": true,
+    "matplotlib": false,
+    "pyvista": false,
+    "numba": false,
+    "casadi": true
+  },
+  "pack_dominants_mib": {
+    "vtkmodules": 639,
+    "casadi": 277,
+    "llvmlite": 173,
+    "OCP": 166,
+    "scipy": 109,
+    "numpy": 43,
+    "ezdxf": 33,
+    "numba": 33,
+    "cadquery": 2
+  },
+  "notes": [
+    "trame and matplotlib are not imported by import cadquery and can be omitted for a headless pack.",
+    "vtk is imported by cadquery.occ_impl.shapes and is required for STL tessellation; it cannot be omitted in CQ 2.8.",
+    "casadi is imported by cadquery.assembly -> solver at top level; a lazy-import patch would be required to omit it.",
+    "numba/llvmlite are not imported for this bracket; removing them leaves basic import/compile working, but they are declared dependencies and may be needed by NURBS/vis paths."
+  ]
+}

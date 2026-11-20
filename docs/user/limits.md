@@ -42,6 +42,15 @@
 - GLB 只能作为**侧车**保存；面板仍只预览 STL。
 - 颜色不是几何通过条件：彩色渲染不代表打印颜色，也不参与可打印性判定。
 
+## CadQuery（可选内核）
+
+- **CadQuery 不是默认内核，也不是必需依赖。** OpenSCAD 始终保留；四视图渲染、剖切、运动/装配关键帧和网格导出仍走 OpenSCAD。
+- **pack 约 1.4–1.6 GiB**，由用户显式安装到 `$DSH_HOME/cad/packs/cadquery`（或 `DSH_CAD_CQ_PACK`），不随 npm 包分发，`setup` 不自动下载。
+- **CadQuery 脚本是 Python，以用户权限执行**，不是沙箱。只运行你信任的模型/示例；pack 里的 VTK/OCP 是导入与 B-rep 依赖，不用于本插件渲染。
+- **一个项目一个作者内核。** 新版本记录 `backend.kernel`；旧版本不重写。切换内核后旧版本仍按自己的 pin 编译。
+- **STEP 是原生旁路产物，不是设计证据。** 设计验证仍以 STL 网格为准；`BRepCheck` 通过不等于尺寸/壁厚/装配通过。
+- **Windows/macOS 的本版状态：** 代码已去掉 Linux 专用的 `xvfb-run`/路径假设，但尚未在真机 smoke；不要把它当成“已验证跨平台”。
+
 ## 平台差异
 
 | 平台 | 差异 |

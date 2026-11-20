@@ -21,4 +21,9 @@ Copyright 2026 songsenand <songsenand@163.com> and other contributors
 - 题库第三方素材（Pixabay 等）—— **物化使用、不入库**；逐项授权登记见
   examples/bench/ATTRIBUTION.md 与 docs/THIRD-PARTY-AUDIT.md
 
+- CadQuery / cadquery-ocp / OpenCASCADE / VTK —— **可选** CadQuery pack，由用户显式安装，
+  不随本包分发。CadQuery 为 Apache-2.0；cadquery-ocp/OpenCASCADE 为 LGPL-2.1（含 OCCT
+  例外），以独立 Python 包/动态库方式使用；VTK 为 BSD-3-Clause。pack 的安装命令与版本锁定
+  见 docs/llm/cadquery.md 与 docs/user/install.md。
+
 本项目自身不包含任何 GPL/AGPL/LGPL 代码。

@@ -44,6 +44,19 @@ const verifyCli = await esbuild.context({
   sourcemap: true,
 });
 
+// Packaged contract CLI: `dsh-cad-contract` must work on a clean install with
+// no src/; scripts/contract.mjs loads this bundle first.
+const contractCli = await esbuild.context({
+  entryPoints: ['src/host/contract-cli.ts'],
+  outfile: 'lib/contract-cli.js',
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node20',
+  external: ['@deepseek-ai/*', '@deepseek-ai/cordis', 'schemastery', 'manifold-3d'],
+  sourcemap: true,
+});
+
 // Client half: CJS factory registered via window.__ModuleLoader__.load(),
 // mirroring the first-party bundle shape exactly. react/jsx-runtime are
 // baseline platform modules resolved from the module table.
@@ -74,10 +87,10 @@ const client = await esbuild.context({
 });
 
 if (watch) {
-  await Promise.all([host.watch(), client.watch(), verifyCli.watch(), importRunCli.watch()]);
+  await Promise.all([host.watch(), client.watch(), verifyCli.watch(), importRunCli.watch(), contractCli.watch()]);
   console.log('[cad-harness] watching…');
 } else {
-  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild(), importRunCli.rebuild()]);
-  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose(), importRunCli.dispose()]);
-  console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js');
+  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild(), importRunCli.rebuild(), contractCli.rebuild()]);
+  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose(), importRunCli.dispose(), contractCli.dispose()]);
+  console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js + lib/contract-cli.js');
 }

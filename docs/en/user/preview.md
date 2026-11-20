@@ -1,4 +1,4 @@
-# 0.1.0 preview notes
+# 0.1.1-preview.1 preview notes
 
 [中文](../../user/preview.md) | English
 
@@ -24,7 +24,7 @@
 See [install](install.md). The minimum path:
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
+tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup
@@ -34,14 +34,14 @@ npx dsh-cad-verify <project> --advisory
 # restart dsh
 ```
 
-OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or too slow. 2021.01 works but `doctor` reports `degraded`. The plugin does not ship OpenSCAD, and OpenSCAD is the default kernel, not the only possible one. The preview ships only the OpenSCAD adapter; CadQuery/FreeCAD are listed as `planned`, cannot be selected, and are never silently substituted.
+OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system install is used as-is; otherwise the official snapshot is tried first and the OSS mirror is used only when the official source is unreachable or too slow. 2021.01 works but `doctor` reports `degraded`. The plugin does not ship OpenSCAD, and OpenSCAD is the default kernel, not the only possible one. This release ships OpenSCAD and CadQuery; CadQuery needs the optional ~1.6 GiB pack installed explicitly (setup does not download it). FreeCAD remains `planned` and cannot be selected.
 
 ## Known limits
 
 - **Approval/rollback**: browse, pin and compare versions. The agent can propose a revert; approving it in the panel creates a new version. There is no separate version sign-off workflow.
 - **Python runtime**: the first use downloads about 400 MB and may take minutes; offline failure gives the next step.
 - **BOSL2**: optional; standard parts need it, and a missing copy is reported rather than silently producing empty geometry.
-- **Kernel**: OpenSCAD only in this preview. A second kernel is the first mid-term item, not a promise for this release.
+- **Kernel**: OpenSCAD plus optional CadQuery; one authoring kernel per project, old versions keep their pin. OpenSCAD remains the rendering/export dependency.
 - **Long tasks**: background **compile** jobs have submit/status/cancel/timeout/restart recovery; rendering and simulation are still synchronous. A timeout is reported, never treated as a pass.
 - **English UI**: all client-visible strings go through i18n (same keys in zh/en;
   `accept:ui-i18n` scans literals), and the deep panel is English too as of preview.2.

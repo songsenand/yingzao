@@ -1,0 +1,2 @@
+cc9bfba3fb790796b3c2823653e66619c1ece54dde19a371cc64064b3af9e878  bracket_cq.stl
+913d4faa588c77927ae516faf88589a06095ea8fccf70d981dbe2cd7311813cd  bracket_scad.stl

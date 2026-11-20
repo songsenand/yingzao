@@ -21,10 +21,11 @@
 // are still included at their newest revision, so work-in-progress parts are not
 // silently dropped.
 
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { safeFileStem } from '../shared/download-name.ts';
 import { axisAngleAffine, eulerMatrix, type Mat3 } from './assembly-check.ts';
+import { changesDirFor, sealPathFor } from './assembly-seal.ts';
 import { newestVersionPerPart } from './latest.ts';
 import {
   DEFAULT_MANIFEST_REL, flattenParts, loadAssemblyManifest, resolveAssemblyManifestPath,
@@ -59,6 +60,8 @@ export interface ProjectPartFile {
   label: string;
   versionId: string;
   stl: Uint8Array;
+  /** Native STEP alongside STL when the version recorded one. */
+  step?: Uint8Array;
 }
 
 export interface ProjectAssemblyInstance {
@@ -77,6 +80,8 @@ export interface ProjectExportPlan {
   manifestPath: string | null;
   manifestText: string | null;
   manifestHash: string | null;
+  /** Sealed-contract provenance: assembly.seal + changes/ travel with the JSON. */
+  contractFiles: ZipEntry[];
   files: ProjectPartFile[];
   instances: ProjectAssemblyInstance[];
   skipped: { label: string; reason: string }[];
@@ -138,9 +143,26 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
   const hasManifest = resolved.origin !== 'workspace-default';
   let manifestText: string | null = null;
   let manifest = null;
+  const contractFiles: ZipEntry[] = [];
   if (hasManifest) {
     manifest = await loadAssemblyManifest(resolved.path);
     manifestText = await readFile(resolved.path, 'utf8');
+    // The seal + change log are the contract's provenance. A ZIP that carries
+    // only assembly.json hands the recipient a materialized view with no way to
+    // tell a tool-written revision from a typed edit.
+    try {
+      contractFiles.push({ name: 'assembly/assembly.seal', data: new Uint8Array(await readFile(sealPathFor(resolved.path))) });
+    } catch { /* legacy contract: no seal */ }
+    try {
+      const changes = changesDirFor(resolved.path);
+      const names = (await readdir(changes)).filter((name) => /^\d{4}-.*\.json$/.test(name)).sort();
+      for (const name of names) {
+        contractFiles.push({
+          name: `assembly/changes/${name}`,
+          data: new Uint8Array(await readFile(join(changes, name))),
+        });
+      }
+    } catch { /* no change log (legacy) */ }
   }
 
   const [versions, parts] = await Promise.all([listVersions(project.store), listParts(project.partStore)]);
@@ -151,6 +173,7 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
   const warnings: string[] = [];
   const skipped: { label: string; reason: string }[] = [];
   const stlCache = new Map<string, Uint8Array | null>();
+  const stepCache = new Map<string, Uint8Array | null>();
 
   const stlFor = async (versionId: string): Promise<Uint8Array | null> => {
     if (stlCache.has(versionId)) return stlCache.get(versionId)!;
@@ -162,6 +185,18 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
     }
     stlCache.set(versionId, stl);
     return stl;
+  };
+
+  const stepFor = async (versionId: string): Promise<Uint8Array | null> => {
+    if (stepCache.has(versionId)) return stepCache.get(versionId)!;
+    let step: Uint8Array | null = null;
+    try {
+      step = new Uint8Array(await readFile(join(project.store.root, 'versions', versionId, 'model.step')));
+    } catch {
+      step = null;
+    }
+    stepCache.set(versionId, step);
+    return step;
   };
 
   const partLabel = (node: ManifestNode, entry: VersionManifestEntry | undefined): string =>
@@ -193,6 +228,7 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
         continue;
       }
       const display = partLabel(node, entry);
+      const step = await stepFor(versionId);
       const newestId = entry?.partId ? newest.get(entry.partId) : undefined;
       if (entry?.partId && newestId && newestId !== versionId) {
         const note = `${display}：装配清单钉 ${versionId}，该零件最新版是 ${newestId}`;
@@ -206,6 +242,7 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
           label: display,
           versionId,
           stl,
+          ...(step ? { step } : {}),
         };
         fileByVersion.set(versionId, file);
         files.push(file);
@@ -237,11 +274,13 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
       skipped.push({ label: part.name, reason: `版本 ${versionId} 没有 model.stl` });
       continue;
     }
+    const step = await stepFor(versionId);
     const file: ProjectPartFile = {
       stem: uniqueStem(part.name, versionId, usedStems),
       label: part.name,
       versionId,
       stl,
+      ...(step ? { step } : {}),
     };
     fileByVersion.set(versionId, file);
     files.push(file);
@@ -253,6 +292,7 @@ export async function planProjectExport(project: ProjectStores): Promise<Project
     manifestPath: hasManifest ? resolved.path : null,
     manifestText,
     manifestHash: manifest?.manifestHash ?? null,
+    contractFiles,
     files,
     instances,
     skipped,
@@ -324,6 +364,12 @@ export function projectExportReadme(plan: ProjectExportPlan): string {
       '用于整机预览/报价；它不是布尔并集，也不是可以直接打印的单个实体。',
       '装配位置以 assembly/assembly.json 为准。',
     );
+    if (plan.contractFiles.length > 0) {
+      lines.push(
+        'assembly/assembly.seal + assembly/changes/ 是该清单的封印与变更凭证；',
+        '修改清单请用 cad_assembly（write）或 dsh-cad-contract，不要直接编辑 assembly.json。',
+      );
+    }
   } else {
     lines.push(
       `没有 ${DEFAULT_MANIFEST_REL}：本包按各零件的最新版本导出，零件彼此没有装配位置。`,
@@ -334,7 +380,7 @@ export function projectExportReadme(plan: ProjectExportPlan): string {
   if (plan.files.length) {
     lines.push('零件：');
     for (const file of plan.files) {
-      lines.push(`- ${file.label}（${file.versionId}）→ parts/${file.stem}.stl`);
+      lines.push(`- ${file.label}（${file.versionId}）→ parts/${file.stem}.stl${file.step ? ' + parts/' + file.stem + '.step' : ''}`);
     }
   } else {
     lines.push('零件：（无）');
@@ -367,10 +413,10 @@ export function projectExportReadme(plan: ProjectExportPlan): string {
 /** The ZIP a human downloads: parts + manifest + README (+ placed assembly). */
 export async function buildProjectZip(plan: ProjectExportPlan, extras: readonly ZipEntry[] = []): Promise<Uint8Array> {
   const encoder = new TextEncoder();
-  const entries: ZipEntry[] = plan.files.map((file) => ({
-    name: `parts/${file.stem}.stl`,
-    data: file.stl,
-  }));
+  const entries: ZipEntry[] = plan.files.flatMap((file) => [
+    { name: `parts/${file.stem}.stl`, data: file.stl },
+    ...(file.step ? [{ name: `parts/${file.stem}.step`, data: file.step }] : []),
+  ]);
   if (plan.manifestText) {
     entries.push({
       name: DEFAULT_MANIFEST_REL,
@@ -379,6 +425,7 @@ export async function buildProjectZip(plan: ProjectExportPlan, extras: readonly 
     if (plan.instances.length) {
       entries.push({ name: 'assembly.stl', data: buildAssemblyStl(plan) });
     }
+    entries.push(...plan.contractFiles);
   }
   entries.push({ name: 'README.txt', data: encoder.encode(projectExportReadme(plan)) });
   entries.push(...extras);

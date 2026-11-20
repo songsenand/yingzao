@@ -1,14 +1,16 @@
 // Background compile jobs: a submit returns an id immediately, state survives a
 // restart, and cancel kills the process group rather than abandoning a promise.
 //
-// Scope: OpenSCAD compile only. Rendering/simulation remain synchronous until
-// they can check the same signal; this is the first real job kind, not a mock.
+// Scope: one compile job, dispatched by the version's backend pin. OpenSCAD is
+// still an external child process; CadQuery runs through the provider (which
+// owns its own subprocess). Rendering/simulation remain synchronous until they
+// can check the same signal.
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeJsonAtomic } from './file-lock.ts';
-import type { VersionStore } from './version.ts';
+import { readVersionEntry, readVersionSource, type VersionStore } from './version.ts';
 
 export type JobStatus = 'running' | 'done' | 'failed' | 'cancelled' | 'timeout';
 export interface JobRecord {
@@ -109,8 +111,9 @@ async function resolveOpenScad(): Promise<{ bin: string; extra: string[] }> {
 }
 
 /**
- * Start a compile job. Throws synchronously on a missing version/model.scad;
- * a binary/probe failure after the job row is written is recorded as `failed`.
+ * Start a compile job for one version. The version's `sourceFile`/`backend`
+ * decides the engine; a missing source is refused before the job row is written,
+ * while an engine failure after it is recorded as `failed`/`timeout`.
  */
 export async function startCompileJob(opts: {
   store: JobStore;
@@ -119,9 +122,19 @@ export async function startCompileJob(opts: {
   versionId: string;
   timeoutMs?: number;
 }): Promise<JobRecord> {
+  // `versionId` is caller-controlled in the HTTP route. A manifest lookup both
+  // validates the id and keeps `join()` from ever seeing `../`; the old direct
+  // join let an attacker point the job at an arbitrary model.py and execute it.
+  const entry = await readVersionEntry(opts.versions, opts.versionId);
+  if (!entry || !/^v\d{3,}$/.test(opts.versionId)) throw new Error(`unknown version: ${opts.versionId}`);
   const versionDir = join(opts.versions.root, 'versions', opts.versionId);
-  const scad = join(versionDir, 'model.scad');
-  if (!existsSync(scad)) throw new Error(`unknown version or missing model.scad: ${opts.versionId}`);
+  const source = await readVersionSource(opts.versions, opts.versionId);
+  if (!source) throw new Error(`unknown version or missing source: ${opts.versionId}`);
+  if (source.kernel !== 'openscad' && source.kernel !== 'cadquery') {
+    throw new Error(`backend_not_available: version ${opts.versionId} pins unknown kernel "${source.kernel}"`);
+  }
+  const sourcePath = join(versionDir, source.sourceFile);
+  if (!existsSync(sourcePath)) throw new Error(`unknown version or missing ${source.sourceFile}: ${opts.versionId}`);
   const timeoutMs = Math.min(Math.max(opts.timeoutMs ?? 120_000, 1_000), 600_000);
   const running = listJobs(opts.store).filter((job) => job.status === 'running').length;
   if (running >= MAX_RUNNING_JOBS) throw new Error(`job concurrency limit reached (${MAX_RUNNING_JOBS}); wait for a job or cancel one`);
@@ -129,7 +142,7 @@ export async function startCompileJob(opts: {
   const dir = join(opts.store.root, id);
   mkdirSync(dir, { recursive: true });
   const output = join(dir, 'model.stl');
-  const log = join(dir, 'openscad.log');
+  const log = join(dir, source.kernel === 'cadquery' ? 'cadquery.log' : 'openscad.log');
   const job: JobRecord = {
     schemaVersion: 1, id, kind: 'compile', status: 'running', createdAt: now(), updatedAt: now(),
     project: opts.project, versionId: opts.versionId, output, timeoutMs,
@@ -145,15 +158,60 @@ export async function startCompileJob(opts: {
     current.status = status;
     current.updatedAt = now();
     current.finishedAt = current.updatedAt;
+    if (current.pid) alive.delete(current.pid);
     if (error) current.error = error;
     if (status === 'done' && !existsSync(output)) current.status = 'failed', current.error = 'openscad exited 0 but wrote no STL';
     await write(opts.store, current);
   };
 
+  if (source.kernel === 'cadquery') {
+    // CadQuery owns its own child process, so this branch is asynchronous like
+    // OpenSCAD's. The pid reaches the job through onSpawn; cancel kills that
+    // child and the row's cancelled state wins over a late result.
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const { compileStlOnly } = await import('./compile.ts');
+        const compiled = await compileStlOnly(source.code, {
+          kernel: 'cadquery',
+          timeoutMs,
+          signal: controller.signal,
+          onSpawn: (pid) => {
+            job.pid = pid;
+            alive.add(pid);
+            void write(opts.store, job);
+          },
+        });
+        writeFileSync(log, [...compiled.errors, ...compiled.warnings].join('\n'));
+        if (read(opts.store, id)?.status !== 'running') return;
+        if (compiled.success && compiled.stl) {
+          writeFileSync(output, compiled.stl);
+          await finish('done');
+        } else {
+          await finish(
+            compiled.errorCode === 'cadquery_timeout' ? 'timeout' : 'failed',
+            compiled.errors.join('; ') || 'CadQuery compile failed',
+          );
+        }
+      } catch (error) {
+        await finish('failed', String((error as Error)?.message ?? error));
+      }
+    })();
+    return job;
+  }
+
   try {
     const { bin, extra } = await resolveOpenScad();
+    // The job must produce the SAME artifact compileOpenScad does: ASCII STL
+    // with no datum prelude is not a mesh this codebase can parse (parseBinaryStl
+    // reads binary), and `datum()` would be an unknown module. Compose the
+    // prelude into a job-local source; never write into the version directory.
+    const { datumPrelude } = await import('./compile.ts');
+    const prelude = await datumPrelude();
+    const jobSource = join(dir, 'model.scad');
+    writeFileSync(jobSource, prelude + source.code, 'utf8');
     const fd = openSync(log, 'a');
-    child = spawn(bin, [...extra, '-o', output, scad], {
+    child = spawn(bin, [...extra, '-o', output, '--export-format', 'binstl', '-D', '$fn=64', jobSource], {
       detached: true,
       stdio: ['ignore', fd, fd],
     });

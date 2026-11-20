@@ -12,7 +12,7 @@
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { buildPreset, listSkillFiles } from './preset-lib.mjs';
@@ -20,7 +20,8 @@ import { SPEED_NOTE } from './provision-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(argValue('--root') ?? join(HERE, '..'));
-const DSH_HOME = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'));
+const DSH_HOME_RAW = process.env.DSH_HOME?.trim();
+const DSH_HOME = DSH_HOME_RAW && isAbsolute(DSH_HOME_RAW) ? resolve(DSH_HOME_RAW) : join(homedir(), '.dsh');
 const CAD_HOME = join(DSH_HOME, 'cad');
 
 function argValue(name) {
@@ -115,7 +116,12 @@ add('bundle-lib', existsSync(join(ROOT, 'lib/index.js')) ? 'pass' : 'fail',
 // --- OpenSCAD --------------------------------------------------------------
 const backendFile = join(CAD_HOME, 'backend.json');
 let backendConfig = { kernel: 'openscad', compileBackend: 'auto', binaryPath: null };
-try { backendConfig = { ...backendConfig, ...JSON.parse(readFileSync(backendFile, 'utf8')) }; } catch { /* defaults */ }
+let backendConfigError = null;
+try {
+  backendConfig = { ...backendConfig, ...JSON.parse(readFileSync(backendFile, 'utf8')) };
+} catch (error) {
+  if (existsSync(backendFile)) backendConfigError = error;
+}
 const repoSandbox = join(ROOT, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad');
 const candidates = explicitOpenScad
   ? [explicitOpenScad]
@@ -130,12 +136,23 @@ const candidates = explicitOpenScad
     ].filter(Boolean);
 let openscad = null;
 let openscadVersion = null;
+let openscadScore = -1;
+const scoreOf = (text) => {
+  const m = /20(\d{2})\.(\d{2})/.exec(text ?? '');
+  return m ? Number(`20${m[1]}${m[2]}`) : 0;
+};
+// Highest version wins, matching compile.ts. Reading the first candidate would
+// let an old system/backend entry hide the newer plugin snapshot.
 for (const candidate of candidates) {
   const v = versionOf(candidate);
   if (v.ok || v.output) {
-    openscad = candidate;
-    openscadVersion = v.output.split('\n')[0] || 'unknown';
-    break;
+    const text = v.output.split('\n')[0] || 'unknown';
+    const score = scoreOf(text);
+    if (score > openscadScore) {
+      openscad = candidate;
+      openscadVersion = text;
+      openscadScore = score;
+    }
   }
 }
 if (!openscad) {
@@ -162,11 +179,18 @@ add('bosl2', bosl2 ? 'pass' : 'warn', bosl2 ? `BOSL2 at ${bosl2}` : 'BOSL2 not f
   bosl2 ? undefined : 'download BOSL2 into lib/BOSL2 and set OPENSCADPATH to the directory that CONTAINS BOSL2');
 
 // --- backend selection -----------------------------------------------------
-add('backend', backendConfig.kernel === 'openscad' ? 'pass' : 'fail',
-  `kernel=${backendConfig.kernel} compileBackend=${backendConfig.compileBackend}`,
-  backendConfig.kernel === 'openscad' ? undefined : 'run `npx dsh-cad-backend --kernel openscad` (only OpenSCAD ships in this preview)');
+const kernelKnown = backendConfig.kernel === 'openscad' || backendConfig.kernel === 'cadquery';
+if (backendConfigError) {
+  add('backend', 'warn', `backend.json is unreadable: ${backendConfigError.message}`,
+    'delete or repair $DSH_HOME/cad/backend.json; using openscad/auto defaults for this check');
+} else {
+  add('backend', kernelKnown ? 'pass' : 'fail',
+    `kernel=${backendConfig.kernel} compileBackend=${backendConfig.compileBackend}`,
+    kernelKnown ? undefined : 'run `npx dsh-cad-backend --kernel openscad|cadquery`');
+}
 
 // --- Python runtime --------------------------------------------------------
+let pythonVenv = null;
 const pythonMode = (process.env.DSH_CAD_PYTHON ?? '').toLowerCase();
 const runtimeRoot = resolve(process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(CAD_HOME, 'runtime'));
 if (pythonMode === 'off') {
@@ -184,9 +208,33 @@ if (pythonMode === 'off') {
   } else if (state.error) {
     add('python-runtime', 'fail', `runtime failed: ${state.error}`, 'run python_runtime action=repair');
   } else if (state.venvPython && existsSync(state.venvPython)) {
+    pythonVenv = state.venvPython;
     add('python-runtime', 'pass', `ready at ${runtimeRoot}`);
   } else {
     add('python-runtime', 'warn', `runtime at ${runtimeRoot} is not ready (phase=${state.phase ?? 'unknown'})`, 'run python_runtime action=provision');
+  }
+}
+
+// --- CadQuery pack (optional engine, explicit install) --------------------
+const cqRoot = resolve(process.env.DSH_CAD_CQ_PACK?.trim() || join(CAD_HOME, 'packs', 'cadquery'));
+const cqInstalled = existsSync(join(cqRoot, 'cadquery', '__init__.py')) && existsSync(join(cqRoot, 'OCP'));
+if (!cqInstalled) {
+  add('cadquery', 'warn', `CadQuery pack not installed at ${cqRoot} (optional)`,
+    `install explicitly: python -m pip install --target "${cqRoot}" cadquery==2.8.0 (see docs for the pinned set)`);
+} else if (!pythonVenv) {
+  add('cadquery', 'warn', `CadQuery pack present at ${cqRoot}, but the Python runtime is not ready`,
+    'run python_runtime action=provision, then re-run doctor');
+} else {
+  const probe = spawnSync(pythonVenv, ['-c', 'import cadquery; print(cadquery.__version__)'], {
+    encoding: 'utf8',
+    timeout: 30000,
+    env: { ...process.env, PYTHONPATH: `${cqRoot}${delimiter}${process.env.PYTHONPATH ?? ''}` },
+  });
+  if (probe.status === 0) {
+    add('cadquery', 'pass', `CadQuery ${probe.stdout.trim().split('\n').pop()} at ${cqRoot}`);
+  } else {
+    add('cadquery', 'fail', `CadQuery pack at ${cqRoot} cannot import`,
+      'reinstall the pack; the pinned set is in docs/install or the L1.0 experiment');
   }
 }
 

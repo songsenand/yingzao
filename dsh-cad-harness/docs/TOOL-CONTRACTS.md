@@ -105,7 +105,7 @@ Validate the assembly manifest (BOM + interface contracts): distance (datum-kind
 cad_assembly({ action: "check", args: { manifestPath: "…" } })
 ```
 
-returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `adjacencyThresholdMm`, `summary`, `features`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
+returns: `overallStatus`, `judgement`, `judgedBy`, `manifestPath`, `contractRevision`, `contractHash`, `adjacencyThresholdMm`, `summary`, `features`, `hardViolations`, `intentFlags`, `skipped`, `undeclared`
 
 
 ## `check_cnc_access`
@@ -303,21 +303,23 @@ returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `ru
 
 Model-facing call: `cad_part` action `generate` (this section documents the internal op).
 
-Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. G2 (2026-10-29): datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; OpenSCAD positional arguments are silent, so a swap compiles and corrupts the contract (roberval v048). A zero direction is a compile error; a direction that dwarfs its own point comes back as a compile warning naming the datum. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
+Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (CadQuery Python); exactly one is required. CadQuery scripts must leave a `result` (Workplane/Shape) or call `show_object(...)`; declare anchors with datum/datum_axis/datum_plane/datum_cyl (point first, same schema as OpenSCAD). OpenSCAD code is self-contained with $fn=64 (BOSL2 available); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. Renders are attached by default; trim with `views` on numeric iterations. CadQuery renders are produced by the shared STL→OpenSCAD path, never by VTK. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
-| `scadCode` | string | **required** | Complete OpenSCAD source code for the part. Must be self-contained; no external libraries. |
+| `scadCode` | string | — | Complete OpenSCAD source code. Give this OR `code`, not both. Required for the OpenSCAD kernel. |
+| `code` | string | — | Complete CadQuery Python authoring script. Give this OR `scadCode`, not both. Set `result = ...` or call `show_object(...)`; datum helpers share the assembly schema. |
 | `userIntent` | string | **required** | One-line summary of what the part should look like, used in the version history. |
 | `parentVersion` | string | — | Version id this iteration derives from, e.g. "v003". Must belong to the same part. |
 | `part` | string | — | Which part this version belongs to — the name the user would call it, e.g. "调焦轴". ALWAYS pass this when iterating: it is what groups versions into one part in the panel. Omit only for a brand-new part with no parentVersion (a name is then derived from userIntent), or to inherit the parentVersion's part. |
 | `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded. |
+| `step` | boolean | — | CadQuery only: also write model.step and record BRepCheck provenance (optional; adds ~tens of KB and a STEP/STL consistency check). |
 
 ```js
-cad_part({ action: "generate", args: { scadCode: "…", userIntent: "…" } })
+cad_part({ action: "generate", args: { userIntent: "…" } })
 ```
 
-returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `minWallMm`, `minWallAtMm`, `part`
+returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `kernel`, `step`, `errorCode`, `fix`, `minWallMm`, `minWallAtMm`, `part`
 
 
 ## `import_part`
@@ -358,6 +360,7 @@ Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, 
 |---|---|---|---|
 | `dir` | string | **required** | Directory to make a project (absolute, or relative to the session workspace). Created if missing. |
 | `title` | string | — | Human title for project.json (default: the directory basename). |
+| `defaultKernel` | string (openscad \| cadquery) | — | Optional project-level authoring kernel default (cad_session info reports it). |
 
 ```js
 cad_session({ action: "init", args: { dir: "…" } })
@@ -499,7 +502,7 @@ returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summ
 
 Model-facing call: `cad_session` action `info` (this section documents the internal op).
 
-Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch.
+Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch. Reports the effective authoring kernel (`kernel`/`kernelSource`); the session prompt already states it, so this is a confirmation, not a prerequisite.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -508,7 +511,7 @@ Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/bou
 cad_session({ action: "info", args: {  } })
 ```
 
-returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `selected`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
+returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `selected`, `kernel`, `kernelSource`, `wouldBindTo`, `wouldBindMarker`, `mismatch`, `ambiguous`, `workspace`, `note`
 
 
 ## `python_runtime`
@@ -830,19 +833,22 @@ returns: `overallStatus`, `judgement`, `judgedBy`, `parts`, `pairs`
 
 Model-facing call: `cad_assembly` action `write` (this section documents the internal op).
 
-Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit. Give each part a `color` (#rrggbb) when the project is discussed with a human: the panel renders assembly and playback with it, so the agent and the human name the same part. It is a communication label, not a material or a spec, and it is only used where colour already exists (assembly + playback) — never to decorate reports or tables. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.
+Write or update the assembly contract. This is the ONLY write entry: the contract is sealed (assembly/assembly.seal) and every change appends a record under assembly/changes/ with a reason, actor, diff and revision. A generic write/edit to assembly.json is not a contract change and will be rejected by the seal check. The tool validates the manifest schema, every child version, every interface endpoint against that version's datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist; expectedRevision 0), merge (upsert children/interfaces by id; explicit remove; requires expectedRevision), replace (full root; requires expectedRevision). `reason` is required for every mode. Use `dryRun` to preview the diff without writing. It does not create datums, compute distances, or judge fit. Give each part a `color` (#rrggbb) when the project is discussed with a human: the panel renders assembly and playback with it, so the agent and the human name the same part. It is a communication label, not a material or a spec, and it is only used where colour already exists (assembly + playback) — never to decorate reports or tables. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `manifestPath` | string | — | Workspace-relative manifest path; default assembly/assembly.json. Must stay inside the project workspace. |
-| `mode` | string (create \| merge \| replace) | — | Default merge. merge/replace require expectedHash when the file exists. |
-| `expectedHash` | string | — | sha256:<hex> of the current file (or bare hex). Required for merge/replace when the file exists; prevents clobbering. |
+| `mode` | string (create \| merge \| replace) | — | Default merge. merge/replace require expectedRevision (from the last write/check). |
+| `expectedRevision` | integer | — | Current contract revision from the last write/check (0 for create). Required for merge/replace; a stale revision is refused. |
+| `expectedHash` | string | — | Optional sha256 of the current file (or bare hex); when both are given, both must match. |
+| `reason` | string | **required** | Why this change is made. Recorded in the change log; empty is refused. |
+| `dryRun` | boolean | — | Validate and return the diff without writing or appending a change record. |
 | `root` | object | — | Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields. |
 | `remove` | object | — | Explicit root-level deletions; omitted ids are preserved, never deleted implicitly. |
 
 ```js
-cad_assembly({ action: "write", args: { manifestPath: "…" } })
+cad_assembly({ action: "write", args: { reason: "…" } })
 ```
 
-returns: `manifestPath`, `manifestHash`, `mode`, `changed`, `counts`, `warnings`
+returns: `manifestPath`, `manifestHash`, `mode`, `changed`, `contractRevision`, `contractHash`, `changeId`, `dryRun`, `diff`, `counts`, `warnings`
 

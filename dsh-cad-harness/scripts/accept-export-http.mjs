@@ -56,6 +56,12 @@ try {
     userIntent: 'export-http fixture',
     partId: 'http-fixture',
   });
+  const projectQuery = encodeURIComponent(tmp);
+  const traversal = await route.fetch(new Request(`http://x/api/cad/export?v=../../outside&format=stl&project=${projectQuery}`));
+  check('export refuses a traversal version id before reading', traversal.status === 400, String(traversal.status));
+  const unknownVersion = await route.fetch(new Request(`http://x/api/cad/export?v=v999&format=stl&project=${projectQuery}`));
+  check('export refuses an unknown version id', unknownVersion.status === 404, String(unknownVersion.status));
+
   mkdirSync(join(tmp, 'assembly'), { recursive: true });
   writeFileSync(join(tmp, 'assembly', 'assembly.json'), JSON.stringify({
     schemaVersion: 1, name: 'http-fixture', unit: 'mm', up: 'z',

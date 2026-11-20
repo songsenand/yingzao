@@ -3,7 +3,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import { compileAndRender, compileStlOnly, renderScadPng } from './compile.ts';
-import { datumDriftForPart, datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
+import { datumDriftForPart, datumNames, listVersions, readVersionDatums, readVersionDatumPoints, readVersionEntry, readVersionSource, saveVersion, unionDatumSets, versionExists, writeVersionDatums } from './version.ts';
 import {
   attachVersion, createUniquePart, derivePartName, ensurePart, findPartById, findPartByName,
   listParts, partRoleOf, setPartRole, PART_ROLES, type PartEntry, type PartRole,
@@ -15,7 +15,9 @@ import { revertVersion as revertVersionHelper } from './version.ts';
 import { enqueueReviews, readQueue, setReviewStatus } from './review-queue.ts';
 import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
-import { writeAssembly, type WriteAssemblyInput } from './write-assembly.ts';
+import { validateVersionGeometry } from './geometry-validate.ts';
+import { weldToSolid } from './solidify.ts';
+import { writeAssemblyContract, type ContractWriteInput } from './assembly-contract.ts';
 import { runPearl } from './pearls/run.ts';
 import { executeContractRound } from './pearls/execute.ts';
 import { executeTemplate, type StepDispatcher } from './pearls/execute-template.ts';
@@ -75,6 +77,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
 import { pythonRuntimeStatus } from './python-runtime.ts';
 import { readBackendConfig } from './backend.ts';
+import { effectiveKernelForSession } from './kernel-context.ts';
 import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jobs.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
@@ -84,17 +87,22 @@ import {
   deriveNameFromFile, importGeometry, normalizeDatums, datumDirectionWarnings, type DatumInput, type Unit,
 } from './import.ts';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 
 interface GeneratePartArgs {
-  scadCode: string;
+  /** OpenSCAD source; exactly one of scadCode/code. */
+  scadCode?: string;
+  /** CadQuery authoring script; exactly one of scadCode/code. */
+  code?: string;
   userIntent: string;
   parentVersion?: string;
   part?: string;
   /** Subset of ["top","front","side","iso"] to attach; default all four. */
   views?: string[];
+  /** CadQuery only: also write model.step and record its BRepCheck provenance. */
+  step?: boolean;
 }
 
 interface PhysicsToolArgs {
@@ -153,6 +161,14 @@ interface GeneratePartResult {
   watertight?: boolean;
   triangles?: number;
   shells?: number;
+  /** Engine that produced this version. */
+  kernel?: 'openscad' | 'cadquery';
+  /** True when model.step was written. */
+  step?: boolean;
+  /** Machine-readable failure class from the provider, when known. */
+  errorCode?: string;
+  /** One actionable fix for that failure. */
+  fix?: string;
 }
 
 /** Render refs stashed by execute() for finalizeContent to emit as image blocks. */
@@ -1075,13 +1091,19 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'generate_part',
     description:
-      'Compile OpenSCAD into a new part version; renders top/front/side/iso (all four attached by default; trim with `views` to save image budget on numeric iterations). Write complete self-contained code with $fn=64 (BOSL2 is available: std/screws/gears/walls). Declare anchors with `datum("name",[x,y,z])` at top level in final world coordinates; they do not affect the mesh. G2 (2026-10-29): datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; OpenSCAD positional arguments are silent, so a swap compiles and corrupts the contract (roberval v048). A zero direction is a compile error; a direction that dwarfs its own point comes back as a compile warning naming the datum. ' +
+      'Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (CadQuery Python); exactly one is required. ' +
+      'CadQuery scripts must leave a `result` (Workplane/Shape) or call `show_object(...)`; declare anchors with datum/datum_axis/datum_plane/datum_cyl (point first, same schema as OpenSCAD). ' +
+      'OpenSCAD code is self-contained with $fn=64 (BOSL2 available); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. ' +
+      'Renders are attached by default; trim with `views` on numeric iterations. CadQuery renders are produced by the shared STL→OpenSCAD path, never by VTK. ' +
       'The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.',
     parameters: {
       scadCode: {
         type: 'string',
-        required: true,
-        description: 'Complete OpenSCAD source code for the part. Must be self-contained; no external libraries.',
+        description: 'Complete OpenSCAD source code. Give this OR `code`, not both. Required for the OpenSCAD kernel.',
+      },
+      code: {
+        type: 'string',
+        description: 'Complete CadQuery Python authoring script. Give this OR `scadCode`, not both. Set `result = ...` or call `show_object(...)`; datum helpers share the assembly schema.',
       },
       userIntent: {
         type: 'string',
@@ -1109,6 +1131,10 @@ export function registerCadTools(
           'Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded.',
         items: { type: 'string' },
       },
+      step: {
+        type: 'boolean',
+        description: 'CadQuery only: also write model.step and record BRepCheck provenance (optional; adds ~tens of KB and a STEP/STL consistency check).',
+      },
     },
     output: {
       schema: {
@@ -1127,6 +1153,10 @@ export function registerCadTools(
           watertight: { type: 'boolean', description: 'False = open surface: fix before any downstream check.' },
           triangles: { type: 'integer' },
           shells: { type: 'integer' },
+          kernel: { type: 'string', description: 'openscad | cadquery — which authoring engine produced this version.' },
+          step: { type: 'boolean', description: 'True when model.step was written for this version.' },
+          errorCode: { type: 'string', description: 'Provider failure class (e.g. cadquery_pack_missing).' },
+          fix: { type: 'string', description: 'Concrete fix for errorCode.' },
           minWallMm: { type: 'number', description: 'First version only: thinnest sampled wall (in-process TS screen, 600 samples). Below 1.2mm the reply says to fix the representative before generating its family.' },
           minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where that thinnest wall was found (first version only).' },
           part: { type: 'string', required: true, description: 'The part this version belongs to.' },
@@ -1140,14 +1170,37 @@ export function registerCadTools(
     timeoutMs: 120_000,
     async execute(args: unknown, exec: unknown): Promise<GeneratePartResult> {
       const a = args as GeneratePartArgs;
+      const scad = a.scadCode?.trim();
+      const cqCode = a.code?.trim();
+      if (!scad && !cqCode) throw new Error('generate_part: pass either scadCode (OpenSCAD) or code (CadQuery)');
+      if (scad && cqCode) throw new Error('generate_part: pass scadCode OR code, not both');
+      const kernel = cqCode ? 'cadquery' as const : 'openscad' as const;
+      if (a.step && kernel !== 'cadquery') throw new Error('generate_part: step is only available with code (CadQuery)');
+      const source = (cqCode ?? scad)!;
       const project = await allStores(exec);
       const { store, partStore } = project;
       const part = await resolvePartForGeneration(a, project);
-      const result = await compileAndRender(a.scadCode);
+      const result = await compileAndRender(source, { kernel, step: a.step === true });
+      if (result.success && kernel === 'cadquery' && (result.renders?.length ?? 0) === 0 && result.stl) {
+        // CadQuery returns geometry, not pictures. The shared renderer is the
+        // STL→OpenSCAD path (no VTK in the CQ pack); a render failure is a
+        // warning, never a reason to pretend the version was seen.
+        try {
+          const renderDir = await mkdtemp(join(tmpdir(), 'cad-cq-render-'));
+          const stlPath = join(renderDir, 'model.stl');
+          await writeFile(stlPath, result.stl);
+          result.renders = await renderStlViews(stlPath);
+          await rm(renderDir, { recursive: true, force: true }).catch(() => {});
+        } catch (error) {
+          result.warnings.push(`CadQuery render fallback failed: ${String((error as Error)?.message ?? error)}`);
+        }
+      }
       if (!result.success) {
         // A failed round still lands on the part: the error is part of its history.
         const versionId = await saveVersion(store, {
-          scadCode: a.scadCode,
+          ...(kernel === 'cadquery'
+            ? { sourceCode: source, sourceFile: 'model.py', backend: { kernel, version: result.meta?.version ?? null } }
+            : { scadCode: source }),
           userIntent: a.userIntent,
           parentVersion: a.parentVersion ?? null,
           partId: part.id,
@@ -1156,7 +1209,9 @@ export function registerCadTools(
         });
         await attachVersion(partStore, part.id, versionId);
         return {
-          versionId, success: false, part: part.name,
+          versionId, success: false, part: part.name, kernel,
+          ...(result.errorCode ? { errorCode: result.errorCode } : {}),
+          ...(result.fix ? { fix: result.fix } : {}),
           errors: result.errors, warnings: result.warnings,
           durationMs: result.durationMs, views: [],
         };
@@ -1172,9 +1227,24 @@ export function registerCadTools(
           'Interfaces naming them will stop resolving; add datum(...) to the source or call set_datums afterwards.',
         );
       }
+      // Persist the measured solidity, not an assumption: absent `solid` means
+      // true in the manifest, so a non-manifold save would otherwise be
+      // indistinguishable from a closed one.
+      let measuredSolid: boolean | undefined;
+      if (result.stl) {
+        try { measuredSolid = (await weldToSolid(parseBinaryStl(result.stl))).ok; } catch { measuredSolid = false; }
+      }
       const versionId = await saveVersion(store, {
-        scadCode: a.scadCode,
+        ...(kernel === 'cadquery'
+          ? {
+              sourceCode: source,
+              sourceFile: 'model.py',
+              backend: { kernel, version: result.meta?.version ?? null },
+              ...(result.step ? { step: result.step, brepValid: result.meta?.brepValid, brepToleranceMm: result.meta?.toleranceMm } : {}),
+            }
+          : { scadCode: source }),
         stl: result.stl,
+        ...(measuredSolid === false ? { solid: false } : {}),
         renders: result.renders,
         userIntent: a.userIntent,
         parentVersion: a.parentVersion ?? null,
@@ -1183,6 +1253,20 @@ export function registerCadTools(
         datumSet: result.datumSet,
       });
       await attachVersion(partStore, part.id, versionId);
+
+      // The unified validation entry is not dead code: every authored version
+      // gets the STL/datums check here, and a CadQuery STEP gets its hash +
+      // read-back check immediately rather than at export time. `step_missing`
+      // is noise for an OpenSCAD version (STEP is optional), so it is filtered.
+      try {
+        const validation = await validateVersionGeometry(store, versionId, { requireStep: kernel === 'cadquery' && a.step === true });
+        for (const issue of validation.issues) {
+          if (issue.code === 'step_missing') continue;
+          result.warnings.push(`geometry validation: [${issue.code}] ${issue.message}`);
+        }
+      } catch (error) {
+        result.warnings.push(`geometry validation skipped: ${String((error as Error)?.message ?? error)}`);
+      }
 
       // View selection: every attached image spends the session's image budget,
       // and a numeric iteration does not need four pictures of an unchanged
@@ -1285,7 +1369,8 @@ export function registerCadTools(
       }
 
       return {
-        versionId, success: true,
+        versionId, success: true, kernel,
+        ...(result.step ? { step: true } : {}),
         part: part.name,
         errors: [], warnings: result.warnings,
         durationMs: result.durationMs,
@@ -2130,12 +2215,14 @@ export function registerCadTools(
       // told which id now carries the new ones.
       const srcDir = join(store.root, 'versions', a.versionId);
       const stl = new Uint8Array(await readFile(join(srcDir, 'model.stl')));
+      const source = await readVersionSource(store, a.versionId);
       const newId = await saveVersion(store, {
         userIntent: `${known.userIntent} · 锚点变更（源自 ${a.versionId}）`,
         parentVersion: a.versionId,
         stl,
         datumSet: next,
         ...(entry?.partId ? { partId: entry.partId } : {}),
+        ...(source ? { sourceCode: source.code, sourceFile: source.sourceFile, backend: source.backend } : {}),
         ...(known.source ? { source: known.source } : {}),
         solid: true,
       });
@@ -2245,11 +2332,14 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'write_assembly',
     description:
-      'Write or update assembly/assembly.json as a typed contract. This is NOT a generic file write: it validates the manifest schema, every child version, every interface endpoint against that version\'s datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist), merge (upsert children/interfaces by id; explicit remove; requires expectedHash), replace (full root; requires expectedHash). It does not create datums, compute distances, or judge fit. Give each part a `color` (#rrggbb) when the project is discussed with a human: the panel renders assembly and playback with it, so the agent and the human name the same part. It is a communication label, not a material or a spec, and it is only used where colour already exists (assembly + playback) — never to decorate reports or tables. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.',
+      'Write or update the assembly contract. This is the ONLY write entry: the contract is sealed (assembly/assembly.seal) and every change appends a record under assembly/changes/ with a reason, actor, diff and revision. A generic write/edit to assembly.json is not a contract change and will be rejected by the seal check. The tool validates the manifest schema, every child version, every interface endpoint against that version\'s datums, and direct-child ownership, then writes atomically. Modes: create (file must not exist; expectedRevision 0), merge (upsert children/interfaces by id; explicit remove; requires expectedRevision), replace (full root; requires expectedRevision). `reason` is required for every mode. Use `dryRun` to preview the diff without writing. It does not create datums, compute distances, or judge fit. Give each part a `color` (#rrggbb) when the project is discussed with a human: the panel renders assembly and playback with it, so the agent and the human name the same part. It is a communication label, not a material or a spec, and it is only used where colour already exists (assembly + playback) — never to decorate reports or tables. Record the kickoff alignment in the root `brief` field (buy-vs-make with `by: user|assumed`, the ALLOWED process set, what "working" means, and every assumption) — delivery_audit prints the assumed ones.',
     parameters: {
       manifestPath: { type: 'string', description: 'Workspace-relative manifest path; default assembly/assembly.json. Must stay inside the project workspace.' },
-      mode: { type: 'string', enum: ['create', 'merge', 'replace'], description: 'Default merge. merge/replace require expectedHash when the file exists.' },
-      expectedHash: { type: 'string', description: 'sha256:<hex> of the current file (or bare hex). Required for merge/replace when the file exists; prevents clobbering.' },
+      mode: { type: 'string', enum: ['create', 'merge', 'replace'], description: 'Default merge. merge/replace require expectedRevision (from the last write/check).' },
+      expectedRevision: { type: 'integer', description: 'Current contract revision from the last write/check (0 for create). Required for merge/replace; a stale revision is refused.' },
+      expectedHash: { type: 'string', description: 'Optional sha256 of the current file (or bare hex); when both are given, both must match.' },
+      reason: { type: 'string', required: true, description: 'Why this change is made. Recorded in the change log; empty is refused.' },
+      dryRun: { type: 'boolean', description: 'Validate and return the diff without writing or appending a change record.' },
       root: {
         type: 'object', additionalProperties: true,
         description: 'Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields.',
@@ -2271,6 +2361,11 @@ export function registerCadTools(
           manifestHash: { type: 'string', required: true, description: 'sha256:<hex> of the written bytes.' },
           mode: { type: 'string', required: true },
           changed: { type: 'boolean', required: true },
+          contractRevision: { type: 'integer', required: true },
+          contractHash: { type: 'string', required: true },
+          changeId: { type: 'string', required: true, description: 'Change-record id; empty when changed=false.' },
+          dryRun: { type: 'boolean', required: true },
+          diff: { type: 'object', additionalProperties: true, description: 'Structured contract diff; empty object when changed=false.' },
           counts: {
             type: 'object', additionalProperties: false, required: true,
             properties: { children: { type: 'integer', required: true }, interfaces: { type: 'integer', required: true } },
@@ -2282,7 +2377,12 @@ export function registerCadTools(
     },
     timeoutMs: 30_000,
     async execute(args: unknown, exec: unknown) {
-      return writeAssembly(await allStores(exec), args as WriteAssemblyInput);
+      const a = args as ContractWriteInput;
+      const result = await writeAssemblyContract(await allStores(exec), {
+        ...a,
+        actor: { sessionId: sessionIdOf(exec), source: 'cad_assembly.write' },
+      });
+      return { ...result, changeId: result.changeId ?? '', diff: result.diff ?? {} };
     },
   }), { id: 'cad_assembly', action: 'write' });
 
@@ -3570,7 +3670,8 @@ export function registerCadTools(
     description:
       'Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. ' +
       'There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). ' +
-      'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch.',
+      'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch. ' +
+      'Reports the effective authoring kernel (`kernel`/`kernelSource`); the session prompt already states it, so this is a confirmation, not a prerequisite.',
     parameters: {},
     output: {
       schema: {
@@ -3582,6 +3683,8 @@ export function registerCadTools(
           marker: { type: 'string', description: '"project" | "legacy"; absent when unbound.' },
           liveCwd: { type: 'string' },
           selected: { type: 'boolean', required: true, description: 'True when this session has explicitly selected a project.' },
+          kernel: { type: 'string', description: 'Effective authoring kernel: openscad | cadquery.' },
+          kernelSource: { type: 'string', description: 'project (marker defaultKernel) | global (backend.json).' },
           wouldBindTo: { type: 'string', description: 'The selected project root; absent when nothing is selected.' },
           wouldBindMarker: { type: 'string', description: 'Marker kind at the selected root; absent when nothing is selected.' },
           mismatch: { type: 'boolean', required: true, description: 'True when liveCwd resolves to a different corpus than boundRoot.' },
@@ -3593,6 +3696,7 @@ export function registerCadTools(
       render: (_args: unknown, value: any) => [{
         type: 'text',
         text: `project_info — ${value.note}` +
+          `\n  kernel: ${value.kernel ?? '(unset)'}${value.kernelSource ? ` (${value.kernelSource})` : ''}` +
           `\n  selected: ${value.selected ? value.boundRoot : '(none)'}${value.boundAt ? ` @ ${value.boundAt}` : ''}` +
           (value.selected ? `\n  live cwd: ${value.liveCwd ?? '(none)'} (selected project does not switch)` : '') +
           (value.mismatch ? '\n  MISMATCH: live cwd is a different corpus; a bound session will NOT switch.' : '') +
@@ -3603,11 +3707,16 @@ export function registerCadTools(
     timeoutMs: 15_000,
     async execute(_args: unknown, exec: unknown) {
       const info = await projectInfoFor(exec);
+      const effective = effectiveKernelForSession(info.sessionId, info.boundRoot ?? info.liveCwd ?? null);
+      const kernel = effective.kernel;
+      const kernelSource = effective.source;
       const out: Record<string, unknown> = {
         selected: info.selected,
         mismatch: info.mismatch,
         ambiguous: info.ambiguous,
         workspace: info.workspace,
+        kernel,
+        kernelSource,
         note: info.note,
       };
       if (info.sessionId) out.sessionId = info.sessionId;
@@ -3631,6 +3740,7 @@ export function registerCadTools(
     parameters: {
       dir: { type: 'string', required: true, description: 'Directory to make a project (absolute, or relative to the session workspace). Created if missing.' },
       title: { type: 'string', description: 'Human title for project.json (default: the directory basename).' },
+      defaultKernel: { type: 'string', enum: ['openscad', 'cadquery'], description: 'Optional project-level authoring kernel default (cad_session info reports it).' },
     },
     output: {
       schema: {
@@ -3648,13 +3758,13 @@ export function registerCadTools(
     },
     timeoutMs: 15_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as { dir?: string; title?: string };
+      const a = args as { dir?: string; title?: string; defaultKernel?: 'openscad' | 'cadquery' };
       if (!a.dir?.trim()) throw new Error('dir is required (the directory to make a project)');
       // Deliberately NOT allStores(): init_project is the action that resolves
       // the ambiguous write target, so it must work before a project is bound.
       const live = await liveCwdOf(exec);
       const dir = isAbsolute(a.dir) ? a.dir : join(live ?? process.cwd(), a.dir);
-      const made = await createProjectMarker(dir, a.title);
+      const made = await createProjectMarker(dir, a.title, a.defaultKernel);
       const before = await projectInfoFor(exec);
       let bound = false;
       if (!before.boundRoot && before.sessionId) {
@@ -8559,6 +8669,9 @@ export function registerCadTools(
       checkedAt: report.checkedAt,
       manifestPath: path,
       manifestHash: report.manifestHash,
+      contractRevision: report.contractRevision,
+      contractHash: report.contractHash,
+      contractStatus: report.contractStatus,
       schema: 'assembly-check-pointer/v1',
     });
     return { report, manifestFile: path, origin: resolved.origin };
@@ -8608,6 +8721,8 @@ export function registerCadTools(
             description: 'The counts the judgement was derived from. A skipped interface is "unevaluable" and must never read as a pass.',
           },
           manifestPath: { type: 'string' },
+          contractRevision: { type: 'integer', description: 'Current sealed-contract revision; pass it to write_assembly. Absent for a legacy/unlocked contract.' },
+          contractHash: { type: 'string', description: 'Current sealed-contract payload hash.' },
           adjacencyThresholdMm: { type: 'number' },
           summary: {
             type: 'object', additionalProperties: false, required: true,
@@ -8738,6 +8853,8 @@ export function registerCadTools(
         // path it passed (workspace vs data root), and the answer matters when a
         // stale copy is the reason a check disagrees with the source of truth.
         manifestPath: manifestFile,
+        ...(Number.isInteger(report.contractRevision) ? { contractRevision: report.contractRevision } : {}),
+        ...(report.contractHash ? { contractHash: report.contractHash } : {}),
         adjacencyThresholdMm: report.adjacencyThresholdMm,
         summary: report.summary,
         ...(report.features ? { features: report.features as unknown as never } : {}),
@@ -9427,7 +9544,7 @@ export function registerCadTools(
     });
 
     const EXPORT_FORMATS: Record<string, string> = {
-      stl: 'model/stl', '3mf': 'model/3mf', obj: 'text/plain', off: 'text/plain', wrl: 'model/vrml',
+      stl: 'model/stl', step: 'application/step', '3mf': 'model/3mf', obj: 'text/plain', off: 'text/plain', wrl: 'model/vrml',
     };
     void connection.fetch.register({
       path: '/api/cad/export',
@@ -9440,7 +9557,10 @@ export function registerCadTools(
         const v = url.searchParams.get('v');
         const format = (url.searchParams.get('format') ?? 'stl').toLowerCase();
         if (!v) return new Response('missing v', { status: 400 });
+        if (!/^v\d{3,}$/.test(v)) return new Response('invalid version id', { status: 400 });
         if (!EXPORT_FORMATS[format]) return new Response(`unsupported format: ${format}`, { status: 400 });
+        const known = await listVersions(store);
+        if (!known.some((entry) => entry.id === v)) return new Response('unknown version', { status: 404 });
 
         const gate = await auditExport(project);
         const confirmed = url.searchParams.get('confirm') === '1';
@@ -9469,24 +9589,61 @@ export function registerCadTools(
           let bytes: Uint8Array;
           if (format === 'stl') {
             bytes = await readFile(join(versionDir, 'model.stl'));
-          } else {
-            const cached = join(versionDir, `export_${format}.${format}`);
+          } else if (format === 'step') {
+            // STEP is a native artifact, not a conversion: never compile here.
             try {
-              bytes = await readFile(cached);
+              bytes = await readFile(join(versionDir, 'model.step'));
+              const entry = await readVersionEntry(store, v);
+              if (entry?.stepSha256) {
+                const expected = entry.stepSha256.replace(/^sha256:/i, '').toLowerCase();
+                const actual = createHash('sha256').update(bytes).digest('hex');
+                if (expected !== actual) {
+                  return new Response(JSON.stringify({
+                    code: 'step_hash_mismatch',
+                    message: `version ${v} records ${entry.stepSha256}, but model.step hashes to sha256:${actual}`,
+                    fix: 're-export the STEP from the same source revision; this route never serves an artifact that disagrees with its manifest',
+                  }, null, 2), { status: 409, headers: { 'content-type': 'application/json' } });
+                }
+              }
             } catch {
-              const { exportScad } = await import('./compile.ts');
-              // An imported version has no model.scad, but the mesh is still the
-              // truth — wrap it in the smallest source that reproduces it. 3MF
-              // is the print-handoff format, so this path has to work for a
-              // partner's or a purchased part, not only for generated ones.
-              let source = join(versionDir, 'model.scad');
-              try {
-                await readFile(source);
-              } catch {
-                source = join(versionDir, 'export_source.scad');
+              return new Response(JSON.stringify({
+                code: 'step_missing',
+                message: `version ${v} has no model.step`,
+                fix: 'compile a CadQuery version with step:true; this route never invents a STEP',
+              }, null, 2), { status: 409, headers: { 'content-type': 'application/json' } });
+            }
+          } else {
+            const { exportScad } = await import('./compile.ts');
+            // An imported version has no model.scad, but the mesh is still the
+            // truth — wrap it in the smallest source that reproduces it. 3MF is
+            // the print-handoff format, so this path has to work for a partner's
+            // or a purchased part, not only for generated ones.
+            //
+            // Conversion happens entirely in a scratch directory: a GET must not
+            // write into the immutable version directory, and concurrent exports
+            // must never serve a partially written cache file.
+            const entry = await readVersionEntry(store, v);
+            const sourceFile = entry?.sourceFile
+              ?? (entry?.backend?.kernel === 'cadquery' ? 'model.py' : 'model.scad');
+            const scratch = await mkdtemp(join(tmpdir(), 'cad-export-'));
+            try {
+              let source = join(versionDir, sourceFile);
+              if (sourceFile.endsWith('.scad')) {
+                try {
+                  await readFile(source);
+                } catch { source = ''; }
+              } else {
+                source = '';
+              }
+              if (!source) {
+                source = join(scratch, 'source.scad');
                 await writeFile(source, `import("${join(versionDir, 'model.stl')}");\n`, 'utf8');
               }
-              bytes = await exportScad(source, cached, format);
+              const out = join(scratch, `model.${format}`);
+              bytes = await exportScad(source, out, format);
+              if (!bytes) throw new Error(`export ${format} produced no bytes`);
+            } finally {
+              await rm(scratch, { recursive: true, force: true }).catch(() => {});
             }
           }
 

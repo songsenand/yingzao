@@ -4111,16 +4111,38 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 - BOSL2 可选；Python runtime 状态与修复提示；
 - 项目 marker、写权限；project/assembly/claims/policy 的 `schemaVersion`（新版 fail、旧版 warn）；
 - 临时目录 stale 与总大小上限检查（`DSH_CAD_TEMP_MAX_MB`，默认 512）。
-验收 `accept:doctor` 15/15；`accept:scope` 10/10 覆盖面板环境提示。
+验收 `accept:doctor` 21/21；`accept:scope` 10/10 覆盖面板环境提示。
 
 ### 37.3 内核选择
 
 - 产品层只暴露 `kernel`；`compileBackend`（`auto|manifold|cgal`）只是 OpenSCAD 适配器内部选项。
 - `scripts/backend.mjs`（`dsh-cad-backend`）list/show/set，写 `$DSH_HOME/cad/backend.json`；
   未知/未实现内核返回 `backend_not_available`，不静默回退。
-- `src/host/backend.ts` 定义 `CadBackend`；`src/host/backends/openscad.ts` 是第一个适配器；
-  `compileAndRender` 经 registry 分发。新版本 manifest 记录 `backend`，旧版本不重写。
-- 验收 `accept:backend` 19/19。
+- OpenSCAD 解析按**版本号最高者**选择（编译、provision、doctor 一致）；系统旧版本不覆盖插件高版本快照。
+- `dsh-cad-setup --kernel openscad|cadquery` 在安装时确认内核；TTY 且未给 flag 时询问，默认
+  OpenSCAD；写入 `backend.json` 并保留已有 compileBackend/binaryPath。CadQuery 只写选择，
+  pack 仍需显式安装（约 1.6 GiB）；OpenSCAD 仍是渲染/导出常驻依赖。
+- `src/host/backend.ts` 定义 metadata `CadBackend` 与唯一必需 `{ id, compile }` 的 `EngineAdapter`；
+  `src/host/backends/openscad.ts` 是第一个适配器；`src/host/backends/index.ts` 是注册表。
+- `compile(source, { kernel })` 是唯一编译入口；`compileAndRender`/`compileStlOnly` 只差 `render` flag。
+  render/export 不是 adapter 方法，统一走 OpenSCAD；新版本 manifest 记录 `backend`，旧版本不重写。
+- CadQuery provider：`src/host/backends/cadquery.ts` 在子进程执行作者脚本，pack 只经 `PYTHONPATH`
+  注入（`$DSH_HOME/cad/packs/cadquery` 或 `DSH_CAD_CQ_PACK`），不污染 runtime venv、不自动下载；
+  `python/cadquery_compile.py` 产出 STL + 与 SCAD 相同的 `DatumSet`，失败分 `cadquery_syntax` /
+  `cadquery_exception` / `cadquery_timeout` / `cadquery_no_result` / `cadquery_pack_missing` 并带 fix。
+- 版本记录 `sourceFile`（`model.scad`/`model.py`）与 `backend.kernel`；`readVersionSource` 兼容
+  旧行；compile job、装配 STL 重建、下载导出按 pin 分派；切内核不重写旧版本。
+- `src/host/geometry-validate.ts` 是统一验证入口：STL 走 Manifold，`designEvidence` 恒为 mesh；
+  STEP 走 `import_mesh`（cascadio）+ 版本 `brep` 的 OCP BRepCheck，缺失/无效/不一致各有 code；
+  `/api/cad/export?format=step` 只读版本目录，不现场编译。
+- 作者层：`generate_part` 的 `code`/`scadCode` 二选一；CQ 版本渲染走共享 STL→OpenSCAD；
+  `cad_session info` 报 `kernel`/`kernelSource`，`init_project({defaultKernel})` 写项目默认；
+  作者文档 `docs/llm/cadquery.md`，示例 `examples/cadquery/bracket.py`。
+- 每 agent 注册 `cad-kernel` prompt context（`src/host/kernel-context.ts`），仅 CAD/no-preset 会话；
+  文本由项目 marker → 全局 `backend.json` 每次组装动态解析，模型在写第一行代码前就看到
+  `code` 还是 `scadCode`。`cad_session info` 仍是确认入口，不是唯一入口。
+- 验收 `accept:backend` 21/21、`accept:engine-seam` 14/14、`accept:cadquery` 23/23、
+  `accept:kernel-switch` 15/15、`accept:step-validation` 23/23、`accept:cadquery-authoring` 16/16、`accept:kernel-context` 10/10。
 
 ### 37.4 风险标注导出（C1）
 
@@ -4146,7 +4168,7 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
   并杀孤儿；并发上限 4。
 - HTTP：`GET /api/cad/jobs`、`POST /api/cad/jobs/compile`、`POST /api/cad/jobs/cancel`、
   `GET /api/cad/jobs/one`。
-- **边界**：只覆盖 OpenSCAD 编译；渲染/仿真仍同步。`accept:jobs` 16/16。
+- **边界**：只覆盖 OpenSCAD 编译；渲染/仿真仍同步。`accept:jobs` 18/18。
 
 ### 37.7 错误、空状态与资源
 

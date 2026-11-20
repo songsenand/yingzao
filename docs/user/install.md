@@ -17,10 +17,10 @@
 ### 方式 A：tarball（预览版首发，不需要 build）
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
+tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
-npx dsh-cad-setup --openscad=auto
+npx dsh-cad-setup --openscad=auto   # 非交互默认 openscad；TTY 会询问内核
 npx dsh-cad-doctor
 npx dsh-cad-backend --show
 ```
@@ -30,7 +30,7 @@ npx dsh-cad-backend --show
 ```bash
 dsh plugin --profile <你的 profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
-node scripts/setup.mjs --openscad=auto
+node scripts/setup.mjs --openscad=auto   # 或显式 --kernel cadquery
 npx dsh-cad-doctor
 ```
 
@@ -38,7 +38,11 @@ npx dsh-cad-doctor
 
 `npx dsh-cad-setup --openscad=auto`（源码目录里的 `node scripts/setup.mjs --openscad=auto` 等价）会重新生成
 `presets/cad/preset.patch.yml`，写入当前机器的 `skills/` 路径，并准备 OpenSCAD。
+`--kernel openscad|cadquery` 选择作者内核； OpenSCAD 解析按**版本最高者**选择；系统旧版本不会覆盖插件内已安装的高版本快照。TTY 且未给 flag 时会询问，默认 OpenSCAD。非交互且未给 flag 时不覆盖现有 `backend.json`。
+选择写入 `$DSH_HOME/cad/backend.json`，已配置的 `compileBackend`/`binaryPath` 会保留。
 `--openscad=off` 只写预设、不下载；`--openscad=official` / `mirror` 可强制单源。
+`--no-interactive` 禁止询问（适合 CI）；`--check` 只检查预设，不改 `backend.json`。
+**CadQuery 的 pack 约 1.6 GiB，setup 只写选择、不自动下载**；OpenSCAD 仍是渲染/导出的常驻依赖。
 `npm run setup:check` 只检查不写，路径过期或缺 skill 时退出 1。改完需重启 dsh。
 
 > **升级 dsh 之后要重跑一次 `npx dsh-cad-setup` 再重启。** 预设是照着你装的 dsh 的
@@ -53,8 +57,9 @@ npx dsh-cad-doctor          # kind=ok，或有解释的 degraded（例如 OpenSC
 npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
 ```
 
-`dsh-cad-backend` 是内核/编译后端的选择入口。预览版只有 OpenSCAD 可用；
-`cadquery`/`freecad` 显示为 planned，不可选。
+`dsh-cad-backend` 是内核/编译后端的选择入口。0.1.1 提供 **OpenSCAD** 与 **CadQuery**；
+`freecad` 仍是 planned，不可选。CadQuery 需要另行显式安装 pack（约 1.6 GiB），安装后再选；
+OpenSCAD 始终保留用于四视图渲染和网格导出。
 
 > 具体命令以所用 dsh 版本的 `dsh plugin --help` 为准。
 
@@ -66,7 +71,7 @@ npx dsh-cad-backend --show  # kernel=openscad, compileBackend=auto
 
 ## 首次准备（约 400MB，数分钟）
 
-首次用到计算功能时，插件会下载并安装一个**自带的 Python 运行时**，放在 `$DSH_HOME/cad/runtime/`，之后所有项目共用。
+首次用到计算功能时（包括 OpenSCAD 的 datum 解析），插件会下载并安装一个**自带的 Python 运行时**，放在 `$DSH_HOME/cad/runtime/`，之后所有项目共用。
 
 - **原因**：几何分析、精确测量、物理与机构仿真、流体趋势依赖成熟的科学计算库，而无法假定目标机器上存在干净可用的 Python。
 - **提前准备**：让 Agent 准备运行时（带进度日志），或设置 `DSH_CAD_PYTHON=eager` 在启动时后台预热。

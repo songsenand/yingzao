@@ -1,6 +1,6 @@
-# 0.1.0-preview 许可检查清单
+# 0.1.1-preview.1 许可检查清单
 
-> 预览版不随包分发 OpenSCAD、BOSL2 或 Python 运行时；它们由用户安装/首次使用下载。
+> 预览版不随包分发 OpenSCAD、BOSL2、Python 运行时或 CadQuery pack；它们由用户安装/首次使用下载。
 > 本清单在每次 `npm pack` 前后各跑一次。
 
 ## 包内必须存在
@@ -9,6 +9,7 @@
 - [ ] `NOTICE`（本项目与第三方声明）
 - [ ] `README.md`
 - [ ] `package.json` 的 `license: "Apache-2.0"`
+- [ ] `NOTICE` 声明可选 CadQuery / OCP / VTK pack（不随包分发）
 
 ## 包内必须不存在
 
@@ -35,3 +36,4 @@ npm run rehearse:preview                    # 解包后检查同一组文件
 - OpenSCAD 以独立进程调用，不链接；其 GPL 义务由用户安装的副本承担。
 - BOSL2 由用户从上游获取，仓库和 tarball 都不包含。
 - Python 运行时与科学计算包由 `python_runtime` 在用户机器上下载，tarball 不包含。
+- CadQuery pack（CadQuery/OCP/VTK）由用户显式安装，tarball 不包含；逐 wheel 许可审计仍是 L1.7 的后续。

@@ -22,15 +22,19 @@ set_datums({versionId:"<version>", datums:[
 用 `write_assembly` 写（不是通用 `write`/`run_python`）：
 
 ```text
-write_assembly({mode:"merge", expectedHash:"sha256:…", root:{children:[…], interfaces:[…]}})
+write_assembly({mode:"merge", expectedRevision:0, reason:"初始契约：底座与横梁的转动副", root:{children:[…], interfaces:[…]}})
 ```
+
+`assembly/assembly.json` 是封印契约：只能用 `cad_assembly`（或 `dsh-cad-contract`）写；
+每次写入必须有 `reason` 与当前 `expectedRevision`（create 为 0），并返回 `changeId`/`diff`。
+通用 `write`/`edit` 会被拒绝；直改会被 `assembly.seal` 检测，`dsh-cad-contract rebuild` 可恢复。
 
 `assembly/assembly.json` 的 `root`：
 
 - `children`: 直接子件 + version + transform；
 - `interfaces`: `<childId>.<datumName>` 对，`check`/`expected`/`tolerance`；
 - 先声明结构主链，再补接触面；不要用巨大 tolerance 掩盖错误；
-- `write_assembly` 会校验 child version、datum 端点、直接 child、ID 和 expectedHash；它不会算距离。
+- `write_assembly` 会校验 child version、datum 端点、直接 child、ID 和 expectedRevision；它不会算距离。
 
 ## 4. 自检
 

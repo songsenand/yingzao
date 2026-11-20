@@ -185,7 +185,7 @@ export async function validateEndpoints(
   return errors;
 }
 
-function normalizeHash(value: string): string {
+export function normalizeHash(value: string): string {
   const v = value.trim();
   return v.startsWith('sha256:') ? v : `sha256:${v}`;
 }
@@ -224,8 +224,28 @@ export async function inspectAssemblyContract(
   };
 }
 
-/** Write one assembly manifest under the project workspace. */
-export async function writeAssembly(project: ProjectStores, input: WriteAssemblyInput): Promise<WriteAssemblyResult> {
+export interface PreparedAssemblyWrite {
+  manifestPath: string;
+  mode: WriteAssemblyMode;
+  next: AssemblyManifest;
+  text: string;
+  changed: boolean;
+  warnings: string[];
+  counts: { children: number; interfaces: number };
+  /** Parsed current manifest, or null for create. */
+  existing: AssemblyManifest | null;
+  /** Exact current bytes, or null for create. */
+  existingText: string | null;
+}
+
+/**
+ * Validate and build the next manifest WITHOUT writing it.
+ *
+ * Split out so the sealed writer can append a change record and the plain
+ * writer (tests, legacy callers) can keep its old behavior. Every mutation
+ * still goes through this one validation path.
+ */
+export async function prepareAssemblyWrite(project: ProjectStores, input: WriteAssemblyInput): Promise<PreparedAssemblyWrite> {
   const mode = input.mode ?? 'merge';
   if (!['create', 'merge', 'replace'].includes(mode)) throw new Error(`invalid mode "${String(mode)}"`);
   const requested = input.manifestPath?.trim() || DEFAULT_PATH;
@@ -246,12 +266,16 @@ export async function writeAssembly(project: ProjectStores, input: WriteAssembly
 
   if (mode === 'create' && existing) throw new Error(`manifest already exists: ${target}`);
   if (mode === 'replace' && !existing) throw new Error(`replace requires an existing manifest: ${target}`);
-  if (existing && (mode === 'merge' || mode === 'replace')) {
-    if (!input.expectedHash) throw new Error(`${mode} requires expectedHash (read it with check_assembly first)`);
+  if (existing && (mode === 'merge' || mode === 'replace') && input.expectedHash) {
     const actual = sha256(existingText!);
     if (normalizeHash(input.expectedHash) !== actual) {
       throw new Error(`expectedHash mismatch: wanted ${normalizeHash(input.expectedHash)}, actual ${actual}`);
     }
+  }
+  if (existing && (mode === 'merge' || mode === 'replace') && !input.expectedHash) {
+    // The sealed writer checks expectedRevision instead; the plain writer keeps
+    // the old "read it first" contract.
+    throw new Error(`${mode} requires expectedHash (read it with check_assembly first)`);
   }
 
   const warnings: string[] = [];
@@ -295,18 +319,39 @@ export async function writeAssembly(project: ProjectStores, input: WriteAssembly
   if (endpointErrors.length) throw new Error(`endpoint validation failed:\n${endpointErrors.map((e) => `- ${e}`).join('\n')}`);
 
   const text = textOf(next);
-  const changed = text !== existingText;
-  if (changed) {
-    await mkdir(dirname(target), { recursive: true });
-    const tmp = join(dirname(target), `.${process.pid}.${randomUUID()}.assembly.tmp`);
+  return {
+    manifestPath: target,
+    mode,
+    next,
+    text,
+    changed: text !== existingText,
+    warnings,
+    counts: countNodes(root),
+    existing,
+    existingText,
+  };
+}
+
+/** Write one assembly manifest under the project workspace (unsealed). */
+export async function writeAssembly(project: ProjectStores, input: WriteAssemblyInput): Promise<WriteAssemblyResult> {
+  const prepared = await prepareAssemblyWrite(project, input);
+  if (prepared.changed) {
+    await mkdir(dirname(prepared.manifestPath), { recursive: true });
+    const tmp = join(dirname(prepared.manifestPath), `.${process.pid}.${randomUUID()}.assembly.tmp`);
     try {
-      await writeFile(tmp, text, 'utf8');
-      await rename(tmp, target);
+      await writeFile(tmp, prepared.text, 'utf8');
+      await rename(tmp, prepared.manifestPath);
     } catch (e) {
       await rm(tmp, { force: true }).catch(() => {});
       throw e;
     }
   }
-  const counts = countNodes(root);
-  return { manifestPath: target, manifestHash: sha256(text), mode, changed, counts, warnings };
+  return {
+    manifestPath: prepared.manifestPath,
+    manifestHash: sha256(prepared.text),
+    mode: prepared.mode,
+    changed: prepared.changed,
+    counts: prepared.counts,
+    warnings: prepared.warnings,
+  };
 }

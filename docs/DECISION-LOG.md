@@ -6344,3 +6344,137 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** 索引重建后 `songsenand`/`yingzao` 命中 0；awesome 的 `hasBundle(root)` 在无根清单时返回失败并要求改用子路径 URL。
 
 **影响：** 根目录从此是一个 npm 包（private）；在根执行 `npm install` 会把它当作包，CI 不受影响（工作目录固定在 `dsh-cad-harness/`）。若将来支持整仓安装，需在此文件补 `dependencies` 与入口。
+
+## 2026-11-19：0.1.1 收敛为「CadQuery 一等公民」，第三引擎/社区适配后移
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响 0.1.1/0.1.2/0.2/0.3 的路线与范围）。
+
+**要解决的问题：** 推广第一步完成后，0.1.1 的范围在讨论中不断膨胀（CadQuery + 引擎协议 + 用户后端 + UI + 示例）。用户明确：不是为泛化而泛化，可用后端没有那么多，LLM 对稀有后端也写不好；目标是接入少量最常见、LLM 最擅长的后端，特殊需求可自行接入，但优先级靠后。
+
+**决策内容：**
+1. 0.1.1 只做 CadQuery 成为一等公民；不接第三个引擎，不做社区/用户后端，不公开 engine 协议。
+2. 第一梯队当前 = OpenSCAD + CadQuery；第三个引擎不早于 0.3，且须有真实需求 + 3-task benchmark + 不改核心。
+3. 社区/用户自行接入后置到 0.4+/1.0 前；0.1.x 不做市场/插件体系。
+4. 本次修订建议 U01/U02 从 0.1.1 后移到 0.1.2；若用户要求保留在 0.1.1，需加 3–4 周。
+5. 泛化只做 CadQuery 逼出来的最小 seam；判断标准是“新增后端只改 1–2 个核心文件”。
+
+**理由：** 后端数量不是产品目标，每个后端的 LLM 作者能力/验证闭环才是；过早做通用协议会把 0.1.1 变成大工程，并稀释 CadQuery 的质量。
+
+**依据：** 用户 2026-11-19 对话原话；`docs/dev/TODO.md` 重排；`docs/dev/RELEASE-0.1.1.md` 目标/验收；CadQuery 2.8.0 + OCP 7.9.3.1.1 cp313 wheel 可用（本机实测 OCP wheel 67.8 MB 压缩 / 273.1 MB 解压）。
+
+**影响：** TODO 的 0.1.1/0.1.2/引擎路线；RELEASE-0.1.1 的范围；U01/U02 排期；后续第三个引擎/社区适配的触发条件。不改变既有 N/U/L 历史状态。
+
+**非目标：** 不承诺“支持任意引擎”；不做插件市场；不因“技术上能接”就排第三个引擎。
+
+## 2026-11-19（补充）：OpenSCAD 作为常驻渲染/导出依赖，不替换渲染器
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（影响安装面与渲染路径，回退成本高）。
+
+**要解决的问题：** CadQuery 安装是否要摆脱 OpenSCAD；候选 Matplotlib/F3D/自写光栅器各有质量、体积、平台代价。
+
+**决策内容：** OpenSCAD 保留为插件常驻依赖，负责四视图、剖切、运动/装配关键帧与网格格式导出；不替换为 Matplotlib/F3D/自写光栅器。CadQuery 只是新增的作者引擎；一个项目仍只有一个作者引擎；CQ 安装 = OpenSCAD 依赖 + CQ pack。
+
+**理由：** 用户明确没有“去 OpenSCAD 化”的洁癖；Matplotlib 是画家算法、无剖切，F3D 264MB/GL/平台未验，自写光栅器非成熟件；OpenSCAD 已覆盖全部渲染路径，替换收益低、风险高。
+
+**依据：** 用户 2026-11-19 对话；Matplotlib 实测（17.6k 三角 0.07s/视图、211k 0.58s/视图，但无真 z-buffer/剖切）；F3D 实测（Linux EGL 可用、264MB、macOS wheel 仅 arm64）；现有 `renderStlFramePng` 走 OpenSCAD。
+
+**影响：** 0.1.1 不做渲染器替换；`setup`/`doctor` 始终检查 OpenSCAD；README/limits 说明 CQ 安装仍依赖 OpenSCAD；Matplotlib/F3D 不进入 Python 锁。
+
+**非目标：** 不追求“CQ 安装零 OpenSCAD”；不做渲染器抽象/双渲染器。
+
+## 2026-11-19（补充）：U03 契约改为封印写入 + 变更日志 + 唯一入口
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（影响契约文件格式、写入协议与证据链，回退成本高）。
+
+**要解决的问题：** LLM 可以直接改 `assembly/assembly.json`，改完没有 reason/凭证，旧检查也不会显式过期；此前讨论的 hash/diff 只是在“写的时候审计”，没有阻止直改。
+
+**决策内容：**
+1. `assembly/assembly.json` 降级为**物化视图**；权威历史是 `assembly/changes/`（append-only，hash 链），二进制 `assembly/assembly.seal` 封印当前 JSON 的 revision/payload hash/log head。
+2. 唯一写入口是 `cad_assembly`（action write）和 `dsh-cad-contract write`；每次写必须有 `reason` + `expectedRevision`（create 为 0），返回 `changeId`/`diff`/`contractRevision`。
+3. 通用 `write`/`edit`/`apply_patch`/`delete` 命中契约路径时由 CAD fs policy 返回 `FS_PERMISSION_DENIED`；bash 直改字节由 seal 检测为 `contract-tampered`，`dsh-cad-contract rebuild` 从日志恢复。
+4. `assembly-check` 报告/pointer 记录 `contractRevision`/`contractHash`；`delivery-audit` 在 revision 变化时给 `contract-changed-since-check`。
+5. 不采用“把 JSON 换成二进制源”（可读性/git/消费者成本高）；二进制只做 seal。
+
+**理由：** 二进制源只能提高摩擦，且会让面板/导出/人类 review 都要经过转换；JSON + seal 同样让直改无效，但保留可读性和现有消费者。变更日志提供“每次修改有凭证”，fs policy 提供工具层的“不能直写”。
+
+**依据：** 用户 2026-11-19 对话；`npm run accept:assembly-contract` **30/30**（reason/revision/diff/dryRun/直改拒绝/rebuild/链篡改/legacy/fs policy）；`accept:write-assembly` 与 `accept:tool-contracts` 仍绿；`tsc` 0。
+
+**影响：** `src/host/assembly-seal.ts`、`src/host/assembly-contract.ts`、`src/host/fs-policy.ts`、`scripts/contract.mjs`、`write_assembly` schema、`assembly-check`/`delivery-audit` 证据字段、`docs/llm/assembly.md` 与 skill；旧项目无 seal 时按 `unlocked` 读取，首次写创建 genesis。
+
+**非目标：** 不做 OS 沙箱/密钥签名（这不是对抗恶意 agent 的安全边界）；不把 `assembly.json` 换成不可读的二进制源；不做插件市场/第三方契约格式。
+
+## 2026-11-20：接受 CadQuery pack 1.4–1.6 GiB，继续 L1.2
+
+**触发条件：** 第 1 条（用户拍板）+ 第 2 条（L1.0 实测数据）。
+
+**要解决的问题：** L1.0 实测 CQ 2.8 的最小可用 pack 为 1.4–1.6 GiB（vtkmodules 639 MiB、casadi 277 MiB、llvmlite 173 MiB、OCP 166 MiB、scipy 109 MiB），而此前假设是 300–500 MB。需要决定是否因体积停下 CQ 接入。
+
+**决策内容：** 现阶段接受 1.4–1.6 GiB 的 pack，继续 L1.2 CadQuery provider；体积不作为 0.1.1 的阻断项，但必须在 README/limits/安装说明中明示；lazy-import `Assembly/solver`、`--no-compile` 等裁剪作为可选优化，不作为前置。
+
+**理由：** 用户明确“体积现阶段不是问题”；L1.0 已证明 CQ 能编译等价 bracket（bbox delta 0、volume delta -0.09 mm³、STL 水密），功能风险低于体积风险；过早为体积改 CQ 行为会把 provider 推后。
+
+**依据：** 用户 2026-11-20 对话；`experiments/20261120_L1.0_cadquery_probe.md`（安装 196.8 s、pack 1599.3 MiB / 去 numba 1398.2 MiB、import 0.883 s、build 0.0229 s、export 0.0126 s、watertight true、bbox delta 0、volume delta -0.000657%）。
+
+**影响：** L1.2 provider 可以按“按需安装/显式 pack”设计；文档必须写真实体积与 VTK 硬依赖；不再把 300–500 MB 当验收假设；L1.1 已完成，不受影响。
+
+**非目标：** 不承诺 1.4–1.6 GiB 是最终体积；不做自编/裁剪 VTK；不因为体积放弃 CQ。
+
+## 2026-11-20：安装时内核选择纳入 0.1.1（L1.9）
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响安装流程、默认路径与文档）。
+
+**要解决的问题：** 0.1.1 已支持 OpenSCAD + CadQuery，但安装时没有让用户确认使用哪个内核；此前 A3 只规定了“运行时可切换”，安装默认仍是 OpenSCAD。用户认为安装时确认是必要能力，不应留到 0.1.2。
+
+**决策内容：** 将安装时内核选择作为 L1.9 纳入 0.1.1：`dsh-cad-setup --kernel openscad|cadquery`；在 TTY 且未显式给 flag 时询问，默认 OpenSCAD；写入 `$DSH_HOME/cad/backend.json` 并保留已有 compileBackend/binaryPath；选 CadQuery 只提示显式安装 ~1.6 GiB pack，不自动下载；OpenSCAD 仍是渲染/导出的常驻依赖。
+
+**理由：** 用户明确“这个有必要进入”；安装时确认把“一个项目一个作者引擎”的约定落到用户第一次接触产品的路径上，避免安装后才发现内核不对；CadQuery 的 pack 体积需要用户明确选择，不能静默下载。
+
+**依据：** 用户 2026-11-20 对话；`accept:setup-kernel` 10/10（显式 cadquery、默认 openscad、保留 options、未知内核、`--check` 只读）；`scripts/setup.mjs` 的 `--kernel`/TTY prompt。
+
+**影响：** `dsh-cad-setup`、`backend.json`、安装文档/README、`accept:preview`；0.1.1 P0 多一项 L1.9；L1.2 的 pack 仍为显式安装，不因本决策自动下载。
+
+**非目标：** 不在安装时自动下载 CadQuery pack；不改变“OpenSCAD 常驻渲染”的决策；不做多内核同时安装/切换向导。
+
+## 2026-11-20：会话内核上下文进入 0.1.1（L1.10）
+
+**触发条件：** 第 1 条（用户指出问题）+ 第 4 条（影响模型每次写代码的前置信息与多 session 行为）。
+
+**要解决的问题：** 0.1.1 有 OpenSCAD / CadQuery 两个作者内核，但模型只有 `cad_session info` 这个**拉取式**入口；模型可能先写 `scadCode` 再发现内核是 cadquery。用户明确要求 agent 在写代码时知道当前内核。
+
+**决策内容：** 每个 CAD 会话在 `agent/created`/预设切换时注册一个 per-agent 的 `cad-kernel` system-prompt context；文本由项目 `defaultKernel` → 全局 `backend.json` 动态解析，CQ 明确 `generate_part({code})`、`result/show_object`、禁止 scadCode，SCAD 明确 `generate_part({scadCode})`。标准编码会话不注入。
+
+**理由：** 静态全局 prompt 在多项目/多 session 下会指错内核；动态改工具 schema 会让同一工具在不同会话描述不一致；只靠 `cad_session info` 仍是拉取式、太晚。per-agent context 是唯一同时满足“每会话正确、写代码前可见、不污染非 CAD 会话”的位置。
+
+**依据：** 用户 2026-11-20 对话；`accept:kernel-context` 10/10（CAD/标准/无 preset、项目优先、切换 dispose/reinstall、无 systemPrompt 不炸）；`src/host/kernel-context.ts`。
+
+**影响：** `src/host/kernel-context.ts`、`src/host/index.ts`、skills/CQ GUIDE、`accept:preview`；0.1.1 P0 多一项 L1.10。模型看到的仍是普通 context，不是新的系统策略，也不改变工具权限。
+
+**非目标：** 不做全局静态内核提示；不按会话改写工具 schema；不替代 `cad_session info`（它是确认入口，不是唯一入口）。
+
+## 2026-11-20：0.1.1 发布版本号定为 0.1.1-preview.1
+
+**触发条件：** 第 1 条（用户拍板）。
+
+**要解决的问题：** 包版本停在 `0.1.0-preview.5`，而 0.1.1 的范围/文档已包含 CadQuery；直接发 `0.1.1` 正式版会把未完成的 L1.7 文档与跨平台 smoke 说成已发布。
+
+**决策内容：** 本版发布 `0.1.1-preview.1`；不直接发 `0.1.1` 正式版。`package.json`、README badge、install 文档与 RELEASE 目标统一到该版本。
+
+**理由：** preview 后缀准确表达“功能已完成，发布材料/平台 smoke 仍待收口”；避免正式版语义。
+
+**依据：** 用户 2026-11-20 对话；“版本号是 0.1.1-preview.1”。
+
+**影响：** `dsh-cad-harness/package.json`、README、`docs/user/install.md`、`docs/dev/RELEASE-0.1.1.md`；L1.7 仍负责 release notes/limits/许可收尾。
+
+## 2026-11-20：OpenSCAD 版本选择改为“最高版本优先”
+
+**触发条件：** 第 1 条（用户明确要求）+ 第 4 条（影响编译、provision、doctor 和安装路径）。
+
+**要解决的问题：** 旧逻辑按候选顺序取第一个能回答 `--version` 的 OpenSCAD。系统 PATH / `CAD_OPENSCAD_BIN` / `backend.json` 里的旧版本可能先命中，插件内已安装的 2025.06+ 高版本快照反而不会被使用；系统 2021.01 会让 Manifold 关闭、渲染慢 36 倍。
+
+**决策内容：** 编译解析、`dsh-cad-provision`、`doctor` 都探测候选并按版本号最高者选择；同版本时保留 env/backend/plugin/PATH 的显式优先级。插件快照纳入 provision 的候选，`setup --openscad=auto` 会把 `backend.json.binaryPath` 写成高版本快照。
+
+**理由：** 用户要求“系统低版本 + 插件高版本 → 强制用高版本”；版本是能力（Manifold/性能），不是路径偏好；探测后选择比依赖候选顺序更可靠。
+
+**依据：** `setup --openscad=auto` 实测：系统 2021.01 + 插件 2026.09.23 → backend 指向 `/Project/ToyMarker/bin/squashfs-root/usr/bin/openscad`；`accept:backend` 24/24（含 fake 旧 `CAD_OPENSCAD_BIN` 和旧 PATH 不得覆盖插件快照）；`provision --check` 返回插件 2026.09.23；`doctor` 21/21。
+
+**影响：** `src/host/compile.ts`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、安装/发布文档；不加自动下载，不改变 OpenSCAD 常驻渲染的决策。

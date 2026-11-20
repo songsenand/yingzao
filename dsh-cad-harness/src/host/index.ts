@@ -7,12 +7,15 @@
 
 import { registerCadToolsWithSurfaces } from './register-with-surfaces.ts';
 import { applyProtectedImageOffload } from './image-offload.ts';
+import { applyCadFsPolicy } from './fs-policy.ts';
 import { applyPresetToolScope, type ToolScopeConfig } from './tool-scope.ts';
+import { registerKernelPrompt } from './kernel-context.ts';
 import { configureWorkingDirectoryService } from './project.ts';
 import { configurePythonRuntime, ensurePythonRuntime, pythonRuntimeMode, recordRuntimeFailure } from './python-runtime.ts';
 import { resetPythonWorker } from './python-worker.ts';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const name = 'cad-harness';
 
@@ -34,8 +37,8 @@ export const inject = ['tools', 'attachments', 'workingDirectory'];
  */
 function warnIfSkillRootIsStale(ctx: any): void {
   try {
-    const here = realpathSync(join(new URL('../../skills', import.meta.url).pathname));
-    const presetPath = join(new URL('../../presets/cad/preset.patch.yml', import.meta.url).pathname);
+    const here = realpathSync(fileURLToPath(new URL('../../skills', import.meta.url)));
+    const presetPath = fileURLToPath(new URL('../../presets/cad/preset.patch.yml', import.meta.url));
     if (!existsSync(presetPath)) return;
     const match = /customSkillDirs:\s*\n\s*-\s*(\S+)/.exec(readFileSync(presetPath, 'utf8'));
     const configured = match?.[1];
@@ -54,6 +57,9 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // exotic deployments — the resolver then falls back to the session header,
   // exactly as before this fix.
   configureWorkingDirectoryService(ctx?.workingDirectory);
+  // The assembly contract has one writer. Register the generic-fs refusal before
+  // the tools so write/edit/apply_patch cannot produce an unsealed contract.
+  applyCadFsPolicy(ctx);
   const cadTools = [...registerCadToolsWithSurfaces(ctx, config)];
   warnIfSkillRootIsStale(ctx);
 
@@ -78,6 +84,11 @@ export function apply(ctx: any, config: ToolScopeConfig = {}) {
   // Keep the CAD catalog out of sessions that did not ask for it (see
   // tool-scope.ts for the measurement and for the adoption cost).
   if (config?.toolScope === 'preset') applyPresetToolScope(ctx, cadTools, config);
+
+  // Push the effective kernel into every CAD session's prompt. Pull-only
+  // `cad_session info` is too late for a model that has already chosen
+  // scadCode vs code; this is the authoring preflight, stated once per session.
+  registerKernelPrompt(ctx, config);
 
   // Image policy (DESIGN §16–17): NO route-level budget is applied —
   // standard-mode sessions run on dsh factory defaults. The 造物 preset's

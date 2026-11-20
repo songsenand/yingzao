@@ -20,6 +20,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { compileStlOnly, type DatumSet } from './compile.ts';
+import { readVersionSource } from './version.ts';
 import { buildSolid, pairMinDistance, type PartTransform } from './assembly.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import {
@@ -126,25 +127,31 @@ interface PartWorld {
    * transform `buildSolid` was given (`matrix` already encodes rotate∘pose). Null
    * when the part never became a solid, which is also when the adjacency half must
    * skip it. `scratch` names a temporary file to delete once the request is done —
-   * a version whose STL had to be rebuilt from model.scad has no bytes on disk.
+   * a version whose STL had to be rebuilt from its authoring source has no bytes on disk.
    */
   workerMesh: { path: string; transform: PartTransform; scratch?: string } | null;
 }
 
-async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<PartWorld> {
+async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorkerMesh = true): Promise<PartWorld> {
   const warnings: string[] = [];
   const dir = join(store.root, 'versions', node.version ?? '');
   let stl: Uint8Array | null = null;
+  let stlFromDisk = false;
   try {
     stl = await readFile(join(dir, 'model.stl'));
+    stlFromDisk = true;
   } catch {
-    const scad = await readFile(join(dir, 'model.scad'), 'utf8').catch(() => null);
-    if (scad) {
-      const c = await compileStlOnly(scad);
-      if (c.success && c.stl) { stl = c.stl; warnings.push('STL rebuilt from model.scad (was missing)'); }
-      else warnings.push(`STL rebuild failed: ${c.errors.join('; ')}`);
+    const source = await readVersionSource(store, node.version ?? '');
+    if (source) {
+      const c = await compileStlOnly(source.code, { kernel: source.kernel });
+      if (c.success && c.stl) {
+        stl = c.stl;
+        warnings.push(`STL rebuilt from ${source.sourceFile} (${source.kernel}; was missing)`);
+      } else {
+        warnings.push(`STL rebuild failed (${source.kernel}): ${c.errors.join('; ')}`);
+      }
     } else {
-      warnings.push('version has no model.stl and no model.scad');
+      warnings.push('version has no model.stl and no authoring source');
     }
   }
 
@@ -165,8 +172,13 @@ async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<P
       };
       built = await buildSolid(stl, transform);
       const onDisk = join(dir, 'model.stl');
-      const fromDisk = stl === await readFile(onDisk).catch(() => null);
-      if (fromDisk) {
+      if (!needWorkerMesh) {
+        // TS parity consumes `built` only; creating a scratch file here used to
+        // leak one per part per run because this caller never collected it.
+        workerMesh = null;
+      } else if (stlFromDisk) {
+        // Byte identity, not object identity: the old `stl === readFile(...)`
+        // was always false and copied every part to scratch.
         workerMesh = { path: onDisk, transform };
       } else {
         // Rebuilt from model.scad: the bytes exist only in memory, so they get a file
@@ -445,6 +457,10 @@ export interface AssemblyCheckReport {
   manifestName: string;
   /** Content hash of the manifest that was audited (`manifest@<hash8>`). */
   manifestHash?: string;
+  /** Sealed-contract identity (revision + full hash), when the manifest had a seal. */
+  contractRevision?: number;
+  contractHash?: string;
+  contractStatus?: 'sealed' | 'unlocked';
   results: InterfaceCheckResult[];
   undeclared: UndeclaredPair[];
   partWarnings: { partId: string; messages: string[] }[];
@@ -1020,7 +1036,7 @@ export async function runAssemblyCheckInTs(
       partWarnings.push({ partId: flat.id, messages: ['stock part with no version — BOM-only, skipped from geometric checks'] });
       continue;
     }
-    const world = await loadPartWorld(store, flat.node);
+    const world = await loadPartWorld(store, flat.node, false);
     parts.set(flat.id, world);
     if (world.warnings.length > 0) partWarnings.push({ partId: flat.id, messages: world.warnings });
   }
@@ -1239,6 +1255,9 @@ export async function runAssemblyCheckInTs(
     manifestPath,
     manifestName: manifest.name,
     manifestHash: manifest.manifestHash,
+    contractRevision: manifest.contractRevision,
+    contractHash: manifest.contractHash,
+    contractStatus: manifest.contractStatus,
     results,
     undeclared,
     partWarnings,
@@ -1378,6 +1397,9 @@ export async function runAssemblyCheck(
       manifestPath,
       manifestName: manifest.name,
       manifestHash: manifest.manifestHash,
+      contractRevision: manifest.contractRevision,
+      contractHash: manifest.contractHash,
+      contractStatus: manifest.contractStatus,
       results: solved.results.map((r) => ({ ...r, expected: expectedOf(reqById.get(r.interfaceId)) })),
       undeclared: solved.undeclared,
       partWarnings,
@@ -1415,6 +1437,10 @@ export interface AssemblyCheckPointer {
    * was checked" — which is exactly what an ICD must not say.
    */
   manifestHash?: string;
+  /** Sealed-contract revision/hash the check audited. */
+  contractRevision?: number;
+  contractHash?: string;
+  contractStatus?: 'sealed' | 'unlocked';
   /** What the pointer replaced: readers that expected a full report must follow `runId`. */
   schema: 'assembly-check-pointer/v1';
 }

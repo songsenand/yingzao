@@ -13,10 +13,12 @@
 //
 // Exit: 0 ok · 1 stale/missing skills (check mode) · 2 cannot write / no dsh.
 
-import { existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { createInterface } from 'node:readline/promises';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildPreset, listSkillFiles } from './preset-lib.mjs';
 
@@ -46,6 +48,8 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   --standard <file>    explicit standard.patch.yml (default: find installed dsh)
   --out <file>         write here instead of <root>/presets/cad/preset.patch.yml
   --openscad <mode>    auto|official|mirror|off (default auto): provision OpenSCAD too
+  --kernel <id>        openscad|cadquery (default: ask on a TTY, else openscad)
+  --no-interactive     never prompt; use --kernel or the openscad default
 
 Exit: 0 ok · 1 stale/missing skills · 2 cannot write / no dsh`);
   process.exit(0);
@@ -64,7 +68,81 @@ if (!['off', 'auto', 'official', 'mirror'].includes(openscadMode)) {
   process.exit(2);
 }
 
-if (!check && openscadMode !== 'off') {
+const explicitKernel = argValue('--kernel');
+if (explicitKernel && !['openscad', 'cadquery'].includes(explicitKernel)) {
+  console.error(`dsh-cad-setup: unknown --kernel ${explicitKernel} (use openscad|cadquery)`);
+  process.exit(2);
+}
+
+const DSH_HOME_RAW = process.env.DSH_HOME?.trim();
+const DSH_HOME = DSH_HOME_RAW && isAbsolute(DSH_HOME_RAW) ? DSH_HOME_RAW : join(homedir(), '.dsh');
+const backendFile = join(DSH_HOME, 'cad', 'backend.json');
+const interactive = !check && !asJson && !process.argv.includes('--no-interactive') && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+async function chooseKernel() {
+  if (explicitKernel) return { kernel: explicitKernel, decided: true };
+  if (!interactive) {
+    try {
+      const existing = JSON.parse(readFileSync(backendFile, 'utf8'));
+      if (existing?.kernel === 'cadquery') return { kernel: 'cadquery', decided: false };
+    } catch { /* no config: default is openscad */ }
+    return { kernel: 'openscad', decided: false };
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log('\nWhich authoring kernel should this installation use?');
+    console.log('  1) OpenSCAD  — default, smaller; renders with OpenSCAD');
+    console.log('  2) CadQuery  — Python/B-rep authoring; needs the separate ~1.6 GiB pack, still renders via OpenSCAD');
+    const answer = (await rl.question('Choose [1/2] (default 1): ')).trim().toLowerCase();
+    return { kernel: answer === '2' || answer === 'cadquery' ? 'cadquery' : 'openscad', decided: true };
+  } finally {
+    rl.close();
+  }
+}
+
+const choice = await chooseKernel();
+const kernel = choice.kernel;
+
+function writeKernel(kernelId) {
+  if (check) return { changed: false, file: backendFile };
+  const previous = (() => {
+    try {
+      const parsed = JSON.parse(readFileSync(backendFile, 'utf8'));
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch { return {}; }
+  })();
+  const next = {
+    ...previous,
+    kernel: kernelId,
+    compileBackend: ['auto', 'manifold', 'cgal'].includes(previous.compileBackend) ? previous.compileBackend : 'auto',
+    binaryPath: typeof previous.binaryPath === 'string' ? previous.binaryPath : null,
+  };
+  try {
+    mkdirSync(join(DSH_HOME, 'cad'), { recursive: true });
+    writeFileSync(backendFile, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    console.error(`dsh-cad-setup: cannot write ${backendFile}`);
+    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
+    console.error('  the profile directory is read-only; use a writable DSH_HOME (absolute path)');
+    process.exit(2);
+  }
+  return { changed: previous.kernel !== kernelId, file: backendFile, config: next };
+}
+
+let kernelWrite = { changed: false, file: backendFile, skipped: true };
+function commitKernel() {
+  if (!choice.decided || check) return;
+  kernelWrite = writeKernel(kernel);
+  if (asJson) return;
+  if (kernel === 'cadquery') {
+    console.log('dsh-cad-setup: CadQuery selected. The pack is a separate explicit install (~1.6 GiB); see docs/llm/cadquery.md.');
+    console.log('  OpenSCAD remains required for four-view rendering and mesh export.');
+  } else {
+    console.log(`dsh-cad-setup: kernel openscad (written to ${backendFile}).`);
+  }
+}
+
+if (!check && !asJson && openscadMode !== 'off') {
   const provision = spawnSync(process.execPath, [join(HERE, 'provision-openscad.mjs'), '--source', openscadMode], {
     stdio: ['ignore', 'ignore', 'inherit'],
     env: process.env,
@@ -82,6 +160,9 @@ function status(ok, extra = {}) {
     skillDir,
     file,
     skills: listSkillFiles(skillDir).map((p) => basename(dirname(p))),
+    kernel,
+    kernelFile: backendFile,
+    kernelChanged: Boolean(kernelWrite?.changed),
     ...extra,
   };
   if (asJson) console.log(JSON.stringify(payload, null, 2));
@@ -133,6 +214,7 @@ if (check) {
 }
 
 if (!changed) {
+  commitKernel();
   status(true, { changed: false });
   if (!asJson) console.log(`dsh-cad-setup: already current (${skills.length} skills at ${skillDir})`);
   process.exit(0);
@@ -140,6 +222,7 @@ if (!changed) {
 
 try {
   const dir = dirname(file);
+  mkdirSync(dir, { recursive: true });
   const tmp = mkdtempSync(join(dir, '.cad-setup-'));
   const tmpFile = join(tmp, 'preset.patch.yml');
   writeFileSync(tmpFile, built.text, 'utf8');
@@ -157,6 +240,7 @@ try {
   process.exit(2);
 }
 
+commitKernel();
 status(true, { changed: true });
 if (!asJson) {
   console.log(`dsh-cad-setup: wrote ${file}`);

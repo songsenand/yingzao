@@ -7,16 +7,25 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ensurePythonWorker } from './python-worker.ts';
 
 export interface CompileResult {
   success: boolean;
   stl?: Uint8Array;
+  /** Native B-rep, when the provider can produce one (CadQuery/OCP). */
+  step?: Uint8Array;
   renders?: { view: string; png: Uint8Array }[];
   errors: string[];
   warnings: string[];
+  /** Machine-readable failure class for provider/doctor paths. */
+  errorCode?: string;
+  /** One actionable fix for the failure, shown next to the error. */
+  fix?: string;
+  /** Provenance of the geometry that was produced. */
+  meta?: { kernel: string; version?: string; units?: 'mm'; durationMs: number; brepValid?: boolean; toleranceMm?: number };
   /** Datum anchor points declared by the model via datum("name", [x,y,z]). */
   datums: { name: string; point: [number, number, number] }[];
   /** Full datum set incl. axes/planes/cylinders (assembly manifest v1). */
@@ -110,17 +119,13 @@ const IMG_SIZE = 512;
 import { existsSync } from 'node:fs';
 import { readBackendConfig } from './backend.ts';
 
-const pluginRoot = join(new URL('../', import.meta.url).pathname);
-const snapshotLibDir = join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'lib');
-const BACKEND = readBackendConfig();
-const OPENSCAD_CANDIDATES = [
-  process.env.CAD_OPENSCAD_BIN,
-  BACKEND.config.binaryPath,
-  join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'),
-  'openscad',
-].filter(Boolean) as string[];
-
+const pluginRoot = fileURLToPath(new URL('../', import.meta.url));
+const snapshotLibDirs = [
+  join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'lib'), // bundled: <plugin>/../bin
+  join(pluginRoot, '..', '..', 'bin', 'squashfs-root', 'usr', 'lib'), // sources: <plugin>/src/../../bin
+].filter((dir) => existsSync(dir));
 let resolvedBin: string | null = null;
+let resolvedSignature = '';
 let backendArgs: string[] = [];
 let binaryEnv: NodeJS.ProcessEnv | undefined;
 
@@ -130,14 +135,45 @@ export async function resolveOpenScadBinary(): Promise<{ bin: string; extra: str
 }
 
 async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
-  if (BACKEND.requestedKernel !== 'openscad') {
-    throw new Error(`backend_not_available: kernel "${BACKEND.requestedKernel}" is not available in this build (only openscad)`);
+  // OpenSCAD is the renderer/export engine for BOTH authoring kernels; a
+  // cadquery selection must not disable it. Only an unknown/unimplemented
+  // kernel is refused here (the authoring adapter refuses those separately).
+  const config = readBackendConfig();
+  const requested = config.requestedKernel;
+  if (requested !== 'openscad' && requested !== 'cadquery') {
+    throw new Error(`backend_not_available: kernel "${requested}" is not available in this build (available: openscad, cadquery)`);
   }
-  if (resolvedBin) return { bin: resolvedBin, extra: backendArgs };
-  for (const candidate of OPENSCAD_CANDIDATES) {
-    if (candidate !== 'openscad' && !existsSync(candidate)) continue;
+  // Re-read on every call: `dsh-cad-backend` and setup are allowed to change
+  // binaryPath/compileBackend without restarting dsh. The cache is keyed by
+  // those values, not by module-load time.
+  const signature = JSON.stringify({
+    bin: process.env.CAD_OPENSCAD_BIN ?? null,
+    path: config.config.binaryPath ?? null,
+    compile: config.config.compileBackend,
+  });
+  if (resolvedBin && signature === resolvedSignature) return { bin: resolvedBin, extra: backendArgs };
+  resolvedBin = null;
+  binaryEnv = undefined;
+  const candidateList = [
+    { bin: process.env.CAD_OPENSCAD_BIN, source: 'env', priority: 0 },
+    { bin: config.config.binaryPath, source: 'backend', priority: 1 },
+    { bin: join(pluginRoot, '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'), source: 'plugin', priority: 2 },
+    { bin: join(pluginRoot, '..', '..', 'bin', 'squashfs-root', 'usr', 'bin', 'openscad'), source: 'plugin', priority: 2 },
+    { bin: 'openscad', source: 'path', priority: 3 },
+  ].filter((c): c is { bin: string; source: string; priority: number } => Boolean(c.bin));
+
+  const versionOf = (text: string): number => {
+    const m = /20(\d{2})\.(\d{2})/.exec(text ?? '');
+    return m ? Number(`20${m[1]}${m[2]}`) : 0;
+  };
+  let best: { bin: string; version: string; score: number; priority: number; source: string } | null = null;
+  const seen = new Set<string>();
+  for (const candidate of candidateList) {
+    if (seen.has(candidate.bin)) continue;
+    seen.add(candidate.bin);
+    if (candidate.bin !== 'openscad' && !existsSync(candidate.bin)) continue;
     const probe = await new Promise<string>((resolve) => {
-      const c = spawn(candidate, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+      const c = spawn(candidate.bin, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
       let out = '';
       c.stdout?.on('data', (d) => { out += d; });
       c.stderr?.on('data', (d) => { out += d; });
@@ -145,28 +181,37 @@ async function resolveBinary(): Promise<{ bin: string; extra: string[] }> {
       c.once('error', () => resolve(''));
     });
     if (!probe) continue;
-    resolvedBin = candidate;
-    // 2025.06+ ships the Manifold backend; enable it explicitly unless the user
-    // selected a compile backend in $DSH_HOME/cad/backend.json.
-    const year = Number(/20(\d{2})/.exec(probe)?.[1] ?? '0');
-    const pref = BACKEND.config.compileBackend;
-    if (pref === 'cgal') backendArgs = [];
-    else if (pref === 'manifold') backendArgs = ['--backend=Manifold'];
-    else backendArgs = year >= 25 ? ['--backend=Manifold'] : [];
-    // The version is a capability, not a preference: without Manifold the same
-    // model measured 2467 ms instead of 69 ms (experiments/20261021_openscad_text_engraving.md).
-    // Say it once, where the slow render will otherwise look like a plugin bug.
-    if (year > 0 && year < 25) {
-      console.warn(`[cad] OpenSCAD ${probe.trim().split('\n')[0]} predates 2025.06: Manifold is off and rendering is far slower. Run \`npx dsh-cad-provision\` to install the pinned snapshot.`);
+    const score = versionOf(probe);
+    // Highest version wins. A system OpenSCAD on PATH must never shadow a newer
+    // plugin/provisioned binary just because it was probed first. Ties keep the
+    // explicit env/backend preference.
+    if (!best || score > best.score || (score === best.score && candidate.priority < best.priority)) {
+      best = { bin: candidate.bin, version: probe.trim().split('\n')[0], score, priority: candidate.priority, source: candidate.source };
     }
-    // Extracted AppImages need their bundled libs on the loader path.
-    if (candidate.includes('squashfs-root') && existsSync(snapshotLibDir)) {
-      binaryEnv = { ...process.env, LD_LIBRARY_PATH: `${snapshotLibDir}${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}` };
-    }
-    return { bin: resolvedBin, extra: backendArgs };
   }
-  resolvedBin = 'openscad';
-  return { bin: resolvedBin, extra: [] };
+  if (!best) {
+    resolvedBin = 'openscad';
+    return { bin: resolvedBin, extra: [] };
+  }
+  resolvedBin = best.bin;
+  resolvedSignature = signature;
+  const pref = config.config.compileBackend;
+  if (pref === 'cgal') backendArgs = [];
+  else if (pref === 'manifold') backendArgs = ['--backend=Manifold'];
+  else backendArgs = best.score >= 202506 ? ['--backend=Manifold'] : [];
+  if (best.score > 0 && best.score < 202506) {
+    console.warn(`[cad] OpenSCAD ${best.version} predates 2025.06: Manifold is off and rendering is far slower. Run \`npx dsh-cad-provision\` to install the pinned snapshot.`);
+  }
+  if (process.env.CAD_OPENSCAD_BIN && best.bin !== process.env.CAD_OPENSCAD_BIN) {
+    console.warn(`[cad] CAD_OPENSCAD_BIN=${process.env.CAD_OPENSCAD_BIN} was not selected; newer OpenSCAD ${best.version} at ${best.bin} wins.`);
+  }
+  if (best.bin.includes('squashfs-root')) {
+    const lib = snapshotLibDirs.find((dir) => best!.bin.startsWith(dir.split('/squashfs-root/')[0]!));
+    if (lib) {
+      binaryEnv = { ...process.env, LD_LIBRARY_PATH: `${lib}${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}` };
+    }
+  }
+  return { bin: best.bin, extra: backendArgs };
 }
 
 // --- bundled standard-parts library (BOSL2) ---
@@ -186,8 +231,8 @@ const bosl2Roots = [
 const bosl2Path = bosl2Roots.flatMap((libDir) => [libDir, join(libDir, 'BOSL2')]);
 if (bosl2Path.length > 0) {
   process.env.OPENSCADPATH = process.env.OPENSCADPATH
-    ? `${bosl2Path.join(':')}:${process.env.OPENSCADPATH}`
-    : bosl2Path.join(':');
+    ? `${bosl2Path.join(delimiter)}${delimiter}${process.env.OPENSCADPATH}`
+    : bosl2Path.join(delimiter);
 }
 
 // --- shared headless X server ---
@@ -202,6 +247,10 @@ let sharedXvfb: { proc: ChildProcess; display: string } | null = null;
  * never wedge us onto a busy display.
  */
 async function ensureDisplay(): Promise<string | null> {
+  // Xvfb is a Linux/headless solution. macOS uses Cocoa and Windows uses WGL;
+  // spawning Xvfb there only produces a spawn failure (and used to make every
+  // compile fail with "openscad exited with code -1").
+  if (process.platform !== 'linux') return null;
   if (sharedXvfb) return sharedXvfb.display;
   const proc = spawn('Xvfb', ['-displayfd', '3', '-screen', '0', '1280x1024x24'], {
     stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
@@ -252,7 +301,10 @@ async function runOpenscad(args: string[], cwd: string): Promise<{ code: number;
     }
     if (result.code !== -1) return result; // -1 = spawn failure → try xvfb-run
   }
-  return spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], cwd);
+  // Linux only: a missing X display is what xvfb-run exists for. On other
+  // platforms OpenSCAD renders through its native window system.
+  if (process.platform === 'linux') return spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], cwd);
+  return spawnOpenscad(bin, full, cwd, binaryEnv ?? process.env);
 }
 
 function spawnOpenscad(bin: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -329,7 +381,9 @@ export async function renderScadPng(
     onDiagnostics?.(`${r.stdout}\n${r.stderr}`);
     if (r.code === 0) return true;
   }
-  const r = await spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], process.cwd());
+  const r = process.platform === 'linux'
+    ? await spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], process.cwd())
+    : await spawnOpenscad(bin, full, process.cwd(), binaryEnv ?? process.env);
   onDiagnostics?.(`${r.stdout}\n${r.stderr}`);
   return r.code === 0;
 }
@@ -364,7 +418,9 @@ export async function exportScad(scadPath: string, outPath: string, format: stri
     const r = await spawnOpenscad(bin, full, process.cwd(), env);
     if (r.code === 0) return new Uint8Array(await readFile(outPath));
   }
-  const r = await spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], process.cwd());
+  const r = process.platform === 'linux'
+    ? await spawnOpenscad('xvfb-run', ['-a', 'openscad', ...full], process.cwd())
+    : await spawnOpenscad(bin, full, process.cwd(), binaryEnv ?? process.env);
   if (r.code !== 0) throw new Error(`export ${format} failed`);
   return new Uint8Array(await readFile(outPath));
 }
@@ -383,16 +439,43 @@ const VIEWS: Record<string, [number, number, number]> = {
  * Compile SCAD to STL and render four fixed-view PNGs.
  * Renders are skipped when compilation fails.
  */
-/** The kernel-neutral entry point: resolve the adapter, then compile. */
-export async function compileAndRender(scadCode: string): Promise<CompileResult> {
-  const { backendAdapter } = await import('./backends/index.ts');
-  const adapter = backendAdapter('openscad');
-  if (!adapter.compile) throw new Error('backend_not_available: adapter has no compile()');
-  return await adapter.compile(scadCode);
+/** Options for the one compile surface. */
+export interface CompileOptions {
+  /** Authoring engine id; default openscad. */
+  kernel?: string;
+  /** Ask OpenSCAD for its four views. Other engines ignore it. */
+  render?: boolean;
+  /** Provider subprocess deadline in milliseconds. */
+  timeoutMs?: number;
+  /** Ask the provider for a native STEP alongside STL (CadQuery only). */
+  step?: boolean;
+  /** Abort a provider's child process (job cancel). */
+  signal?: AbortSignal;
+  /** Called with the provider child pid, when it has one. */
+  onSpawn?: (pid: number) => void;
+}
+
+/**
+ * The only compile entry: resolve the engine adapter, then compile.
+ *
+ * Rendering/export are NOT adapter methods. A provider returns geometry; the
+ * shared OpenSCAD path renders/export it. `compileAndRender`/`compileStlOnly`
+ * differ only in the `render` flag.
+ */
+export async function compile(source: string, opts: CompileOptions = {}): Promise<CompileResult> {
+  const kernel = opts.kernel?.trim() || 'openscad';
+  const { engineAdapter } = await import('./backends/index.ts');
+  const adapter = engineAdapter(kernel);
+  return await adapter.compile(source, { render: opts.render, timeoutMs: opts.timeoutMs, step: opts.step, signal: opts.signal, onSpawn: opts.onSpawn });
+}
+
+/** Compile and render the four OpenSCAD views (default path). */
+export async function compileAndRender(scadCode: string, opts: CompileOptions = {}): Promise<CompileResult> {
+  return await compile(scadCode, { ...opts, render: true });
 }
 
 /** OpenSCAD implementation behind the adapter (not a second public entry point). */
-export async function compileAndRenderOpenScad(scadCode: string): Promise<CompileResult> {
+export async function compileOpenScad(scadCode: string, opts: { render?: boolean } = {}): Promise<CompileResult> {
   const started = Date.now();
   const dir = await mkdtemp(join(tmpdir(), 'cad-harness-'));
   try {
@@ -418,25 +501,28 @@ export async function compileAndRenderOpenScad(scadCode: string): Promise<Compil
       };
     }
 
-    // Render the four views. Per-view failures are warnings: STL already valid.
+    // Render the four views unless the caller asked for STL only. Per-view
+    // failures are warnings: STL already valid.
     const renders: { view: string; png: Uint8Array }[] = [];
-    for (const [view, [rx, ry, rz]] of Object.entries(VIEWS)) {
-      const pngPath = join(dir, `${view}.png`);
-      const res = await runOpenscad([
-        '-o', pngPath,
-        `--camera=0,0,0,${rx},${ry},${rz},0`,
-        `--imgsize=${IMG_SIZE},${IMG_SIZE}`,
-        '--viewall',
-        '--autocenter',
-        '--projection=p',
-        '--colorscheme=Tomorrow',
-        scadPath,
-      ], dir);
-      if (res.code !== 0) {
-        warnings.push(`render ${view} failed: ${(await parseMessages(res.stderr)).errors.join('; ') || `exit ${res.code}`}`);
-        continue;
+    if (opts.render !== false) {
+      for (const [view, [rx, ry, rz]] of Object.entries(VIEWS)) {
+        const pngPath = join(dir, `${view}.png`);
+        const res = await runOpenscad([
+          '-o', pngPath,
+          `--camera=0,0,0,${rx},${ry},${rz},0`,
+          `--imgsize=${IMG_SIZE},${IMG_SIZE}`,
+          '--viewall',
+          '--autocenter',
+          '--projection=p',
+          '--colorscheme=Tomorrow',
+          scadPath,
+        ], dir);
+        if (res.code !== 0) {
+          warnings.push(`render ${view} failed: ${(await parseMessages(res.stderr)).errors.join('; ') || `exit ${res.code}`}`);
+          continue;
+        }
+        renders.push({ view, png: await readFile(pngPath) });
       }
-      renders.push({ view, png: await readFile(pngPath) });
     }
 
     return { success: true, stl: await readFile(stlPath), renders, errors: [], warnings, datums, datumSet, durationMs: Date.now() - started };
@@ -445,38 +531,9 @@ export async function compileAndRenderOpenScad(scadCode: string): Promise<Compil
   }
 }
 
-/**
- * Compile SCAD to STL only (no renders). Used by assembly validation where
- * per-part renders would multiply OpenSCAD invocations pointlessly.
- */
-export async function compileStlOnly(scadCode: string): Promise<CompileResult> {
-  const started = Date.now();
-  const dir = await mkdtemp(join(tmpdir(), 'cad-harness-'));
-  try {
-    const scadPath = join(dir, 'model.scad');
-    const stlPath = join(dir, 'model.stl');
-    await writeFile(scadPath, (await datumPrelude()) + scadCode, 'utf8');
-    const compile = await runOpenscad(
-      ['-o', stlPath, '--export-format', 'binstl', '-D', '$fn=64', scadPath],
-      dir,
-    );
-    const rawOutput = `${compile.stderr}\n${compile.stdout}`;
-    const { errors, warnings, datumSet } = await scadParseOutput(rawOutput);
-    const datums = datumSet.points;
-    if (compile.code !== 0) {
-      return {
-        success: false,
-        errors: errors.length > 0 ? errors : [`openscad exited with code ${compile.code}`],
-        warnings,
-        datums,
-        datumSet,
-        durationMs: Date.now() - started,
-      };
-    }
-    return { success: true, stl: await readFile(stlPath), errors: [], warnings, datums, datumSet, durationMs: Date.now() - started };
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
+/** Compile to STL only (no renders), through the same kernel-neutral entry. */
+export async function compileStlOnly(scadCode: string, opts: CompileOptions = {}): Promise<CompileResult> {
+  return await compile(scadCode, { ...opts, render: false });
 }
 
 export { delay };

@@ -17,12 +17,36 @@ import type { CompileResult } from './compile.ts';
 export type CompileBackend = 'auto' | 'manifold' | 'cgal';
 
 export interface BackendConfig {
-  kernel: 'openscad';
+  kernel: 'openscad' | 'cadquery';
   compileBackend: CompileBackend;
   /** Optional explicit OpenSCAD executable. */
   binaryPath?: string | null;
 }
 
+/**
+ * An authoring engine's ONE required operation. Rendering and export are not
+ * adapter methods: the STL/STEP a provider returns is rendered and exported by
+ * the shared OpenSCAD path, so a new kernel cannot fork those behaviours.
+ */
+export interface EngineCompileOptions {
+  /** OpenSCAD can render its views during compile; other engines ignore this. */
+  render?: boolean;
+  /** Provider subprocess deadline; ignored by OpenSCAD (it has its own). */
+  timeoutMs?: number;
+  /** Ask the provider for a native STEP (CadQuery only). */
+  step?: boolean;
+  /** Abort the provider's child (job cancel); adapters that spawn must honor it. */
+  signal?: AbortSignal;
+  /** Report the child pid so a job can kill the exact process group. */
+  onSpawn?: (pid: number) => void;
+}
+
+export interface EngineAdapter {
+  id: string;
+  compile(source: string, opts?: EngineCompileOptions): Promise<CompileResult>;
+}
+
+/** Metadata for the backend list/doctor. It deliberately has no compile surface. */
 export interface CadBackend {
   id: string;
   label: string;
@@ -31,10 +55,6 @@ export interface CadBackend {
   capabilities: { exactCsg: boolean; manifold: boolean; twoD: boolean };
   status: 'available' | 'planned';
   detect(): Promise<{ ok: boolean; version?: string; reason?: string }>;
-  /** Optional adapter surface; metadata-only entries (planned kernels) omit it. */
-  compile?: (source: string) => Promise<CompileResult>;
-  render?: (sourcePath: string, pngPath: string, opts: unknown) => Promise<boolean>;
-  export?: (sourcePath: string, outPath: string, format: string) => Promise<Uint8Array>;
 }
 
 export const DEFAULT_BACKEND: BackendConfig = { kernel: 'openscad', compileBackend: 'auto', binaryPath: null };
@@ -66,15 +86,15 @@ export function readBackendConfig(): { config: BackendConfig; requestedKernel: s
   const kernel = (envKernel || file.kernel || DEFAULT_BACKEND.kernel) as BackendConfig['kernel'];
   const compile = (envCompile || file.compileBackend || DEFAULT_BACKEND.compileBackend) as CompileBackend;
   const binaryPath = typeof file.binaryPath === 'string' ? file.binaryPath : null;
-  if (kernel !== 'openscad') {
-    warnings.push(`kernel "${kernel}" is not available in this build; use openscad`);
+  if (kernel !== 'openscad' && kernel !== 'cadquery') {
+    warnings.push(`kernel "${kernel}" is not available in this build; use openscad or cadquery`);
   }
   if (!['auto', 'manifold', 'cgal'].includes(compile)) {
     warnings.push(`compileBackend "${compile}" is unknown; using auto`);
   }
   return {
     config: {
-      kernel: 'openscad',
+      kernel: kernel === 'cadquery' ? 'cadquery' : 'openscad',
       compileBackend: (['auto', 'manifold', 'cgal'] as const).includes(compile as CompileBackend) ? compile as CompileBackend : 'auto',
       binaryPath,
     },
@@ -113,12 +133,20 @@ export const OPENSCAD_BACKEND: CadBackend = {
   },
 };
 
-export const PLANNED_BACKENDS: CadBackend[] = [
-  {
-    id: 'cadquery', label: 'CadQuery', sourceLanguage: 'py', fileExtension: '.py',
-    capabilities: { exactCsg: true, manifold: false, twoD: true }, status: 'planned',
-    async detect() { return { ok: false, reason: 'planned: no adapter in this build' }; },
+/** CadQuery is available as an engine; the pack itself is a separate capability. */
+export const CADQUERY_BACKEND: CadBackend = {
+  id: 'cadquery', label: 'CadQuery', sourceLanguage: 'py', fileExtension: '.py',
+  capabilities: { exactCsg: true, manifold: false, twoD: true }, status: 'available',
+  async detect() {
+    const root = process.env.DSH_CAD_CQ_PACK?.trim() || join(dshHomeDir(), 'cad', 'packs', 'cadquery');
+    const installed = existsSync(join(root, 'cadquery', '__init__.py')) && existsSync(join(root, 'OCP'));
+    return installed
+      ? { ok: true, version: 'pack' }
+      : { ok: false, reason: `pack not installed at ${root}` };
   },
+};
+
+export const PLANNED_BACKENDS: CadBackend[] = [
   {
     id: 'freecad', label: 'FreeCAD', sourceLanguage: 'py', fileExtension: '.py',
     capabilities: { exactCsg: true, manifold: false, twoD: true }, status: 'planned',
@@ -127,7 +155,7 @@ export const PLANNED_BACKENDS: CadBackend[] = [
 ];
 
 export function listBackends(): CadBackend[] {
-  return [OPENSCAD_BACKEND, ...PLANNED_BACKENDS];
+  return [OPENSCAD_BACKEND, CADQUERY_BACKEND, ...PLANNED_BACKENDS];
 }
 
 export function selectBackend(kernel: string): CadBackend {

@@ -164,7 +164,7 @@ export function sessionBindingPath(sessionId: string): string {
   return join(sessionBindingsDir(), `${safeSessionId(sessionId)}.json`);
 }
 
-function readSessionBindingRecord(sessionId: string): { projectRoot: string; boundAt?: string } | undefined {
+export function readSessionBindingRecord(sessionId: string): { projectRoot: string; boundAt?: string } | undefined {
   const cached = sessionBindingCache.get(sessionId);
   if (cached && isDirectory(cached)) return { projectRoot: cached };
   if (cached) sessionBindingCache.delete(sessionId);
@@ -522,6 +522,7 @@ export async function projectInfoFor(exec: unknown): Promise<ProjectInfo> {
 export async function createProjectMarker(
   dir: string,
   title?: string,
+  defaultKernel?: 'openscad' | 'cadquery',
 ): Promise<{ root: string; key: string; created: boolean; inheritedFrom: string | null; note: string }> {
   const root = resolve(dir);
   // Resolve the ANCESTOR before creating anything: a bare `cad-data/` made here
@@ -557,6 +558,7 @@ export async function createProjectMarker(
     cwd: root,
     key,
     title: (title?.trim() || basename(root) || 'project'),
+    ...(defaultKernel ? { defaultKernel } : {}),
     createdAt: new Date().toISOString(),
   });
   clearProjectRootCache();
@@ -571,11 +573,22 @@ export async function createProjectMarker(
 }
 
 /** The live working directory, or the durable header cwd, or null. */
+const liveCwdBySession = new Map<string, string>();
+
+/** Last live cwd observed for a session; used by synchronous prompt providers. */
+export function cachedLiveCwd(sessionId: string | null | undefined): string | null {
+  return sessionId ? liveCwdBySession.get(sessionId) ?? null : null;
+}
+
 export async function liveCwdOf(exec: unknown): Promise<string | null> {
-  const agent = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent;
+  const agent = (exec as { agent?: { session?: { header?: { id?: unknown; cwd?: unknown } } } })?.agent;
+  const id = typeof agent?.session?.header?.id === 'string' ? agent.session.header.id : null;
   try {
     const current = await workingDirectoryService?.ensure?.(agent, undefined);
-    if (typeof current === 'string' && current.trim()) return current;
+    if (typeof current === 'string' && current.trim()) {
+      if (id) liveCwdBySession.set(id, current);
+      return current;
+    }
   } catch { /* fall through to the durable header */ }
   const headerCwd = agent?.session?.header?.cwd;
   return typeof headerCwd === 'string' && headerCwd.trim() ? headerCwd : null;
@@ -664,15 +677,22 @@ const ensured = new Set<string>();
 export async function ensureProjectDir(project: ProjectStores): Promise<void> {
   if (ensured.has(project.root)) return;
   await mkdir(project.root, { recursive: true });
-  try {
-    await writeFile(join(project.root, 'project.json'), `${JSON.stringify({
-      schemaVersion: 1,
-      cwd: project.cwd,
-      key: projectKey(project.cwd),
-      title: basename(project.cwd) || project.cwd,
-      createdAt: new Date().toISOString(),
-    }, null, 2)}\n`, 'utf8');
-  } catch { /* the corpus is still usable without its identity stamp */ }
+  const markerPath = join(project.root, 'project.json');
+  // The marker is USER STATE now (title, defaultKernel, and future fields). A
+  // write-time stamp must create it, never re-stamp it: this used to overwrite
+  // init_project({defaultKernel:"cadquery"}) on the first generate_part and
+  // silently send the session back to the global OpenSCAD default.
+  if (!existsSync(markerPath)) {
+    try {
+      await writeFile(markerPath, `${JSON.stringify({
+        schemaVersion: 1,
+        cwd: project.cwd,
+        key: projectKey(project.cwd),
+        title: basename(project.cwd) || project.cwd,
+        createdAt: new Date().toISOString(),
+      }, null, 2)}\n`, 'utf8');
+    } catch { /* the corpus is still usable without its identity stamp */ }
+  }
   ensured.add(project.root);
   clearProjectRootCache();
 }

@@ -4,12 +4,13 @@
 //
 // A version is the unit of "geometry that was validated", not "a SCAD file".
 // Since imports landed, a version may have NO source code at all: a version
-// records where its geometry came from via `source`, and `model.scad` is
+// records where its geometry came from via `source`, and `model.<ext>` is
 // written only when there is one. Everything downstream reads `model.stl`,
 // which is why an imported part is a first-class citizen rather than a special
 // case. Absent `source` means `generated` — the pre-import corpora stay valid
 // with no migration.
 
+import { createHash } from 'node:crypto';
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock, writeJsonAtomic } from './file-lock.ts';
@@ -87,6 +88,20 @@ export interface VersionManifestEntry {
    */
   backend?: { kernel: string; options?: Record<string, unknown>; version?: string | null };
   /**
+   * Authoring source file inside the version directory (`model.scad` or
+   * `model.py`). Absent on legacy rows and on imported/merged bodies.
+   */
+  sourceFile?: string;
+  /** Native STEP artifact, when the provider produced one. */
+  stepFile?: 'model.step';
+  stepSha256?: string;
+  /**
+   * B-rep validity is a PROVIDER claim, not design evidence. The design
+   * verdict still comes from the STL mesh (`designEvidence: "mesh"`).
+   */
+  brep?: { valid: boolean; validatedBy: 'OCP'; toleranceMm?: number };
+  designEvidence?: 'mesh';
+  /**
    * Whether the stored mesh is a closed solid. Absent = true. A version may be
    * stored with `false` only when the caller explicitly allowed it, and every
    * consumer that needs a solid must say so rather than measure a broken mesh.
@@ -126,7 +141,7 @@ async function nextVersionId(store: VersionStore): Promise<string> {
 /**
  * Read the version index, repairing it from `versions/` when it is missing or broken.
  *
- * WHY: the directory is the durable record (each `vNNN/` carries model.scad/stl, its
+ * WHY: the directory is the durable record (each `vNNN/` carries model.<ext>/stl, its
  * renders and datums). The index is an optimisation over it. Treating invalid JSON as an
  * empty index made a torn write look like "this project has no versions", and the next
  * `saveVersion` wrote that emptiness back — losing intent/parent/part for every version
@@ -236,8 +251,17 @@ export async function diagnoseManifest(store: VersionStore): Promise<{
 }
 
 export interface SaveVersionInput {
-  /** Absent for an imported version — there is no source code to persist. */
+  /** OpenSCAD source (legacy name; equivalent to sourceCode + openscad backend). */
   scadCode?: string;
+  /** Authoring source for any engine; pair with `backend`/`sourceFile`. */
+  sourceCode?: string;
+  /** File name inside the version directory; default by kernel (model.scad/model.py). */
+  sourceFile?: string;
+  /** Native STEP bytes (CadQuery); written as model.step when present. */
+  step?: Uint8Array;
+  /** Provider BRepCheck result for the STEP artifact. */
+  brepValid?: boolean;
+  brepToleranceMm?: number;
   stl?: Uint8Array;
   renders?: { view: string; png: Uint8Array }[];
   userIntent: string;
@@ -270,8 +294,14 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
     const id = await nextVersionId(store);
     const dir = join(versionsDir(store), id);
     await mkdir(dir, { recursive: true });
-    if (input.scadCode !== undefined) await writeFile(join(dir, 'model.scad'), input.scadCode, 'utf8');
+    const sourceCode = input.sourceCode ?? input.scadCode;
+    const sourceFile = input.sourceFile ?? (input.backend?.kernel === 'cadquery' ? 'model.py' : 'model.scad');
+    if (!/^[A-Za-z0-9._-]+$/.test(sourceFile) || sourceFile.startsWith('.')) {
+      throw new Error(`unsafe sourceFile "${sourceFile}" (use a plain file name inside the version directory)`);
+    }
+    if (sourceCode !== undefined) await writeFile(join(dir, sourceFile), sourceCode, 'utf8');
     if (input.stl) await writeFile(join(dir, 'model.stl'), input.stl);
+    if (input.step) await writeFile(join(dir, 'model.step'), input.step);
     const datumSet = mergeDatumSet(input.datums, input.datumSet);
     if (datumSet) {
       await writeFile(join(dir, 'datums.json'), JSON.stringify(datumSet, null, 2));
@@ -314,9 +344,26 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
       ...(input.source ? { source: input.source } : {}),
       ...(input.backend
         ? { backend: input.backend }
-        : input.source
-          ? {}
-          : { backend: { kernel: 'openscad', options: { compileBackend: readBackendConfig().config.compileBackend } } }),
+        : sourceCode !== undefined
+          ? {
+              backend: sourceFile.endsWith('.py')
+                ? { kernel: 'cadquery' }
+                : { kernel: 'openscad', options: { compileBackend: readBackendConfig().config.compileBackend } },
+            }
+          : input.source
+            ? {}
+            : { backend: { kernel: 'openscad', options: { compileBackend: readBackendConfig().config.compileBackend } } }),
+      ...(sourceCode !== undefined ? { sourceFile } : {}),
+      ...(input.step
+        ? {
+            stepFile: 'model.step' as const,
+            stepSha256: `sha256:${createHash('sha256').update(input.step).digest('hex')}`,
+            ...(input.brepValid !== undefined
+              ? { brep: { valid: input.brepValid, validatedBy: 'OCP' as const, ...(input.brepToleranceMm !== undefined ? { toleranceMm: input.brepToleranceMm } : {}) } }
+              : {}),
+            designEvidence: 'mesh' as const,
+          }
+        : {}),
       ...(input.solid === false ? { solid: false } : {}),
     });
     // Unique temp name + rename: a torn write here used to lose the WHOLE history
@@ -357,6 +404,50 @@ export async function readVersionDatumPoints(
   }
 }
 
+/** The source code + pin one version was authored with, if it has source. */
+export interface VersionSourceCode {
+  code: string;
+  sourceFile: string;
+  kernel: string;
+  backend?: VersionManifestEntry['backend'];
+}
+
+/**
+ * Read a version's authoring source without assuming OpenSCAD.
+ *
+ * Legacy rows have no `sourceFile` and only `model.scad`; CQ rows carry
+ * `model.py` + `backend.kernel`. The fallback list keeps old corpora readable
+ * even if a row was recovered without provenance.
+ */
+export async function readVersionSource(store: VersionStore, id: string): Promise<VersionSourceCode | null> {
+  const entry = await readVersionEntry(store, id);
+  const pinned = entry?.backend?.kernel;
+  const preferred = pinned === 'cadquery' ? 'model.py' : 'model.scad';
+  const candidates = [
+    entry?.sourceFile,
+    preferred,
+    'model.scad',
+    'model.py',
+  ].filter((name): name is string => Boolean(name));
+  const dir = join(versionsDir(store), id);
+  for (const sourceFile of [...new Set(candidates)]) {
+    try {
+      const code = await readFile(join(dir, sourceFile), 'utf8');
+      const byExtension = sourceFile.endsWith('.py') ? 'cadquery' : 'openscad';
+      if (pinned && pinned !== byExtension) {
+        throw new Error(
+          `version ${id} pins kernel "${pinned}" but its source is ${sourceFile}; ` +
+          'the manifest and the file disagree — do not compile it silently',
+        );
+      }
+      return { code, sourceFile, kernel: pinned ?? byExtension, backend: entry?.backend };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  return null;
+}
+
 /**
  * Roll back by ADDING a version.
  *
@@ -375,17 +466,26 @@ export async function revertVersion(
   if (!entry) throw new Error(`unknown version "${fromVersionId}"`);
   const dir = join(versionsDir(store), fromVersionId);
   const stl = await readFile(join(dir, 'model.stl')).catch(() => null);
+  const step = await readFile(join(dir, 'model.step')).catch(() => null);
   if (!stl) {
     throw new Error(`version "${fromVersionId}" has no model.stl — a rollback copies geometry, so there is nothing to copy`);
   }
-  const scadCode = await readFile(join(dir, 'model.scad'), 'utf8').catch(() => null);
+  const source = await readVersionSource(store, fromVersionId);
   const datumSet = await readVersionDatums(store, fromVersionId);
   // The head is the newest version of the SAME part — the rollback's parent, so
   // the chain reads "head → rolled back to an older shape".
   const head = entry.partId ? newestVersionPerPart(manifest.versions).get(entry.partId) ?? null : null;
   return saveVersion(store, {
-    scadCode: scadCode ?? undefined,
+    sourceCode: source?.code,
+    sourceFile: source?.sourceFile,
+    backend: source?.backend,
     stl,
+    ...(step
+      ? {
+          step,
+          ...(entry.brep ? { brepValid: entry.brep.valid, brepToleranceMm: entry.brep.toleranceMm } : {}),
+        }
+      : {}),
     datumSet: datumSet.points.length + datumSet.axes.length + datumSet.planes.length + datumSet.cylinders.length > 0
       ? datumSet : undefined,
     userIntent: `回退到 ${fromVersionId}` + (options.reason ? `：${options.reason}` : ''),

@@ -6,6 +6,28 @@
 
 A green assembly check means the declared interfaces were machine-checked against their operators. It is not a statement that the parts are manufacturable, printable or strong.
 
+## Writing the contract: one entry, a reason, and a revision
+
+`assembly/assembly.json` is a **sealed contract**, not a scratch JSON file. The only write
+entry is `cad_assembly` (`action: "write"`); generic `write`/`edit`/`apply_patch` to it is
+refused by the CAD filesystem policy, and a direct edit made through a shell is rejected by
+`assembly/assembly.seal` on the next read.
+
+Every write needs:
+
+- `reason` — why the contract is changing (non-empty; recorded in `assembly/changes/`);
+- `expectedRevision` — the current revision (0 for `create`), returned by the previous
+  write/check; a stale revision is refused rather than silently overwriting;
+- `mode` — `create` / `merge` / `replace`.
+
+`cad_assembly` (`action: "check"`) also returns the current `contractRevision` / `contractHash`; use that revision for the next write.
+
+It returns `changeId`, `contractRevision`, `contractHash` and a structured `diff`
+(children/interfaces/root mutations). Use `dryRun: true` to preview the diff without
+writing. If a direct edit is detected, run `dsh-cad-contract rebuild` to restore the last
+recorded revision, then re-read and write with the current revision. `dsh-cad-contract
+verify` checks the seal and the change chain.
+
 ## The document shape: do not guess it — the validator prints it
 
 The manifest is a contract with a published schema (`schemas/assembly-manifest.schema.json`).

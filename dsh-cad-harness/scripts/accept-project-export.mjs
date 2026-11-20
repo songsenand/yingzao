@@ -95,6 +95,7 @@ try {
     ],
   });
   await writeFile(join(tmp, 'cad-data/versions/v001/model.stl'), writeBinaryStl(boxMesh()));
+  await writeFile(join(tmp, 'cad-data/versions/v001/model.step'), 'ISO-10303-21;\nEND-ISO-10303-21;\n');
   await writeFile(join(tmp, 'cad-data/versions/v003/model.stl'), writeBinaryStl(boxMesh()));
   // v002 is a 20x10x10 box with a feature-axis pose: 90 deg about z, then +50 in y.
   await writeFile(join(tmp, 'cad-data/versions/v002/model.stl'), writeBinaryStl(boxMesh(20, 10, 10)));
@@ -148,6 +149,7 @@ try {
   const names = [...entries.keys()];
   check(names.includes('parts/A_v001.stl') && names.includes('parts/B_v002.stl'),
     'part files are named by part + version', names.filter((n) => n.startsWith('parts/')).join(', '));
+  check(names.includes('parts/A_v001.step'), 'native STEP travels alongside the STL', names.filter((n) => n.endsWith('.step')).join(', '));
   check(names.includes('assembly/assembly.json'), 'the manifest is at assembly/assembly.json');
   check(names.includes('assembly.stl'), 'the placed assembly travels inside the ZIP');
   check(names.includes('README.txt'), 'the README travels inside the ZIP');

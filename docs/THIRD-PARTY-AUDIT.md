@@ -439,3 +439,21 @@ GPL-2.0 意义上的再分发，而非"仅提供链接"。义务落在随镜像�
 
 **结论：** 以 Apache-2.0 发布不存在 copyleft 牵连；`NOTICE` 与本节共同满足 Apache-2.0 的声明义务。
 
+
+---
+
+## 附录 A：CadQuery pack（0.1.1 新增，外部可选依赖）
+
+**分发方式：** 不随 npm 包分发；用户按 `docs/user/install.md` 显式安装到
+`$DSH_HOME/cad/packs/cadquery`（或 `DSH_CAD_CQ_PACK`）。`dsh-cad-setup` 只写内核选择，
+不自动下载；`accept:release` 才要求 pack 存在。
+
+| 组件 | 版本（L1.0/L1.2 实测） | 许可（PyPI 元数据） | 使用方式 |
+|---|---|---|---|
+| CadQuery | 2.8.0 | Apache-2.0 | Python 子进程导入，不链接 |
+| cadquery-ocp / OpenCASCADE | 7.9.3.1.1 | LGPL-2.1 + OCCT exception | 动态库/ Python 包，独立进程 |
+| VTK | 9.6.2 | BSD-3-Clause | CadQuery 的硬导入依赖；不用于本插件渲染 |
+| NumPy/SciPy/numba/llvmlite 等 | 见 L1.0 lock | BSD/Apache 等 | pack 内依赖，随用户安装 |
+
+**未做：** 未对 wheel 内每个 `.so` 做逐文件许可审计，也未把 pack 打进 npm tarball；
+正式发布前若要以“官方 CadQuery 发行版”口径宣传，需补一次 wheel 内许可证清单。

@@ -790,9 +790,27 @@ let inflight: Promise<PythonRuntimePaths> | null = null;
  * earlier in this process must not stay reachable after the operator sets
  * `DSH_CAD_PYTHON=off` (that is exactly what an off switch is for).
  */
-export function ensurePythonRuntime(options: ProvisionOptions = {}): Promise<PythonRuntimePaths> {
+export async function ensurePythonRuntime(options: ProvisionOptions = {}): Promise<PythonRuntimePaths> {
   if (pythonRuntimeMode() === 'off') {
-    return Promise.reject(new Error('the bundled Python runtime is disabled (DSH_CAD_PYTHON=off)'));
+    throw new Error('the bundled Python runtime is disabled (DSH_CAD_PYTHON=off)');
+  }
+  // A warm runtime needs no provisioning, and provisioning ends by rewriting
+  // state.json. That write is unnecessary and fails on a read-only runtime dir
+  // (and in a read-only sandbox) even though every import is healthy. Probe
+  // readiness first; only a non-ready runtime goes through the writer.
+  if (!options.force && !inflight) {
+    const status = await pythonRuntimeStatus();
+    if (status.state === 'ready' && status.interpreter && status.venvPython && status.source) {
+      return {
+        root: status.root,
+        target: status.target ?? '',
+        pythonVersion: status.pythonVersion,
+        requirementsSha: status.requirementsSha,
+        interpreter: status.interpreter,
+        venvPython: status.venvPython,
+        source: status.source as PythonRuntimePaths['source'],
+      };
+    }
   }
   if (!inflight || options.force) {
     inflight = provision(options).catch((error) => {

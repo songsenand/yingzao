@@ -2,8 +2,8 @@
 // dsh-cad-backend — choose the geometry kernel / OpenSCAD compile backend.
 //
 // The product-level choice is ONE field: kernel. `compileBackend` is an
-// OpenSCAD-adapter detail. 0.1.0-preview ships OpenSCAD only; cadquery/freecad
-// are listed as planned and refused, never silently substituted.
+// OpenSCAD-adapter detail. 0.1.1 ships OpenSCAD + CadQuery; freecad is planned and
+// refused, never silently substituted.
 //
 //   npx dsh-cad-backend --show
 //   npx dsh-cad-backend --compile-backend manifold
@@ -20,13 +20,22 @@ const DSH_HOME = process.env.DSH_HOME?.trim() && isAbsolute(process.env.DSH_HOME
 const FILE = join(DSH_HOME, 'cad', 'backend.json');
 const KERNELS = [
   { id: 'openscad', label: 'OpenSCAD', status: 'available', sourceLanguage: 'scad' },
-  { id: 'cadquery', label: 'CadQuery', status: 'planned', sourceLanguage: 'py' },
+  { id: 'cadquery', label: 'CadQuery', status: 'available', sourceLanguage: 'py' },
   { id: 'freecad', label: 'FreeCAD', status: 'planned', sourceLanguage: 'py' },
 ];
 const COMPILE = ['auto', 'manifold', 'cgal'];
 const DEFAULT = { kernel: 'openscad', compileBackend: 'auto', binaryPath: null };
 
 function argValue(name) {
+  const eq = process.argv.find((a) => a.startsWith(`${name}=`));
+  if (eq) {
+    const value = eq.slice(name.length + 1);
+    if (!value) {
+      console.error(`dsh-cad-backend: ${name} needs a value`);
+      process.exit(2);
+    }
+    return value;
+  }
   const i = process.argv.indexOf(name);
   if (i < 0) return undefined;
   const value = process.argv[i + 1];
@@ -69,11 +78,13 @@ const kernel = argValue('--kernel');
 const compileBackend = argValue('--compile-backend');
 const binaryPath = argValue('--binary');
 
-if (kernel && kernel !== 'openscad') {
+if (kernel) {
   const found = KERNELS.find((k) => k.id === kernel);
   const why = found ? `"${kernel}" is ${found.status} in this build` : `unknown kernel "${kernel}"`;
-  console.error(`backend_not_available: ${why}; available: openscad`);
-  process.exit(2);
+  if (!found || found.status !== 'available') {
+    console.error(`backend_not_available: ${why}; available: ${KERNELS.filter((k) => k.status === 'available').map((k) => k.id).join(', ')}`);
+    process.exit(2);
+  }
 }
 if (compileBackend && !COMPILE.includes(compileBackend)) {
   console.error(`dsh-cad-backend: unknown compile backend "${compileBackend}" (use ${COMPILE.join('|')})`);
@@ -93,11 +104,11 @@ if (kernel || compileBackend || binaryPath) {
 }
 
 const payload = {
-  ok: next.kernel === 'openscad',
+  ok: next.kernel === 'openscad' || next.kernel === 'cadquery',
   file: FILE,
   config: next,
   kernels: KERNELS,
-  warnings: next.kernel === 'openscad' ? [] : [`kernel ${next.kernel} is not available`],
+  warnings: next.kernel === 'openscad' || next.kernel === 'cadquery' ? [] : [`kernel ${next.kernel} is not available`],
 };
 if (asJson) console.log(JSON.stringify(payload, null, 2));
 else if (show || kernel || compileBackend || binaryPath) {

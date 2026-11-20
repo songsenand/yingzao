@@ -10,7 +10,7 @@ dsh 的机械 CAD 插件：验收前替你把配合、运动与可制造性查�
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/user/limits.md)
 [![npm](https://img.shields.io/npm/v/dsh-cad-harness?label=npm)](https://www.npmjs.com/package/dsh-cad-harness)
-[![Status](https://img.shields.io/badge/status-0.1.0%20%E9%A2%84%E8%A7%88%E7%89%88-orange.svg)](docs/user/preview.md)
+[![Status](https://img.shields.io/badge/status-0.1.1--preview.1-orange.svg)](docs/user/preview.md)
 
 [English](README.en.md) · [快速开始](#快速开始) · [验证](#验证) · [文档](#文档)
 
@@ -72,12 +72,12 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 
 营造把「生成 → 验证 → 迭代 → 交付」做成闭环：
 
-- **生成**：Agent 编写参数化代码（OpenSCAD），编译成不可变版本；
+- **生成**：Agent 编写参数化代码（OpenSCAD 或 CadQuery），编译成不可变版本；
 - **验证**：尺寸、体积、壁厚、间隙、干涉、运动行程、流体趋势由引擎给出数值，而不是由语言模型“目测”；
 - **迭代**：每一版都能浏览、钉住、对比；旧版本和旧运行不会被覆盖；
 - **交付**：导出单个版本，或整个项目（每个零件的 STL + 装配清单 + 说明）；也可按装配位姿合并成整机。
 
-它面向的不是聊天框里“画一个零件”的演示。**多模态大模型**负责读写 SCAD、查看渲染图并决定下一步；**DSH 插件**提供 CAD 工具、不可变版本、数值验证和交付门。它不追求全自动建模：重复的生成和检查交给 Agent，设计判断留给你。
+它面向的不是聊天框里“画一个零件”的演示。**多模态大模型**负责读写 SCAD/Python、查看渲染图并决定下一步；**DSH 插件**提供 CAD 工具、不可变版本、数值验证和交付门。它不追求全自动建模：重复的生成和检查交给 Agent，设计判断留给你。
 
 ## 示例
 
@@ -138,7 +138,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 
 | 层 | 使用 |
 |---|---|
-| 几何内核 | **OpenSCAD** + **Manifold** 后端；BOSL2 提供螺纹、齿轮等标准件 |
+| 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 提供螺纹、齿轮等标准件 |
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |
@@ -160,7 +160,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 
 `LICENSE.GPL-2.0`、`SOURCE-OFFER.md`（GPL-2.0 §3(b) 源码书面要约）和 `manifest.json`（逐文件 sha256）随二进制发布在同一镜像前缀下；仓库里只保留后两者，避免第二个许可证文件干扰 SPDX 识别，见 [dsh-cad-harness/mirror/](dsh-cad-harness/mirror/)。
 
-> OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算时安装。两者都不随 tarball 分发。
+> OpenSCAD 在 `setup` 时准备；Python 运行时约 400MB，在首次计算（含 datum 解析）时安装；CadQuery pack 约 1.6 GiB，需显式安装。三者都不随 tarball 分发。
 
 ### 安装（推荐：npm）
 
@@ -171,9 +171,14 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 装完后跑一次准备，把预设和 OpenSCAD 就位：
 
 ```bash
-npx dsh-cad-setup --openscad=auto   # 预设 + 自动准备 OpenSCAD
+npx dsh-cad-setup --openscad=auto   # 交互式会询问内核；非交互默认 openscad
+## 或显式选择：npx dsh-cad-setup --openscad=auto --kernel cadquery
 npx dsh-cad-doctor                  # kind=ok，或有解释的 degraded
 ```
+
+内核选择写入 `$DSH_HOME/cad/backend.json`。 `setup`/`dsh-cad-provision` 和编译时的 OpenSCAD 选择都按**版本号最高者**：系统旧版本不会覆盖插件内的高版本快照。**CadQuery 需要单独安装约 1.6 GiB 的 pack，setup 不会自动下载**；OpenSCAD 仍是四视图渲染/网格导出的常驻依赖。
+
+CadQuery 作者契约、`result`/`show_object`、datum 顺序与错误码见 [CadQuery 指南](docs/llm/cadquery.md)；端到端示例在 [bracket.py](dsh-cad-harness/examples/cadquery/bracket.py)。
 
 **升级 dsh 之后要重跑一次 `npx dsh-cad-setup` 再重启。** 预设是从你装的 dsh 的
 `standard.patch.yml` 逐字复制生成的，dsh 在新版本里会删改内部行；预设是整块挂载的，

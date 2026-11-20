@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openVersionStore } from '../src/host/version.ts';
 import { getJob, listJobs, openJobStore, startCompileJob } from '../src/host/jobs.ts';
+import { parseBinaryStl } from '../src/host/mesh.ts';
 import { apply } from '../src/host/index.ts';
 
 let passed = 0;
@@ -49,6 +50,8 @@ try {
   const finished = await waitFor(store, 'j001', 'done');
   check('job finishes', finished?.status === 'done', finished?.error);
   check('job wrote an STL', Boolean(finished?.output) && existsSync(finished.output));
+  const jobStl = finished?.output ? readFileSync(finished.output) : null;
+  check('job wrote a binary STL that this codebase can parse', Boolean(jobStl) && jobStl.subarray(0, 5).toString() !== 'solid' && parseBinaryStl(jobStl).triVerts.length > 0, jobStl ? `${jobStl.length} bytes` : 'no file');
 
   const cancelled = await startCompileJob({ store, versions, project, versionId: 'v002', timeoutMs: 20_000 });
   const cancelResult = await (await import('../src/host/jobs.ts')).cancelJob(store, cancelled.id);
@@ -76,6 +79,10 @@ try {
   try { await startCompileJob({ store, versions, project, versionId: 'v002', timeoutMs: 20_000 }); }
   catch (error) { limited = String(error?.message ?? error); }
   check('concurrency gate refuses the fifth job', limited.includes('concurrency limit'), limited);
+  let traversal = '';
+  try { await startCompileJob({ store, versions, project, versionId: '../../outside', timeoutMs: 5_000 }); }
+  catch (error) { traversal = String(error?.message ?? error); }
+  check('version id path traversal is refused before any file join', traversal.includes('unknown version'), traversal);
   await Promise.all(burst.map((job) => (import('../src/host/jobs.ts')).then((m) => m.cancelJob(store, job.id))));
   await sleep(200);
 

@@ -1,0 +1,45 @@
+{
+  "version": "2.8.0",
+  "build_s": 0.0229,
+  "export_s": 0.0126,
+  "bbox": {
+    "x": [
+      -30.0,
+      30.0
+    ],
+    "y": [
+      -20.0,
+      20.0
+    ],
+    "z": [
+      0.0,
+      6.0
+    ],
+    "xlen": 60.0,
+    "ylen": 40.0,
+    "zlen": 6.0
+  },
+  "volume_mm3": 13935.88938733346,
+  "valid": true,
+  "faces": 14,
+  "edges": 36,
+  "top_face_center": [
+    -4.440892098500626e-16,
+    1.1135459616309357e-15,
+    6.0
+  ],
+  "top_face_normal": [
+    0.0,
+    0.0,
+    1.0
+  ],
+  "modules": {
+    "trame": false,
+    "vtk": true,
+    "vtkmodules": true,
+    "matplotlib": false,
+    "pyvista": false,
+    "numba": false,
+    "casadi": true
+  }
+}

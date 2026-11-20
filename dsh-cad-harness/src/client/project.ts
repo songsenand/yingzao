@@ -260,7 +260,7 @@ export function cadMissingToolsNotice(
 export function environmentNotice(scope: CadScope | null): string | null {
   if (!scope) return null;
   const backend = scope.backend;
-  if (backend && backend.kernel !== 'openscad') {
+  if (backend && backend.kernel !== 'openscad' && backend.kernel !== 'cadquery') {
     return t('env.kernel', { kernel: backend.kernel });
   }
   const runtime = scope.runtime;

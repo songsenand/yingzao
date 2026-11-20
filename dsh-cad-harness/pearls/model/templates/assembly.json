@@ -27,9 +27,13 @@
           "from": "input",
           "path": "contract.mode"
         },
-        "expectedHash": {
+        "expectedRevision": {
           "from": "input",
-          "path": "contract.expectedHash"
+          "path": "contract.expectedRevision"
+        },
+        "reason": {
+          "from": "input",
+          "path": "contract.reason"
         },
         "root": {
           "from": "input",
