@@ -1,7 +1,8 @@
 # 0.1.1-preview.1 发布说明
 
-> **状态**：`0.1.1-preview.1` 候选发布说明；版本号已由用户 2026-11-20 确认。本文件先写已确定的**升级须知与已知问题**（L1.8）；
-> 功能清单、证据表与发布步骤在 0.1.1 收口时补（L1.7）。
+> **状态**：`0.1.1-preview.1` 发布说明；版本号已由用户 2026-11-20 确认。
+> 功能、证据、安装/升级、已知问题与发布步骤见下文；标准件目录的现状见 §8 与
+> `docs/llm/library.md`。
 > **基线**：`v0.1.0-preview.5` → 本版。
 > **目标/范围/验收**：[RELEASE-0.1.1.md](RELEASE-0.1.1.md)；**状态**：[TODO.md](TODO.md) 的 L1.8。
 
@@ -122,12 +123,11 @@ npx dsh-cad-doctor
 
 ## 8. 已知问题（本版不阻塞 preview）
 
-- Windows/macOS 未真机 smoke；代码已去掉 Linux 专用 `xvfb-run`/路径假设，但不声明已跨平台验证。
+- **99 个标准件目录随包分发，但 0.1.1-preview.1 没有 `cad_part` 的 list/get/import-by-catalog 操作**；`fit`/`visual` 目前不能通过工具选择，`assembly.json` 也没有结构化 `libraryRef`。见 `docs/llm/library.md`。这不影响非标准件建模。
+- Windows 是 smoke + 内核测试，macOS 是完整 preview；两者已在 GitHub CI 通过，但没有本地真机手工 smoke。CadQuery 真机只在 Ubuntu CI 跑。
 - 项目 ZIP 逐件带 STL，存在 `model.step` 时也带 STEP；STEP 往返/完整审计留 0.1.2。
 - CadQuery pack 的 VTK 不能作为 headless 渲染器；四视图仍走 OpenSCAD。
-- `compile.ts` 的 `binaryPath`/`compileBackend` 是模块加载时快照，改 backend 后需重启 dsh。
-- `doctor` 对损坏的 `backend.json` 静默回落；未比对 pack 版本与 pinned 2.8.0。
-- committed dev preset 含本机 skill 路径；`prepack` 会剥掉，发布检查改为 machine-neutral `check-release-preset`。
+- TTY 内核选择由 Linux PTY 手工验证，不在 Windows CI；CI 覆盖 `--kernel` 参数路径。
 
 ## 9. 发布步骤
 

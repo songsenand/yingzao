@@ -38,6 +38,7 @@
 | `manufacturing.md` | 可打印性清单、工艺档案、信任阶梯、校准、封闭腔/刀具可达 | 已有 |
 | `processes.md` | 工艺目录：`allowed` 决策空间 vs `support` 评估器；planned/partial 的分级与 handoff | 已有 |
 | `modeling.md` | 导入格式/单位、merge/genus、OpenSCAD 度数/radian、twist、参考图 | 已有 |
+| `library.md` | 99 个标准件目录、fit/visual、BOSL2/弹簧 seed 的区分、当前未接入工具的事实 | 已有 |
 | `delivery.md` | 交付纪律全文：claim、证据、覆盖、代表件 | 已有 |
 | `conventions.md` | mm/z-up、datum、manifest、judge/scan/both、run | 已有 |
 | `traps.md` | 长解释型陷阱（rack pitch、pivot、lattice units…） | 已有 |

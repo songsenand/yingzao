@@ -155,10 +155,10 @@ working, not an error.
   reports `forceAtTravelN` and checks that endpoint force too — the installed
   preload is not the force at full press. It never invents child/adult or product
   thresholds.
-  `standardId` is a **curated seed catalog**, not a general parts library: the
-  seed is deliberately small (the pen spring is the first entry). An entry is
-  added only for a purchased, reused part with a source/tolerance; self-designed
-  flexures stay formula/family checks; a one-off stays `skipped` + agent.
+  `standardId` is a **curated spring seed catalog**, not the 99-item `library/` standard-parts
+  catalogue (`docs/llm/library.md`): the seed is deliberately small (the pen spring is the
+  first entry). An entry is added only for a purchased, reused part with a source/tolerance;
+  self-designed flexures stay formula/family checks; a one-off stays `skipped` + agent.
   Explicit manifest fields win; an unknown id is a validation error, never a
   silent fallback.
   `snap-fit` is the **卡扣** operator: `lobeCount`, `lobeWidthMm`,

@@ -138,7 +138,8 @@ The motion check answers whether it moves, collides or runs out of stroke; it do
 
 | Layer | Used |
 |---|---|
-| Geometry kernel | **OpenSCAD** + **Manifold** backend; BOSL2 provides threads, gears and other standard parts |
+| Geometry kernel | **OpenSCAD** + **Manifold** backend; optional **CadQuery** (B-rep, separate pack); BOSL2 is an optional **OpenSCAD modelling library** (threads/gears/screws), not the standard-parts catalogue |
+| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.1-preview.1** — see [library/README](dsh-cad-harness/library/README.md) |
 | Numerical checks | Python, trimesh, manifold3d, numpy, shapely |
 | Host | **DeepSeek Harness** plugin; Node.js ≥ 20, TypeScript |
 | Panel | React + WebGL viewport, running inside the DSH Web GUI |

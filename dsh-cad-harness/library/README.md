@@ -1,8 +1,17 @@
-# Standard parts library — catalog + geometry v0
+# Standard-parts catalogue — catalog + geometry v0
 
 v0 core: **99 specs / 14 families**, each with a `fit` LOD and a `visual` LOD.
-Geometry is generated and committed; the plugin runtime reads STEP/STL and
-`part.json` and needs no CAD kernel.
+Geometry is generated and committed; the files are self-contained (STEP/STL +
+`part.json`), and no CAD kernel is needed to inspect or import them.
+
+## Access status (0.1.1-preview.1)
+
+The catalogue **ships**, but the production tool surface has **no first-class
+catalogue action** (`cad_part` is still create/generate/import/merge/role/
+appearance). There is no `libRef`/`library.lock`, no list/get/import-by-ID, and
+no way for the agent to select `fit` vs `visual` through a tool. Do not describe
+the catalogue as a usable API until that entry exists. See `docs/llm/library.md` for the current
+facts and the proposed interface.
 
 ## File count
 
@@ -45,9 +54,10 @@ the datums and measured bbox/volume.
   dimensions, no helical threads, no bearing balls, spring envelope.
 - **visual** is display-only: thread relief/chamfers, bearing balls, real spring
   coils; a visual bbox must stay inside the fit envelope.
-- **LOD is chosen by the agent at use time**, not by package membership. Checks
-  default to fit, rendering to visual; explicit selection wins; a missing LOD is
-  an error, not a silent fallback.
+- **LOD is intended to be chosen by the agent at use time**, not by package membership. That is
+  a design target for the future catalogue action, not a capability of 0.1.1-preview.1. When the
+  action lands, checks default to fit, rendering to visual; explicit selection wins; a missing
+  LOD is an error, not a silent fallback.
 - `frequency.source: "assumed"` on every spec. This is an experience baseline,
   not usage data. No score is invented.
 - `package` is metadata, never part of the ID: `iso4014.M16x60` is stable;

@@ -9,8 +9,11 @@
 | **dsh**（含 Web GUI） | 插件挂在 dsh 上；预览版以 tarball 或本地路径安装 |
 | **Node ≥ 20 + pnpm** | 安装/运行插件；tarball 用户不需要 build，DSH 内部仍会用 pnpm |
 | **OpenSCAD** | `setup --openscad=auto` 自动准备；已有 2025.06+ 系统版本则直接用。官方快照优先，官方不可达/持续低于 256 KB/s 才切 OSS。也可用 `CAD_OPENSCAD_BIN` 指定现有二进制 |
-| **BOSL2** | 可选标准件库（齿轮/螺纹/螺丝/壁）。从上游自行下载到 `lib/BOSL2/`，包内不包含 |
+| **BOSL2** | 可选 **OpenSCAD 建模库**（齿轮/螺纹/螺丝/壁），不是 99 标准件目录。从上游自行下载到 `lib/BOSL2/`，包内不包含 |
+| **标准件目录 v0** | 随包分发 99 个预生成规范件（fit/visual，STEP/STL），无需安装；**0.1.1-preview.1 还没有 `cad_part` 的目录选择/导入操作**。见 [标准件目录](../llm/library.md) |
 | **Python** | **不随包分发**；首次分析/仿真时下载约 400MB 到 `$DSH_HOME/cad/runtime/` |
+
+**标准件目录随包**；OpenSCAD、BOSL2 和 Python runtime 不随包。
 
 ## 安装
 

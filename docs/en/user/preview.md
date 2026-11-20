@@ -10,8 +10,10 @@
 - The model-facing catalog is compressed from 39 tools to **9 job surfaces**
   (`cad_session`/`cad_part`/`cad_assembly`/`cad_check`/`cad_simulate`/`cad_inspect`/
   `cad_see`/`cad_python`/`cad_deliver`), with arguments under `action`;
-- Standard-parts library v0: 99 catalogue items with pre-generated STEP/STL
-  (fit and visual LOD), shipped in the package;
+- Standard-parts catalogue v0: 99 catalogue items with pre-generated STEP/STL
+  (fit and visual LOD), shipped in the package; **this release has no
+  `cad_part` catalogue select/import action yet** — see
+  [the catalogue reference](../llm/library.md). This is not the optional BOSL2 modelling library;
 - Five verification layers: geometry / assembly / rigid body & mechanism / fluid / process;
 - Assembly contract (BOM + executable ICD), delivery audit, evidence CLI;
 - Risk-annotated export: a blocked delivery can still be exported, but the panel asks for confirmation, the filename carries `_UNVERIFIED`, and the project `exports/<id>/` keeps a manifest and the findings;
@@ -40,7 +42,7 @@ OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system ins
 
 - **Approval/rollback**: browse, pin and compare versions. The agent can propose a revert; approving it in the panel creates a new version. There is no separate version sign-off workflow.
 - **Python runtime**: the first use downloads about 400 MB and may take minutes; offline failure gives the next step.
-- **BOSL2**: optional; standard parts need it, and a missing copy is reported rather than silently producing empty geometry.
+- **BOSL2**: optional OpenSCAD modelling library; needed when using its threads/gears/screws modules, and a missing copy is reported rather than silently producing empty geometry.
 - **Kernel**: OpenSCAD plus optional CadQuery; one authoring kernel per project, old versions keep their pin. OpenSCAD remains the rendering/export dependency.
 - **Long tasks**: background **compile** jobs have submit/status/cancel/timeout/restart recovery; rendering and simulation are still synchronous. A timeout is reported, never treated as a pass.
 - **English UI**: all client-visible strings go through i18n (same keys in zh/en;

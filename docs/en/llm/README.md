@@ -38,6 +38,7 @@ A production session exposes **9 surfaces / 39 ops**. The call form is `cad_<sur
 | `manufacturing.md` | Printability checklist, process profiles, trust ladder, calibration, sealed cavities/tool reach | present |
 | `processes.md` | Process catalogue: `allowed` decision space vs `support` evaluator; planned/partial tiers and handoff | present |
 | `modeling.md` | Import formats/units, merge/genus, OpenSCAD degrees/radians, twist, reference images | present |
+| `library.md` | 99-item standard-parts catalogue, fit/visual, BOSL2 vs spring seed, and the current lack of a tool entry | present |
 | `delivery.md` | Delivery discipline: claims, evidence, coverage, representative parts | present |
 | `conventions.md` | mm/z-up, datum, manifest, judge/scan/both, run | present |
 | `traps.md` | Long-form traps (rack pitch, pivot, lattice units…) | present |

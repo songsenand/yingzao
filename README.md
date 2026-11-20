@@ -138,7 +138,8 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 
 | 层 | 使用 |
 |---|---|
-| 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 提供螺纹、齿轮等标准件 |
+| 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 是可选 **OpenSCAD 建模库**（螺纹/齿轮/螺丝），不是标准件目录 |
+| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.1-preview.1 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |

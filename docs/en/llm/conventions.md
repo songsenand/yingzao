@@ -37,10 +37,12 @@
   `manifestPath` against the workspace first (the plugin data root is only a
   fallback for old corpora). Author and edit it with `write` / `edit` like any
   other source file — do not shell out to patch JSON, and never copy it anywhere.
-- **BOSL2 is available** in `cad_part` (`action: "generate"`) (`std.scad`, plus `screws.scad`,
+- **BOSL2 is an OpenSCAD modelling library, not the standard-parts catalogue.** It is available
+  in `cad_part` (`action: "generate"`) (`std.scad`, plus `screws.scad`,
   `gears.scad`, `walls.scad`, `threading.scad`, `sliders.scad`,
-  `ball_bearings.scad`). Use the library module instead of hand-rolling a thread,
-  a gear or a fillet.
+  `ball_bearings.scad`). Use it instead of hand-rolling a thread, a gear or a fillet.
+  The 99 pre-generated catalogue in `library/` is a different thing; see
+  `docs/en/llm/library.md` for its fit/visual rules and current tool gap.
 - **`judge` / `scan` / `both`.** The judgement tools (`cad_check` (`action: "printability"`),
   `cad_simulate` (`action: "stress"`)) take `mode`: `judge` (default) returns the verdict and NO
   field, `scan` returns the field and NO verdict, `both` returns both as separate

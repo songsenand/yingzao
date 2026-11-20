@@ -52,8 +52,9 @@ preview 期间的长证据表不再逐行维护，保留在 §6 与 release note
 | L1.10 | P0 | done | 会话内核上下文 | 每 agent 注册 `cad-kernel` prompt context（仅 CAD/no-preset 会话）；内容由项目 marker → 全局 `backend.json` 动态解析；CQ 明确 `generate_part({code})`/禁止 scadCode，SCAD 反之；`accept:kernel-context` 10/10 | 1d |
 | L1.11 | P1 | done | 同 prompt 内核质量实验 | 同一 60×40×6 brief 经真实 `generate_part` 跑 OpenSCAD/CadQuery：bbox/水密/genus 一致，体积差 0.00066%、面积差 0.0019%；发现 CQ `.box` 原点偏移未被验证捕获，新增 `datum_outside_bbox` warn；报告 `experiments/20261120_L1.11_kernel_quality.md` | 1d |
 | L1.12 | P0 | done | OpenSCAD 高版本强制 | 编译/provision/doctor 全部按最高版本选择；插件 2026.09.23 不被系统 2021.01 覆盖；`accept:backend` 24/24、`accept-provision` 22/22、`doctor` 21/21 | 1d |
+| L1.13 | P1 | partial | 标准件目录接入 | 99 specs 随包；`docs/llm/library.md` 已写清 fit/visual、BOSL2/弹簧 seed 区分与“当前无工具入口”；**待做**：`cad_part` list/get/import-by-catalog、结构化 `libraryRef`、`accept-library-catalog` 进 preview/release、E2E import→datum→check | 2–3d |
 | U03 | P1 | done | `assembly.json` 封印契约 | 唯一写入口 `cad_assembly write`：必须有 `reason` + `expectedRevision`（create=0），返回 `changeId`/`diff`；`assembly.seal` + `assembly/changes/` 链；通用 `write`/`edit` 走 CAD fs policy → `FS_PERMISSION_DENIED`；直改 → `contract-tampered`，`dsh-cad-contract rebuild` 恢复；`accept:assembly-contract` 30/30 | 3–5d |
-| L1.4b | P2 | planned | 单件 STEP 直通（可选） | CQ 版本可下载 `model.step`；内核 `BRepCheck`；manifest 记 provenance；不做 ZIP/往返 | 2–3d |
+| L1.4b | P2 | partial | 单件 STEP 直通（可选） | CQ 版本可下载 `model.step`；内核 `BRepCheck`；manifest 记 provenance；项目 ZIP 逐件附带 STEP；不做 STEP 往返/完整审计 | 2–3d |
 
 **0.1.1 不做：**
 
