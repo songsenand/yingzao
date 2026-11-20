@@ -54,6 +54,9 @@ jobs:
           test -f "$STD"
           node scripts/setup.mjs --openscad=off --standard "$STD"
 
+      - name: Materialize the bundled Python runtime
+        run: node scripts/provision-python.mjs
+
       - name: Full preview acceptance (P0 + P1 suites)
         run: |
           set -o pipefail
