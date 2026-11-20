@@ -23,7 +23,7 @@ try {
   await mkdir(join(home, 'cad'), { recursive: true });
   await writeFile(join(home, 'cad', 'backend.json'), JSON.stringify({ kernel: 'openscad', compileBackend: 'auto', binaryPath: null }));
 
-  const { registerKernelPrompt, effectiveKernelForSession } = await import('../src/host/kernel-context.ts');
+  const { registerKernelPrompt, effectiveKernelForSession, kernelPromptText } = await import('../src/host/kernel-context.ts');
   const registrations = [];
   const disposed = [];
   const handlers = new Map();
@@ -60,6 +60,9 @@ try {
   const text = cad.defs[0]?.text();
   check(typeof text === 'string' && text.includes('cadquery') && text.includes('generate_part({code})'), 'project marker wins and names the CQ call', text);
   check(text.includes('Do not use scadCode') && !text.includes('generate_part({scadCode'), 'CQ text forbids scadCode rather than recommending it', text);
+  check(!text.includes('BOSL2'), 'CQ text does not mention BOSL2 at all', text);
+  const scadText = kernelPromptText({ kernel: 'openscad', source: 'global', root: workspace });
+  check(scadText.includes('BOSL2 (OpenSCAD-only, installed separately)'), 'SCAD text names BOSL2 as OpenSCAD-only and separately installed', scadText);
   check(effectiveKernelForSession('s-cad', workspace).source === 'project', 'effective kernel reports the project source');
 
   const standard = makeAgent('s-standard', 'standard');

@@ -12,7 +12,7 @@
 | 名字 | 是什么 | 在哪里 | 现在怎么用 |
 |---|---|---|---|
 | **标准件目录 v0** | 99 个规范件 / 14 个 family，预生成 STEP/STL；`fit` / `visual` 两档 LOD | `library/catalog.json`、`library/parts/<id>/` | 随包存在；**没有 `cad_part` 的 list/get/import 操作**（见下） |
-| **BOSL2** | 可选 OpenSCAD 建模库（螺纹、齿轮、螺丝、墙、轴承等） | 用户自行放到 `lib/BOSL2/`，不随包 | `cad_part` (`action: "generate"`) 里 `include <BOSL2/...>` |
+| **BOSL2** | 可选 **仅 OpenSCAD** 建模库（螺纹、齿轮、螺丝、墙、轴承等） | 用户自行放到 `lib/BOSL2/`，不随包 | 只在 `scadCode` 里 `include <BOSL2/...>` |
 | **弹簧 `standardId`** | 装配检查用的 1 条 seed（pen spring） | `src/host/standard-parts.ts` | `cad_assembly` (`action: "check"`) 的 `spring-behaviour` 填充字段 |
 
 “标准件”在本项目里被这三者共用；写文档或回答用户时必须点名是哪一种。

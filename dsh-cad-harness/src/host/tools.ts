@@ -1093,7 +1093,7 @@ export function registerCadTools(
     description:
       'Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (CadQuery Python); exactly one is required. ' +
       'CadQuery scripts must leave a `result` (Workplane/Shape) or call `show_object(...)`; declare anchors with datum/datum_axis/datum_plane/datum_cyl (point first, same schema as OpenSCAD). ' +
-      'OpenSCAD code is self-contained with $fn=64 (BOSL2 available); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. ' +
+      'OpenSCAD code is self-contained with $fn=64 (BOSL2 available when installed); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. ' +
       'Renders are attached by default; trim with `views` on numeric iterations. CadQuery renders are produced by the shared STL→OpenSCAD path, never by VTK. ' +
       'The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.',
     parameters: {

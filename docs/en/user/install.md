@@ -9,7 +9,7 @@
 | **dsh** (with the Web GUI) | The plugin is installed into a dsh profile |
 | **Node ≥ 20 + pnpm** | For install/runtime; tarball users do not build, but dsh still uses pnpm internally |
 | **OpenSCAD** | Prepared by `setup --openscad=auto`; an existing 2025.06+ system install is used as-is. Official snapshot first; the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s. You can also point `CAD_OPENSCAD_BIN` at a binary |
-| **BOSL2** | Optional **OpenSCAD modelling library** (gears/threads/screws/walls), not the 99-item standard-parts catalogue. Download it yourself into `lib/BOSL2/`; it is not shipped |
+| **BOSL2** | Optional **OpenSCAD-only modelling library** (gears/threads/screws/walls), not the 99-item standard-parts catalogue. Download it yourself into `lib/BOSL2/`; it is not shipped |
 | **Standard-parts catalogue v0** | 99 pre-generated specs (fit/visual, STEP/STL) shipped with the package; no install needed. **0.1.1-preview.1 has no `cad_part` catalogue select/import action yet.** See [the catalogue reference](../llm/library.md) |
 | **Python** | **Not shipped.** The first analysis/simulation downloads about 400 MB into `$DSH_HOME/cad/runtime/` |
 

@@ -6478,3 +6478,23 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** `setup --openscad=auto` 实测：系统 2021.01 + 插件 2026.09.23 → backend 指向 `/Project/ToyMarker/bin/squashfs-root/usr/bin/openscad`；`accept:backend` 24/24（含 fake 旧 `CAD_OPENSCAD_BIN` 和旧 PATH 不得覆盖插件快照）；`provision --check` 返回插件 2026.09.23；`doctor` 21/21。
 
 **影响：** `src/host/compile.ts`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、安装/发布文档；不加自动下载，不改变 OpenSCAD 常驻渲染的决策。
+
+## 2026-11-20：BOSL2 按内核分侧——OpenSCAD 保留，CadQuery 不引入
+
+**触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响内核提示、工具描述与文档口径）。
+
+**要解决的问题：** 标准件目录（99 specs / 14 families）落地后，旧叙述“BOSL2 提供螺纹/齿轮等标准件”把目录与建模库混成一件；同时 BOSL2 是 OpenSCAD 的 include 库，CadQuery 是 B-rep Python 内核，没有这个机制。用户先问“有目录了还要不要 BOSL2”，随后明确：**OpenSCAD 侧不删，CadQuery 侧不包含**，按内核分侧处理。
+
+**决策内容：**
+1. OpenSCAD 内核保留 BOSL2 为可选建模库（用户自装、不随包、BSD-2），用于齿轮/螺纹/圆角/壳体等自制特征；外购件实体归目录。
+2. CadQuery 内核不引入 BOSL2、不做适配层，也不在 CQ 的会话提示、工具描述与文档里提它——不是写一条“禁止使用”，而是让它不存在。
+3. 统一路由：买得到的成品件 → 目录；OpenSCAD 自制件上的配合特征/传动件 → BOSL2；CQ 自制件 → CQ 几何 API（需要成品件时导入目录/stock）。
+4. 把边界写进 `kernelPromptText`（SCAD 侧说明 BOSL2 仅 OpenSCAD、需单独安装；CQ 侧不出现该词）、`generate_part` 描述、library/install 文档，并给 `accept:kernel-context` 加断言（CQ 文本不含 BOSL2）。
+
+**理由：** 目录是预生成静态几何，覆盖外购紧固/密封/弹簧/轴承，不含齿轮，也替代不了“在自制件上切螺纹”；BOSL2 在 SCAD 侧是成熟原语库，删掉会把齿轮/螺纹推回手搓（microscope5 v021“BOSL2 不可用，自绘梯形齿轮”即反例）。CQ 侧没有 include 机制，硬接等于造假适配层；而在 CQ 上下文里写“你没有 BOSL2”反而把不存在的概念塞给模型，正确做法是整个 CQ 面都不出现这个词。分侧后“标准件”的三个所指（目录 / BOSL2 / 弹簧 seed）各有明确归属。
+
+**依据：** 用户 2026-11-20 对话原话（“openscad 侧不应该删除它，cq 不应该包含它”“CQ 侧无需特意提到无需 BOSL2，直接让他不存在就行了”）；`library/catalog.json` 的 14 族不含齿轮且 fit 不建螺旋螺纹；windup-frog 的 7.2:1 齿轮副依赖 BOSL2 `spur_gear`（10T 自动变位，中心距 14.2719 / 12.1692）；`accept:kernel-context` 12/12（CQ 提示不含 BOSL2、SCAD 提示说明仅 OpenSCAD 且需单独安装）、`accept:i18n` 18/18、`accept:doctor` 21/21、`tsc` 0。
+
+**影响：** `src/host/kernel-context.ts`、`src/host/tools.ts`（`generate_part` 描述）、`skills/cad-toolbox/SKILL.md`、`docs/llm/library.md` 与英文版、`docs/user/install.md` 与英文版、`scripts/doctor.mjs`、`scripts/accept-kernel-context.mjs`、`DESIGN.md`。BOSL2 的安装/接线/许可形态不变。
+
+**非目标：** 不删除 BOSL2；不把它打进 npm 包；不为 CQ 做 BOSL2 等价库（不引 cq_warehouse）；不把 `accept-bosl2` 接进 CI（`lib/` 被 gitignore，CI 无 BOSL2，要接先解决获取与许可）。

@@ -13,7 +13,7 @@ no first-class tool entry for them.** Do not confuse the catalogue with BOSL2 or
 | Name | What it is | Where | How to use it today |
 |---|---|---|---|
 | **Standard-parts catalogue v0** | 99 specs / 14 families, pre-generated STEP/STL, `fit` / `visual` LODs | `library/catalog.json`, `library/parts/<id>/` | Ships with the package; **no `cad_part` list/get/import-by-catalog action** (below) |
-| **BOSL2** | Optional OpenSCAD modelling library (threads, gears, screws, walls, bearings) | User downloads into `lib/BOSL2/`; not shipped | `include <BOSL2/...>` inside `cad_part` (`action: "generate"`) |
+| **BOSL2** | Optional **OpenSCAD-only** modelling library (threads, gears, screws, walls, bearings) | User downloads into `lib/BOSL2/`; not shipped | `include <BOSL2/...>` inside `scadCode` only |
 | **Spring `standardId`** | One seed entry (pen spring) for assembly checks | `src/host/standard-parts.ts` | `spring-behaviour` in `cad_assembly` (`action: "check"`) fills fields from it |
 
 “Standard part” is overloaded across these three; always name which one you mean.

@@ -175,8 +175,8 @@ const bosl2 = [
   join(ROOT, '..', 'lib', 'BOSL2', 'std.scad'),
   join(ROOT, 'lib', 'BOSL2', 'std.scad'),
 ].find((p) => p && existsSync(p));
-add('bosl2', bosl2 ? 'pass' : 'warn', bosl2 ? `BOSL2 at ${bosl2}` : 'BOSL2 not found (optional; standard parts need it)',
-  bosl2 ? undefined : 'download BOSL2 into lib/BOSL2 and set OPENSCADPATH to the directory that CONTAINS BOSL2');
+add('bosl2', bosl2 ? 'pass' : 'warn', bosl2 ? `BOSL2 at ${bosl2}` : 'BOSL2 not found (optional; OpenSCAD gears/threads need it)',
+  bosl2 ? undefined : 'download BOSL2 into lib/BOSL2 and set OPENSCADPATH to the directory that CONTAINS BOSL2 (OpenSCAD projects only)');
 
 // --- backend selection -----------------------------------------------------
 const kernelKnown = backendConfig.kernel === 'openscad' || backendConfig.kernel === 'cadquery';

@@ -64,6 +64,7 @@ export function kernelPromptText(kernel: EffectiveKernel): string {
   return (
     `CAD authoring kernel: openscad (${kernel.source}). ` +
     'Write OpenSCAD source and call generate_part({scadCode}); do not pass CadQuery `code` in this session. ' +
+    'BOSL2 (OpenSCAD-only, installed separately) covers gears/threads/fillets via include <BOSL2/...>. ' +
     'The OpenSCAD unit and datum traps apply.'
   );
 }

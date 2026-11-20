@@ -259,7 +259,7 @@ emptyDatumSet(): DatumSet   /   datumPrelude(): Promise<string>
 
 **实现要点**：
 - **二进制解析链**：`CAD_OPENSCAD_BIN` → `bin/squashfs-root/usr/bin/openscad`（2026.09.23 snapshot）→ 系统 `openscad`；版本 ≥ 2025 显式加 `--backend=Manifold`；snapshot 自动补 `LD_LIBRARY_PATH`
-- **BOSL2**：`OPENSCADPATH` 指向内置 `lib/BOSL2`，所有调用生效（螺纹/齿轮/圆角/结构件不手搓）
+- **BOSL2（可选，仅 OpenSCAD）**：`OPENSCADPATH` 指向检出内 `lib/BOSL2`（npm 包不含，用户自装）；SCAD 的螺纹/齿轮/圆角/结构件用它，不手搓。
 - **共享 Xvfb**：`-displayfd` 自选显示号 + GL 预热 + `unref`，只在 PNG 渲染路径需要（渲染管线 15.7s → ~1.0s）
 - 临时目录 `mkdtemp`（非固定路径）；超时 30s；STL 一律 `--export-format binstl -D $fn=64`
 - **datum 前置区**：编译前 prepend `DATUM_PRELUDE`（`datum` / `datum_axis` / `datum_plane` / `datum_cyl` 四个模块，echo 行解析），错误行号偏移由注释声明接受
@@ -1309,7 +1309,7 @@ npm run setup
   - **供给开关（2026-11-17）**：`CAD_OPENSCAD_MIRROR` 覆盖镜像基址（内网/区域镜像，仍需命中固定 sha256）；`CAD_OPENSCAD_ARCHIVE` 指向本地离线归档，等同 `--from`，完全不走网络；`CAD_OPENSCAD_ALLOW_UNVERIFIED=1` 才允许装入非 pin 归档。镜像随二进制发布 `mirror/LICENSE.GPL-2.0`、`mirror/SOURCE-OFFER.md`（GPL-2.0 §3(b)）、`mirror/manifest.json`（逐文件 sha256），由 `build-mirror-manifest.mjs` 生成、`accept-mirror-manifest.mjs` 卡漂移。
   - **版本门槛显性化**：低于 2025.06 时 `doctor` 与 `compile.ts`（首次解析）都给出实测对比 2467 ms（CGAL）vs 69 ms（Manifold），而不是只报 degraded。
 - **渲染管线提速**：`xvfb-run` 每调用 ~3s 的 X server 启动税是原瓶颈（5 次调用 ≈ 15s）。改为进程内共享一个 Xvfb（`-displayfd` 自选空闲显示号 + GL 预热 + 渲染重试），全管线 15.7s → ~1s（15.6×）。
-- **BOSL2 标准件库内置**：`lib/BOSL2`，经 `OPENSCADPATH` 对所有 openscad 调用生效；generate_part 工具描述已声明可用（螺纹/齿轮/圆角/结构件用 BOSL2，不手搓）。
+- **BOSL2（可选建模库，仅 OpenSCAD）**：源码检出的 `lib/BOSL2` 经 `OPENSCADPATH` 对 openscad 调用生效（npm 包不含，用户自装）；generate_part 描述声明“BOSL2 仅 OpenSCAD”。它不是标准件目录（目录见 `library/`）。
 - **新工具**：`render_part`（模型主动按视角/旋转/缩放/剖切渲染，~300ms/帧）、`measure_part`（包围盒/体积/表面积/质心/genus/水密——数值真值核对）。
 - **视角标签修正**：z-up 约定下 `front/top` 曾标反（`[0,0,0]` 是俯视），已修正。
 - **参数面板（Customizer）**：SCAD 中 `name = value; // PARAMS 描述` 即为可调参数；`GET /api/cad/params` 解析、`POST /api/cad/preview` 按覆盖值渲染；面板滑块 + 防抖预览。
@@ -1606,7 +1606,7 @@ npm run setup
 |---|---|
 | 共享 Xvfb | `-displayfd` 自选显示号 + GL 预热 + unref，渲染管线 15.7s → 1.0s（15.6×） |
 | OpenSCAD 2026.09.23 | Manifold 后端（STL 1.2-18×，复杂度越高越大）；二进制解析链 env → snapshot → system |
-| BOSL2 内置 | `lib/BOSL2` + OPENSCADPATH；generate_part 描述已声明 |
+| BOSL2（仅 OpenSCAD，可选） | 源码检出 `lib/BOSL2` + OPENSCADPATH；npm 包不含 |
 | 计量管线 | `llm/stream` 观察者 → `usage.jsonl`；实测 9 调用 60 图 ≈ 60k token，为图片修剪扩展提供触发线 |
 | 无头验收 | `verify-m0/annotate/params.mjs`：DOM 状态 + 截图 + console 错误收集；截图由模型判读 + 人复核 |
 | OpenSCAD 升级 | 2026.09.23 snapshot（Manifold 后端）——性能矩阵见版本记录 v2.1 |
@@ -4108,7 +4108,7 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 
 - Node/dsh 版本兼容；插件 bundle、preset、skill 路径；
 - OpenSCAD 是否存在；2021.01 可跑但 `openscad-backend` 为 warn（无 Manifold），2025.06+ 为 pass；
-- BOSL2 可选；Python runtime 状态与修复提示；
+- BOSL2 可选且仅 OpenSCAD；Python runtime 状态与修复提示；
 - 项目 marker、写权限；project/assembly/claims/policy 的 `schemaVersion`（新版 fail、旧版 warn）；
 - 临时目录 stale 与总大小上限检查（`DSH_CAD_TEMP_MAX_MB`，默认 512）。
 验收 `accept:doctor` 21/21；`accept:scope` 10/10 覆盖面板环境提示。
