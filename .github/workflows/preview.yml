@@ -33,6 +33,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build host + client + verify CLI
         run: npm run build
+      - name: Root shim version matches package
+        run: node scripts/sync-root-version.mjs --check
       - name: Install dsh (preset source + doctor compatibility check)
         run: npm install -g @deepseek-ai/dsh@0.2.2-rc.1
       - name: Accept A2 (preset path) / C1 (export gate) / A3 (backend) / C2 (verify CLI)
