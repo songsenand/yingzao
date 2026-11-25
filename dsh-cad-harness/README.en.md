@@ -12,7 +12,7 @@ library.
 Tarball release (no build; `lib/` is included):
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.2.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 node scripts/setup.mjs          # writes this machine's skill path into the preset
@@ -73,7 +73,7 @@ The `dsh-cad-*` binaries are declared in `package.json`; they are on `PATH` when
 the package is linked into a profile/tool installation. From an unpacked tarball,
 `node scripts/*.mjs` is the reliable form.
 
-## What's new in 0.1.2-preview.2
+## What's new in 0.1.2-preview.1
 
 - `generate` takes `dryRun` (compile + measure, save nothing) and `preflight` (save only watertight single-body meshes).
 - `cad_check` `sweep` screens a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`; motion supports a `gear` ratio.

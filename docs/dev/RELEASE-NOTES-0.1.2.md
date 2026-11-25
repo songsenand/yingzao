@@ -1,7 +1,7 @@
-# 0.1.2-preview.2 发布说明
+# 0.1.2-preview.1 发布说明
 
-> **状态**：发布候选（2026-11-26）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`，preview.1 代码）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack。
-> **版本号从 `0.1.2-preview.1` 提到 `0.1.2-preview.2`**：preview.1 用 stage-only token 进了 npm staging，CLI `stage approve`/`reject` 均 404、直发 E409，且用户 web 2FA 设备不可用；preview.1 **未公开发布**。preview.2 仅版本号/文档变化，用 package:write token 直发；tag CI 会重跑。
+> **状态**：**已发布**（2026-11-26 00:39 +08）。维护者在手机 npmjs.com 的 Staged Packages 批准后上线；`dist-tags.latest` = `0.1.2-preview.1`，gitHead `d229536`，shasum `dbe385ed…`。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack。
+> **发布路径**：CLI `npm stage publish` 成功，但现有 token 只有 `package:write`，`stage approve`/`reject` 均 404、直发 E409；web 2FA 指纹设备损坏，最终由手机批准。**下次遇到 staged 阻塞，先提示“可以用手机 npmjs.com → Staged Packages 批准”**，不要先改版本号。
 > **基线**：`v0.1.1-preview.1`（2026-11-20）→ 本版。
 > **目标/范围/验收**：[TODO.md](TODO.md) §1 的 R1–R8；用户文档入口：[docs/user/preview.md](../user/preview.md)。
 
@@ -120,7 +120,7 @@ motion 49 位姿 / 0 干涉；后拨 check 29/29、motion 24 位姿 / 0 干涉�
 - **CI 分档**：`push main` → fast + Ubuntu 全量；PR → 仅 fast；夜间 → Ubuntu+macOS 全量 + Windows smoke；
   tag `v0.*` → 全矩阵 + Windows smoke + CadQuery pack；外加 `concurrency` 取消与运行时缓存。
 - **本地 DSH 矩阵**：13 个 in-range 0.2.x 已在 0.1.1-preview.1 那轮全量实测（12 PASS + 1 BLOCKED；
-  0.2.3-alpha.1 上游 `dsh --version` 自身起不来，不算插件失败）。**0.1.2-preview.2 的全矩阵待重跑**，
+  0.2.3-alpha.1 上游 `dsh --version` 自身起不来，不算插件失败）。**0.1.2-preview.1 的全矩阵待重跑**，
   见 §5 与 [DSH-MATRIX.md](DSH-MATRIX.md)。
 - **根 shim 版本同步**：仓库根 `package.json` 不再手写版本，由脚本从包同步，CI 每次 push 校验；
   `dsh plugin add github:songsenand/yingzao` 能解析到真实包。
@@ -192,8 +192,8 @@ DSH_CAD_CQ_PACK=/path/to/cadquery npx dsh-cad-backend --show
 | `accept:license` / `npm pack --dry-run` | `15/15`；651 files / **10.1 MB packed** / 34.1 MB unpacked（本机） |
 | `npm publish --dry-run --tag preview` | exit 0（`prepublishOnly` + `prepack` + `postpack`） |
 | DSH 13 版本矩阵 | **待普通终端重跑**（本沙箱无 systemd 用户总线，kern 起不来）；见 [DSH-MATRIX.md](DSH-MATRIX.md) |
-| npm token | `package:write` + `bypass_2fa`；**不能管理 staged 记录**（approve/reject 404）。preview.2 直接 `npm publish` |
-| 干净 profile 从 npm 安装 | 待 R8（发布后） |
+| staged 批准 | 维护者手机 npmjs.com → Staged Packages → Approve（2026-11-26）；CLI token 只有 `package:write`，approve/reject 返回 404，直发 E409 |
+| registry tarball 解包 smoke | **PASS**：下载 `0.1.2-preview.1` 的 shasum 与 npm 一致（`dbe385ed…`）；`setup --check` ok；`doctor` = `degraded`，唯一原因是本机 OpenSCAD 2021（warn，非 fail） |
 
 > 发布时这一节不能留“待填”；任何一项没跑，发布说明必须写明原因，不允许用“本机绿”代替 tag 证据。
 
@@ -208,12 +208,12 @@ DSH_CAD_REQUIRE_CQ=1 DSH_CAD_CQ_PACK=/path/to/cadquery npm run accept:release
 node scripts/sync-root-version.mjs --check
 npm pack --dry-run
 npm run rehearse:preview
-npm publish --tag latest         # 预发布版本必须显式给 tag；本版要让 latest 指向 0.1.2-preview.2
+npm publish --tag latest         # 预发布版本必须显式给 tag；本版要让 latest 指向 0.1.2-preview.1
 ```
 
 > 预发布版本必须显式给 `--tag`；本版用 `latest`，与 0.1.1 的发布方式一致（`dsh plugin add
 > dsh-cad-harness` 应装到本版）。如需 `preview` 别名，发布后执行
-> `npm dist-tag add dsh-cad-harness@0.1.2-preview.2 preview`。
+> `npm dist-tag add dsh-cad-harness@0.1.2-preview.1 preview`。
 >
 > 本机沙箱不能跑 `rehearse:preview` 的 pnpm 步骤；CI 的 Ubuntu job 已覆盖等价链路
 > （build → `accept:preview` → pack → 解包 setup/doctor），见 §5。
@@ -222,7 +222,7 @@ npm publish --tag latest         # 预发布版本必须显式给 tag；本版�
 
 ```bash
 npm view dsh-cad-harness dist-tags
-# latest 应为 0.1.2-preview.2；gitHead 与 tag v0.1.2-preview.2 相同
+# latest 应为 0.1.2-preview.1；gitHead 与 tag v0.1.2-preview.1 相同
 ```
 
 ---
@@ -232,3 +232,21 @@ npm view dsh-cad-harness dist-tags
 - 引擎范围不变：OpenSCAD + CadQuery；0.1.1 的内核选择、会话内核对齐、统一 STL/STEP 验证全部保留。
 - 0.1.1-preview.1 的“latest 是坏包”问题已经修复；本版**不是** 0.1.1 的修订版，而是下一个预览版。
 - 0.1.1 明确不做的 U01/U02/L10/N15 等仍不做；本版只发已落地的改动，剩余项见 §3。
+
+---
+
+## 8. 发布记录与下次提示（2026-11-26）
+
+- **已发布**：`0.1.2-preview.1`，`dist-tags.latest`；gitHead `d229536`（tag `v0.1.2-preview.1`），
+  shasum `dbe385ed538c3ad3d332e345e920ca8af67e20d3`。
+- **发布方式**：`npm stage publish` 把包放进 staging 后，由维护者在**手机** npmjs.com 的
+  Staged Packages 里批准（2FA 指纹设备损坏，网页桌面 2FA 不可用）。
+- **CLI 的限制**：现有 token 权限是 `package:write` + `bypass_2fa`；`npm stage approve` 与
+  `npm stage reject` 都返回 404，直接 `npm publish` 因 staged 占用返回 E409。
+- **中间插曲**：曾把版本提到 `0.1.2-preview.2` 并推送过 commit/tag，但 preview.2 未发布；
+  确认 preview.1 已上线后，本地已回退到 preview.1（回退提交未推送远端；远端 `v0.1.2-preview.2`
+  tag 仍存在，待允许推送时清理）。
+- **下次提示**：发布前先问“能不能用手机 npmjs.com → Staged Packages 批准”。这比换 token、
+  改版本号都快，也不会留下 staged 阻塞。
+- **发布后验证**：`npm pack dsh-cad-harness@0.1.2-preview.1` 的 shasum 与 registry 一致；
+  解包后 `setup --check` ok，`doctor` = degraded（仅本机 OpenSCAD 2021 的 warn）。

@@ -16,9 +16,9 @@
 | [ASSESSMENT-2026-10-28.md](ASSESSMENT-2026-10-28.md) | 能力评估：玩具→准生产的证据、缺口与路线图 | 排优先级/看现状 |
 | [TEST-COVERAGE-2026-11-16.md](TEST-COVERAGE-2026-11-16.md) | 工具单元测试覆盖率实测：9 surface/39 op、172 个 accept 脚本、src 行 89.0% / 函数 83.0% | 补测试/判断工具面质量 |
 | [DSH-MATRIX.md](DSH-MATRIX.md) | 本地 DSH 版本矩阵：13 个 in-range 0.2.x 的 rc/alpha 实测表、T0–T2 断言与复现 | 判断支持范围/加版本前 |
-| [TODO.md](TODO.md) | **项目 TODO 总表**：`0.1.2-preview.2` 发布阻断（R1–R8）、0.1.2 线剩余与中远期（L2–L16）的顺序、状态、出口 | 每次开工前/发布前每天 review |
+| [TODO.md](TODO.md) | **项目 TODO 总表**：`0.1.2-preview.1` 发布阻断（R1–R8）、0.1.2 线剩余与中远期（L2–L16）的顺序、状态、出口 | 每次开工前/发布前每天 review |
 | [RELEASE-0.1.1.md](RELEASE-0.1.1.md) | 0.1.1 版本目标：CadQuery 成为一等公民；范围、验收、排期；L1.8 预设与 dsh 版本对齐（已发布，历史） | 查 0.1.1 设计与发布记录时 |
-| [RELEASE-NOTES-0.1.2.md](RELEASE-NOTES-0.1.2.md) | **0.1.2-preview.2 发布说明**：C1–C12 用户可见变化、升级须知、已知问题、证据表与发布步骤 | 发布/查本版变化时 |
+| [RELEASE-NOTES-0.1.2.md](RELEASE-NOTES-0.1.2.md) | **0.1.2-preview.1 发布说明**：C1–C12 用户可见变化、升级须知、已知问题、证据表与发布步骤 | 发布/查本版变化时 |
 | [RELEASE-NOTES-0.1.1.md](RELEASE-NOTES-0.1.1.md) | 0.1.1-preview.1 发布说明与已知问题（历史） | 查 0.1.1 发布记录时 |
 | [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md) | 0.1.0 预览版发布计划：L2 外壳的 P0/P1 索引；C1 风险标注导出、A3 后端选择、A2 安装时预设（历史） | 查预览版设计/历史时 |
 | [RELEASE-NOTES-0.1.0-preview.2.md](RELEASE-NOTES-0.1.0-preview.2.md) | preview.2 发布说明：9 surface、标准件库 v0、球阀示例、证据修复、已知问题与门禁证据 | 打 tag/写 release body 前 |

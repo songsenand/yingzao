@@ -11,7 +11,7 @@
     "llm",
     "agent"
   ],
-  "version": "0.1.2-preview.2",
+  "version": "0.1.2-preview.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/host/index.d.ts",

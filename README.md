@@ -140,7 +140,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 | 层 | 使用 |
 |---|---|
 | 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 是可选 **OpenSCAD 建模库**（螺纹/齿轮/螺丝），不是标准件目录 |
-| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.2-preview.2 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
+| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.2-preview.1 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |
@@ -309,14 +309,14 @@ curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
 
 > 必须在普通终端里跑：kern 需要 systemd 用户总线，不能嵌套在 DSH 自己的 bwrap 沙箱里。
 
-## 本版变化（0.1.2-preview.2）
+## 本版变化（0.1.2-preview.1）
 
 - **生成前先判断**：`cad_part generate` 的 `dryRun` 只编译 + 测量、不落版本；`preflight` 只在网格闭合且单实体时写版本（薄壁 <1.2mm 只警告）。
 - **装配到运动之间多一层**：`cad_check` 的 `sweep` 按声明的关节行程做扫掠筛查，报 `suspect`，不冒充交付判定；转动副可声明 `overlapEnvelope` / `fit`，motion 支持 `gear` 比率。
 - **悬垂不再直接判失败**：默认只报 finding；工艺档案显式 `overhangDeg.hard: true` 才降为 `difficult`。
 - **面板**：热力图可切换 融合风险 / 壁厚 / 悬垂 / von Mises；配色跟随宿主亮/暗主题。
 - **示例**：新增缝纫旋梭与三速后拨（各含 CadQuery 变体）；按“进新退旧”，3 个旧示例移到历史表，目录与语料仍保留。
-- 完整说明、证据与已知问题见 [0.1.2-preview.2 发布说明](docs/dev/RELEASE-NOTES-0.1.2.md)。
+- 完整说明、证据与已知问题见 [0.1.2-preview.1 发布说明](docs/dev/RELEASE-NOTES-0.1.2.md)。
 
 ## 已知边界
 

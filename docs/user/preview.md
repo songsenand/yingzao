@@ -1,6 +1,6 @@
 [English](../en/user/preview.md) | 中文
 
-# 0.1.2-preview.2 预览版说明
+# 0.1.2-preview.1 预览版说明
 
 > **这是预览版，不是生产放行系统。** 它已经能装、能自检、能验证、能交付，但不承诺工业级
 > 公差、认证精度或长期支持。请把它当"可用的实验仪器"，不是"合格证"。
@@ -31,7 +31,7 @@
 见 [安装与首次准备](install.md)。预览版的最小路径：
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.2.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup          # 写入本机 skill 路径

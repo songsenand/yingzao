@@ -1,32 +1,25 @@
 # 项目 TODO 总表
 
-> **状态**：单一索引（2026-11-12 创建；**2026-11-25 按 `0.1.2-preview.2` 重排**）。
+> **状态**：单一索引（2026-11-12 创建；**2026-11-25 按 `0.1.2-preview.1` 重排**）。
 > **作用**：把散落在 `RELEASE-0.1.1.md`、`RELEASE-NOTES-0.1.1.md`、`RELEASE-0.1.0-PREVIEW.md`、
 > `PLUGIN-ISSUES-2026-11-21.md`、`ASSESSMENT-2026-10-28.md`、`DESIGN.md §12`、
 > `UI-PLAN.md` / `UI-EXECUTION.md`、`PROJECT-SCOPE.md`、`DECISION-LOG.md` 的“未决/非目标/后续”
 > 收成一张有序的表。
 > **规则**：本文件决定**顺序、状态、优先级**；设计细节留在来源文档。不要在两处同时维护状态。
 > **状态词**：`next` / `doing` / `planned` / `partial` / `blocked` / `triggered` / `done` / `dropped`。
-> **时间口径**：`0.1.1-preview.1` = 已发布（2026-11-20，npm `latest`）；`0.1.2-preview.2` = 当前，
-> 发布阻断；`0.1.2` 线剩余 = 其后；`0.2–0.4` = 中远期；`1.0` = 冻结。
+> **时间口径**：`0.1.1-preview.1` = 已发布（2026-11-20）；`0.1.2-preview.1` = **已发布**（2026-11-26，
+> npm `latest`）；`0.1.2` 线剩余 = 当前；`0.2–0.4` = 中远期；`1.0` = 冻结。
 
 ---
 
 ## 0. 现在只做一件事
 
-**`0.1.2-preview.2`：把 2026-11-20 之后已经落地、但还没进版的改动收成可发布的预览版。**
+**`0.1.2-preview.1` 已发布（2026-11-26，npm `latest`）。现在做 §3 的 0.1.2 线剩余；发布路径与“手机批准 staged”的教训见 [RELEASE-NOTES-0.1.2.md](RELEASE-NOTES-0.1.2.md) §8。**
 
-- 0.1.1 的双内核主线已经收口（L1.0–L1.12 全绿，`0.1.1-preview.1` 已发布）。本版**不新增引擎、不改 seam**。
-- 本版内容是 11-20 → 11-25 的 36 个提交（截至 2026-11-25 22:30，含发布文档），按 §2 归为 C1–C12：关节包络/fit、扫掠筛查、motion gear、
-  悬垂政策、热力图图层、analyze probe/look、generate dryRun/preflight、插件 issue 修复、
-  DIN 2098 弹簧参数、四个新示例、主题变量、CI 分层、DSH 矩阵、TS oracle 退役。
-- **本版没有“再写一个功能”的阻断项；阻断项全在“包与说明”**：版本号/tag、发布说明、预设与 dsh 对齐、
-  文档口径、门禁覆盖、全矩阵证据、许可打包、发布后验证（§1 的 R1–R8）。
-- **版本线（2026-11-25 用户确认）**：下一版按 `0.1.2-preview.2` 发；0.1.1 线不再单独补发修订版。
-  若决定先补 0.1.1 修订版，把 R1/R2 的版本号改成 `0.1.1-preview.2` 即可，其余不变。
-  依据见 DECISION-LOG 2026-11-25。
-- **纠正一条过时结论**：npm `latest` 的 `0.1.1-preview.1`（gitHead `f62124b`）**已包含预设修复**，
-  不是坏包；“latest 仍是坏包、待发 0.1.1 修订版”的记录作废。
+- 0.1.1 与 0.1.2-preview.1 的双内核主线都已收口；后续**不新增引擎、不改 seam**，先把 0.1.2 线的体验/证据补齐。
+- 本版内容（C1–C12）已发布，见 §2 与发布说明；不再重复维护“待发清单”。
+- **下次发布先问**：能不能用手机 npmjs.com → Staged Packages 批准？CLI token 只有 `package:write` 时 approve/reject 会 404、直发会 E409；不要先改版本号。
+- **纠正一条历史结论**：npm `0.1.1-preview.1`（gitHead `f62124b`）已包含预设修复，不是坏包。
 
 **引擎策略（2026-11-19 用户拍板，继续有效）：**
 
@@ -38,20 +31,20 @@
 
 ---
 
-## 1. `0.1.2-preview.2` 发布阻断（R1–R8）
+## 1. `0.1.2-preview.1` 发布阻断（R1–R8）
 
 > 出口都必须可证伪；不通过不发。建议顺序：R1 → R2 → R3/R4 并行 → R5 → R6 → R7 → R8。
 
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
-| R1 | P0 | done | 版本号与根 shim | 包与根 `package.json` 均为 `0.1.2-preview.2`（根依赖 `^0.1.2-preview.2`）；`node scripts/sync-root-version.mjs --check` 输出 in sync（2026-11-25）。tag 的 gitHead 校验移到 R8，发布时做 | 0.5d |
+| R1 | P0 | done | 版本号与根 shim | 包与根 `package.json` 均为 `0.1.2-preview.1`（根依赖 `^0.1.2-preview.1`）；`node scripts/sync-root-version.mjs --check` 输出 in sync（2026-11-25）。tag 的 gitHead 校验移到 R8，发布时做 | 0.5d |
 | R2 | P0 | done | 新建 `RELEASE-NOTES-0.1.2.md` | C1–C12 各有小节，升级/已知问题/发布步骤齐全；证据表已回填 CI run 45645941780、许可/打包与 `publish --dry-run` 结果。发布后由 R8 追加 npm 安装记录 | 1d |
-| R3 | P0 | partial | 预设与 DSH 兼容矩阵 | 预设 `setup --check` ok、`check-release-preset` ok、`doctor` 的 `preset-standard-drift` PASS（2026-11-25）；**13 版本矩阵尚未用 0.1.2-preview.2 重跑**：本沙箱无 systemd 用户总线，kern 起不来，需普通终端重跑或等 tag CI，结果回填 `DSH-MATRIX.md` | 1d |
-| R4 | P0 | done | 用户文档 + 架构文档同步 | 根 README/README.en 与包 README/README.en 已到 0.1.2-preview.2，新能力进“本版变化/已知边界/预览说明”；`docs/user/{preview,install,README}`(+en)、`docs/llm/library.md`(+en)、`skills/cad-toolbox/SKILL.md`、`library/README.md` 版本口径更新；DESIGN.md 新增 §38（dryRun/preflight、sweep、fit/gear、悬垂、热力图/主题、oracle 退役、示例展示）；examples 索引按“进新退旧”移动 3 个；`grep "0.1.1-preview.1"` 只剩历史文件与旧运行说明 | 2d |
+| R3 | P0 | partial | 预设与 DSH 兼容矩阵 | 预设 `setup --check` ok、`check-release-preset` ok、`doctor` 的 `preset-standard-drift` PASS（2026-11-25）；**13 版本矩阵尚未用 0.1.2-preview.1 重跑**：本沙箱无 systemd 用户总线，kern 起不来，需普通终端重跑或等 tag CI，结果回填 `DSH-MATRIX.md` | 1d |
+| R4 | P0 | done | 用户文档 + 架构文档同步 | 根 README/README.en 与包 README/README.en 已到 0.1.2-preview.1，新能力进“本版变化/已知边界/预览说明”；`docs/user/{preview,install,README}`(+en)、`docs/llm/library.md`(+en)、`skills/cad-toolbox/SKILL.md`、`library/README.md` 版本口径更新；DESIGN.md 新增 §38（dryRun/preflight、sweep、fit/gear、悬垂、热力图/主题、oracle 退役、示例展示）；examples 索引按“进新退旧”移动 3 个；`grep "0.1.1-preview.1"` 只剩历史文件与旧运行说明 | 2d |
 | R5 | P1 | done | 发布门禁补齐 | `accept:preview` 从 29 增至 44 个脚本：本版 15 个验收全部接入（assembly golden/分支、measure 两个 smoke、motion joint-pairs/gear/sweep/fit、overhang/heat/analyze/generate-preflight、library-catalog、tokens、plugin-issues）；`accept` 聚合也纳入 plugin-issues（68→69）。15 个脚本逐个 exit 0（本地用可写 runtime overlay；assembly/motion 的 EROFS 是沙箱只读导致，不是脚本问题） | 1d |
 | R6 | P0 | partial | 发布证据：全矩阵 + release gate | CI [run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）：Ubuntu/macOS `accept:preview`、Windows smoke、CadQuery job 全 PASS；本地单条 `accept:release` 未跑（沙箱），其组成由 CI 两个 job 覆盖。**余**：DSH 13 版本矩阵需普通终端重跑（或另立 CI job） | 1d |
 | R7 | P1 | done | 许可与打包 | `accept:license` 15/15；`npm pack --dry-run` 651 files / 10.1 MB packed / 34.1 MB unpacked；`npm publish --dry-run --tag preview` exit 0；CI Ubuntu 解包后 setup/doctor smoke PASS（含 packed preset 无绝对路径）。本机未跑 `rehearse:preview`（沙箱），其链路由 CI 同步骤覆盖 | 0.5d |
-| R8 | P0 | doing | 发布与发布后验证 | 版本改到 `0.1.2-preview.2`：preview.1 的 staged 记录无法用 CLI approve/reject（token 只有 `package:write`；web 2FA 设备不可用），直发 E409；preview.2 用该 token 直发 `npm publish --tag latest`（`bypass_2fa`，无需 OTP）。出口：`dist-tags.latest` = 0.1.2-preview.2、tag 的 gitHead 与 `npm view ... gitHead` 相等、干净 profile 安装 → setup → doctor → 生成/导出留档；preview.1 的 tag 删除 | 0.5d |
+| R8 | P0 | done | 发布与发布后验证 | **已发布 `0.1.2-preview.1`**（2026-11-26 00:39 +08）：`dist-tags.latest` 指向本版，gitHead `d229536`，shasum `dbe385ed…`；由维护者在手机 npmjs.com 的 Staged Packages 批准（CLI token 只有 `package:write`，approve/reject 404、直发 E409）。发布路径与下次提示见发布说明 §8 | 0.5d |
 
 > R5 的缺口依据：`accept:preview` 覆盖 29 个脚本，`accept` 是 68 个脚本。上面 15 个缺口里，
 > 13 个脚本在 `accept` 里但不在 `accept:preview`/`accept:release` 里；另 2 个
@@ -81,10 +74,10 @@
 
 ---
 
-## 3. 0.1.2 线剩余（不阻断 `0.1.2-preview.2`）
+## 3. 0.1.2 线剩余（不阻断 `0.1.2-preview.1`）
 
 > 这些是原 0.1.2 主题（体验/证据/示例）里**还没做完**的部分。本版先发已落地的改动；
-> 它们随 `0.1.2-preview.2` 或 0.2 继续。不要因为“0.1.2 要发”而临时开工。
+> 它们随 `0.1.2-preview.1` 或 0.2 继续。不要因为“0.1.2 要发”而临时开工。
 
 | ID | P | 状态 | 事项 | 剩余出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
@@ -261,18 +254,15 @@
 7. **引擎纪律（2026-11-19）：** 第三个引擎和社区适配不因讨论自动进表；必须由用户拍板，并满足 §4 的触发条件。
 8. **版本事实以 npm registry + git tag 为准（2026-11-25）：** 不保留“latest 坏包”这类会过期的断言；
    R1/R8 的出口就是版本事实的复核方式。
+9. **staged 审批优先走手机（2026-11-26）：** `npm stage publish` 之后若 CLI 无 approve/reject 权限，先提示用户用手机 npmjs.com → Staged Packages 批准；不要先改版本号或换更高权限 token。
 
 ---
 
 ## 10. 当前建议（2026-11-25）
 
-- **已完成（2026-11-25）**：R1 版本与根 shim；R2 发布说明（证据已回填）；R4 文档与示例展示；
-  R5 门禁补齐；R7 许可/打包。**R6 证据已拿到**：CI run 45645941780 全绿（Ubuntu/macOS 全量 +
-  Windows smoke + CadQuery）。
-- **发布前只剩两件**：① DSH 13 版本矩阵（R3/R6 的余项，普通终端跑 `node scripts/accept-dsh-matrix.mjs`
-  或另立 CI job，回填 `DSH-MATRIX.md`）；② R8：用户 `npm login` 后 tag `v0.1.2-preview.2` →
-  `npm publish --tag latest` → 干净 profile 安装验证（本环境 npm 未登录，不能代发）。
-- **R3 的地雷**：13 版本矩阵在本沙箱跑不了（kern 需要 systemd 用户总线）；不要把 0.1.1 的运行当成本版证据。
-- **本版不要做**：U01/U02 的视觉与示例重做、L10/N15、第三个引擎、社区适配、渲染器替换；视口点选已延后（X14）。
-- **判断本版 ready 的一句话**：`npm view dsh-cad-harness dist-tags.latest` 指向 `0.1.2-preview.2`，
-  且干净环境按 README 能装、能 `doctor`、能生成并导出——否则不算发完。
+- **已发布（2026-11-26）**：`0.1.2-preview.1` 是 npm `latest`；CI run 45645941780 全绿；
+  发布路径与手机批准 staged 的记录见发布说明 §8。
+- **下一步**：① DSH 13 版本矩阵补跑（R3/R6 余项，普通终端）；② §3 的 0.1.2 线剩余
+  （U02 复现记录、L10、N15、L1.13、P2-10、L16；U01 签收）。
+- **不要在发布后立刻做的**：第三个引擎、社区适配、渲染器替换；视口点选仍是 X14。
+- **下次发布**：先问“能否用手机 npmjs.com 批准 staged”，再决定 token/版本号动作。
