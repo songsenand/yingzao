@@ -6823,3 +6823,32 @@ watertight / 单实体。`measureDistance`、`buildMeshBvh` 保留（前者仍�
 **影响：** 少维护约 150 行 TS 与两个 parity 脚本；`accept` 链新增 measure-part smoke。
 **未退：** assembly validate/check、merge、motion（darwin 兜底）、printability（preflight）、
 fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
+
+## 2026-11-25：退役 assembly 与 measure-angle/distance 的剩余 TS oracle
+
+**触发条件：** 第 4 条（影响测试与维护）＋第 2 条（双实现清单的定量评估）。
+
+**要解决的问题：** 上一批退了 `measure_part` / `measure_closest` 的 oracle；这一批是清单里
+维护量最大的 assembly 两块和 measure 的 angle/distance。它们都只在 parity 脚本或纯 TS
+验收里被调用，生产路径已是 Python。
+
+**决策内容：** 删除 `validateAssemblyInTs`、`buildSolid`、`pairMinDistance`（`assembly.ts`）；
+删除 `runAssemblyCheckInTs`、`axisLineDistance`（`assembly-check.ts`）；删除 `measureDistance`
+及 `snapToSurface`（`measure.ts`，只留 `buildMeshBvh`）。同时删除对应的
+`accept-assembly-parity`、`accept-check-assembly-parity`、`accept-merge-parity`、
+`accept-measure-angle-parity`、`accept-measure-distance-parity`、`accept-measure`；
+`accept-icd` 改用 Python `runAssemblyCheck`，`accept-motion-pair-coverage` 去掉 TS 分支。
+新增 `accept-measure-gap-smoke` 用 Python `measure` 验证两个 10mm 立方体间隙 10mm；
+`accept-measure-part-smoke` 继续覆盖整件测量。
+
+**理由：** assembly 的两个 oracle 是纯测试代码，却带着整套 `buildSolid`/`pairMinDistance`
+依赖；measure angle/distance 的 oracle 也只服务对拍。删除后生产路径不变，Python 侧仍有
+assembly/measure 的端到端验收；用 smoke 保留“工具还能算对”的最低证据。
+
+**依据：** 删除后 `tsc --noEmit` 0；`accept-measure-gap-smoke`（10mm 间隙、witness 对）、
+`accept-measure-part-smoke`（8000mm³/bbox/watertight/单实体）、`accept-motion-fit-tool`、
+`accept-icd`、`accept-tool-contracts`、`npm run build` 均通过。
+
+**影响：** 再少约 1,000 行 TS oracle 与 6 个 parity/unit 脚本；assembly 的独立第二实现消失，
+后续以 Python 输出 + fixture 为准。**未退：** motion（darwin 兜底）、printability（preflight）、
+fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。

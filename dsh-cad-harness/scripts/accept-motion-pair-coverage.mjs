@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { runAssemblyCheck, runAssemblyCheckInTs, readMotionPairCoverage, excludedPairFor } from '../src/host/assembly-check.ts';
+import { runAssemblyCheck, readMotionPairCoverage, excludedPairFor } from '../src/host/assembly-check.ts';
 import { projectStores } from '../src/host/project.ts';
 import { listVersions, openVersionStore } from '../src/host/version.ts';
 import { newestVersionPerPart } from '../src/host/latest.ts';
@@ -103,7 +103,7 @@ const assertGate = (tag, report) => {
   check(/excluded the revolute pair rod↔upper_shaft/.test(gate?.detail ?? ''),
     `${tag}: detail names the excluded pair`, gate?.detail ?? '');
 };
-assertGate('TS', await runAssemblyCheckInTs(tmpStore, gateManifest, { runs: [fakeRun] }));
+
 if (havePython) {
   assertGate('Python', await runAssemblyCheck(tmpStore, gateManifest, { runs: [fakeRun] }));
 } else {

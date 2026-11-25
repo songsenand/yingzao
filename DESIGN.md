@@ -1796,7 +1796,8 @@ npm run setup
 ② `aDatum "<名字>"`——轴/圆柱/平面 datum，**精确**解析；③ `aPoints` / `aDir`——两点连线或已知向量。
 
 **数学只实现一次**：`_axis_line_metrics` 同时供给本工具与 `check_assembly` 的 `coaxial`
-算子（后者目前在 TS，迁移时改为消费同一 op），TS 的 `axisLineDistance` 保留为 parity oracle。
+算子；后者已迁移到 Python 的 `assembly_contracts`，TS 的 `axisLineDistance` oracle 于
+2026-11-25 退役。
 
 两条必须记住的约定/陷阱：
 
@@ -2130,7 +2131,7 @@ session-eecbcf56  Project/ToyMarker    preset=standard  37 tools 11064 tok  CAD 
 
 - **格式探测必须精确而非启发式**。二进制 STL 的 80 字节头里**可以**写着 `solid`（历史导出器的遗留），所以唯一可靠的判据是长度恒等式 `84 + triCount*50 === length`；ASCII 判据放在其后。搞错的代价不是难看：ASCII 文件喂给二进制解析器会读出垃圾 `triCount` 并报 **"STL truncated"**——正是导入路径最不该产出的那种误导性错误。
 - **二进制与 ASCII 必须归一到同一份网格**。把去重逻辑抽成共享的 `MeshBuilder`，验收断言两者**存下来的字节从第 80 字节起完全一致**（头 80 字节只记来源文件名）。
-- **"字节 → 实体"只留一个入口**（`src/host/solidify.ts`）。原 `assembly.ts::buildSolid` 里内联着 parse→merge→Manifold 三行，导入路径如果自己再写一遍，就会出现"同一个网格对一个调用方是实体、对另一个不是"——正是本仓最忌讳的静默谎言。改动后立刻重跑 `accept-assembly` 与 `accept-m3` 作为守卫，断言数不变。
+- **"字节 → 实体"只留一个入口**（`src/host/solidify.ts`）。原 `assembly.ts` 里的 TS 构建路径内联着 parse→merge→Manifold 三行，导入路径如果自己再写一遍，就会出现"同一个网格对一个调用方是实体、对另一个不是"——正是本仓最忌讳的静默谎言。改动后立刻重跑 `accept-assembly` 与 `accept-m3` 作为守卫，断言数不变。
 - **datum 是外部件进契约的唯一入口**。生成件的 datum 来自 SCAD 里的 `datum*/datum_cyl`；STL 不带。于是导入接受 `datums` 参数、写进**同一个** `datums.json`，被导入件由此成为 `check_assembly` 的合法端点。**这顺带推翻了一条旧限制**（"stock 件不能作接口端点"）：那条只对"没有版本的既有件"成立。因此 manifest 的 `source` 新增 `'imported'`，只有无版本的 `stock` 才被 `assembly-check.ts` 跳过（验收 5c 断言导入件**没有**被 skip 警告覆盖）。
 - **渲染走 STL 而不是源码**：把 `renderVersionFrame` 拆成 `renderStlFramePng`（取景数学只留一份）+ 薄包装，导入件由此拿到与 `generate_part` 同形的四视图，并且**scratch 文件移出版本目录**（旧实现每次渲染往版本目录里丢一对 `inspect_*.scad/png`，只读的查看动作不该弄脏产物）。
 - **导出要跟着修**：`/api/cad/export` 的非 STL 分支原来读 `model.scad`，导入件没有它——改成用 `import("<versionDir>/model.stl")` 包一层再导出，否则 3MF（打印交付那条链路）对导入件是坏的。
@@ -3193,8 +3194,9 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   `closest_mesh_mesh` / `closest_mesh_sphere`；TS 侧只剩 schema、版本→路径、警告文案与
   标注渲染（渲染与附件是 ① 平台接线，不迁）。TS 的最近点实现曾作为 **parity oracle**，
   由 `scripts/accept-measure-closest.mjs` 驱动：三组真实网格距离 **Δ=0**，解析真值
-  （1 mm 间隙、4 mm 球间隙、吞面报 0）也命中；该 oracle 与脚本于 **2026-11-25 退役**
-  （维护负担，Python 已是唯一生产路径），Python 侧的最近点仍由 motion/fit/sweep 验收覆盖。
+  （1 mm 间隙、4 mm 球间隙、吞面报 0）也命中；该 oracle、`closestPointsBetweenMeshes` /
+  `closestPointsMeshVsSphere` 与脚本于 **2026-11-25 退役**，Python 侧的最近点仍由
+  motion/fit/sweep 验收覆盖。
   **历史耗时 0.89×/8.43×/0.98×**（剪枝前最坏 107×）。
   **行为上唯一的放松**：多个点并列取得最小值时返回其中任意一对（旧实现返回扫描序第一个）；
   最小值唯一时点对完全一致。`measure_closest` 因此需要一个可用的运行时——`DSH_CAD_PYTHON=off`
@@ -3208,8 +3210,9 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   op 逐行镜像 `solidify.ts`（1e-5 mm 取整焊接 → `Mesh.merge()` → Manifold；status 与
   体积是硬闸门，非实体/绕向反转一律拒绝）与 `validateAssembly`（交集定干涉、只有不接触的
   对才做 1200 三角形抽样距离）。parts 以**路径**进 worker，报告形状不变；
-  `validateAssemblyInTs` 留作 parity oracle。**8 个用例全字段一致**（真实零件、rotate、
-  matrix/pose、干涉、too_tight、非实体拒绝）。
+  `validateAssemblyInTs` 曾留作 parity oracle；该 oracle 与 `buildSolid` / `pairMinDistance`
+  于 2026-11-25 退役。**迁移期 8 个用例曾全字段一致**（真实零件、rotate、matrix/pose、干涉、
+  too_tight、非实体拒绝）。
 - **worker 是子进程，生命周期归插件管**：`ctx.effect` 里注册 `resetPythonWorker()`，
   卸载即停。这不是理论担忧——迁移 `validate_assembly` 后 `accept-m2.mjs` 实测**挂住不退出**
   （worker 的 stdio 句柄让事件循环一直活着），验收脚本因此也要显式收尾。

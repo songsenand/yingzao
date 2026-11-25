@@ -21,7 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { compileStlOnly, type DatumSet } from './compile.ts';
 import { readVersionSource } from './version.ts';
-import { buildSolid, pairMinDistance, type PartTransform } from './assembly.ts';
+import { type PartTransform } from './assembly.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import {
   loadAssemblyManifest, flattenParts, allInterfaces, findNode,
@@ -191,12 +191,11 @@ export function eulerMatrix(rot: [number, number, number]): Mat3 {
 export interface PartWorld {
   id: string;
   node: ManifestNode;
-  built: Awaited<ReturnType<typeof buildSolid>> | null;
   datums: DatumSet;      // transformed to world
   warnings: string[];
   /**
    * How the WORKER can build this same placed solid: an STL path plus the exact
-   * transform `buildSolid` was given (`matrix` already encodes rotate∘pose). Null
+   * transform the affine resolves to (`matrix` already encodes rotate∘pose). Null
    * when the part never became a solid, which is also when the adjacency half must
    * skip it. `scratch` names a temporary file to delete once the request is done —
    * a version whose STL had to be rebuilt from its authoring source has no bytes on disk.
@@ -204,7 +203,7 @@ export interface PartWorld {
   workerMesh: { path: string; transform: PartTransform; scratch?: string } | null;
 }
 
-export async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorkerMesh = true): Promise<PartWorld> {
+export async function loadPartWorld(store: VersionStore, node: ManifestNode): Promise<PartWorld> {
   const warnings: string[] = [];
   const dir = join(store.root, 'versions', node.version ?? '');
   let stl: Uint8Array | null = null;
@@ -227,7 +226,6 @@ export async function loadPartWorld(store: VersionStore, node: ManifestNode, nee
     }
   }
 
-  let built: PartWorld['built'] = null;
   let workerMesh: PartWorld['workerMesh'] = null;
   if (stl) {
     try {
@@ -242,13 +240,8 @@ export async function loadPartWorld(store: VersionStore, node: ManifestNode, nee
           : { ...(node.transform?.rotate ? { rotate: node.transform.rotate } : {}) }),
         ...(node.transform?.translate ? { translate: node.transform.translate } : {}),
       };
-      built = await buildSolid(stl, transform);
       const onDisk = join(dir, 'model.stl');
-      if (!needWorkerMesh) {
-        // TS parity consumes `built` only; creating a scratch file here used to
-        // leak one per part per run because this caller never collected it.
-        workerMesh = null;
-      } else if (stlFromDisk) {
+      if (stlFromDisk) {
         // Byte identity, not object identity: the old `stl === readFile(...)`
         // was always false and copied every part to scratch.
         workerMesh = { path: onDisk, transform };
@@ -260,7 +253,7 @@ export async function loadPartWorld(store: VersionStore, node: ManifestNode, nee
         workerMesh = { path: scratch, transform, scratch };
       }
     } catch (e) {
-      warnings.push(`solid build failed: ${(e as Error).message}`);
+      warnings.push(`worker mesh build failed: ${(e as Error).message}`);
       workerMesh = null;
     }
   }
@@ -276,7 +269,7 @@ export async function loadPartWorld(store: VersionStore, node: ManifestNode, nee
     planes: raw.planes.map((d) => ({ name: d.name, point: transformPoint(d.point), normal: transformDir(d.normal) })),
     cylinders: raw.cylinders.map((d) => ({ name: d.name, point: transformPoint(d.point), dir: transformDir(d.dir), radius: d.radius })),
   };
-  return { id: node.id, node, built, datums, warnings, workerMesh };
+  return { id: node.id, node, datums, warnings, workerMesh };
 }
 
 /**
@@ -615,41 +608,6 @@ const DEFAULT_DERIVED: Record<ManifestInterface['type'], { layer: 'L0' | 'L1' | 
  * has to mean when the claim is about motion).
  */
 const IMPLEMENTED_CHECKS = new Set(['distance', 'diameter-match', 'coaxial', 'motion-clearance', 'spring-preload', 'spring-behaviour', 'snap-fit']);
-
-/**
- * Distance between two INFINITE axis lines (skew or parallel), mm. This is the
- * measured quantity of `coaxial`: for parallel axes it is the perpendicular
- * offset, for skewed axes the closest approach. The angle between the axes is
- * reported in the detail so a tilted bore cannot hide behind a small offset.
- */
-export function axisLineDistance(p1: Vec3, d1: Vec3, p2: Vec3, d2: Vec3): { distance: number; angleDeg: number } {
-  const len = (v: Vec3) => Math.hypot(...v) || 1;
-  const u1 = d1.map((x) => x / len(d1)) as Vec3;
-  const u2 = d2.map((x) => x / len(d2)) as Vec3;
-  const w = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]] as Vec3;
-  const a = u1[0] * u1[0] + u1[1] * u1[1] + u1[2] * u1[2];
-  const b = u1[0] * u2[0] + u1[1] * u2[1] + u1[2] * u2[2];
-  const c = u2[0] * u2[0] + u2[1] * u2[1] + u2[2] * u2[2];
-  const d = u1[0] * w[0] + u1[1] * w[1] + u1[2] * w[2];
-  const e = u2[0] * w[0] + u2[1] * w[1] + u2[2] * w[2];
-  const denom = a * c - b * b;
-  let distance: number;
-  if (Math.abs(denom) < 1e-9) {
-    // parallel: perpendicular component of w
-    const along = u1.map((x) => x * d) as Vec3;
-    const perp = [w[0] - along[0], w[1] - along[1], w[2] - along[2]] as Vec3;
-    distance = Math.hypot(...perp);
-  } else {
-    const sc = (b * e - c * d) / denom;
-    const tc = (a * e - b * d) / denom;
-    const p1c = u1.map((x) => x * sc) as Vec3;
-    const p2c = u2.map((x) => x * tc) as Vec3;
-    const diff = [w[0] + p1c[0] - p2c[0], w[1] + p1c[1] - p2c[1], w[2] + p1c[2] - p2c[2]] as Vec3;
-    distance = Math.hypot(...diff);
-  }
-  const angleDeg = Math.acos(Math.max(-1, Math.min(1, Math.abs(b) / (Math.sqrt(a) * Math.sqrt(c))))) * 180 / Math.PI;
-  return { distance, angleDeg };
-}
 
 /** First numeric param present, or null. */
 function numParam(iface: ManifestInterface, keys: string[]): number | null {
@@ -1084,281 +1042,6 @@ function snapFit(
       nextLook,
     },
   };
-}
-
-/**
- * PARITY ORACLE — the pre-migration TypeScript implementation. Do not wire new
- * callers to this: `runAssemblyCheck` below is what the tool and the HTTP path use,
- * and it evaluates the contracts in the worker. This stays because it is the only
- * independent statement of what those numbers and those detail strings were, and
- * `scripts/accept-check-assembly-parity.mjs` compares the two on real manifests.
- */
-export async function runAssemblyCheckInTs(
-  store: VersionStore,
-  manifestPath: string,
-  opts: { adjacencyThresholdMm?: number; runs?: RunEntry[] } = {},
-): Promise<AssemblyCheckReport> {
-  const manifest: AssemblyManifest = await loadAssemblyManifest(manifestPath);
-  const parts = new Map<string, PartWorld>();
-  const partWarnings: AssemblyCheckReport['partWarnings'] = [];
-
-  // Evidence expires with the version it cites (DESIGN §22): a cited run whose
-  // geometry predates the CURRENT version of any of its parts is not evidence.
-  const versionList = await listVersions(store);
-  const newestOfPart = newestVersionPerPart(versionList);
-  const staleCitations = (run: RunEntry): string[] => supersededVersionIds(versionList, run.sourceVersionIds);
-
-  for (const flat of flattenParts(manifest.root)) {
-    if (flat.node.source === 'stock' && !flat.node.version) {
-      partWarnings.push({ partId: flat.id, messages: ['stock part with no version — BOM-only, skipped from geometric checks'] });
-      continue;
-    }
-    const world = await loadPartWorld(store, flat.node, false);
-    parts.set(flat.id, world);
-    if (world.warnings.length > 0) partWarnings.push({ partId: flat.id, messages: world.warnings });
-  }
-
-  const owned: OwnedInterface[] = allInterfaces(manifest.root);
-  const results: InterfaceCheckResult[] = [];
-
-  for (const { ownerPath, iface } of owned) {
-    const owner = findNode(manifest.root, ownerPath[ownerPath.length - 1]!)!;
-    // A manifest may name an OPERATOR in `type` when `check` says the same thing
-    // (the validator tolerates that, because "coaxial" is what people write). The
-    // checker then has no fit kind to derive a layer/operator from — it used to
-    // crash on `derived.layer`. An interface we cannot evaluate is skipped WITH a
-    // reason, like every other unevaluable one.
-    const derived = DEFAULT_DERIVED[iface.type];
-    const layer = iface.layer ?? derived?.layer ?? 'L0';
-    const checkName = iface.check ?? derived?.check ?? null;
-
-    const base: InterfaceCheckResult = {
-      interfaceId: iface.id,
-      ownerPath,
-      a: iface.a, b: iface.b,
-      type: iface.type, severity: iface.severity,
-      layer, check: checkName ?? '(none)',
-      verdict: 'skipped',
-      expected: expectedOf(iface),
-      detail: '',
-    };
-
-    if (!checkName) {
-      results.push({
-        ...base,
-        detail: `interface type "${iface.type}" is not a fit kind, and no \`check\` operator names one — nothing to evaluate`,
-      });
-      continue;
-    }
-    if (layer !== 'L0' && !IMPLEMENTED_CHECKS.has(checkName)) {
-      results.push({ ...base, detail: `${layer} check "${checkName}" not implemented in v1 — pending` });
-      continue;
-    }
-
-    const ra = resolveEndpoint(parts, owner, iface.a);
-    if ('error' in ra) { results.push({ ...base, detail: ra.error }); continue; }
-    const rb = resolveEndpoint(parts, owner, iface.b);
-    if ('error' in rb) { results.push({ ...base, detail: rb.error }); continue; }
-
-    if (checkName === 'distance' || checkName === 'motion-clearance') {
-      const pa = pointOf(ra.feature);
-      const pb = pointOf(rb.feature);
-      const d = checkName === 'distance'
-        ? datumDistance(ra.feature, rb.feature)
-        : {
-            measured: +Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]).toFixed(4),
-            detail: 'point-to-point distance between declared datums',
-          };
-      const r = verdictFor(iface, d.measured, d.detail);
-      if (checkName === 'motion-clearance') {
-        // A motion claim has two halves, and this engine can only decide one of
-        // them: the relationship at the modelled pose (that is a distance, and
-        // it IS evaluated above), and whether the pair survives the travel. The
-        // second half is decided by `simulate_motion`; an interface that names
-        // the run which proved it gets the two halves tied together here
-        // instead of being reported as an unimplemented check forever.
-        const cited = citedRunId(iface);
-        if (!cited) {
-          r.detail += ' — motion half NOT evidenced: run simulate_motion over the travel and cite it with evidence.runId';
-        } else {
-          const run = opts.runs?.find((x) => x.id === cited);
-          if (!run) {
-            r.verdict = 'hard-violation';
-            r.detail += ` — cited run "${cited}" names no run in this project`;
-          } else if (run.kind !== 'motion') {
-            r.verdict = 'hard-violation';
-            r.detail += ` — run ${cited} is a ${run.kind} run, not a motion run`;
-          } else if (run.status !== 'pass') {
-            r.verdict = 'hard-violation';
-            r.detail += ` — cited motion run ${cited} did not pass (${run.summary})`;
-          } else if (staleCitations(run).length > 0) {
-            // §22 hard gate: the run is green, but over geometry that parts have
-            // since replaced. Re-run it, or the evidence does not exist.
-            const stale = staleCitations(run);
-            r.verdict = 'hard-violation';
-            r.detail += ` — cited motion run ${cited} is STALE: it verified ${stale.join(', ')}, ` +
-              'which a part has since replaced. Re-run the motion over the current versions and cite that run ' +
-              '(evidence expires with the version it cites).';
-          } else {
-            const coverage = await readMotionPairCoverage(store, cited);
-            const hit = coverage.known ? excludedPairFor(coverage, iface.a, iface.b) : null;
-            if (hit) {
-              r.verdict = 'hard-violation';
-              r.detail += ` — cited motion run ${cited} excluded the revolute pair ${hit[0]}↔${hit[1]} from its interference timeline; ` +
-                '"0 interference" does not cover it — rerun simulate_motion with scanJointPairs: true, or fix the geometry';
-            } else {
-              r.detail += ` — motion evidenced by ${cited} (${run.summary}${run.supersededBy ? `, SUPERSEDED by ${run.supersededBy}` : ''})`;
-            }
-          }
-        }
-      }
-      results.push({ ...r, ownerPath });
-    } else if (checkName === 'spring-behaviour') {
-      try {
-        const r = springBehaviour(iface, ra.feature, rb.feature);
-        results.push({ ...base, ...r, ownerPath } as InterfaceCheckResult);
-      } catch (err) {
-        results.push({ ...base, detail: err instanceof Error ? err.message : String(err) });
-      }
-    } else if (checkName === 'snap-fit') {
-      try {
-        const r = snapFit(iface, ra.feature, rb.feature);
-        results.push({ ...base, ...r, ownerPath } as InterfaceCheckResult);
-      } catch (err) {
-        results.push({ ...base, detail: err instanceof Error ? err.message : String(err) });
-      }
-    } else if (checkName === 'spring-preload') {
-      // A preload is a FORCE, and the engine has no contact model. What it does
-      // have is geometry: if the two endpoints are the spring's two ends and the
-      // manifest declares the free length and the rate, then the installed
-      // length measures the deflection and k·δ is the force — arithmetic on
-      // measured geometry rather than on a declared number.
-      const k = numParam(iface, ['stiffnessNPerMm', 'springRateNPerMm', 'k']);
-      const free = numParam(iface, ['freeLengthMm', 'freeLength']);
-      if (k === null || free === null) {
-        results.push({
-          ...base,
-          detail: 'spring-preload needs params.freeLengthMm and params.stiffnessNPerMm, with a and b being the ' +
-            'spring\'s own two ends — without them there is nothing to measure a deflection against',
-        });
-        continue;
-      }
-      const pa = pointOf(ra.feature);
-      const pb = pointOf(rb.feature);
-      const installed = +Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]).toFixed(4);
-      const deflection = +(free - installed).toFixed(4);
-      const force = +(k * deflection).toFixed(4);
-      const r = verdictFor(iface, force,
-        `installed ${installed}mm vs free ${free}mm → δ${deflection}mm × ${k}N/mm = ${force}N` +
-        (deflection < 0 ? ' (STRETCHED past free length — negative deflection)' : ''));
-      results.push({ ...r, ownerPath });
-    } else if (checkName === 'coaxial') {
-      // Two axis lines, not two points. This is the operator microscope3's
-      // interfaces 14/15 were waiting for: a two-point distance passes even
-      // when one bore is tilted, because the chosen points happen to line up.
-      const dirA = (ra.feature as { dir?: Vec3 }).dir;
-      const dirB = (rb.feature as { dir?: Vec3 }).dir;
-      if (!dirA || !dirB) {
-        results.push({
-          ...base,
-          detail: 'coaxial requires axis or cylinder datums (datum_axis / datum_cyl) on both endpoints — a point datum has no direction to be coaxial WITH',
-        });
-        continue;
-      }
-      const { distance, angleDeg } = axisLineDistance(pointOf(ra.feature), dirA, pointOf(rb.feature), dirB);
-      const measured = +distance.toFixed(4);
-      const r = verdictFor(iface, measured,
-        `axis offset ${measured}mm, axes ${angleDeg.toFixed(3)}° apart (line-to-line, infinite extents)`);
-      if (angleDeg > 1.0 && measured <= (iface.tolerance?.max ?? Infinity)) {
-        // A tilted bore can pass the offset test while the parts will not
-        // assemble; the tolerance speaks about the offset, so tilt gets its
-        // own hard note rather than silently riding inside a pass.
-        r.detail += ' — axes NOT parallel: offset pass does not mean the bores line up';
-        if (iface.severity === 'hard') r.verdict = 'hard-violation';
-      }
-      results.push({ ...r, ownerPath });
-    } else if (checkName === 'diameter-match') {
-      const cylA = (ra.feature as { radius?: number });
-      const cylB = (rb.feature as { radius?: number });
-      if (typeof cylA.radius !== 'number' || typeof cylB.radius !== 'number') {
-        results.push({ ...base, detail: 'diameter-match requires cylinder datums (datum_cyl) on both endpoints' });
-        continue;
-      }
-      // a = hole (larger), b = shaft: diametral clearance
-      const measured = +(2 * (cylA.radius - cylB.radius)).toFixed(4);
-      const r = verdictFor(iface, measured, `diametral clearance Ø${measured} (hole Ø${2 * cylA.radius} vs shaft Ø${2 * cylB.radius})`);
-      if (measured < 0 && iface.severity !== 'hard') {
-        r.verdict = 'hard-violation';
-        r.detail += ' — negative clearance means interference, escalated to hard';
-      }
-      results.push({ ...r, ownerPath });
-    } else {
-      results.push({ ...base, detail: `L0 check "${checkName}" is unknown — skipped` });
-    }
-  }
-
-  // ---- adjacency discovery: near/interfering pairs with no declared interface ----
-  const undeclared: UndeclaredPair[] = [];
-  const geometric = [...parts.values()].filter((p) => p.built !== null);
-  if (geometric.length >= 2) {
-    const threshold = opts.adjacencyThresholdMm ?? 0.75;
-    for (let i = 0; i < geometric.length; i++) {
-      for (let j = i + 1; j < geometric.length; j++) {
-        const A = geometric[i]!;
-        const B = geometric[j]!;
-        const inter = A.built!.solid.intersect(B.built!.solid);
-        const interVol = inter.isEmpty() ? 0 : Math.max(0, inter.volume());
-        let minDistance = 0;
-        if (interVol <= 1e-6) {
-          minDistance = await pairMinDistance(A.built!, B.built!);
-        }
-        const near = interVol > 1e-6 || minDistance < threshold;
-        if (!near) continue;
-        const declared = owned.some(({ iface }) => {
-          const idA = iface.a.split('.')[0]!;
-          const idB = iface.b.split('.')[0]!;
-          return (idA === A.id && idB === B.id) || (idA === B.id && idB === A.id);
-        });
-        if (!declared) {
-          undeclared.push({
-            partA: A.id, partB: B.id,
-            minDistance: +minDistance.toFixed(4),
-            intersectionVolume: +interVol.toFixed(4),
-          });
-        }
-      }
-    }
-  }
-
-  const pass = results.filter((r) => r.verdict === 'pass').length;
-  const hard = results.filter((r) => r.verdict === 'hard-violation').length;
-  const intents = results.filter((r) => r.verdict === 'intent-flag').length;
-  const skipped = results.filter((r) => r.verdict === 'skipped').length;
-
-  const report: AssemblyCheckReport = {
-    checkedAt: new Date().toISOString(),
-    manifestPath,
-    manifestName: manifest.name,
-    manifestHash: manifest.manifestHash,
-    contractRevision: manifest.contractRevision,
-    contractHash: manifest.contractHash,
-    contractStatus: manifest.contractStatus,
-    results,
-    undeclared,
-    partWarnings,
-    adjacencyThresholdMm: opts.adjacencyThresholdMm ?? 0.75,
-    summary: {
-      interfaces: results.length, pass, hardViolations: hard, intentFlags: intents,
-      skipped, undeclared: undeclared.length,
-    },
-    // Skipped is not a pass either (missing tolerance / unimplemented operator), and
-    // neither is a manifest that declares NO interface: an empty contract has not been
-    // satisfied, it has not been written (2026-10-23 audit, FIX-B4).
-    overallStatus: hard > 0 ? 'fail'
-      : (results.length === 0 || intents + undeclared.length + skipped > 0) ? 'check'
-        : 'pass',
-  };
-  return report;
 }
 
 /**

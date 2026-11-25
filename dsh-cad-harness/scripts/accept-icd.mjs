@@ -7,7 +7,7 @@
 //      this check audit?" is unanswerable and a re-check silently replaces the
 //      old verdict.
 //
-// Pure TypeScript path (no python worker): runAssemblyCheckInTs + the pointer
+// Python path: runAssemblyCheck + the pointer
 // writer. The worker path attaches the same `expected` from the same helper; that
 // one line is covered by accept-assembly (which needs the runtime).
 //
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { openVersionStore, saveVersion } = await import('../src/host/version.ts');
 const { saveAssemblyManifest, loadAssemblyManifest } = await import('../src/host/manifest.ts');
-const { runAssemblyCheckInTs, saveAssemblyCheckPointer } = await import('../src/host/assembly-check.ts');
+const { runAssemblyCheck, saveAssemblyCheckPointer } = await import('../src/host/assembly-check.ts');
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
@@ -78,7 +78,7 @@ try {
   await mkdir(dirname(path), { recursive: true });
   await saveAssemblyManifest(path, manifest());
 
-  const report = await runAssemblyCheckInTs(store, path);
+  const report = await runAssemblyCheck(store, path);
 
   check(/^[0-9a-f]{8}$/.test(report.manifestHash ?? ''), 'the report carries the manifest hash', String(report.manifestHash));
   const i1 = report.results.find((r) => r.interfaceId === 'I1');
