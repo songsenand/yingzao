@@ -21,6 +21,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMotion } from '../src/host/motion.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
+import { pythonRuntimeRoot } from '../src/host/python-runtime.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -29,10 +30,13 @@ const argOf = (flag, fallback) => {
   const i = args.indexOf(flag);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
-process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, '.tmp-measure-runtime')));
+const localRuntime = join(REPO, '.tmp-measure-runtime');
+const explicitRuntime = argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim());
+if (explicitRuntime) process.env.DSH_CAD_PYTHON_ROOT = resolve(explicitRuntime);
+else if (existsSync(join(localRuntime, 'venv'))) process.env.DSH_CAD_PYTHON_ROOT = localRuntime;
 const venvPython = process.platform === 'win32'
-  ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')
-  : join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'bin', 'python');
+  ? join(pythonRuntimeRoot(), 'venv', 'Scripts', 'python.exe')
+  : join(pythonRuntimeRoot(), 'venv', 'bin', 'python');
 const havePython = existsSync(venvPython);
 
 let failures = 0;

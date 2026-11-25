@@ -11,6 +11,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAssemblyCheck } from '../src/host/assembly-check.ts';
+import { pythonRuntimeRoot } from '../src/host/python-runtime.ts';
 import { listVersions, openVersionStore } from '../src/host/version.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -20,10 +21,13 @@ const argOf = (flag, fallback) => {
   const index = process.argv.indexOf(flag);
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
 };
-process.env.DSH_CAD_PYTHON_ROOT = resolve(argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim() || join(REPO, '.tmp-measure-runtime')));
+const localRuntime = join(REPO, '.tmp-measure-runtime');
+const explicitRuntime = argOf('--runtime', process.env.DSH_CAD_PYTHON_ROOT?.trim());
+if (explicitRuntime) process.env.DSH_CAD_PYTHON_ROOT = resolve(explicitRuntime);
+else if (existsSync(join(localRuntime, 'venv'))) process.env.DSH_CAD_PYTHON_ROOT = localRuntime;
 const venvPython = process.platform === 'win32'
-  ? join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'Scripts', 'python.exe')
-  : join(process.env.DSH_CAD_PYTHON_ROOT, 'venv', 'bin', 'python');
+  ? join(pythonRuntimeRoot(), 'venv', 'Scripts', 'python.exe')
+  : join(pythonRuntimeRoot(), 'venv', 'bin', 'python');
 if (!existsSync(venvPython)) {
   console.error(`no venv python at ${venvPython} — provision the runtime first (or pass --runtime <dir>)`);
   process.exit(2);
