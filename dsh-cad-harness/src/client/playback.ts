@@ -19,7 +19,8 @@ import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { withProject } from './project';
 import { placementEuler } from './placement';
 import type { ShotFrame } from './shot-caption';
-import { T } from './tokens';
+import { ANN_PALETTE, PART_PALETTE, SCENE, T } from './tokens.ts';
+import { resolveCssColor } from './theme.ts';
 import { downloadAnimation, exportAnimation } from './anim-export';
 import { runFacts, type RunEvent, type RunFact, type RunFacts, type RunKeyframe, type RunTone } from './run-facts';
 import { buildRunChart, RunChart } from './run-chart';
@@ -50,7 +51,7 @@ interface SceneHandle {
  */
 function useGround(sceneRef: React.MutableRefObject<SceneHandle | null>, background?: string): void {
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.scene.background = new THREE.Color(background ?? '#f2f3f5');
+    if (sceneRef.current) sceneRef.current.scene.background = new THREE.Color(background ?? SCENE.groundPaper);
   }, [background]);
 }
 
@@ -70,7 +71,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
   mount.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(background ?? '#f2f3f5');
+  scene.background = new THREE.Color(background ?? SCENE.groundPaper);
   const aspect = mount.clientWidth / (mount.clientHeight || 420);
   const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100_000);
   // Same studio rig as the model viewport: a replay is looked at from every
@@ -198,9 +199,13 @@ function downloadCanvasPng(canvas: HTMLCanvasElement, base: string): void {
   }, 'image/png');
 }
 
-const btn = (active = false, color = '#4a7dbd'): React.CSSProperties => ({
+const btn = (active = false, color = T.active): React.CSSProperties => ({
   cursor: 'pointer', borderRadius: 6, padding: '2px 10px', fontSize: 12,
-  border: active ? `2px solid ${color}` : '1px solid #bbb', background: active ? '#e8f0fa' : '#fff',
+  // `color` is explicit: the host's dark mode inherits a light body colour, and a
+  // plate without an ink made every transport button unreadable.
+  color: T.ink,
+  border: active ? `2px solid ${color}` : `1px solid ${T.line}`,
+  background: active ? T.activeSoft : T.plate,
 });
 
 const PlaybackFrame: React.FC<{
@@ -255,7 +260,7 @@ interface TrajectoryJson {
 /** One committed annotation box, in the viewport's CSS-pixel frame. */
 interface AnnBox { x0: number; y0: number; x1: number; y1: number; color: string }
 
-const ANN_COLORS = [T.danger, T.warn, T.ok, T.accent];
+const ANN_COLORS = [...ANN_PALETTE];
 
 /**
  * Bake the boxes into a COPY of the canvas, in device pixels.
@@ -276,7 +281,7 @@ const bakeBoxes = (src: HTMLCanvasElement, boxes: AnnBox[], rect: { width: numbe
   const sy = out.height / Math.max(1, rect.height);
   g.lineWidth = Math.max(2, out.width / 300);
   for (const b of boxes) {
-    g.strokeStyle = b.color;
+    g.strokeStyle = resolveCssColor(b.color);
     g.strokeRect(
       Math.min(b.x0, b.x1) * sx, Math.min(b.y0, b.y1) * sy,
       Math.abs(b.x1 - b.x0) * sx, Math.abs(b.y1 - b.y0) * sy,
@@ -336,7 +341,7 @@ const annotateLayer = (opts: {
   }) : null,
 );
 
-const PART_COLORS = ['#4a7dbd', '#c0392b', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+const PART_COLORS = [...PART_PALETTE];
 
 /**
  * Colour for a part: the manifest's `color` when it declared one, else the
@@ -345,7 +350,7 @@ const PART_COLORS = ['#4a7dbd', '#c0392b', '#2ecc71', '#f39c12', '#9b59b6', '#1a
  * a manifest colour there would read as "this part is highlighted".
  */
 function partColor(name: string, index: number, fixed: boolean, declared?: Record<string, string>): string {
-  if (fixed) return '#9aa5b1';
+  if (fixed) return SCENE.fixed;
   return declared?.[name] ?? PART_COLORS[index % PART_COLORS.length]!;
 }
 
@@ -888,7 +893,7 @@ export function MotionPlaybackView(props: {
   }, [traj]);
 
   if (!traj) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err ?? tr('playback.trajectoryLoad'));
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 13 } }, err ?? tr('playback.trajectoryLoad'));
   }
 
   const t = traj.trajectory.times[Math.min(frameIdx, nFrames - 1)] ?? 0;
@@ -947,8 +952,8 @@ export function MotionPlaybackView(props: {
           position: 'absolute', top: 6, left: 6, zIndex: 7,
           display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap',
           maxWidth: 'calc(100% - 70px)', padding: '3px 5px',
-          borderRadius: 7, background: 'rgba(255,255,255,0.88)',
-          border: `1px solid ${T.border}`, boxShadow: '0 1px 4px rgba(20,30,40,0.14)',
+          borderRadius: 7, background: T.chip,
+          border: `1px solid ${T.border}`, boxShadow: T.shadowSm,
           fontSize: 10, color: T.soft,
         },
       },
@@ -958,7 +963,7 @@ export function MotionPlaybackView(props: {
       }, tr('playback.section')),
       React.createElement('button', {
         type: 'button', title: tr('playback.measureTitle'), onClick: () => setMeasureOn((v) => !v),
-        style: { ...btn(measureOn, '#ff3040'), fontSize: 10, padding: '1px 7px' },
+        style: { ...btn(measureOn, T.measure), fontSize: 10, padding: '1px 7px' },
       }, tr('playback.measure')),
       // Screen-space box: works here because it does not need the picking stack
       // (the main viewer's 标注 was the only place this existed).
@@ -1287,7 +1292,7 @@ export function FluidPlaybackView(props: {
         if (res.ok) {
           const geo = new STLLoader().parse(await res.arrayBuffer());
           const wall = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-            color: '#7a8aa0', metalness: 0, roughness: 0.9,
+            color: SCENE.fluidWall, metalness: 0, roughness: 0.9,
             transparent: true, opacity: 0.16, depthWrite: false,
           }));
           handle.scene.add(wall);
@@ -1389,10 +1394,10 @@ export function FluidPlaybackView(props: {
   }, [playing, speed, manifest]);
 
   if (err) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, err);
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 13 } }, err);
   }
   if (!manifest) {
-    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 } }, tr('playback.fluidLoad'));
+    return React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 13 } }, tr('playback.fluidLoad'));
   }
 
   const entry = manifest.frames[Math.min(frameIdx, manifest.frames.length - 1)]!;
@@ -1418,23 +1423,23 @@ export function FluidPlaybackView(props: {
       : null),
     onReset: () => sceneRef.current?.refit(),
     controls: [
-      React.createElement('button', { key: 'play', onClick: () => setPlaying((p) => !p), style: btn(playing, '#2c81ba') },
+      React.createElement('button', { key: 'play', onClick: () => setPlaying((p) => !p), style: btn(playing, T.info) },
         playing ? tr('playback.fluidPlaying') : tr('playback.fluidPaused')),
       React.createElement('input', {
         key: 'seek', type: 'range', min: 0, max: Math.max(0, manifest.frames.length - 1), value: Math.min(frameIdx, manifest.frames.length - 1),
         onChange: (e: any) => { setPlaying(false); setFrameIdx(Number(e.target.value)); },
         style: { flex: 1, minWidth: 120 },
       }),
-      React.createElement('span', { key: 'time', style: { fontSize: 11, color: '#555', minWidth: 110, textAlign: 'right' } },
+      React.createElement('span', { key: 'time', style: { fontSize: 11, color: T.soft, minWidth: 110, textAlign: 'right' } },
         tr('playback.fluidFrame', { time: entry.timeSec, particles: entry.particles })),
       React.createElement('select', {
         key: 'speed', value: speed, onChange: (e: any) => setSpeed(Number(e.target.value)),
         style: { fontSize: 11, padding: '2px 4px' },
       }, [0.25, 0.5, 1, 2].map((s) => React.createElement('option', { key: s, value: s }, `${s}×`))),
-      loading && React.createElement('span', { key: 'ld', style: { fontSize: 11, color: '#b8860b' } }, tr('playback.loadingFrame')),
-      React.createElement('span', { key: 'legend', style: { fontSize: 11, color: '#666' } },
-        `${tr('playback.speed')} `, React.createElement('span', { style: { color: '#3457d5', fontWeight: 700 } }, '■'),
-        '→', React.createElement('span', { style: { color: '#e5261a', fontWeight: 700 } }, '■'),
+      loading && React.createElement('span', { key: 'ld', style: { fontSize: 11, color: T.warn } }, tr('playback.loadingFrame')),
+      React.createElement('span', { key: 'legend', style: { fontSize: 11, color: T.soft } },
+        `${tr('playback.speed')} `, React.createElement('span', { style: { color: SCENE.speedLow, fontWeight: 700 } }, '■'),
+        '→', React.createElement('span', { style: { color: SCENE.speedHigh, fontWeight: 700 } }, '■'),
         ` 0…${manifest.vmaxMmPerSec.toFixed(0)}mm/s`),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
@@ -1540,9 +1545,9 @@ export function StaticPartsView(props: {
       : null),
     onReset: () => sceneRef.current?.refit(),
     controls: [
-      React.createElement('span', { key: 'label', style: { fontSize: 11, color: '#555' } },
+      React.createElement('span', { key: 'label', style: { fontSize: 11, color: T.soft } },
         tr('playback.staticAssembly', { count: props.parts.length })),
-      err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: '#c0392b' } }, err),
+      err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: T.danger } }, err),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {
             key: 'shot',

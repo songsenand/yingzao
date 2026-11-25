@@ -18,7 +18,8 @@ import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overla
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
-import { T } from './tokens';
+import { ANN_PALETTE, SCENE as SCENE_COLOR, T } from './tokens.ts';
+import { resolveCssColor } from './theme.ts';
 import { runFacts, type RunFact, type RunTone } from './run-facts';
 import { buildRunChart, RunChart } from './run-chart';
 import { attentionQuery, buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
@@ -43,7 +44,7 @@ import { parseMachine, type Machine } from './assembly';
 // two drift.
 import { RUN_KIND_LABEL } from '../shared/labels';
 
-const ANN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+const ANN_COLORS = [...ANN_PALETTE];
 
 /** The name a run is shown under: derived from its parts when the stored title is legacy. */
 const runTitle = (r: RunProduct): string =>
@@ -61,7 +62,7 @@ const statusGlyph = (status: string): React.ReactNode => {
  * the word (不排除可行) is the claim, and a ✅ would silently drop its two negations.
  */
 const judgementGlyph = (j: RunJudgement | null): React.ReactNode => {
-  const color = j === 'excluded' ? T.danger : j === 'difficult' ? T.warn : j === 'not-excluded' ? '#2f7d5d' : T.muted;
+  const color = j === 'excluded' ? T.danger : j === 'difficult' ? T.warn : j === 'not-excluded' ? T.okInk : T.muted;
   const glyph = j === 'excluded' ? '✕' : j === 'difficult' ? '!' : j === 'not-excluded' ? '◦' : '·';
   return React.createElement('span', { style: { color, fontWeight: 700 } }, glyph);
 };
@@ -74,8 +75,8 @@ const VERDICT_WORD: Record<string, string> = {
 };
 const verdictWord = (v: string): string => t((VERDICT_WORD[v] ?? 'ui.verdict.unjudged') as any);
 const verdictColor = (v: string | null): string =>
-  v === 'not-excluded' ? '#2f7d5d' : v === 'excluded' ? T.danger : v === 'difficult' ? '#9c6f0a'
-    : v === 'pass' ? '#1e8449' : v === 'fail' ? T.danger : v === 'check' ? '#9c6f0a' : T.muted;
+  v === 'not-excluded' ? T.okInk : v === 'excluded' ? T.danger : v === 'difficult' ? T.warnInk
+    : v === 'pass' ? T.okInk : v === 'fail' ? T.danger : v === 'check' ? T.warnInk : T.muted;
 
 /**
  * One row of the 未登记 list. The host's scan (shared with delivery_audit) says
@@ -143,7 +144,7 @@ const SNAP_PX = 9;
 /** The cut plane's own outline, so the section reads as a plane and not a hole. */
 const SECTION_COLOR = 0xf0a020;
 /**
- * The cut FACE. Between the body (#7aa7d9) and the interior tint (#41608a) so the
+ * The cut FACE. Between the body blue and the interior tint so the
  * cut reads as cut material rather than as a hole into the part.
  */
 const CAP_COLOR = 0x6d90b8;
@@ -441,13 +442,16 @@ const fmtBytes = (n: number): string =>
 
 /** Compact input used by the 未登记 import form (the dialog owns its own styles). */
 const fieldStyle: React.CSSProperties = {
-  fontSize: 11, padding: '2px 4px', border: '1px solid #d5d9dd', borderRadius: 4,
-  minWidth: 0, boxSizing: 'border-box', background: T.white,
+  fontSize: 11, padding: '2px 4px', border: `1px solid ${T.line}`, borderRadius: 4,
+  minWidth: 0, boxSizing: 'border-box', background: T.plate,
 };
 
 const S: Record<string, React.CSSProperties> = {
   panel: {
     padding: 12, display: 'flex', flexDirection: 'column', gap: 5,
+    // Explicit, not inherited: in the host's dark mode the body ink is light and
+    // the panel used to leave every uncoloured label to inherit it.
+    color: T.ink,
     height: '100%', minHeight: 0, boxSizing: 'border-box', overflow: 'hidden',
     position: 'relative',
   },
@@ -456,13 +460,13 @@ const S: Record<string, React.CSSProperties> = {
   error: {
     position: 'absolute', top: 4, left: 8, right: 8, zIndex: 30,
     padding: '4px 8px', borderRadius: 6, fontSize: 12,
-    background: '#fdecea', border: '1px solid #e6b0aa', color: '#a93226',
+    background: T.dangerSoft, border: `1px solid ${T.dangerLine}`, color: T.dangerText,
   },
   // Same slot as `error` but amber: a standing condition, not a failure.
   notice: {
     position: 'absolute', top: 4, left: 8, right: 8, zIndex: 30,
     padding: '4px 8px', borderRadius: 6, fontSize: 11, lineHeight: 1.35,
-    background: '#fdf3e3', border: '1px solid #e0c08a', color: '#8a5a12',
+    background: T.warnSoft, border: `1px solid ${T.warnLine}`, color: T.warnInk,
   },
   bar: { display: 'flex', alignItems: 'center', gap: 5, flex: 'none', flexWrap: 'wrap' },
   // Every region except the viewport keeps a fixed footprint. The viewport is
@@ -488,12 +492,12 @@ const S: Record<string, React.CSSProperties> = {
     // Basis = the FLATTEST allowed ratio (16:9): the real height then comes from
     // what the section body leaves, and the basis can never force a shrink.
     position: 'relative', width: '100%', aspectRatio: '16 / 9', flex: '1 1 auto', minHeight: 120,
-    background: '#f0f0f0', border: '1px solid #e3e7ea', borderRadius: 10, overflow: 'hidden',
+    background: T.stage, border: `1px solid ${T.edge}`, borderRadius: 10, overflow: 'hidden',
   },
   row: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none', minWidth: 0 },
   select: {
     flex: '1 1 120px', minWidth: 0, height: 26, fontSize: 12, padding: '0 6px',
-    border: '1px solid #d5d9dd', borderRadius: 6, background: T.white, color: T.ink,
+    border: `1px solid ${T.line}`, borderRadius: 6, background: T.plate, color: T.ink,
   },
   caption: {
     fontSize: 11, lineHeight: 1.45, color: T.soft, flex: 'none',
@@ -537,8 +541,8 @@ const S: Record<string, React.CSSProperties> = {
   sheet: {
     position: 'absolute', left: 8, right: 8, zIndex: 25,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-    background: T.white, border: '1px solid #d7dbe0', borderRadius: 10,
-    boxShadow: '0 10px 30px rgba(20,30,40,0.20)', padding: 10,
+    background: T.plate, border: `1px solid ${T.edge}`, borderRadius: 10,
+    boxShadow: T.shadowMd, padding: 10,
   },
   sheetHead: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none', marginBottom: 6 },
   sheetBody: { minHeight: 0, overflow: 'auto', scrollbarGutter: 'stable' },
@@ -546,7 +550,7 @@ const S: Record<string, React.CSSProperties> = {
   status: {
     flex: 'none', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
     minHeight: 22, padding: '3px 8px', marginTop: 2, borderRadius: 6,
-    borderTop: '1px solid #eef1f3', background: '#fafbfc',
+    borderTop: `1px solid ${T.border}`, background: T.sunk,
     fontSize: 11, lineHeight: '16px', color: T.soft,
   },
   statusText: {
@@ -556,35 +560,35 @@ const S: Record<string, React.CSSProperties> = {
   hint: { fontSize: 11, color: T.muted, lineHeight: 1.5 },
   smallBtn: {
     cursor: 'pointer', borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
-    border: '1px solid #d5d9dd', background: T.white, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
+    border: `1px solid ${T.line}`, background: T.plate, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
   },
 };
 
 /** Section tab in the strip. Same border width in both states (see iconBtnStyle). */
 const tabBtnStyle = (active: boolean): React.CSSProperties => ({
   cursor: 'pointer', borderRadius: 6, padding: '2px 7px', fontSize: 11.5, lineHeight: '18px',
-  border: `1px solid ${active ? '#4a7dbd' : T.edge}`,
-  background: active ? '#eaf2fb' : '#f7f9fb',
-  color: active ? '#1f4e79' : T.soft,
+  border: `1px solid ${active ? T.active : T.edge}`,
+  background: active ? T.accentSoft : T.ground,
+  color: active ? T.accentInk : T.soft,
   whiteSpace: 'nowrap', flex: 'none',
 });
 
 /** A viewport-corner tool chip: translucent, shadowed, and still clickable while
  *  the picking overlay covers the stage (hence `pointerEvents` back on). */
-const viewToolStyle = (active: boolean, color = '#4a7dbd'): React.CSSProperties => ({
+const viewToolStyle = (active: boolean, color = T.active): React.CSSProperties => ({
   ...iconBtnStyle(active, color),
   width: 66, textAlign: 'center', pointerEvents: 'auto', padding: '2px 5px',
-  background: active ? '#fdecea' : 'rgba(255,255,255,0.86)',
-  boxShadow: '0 1px 3px rgba(20,30,40,0.14)',
+  background: active ? T.dangerSoft : T.chip,
+  boxShadow: T.shadowSm,
 });
 
-const iconBtnStyle = (active: boolean, color = '#4a7dbd'): React.CSSProperties => ({
+const iconBtnStyle = (active: boolean, color = T.active): React.CSSProperties => ({
   cursor: 'pointer', borderRadius: 6, padding: '3px 6px', fontSize: 12, lineHeight: '18px',
   // Border WIDTH is constant on purpose: 1px ↔ 1.5px would resize the button by a
   // pixel every time a mode toggled, and the toolbar row's geometry must not
   // depend on state (same reason the labels no longer swap to ✕…).
   border: `1.5px solid ${active ? color : T.line}`,
-  background: active ? '#fdecea' : T.white, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
+  background: active ? T.dangerSoft : T.plate, color: T.ink, flex: 'none', whiteSpace: 'nowrap',
 });
 
 export function CadPanel(): React.ReactElement {
@@ -1256,7 +1260,7 @@ export function CadPanel(): React.ReactElement {
         // fillet or a bore is itself a shape cue, and it sharpens as roughness
         // drops. Metalness stays low because there is no environment map to
         // reflect — raising it without one only darkens the part.
-        const material = new THREE.MeshStandardMaterial({ color: '#7aa7d9', metalness: 0.08, roughness: 0.5 });
+        const material = new THREE.MeshStandardMaterial({ color: SCENE_COLOR.part, metalness: 0.08, roughness: 0.5 });
         const mesh = new THREE.Mesh(geometry, material);
         meshRef.current = mesh;
         // Raycasting honours `material.side`, and the display material is
@@ -1271,7 +1275,7 @@ export function CadPanel(): React.ReactElement {
         // back-face-only twin paints the exposed inside in a darker tone, so the
         // opening reads as a cut face. Depth testing keeps it behind the front
         // faces (back faces of the near side are culled), so no draw order games.
-        const innerMat = new THREE.MeshBasicMaterial({ color: '#41608a', side: THREE.BackSide });
+        const innerMat = new THREE.MeshBasicMaterial({ color: SCENE_COLOR.interior, side: THREE.BackSide });
         const innerMesh = new THREE.Mesh(geometry, innerMat);
         innerMesh.visible = false;
         innerMesh.renderOrder = 1;
@@ -1336,12 +1340,12 @@ export function CadPanel(): React.ReactElement {
               // translucent colour (blue / orange) and the overlap reads as the
               // third colour — "these two coincide". Additive was tried and
               // washed the whole body to white, hiding exactly what "same" means.
-              insetScene.background = new THREE.Color('#f2f4f7');
+              insetScene.background = new THREE.Color(SCENE_COLOR.insetGround);
               const glass = (geo: THREE.BufferGeometry, color: string) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
                 color, transparent: true, opacity: 0.46, depthWrite: false,
               }));
-              const here = glass(geometry, '#2563eb');   // blue = the version on screen
-              const there = glass(other, '#f97316');     // orange = the counterpart
+              const here = glass(geometry, SCENE_COLOR.compareHere);   // blue = the version on screen
+              const there = glass(other, SCENE_COLOR.compareThere);     // orange = the counterpart
               here.renderOrder = 1;
               there.renderOrder = 2;
               insetScene.add(here);
@@ -1893,7 +1897,9 @@ export function CadPanel(): React.ReactElement {
     const sy = out.height / mount.clientHeight;
     g.lineWidth = 4;
     for (const r of annotations) {
-      g.strokeStyle = r.color;
+      // `r.color` is a token (`T.danger` …): a canvas cannot resolve a custom
+      // property, so it is resolved once, here, for the exported image.
+      g.strokeStyle = resolveCssColor(r.color);
       g.strokeRect(Math.min(r.x0, r.x1) * sx, Math.min(r.y0, r.y1) * sy,
         Math.abs(r.x1 - r.x0) * sx, Math.abs(r.y1 - r.y0) * sy);
     }
@@ -1910,6 +1916,7 @@ export function CadPanel(): React.ReactElement {
       const pb = projectToScreen(seg.b);
       if (!pa || !pb) continue;
       const ax = pa[0] * sx, ay = pa[1] * sy, bx = pb[0] * sx, by = pb[1] * sy;
+      seg.color = resolveCssColor(seg.color);
       g.strokeStyle = seg.color;
       g.lineWidth = 3;
       g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
@@ -1922,7 +1929,7 @@ export function CadPanel(): React.ReactElement {
       const mx = (ax + bx) / 2, my = (ay + by) / 2;
       g.fillStyle = seg.color;
       g.fillRect(mx - tw / 2 - 6, my - 14, tw + 12, 24);
-      g.fillStyle = '#ffffff';
+      g.fillStyle = SCENE_COLOR.labelInk;
       g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(seg.label, mx, my - 2);
     }
@@ -2182,8 +2189,8 @@ export function CadPanel(): React.ReactElement {
       const bounds = overlay.getBoundingClientRect();
       const el = document.createElement('div');
       el.style.position = 'absolute';
-      el.style.border = '2px solid #e74c3c';
-      el.style.background = 'rgba(231,76,60,0.12)';
+      el.style.border = `2px solid ${ANN_PALETTE[0]}`;
+      el.style.background = SCENE_COLOR.annFill;
       el.style.pointerEvents = 'none';
       overlay.appendChild(el);
       rectRef.current = { x0: e.clientX - bounds.left, y0: e.clientY - bounds.top, x1: e.clientX - bounds.left, y1: e.clientY - bounds.top, el };
@@ -2302,7 +2309,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('div', { style: { fontSize: 11, lineHeight: 1.5, color: T.ink, ...style } }, text);
     return React.createElement(
       'div',
-      { 'data-contract-card': '1', style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', textAlign: 'left', background: '#fff' } },
+      { 'data-contract-card': '1', style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', textAlign: 'left', background: T.plate } },
       // ── fixed header: who + verdict ────────────────────────────────────────
       React.createElement('div', { style: { padding: '10px 12px 6px', borderBottom: `1px solid ${T.edge}` } },
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
@@ -2369,7 +2376,7 @@ export function CadPanel(): React.ReactElement {
     const rep = runReport;
     if (!rep) return React.createElement('div', { style: S.hint }, t('ui.contract.readingReport'));
     const line = (text: string, color?: string) =>
-      React.createElement('div', { style: { fontSize: 12, padding: '1px 0', color: color ?? '#374151' } }, text);
+      React.createElement('div', { style: { fontSize: 12, padding: '1px 0', color: color ?? T.ink } }, text);
     const toneInk = (tone?: RunTone): string =>
       tone === 'ok' ? T.ok : tone === 'bad' ? T.danger : tone === 'warn' ? T.warn : T.muted;
     // The same facts the playback strip shows, with the one-sentence reading;
@@ -2449,8 +2456,8 @@ export function CadPanel(): React.ReactElement {
       const req = reqText;
       const cell = (text: React.ReactNode, opts: { strong?: boolean; color?: string } = {}) =>
         React.createElement('td', {
-          style: { padding: '3px 6px', borderBottom: '1px solid #e5e7eb', fontSize: 11,
-                   fontWeight: opts.strong ? 600 : 400, color: opts.color ?? '#374151' },
+          style: { padding: '3px 6px', borderBottom: `1px solid ${T.edge}`, fontSize: 11,
+                   fontWeight: opts.strong ? 600 : 400, color: opts.color ?? T.ink },
         }, text);
       if (rows.length === 0) {
         // Old manifests declared no interfaces at all. An empty table read as
@@ -2475,7 +2482,7 @@ export function CadPanel(): React.ReactElement {
           React.createElement('thead', null, React.createElement('tr', {},
             [t('ui.contract.col.interface'), t('ui.contract.col.pairs'), t('ui.contract.col.required'), t('ui.contract.col.measured'), t('ui.contract.col.verdict')].map((h) =>
               React.createElement('th', { key: h, style: { padding: '3px 6px', fontSize: 11, textAlign: 'left',
-                borderBottom: '2px solid #d1d5db', color: '#6b7280' } }, h)))),
+                borderBottom: `2px solid ${T.line}`, color: T.muted } }, h)))),
           React.createElement('tbody', null, rows.map((row, i) =>
             React.createElement('tr', { key: i },
               cell(row.interfaceId ?? '—', { strong: true }),
@@ -2498,7 +2505,7 @@ export function CadPanel(): React.ReactElement {
     if (r.kind === 'assembly') {
       return React.createElement('div', null,
         ...((rep.parts ?? []) as { name: string; watertight: boolean; volume: number }[]).map((p, i) =>
-          line(t(p.watertight ? 'ui.report.watertight' : 'ui.report.nonWatertight', { name: p.name, volume: p.volume?.toFixed?.(0) ?? '—' }), p.watertight ? '#374151' : T.danger)),
+          line(t(p.watertight ? 'ui.report.watertight' : 'ui.report.nonWatertight', { name: p.name, volume: p.volume?.toFixed?.(0) ?? '—' }), p.watertight ? T.ink : T.danger)),
         ...((rep.pairs ?? []) as { partA: string; partB: string; intersectionVolume: number; minDistance: number; status: string }[])
           .map((p, i) => line(
             p.status === 'interference'
@@ -2643,10 +2650,10 @@ export function CadPanel(): React.ReactElement {
       [t('ui.tool.screenshot'), t('ui.help.shot')],
       [t('ui.tool.expand'), t('ui.help.expand')],
     ] as [string, string][]).map(([k, v]) => React.createElement('div', { key: k, style: { display: 'flex', gap: 6 } },
-      React.createElement('span', { style: { flex: 'none', width: 58, fontWeight: 600, color: '#3b4450' } }, k),
+      React.createElement('span', { style: { flex: 'none', width: 58, fontWeight: 600, color: T.ink } }, k),
       React.createElement('span', { style: { color: T.soft } }, v),
     )),
-    React.createElement('div', { style: { color: T.muted, borderTop: '1px solid #eef1f3', paddingTop: 5 } },
+    React.createElement('div', { style: { color: T.muted, borderTop: `1px solid ${T.border}`, paddingTop: 5 } },
       t('ui.help.note')),
   );
 
@@ -2659,7 +2666,7 @@ export function CadPanel(): React.ReactElement {
         'div',
         { key: item.id, style: { display: 'flex', gap: 6, alignItems: 'flex-start', padding: '3px 0' } },
         React.createElement('img', {
-          src: item.thumb, style: { width: 52, flex: 'none', borderRadius: 4, border: '1px solid #e3e7ea' },
+          src: item.thumb, style: { width: 52, flex: 'none', borderRadius: 4, border: `1px solid ${T.edge}` },
         }),
         React.createElement(
           'div',
@@ -2679,7 +2686,7 @@ export function CadPanel(): React.ReactElement {
             placeholder: tr('ui.tray.notePlaceholder'),
             value: item.note,
             onChange: (e: any) => setTray((t) => t.map((x) => x.id === item.id ? { ...x, note: e.target.value } : x)),
-            style: { width: '100%', marginTop: 2, fontSize: 11, padding: '2px 5px', border: '1px solid #e3e7ea', borderRadius: 4 },
+            style: { width: '100%', marginTop: 2, fontSize: 11, padding: '2px 5px', border: `1px solid ${T.edge}`, borderRadius: 4 },
           }),
         ),
         React.createElement('button', {
@@ -2755,7 +2762,7 @@ export function CadPanel(): React.ReactElement {
       onClick: () => { setKind(browseKindOf(r)); setRecordId(r.id); },
       style: {
         display: 'flex', flexDirection: 'column', gap: 2, width: '100%', textAlign: 'left',
-        padding: '5px 6px', border: 'none', borderBottom: '1px solid #f0f2f4',
+        padding: '5px 6px', border: 'none', borderBottom: `1px solid ${T.divider}`,
         background: r.id === recordId ? T.accentSoft : 'transparent', cursor: 'pointer',
       },
     },
@@ -2795,8 +2802,8 @@ export function CadPanel(): React.ReactElement {
           onClick: () => setEvidenceFilter(g.id),
           style: {
             fontSize: 11, padding: '1px 6px', borderRadius: 10, cursor: 'pointer',
-            border: `1px solid ${evidenceFilter === g.id ? '#4a7dbd' : T.line}`,
-            background: evidenceFilter === g.id ? T.accentSoft : T.white,
+            border: `1px solid ${evidenceFilter === g.id ? T.active : T.line}`,
+            background: evidenceFilter === g.id ? T.accentSoft : T.plate,
             color: evidenceFilter === g.id ? T.accent : T.soft,
           },
         }, `${g.label} ${all.filter(g.test).length}`)),
@@ -2806,12 +2813,12 @@ export function CadPanel(): React.ReactElement {
         : React.createElement('div', null, ...list.map(row)),
       scope === 'part' && version && React.createElement(
         'div',
-        { style: { borderTop: '1px solid #eef1f3', paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
+        { style: { borderTop: `1px solid ${T.border}`, paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
         React.createElement('button', {
           type: 'button',
           onClick: () => void runFluid(),
           disabled: fluidBusy,
-          style: { ...S.smallBtn, border: '1px solid #2c81ba', background: '#e8f4fa', opacity: fluidBusy ? 0.55 : 1 },
+          style: { ...S.smallBtn, border: `1px solid ${T.info}`, background: T.infoSoft, opacity: fluidBusy ? 0.55 : 1 },
         }, fluidBusy ? tr('ui.fluid.busy')
           : version.id !== latestVersionId
             ? tr('ui.fluid.old', { version: version.id })
@@ -2851,7 +2858,7 @@ export function CadPanel(): React.ReactElement {
         onClick: () => { if (partId && n.version) navPickVersion(partId, n.version); },
         style: {
           display: 'flex', gap: 6, width: '100%', textAlign: 'left', padding: '3px 6px',
-          border: 'none', borderBottom: '1px solid #f0f2f4', background: 'transparent',
+          border: 'none', borderBottom: `1px solid ${T.divider}`, background: 'transparent',
           cursor: known ? 'pointer' : 'default', fontSize: 12, color: known ? T.ink : T.muted,
         },
       },
@@ -2907,7 +2914,7 @@ export function CadPanel(): React.ReactElement {
       onClick: () => { if (version) void downloadExport(withProject(`/api/cad/export?v=${version.id}&format=${fmt}`)); },
     }, fmt.toUpperCase())),
     React.createElement('span', { style: S.hint }, t('panel.exportGeometry')),
-    React.createElement('div', { key: '__project-sep', style: { width: '100%', height: 0, borderTop: '1px solid #eef1f3', margin: '2px 0' } }),
+    React.createElement('div', { key: '__project-sep', style: { width: '100%', height: 0, borderTop: `1px solid ${T.border}`, margin: '2px 0' } }),
     React.createElement('span', { key: '__project-label', style: { ...S.hint, fontWeight: 600, color: T.soft } }, t('panel.projectLabel')),
     ...projectExportButtons(),
   );
@@ -2954,7 +2961,7 @@ export function CadPanel(): React.ReactElement {
   const unregisteredBody = (): React.ReactNode => {
     const row = unregistered.find((f) => f.path === fileSubject) ?? null;
     const kids: React.ReactNode[] = [
-      React.createElement('div', { style: { ...S.caption, color: '#9c6f0a' } }, tr('ui.unreg.badge')),
+      React.createElement('div', { style: { ...S.caption, color: T.warnInk } }, tr('ui.unreg.badge')),
       React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } },
         tr('ui.unreg.desc')),
       React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
@@ -2981,7 +2988,7 @@ export function CadPanel(): React.ReactElement {
     }, fileSubject));
     if (row) {
       kids.push(React.createElement('div', {
-        style: { fontSize: 11, color: row.severity === 'blocked' ? T.danger : '#9c6f0a' },
+        style: { fontSize: 11, color: row.severity === 'blocked' ? T.danger : T.warnInk },
       }, `${row.severity === 'blocked' ? tr('ui.unreg.newer') : tr('ui.unreg.older')} · ${row.format.toUpperCase()} · ` +
          `${fmtBytes(row.bytes)} · ${fmtTime(row.modified)}`));
     }
@@ -2990,7 +2997,7 @@ export function CadPanel(): React.ReactElement {
         `${fileMeta.solid ? tr('ui.unreg.solid') : tr('ui.unreg.openShells', { count: fileMeta.shells })} · ` +
         tr(fileMeta.unitsMm ? 'ui.unreg.unitsMm' : 'ui.unreg.unitsUnknown')));
       for (const w of fileMeta.warnings.slice(0, 3)) {
-        kids.push(React.createElement('div', { key: w, style: { fontSize: 11, color: '#9c6f0a' } }, w));
+        kids.push(React.createElement('div', { key: w, style: { fontSize: 11, color: T.warnInk } }, w));
       }
     }
     if (row && !row.previewable) {
@@ -2998,7 +3005,7 @@ export function CadPanel(): React.ReactElement {
         tr('ui.unreg.dxf')));
     }
     kids.push(React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #e6e9ec', paddingTop: 6 },
+      style: { display: 'flex', flexDirection: 'column', gap: 4, borderTop: `1px solid ${T.edge}`, paddingTop: 6 },
     },
       React.createElement('div', { style: { fontSize: 11, fontWeight: 600 } }, tr('ui.unreg.form')),
       React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
@@ -3029,7 +3036,7 @@ export function CadPanel(): React.ReactElement {
         style: { ...S.smallBtn, alignSelf: 'flex-start' },
       }, importBusy ? tr('ui.unreg.importing') : tr('ui.unreg.import')),
       importMsg && React.createElement('div', {
-        style: { fontSize: 11, color: importMsg.startsWith(tr('ui.import.failed')) ? T.danger : '#1e8449' },
+        style: { fontSize: 11, color: importMsg.startsWith(tr('ui.import.failed')) ? T.danger : T.okInk },
       }, importMsg),
     ));
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, ...kids);
@@ -3090,7 +3097,7 @@ export function CadPanel(): React.ReactElement {
       const body = runReportBody(run);
       const notice = run.staleVersionIds?.length
         ? React.createElement('div', {
-            style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
+            style: { background: T.warnWash, border: `1px solid ${T.warn}`,
                      borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600,
                      color: T.warnInk, marginBottom: 4 },
           }, tr('ui.run.staleBanner', { versions: run.staleVersionIds.join(', ') }))
@@ -3137,10 +3144,10 @@ export function CadPanel(): React.ReactElement {
       style: {
         position: 'absolute', right: 8, top: 66, zIndex: 8, cursor: 'pointer',
         borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
-        border: compareActive ? '1px solid #e07a3f' : '1px solid #d5d9dd',
-        background: 'rgba(255,255,255,0.86)',
+        border: compareActive ? `1px solid ${T.compare}` : `1px solid ${T.line}`,
+        background: T.chip,
         color: compareActive ? T.dangerInk : T.ink,
-        ...(compareActive ? { boxShadow: '0 0 0 2px rgba(224,122,63,0.18)' } : {}),
+        ...(compareActive ? { boxShadow: T.ringCompare } : {}),
       },
     }, `${compareActive ? '◫' : '▢'} ${tr('ui.compare.label')} ${ghostVersionId}`)
     : null;
@@ -3164,9 +3171,9 @@ export function CadPanel(): React.ReactElement {
         style: {
           cursor: 'pointer', borderRadius: 6, padding: '2px 7px',
           fontSize: 11, lineHeight: '16px',
-          border: bgPickerOpen ? '1px solid #3498db' : '1px solid #d5d9dd',
-          background: 'rgba(255,255,255,0.86)', color: T.ink,
-          ...(bgPickerOpen ? { boxShadow: '0 0 0 2px rgba(52,152,219,0.25)' } : {}),
+          border: bgPickerOpen ? `1px solid ${T.accent}` : `1px solid ${T.line}`,
+          background: T.chip, color: T.ink,
+          ...(bgPickerOpen ? { boxShadow: T.ringAccent } : {}),
         },
       }, tr('ui.bg.label')),
       bgPickerOpen && React.createElement(
@@ -3175,8 +3182,8 @@ export function CadPanel(): React.ReactElement {
           style: {
             position: 'absolute', right: 0, top: 26, zIndex: 20,
             display: 'flex', flexDirection: 'column', gap: 3, padding: 5,
-            background: 'rgba(255,255,255,0.97)', border: '1px solid #c9ced4',
-            borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+            background: T.chipMenu, border: `1px solid ${T.line}`,
+            borderRadius: 8, boxShadow: T.shadowSm,
           },
         },
         VIEWPORT_BACKGROUNDS.map((option) => React.createElement('button', {
@@ -3188,12 +3195,12 @@ export function CadPanel(): React.ReactElement {
             display: 'flex', alignItems: 'center', gap: 6, width: 92,
             padding: '2px 5px', cursor: 'pointer', fontSize: 11, lineHeight: '16px',
             borderRadius: 5, background: 'transparent', textAlign: 'left',
-            border: option.id === bg.id ? '1px solid #3498db' : '1px solid transparent',
+            border: option.id === bg.id ? `1px solid ${T.accent}` : '1px solid transparent',
             color: T.ink,
           },
         },
           React.createElement('span', {
-            style: { width: 14, height: 14, borderRadius: 4, background: option.hex, border: '1px solid #b9c0c7', flex: 'none' },
+            style: { width: 14, height: 14, borderRadius: 4, background: option.hex, border: `1px solid ${T.line}`, flex: 'none' },
           }),
           option.label,
         )),
@@ -3318,7 +3325,7 @@ export function CadPanel(): React.ReactElement {
         background: active ? T.accentSoft : 'transparent',
         // Muted = "this is history": still one click away, but it must not look
         // like the default surface. The cost is visual weight, not a wall.
-        color: muted ? '#6b7684' : T.ink, fontSize: 12,
+        color: muted ? T.muted : T.ink, fontSize: 12,
       },
     },
       React.createElement('span', {
@@ -3376,7 +3383,7 @@ export function CadPanel(): React.ReactElement {
           ? [
             React.createElement('div', {
               key: 'older-divider',
-              style: { fontSize: 10, color: T.muted, padding: '4px 6px 2px', borderTop: '1px solid #f0f2f4', marginTop: 2 },
+              style: { fontSize: 10, color: T.muted, padding: '4px 6px 2px', borderTop: `1px solid ${T.divider}`, marginTop: 2 },
             }, t('ui.nav.older', { count: older.length })),
             ...older.map((v) => vRow(v, true)),
             // A nudge, not a wall: history is here when you need it, but the
@@ -3448,19 +3455,19 @@ export function CadPanel(): React.ReactElement {
 
     return React.createElement('div', {
       style: {
-        position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(20,24,30,0.35)',
+        position: 'absolute', inset: 0, zIndex: 50, background: T.scrimSoft,
         display: 'flex', padding: 8, boxSizing: 'border-box',
       },
       onClick: (e: any) => { if (e.target === e.currentTarget) navClose(); },
     },
       React.createElement('div', {
         style: {
-          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: T.white,
-          borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: T.plate,
+          borderRadius: 10, boxShadow: T.shadowXl, overflow: 'hidden',
         },
       },
         React.createElement('div', {
-          style: { display: 'flex', gap: 6, alignItems: 'center', padding: 8, borderBottom: '1px solid #eef1f3' },
+          style: { display: 'flex', gap: 6, alignItems: 'center', padding: 8, borderBottom: `1px solid ${T.border}` },
         },
           React.createElement('input', {
             autoFocus: true, value: navQuery,
@@ -3468,7 +3475,7 @@ export function CadPanel(): React.ReactElement {
             'aria-label': t('ui.nav.searchLabel'),
             onChange: (e: any) => setNavQuery(e.target.value),
             onKeyDown: (e: any) => { if (e.key === 'Escape') navClose(); },
-            style: { flex: 1, minWidth: 0, height: 28, fontSize: 12, padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6 },
+            style: { flex: 1, minWidth: 0, height: 28, fontSize: 12, padding: '0 8px', border: `1px solid ${T.line}`, borderRadius: 6 },
           }),
           React.createElement('button', { type: 'button', onClick: navClose, title: t('ui.nav.close'), style: S.smallBtn }, '✕'),
         ),
@@ -3490,7 +3497,7 @@ export function CadPanel(): React.ReactElement {
   const reviewOverlay = () => {
     const pending = review.items.filter((i) => i.status === 'unread');
     const settled = review.items.filter((i) => i.status !== 'unread');
-    const card = { background: T.white, borderRadius: 10, border: '1px solid #d5d9dd', padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 3 };
+    const card = { background: T.plate, borderRadius: 10, border: `1px solid ${T.line}`, padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 3 };
     const tinyBtn = { ...S.smallBtn, padding: '1px 7px', fontSize: 11 };
 
     const row = (item: ReviewItem) => React.createElement('div', {
@@ -3503,7 +3510,7 @@ export function CadPanel(): React.ReactElement {
           style: {
             flex: 'none', fontSize: 10, lineHeight: '15px', padding: '0 5px', borderRadius: 3, fontWeight: 600,
             color: item.kind === 'revert' ? T.dangerInk : T.accent,
-            background: item.kind === 'revert' ? '#fdeee2' : T.accentSoft,
+            background: item.kind === 'revert' ? T.warnSoft : T.accentSoft,
           },
         }, item.kind === 'revert' ? tr('ui.review.revert') : tr('ui.review.pendingKind')),
         React.createElement('span', {
@@ -3518,7 +3525,7 @@ export function CadPanel(): React.ReactElement {
         item.target && React.createElement('span', {
           style: { fontFamily: 'ui-monospace, monospace', fontSize: 10, color: T.muted },
         }, item.target),
-        item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: '#1e8449' } }, tr('ui.review.resolved', { version: item.resolvedBy })),
+        item.resolvedBy && React.createElement('span', { style: { fontSize: 10, color: T.okInk } }, tr('ui.review.resolved', { version: item.resolvedBy })),
         React.createElement('span', { style: { marginLeft: 'auto' } }),
         item.target && item.kind === 'revert' && React.createElement('button', {
           type: 'button',
@@ -3533,7 +3540,7 @@ export function CadPanel(): React.ReactElement {
               setError(tr('ui.review.failed', { error: String(e?.message ?? e) }));
             }
           },
-          style: { ...tinyBtn, border: '1px solid #a4531c', color: T.dangerInk, background: '#fdeee2' },
+          style: { ...tinyBtn, border: `1px solid ${T.dangerInk}`, color: T.dangerInk, background: T.warnSoft },
         }, tr('ui.review.approve')),
         item.target && React.createElement('button', {
           type: 'button',
@@ -3545,7 +3552,7 @@ export function CadPanel(): React.ReactElement {
             void setReviewItemStatus(item.id, 'read');
             setReviewOpen(false);
           },
-          style: { ...tinyBtn, border: '1px solid #2c81ba', background: '#e8f4fa' },
+          style: { ...tinyBtn, border: `1px solid ${T.info}`, background: T.infoSoft },
         }, tr('ui.review.view')),
         React.createElement('button', {
           type: 'button', onClick: () => void setReviewItemStatus(item.id, item.status === 'unread' ? 'read' : 'unread'),
@@ -3560,19 +3567,19 @@ export function CadPanel(): React.ReactElement {
 
     return React.createElement('div', {
       style: {
-        position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(20,24,30,0.35)',
+        position: 'absolute', inset: 0, zIndex: 50, background: T.scrimSoft,
         display: 'flex', padding: 8, boxSizing: 'border-box',
       },
       onClick: (e: any) => { if (e.target === e.currentTarget) setReviewOpen(false); },
     },
       React.createElement('div', {
         style: {
-          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#f7f9fb',
-          borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: T.ground,
+          borderRadius: 10, boxShadow: T.shadowXl, overflow: 'hidden',
         },
       },
         React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: '1px solid #e6ebef', background: T.white },
+          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', borderBottom: `1px solid ${T.edge}`, background: T.plate },
         },
           React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: T.ink } }, tr('ui.review.title')),
           React.createElement('span', { style: { fontSize: 11, color: T.muted } },
@@ -3592,7 +3599,7 @@ export function CadPanel(): React.ReactElement {
             : [...pending, ...settled].map(row),
         ),
         React.createElement('div', {
-          style: { borderTop: '1px solid #e6ebef', padding: '5px 9px', fontSize: 10, color: T.muted, background: T.white },
+          style: { borderTop: `1px solid ${T.edge}`, padding: '5px 9px', fontSize: 10, color: T.muted, background: T.plate },
         }, tr('ui.review.footer')),
       ),
     );
@@ -3609,7 +3616,7 @@ export function CadPanel(): React.ReactElement {
 
   return React.createElement(
     'div',
-    { style: S.panel, ref: panelRef },
+    { className: 'cad-theme', style: S.panel, ref: panelRef },
 
     // No CAD tools in this session: say it here, because the alternative is a
     // calm empty part list while the agent silently fails to make anything. The
@@ -3640,20 +3647,20 @@ export function CadPanel(): React.ReactElement {
       'div',
       {
         style: {
-          position: 'fixed', inset: 0, background: 'rgba(20,24,30,0.45)', zIndex: 60,
+          position: 'fixed', inset: 0, background: T.scrimStrong, zIndex: 60,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         },
         onClick: (e: any) => { if (e.target === e.currentTarget) setShotDraft(null); },
       },
       React.createElement(
         'div',
-        { style: { background: T.white, borderRadius: 10, padding: 12, width: 340, maxWidth: '92vw', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' } },
-        React.createElement('div', { style: { fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#3b4450' } },
+        { style: { background: T.plate, borderRadius: 10, padding: 12, width: 340, maxWidth: '92vw', boxShadow: T.shadowXl } },
+        React.createElement('div', { style: { fontSize: 12, fontWeight: 600, marginBottom: 6, color: T.ink } },
           tr('ui.shot.title', { label: shotDraft.label })),
         React.createElement('img', {
           src: shotDraft.url,
           alt: tr('ui.shot.alt'),
-          style: { width: '100%', borderRadius: 6, border: '1px solid #e3e7ea', marginBottom: 8, display: 'block' },
+          style: { width: '100%', borderRadius: 6, border: `1px solid ${T.edge}`, marginBottom: 8, display: 'block' },
         }),
         // Auto caption: machine-generated facts (view, version, bbox, 测量/标注),
         // necessary context for the model but NOT the user's business to edit —
@@ -3661,12 +3668,12 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', {
           title: tr('ui.shot.autoTitle'),
           style: {
-            fontSize: 10, color: T.muted, background: '#f4f6f8', borderRadius: 4,
+            fontSize: 10, color: T.muted, background: T.ground, borderRadius: 4,
             padding: '4px 6px', marginBottom: 6, whiteSpace: 'pre-wrap', userSelect: 'text',
           },
         }, shotDraft.auto),
         shotDraft.stale && React.createElement('div', {
-          style: { background: 'rgba(184, 134, 11, 0.15)', border: '1px solid #b8860b',
+          style: { background: T.warnWash, border: `1px solid ${T.warn}`,
                    borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 600, color: T.warnInk },
         }, tr('ui.shot.stale', { version: shotDraft.stale.version, latest: shotDraft.stale.latest })),
         React.createElement('textarea', {
@@ -3678,7 +3685,7 @@ export function CadPanel(): React.ReactElement {
           rows: 3,
           autoFocus: true,
           placeholder: tr('ui.shot.draftPlaceholder'),
-          style: { width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px', border: '1px solid #d7dde2', borderRadius: 6, resize: 'vertical' },
+          style: { width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 8px', border: `1px solid ${T.line}`, borderRadius: 6, resize: 'vertical' },
         }),
         React.createElement(
           'div',
@@ -3686,7 +3693,7 @@ export function CadPanel(): React.ReactElement {
           React.createElement('button', {
             type: 'button', onClick: () => void sendShotDraft(),
             title: tr('ui.shot.sendTitle'),
-            style: { ...S.smallBtn, background: T.accent, color: T.white, border: '1px solid #2f6fdb', fontWeight: 600 },
+            style: { ...S.smallBtn, background: T.accentSolid, color: T.white, border: `1px solid ${T.accentSolid}`, fontWeight: 600 },
           }, tr('ui.shot.send')),
           React.createElement('button', {
             type: 'button', onClick: () => void parkShotDraft(),
@@ -3766,7 +3773,7 @@ export function CadPanel(): React.ReactElement {
       ),
       !workspaceCwd && React.createElement('span', {
         key: 'no-project',
-        style: { flex: 'none', color: '#b42318', fontSize: 11, whiteSpace: 'nowrap' },
+        style: { flex: 'none', color: T.dangerText, fontSize: 11, whiteSpace: 'nowrap' },
         title: t('ui.project.notSelectedTitle'),
       }, t('ui.project.notSelected')),
       React.createElement('button', {
@@ -3779,7 +3786,7 @@ export function CadPanel(): React.ReactElement {
           // the flex base size, so an auto basis (the breadcrumb's text width) makes
           // the row wrap at 320 instead of letting the text ellipsize.
           flex: '1 1 0', minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 6,
-          padding: '0 8px', border: '1px solid #d5d9dd', borderRadius: 6, background: T.white,
+          padding: '0 8px', border: `1px solid ${T.line}`, borderRadius: 6, background: T.plate,
           cursor: 'pointer', fontSize: 12, color: T.ink, textAlign: 'left',
         },
       },
@@ -3813,7 +3820,7 @@ export function CadPanel(): React.ReactElement {
           style: {
             position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(184, 134, 11, 0.92)', color: T.white,
+            background: T.warnSoft, color: T.warnInk, borderBottom: `1px solid ${T.warnLine}`,
             padding: '4px 10px', fontSize: 12, fontWeight: 600,
           },
         },
@@ -3833,8 +3840,8 @@ export function CadPanel(): React.ReactElement {
         'data-compare-inset': '',
         style: {
           position: 'absolute', right: 6, bottom: 6, height: '54%', aspectRatio: '1 / 1',
-          border: '1px solid #c9ced4', borderRadius: 8, pointerEvents: 'none', zIndex: 5,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          border: `1px solid ${T.line}`, borderRadius: 8, pointerEvents: 'none', zIndex: 5,
+          boxShadow: T.shadowSm,
         },
       },
         // The legend says WHICH ROLE each colour has, not just which id: the whole
@@ -3842,15 +3849,15 @@ export function CadPanel(): React.ReactElement {
         React.createElement('div', {
           style: {
             position: 'absolute', left: 4, top: 3, fontSize: 10, lineHeight: '12px',
-            color: '#3d4a57', background: 'rgba(255,255,255,0.84)', borderRadius: 4,
+            color: T.ink, background: T.chip, borderRadius: 4,
             padding: '1px 4px', fontWeight: 600,
           },
         },
           React.createElement('div', null,
-            React.createElement('span', { style: { color: '#2563eb' } }, tr('ui.legend.blue')),
+            React.createElement('span', { style: { color: SCENE_COLOR.compareHere } }, tr('ui.legend.blue')),
             React.createElement('span', null, `${staleBanner ? t('ui.legend.history') : t('ui.legend.current')} ${version?.id ?? ''}`)),
           React.createElement('div', null,
-            React.createElement('span', { style: { color: '#e2651c' } }, tr('ui.legend.orange')),
+            React.createElement('span', { style: { color: T.compareInk } }, tr('ui.legend.orange')),
             React.createElement('span', null, `${staleBanner ? t('ui.legend.current') : t('ui.legend.history')} ${ghostVersionId}`)),
         ),
       ),
@@ -3972,7 +3979,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('button', {
         type: 'button', title: annotateMode ? t('ui.tool.annotateOnTitle') : t('ui.tool.annotateTitle'),
         onClick: () => setAnnotateMode((m) => !m),
-        style: viewToolStyle(annotateMode, '#e74c3c'),
+        style: viewToolStyle(annotateMode, ANN_PALETTE[0]),
       }, t('ui.tool.annotate')),
     ),
     // ── markup tools, in the viewport (top-left): these only make sense on a
@@ -3991,7 +3998,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('button', {
         type: 'button', title: annotateMode ? t('ui.tool.annotateOnTitle') : t('ui.tool.annotateTitle'),
         onClick: () => { setAnnotateMode((m) => !m); setMeasureMode(false); setThickMode(false); },
-        style: viewToolStyle(annotateMode, '#e74c3c'),
+        style: viewToolStyle(annotateMode, ANN_PALETTE[0]),
       }, t('ui.tool.annotate')),
       React.createElement('button', {
         type: 'button', title: measureMode ? t('ui.tool.measureOnTitle') : t('ui.tool.measureTitle'),
@@ -4058,7 +4065,7 @@ export function CadPanel(): React.ReactElement {
           onChange: (e: any) => setSectionAxis(e.target.value),
           'aria-label': t('ui.section.axis'),
           title: t('ui.section.axisTitle'),
-          style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: '1px solid #d5d9dd', borderRadius: 4 },
+          style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: `1px solid ${T.line}`, borderRadius: 4 },
         }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a))),
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } },
           `${(clipRef.current.pos * 100).toFixed(0)}%`),
@@ -4084,19 +4091,19 @@ export function CadPanel(): React.ReactElement {
           style: {
             display: 'flex', alignItems: 'center', gap: 5, flex: '1 1 auto', minWidth: 0,
             height: 17, boxSizing: 'border-box', padding: '0 5px', cursor: 'pointer', textAlign: 'left',
-            border: '1px solid #bcd6f5', borderRadius: 4, background: '#eef5ff', overflow: 'hidden',
+            border: `1px solid ${T.accentLine}`, borderRadius: 4, background: T.accentSoft, overflow: 'hidden',
           },
         },
           React.createElement('span', {
             style: {
-              flex: 'none', fontSize: 10, fontWeight: 700, color: T.white, background: T.accent,
+              flex: 'none', fontSize: 10, fontWeight: 700, color: T.white, background: T.accentSolid,
               borderRadius: 3, padding: '0 4px', lineHeight: '13px',
             },
           }, tr('ui.review.count', { count: review.items.filter((i) => i.status === 'unread').length })),
           React.createElement('span', {
             style: {
               flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              fontSize: 11, fontWeight: 600, color: '#1f4f8f',
+              fontSize: 11, fontWeight: 600, color: T.infoInk,
             },
           }, review.items.find((i) => i.status === 'unread')?.title ?? ''),
           React.createElement('span', { style: { flex: 'none', fontSize: 11, color: T.accent } }, tr('ui.nav.open')),
@@ -4185,7 +4192,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement(
         'div',
         { style: S.sheetHead },
-        React.createElement('span', { style: { fontSize: 12, fontWeight: 600, color: '#3b4450' } }, tabLabel(sheet)),
+        React.createElement('span', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, tabLabel(sheet)),
         run && React.createElement('span', { style: { fontSize: 11, color: T.muted } }, run.id),
         React.createElement('button', {
           type: 'button', onClick: () => setSheet(null),
@@ -4230,7 +4237,7 @@ export function CadPanel(): React.ReactElement {
         // shrinks by 2px the moment the first screenshot is taken.
         style: {
           flex: 'none', border: 'none', background: 'none', cursor: 'pointer', padding: 0,
-          fontSize: 11, lineHeight: '16px', color: '#8a6d1a', textDecoration: 'underline dotted',
+          fontSize: 11, lineHeight: '16px', color: T.warnInk, textDecoration: 'underline dotted',
         },
       }, tr('ui.tray.buttonLabel', { count: tray.length })),
     ),

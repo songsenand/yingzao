@@ -211,6 +211,7 @@ The panel gives you:
 - **Measure and annotate**: two-point distance, wall thickness, section cuts, red-box annotations, and send the annotation back to the session.
 - **Run playback**: motion, rigid-body and fluid timelines; pause on a frame.
 - **Verification state**: assembly checks, printability and delivery audit results, including "needs review".
+- **Theming**: the panel's surfaces, text and buttons follow the DSH Web GUI light/dark setting, including the tool chips and playback controls over the viewport. The 3D viewport ground stays a studio preset from **Background**; pick Graphite or Midnight for a dark ground.
 - **Export**: single-version STL/3MF/OBJ/OFF/WRL, or a project ZIP; a blocked delivery audit asks for confirmation.
 
 > The panel is a **read-only viewport plus the human's pointing channel**: it does not replace the agent writing code or the engine producing truth; it lets you see, measure and point at the problem.

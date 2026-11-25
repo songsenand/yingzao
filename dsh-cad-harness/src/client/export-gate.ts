@@ -5,6 +5,7 @@
 // the file with `confirm=1&reason=...`. The server still enforces both.
 
 import { t } from './i18n.ts';
+import { T } from './tokens.ts';
 
 export interface ExportGatePayload {
   kind?: string;
@@ -39,9 +40,12 @@ function saveBlob(blob: Blob, name: string): void {
 function dialog(payload: ExportGatePayload): Promise<string | null> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
+    // A body-appended dialog: the class gives it the theme's `color-scheme` and
+    // the `--cad-*` variables it reads are declared on the root.
+    overlay.className = 'cad-theme';
     overlay.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:2147483000',
-      'background:rgba(16,24,32,.48)', 'display:flex', 'align-items:center',
+      `background:${T.scrimStrong}`, 'display:flex', 'align-items:center',
       'justify-content:center', 'padding:24px',
     ].join(';');
 
@@ -50,8 +54,8 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     panel.setAttribute('aria-modal', 'true');
     panel.style.cssText = [
       'width:min(560px,100%)', 'max-height:84vh', 'overflow:auto',
-      'background:#fff', 'color:#1c2733', 'border-radius:10px',
-      'box-shadow:0 24px 80px rgba(0,0,0,.28)', 'padding:20px 22px',
+      `background:${T.plate}`, `color:${T.ink}`, 'border-radius:10px',
+      `box-shadow:${T.shadowLg}`, 'padding:20px 22px',
       'font:13px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif',
     ].join(';');
 
@@ -62,12 +66,12 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
 
     const verdict = document.createElement('div');
     verdict.textContent = payload.verdict === 'blocked' ? 'BLOCKED' : (payload.verdict ?? 'UNVERIFIED');
-    verdict.style.cssText = 'display:inline-block;margin-bottom:10px;padding:2px 8px;border-radius:999px;background:#fdecec;color:#a4262c;font-weight:700;font-size:11px;letter-spacing:.04em';
+    verdict.style.cssText = `display:inline-block;margin-bottom:10px;padding:2px 8px;border-radius:999px;background:${T.dangerSoft};color:${T.dangerText};font-weight:700;font-size:11px;letter-spacing:.04em`;
     panel.appendChild(verdict);
 
     const message = document.createElement('p');
     message.textContent = t('export.message');
-    message.style.cssText = 'margin:0 0 12px;color:#40505f';
+    message.style.cssText = `margin:0 0 12px;color:${T.soft}`;
     panel.appendChild(message);
 
     const findings = payload.findings ?? [];
@@ -79,17 +83,17 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
         item.style.cssText = 'margin:0 0 6px';
         const code = document.createElement('b');
         code.textContent = `${finding.severity ?? 'finding'} · ${finding.code ?? 'unknown'}`;
-        code.style.cssText = finding.severity === 'blocked' ? 'color:#a4262c' : 'color:#8a5a00';
+        code.style.cssText = finding.severity === 'blocked' ? `color:${T.dangerText}` : `color:${T.warnInk}`;
         const detail = document.createElement('div');
         detail.textContent = finding.detail ?? '';
-        detail.style.cssText = 'color:#5b6b7a;word-break:break-word';
+        detail.style.cssText = `color:${T.soft};word-break:break-word`;
         item.append(code, detail);
         list.appendChild(item);
       }
       if (findings.length > 8) {
         const more = document.createElement('div');
         more.textContent = t('export.more', { count: findings.length - 8 });
-        more.style.cssText = 'color:#5b6b7a;margin-bottom:10px';
+        more.style.cssText = `color:${T.soft};margin-bottom:10px`;
         panel.appendChild(list);
         panel.appendChild(more);
       } else {
@@ -99,7 +103,7 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
 
     if (payload.nextLook?.length) {
       const next = document.createElement('div');
-      next.style.cssText = 'margin:0 0 12px;padding:8px 10px;border-left:3px solid #c9d3dd;background:#f7f9fb;color:#40505f';
+      next.style.cssText = `margin:0 0 12px;padding:8px 10px;border-left:3px solid ${T.line};background:${T.ground};color:${T.soft}`;
       next.textContent = t('export.next', { items: payload.nextLook.join('; ') });
       panel.appendChild(next);
     }
@@ -110,11 +114,11 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     const reason = document.createElement('input');
     reason.type = 'text';
     reason.value = t('export.reasonDefault');
-    reason.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #ccd5dd;border-radius:6px;font:inherit';
+    reason.style.cssText = `width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid ${T.line};border-radius:6px;font:inherit;background:${T.plate};color:${T.ink}`;
     panel.append(reasonLabel, reason);
 
     const ackLabel = document.createElement('label');
-    ackLabel.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin:12px 0 14px;color:#40505f';
+    ackLabel.style.cssText = `display:flex;gap:8px;align-items:flex-start;margin:12px 0 14px;color:${T.soft}`;
     const ack = document.createElement('input');
     ack.type = 'checkbox';
     ack.style.cssText = 'margin-top:2px';
@@ -128,12 +132,12 @@ function dialog(payload: ExportGatePayload): Promise<string | null> {
     const cancel = document.createElement('button');
     cancel.type = 'button';
     cancel.textContent = t('export.cancel');
-    cancel.style.cssText = 'padding:7px 14px;border:1px solid #ccd5dd;background:#fff;border-radius:6px;cursor:pointer;font:inherit';
+    cancel.style.cssText = `padding:7px 14px;border:1px solid ${T.line};background:${T.plate};color:${T.ink};border-radius:6px;cursor:pointer;font:inherit`;
     const confirm = document.createElement('button');
     confirm.type = 'button';
     confirm.textContent = t('export.confirm');
     confirm.disabled = true;
-    confirm.style.cssText = 'padding:7px 14px;border:1px solid #a4262c;background:#a4262c;color:#fff;border-radius:6px;cursor:pointer;font:inherit;opacity:.45';
+    confirm.style.cssText = `padding:7px 14px;border:1px solid ${T.danger};background:${T.danger};color:${T.white};border-radius:6px;cursor:pointer;font:inherit;opacity:.45`;
     actions.append(cancel, confirm);
     panel.appendChild(actions);
     overlay.appendChild(panel);

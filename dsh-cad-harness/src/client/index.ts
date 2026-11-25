@@ -11,6 +11,7 @@ import { currentSessionId, refreshProjectScope, setProjectServices } from './pro
 import { subscribeProducts } from './products-store';
 import { decideActivityOpen } from './activity';
 import { installCadLocale, t } from './i18n.ts';
+import { installCadTheme } from './theme.ts';
 
 /** Required services (cordis fiber inject). */
 export const inject = ['connection', 'slots', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation', 'locale'];
@@ -24,6 +25,10 @@ const TAB_KIND = 'cad-viewer';
 /** Client plugin body: declare the tab type, register the body, open it. */
 export function apply(ctx: any) {
   installCadLocale(ctx);
+  // The `--cad-*` stylesheet carries the light and dark palettes every inline
+  // style reads. Installing it before the first panel render is what makes
+  // `T.ink` mean "this theme's ink" rather than "the light hex".
+  ctx.effect(() => installCadTheme(), 'cad-harness: theme tokens');
   setClientServices({ connection: ctx.connection, sessions: ctx.sessions, conversation: ctx.conversation, root: ctx });
   setProjectServices({ sessions: ctx.sessions });
 

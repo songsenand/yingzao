@@ -10,8 +10,20 @@ import * as THREE from 'three';
 import { CadPanel, setClientServices } from '../../src/client/panel';
 import { setProjectServices, setProjectOverride } from '../../src/client/project';
 import { ViewportOverlay } from '../../src/client/overlay';
+import { installCadTheme } from '../../src/client/theme.ts';
 
 const q = new URLSearchParams(location.search);
+
+// The sandbox mounts the panel directly, so the host's `apply()` does not run;
+// install the token stylesheet here exactly as the client half does. Without it
+// every `var(--cad-*, …)` would fall back to the light value.
+installCadTheme();
+
+// ?dark=1 — emulate the host's dark theme. The theme plugin marks dark by putting
+// `data-ds-dark-theme` on <body>; the sandbox uses the same attribute (and the
+// index.html darkens the dock chrome), so there is one theme path, not two.
+const darkParam = q.get('dark') === '1';
+if (darkParam) document.body.setAttribute('data-ds-dark-theme', '');
 const w = Number(q.get('w') ?? 380);
 const h = Number(q.get('h') ?? 900);
 const freeze = q.get('freeze') !== '0';
@@ -507,6 +519,159 @@ if (q.get('assert') === 'local-import') {
       }, 400);
     }, 700);
   }, 1500);
+}
+
+// ?assert=theme — the panel must follow the host's light/dark palette, and no
+// label may be light-on-light in either mode. The regression: the chrome was
+// fixed light, so with `data-ds-dark-theme` set the body's light ink landed on
+// white plates (the simulation viewport's transport buttons were the loudest).
+//
+// The check is a CONTRAST check, not a screenshot: every element with its own
+// text is measured against the background actually behind it (walking up the
+// ancestor chain and compositing translucent layers). A theme that forgets one
+// plate fails here even when the rest of the panel looks right.
+if (q.get('assert') === 'theme') {
+  type RGB = [number, number, number, number];
+  const parseColor = (value: string): RGB => {
+    const m = /^rgba?\(([^)]+)\)$/.exec(value.trim());
+    if (!m) return [0, 0, 0, 0];
+    const p = m[1]!.split(',').map((x) => parseFloat(x));
+    return [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0, p[3] ?? 1];
+  };
+  const luminance = ([r, g, b]: RGB): number => {
+    const f = (c: number) => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const contrast = (a: RGB, b: RGB): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+  };
+  const over = (top: RGB, bottom: RGB): RGB => {
+    const a = top[3];
+    return [top[0] * a + bottom[0] * (1 - a), top[1] * a + bottom[1] * (1 - a), top[2] * a + bottom[2] * (1 - a), 1];
+  };
+  const backgroundOf = (el: Element): RGB => {
+    const layers: RGB[] = [];
+    for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+      const c = parseColor(getComputedStyle(cur).backgroundColor);
+      if (c[3] > 0.01) layers.push(c);
+      if (c[3] >= 0.999) break;
+    }
+    // The page's own canvas is the last resort; the dock and body are opaque in
+    // both modes, so this only matters for a detached element.
+    let base: RGB = darkParam ? [18, 22, 26, 1] : [255, 255, 255, 1];
+    for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i]!, base);
+    return base;
+  };
+  const resolveVar = (name: string): RGB => {
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:fixed;left:-9999px;width:0;height:0;background:var(${name}, #ff00ff)`;
+    document.body.appendChild(probe);
+    const value = parseColor(getComputedStyle(probe).backgroundColor);
+    probe.remove();
+    return value;
+  };
+
+  // Wait for the panel's async corpus to land: a theme check on an empty shell
+  // would pass vacuously.
+  const waitFor = (fn: () => boolean, ms = 9000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+
+  void (async () => {
+    const loaded = await waitFor(() => document.querySelectorAll('#root *').length > 30);
+    const rootEl = document.querySelector('#root .cad-theme') as HTMLElement | null;
+    const lines: string[] = [`theme (dock ${w}×${h}, ${darkParam ? 'dark' : 'light'})`];
+    const pass = (ok: boolean, label: string, detail = '') => {
+      lines.push(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
+    };
+
+    pass(Boolean(document.getElementById('cad-theme-tokens')), 'the token stylesheet is installed');
+    pass(Boolean(rootEl), 'the panel carries the `cad-theme` scope');
+
+    const plate = resolveVar('--cad-plate');
+    const ink = resolveVar('--cad-ink');
+    const plateLum = luminance(plate);
+    const inkLum = luminance(ink);
+    pass(darkParam ? plateLum < 0.18 : plateLum > 0.8,
+      `the active plate is ${darkParam ? 'dark' : 'light'}`, `luminance ${plateLum.toFixed(3)}`);
+    pass(darkParam ? inkLum > 0.55 : inkLum < 0.2,
+      `the active ink is ${darkParam ? 'light' : 'dark'}`, `luminance ${inkLum.toFixed(3)}`);
+
+    if (rootEl) {
+      const rootColor = parseColor(getComputedStyle(rootEl).color);
+      pass(contrast(rootColor, plate) >= 4.5, 'the panel root carries readable ink',
+        `contrast ${contrast(rootColor, plate).toFixed(2)}`);
+    }
+
+    // Every element whose own text is visible: its colour must stand off the
+    // surface behind it. 2.5 is the floor for a dense, deliberately muted label;
+    // the failure this catches is ~1.0 (light ink on a light plate).
+    const textEls = [...document.querySelectorAll('#root *')].filter((el) => {
+      const hasOwnText = [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim());
+      const box = el.getBoundingClientRect();
+      // The instrument plate (triad + scale bar) and the pinned read-outs are
+      // drawn ON the 3D ground, so their ink follows the user's background preset
+      // (light or dark), not the host theme. They are scene annotations, not
+      // chrome; their legibility rule lives in overlay.ts.
+      if (el.closest('[data-corner], [data-label]')) return false;
+      return hasOwnText && box.width >= 1 && box.height >= 1;
+    });
+    const weak: string[] = [];
+    let worst = { ratio: Number.POSITIVE_INFINITY, tag: '' };
+    for (const el of textEls) {
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
+      const fg = parseColor(style.color);
+      if (fg[3] < 0.2) continue;
+      const ratio = contrast(fg, backgroundOf(el));
+      const label = `<${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 24)}"`;
+      if (ratio < worst.ratio) worst = { ratio, tag: label };
+      if (ratio < 2.5) weak.push(`${label} ${ratio.toFixed(2)}`);
+    }
+    pass(textEls.length >= 20, 'the contrast sweep measured real labels', `${textEls.length} elements`);
+    pass(weak.length === 0, 'no label is washed out in this theme', weak.slice(0, 5).join(' | ') || 'none');
+    lines.push(`      lowest contrast: ${worst.ratio.toFixed(2)} on ${worst.tag}`);
+
+    // Controls get their own voice: a button that inherits ink is exactly the bug.
+    const controls = [...document.querySelectorAll('#root button, #root select, #root input, #root textarea')]
+      .filter((el) => {
+        const box = el.getBoundingClientRect();
+        return box.width >= 1 && box.height >= 1 && !(el as HTMLInputElement).disabled;
+      });
+    const badControls: string[] = [];
+    for (const el of controls) {
+      // A control that paints no text (the 8px keyframe diamond, the 3px event
+      // tick) is a hit target, not a label: its inherited colour is irrelevant.
+      const label = ((el as HTMLInputElement).value || el.textContent || (el as HTMLInputElement).placeholder || '').trim();
+      if (!label) continue;
+      const style = getComputedStyle(el);
+      const fg = parseColor(style.color);
+      const ratio = contrast(fg, backgroundOf(el));
+      if (ratio < 2.5) {
+        const what = ((el as HTMLInputElement).value || el.textContent || el.getAttribute('title') || el.getAttribute('aria-label') || el.outerHTML.slice(0, 90)).replace(/\s+/g, ' ').trim();
+        badControls.push(`"${what.slice(0, 60)}" ${ratio.toFixed(2)}`);
+      }
+    }
+    pass(controls.length >= 8, 'the control sweep measured real controls', `${controls.length} controls`);
+    pass(badControls.length === 0, 'controls keep readable ink', badControls.slice(0, 5).join(' | ') || 'none');
+
+    const pre = document.createElement('pre');
+    pre.style.cssText = `font:12px/1.6 monospace;white-space:pre-wrap;margin:12px;color:${darkParam ? '#e7eaef' : '#111'};`;
+    const stage = document.getElementById('stage');
+    if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+    if (!loaded) lines.push('FAIL  the panel never rendered enough content to check');
+    pre.textContent = lines.join('\n');
+  })();
 }
 
 // Every assert renders its verdict into a <pre> under #stage. Forward that text

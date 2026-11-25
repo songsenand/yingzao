@@ -28,6 +28,14 @@
   #dockHeader b { font-weight: 600; color: #374151; }
   #tabbody { flex: 1; min-height: 0; overflow: auto; }
   #root { height: 100%; min-height: 0; }
+
+  /* ?dark=1 emulates the host: the theme plugin sets this attribute on <body>,
+     so the dock chrome around the panel follows the same switch. */
+  body[data-ds-dark-theme] { background: #12161a; color: #e7eaef; }
+  body[data-ds-dark-theme] #dock { background: #1f252c; border-left-color: #303842; }
+  body[data-ds-dark-theme] #dockHeader { color: #8b95a3; border-bottom-color: #2a313a; }
+  body[data-ds-dark-theme] #dockHeader b { color: #e7eaef; }
+  body[data-ds-dark-theme] #stage { color: #5c6672; }
 </style>
 </head>
 <body>

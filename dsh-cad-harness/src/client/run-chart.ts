@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { t as tr } from './i18n.ts';
-import { T } from './tokens.ts';
+import { CHART_PALETTE, T } from './tokens.ts';
 
 export interface ChartSeries {
   name: string;
@@ -38,7 +38,7 @@ export interface RunChartData {
   note: string;
 }
 
-const PALETTE = ['#2f6fdb', '#c0392b', '#27ae60'];
+const PALETTE = [...CHART_PALETTE];
 
 const axisIndex = (axis: string): number => (axis === 'x' ? 0 : axis === 'y' ? 1 : 2);
 
@@ -195,22 +195,24 @@ export function RunChart(props: {
       },
       ...[0, 0.5, 1].map((f) => React.createElement('line', {
         key: `gx-${f}`, x1: m.l, x2: W - m.r, y1: y(yMin + f * (yMax - yMin)), y2: y(yMin + f * (yMax - yMin)),
-        stroke: T.divider, strokeWidth: 1,
+        // Paint through `style`, not the presentation attribute: `var()` in an
+        // SVG attribute is not reliably resolved, in a style it always is.
+        style: { stroke: T.divider }, strokeWidth: 1,
       })),
       ...yTicks.map((v, i) => React.createElement('text', {
-        key: `yt-${i}`, x: m.l - 4, y: y(v) + 3, textAnchor: 'end', fontSize: 9, fill: T.muted,
+        key: `yt-${i}`, x: m.l - 4, y: y(v) + 3, textAnchor: 'end', fontSize: 9, style: { fill: T.muted },
       }, fmt(v))),
       ...[0, 0.5, 1].map((f) => React.createElement('text', {
         key: `xt-${f}`, x: x(f * tMax), y: H - 8, textAnchor: f === 0 ? 'start' : f === 1 ? 'end' : 'middle',
-        fontSize: 9, fill: T.muted,
+        fontSize: 9, style: { fill: T.muted },
       }, `${fmt(f * tMax)}s`)),
       ...data.events.map((ev, i) => React.createElement('line', {
         key: `ev-${i}`, x1: x(ev.timeSec), x2: x(ev.timeSec), y1: m.t, y2: H - m.b,
-        stroke: ev.tone === 'bad' ? T.danger : T.warn, strokeWidth: 1, strokeDasharray: '2 2', opacity: 0.75,
+        style: { stroke: ev.tone === 'bad' ? T.danger : T.warn }, strokeWidth: 1, strokeDasharray: '2 2', opacity: 0.75,
       })),
       ...data.keyframes.map((k, i) => React.createElement('rect', {
         key: `kf-${i}`, x: x(k.timeSec) - 2.5, y: m.t - 5, width: 5, height: 5,
-        fill: T.accent, transform: `rotate(45 ${x(k.timeSec)} ${m.t - 2.5})`,
+        style: { fill: T.accent }, transform: `rotate(45 ${x(k.timeSec)} ${m.t - 2.5})`,
       })),
       ...data.series.map((s) => React.createElement('path', {
         key: s.name, d: path(s.values), fill: 'none', stroke: s.color, strokeWidth: 1.6,
@@ -219,10 +221,10 @@ export function RunChart(props: {
       typeof tNow === 'number' && Number.isFinite(tNow)
         ? React.createElement('line', {
             x1: x(Math.min(tMax, Math.max(0, tNow))), x2: x(Math.min(tMax, Math.max(0, tNow))),
-            y1: m.t, y2: H - m.b, stroke: T.ink, strokeWidth: 1,
+            y1: m.t, y2: H - m.b, style: { stroke: T.ink }, strokeWidth: 1,
           })
         : null,
-      React.createElement('line', { x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), stroke: T.soft, strokeWidth: 0.8 }),
+      React.createElement('line', { x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), style: { stroke: T.soft }, strokeWidth: 0.8 }),
     ),
     React.createElement('div', { style: { fontSize: 10, color: T.muted, lineHeight: 1.4 } }, data.note),
   );

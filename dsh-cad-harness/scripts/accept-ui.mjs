@@ -41,6 +41,13 @@ const SCENARIOS = [
   // The playback toolbar's 「▭ 标注」: a screen-space box that must survive a drag
   // (and must not steal the orbit controls while disarmed).
   { name: 'playback-ann', query: 'w=520&h=900&assert=playback-annotate&debug=0', resolve: 'motion' },
+  // The panel must follow the host palette: the same page rendered under the
+  // light and dark theme, each measured for washed-out labels/controls instead
+  // of eyeballed in a screenshot. The playback run is the reported case (the
+  // transport buttons over the viewport).
+  { name: 'theme-light', query: 'w=380&h=900&recent=p005&assert=theme&debug=0' },
+  { name: 'theme-dark', query: 'w=380&h=900&recent=p005&dark=1&assert=theme&debug=0' },
+  { name: 'theme-dark-playback', query: 'w=520&h=1200&dark=1&assert=theme&debug=0', resolve: 'motion' },
   // A 3D-only control, exercised under Xvfb; SKIP when this box cannot give GL.
   { name: 'section', query: 'w=520&h=1200&open=剖切&assert=section&debug=0', resolve: 'motion' },
   // The no-WebGL path must still show the run's data and keyframe strip.

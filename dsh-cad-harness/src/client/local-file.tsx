@@ -24,6 +24,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { createFreeOrbit } from './free-orbit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { fitDistance } from './fit';
+import { SCENE, T } from './tokens.ts';
 import {
   buildImportStlRequest, partNameFromPath, IMPORT_UNITS,
   type ImportUnit,
@@ -43,52 +44,52 @@ export interface LocalFileDialogProps {
 const S = {
   backdrop: {
     position: 'fixed' as const, inset: 0, zIndex: 70,
-    background: 'rgba(20,24,30,0.45)',
+    background: T.scrimStrong,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   panel: {
     width: 'min(900px, 94vw)', height: 'min(680px, 90vh)',
     display: 'flex', flexDirection: 'column' as const,
-    background: '#fff', borderRadius: 12, boxShadow: '0 18px 60px rgba(0,0,0,0.30)',
+    background: T.plate, borderRadius: 12, boxShadow: T.shadowLg,
     overflow: 'hidden',
   },
   head: {
     display: 'flex', alignItems: 'center', gap: 6, flex: 'none', flexWrap: 'wrap' as const, rowGap: 4,
-    padding: '8px 10px', borderBottom: '1px solid #e8ecef',
+    padding: '8px 10px', borderBottom: `1px solid ${T.edge}`,
   },
-  title: { fontSize: 13, fontWeight: 600 as const, color: '#26303a' },
+  title: { fontSize: 13, fontWeight: 600 as const, color: T.ink },
   tab: (active: boolean) => ({
     cursor: 'pointer', borderRadius: 6, padding: '3px 9px', fontSize: 12, lineHeight: '18px',
-    border: `1px solid ${active ? '#4a7dbd' : '#e3e7ea'}`,
-    background: active ? '#eaf2fb' : '#f7f9fb', color: active ? '#1f4e79' : '#5b6673',
+    border: `1px solid ${active ? T.active : T.edge}`,
+    background: active ? T.accentSoft : T.ground, color: active ? T.accentInk : T.soft,
   }),
   body: { flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' as const, padding: 10, gap: 8 },
   canvasHost: {
     position: 'relative' as const, flex: '1 1 auto', minHeight: 220,
-    border: '1px solid #e3e7ea', borderRadius: 8, overflow: 'hidden', background: '#f0f0f0',
+    border: `1px solid ${T.edge}`, borderRadius: 8, overflow: 'hidden', background: T.stage,
   },
-  hint: { fontSize: 11, color: '#8a94a0', lineHeight: 1.5 },
+  hint: { fontSize: 11, color: T.muted, lineHeight: 1.5 },
   smallBtn: {
     cursor: 'pointer', borderRadius: 6, padding: '3px 9px', fontSize: 12, lineHeight: '18px',
-    border: '1px solid #d5d9dd', background: '#fff', color: '#26303a', whiteSpace: 'nowrap' as const,
+    border: `1px solid ${T.line}`, background: T.plate, color: T.ink, whiteSpace: 'nowrap' as const,
   },
   primary: {
     cursor: 'pointer', borderRadius: 6, padding: '4px 12px', fontSize: 12, lineHeight: '18px',
-    border: '1px solid #2f6fdb', background: '#2f6fdb', color: '#fff', fontWeight: 600 as const,
+    border: `1px solid ${T.accentSolid}`, background: T.accentSolid, color: T.white, fontWeight: 600 as const,
   },
   field: {
-    display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#3b4450',
+    display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: T.ink,
   },
   input: {
     flex: '1 1 auto', minWidth: 0, height: 26, fontSize: 12, padding: '0 7px',
-    border: '1px solid #d5d9dd', borderRadius: 6, background: '#fff', color: '#26303a',
+    border: `1px solid ${T.line}`, borderRadius: 6, background: T.plate, color: T.ink,
   },
   error: {
-    background: 'rgba(192,57,43,0.08)', border: '1px solid #c0392b', color: '#7b241c',
+    background: T.dangerWash, border: `1px solid ${T.danger}`, color: T.dangerText,
     borderRadius: 6, padding: '5px 8px', fontSize: 11.5, lineHeight: 1.45,
   },
   ok: {
-    background: 'rgba(39,174,96,0.10)', border: '1px solid #27ae60', color: '#1e6f45',
+    background: T.okWash, border: `1px solid ${T.ok}`, color: T.okInk,
     borderRadius: 6, padding: '5px 8px', fontSize: 11.5, lineHeight: 1.45,
   },
 };
@@ -225,7 +226,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
         }
         mesh = new THREE.Mesh(
           geometry,
-          new THREE.MeshStandardMaterial({ color: '#7aa7d9', metalness: 0.08, roughness: 0.5 }),
+          new THREE.MeshStandardMaterial({ color: SCENE.part, metalness: 0.08, roughness: 0.5 }),
         );
         scene.add(mesh);
         frame();
@@ -374,7 +375,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
                   选择 STL 文件…
                 </button>
                 {stats && (
-                  <span style={{ fontSize: 12, color: '#3b4450', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 12, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {stats.name} · {stats.triangles} 面 · 包围盒 {stats.size.map((v) => v.toFixed(1)).join(' × ')}
                   </span>
                 )}
@@ -386,7 +387,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
                 ref={hostRef}
                 style={{
                   ...S.canvasHost,
-                  outline: dragging ? '2px dashed #2f6fdb' : 'none',
+                  outline: dragging ? `2px dashed ${T.accentSolid}` : 'none',
                   outlineOffset: -4,
                 }}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -404,7 +405,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
                     alignItems: 'center', justifyContent: 'center', gap: 6, pointerEvents: 'none',
                   }}>
                     <div style={{ fontSize: 26 }}>📦</div>
-                    <div style={{ fontSize: 12, color: '#5b6673' }}>把 STL 拖到这里，或点「选择 STL 文件…」</div>
+                    <div style={{ fontSize: 12, color: T.soft }}>把 STL 拖到这里，或点「选择 STL 文件…」</div>
                     <div style={S.hint}>单位不做换算：STL 没有单位，预览只画文件里的数</div>
                   </div>
                 )}
@@ -461,7 +462,7 @@ export function LocalFileDialog(props: LocalFileDialogProps): React.ReactElement
                 {!project && ' — 不能猜测目标语料，请等面板刷新后再试'}
               </div>
 
-              {importHint && <div style={{ ...S.hint, color: '#8a6d1a' }}>{importHint}</div>}
+              {importHint && <div style={{ ...S.hint, color: T.warnInk }}>{importHint}</div>}
 
               <label style={S.field}>
                 <span style={{ flex: 'none', width: 64 }}>文件路径</span>

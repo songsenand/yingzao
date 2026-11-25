@@ -10,6 +10,7 @@
 // be verified in the sandbox harness.
 import React, { useEffect, useRef } from 'react';
 import { t as tr } from './i18n.ts';
+import { AXIS_PALETTE, SCENE, T } from './tokens.ts';
 import * as THREE from 'three';
 
 export interface OverlayScene {
@@ -20,15 +21,15 @@ export interface OverlayScene {
 
 /** Very light plate under both corners: the model behind them is arbitrary. */
 const PLATE: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.55)',
+  background: SCENE.overlayPlate,
   borderRadius: 7,
   backdropFilter: 'blur(1.5px)',
 };
 
 const AXES: { label: string; dir: [number, number, number]; color: string }[] = [
-  { label: 'X', dir: [1, 0, 0], color: '#c0392b' },
-  { label: 'Y', dir: [0, 1, 0], color: '#1e8449' },
-  { label: 'Z', dir: [0, 0, 1], color: '#2471a3' },
+  { label: 'X', dir: [1, 0, 0], color: AXIS_PALETTE.x },
+  { label: 'Y', dir: [0, 1, 0], color: AXIS_PALETTE.y },
+  { label: 'Z', dir: [0, 0, 1], color: AXIS_PALETTE.z },
 ];
 
 /** The scale bar never changes length; only its readout does. */
@@ -59,7 +60,7 @@ export function ViewportOverlay(props: {
    */
   chrome?: React.ReactNode;
 }): React.ReactElement {
-  const ink = props.ink ?? { color: '#26303a', halo: '#f0f0f0' };
+  const ink = props.ink ?? { color: SCENE.overlayInk, halo: SCENE.overlayHalo };
   const rootRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(SVGLineElement | null)[]>([]);
   const labelRefs = useRef<(SVGTextElement | null)[]>([]);
@@ -213,7 +214,7 @@ export function ViewportOverlay(props: {
           style: { display: 'block' },
         },
         React.createElement('circle', {
-          cx: 33, cy: 33, r: 2.4, fill: '#6b7280', opacity: 0.85,
+          cx: 33, cy: 33, r: 2.4, fill: SCENE.overlayDot, opacity: 0.85,
         }),
         ...AXES.map((a, i) => React.createElement('line', {
           key: `l${a.label}`,
@@ -227,7 +228,7 @@ export function ViewportOverlay(props: {
           x: 33, y: 33,
           fill: a.color, fontSize: 10, fontWeight: 700,
           textAnchor: 'middle', dominantBaseline: 'middle',
-          style: { paintOrder: 'stroke', stroke: '#f0f0f0', strokeWidth: 2.5 },
+          style: { paintOrder: 'stroke', stroke: ink.halo, strokeWidth: 2.5 },
         }, a.label)),
       ),
       React.createElement(
@@ -260,7 +261,7 @@ export function ViewportOverlay(props: {
         position: 'absolute', left: 0, top: 0, display: 'none',
         transform: 'translate(-50%, -155%)',
         padding: '1px 5px', borderRadius: 4, fontSize: 11, lineHeight: '15px', whiteSpace: 'nowrap',
-        fontWeight: 600, background: 'rgba(255,255,255,0.93)',
+        fontWeight: 600, background: T.chipStrong,
         border: `1px solid ${l.color}`, color: l.color, pointerEvents: 'none',
       },
     }, l.text)),
@@ -275,7 +276,7 @@ export function ViewportOverlay(props: {
           position: 'absolute', right: 8, top: 8, pointerEvents: 'auto',
           cursor: 'pointer', borderRadius: 6, padding: '2px 7px',
           fontSize: 11, lineHeight: '16px',
-          border: '1px solid #d5d9dd', background: 'rgba(255,255,255,0.86)', color: '#26303a',
+          border: `1px solid ${T.line}`, background: T.chip, color: T.ink,
         },
       }, tr('ui.view.restore'))
       : null,

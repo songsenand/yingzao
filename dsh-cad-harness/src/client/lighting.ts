@@ -23,6 +23,7 @@
 // frames parts wherever they were authored).
 
 import * as THREE from 'three';
+import { SCENE } from './tokens.ts';
 import { t as tr } from './i18n.ts';
 
 /** The rig, exposed for tuning and for the structural acceptance test. */
@@ -98,7 +99,7 @@ export function attachStudioLights(scene: THREE.Scene, camera: THREE.Camera): St
 // ---------------------------------------------------------------- backgrounds
 //
 // The ground the model sits on is part of "can I see it", not decoration. The
-// part is a light blue (#7aa7d9 with the studio rig on it), so these presets
+// part is a light blue (SCENE.part with the studio rig on it), so these presets
 // span VALUE rather than hue: a pale ground for drawings and screenshots, a warm
 // one that flatters the cool part, and two dark ones where a lit part gains the
 // most separation. Mid-greys were left out on purpose — they sit closest to the
@@ -115,10 +116,10 @@ export interface ViewportBackground {
 }
 
 export const VIEWPORT_BACKGROUNDS: readonly ViewportBackground[] = [
-  { id: 'paper', label: tr('ui.bg.paper'), hex: '#f2f3f5', ink: 'dark' },
-  { id: 'warm', label: tr('ui.bg.warm'), hex: '#e6e0d6', ink: 'dark' },
-  { id: 'graphite', label: tr('ui.bg.graphite'), hex: '#39424d', ink: 'light' },
-  { id: 'midnight', label: tr('ui.bg.midnight'), hex: '#1c2733', ink: 'light' },
+  { id: 'paper', label: tr('ui.bg.paper'), hex: SCENE.groundPaper, ink: 'dark' },
+  { id: 'warm', label: tr('ui.bg.warm'), hex: SCENE.groundWarm, ink: 'dark' },
+  { id: 'graphite', label: tr('ui.bg.graphite'), hex: SCENE.groundGraphite, ink: 'light' },
+  { id: 'midnight', label: tr('ui.bg.midnight'), hex: SCENE.groundMidnight, ink: 'light' },
 ];
 
 export const DEFAULT_BACKGROUND_ID = 'paper';
@@ -151,11 +152,11 @@ export function saveBackgroundId(id: string): void {
  * Overlay ink for one ground.
  *
  * The scale bar and the readout are DOM, drawn over the canvas: on a dark ground
- * the old fixed `#26303a` ink disappears. The halo is the opposite end, so the
+ * the old fixed dark ink disappears. The halo is the opposite end, so the
  * text stays legible wherever it lands on the model.
  */
 export function overlayInk(bg: ViewportBackground): { color: string; halo: string } {
   return bg.ink === 'light'
-    ? { color: '#eef1f4', halo: '#1c2733' }
-    : { color: '#26303a', halo: '#f2f3f5' };
+    ? { color: SCENE.inkOnDark, halo: SCENE.haloOnDark }
+    : { color: SCENE.inkOnLight, halo: SCENE.haloOnLight };
 }
