@@ -94,3 +94,10 @@ examples/*/.tmp/
 
 # README 渲染中间件
 /docs/readme-models/build/
+
+# ---- DSH 兼容矩阵的运行产物（表格结论写入 docs，原始日志不入库）----
+dsh-cad-harness/verification/dsh-matrix/
+
+# ---- 本地会话调试脚本与扫描器临时克隆（都不入库）----
+/.scratch/
+/.vet-tmp/
