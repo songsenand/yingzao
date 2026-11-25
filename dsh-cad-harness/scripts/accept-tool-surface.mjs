@@ -27,7 +27,7 @@ let report = null;
 try { report = JSON.parse(run.stdout); } catch { /* checked below */ }
 check('audit JSON parses', report !== null);
 check('9 surfaces declared', report?.surfaces === 9, String(report?.surfaces));
-check('39 current tools captured', report?.tools === 39, String(report?.tools));
+check('the current tool set is captured (coverage, not a frozen count)', Number(report?.tools) >= 39, String(report?.tools));
 check('every registered tool is in exactly one surface',
   report?.coverage?.missing?.length === 0
   && report?.coverage?.absent?.length === 0

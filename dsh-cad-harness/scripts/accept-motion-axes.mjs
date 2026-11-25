@@ -114,7 +114,12 @@ const scenario = {
 };
 
 function assertMotion(tag, report) {
-  check(report.overallStatus === 'pass', `${tag}: the 0.02-turn sweep passes`, report.overallStatus);
+  // 2026-11-24: a revolute mechanism run that did NOT scan its hinge pairs is
+  // `check`, never `pass` — "0 interference" is scoped to the candidate pairs
+  // and cannot cover an excluded pair (the sewing r092/r101 failure mode).
+  check(report.overallStatus === 'check', `${tag}: unscanned hinge pairs force check`, report.overallStatus);
+  check(report.metrics.excludedJointPairs.length > 0,
+    `${tag}: the excluded pairs are listed`, JSON.stringify(report.metrics.excludedJointPairs));
   check(report.metrics.maxJointDriftMm < 2, `${tag}: no joint drift (was 105.566mm)`, `${report.metrics.maxJointDriftMm}mm`);
   check(report.metrics.jointViolations.length === 0, `${tag}: no joint violations`, report.metrics.jointViolations.join('; ') || 'none');
   check(report.metrics.interferenceChecks >= 24, `${tag}: 24+ sampled poses`, `${report.metrics.interferenceChecks}`);

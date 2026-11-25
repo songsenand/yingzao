@@ -25,6 +25,7 @@ const { openVersionStore, saveVersion } = await import('../src/host/version.ts')
 const { ensurePart, attachVersion, partRoleOf } = await import('../src/host/parts.ts');
 const { projectStores } = await import('../src/host/project.ts');
 const { auditDelivery } = await import('../src/host/delivery-audit.ts');
+const { beginRun } = await import('../src/host/runs.ts');
 
 let failures = 0;
 const check = (ok, label, detail = '') => {
@@ -61,7 +62,7 @@ const vS = await saveVersion(store, { stl: STL, userIntent: 'm3 screw model', pa
 await attachVersion(partStore, bracket.id, vB);
 await attachVersion(partStore, screw.id, vS);
 
-const claim = { kind: 'manufacturability', statement: 'every printed part has a printability run' };
+const claim = { kind: 'manufacturability', statement: 'every fabricated part has manufacturing evidence' };
 const audit = (claims) => auditDelivery(projectStores(workspace), { claims, scanPaths: [] });
 
 // 1. baseline: no roles declared → both parts are expected to be printable
@@ -99,6 +100,22 @@ check(
 const info = r.findings.find((f) => f.code === 'role-exempt-parts');
 check(Boolean(info) && info.severity === 'info' && info.detail.includes('m3_screw_20') && info.detail.includes('stock'),
   'the exemption is VISIBLE as an info finding', info?.detail);
+
+// 2b. a CNC run is manufacturing evidence, not just a printability run
+const cncRun = await beginRun(projectStores(workspace).runStore, { kind: 'machinability', title: 'CNC bracket' });
+await cncRun.commit({
+  status: 'pass', judgement: 'not-excluded', summary: 'CNC access · 3-axis',
+  sourceVersionIds: [vB],
+});
+r = await audit([claim]);
+check(
+  !r.findings.some((f) => f.code === 'claim-without-evidence' && f.detail.includes('bracket')),
+  'a fresh machinability run satisfies the manufacturability claim (no FDM screen demanded)',
+);
+check(
+  r.findings.some((f) => f.code === 'claim-without-evidence' && f.detail.includes('m3_screw_20')) === false,
+  'the stock part stays exempt from the same claim',
+);
 
 // 3. role back to printed → expectations return
 await call('set_part_role', { part: 'm3_screw_20', role: 'printed' });
