@@ -89,10 +89,9 @@
 | ID | P | 状态 | 事项 | 剩余出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
 | U01 | P1 | partial | 面板视觉重做 | tokens 与亮/暗主题已落（C9），`accept-tokens` 零字面量、`accept-ui` 的 `assert=layout` 覆盖密度/对齐；**余**：同一任务在新旧 UI 各跑一次，截图对照 + 用户签收（U01 ③） | 2d |
-| U02 | P1 | partial | 更多高质量示例 | 4 个新示例已入库；**余**：干净环境按 README 复现并记录耗时；`examples/README.md` 旋梭行仍写 r053/r052/r024，而旋梭 README 已是 r029/r101，需重跑或改索引；旋梭 README §6 的 6 项未决（5 项待办 + 1 条教训：带耦合 physics、时序脚本按 r101 重算、旧 run `retire` 后 audit 可判、GT2 齿形、新件工艺筛查/视觉复核） | 3–5d |
+| U02 | P1 | partial | 更多高质量示例 | 4 个新示例已入库（旋梭、后拨各含 CadQuery 变体）。**展示策略（2026-11-25 用户）**：进新退旧——新示例进入“当前示例”展示时，把等量或更老的示例移到“历史/归档”，只改展示、不删除目录与语料。**余**：干净环境按 README 复现并记录耗时；`examples/README.md` 旋梭行仍写 r053/r052/r024，而旋梭 README 已是 r029/r101，需重跑或改索引；旋梭 README §6 的 6 项未决（5 项待办 + 1 条教训：带耦合 physics、时序脚本按 r101 重算、旧 run `retire` 后 audit 可判、GT2 齿形、新件工艺筛查/视觉复核）；0.1.2 先按展示策略把 3 个最老的当前示例（ball-and-stick、multirotor-propeller、toy-balance2）移入历史表 | 3–5d |
 | L10 | P2 | planned | STEP 完整导出路径 | 单件 + 项目 ZIP 的 STEP 已有；**余**：STEP 回读往返；B-rep 与 STL 体积/bbox 一致性；三平台 smoke | 3–5d |
 | N15 | P1 | partial | 异步 render/sim job | 当前 jobs 仍只覆盖 OpenSCAD 编译（`src/host/jobs.ts` 头注释）；submit/cancel/timeout 扩到渲染与仿真 | 3–4d |
-| L15 | P2 | planned | 视口内选中零件 | 视口 raycast 目前只服务测量/测厚，没有零件点选 → 高亮 → 名称/版本/颜色/BOM 行 | 2–3d |
 | L1.13 | P1 | partial | 标准件目录工具入口 | 99 specs / 14 families 与 `accept-library-catalog` 已通；**余**：`cad_part` 的 list/get/import-by-catalog、结构化 `libraryRef`、catalog 进 preview/release、E2E import→datum→check | 2–3d |
 | P2-10 | P2 | partial | 装配可装入性 | 已判封闭腔/大面积不可达；**余**：全序列插入检查 | 2–3d |
 | P3-15 | P3 | partial | 参数/schema 小问题 | `-0.0` 已修；余 `/tmp` 路径可见性属 harness core，插件侧不做（可转 `dropped`） | — |
@@ -140,7 +139,7 @@
 
 ## 5. 中远期（L2–L14；L16 见 §3）
 
-> L1 已在 §1/§3/§7；L10/L15 已在 §3。这里不重复“第二内核”。
+> L1 已在 §1/§3/§7；L10 已在 §3，L15 已延后为 §6 的 X14。这里不重复“第二内核”。
 
 | ID | P | 状态 | 事项 | 为什么/触发 | 出口 | 来源 |
 |---|---|---|---|---|---|---|
@@ -178,6 +177,7 @@
 | X11 | 第三个几何引擎 | **不排 0.1.2/0.2；0.3 才评估** | 真实需求 + 3-task benchmark + 不改核心 |
 | X12 | 社区/用户自行接入 | **0.4+/1.0 前再做** | 第一梯队稳定 + 信任/安装/版本方案定稿 |
 | X13 | 渲染器替换（Matplotlib/F3D/自写光栅器） | **不做**；OpenSCAD 常驻依赖 | 除非 OpenSCAD 无法满足渲染/剖切且用户重新拍板 |
+| X14（原 L15） | 视口内选中零件 | **延后**；等视口功能更全面再评估（用户 2026-11-25） | 显隐/高亮/剖切/爆炸等视口能力到位，点选成为真实任务 |
 
 ---
 
@@ -272,6 +272,6 @@
 - **证据一次做全**：R6 用一次 `workflow_dispatch` 全矩阵 + Linux `accept:release`；
   不要用“本机绿”代替 tag 证据。
 - **打包与发布后**：R7/R8；干净 profile 安装记录是“包能用”的唯一证据。
-- **本版不要做**：U01/U02 的视觉与示例重做、L10/N15/L15、第三个引擎、社区适配、渲染器替换。
+- **本版不要做**：U01/U02 的视觉与示例重做、L10/N15、第三个引擎、社区适配、渲染器替换；视口点选已延后（X14）。
 - **判断本版 ready 的一句话**：`npm view dsh-cad-harness dist-tags.latest` 指向 `0.1.2-preview.1`，
   且干净环境按 README 能装、能 `doctor`、能生成并导出——否则不算发完。
