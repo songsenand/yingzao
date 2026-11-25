@@ -21,6 +21,11 @@ The hard part is naming the thing you want measured. `cad_inspect` (`action: "fe
 - **Tessellation is yours for STEP/3MF**: `tolLinear` (mm) / `tolAngular` (rad); lower them only when curvature is the question. STL/DXF ignore them.
 - **Color is not an import format.** A GLB color design is a sidecar via `cad_part` (`action: "appearance"`); the panel still previews STL.
 
+## Measuring at a motion pose
+
+- **`cad_inspect` (`action: "measure"`, `kind: "gap"`) can read a saved run's pose.** Pass `runId`, `aPart`, `bPart` and either `timeSec` or `step` (looked up in that run's interference events). It returns the closest surface distance and both witness points at that trajectory pose; no re-run and no hand-written trajectory math.
+- **A closest-point number is surface clearance, not a collision test.** An embedded part can report a positive distance while the run's boolean reports a real overlap. When the cited run reports an overlap at that step, the reply carries a warning; use the event's `overlapBboxMm` for the overlap region.
+
 ## Modeling
 
 - **`cad_part` (`action: "merge"`) is for "one rigid body", not tidying a corpus.** It reports **shells**: more than one means the merged parts do not all touch — a pile, not a machine.

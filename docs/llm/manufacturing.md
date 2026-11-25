@@ -177,3 +177,15 @@ imposes and what the margins are, plus the non-geometric questions only they can
 numbers, and will not treat a missing number as "no constraint" — an undeclared rule comes
 back in `unevaluable`, and `not-excluded` always means "no geometric counter-example was
 found", never "this can be made".
+
+## Print frame and manufacturing evidence (2026-11-25)
+
+- **`cad_check` (`action: "printability"`) accepts `printOrientationDeg`.** It is the
+  print frame as `[rx,ry,rz]` degrees (Rz·Ry·Rx); a part printed upside down must be
+  screened in that frame, not the modelling pose. The report echoes the frame it used.
+- **The `manufacturability` delivery claim accepts any fresh manufacturing run, not
+  only `printability`.** `machinability` (CNC access), `turning` and `sheet2d` count
+  per part, so a turned brass shaft or a laser-cut plate is not forced through an FDM
+  overhang screen. The process-specific evaluator is still the deliver plan's job;
+  `set_part_role` has only `printed` / `stock` / `research` (there is no `machined`
+  role — the run kind is the evidence).

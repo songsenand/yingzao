@@ -227,3 +227,17 @@ working, not an error.
   也没问允许哪些工艺，就把 “FDM 就只能蜗杆传动” 当前提开工——方案空间被静默砍掉，
   直到返工才暴露。推断出来的约束要说出它排除了什么，再把选项交回用户；
   `brief.processes` 记的是用户允许的**集合**，不是某一个工艺。
+
+## Early sweep screen (2026-11-25)
+
+- **`cad_check` (`action: "sweep"`) is the pre-motion screen.** Give one moving
+  version, the static versions, and a declared joint range (`revolute` degrees or
+  `prismatic` mm). It computes a continuous swept AABB envelope, then closest-point
+  clearance samples, and refines only where clearance is below `2×minFeatureMm` until
+  the arc step is `<= minFeatureMm/2` or `maxSamples` is exhausted.
+- **It returns `collision` / `suspect` / `uncovered` / `clean`, not a delivery
+  verdict.** `uncovered` means the budget ran out before the target arc step; never
+  read it as clean. A positive clearance is not a pass.
+- **The declared range is the assumption.** If the real linkage swings less, the
+  screen can be conservative; if it swings more, the screen proves nothing. State the
+  range, then run `cad_simulate` (`action: "motion"`) for the pass/fail timeline.

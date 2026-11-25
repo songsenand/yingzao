@@ -8,7 +8,7 @@
 
 每条仿真运行都会把 `runs/<id>/trajectory.json`（流体是 `frames.json` + 帧二进制）写进 run 目录，**面板的「运行 → 回放」直接读这些文件**：可暂停、拖动、带事件标记和曲线。工具回复里带 `runId` 与 `playback`，把用户指到那里即可。
 
-**齿轮 run 的“穿透 0”不是齿面证据。** 用 `gear` 关节时该对的接触是**关闭**的（比率是给定约束），所以 `penetration 0` 是构造出来的；`metrics.gearContactsDisabled` 列出这些对，report 里也有一条专门的 note。要证明齿面不打架，用**不带 gear 关节的接触 run**，或 `cad_assembly` (`action: "validate"`)。求解器可用 `solverIterations`（默认 4）和 `ccdSubsteps`（默认 1）调，生效值回显在 `metrics.solver`——但薄齿 + 0.03mm 侧隙这类几何，调参未必有用，报告里该怎么判就怎么写。
+**齿轮 run 的“穿透 0”不是齿面证据。** 用 physics 的 `gear` 关节时该对的接触是**关闭**的（比率是给定约束），所以 `penetration 0` 是构造出来的；`metrics.gearContactsDisabled` 列出这些对，report 里也有一条专门的 note。要证明齿面不打架，用**不带 gear 关节的接触 run**，或 `cad_assembly` (`action: "validate"`)。求解器可用 `solverIterations`（默认 4）和 `ccdSubsteps`（默认 1）调，生效值回显在 `metrics.solver`——但薄齿 + 0.03mm 侧隙这类几何，调参未必有用，报告里该怎么判就怎么写。
 
 **外部脚本算出的轨迹用 `dsh-cad-import-run` 进场**（`--trajectory` + 可选 `--stl-dir`），它和工具写的 run 走同一个写入器、同一把锁、同一个索引；导入默认记 `check`（场地没见证计算过程）。所以“工具做不到这个仿真”时，正确动作是**用脚本算、再导入**，而不是去改插件源码。
 
@@ -21,10 +21,11 @@
 - **关节锚点先量后跑。** 每个 joint 的 anchor 间隙在步进前测量；超过 2mm 直接拒绝并报两个 anchor 的位置。`initialJointGaps` / `jointToleranceMm` 在回复里；拒绝意味着你的 anchor 或 placement 不一致，**不要靠调大容差绕过**。
 - **不同朝向的件之间的关节要逐体轴。** `axis` 是“两个 body 用同一个局部向量”，只在两件坐标系平行时正确；旋转过的件用 `axisA` + `axisB`，或 `axisWorld`（工具换算到各自局部系）。r001 的 105mm 漂移就是“文件系当世界系 + 单轴”两件事叠出来的；修正后同一批 STL 是 0mm。
 - **干涉覆盖是判定的一部分。** 每次运行至少 24 个采样位姿，且必采最终位姿；`interferenceChecks` / `samplingSatisfied` / `maxSampleGapDeg` 回报覆盖。**0 次检查不是 0 碰撞。** 行程太小放不下 24 位姿时判 `check`，不判 pass。
-- **被 revolute joint 连接的一对零件之间的重叠不报**——那是轴承。也正因如此，限位挡块恰好落在这一对上时，要另找方式验证。
+- **revolute pair 默认不报**——那是轴承。`scanJointPairs: true` 把它们放进时间线：落在声明的 `overlapEnvelope` 内且声明 `fit` 的重叠列为配合（`jointFitsUnresolved` 仍会 gate），胶囊外仍是干涉。每条事件带 `overlapBboxMm`（min/max XYZ），扫掠碰撞不必重跑就能定位。
 - **`cycles` 接受小数。** 摆杆 ±14° 只扫 0.078 圈；整圈会变成风车并撞上一切。
 - **`drive` 是运动学：它规定曲柄转角，不解决接触传力。** 它回答“连杆会不会撞、行程够不够”，不回答“电机带不带得动”——后者是 `cad_simulate` (`action: "physics"`) 的 `motor`。
 - **没有曲柄也能跑。** `drive` 是可选的：全部运动件都是 `oscillators`（规定轨迹的导向件/阀门）时不需要曲柄，时间基取**振荡周期**；回复里 `hasCrank: false`。只有“既无 drive 又无 oscillator”才拒绝——那意味着什么都不动。
+- **motion 也支持 `gear` 关节。** `type: "gear"` + `ratio` + 各自的 `axisA`/`axisB`，不需要 anchor。和 physics 一样是**规定**的传动比（每步投影从动件姿态），不传扭矩；`metrics.gears` 回报 `turnsA` / `turnsB` / `measuredRatio` / `agrees`，有 gear 但没转起来时 run 不能 pass。区别在碰撞口径：physics 的 gear pair 是 `contactsDisabled`，motion 的 gear pair **仍进干涉时间线**，用来回答“这个比率下齿会不会撞”。
 - **闭环是事实，不是判定。** `closedLoop` / `loopJoints` 由关节图的 union-find 给出：树为 false / []，罗伯威尔天平（5 件 6 铰）为 true / 2 个闭合边。闭环可以 pass——它只是让读者不必自己重推连通性。
 - **几何合理性是事实，不是判定。** 每个零件对最近零件的间隙 ÷ 自身包围盒对角线 > 5 → `离群`；≤ 24 个三角面 → `简单盒体`。两者都**不改变** pass/fail，但 `geometrySuspects` 非空时，“干涉 0 次”可能什么都没证明：fructose r013 的两个假件停在 500mm 外，报告照样通过。规则本身写在 `geometrySuspectRule` 里随结果一起返回。
 

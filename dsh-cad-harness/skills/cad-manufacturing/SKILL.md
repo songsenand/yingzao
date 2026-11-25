@@ -29,5 +29,7 @@ A screen answers "does this violate a declared rule". It never answers "which pr
 - **A sealed cavity is the only escape-passage failure a mesh can prove.** A passage that merely narrows is not claimed.
 - **CNC tool reach is exact only for circular bores.** Non-circular slots/pockets are not covered, and the report says so.
 - **`judge` / `scan` / `both`**: `scan` returns the field and **no verdict**; `judge` returns `nextLook` (where to look) — the field is not a gate.
+- **Declare the print frame.** `cad_check` (`action: "printability"`) accepts `printOrientationDeg` (`[rx,ry,rz]`, Rz·Ry·Rx); a part printed upside down must be screened in that frame, not the modelling pose.
+- **The delivery claim is manufacturing evidence, not FDM evidence.** `manufacturability` accepts a fresh `printability`, `machinability` (CNC), `turning` or `sheet2d` run per part. A turned brass shaft or a laser-cut plate does not need an FDM overhang screen; `set_part_role` still has only `printed` / `stock` / `research` (there is no `machined` role — the run kind is the evidence).
 
 Full checklist, profile-authoring norms (direction, trust ladder, calibration coupons), and the sealed-cavity/tool-reach reasoning: `docs/llm/manufacturing.md`.

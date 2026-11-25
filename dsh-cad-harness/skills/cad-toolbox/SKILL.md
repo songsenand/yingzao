@@ -1,6 +1,6 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the 9-surface map (39 ops), conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the 9-surface map (44 ops), conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
@@ -9,12 +9,12 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 > **生产工具面（2026-11-16）**：模型只看到 9 个 surface。旧工具名（如 `project_info`、`render_part`）只是内部实现名，直接调用会报 `unknown tool`。
 > 调用格式：`cad_session` / `cad_part` / `cad_assembly` / `cad_check` / `cad_simulate` / `cad_inspect` / `cad_see` / `cad_python` / `cad_deliver` + `action` + `args`。
 
-Nine job surfaces (39 ops), but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
+Nine job surfaces (44 ops), but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |
 | **交付** | 能不能交？ | **`cad_deliver` (`action: "plan"`)**（只读计划） · **`cad_deliver` (`action: "preflight"`)** · `cad_check` (`action: "printability"`) · `cad_check` (`action: "sheet2d"`) · `cad_check` (`action: "turning"`) · `cad_check` (`action: "cnc"`) · `cad_check` (`action: "edm"`) · `cad_assembly` (`action: "check"`) · `cad_check` (`action: "parts"`) · `cad_deliver` (`action: "audit"`) | **否决 / 困难 / 不排除可行** + 见证 | 可以**阻止**交付 |
-| **检测** | 该往哪看？ | `cad_inspect` (`action: "analyze"`)（实验性，不可作交付依据） · `cad_inspect` (`action: "attention"`) · `cad_check` (`action: "appearance"`)（成套外观：锐边/收口/对称/近共面/包络预算，只读） · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
+| **检测** | 该往哪看？ | `cad_check` (`action: "sweep"`) · `cad_inspect` (`action: "analyze"`)（实验性，不可作交付依据） · `cad_inspect` (`action: "attention"`) · `cad_check` (`action: "appearance"`)（成套外观：锐边/收口/对称/近共面/包络预算，只读） · 各工具的 `attention` 场 | 坐标 + \|u\| + 可执行观测 | **永不阻止**，永不沉默 |
 | **仿真** | 这种工况下会怎样？ | `cad_simulate` (`action: "stress"`) · `cad_simulate` (`action: "motion"`) · `cad_simulate` (`action: "physics"`) · `cad_simulate` (`action: "fluid"`) · `cad_simulate` (`action: "lbm"`) | **方向性**读数 + 可靠性 + 证据 | 产**证据**，不自己判交付 |
 
 `instrument` 组只装“读数/坐标/写契约”类工具（`cad_inspect` (`action: "measure"`)、`cad_inspect` (`action: "features"`)、`cad_part` (`action: "generate"`)、`cad_see` (`action: "render"`)、`cad_assembly` (`action: "write"`) 等）；它不是交付判据。声明 `groups` 时不要把 `instrument` 和三个 job 组混为一谈。

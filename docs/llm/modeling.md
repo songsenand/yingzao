@@ -88,3 +88,14 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   recall again whenever you need to look at it once more. Before delivering
   anything claimed to "match the reference", make sure the reference is
   actually in vision at that moment — if it is not, recall it first.
+
+## Measuring at a motion pose (2026-11-25)
+
+- **`cad_inspect` (`action: "measure"`, `kind: "gap"`) can read a saved motion run.**
+  Pass `runId`, `aPart`, `bPart`, and either `timeSec` or `step` (the step is looked up
+  in that run's interference events). It applies the trajectory frame and returns the
+  closest surface distance plus both witness points at that pose — no re-run and no
+  hand-written trajectory math.
+- **That number is surface clearance, not a collision test.** A part wholly embedded
+  in another can report a positive distance while the run's boolean reports an
+  overlap; in that case the reply says so and points at the event's `overlapBboxMm`.
