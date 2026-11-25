@@ -12,7 +12,7 @@ library.
 Tarball release (no build; `lib/` is included):
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 node scripts/setup.mjs          # writes this machine's skill path into the preset
@@ -73,8 +73,17 @@ The `dsh-cad-*` binaries are declared in `package.json`; they are on `PATH` when
 the package is linked into a profile/tool installation. From an unpacked tarball,
 `node scripts/*.mjs` is the reliable form.
 
+## What's new in 0.1.2-preview.1
+
+- `generate` takes `dryRun` (compile + measure, save nothing) and `preflight` (save only watertight single-body meshes).
+- `cad_check` `sweep` screens a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`; motion supports a `gear` ratio.
+- Print overhang is a support cost reported as a finding; only a process profile with `overhangDeg.hard: true` lowers the verdict.
+- Heat-map layers (fused / thickness / overhang / von Mises) and a host-following light/dark theme.
+- New sewing-rotary-hook and 3-speed-derailleur examples (each with a CadQuery variant); older examples move to the history index without being deleted.
+- Full notes and known issues: `docs/dev/RELEASE-NOTES-0.1.2.md` in the source repository.
+
 ## Documentation
 
-The English preview entry is `README.en.md` (this file). The full user, agent and
-maintainer docs live in the repository and remain Chinese for this preview;
-`README.md` is the Chinese package entry.
+The full user, agent and maintainer docs live in the source repository under
+`docs/` (`docs/user/` with English mirrors, `docs/llm/`, `docs/dev/`); the
+maintainer docs remain Chinese for this preview.

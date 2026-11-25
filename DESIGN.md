@@ -4259,3 +4259,80 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
   0.2.3-alpha.1 因上游 `dsh-app-boot` 与 `cordis-plugin-loader@1.1.0` 不匹配，发生在插件加载前）。
   容器只是测试基础设施，不是新的产品依赖：宿主运行时仍不引入
   Docker/daemon（§13 第 6 条不变）。
+
+## 38. 0.1.2 能力增量（2026-11-25）
+
+> 本节记**当前有效**的语义。逐条取舍、被否方案与未决项在 `docs/DECISION-LOG.md` 的同日条目；
+> 发布范围与证据在 `docs/dev/TODO.md` §1 与 `docs/dev/RELEASE-NOTES-0.1.2.md`。
+
+### 38.1 生成前门禁：`dryRun` / `preflight`
+
+- `generate_part`（模型面 `cad_part` action `generate`）新增两个可选参数，默认行为不变：
+  - `dryRun: true`：编译 + 测量，**不落版本、不写图、不建零件行**；返回 watertight / bodies /
+    bbox / min-wall，让模型在消耗一个版本号之前判断几何是否值得保存。
+  - `preflight: true`：只有**网格闭合且单实体**才写版本；薄壁 <1.2mm 只警告、不拒绝
+    （合法的薄耳朵/薄板设计不被挡）。它不替代普通 `generate`，也不把失败版本塞进历史。
+- 壁厚/悬垂屏幕走 Python `check_printability`（§38.6）；每次 preflight 多一次 worker 往返。
+- 拒收条件只有 watertight + 单实体；其余是 finding/警告，不是静默通过。
+
+### 38.2 装配扫掠筛查：`check_sweep`
+
+- 模型面 `cad_check` action `sweep`：一个运动件 + 一组静态件 + **声明的**关节行程
+  （转动角度 / 滑动 mm，绕世界轴与 anchor）。
+- 三层：连续扫掠 AABB 包络先排除不可能相碰的 pair → 粗采样最近距离（不是 boolean）→
+  只对 clearance < 2×`minFeatureMm` 的区间自适应细化，目标弧步长 ≤ `minFeatureMm/2`。
+- 结果 `collision` > `suspect` > `uncovered` > `clean`；预算耗尽报 `uncovered`，**永不报 clean**。
+  它是**筛查**：正值不构成 pass，`simulate_motion` 仍是唯一 pass/fail 证据。
+- 几何在 `python/cad_worker/worker.py` 的 `screen_sweep`（Python canonical）；TS 只保留工具面、
+  路径解析与参数校验，不做顶点变换。
+- **未决：** 关节行程目前由调用方直接给，尚未写进装配契约的接口；接口级 travel 是下一步。
+
+### 38.3 运动：配合包络与 `gear`
+
+- 转动副可声明 `overlapEnvelope`（沿轴的配合胶囊）与 `fit`。`scanJointPairs: true` 把关节对
+  放进干涉时间线：落在胶囊内且声明 `fit` 的重叠列为配合（`jointFitsUnresolved` 仍会 gate），
+  胶囊外的重叠仍是干涉；未声明 `scanJointPairs` 的关节对默认按轴承排除。
+- `gear` 关节带符号 `ratio`（B 每转 A 的圈数）。rapier 没有齿轮约束，所以它是**运动学投影**：
+  每步把从动件姿态/角速度按 ratio 投到主动件，比率与 dt 无关；**不传扭矩**，该对做接触隔离。
+  角度按步累加，不从 t=0 重算（避免 `2·atan2` 在 π 处翻边）；`metrics.gears` 报声明与实测圈数。
+  单步转角 ≥180° 时报告加 note，要求减小 `timestepSec`。
+- 每个干涉事件带 `overlapBboxMm`（交叠 min/max XYZ），冲突可定位而不必重放。
+
+### 38.4 悬垂：支撑成本 + 显式 hard gate
+
+- `check_printability` 默认把打印悬垂（print-overhang）报成 **finding**，不直接降 verdict：
+  “需要支撑”不等于“不可制造”。
+- 只有工艺档案显式 `overhangDeg.hard: true`（不允许支撑/可见面/封闭腔）时，>20mm² 的悬垂才把
+  verdict 降到 `difficult`，且 finding 指名该档案。
+- 术语不变：制造语境的“悬垂”永远是 print-overhang，不是结构悬垂（§28/§34）。
+- Python 为唯一实现（§38.6）；`accept-overhang-policy` 覆盖默认 finding 与 hard gate 两侧。
+
+### 38.5 面板：热力图图层与主题令牌
+
+- 热力图开启时，图层选择器暴露 `fused`（给 agent 的融合风险）、壁厚、悬垂、von Mises 四层；
+  每层用自己的阈值、图例和来源 run，**一次只画一层，不相加成一个分数**。版本/run 切换清掉旧场，
+  避免上一张图留在新网格上；样本 <8 不画。
+- `src/client/tokens.ts` 是唯一的颜色字面量表，`LIGHT`/`DARK` 同键；`T.<role>` 解析为
+  `var(--cad-<role>, <亮色>)`，`src/client/theme.ts` 注入 `:root` 与 `body[data-ds-dark-theme]`。
+- 3D 场景色（零件蓝、标注色板、坐标轴、场地预设）描述模型，**不随主题翻转**。
+- `accept-tokens` 的表外颜色字面量预算为 **0**；`accept-ui` 的 `theme-light` / `theme-dark` /
+  `theme-dark-playback` 做对比度扫描。
+
+### 38.6 单一 Python 路径（TS oracle 退役）
+
+- measure（part/closest/angle/distance）、assembly（validate/check/merge）、motion、printability 的
+  TS parity 实现已退役；生产路径统一走 Python worker。
+- 数值/分支护栏改为：`accept-measure-part-smoke`、`accept-measure-gap-smoke`、
+  `accept-assembly-golden`（解析几何期望值）、`accept-check-assembly-branches`（Python-only 分支）、
+  `accept-motion-joint-pairs` / `axes` / `gear` / `sampling`。
+- 保留的 TS 是“平台/宿主需要”而非第二实现：fluid/MPM 的 env fallback、connectivity/SCAD 的
+  host/client 路径；`buildMeshBvh` 仍服务几何路径。
+- 语义修正：`check_assembly` 的“紧固”接口报 `diameter-match`（此前 `check` 字段一律 `distance`，
+  数字对但算子标签错）；只有一条实现时修正，不再为 parity 保留错误标签。
+
+### 38.7 示例展示：进新退旧
+
+- “当前示例”是展示集合，不是仓库内容集合：新示例进入时，把等量或更老的示例移到“历史 / 归档”。
+- 只改 README 索引与展示，**不删除目录、语料或证据**；移出的示例仍可按需打开。
+- 选择标准：最后活动时间、是否仍有关键证据、是否是测试依赖。`microscope5`（UI/交付测试依赖）、
+  `roberval-balance` / `windup-frog`（关键证据）不因“旧”移出。

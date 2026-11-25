@@ -42,6 +42,15 @@ does not appear at all — no error, just a missing mode. `npx dsh-cad-doctor` r
 - BOSL2 optional, under `lib/BOSL2/` in the source checkout
 - Python runtime is provisioned on first use (about 400 MB)
 
+## What's new in 0.1.2-preview.1
+
+- `generate` takes `dryRun` (compile + measure, save nothing) and `preflight` (save only watertight single-body meshes).
+- `cad_check` `sweep` screens a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`; motion supports a `gear` ratio.
+- Print overhang is a support cost reported as a finding; only a process profile with `overhangDeg.hard: true` lowers the verdict.
+- Heat-map layers (fused / thickness / overhang / von Mises) and a host-following light/dark theme.
+- New sewing-rotary-hook and 3-speed-derailleur examples (each with a CadQuery variant); older examples move to the history index without being deleted.
+- Full notes and known issues: `docs/dev/RELEASE-NOTES-0.1.2.md` in the source repository.
+
 ## Documentation
 
 The user guide, Agent reference, and maintainer notes live in the source

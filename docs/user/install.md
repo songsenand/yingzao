@@ -10,7 +10,7 @@
 | **Node ≥ 20 + pnpm** | 安装/运行插件；tarball 用户不需要 build，DSH 内部仍会用 pnpm |
 | **OpenSCAD** | `setup --openscad=auto` 自动准备；已有 2025.06+ 系统版本则直接用。官方快照优先，官方不可达/持续低于 256 KB/s 才切 OSS。也可用 `CAD_OPENSCAD_BIN` 指定现有二进制 |
 | **BOSL2** | 可选 **仅 OpenSCAD 的建模库**（齿轮/螺纹/螺丝/壁），不是 99 标准件目录。从上游自行下载到 `lib/BOSL2/`，包内不包含 |
-| **标准件目录 v0** | 随包分发 99 个预生成规范件（fit/visual，STEP/STL），无需安装；**0.1.1-preview.1 还没有 `cad_part` 的目录选择/导入操作**。见 [标准件目录](../llm/library.md) |
+| **标准件目录 v0** | 随包分发 99 个预生成规范件（fit/visual，STEP/STL），无需安装；**0.1.2-preview.1 还没有 `cad_part` 的目录选择/导入操作**。见 [标准件目录](../llm/library.md) |
 | **Python** | **不随包分发**；首次分析/仿真时下载约 400MB 到 `$DSH_HOME/cad/runtime/` |
 
 **标准件目录随包**；OpenSCAD、BOSL2 和 Python runtime 不随包。
@@ -20,7 +20,7 @@
 ### 方式 A：tarball（预览版首发，不需要 build）
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <你的 profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup --openscad=auto   # 非交互默认 openscad；TTY 会询问内核

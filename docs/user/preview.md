@@ -1,6 +1,6 @@
 [English](../en/user/preview.md) | 中文
 
-# 0.1.1-preview.1 预览版说明
+# 0.1.2-preview.1 预览版说明
 
 > **这是预览版，不是生产放行系统。** 它已经能装、能自检、能验证、能交付，但不承诺工业级
 > 公差、认证精度或长期支持。请把它当"可用的实验仪器"，不是"合格证"。
@@ -14,6 +14,11 @@
 - 标准件目录 v0：99 个规范件，预生成 STEP/STL（fit / visual 两档），随包分发；**但本版还没有
   `cad_part` 的目录选择/导入操作**，详见 [标准件目录](../llm/library.md)；这与可选的 BOSL2 建模库不是一回事；
 - 五层验证：几何 / 装配 / 刚体与机构 / 流体 / 工艺；
+- **生成前门禁**：`cad_part generate` 的 `dryRun` 只编译 + 测量、不落版本；`preflight` 只在网格闭合且单实体时写版本（薄壁只警告）；
+- **扫掠筛查与配合包络**：`cad_check` 的 `sweep` 按声明的关节行程先找嫌疑；转动副可声明 `overlapEnvelope` / `fit`，motion 支持 `gear` 比率；
+- **悬垂是支撑成本**：默认只报 finding，工艺档案显式 `overhangDeg.hard: true` 才降为 `difficult`；
+- **面板**：热力图可切换 融合风险 / 壁厚 / 悬垂 / von Mises；配色跟随宿主亮/暗主题；
+- **示例**：新增缝纫旋梭与三速后拨（各含 CadQuery 变体）；按“进新退旧”，3 个旧示例移到历史表，目录与语料仍保留；
 - 装配契约（BOM + ICD）、交付审计、证据 CLI；
 - 回放导出：运动回放的工具栏有 **GIF** 和 **WebM** 两个按钮，按**当前视角**导出整段轨迹（浏览器内完成，不上传）；GIF 用自带的 256 色调色板编码器。
 - 截图两种去处：**截图** 把当前帧（含标注框）发进会话；**存图** 把同一张图存成 PNG 下载。
@@ -26,7 +31,7 @@
 见 [安装与首次准备](install.md)。预览版的最小路径：
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup          # 写入本机 skill 路径
@@ -53,7 +58,9 @@ FreeCAD 仍显示为 planned、不可选。
 - **英文文档**：英文用户文档已全套（README、install、preview、limits、workflow、verification、configuration、troubleshooting、advanced），HARNESS 也有英文版；`docs/llm` 也有英文版；`docs/dev` 暂时中文。
 - **导出**：`_UNVERIFIED` 是提示，不是安全边界；改名不会改变 manifest 里的判定。`difficult` 导出会弹一次警告，但文件名不变。
 - **schema/迁移**：旧项目可开；未知的新 schemaVersion 会被 `doctor` 拒绝；没有自动迁移器，迁移前必须备份。
-- **CI**：GitHub Actions workflow 已写，但本机网络暂时无法实际跑；本地 `rehearse:preview` 是等价演练。
+- **CI**：GitHub Actions 已按“快检 / 夜间全量 / tag 发布门”分档运行；tag 前会跑 Ubuntu+macOS 全量、Windows smoke 与 CadQuery pack。本机只实跑 Linux。
+- **示例展示**：当前示例按“进新退旧”维护；移到历史表的示例保留目录、语料与证据，只是不再作为当前示例展示。
+- **0.1.2 线剩余**：视觉签收、示例复现记录、STEP 完整路径、异步 render/sim、标准件目录工具入口尚未完成；视口点选已延后。
 
 ## 怎么报告问题
 
@@ -73,6 +80,6 @@ FreeCAD 仍显示为 planned、不可选。
 
 ## 这一版之后
 
-近期优先：渲染/仿真 job、Python 首启进度；示例语料重跑（windup 等）安排在 0.2。
-中远期第一项：第二几何内核（CadQuery 优先）。完整顺序见
-[`docs/dev/TODO.md`](../dev/TODO.md)。
+近期优先：0.1.2 线剩余项（示例复现记录、STEP 完整路径、异步 render/sim、标准件目录工具入口），
+以及视觉签收；视口内点选零件等视口能力更全面后再评估。中远期是深度/质量（装配 v2、判据标定、
+示例语料重跑）与第三个引擎的评估。完整顺序见 [`docs/dev/TODO.md`](../dev/TODO.md)。

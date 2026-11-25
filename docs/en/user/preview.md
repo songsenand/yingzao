@@ -1,4 +1,4 @@
-# 0.1.1-preview.1 preview notes
+# 0.1.2-preview.1 preview notes
 
 [中文](../../user/preview.md) | English
 
@@ -6,7 +6,7 @@
 
 ## What is in this release
 
-- Natural language → OpenSCAD part → compile, render, version store;
+- Natural language → OpenSCAD or CadQuery part → compile, render, version store;
 - The model-facing catalog is compressed from 39 tools to **9 job surfaces**
   (`cad_session`/`cad_part`/`cad_assembly`/`cad_check`/`cad_simulate`/`cad_inspect`/
   `cad_see`/`cad_python`/`cad_deliver`), with arguments under `action`;
@@ -15,6 +15,11 @@
   `cad_part` catalogue select/import action yet** — see
   [the catalogue reference](../llm/library.md). This is not the optional BOSL2 modelling library;
 - Five verification layers: geometry / assembly / rigid body & mechanism / fluid / process;
+- **Check before you save**: `cad_part generate` takes `dryRun` (compile + measure, write nothing) and `preflight` (save only when the mesh is watertight and a single body; sub-1.2mm walls are a warning);
+- **Sweep screen and fit envelopes**: `cad_check` `sweep` finds suspects over a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`, and motion supports a `gear` ratio;
+- **Overhang is a support cost**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`;
+- **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host;
+- **Examples**: sewing rotary hook and 3-speed derailleur, each with a CadQuery variant; per "new in, old out", 3 older examples moved to the history table while keeping their directories and corpora;
 - Assembly contract (BOM + executable ICD), delivery audit, evidence CLI;
 - Risk-annotated export: a blocked delivery can still be exported, but the panel asks for confirmation, the filename carries `_UNVERIFIED`, and the project `exports/<id>/` keeps a manifest and the findings;
 - Playback export: the motion toolbar has **GIF** and **WebM**, exporting the whole trajectory from the **current camera** in the browser (nothing is uploaded); GIF uses the built-in 256-colour encoder;
@@ -26,7 +31,7 @@
 See [install](install.md). The minimum path:
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.1-preview.1.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup
@@ -51,7 +56,9 @@ OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system ins
 - **English docs**: the complete English user set is available under `docs/en/user/`; HARNESS also has an English version. `docs/llm` has an English version too; `docs/dev` stays Chinese for now.
 - **Export**: `_UNVERIFIED` is a warning, not a security boundary; renaming the file does not change the manifest verdict. A `difficult` export shows one warning before the download but keeps the original filename.
 - **Schema/migration**: old projects open; an unknown newer `schemaVersion` is refused by `doctor`; there is no automatic migrator, so back up before migrating.
-- **CI**: the GitHub Actions workflow is written but was not run from this machine (network); `rehearse:preview` is the local equivalent.
+- **CI**: GitHub Actions now runs in tiers (fast / nightly full / tag release gate); a tag runs the Ubuntu + macOS full matrix, Windows smoke and the CadQuery pack. This machine runs Linux only.
+- **Example display**: current examples follow "new in, old out"; a moved example keeps its directory, corpus and evidence and is only no longer shown as current.
+- **Still open in the 0.1.2 line**: visual sign-off, recorded clean-environment example runs, the full STEP path, async render/simulation jobs and the catalogue tool entry; viewport picking is deferred.
 
 ## Reporting a problem
 
@@ -71,6 +78,8 @@ Please include:
 
 ## After this release
 
-Near term: render/simulation jobs, Python first-run progress; re-running the example
-corpora (windup and friends) is scheduled for 0.2.
-First mid-term item: a second geometry kernel (CadQuery first). Full order: [`docs/dev/TODO.md`](../../dev/TODO.md) (Chinese).
+Near term: the remaining 0.1.2-line items (recorded example runs, the full STEP path,
+async render/simulation jobs, the catalogue tool entry) and visual sign-off; viewport
+part picking waits until the viewport itself is more complete. Mid term is depth/quality
+(assembly v2, criterion calibration, example corpus reruns) and evaluating a third
+engine. Full order: [`docs/dev/TODO.md`](../../dev/TODO.md) (Chinese).

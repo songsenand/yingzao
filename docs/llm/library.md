@@ -4,7 +4,7 @@
 
 > 长解释参考；短规则在 `skills/cad-toolbox/SKILL.md`。
 
-先说结论：**99 个预生成标准件随包分发，但在 0.1.1-preview.1 还没有一等工具入口。**
+先说结论：**99 个预生成标准件随包分发，但在 0.1.2-preview.1 还没有一等工具入口。**
 不要把它和 BOSL2 或装配清单里的弹簧 `standardId` 混为一谈。
 
 ## 三个不同的东西
@@ -52,7 +52,7 @@ create · generate · import · merge · role · appearance
 - 如果用户明确给出一个 `library/parts/.../fit/model.step` 路径，可以走
   `cad_part` (`action: "import"`) 导入为 `stock` 版本；这是普通导入，不是目录选择。
 - 如果用户只说“用一个 M5 螺栓”，当前没有可发现的目录入口；应明确告诉用户
-  0.1.1-preview.1 的目录尚未接入工具，或请用户给出 STEP/STL。
+  0.1.2-preview.1 的目录尚未接入工具，或请用户给出 STEP/STL。
 - 需要螺纹/齿轮几何时用 **BOSL2**，但那是 OpenSCAD 建模，不是 99 目录里的预生成件。
 
 `assembly.json` 的 `stockRef` 是自由文本，不是目录解析器；`elastic.standardId` 只认

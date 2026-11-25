@@ -10,7 +10,7 @@ A dsh plugin for mechanical CAD — fit, motion and manufacturability checked be
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/en/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/en/user/limits.md)
 [![npm](https://img.shields.io/npm/v/dsh-cad-harness?label=npm)](https://www.npmjs.com/package/dsh-cad-harness)
-[![Status](https://img.shields.io/badge/status-0.1.0%20preview-orange.svg)](docs/en/user/preview.md)
+[![Status](https://img.shields.io/badge/status-0.1.2--preview.1-orange.svg)](docs/en/user/preview.md)
 
 [中文](README.md) · [Quick start](#quick-start) · [Verification](#verification) · [Documentation](#documentation)
 
@@ -34,6 +34,7 @@ dsh plugin --profile <your-profile> add dsh-cad-harness
 - [Quick start](#quick-start)
 - [Usage](#usage)
 - [Verification](#verification)
+- [What's new](#whats-new)
 - [Known limits](#known-limits)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -139,7 +140,7 @@ The motion check answers whether it moves, collides or runs out of stroke; it do
 | Layer | Used |
 |---|---|
 | Geometry kernel | **OpenSCAD** + **Manifold** backend; optional **CadQuery** (B-rep, separate pack); BOSL2 is an optional **OpenSCAD modelling library** (threads/gears/screws), not the standard-parts catalogue |
-| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.1-preview.1** — see [library/README](dsh-cad-harness/library/README.md) |
+| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.2-preview.1** — see [library/README](dsh-cad-harness/library/README.md) |
 | Numerical checks | Python, trimesh, manifold3d, numpy, shapely |
 | Host | **DeepSeek Harness** plugin; Node.js ≥ 20, TypeScript |
 | Panel | React + WebGL viewport, running inside the DSH Web GUI |
@@ -307,13 +308,24 @@ by CI.
 > Run this from a normal terminal: kern needs the systemd user bus and cannot
 > start inside DSH's own bwrap sandbox.
 
+## What's new (0.1.2-preview.1)
+
+- **Check before you save**: `cad_part generate` now takes `dryRun` (compile + measure, write nothing) and `preflight` (save only when the mesh is watertight and a single body; a sub-1.2mm wall is a warning).
+- **A layer between assembly and motion**: `cad_check` `sweep` screens one moving part over a declared joint range and reports `suspect`, never a delivery verdict; revolute joints can declare `overlapEnvelope` / `fit`, and motion supports a `gear` ratio.
+- **Overhang is a support cost, not a failure**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`.
+- **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host.
+- **Examples**: sewing rotary hook and 3-speed derailleur, each with a CadQuery variant; per the "new in, old out" policy, 3 older examples moved to the history table while keeping their directories and corpora.
+- Full details, evidence and known issues: [0.1.2-preview.1 release notes](docs/dev/RELEASE-NOTES-0.1.2.md).
+
 ## Known limits
 
-- **Not native CAD**: no feature tree, sketch constraints or drag editing; the source of geometry is code, and STEP can come in but cannot go out.
+- **Not native CAD**: no feature tree, sketch constraints or drag editing; the source of geometry is code, and STEP can come in and be exported per part (round-trip and full audit are still pending).
 - **Started as a personal tool**: documentation and acceptance were added after the results exceeded expectations; the early commit history is messy.
 - **No formal benchmark baseline**: `examples/bench` has only one N=1 exploratory run; none of the 6 tasks passed the machine checks, and 03 was left unfinished because of the server-side quota (429). It is not a comparable benchmark.
 - **Uneven tool maturity**: printability and assembly checks are relatively mature; CNC, EDM, sheet metal, turning and die casting remain `partial`; dynamic simulation is limited by the solver.
 - **Not every example is one-command rerunnable**: `examples/*/cad-data/` is gitignored; historical examples keep only documentation, source and renders.
+- **Current examples follow "new in, old out"**: when new examples enter the current table, an equal number of older ones move to the history table; directories, corpora and evidence are never deleted, only no longer shown as current.
+- **Long tasks**: background jobs still cover OpenSCAD compilation only; rendering and simulation remain synchronous (unchanged in 0.1.2).
 - **English is machine-translated**: the English user docs, `docs/en/llm` and `HARNESS.en.md` have not been human-polished; the client UI is in English, but model-side output may still be Chinese.
 - **Not cheap**: that exploratory run consumed 81.41M tokens; the context cost of long tasks is real.
 

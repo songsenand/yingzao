@@ -10,7 +10,7 @@ dsh 的机械 CAD 插件：验收前替你把配合、运动与可制造性查�
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/user/limits.md)
 [![npm](https://img.shields.io/npm/v/dsh-cad-harness?label=npm)](https://www.npmjs.com/package/dsh-cad-harness)
-[![Status](https://img.shields.io/badge/status-0.1.1--preview.1-orange.svg)](docs/user/preview.md)
+[![Status](https://img.shields.io/badge/status-0.1.2--preview.1-orange.svg)](docs/user/preview.md)
 
 [English](README.en.md) · [快速开始](#快速开始) · [验证](#验证) · [文档](#文档)
 
@@ -34,6 +34,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 - [快速开始](#快速开始)
 - [用法](#用法)
 - [验证](#验证)
+- [本版变化](#本版变化)
 - [已知边界](#已知边界)
 - [文档](#文档)
 - [参与贡献](#参与贡献)
@@ -139,7 +140,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 | 层 | 使用 |
 |---|---|
 | 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 是可选 **OpenSCAD 建模库**（螺纹/齿轮/螺丝），不是标准件目录 |
-| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.1-preview.1 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
+| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.2-preview.1 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |
@@ -308,13 +309,24 @@ curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
 
 > 必须在普通终端里跑：kern 需要 systemd 用户总线，不能嵌套在 DSH 自己的 bwrap 沙箱里。
 
+## 本版变化（0.1.2-preview.1）
+
+- **生成前先判断**：`cad_part generate` 的 `dryRun` 只编译 + 测量、不落版本；`preflight` 只在网格闭合且单实体时写版本（薄壁 <1.2mm 只警告）。
+- **装配到运动之间多一层**：`cad_check` 的 `sweep` 按声明的关节行程做扫掠筛查，报 `suspect`，不冒充交付判定；转动副可声明 `overlapEnvelope` / `fit`，motion 支持 `gear` 比率。
+- **悬垂不再直接判失败**：默认只报 finding；工艺档案显式 `overhangDeg.hard: true` 才降为 `difficult`。
+- **面板**：热力图可切换 融合风险 / 壁厚 / 悬垂 / von Mises；配色跟随宿主亮/暗主题。
+- **示例**：新增缝纫旋梭与三速后拨（各含 CadQuery 变体）；按“进新退旧”，3 个旧示例移到历史表，目录与语料仍保留。
+- 完整说明、证据与已知问题见 [0.1.2-preview.1 发布说明](docs/dev/RELEASE-NOTES-0.1.2.md)。
+
 ## 已知边界
 
-- **不是原生 CAD**：没有特征树、草图约束和拖拽编辑，几何源头是代码，STEP 能进不能出。
+- **不是原生 CAD**：没有特征树、草图约束和拖拽编辑，几何源头是代码；STEP 能进，也能按件导出（往返与完整审计仍待补）。
 - **起点是个人自用**：效果超出预期后才补文档和验收，早期提交历史比较乱。
 - **题库没有正式基线**：`examples/bench` 只有一轮 N=1 探索运行，6 题机检通过数均为 0，03 因服务端配额上限（429）未完成，不是可比较的 benchmark。
 - **工具成熟度不齐**：打印性检查 / 装配检查相对成熟，CNC、EDM、钣金、车削、压铸等仍是 `partial`，动态仿真受求解器限制。
 - **示例不能全部一键复跑**：`examples/*/cad-data/` 被 gitignore，历史示例只保留文档、源码和渲染。
+- **当前示例按“进新退旧”维护**：新示例进入当前表时，等量或更老的示例移到历史表；目录、语料与证据不删除，只是不再作为当前示例展示。
+- **长任务**：后台 job 仍只覆盖 OpenSCAD 编译；渲染、仿真仍同步（0.1.2 未变）。
 - **英文是机器翻译**：英文用户文档、`docs/en/llm`、`HARNESS.en.md` 未经人工润色；客户端 UI 已英文化，模型侧输出仍可能为中文。
 - **成本不低**：那一轮探索消耗 81.41M tokens；长任务的上下文成本是真实成本。
 
