@@ -16,6 +16,7 @@
 | 示例 | 角色 | 最后活动 | 本地语料 | 当前证据 / 说明 |
 |---|---|---:|---:|---|
 | [sewing-rotary-hook](sewing-rotary-hook/README.md) | 缝纫机旋梭工作单元（1.5×；OpenSCAD；钣金/冲压/CNC/FDM；黄铜/不锈钢/PLA） | 2026-11-21 | 本地 | check rev 29（36/36）/ motion r101（26.001mm、0 干涉）/ 独立全对扫描（23 件 253 对、0 干涉）/ r015（1:1 传动）/ evidence/hook_needle_timing（脚本待按 r101 重算）；audit excluded：旋梭轴组 5 装夹 + 齿轮齿面逐相位（README §6） |
+| [sewing-rotary-hook-cq](sewing-rotary-hook-cq/README.md) | CadQuery 旋梭机构（2× 演示尺度；2:1 齿轮；CNC 车/铣 + 激光切 + 钣金折弯 + FDM；黄铜/不锈钢/PLA） | 2026-11-25 | CadQuery | r005（整机 14 件 91 对 0 干涉）/ r019（契约 14/14）/ r018（motion 49 位姿 0 干涉）/ r025（缝合链 pass）；audit 仍有 excluded，见 README §5/§9 |
 | [bicycle-derailleur-3spd](bicycle-derailleur-3spd/README.md) | 三级后拨（内置三档定位；CNC 自制 + 库内标准件，钢缆/链条为输入边界） | 2026-11-20 | 本地 | r036(motion 24 位姿 0 干涉/三档 0-5.05-10.00) / r037(契约 29/29) / r035(整机 136 对 0 干涉) |
 | [bicycle-derailleur-3spd-cq](bicycle-derailleur-3spd-cq/README.md) | CadQuery 三速后拨（外置三档；平行四连杆；CNC 6061/POM + 库内标准件；回位/cage 弹簧；顶部开口+POM 过盈顶盖） | 2026-11-21 | CadQuery | r119(契约 62/62) / r117(全行程) / r118(低档静检) / r071(cage 16°) / r120(应力 check) / v073(基座壁 not-excluded) / r111–r112(装夹可达性) / r057(顶盖车削)；audit difficult 0 blocked |
 | [ball-valve-dn100](ball-valve-dn100/README.md) | DN100 PN16 两片式法兰浮动球阀（铸造+锻造+CNC，不外购成品件） | 2026-11-17 | 本地 | r002(90° motion 0 干涉) / r017-r018(流体) / r015(assembly) / r016(29/29 接口) |

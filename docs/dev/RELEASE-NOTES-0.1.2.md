@@ -106,8 +106,8 @@ P3-15 参数/schema 小问题（`-0.0` 已修，`/tmp` 路径可见性属 harnes
 - **缝纫旋梭工作单元**（OpenSCAD + CadQuery 变体）：两轴布局、GT2 1:1、26mm 针杆行程；
 - **三速后拨**（OpenSCAD + CadQuery 变体）：三档索引、CNC 自制 + 库内标准件。
 
-证据（各 README 为准）：旋梭 check 36/36、motion 26.001mm / 0 干涉；
-后拨 check 29/29、motion 24 位姿 / 0 干涉；CQ 后拨 check 62/62。
+证据（各 README 为准）：旋梭 check 36/36、motion 26.001mm / 0 干涉；CQ 旋梭 check 14/14、
+motion 49 位姿 / 0 干涉；后拨 check 29/29、motion 24 位姿 / 0 干涉；CQ 后拨 check 62/62。
 
 **展示策略（2026-11-25 用户）：进新退旧。** 新示例进入“当前示例”时，把等量或更老的示例移到
 “历史 / 归档”表；**只改展示，不删除目录、语料或证据**。本版先移出

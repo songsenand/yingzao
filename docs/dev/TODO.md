@@ -89,7 +89,7 @@
 | ID | P | 状态 | 事项 | 剩余出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
 | U01 | P1 | partial | 面板视觉重做 | tokens 与亮/暗主题已落（C9），`accept-tokens` 零字面量、`accept-ui` 的 `assert=layout` 覆盖密度/对齐；**余**：同一任务在新旧 UI 各跑一次，截图对照 + 用户签收（U01 ③） | 2d |
-| U02 | P1 | partial | 更多高质量示例 | 4 个新示例已入库（旋梭、后拨各含 CadQuery 变体）。**展示策略（2026-11-25 用户）**：进新退旧——新示例进入“当前示例”展示时，把等量或更老的示例移到“历史/归档”，只改展示、不删除目录与语料。**余**：干净环境按 README 复现并记录耗时；`examples/README.md` 旋梭行仍写 r053/r052/r024，而旋梭 README 已是 r029/r101，需重跑或改索引；旋梭 README §6 的 6 项未决（5 项待办 + 1 条教训：带耦合 physics、时序脚本按 r101 重算、旧 run `retire` 后 audit 可判、GT2 齿形、新件工艺筛查/视觉复核）；0.1.2 先按展示策略把 3 个最老的当前示例（ball-and-stick、multirotor-propeller、toy-balance2）移入历史表 | 3–5d |
+| U02 | P1 | partial | 更多高质量示例 | 4 个新示例已入库并进索引；展示策略已执行（ball-and-stick、multirotor-propeller、toy-balance2 移到历史表，目录/语料未删除）。**余**：干净环境按 README 复现并记录耗时；旋梭 README §6 的 6 项未决（5 项待办 + 1 条教训：带耦合 physics、时序脚本按 r101 重算、旧 run `retire` 后 audit 可判、GT2 齿形、新件工艺筛查/视觉复核） | 3–5d |
 | L10 | P2 | planned | STEP 完整导出路径 | 单件 + 项目 ZIP 的 STEP 已有；**余**：STEP 回读往返；B-rep 与 STL 体积/bbox 一致性；三平台 smoke | 3–5d |
 | N15 | P1 | partial | 异步 render/sim job | 当前 jobs 仍只覆盖 OpenSCAD 编译（`src/host/jobs.ts` 头注释）；submit/cancel/timeout 扩到渲染与仿真 | 3–4d |
 | L1.13 | P1 | partial | 标准件目录工具入口 | 99 specs / 14 families 与 `accept-library-catalog` 已通；**余**：`cad_part` 的 list/get/import-by-catalog、结构化 `libraryRef`、catalog 进 preview/release、E2E import→datum→check | 2–3d |
