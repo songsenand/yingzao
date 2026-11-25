@@ -15,6 +15,7 @@
 export interface JointEndpoints {
   bodyA: string;
   bodyB: string;
+  type?: string;
 }
 
 /**
@@ -44,6 +45,7 @@ export function jointLoopClosers(joints: readonly JointEndpoints[]): string[] {
 
   const closers: string[] = [];
   for (const j of joints) {
+    if (j.type === 'gear') continue; // a gear is a coupling, not a loop-closing constraint
     const a = find(j.bodyA);
     const b = find(j.bodyB);
     if (a === b) {

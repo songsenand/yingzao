@@ -6479,6 +6479,34 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 
 **影响：** `src/host/compile.ts`、`scripts/provision-openscad.mjs`、`scripts/doctor.mjs`、安装/发布文档；不加自动下载，不改变 OpenSCAD 常驻渲染的决策。
 
+## 2026-11-20：自行车三级变速器选型与交付边界（examples/bicycle-derailleur-3spd）
+
+**触发条件：** 第 1 条（用户拍板方案与边界）。
+
+**要解决的问题：** 在 `examples/` 新建一台三级变速器。需要先定：机构型式、外购件范围、CNC 工艺集合、功能验证口径。
+
+**决策内容：** 后拨链器 + **内置三档定位**（平行四边形四杆 + 3 凹槽索引板 + 压缩弹簧回位 + 凸轮-柱塞式导轮架预载）；3 档节距 5.0 mm、总横向行程 10.0 mm、钢缆每档 5.0 mm；外购件**严格限定在插件标准件库内**（6000 轴承、DIN 2098 压缩弹簧、ISO 紧固件），钢缆与链条只作输入边界、不建模；自制件全部 CNC（3 轴铣 + 车）；“功能验证”= 装配接口 + 运动学（三档对位/全行程/0 干涉）+ 弹簧力 + 钢缆张力下的应力 + CNC 可加工性。
+
+**理由：** 用户逐项确认（2026-11-20 四问四答）。内置定位让“输入位移/张力 → 三档”成为变速器自身的机械属性；严格库内件是用户对“仅插件标准件”的原约束；压缩弹簧是库内唯一弹簧族，决定了回位与张紧的实现方式与力上限。
+
+**依据：** 用户四问四答；实现证据：装配契约 29/29（r037）、整机 136 对 0 干涉（r035）、运动学 24 位姿 0 干涉且三档 0/5.05/10.00 mm（r036）、弹簧行为 7.6→20.3 N 等（契约 I27–I29）。
+
+**影响：** `examples/bicycle-derailleur-3spd/`（source/layout.py、source/parts、assembly/assembly.json、profiles/cnc-3axis-alu.json、README）；后续若要真骑行额定，需要引入库外扭转弹簧/链条，属于本决策的例外，需用户重新拍板。
+
+## 2026-11-20：退役三条已失效的失败 run（bicycle-derailleur-3spd 交付前）
+
+**触发条件：** 第 1 条（用户拍板）。
+
+**要解决的问题：** `cad_deliver audit` 只剩 2 条 blocked，均为已失效几何/工具缺陷留下的历史 run：`r006`（v017 垫圈端面与轴承端面重合的贴面重叠，已由 v026 修正）、`r054`/`r055`（车削屏幕把回转直径量在世界原点轴上，把 Ø8 阶梯轴报成 46.8/68 mm）。run 的 subject 编码了版本集，新版本的 run 无法 supersede 旧 run，工具也没有删除 run 的 API。
+
+**决策内容：** 用户批准后，把 `r006`、`r054`、`r055` 三条 run 的开发目录移到 `cad-data/runs/.retired/`，从 `runs/manifest.json` 索引中剔除，并在 `.retired/retired.json` 中保留原 run 记录与退役原因。**未删除任何文件**；README 的“已知缺口”记录原因与当前覆盖证据（r036/r039）。
+
+**理由：** 三条记录针对的几何已不存在或失败由屏幕坐标系缺陷造成，继续作为 `current` 会让审计永久 red；保留文件 + 记录原因比删除更可追溯。这是语料整理，不是改写证据：当前几何的证据（r035/r036/r037/r039）没有变化。
+
+**依据：** 用户 2026-11-20 选择“退役两条失效 run（推荐）”；退役后 `cad_deliver audit` 返回 `difficult · 0 blocked · 0 current failing`（51 runs）。
+
+**影响：** 仅 `examples/bicycle-derailleur-3spd/cad-data/`（本地语料，gitignored）与该示例 README；不影响任何当前版本的几何或证据。
+
 ## 2026-11-20：BOSL2 按内核分侧——OpenSCAD 保留，CadQuery 不引入
 
 **触发条件：** 第 1 条（用户拍板）+ 第 4 条（影响内核提示、工具描述与文档口径）。
@@ -6498,3 +6526,238 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **影响：** `src/host/kernel-context.ts`、`src/host/tools.ts`（`generate_part` 描述）、`skills/cad-toolbox/SKILL.md`、`docs/llm/library.md` 与英文版、`docs/user/install.md` 与英文版、`scripts/doctor.mjs`、`scripts/accept-kernel-context.mjs`、`DESIGN.md`。BOSL2 的安装/接线/许可形态不变。
 
 **非目标：** 不删除 BOSL2；不把它打进 npm 包；不为 CQ 做 BOSL2 等价库（不引 cq_warehouse）；不把 `accept-bosl2` 接进 CI（`lib/` 被 gitignore，CI 无 BOSL2，要接先解决获取与许可）。
+
+## 2026-11-21：三速后拨用 CadQuery 重写——外置三档 + 平行四连杆 + 库内标准件
+
+**触发条件：** 第 1 条（用户拍板）+ 第 3 条（独立版本链、后续返工成本高）+ 第 4 条（examples 口径与 CNC/标准件路由）。
+
+**要解决的问题：** 现有 `examples/bicycle-derailleur-3spd/` 是 OpenSCAD 实现、内置三档定位；用户要求同一功能改用 CadQuery 重做，外购件只能用插件库内标准件，工艺为 CNC，并且用户明确要求**不得读取旧示例**（否则视为作弊）。需要决定新目录的架构、索引方式、铰链方案与验证口径。
+
+**决策内容：**
+1. 新建 `examples/bicycle-derailleur-3spd-cq/`，独立 `cad-data/` 与版本链，不读、不改旧 OpenSCAD 目录；真实几何源放 `cq/*.py`，版本 source 只做加载器。
+2. **外置三档**：三档定位由指拨完成（外部边界），后拨只提供回位张力与两个 M4 端限位；钢缆 0/2.21/4.56 mm → 杠杆 0/6.33/13.07° → P 铰 x 0/4/8 mm。
+3. **平行四连杆**：L=40 mm、初始 φ=22°，B 铰 z=±20，P 铰 y=0 平面（14.984, −17.087 / −57.087）；杆宽 8、铰轮毂 Ø14，垂直间距 40·sin22°=14.98 mm，避免 v1 的 9.74 mm 对角干涉。
+4. **混合铰**：四连杆 Ø6 销 + POM 衬套；滑轮内 6000 轴承 + Ø10×50 轴 + Ø10 孔压配；**不用 din471 卡簧**（光轴无槽，压配替代）。
+5. 外购件只从库内取：2×6000、2×Ø10×50、6×Ø6×30、4×6 mm 轴环、M3/M4 紧定、M10 安装组、2×din2098 弹簧。
+6. 弹簧 BOM-only，不放进干涉网格；用两端座距做 spring-behaviour（k=2.04 N/mm 由圈数估算）。
+7. 验证口径：契约 60 接口（assembly check）+ 全行程 motion + 低档静检 + 应力/CNC 屏幕；**difficult 不写成 pass**。
+
+**理由：** 内置三档会把棘爪/定位爪塞进一个仅靠钢缆位移输入的机构，运动引擎无弹簧/接触，无法证明；外置三档把不可证的部分划到边界，后拨只保留可几何验证的四连杆 + 端限位。平行四连杆保证三档横向平动而笼不转；Ø14 轮毂 + 8 mm 杆是干涉迭代后的最小可行截面。卡簧改压配是因为库内 din471 需要轴槽，光轴上会与轴名义干涉。
+
+**依据：** 用户 2026-11-21 会话确认方案并批准开工；`cad_assembly check` r031 = 60/60（0 硬冲突、0 未声明、0 intent flag）；motion r029（24 位姿、0 干涉、关节漂移 0、P 行程 7.58/几何 8.00）、r030、r022（cage 16°）；低档静态 r034（21 对、0 干涉）；应力 r033（check：薄夹块 3.5 mm 在 dx=1.875 下不可认证）；基座 CNC 屏幕 r032（difficult：0.15 mm 转角薄区 0.06%）；`cad_deliver audit` difficult、0 blocked。
+
+**影响：** 新增 `examples/bicycle-derailleur-3spd-cq/`（README、`cq/`、契约、版本/运行语料）；`examples/README.md` 增加一行；旧 `bicycle-derailleur-3spd/` 未动。后续如需链条/飞轮/车架/指拨闭环，应在此目录外新增边界件，不把外置三档改成内置而不重做运动模型。
+
+## 2026-11-21：基座回位弹簧腔从盲腔改为顶部开口 + POM 过盈顶盖
+
+**触发条件：** 第 3 条（装配不可行、返工成本高）+ 第 4 条（基座/顶盖/BOM/契约/装配顺序）。
+
+**要解决的问题：** CNC 可达性屏幕 r040 报基座 28.3% 面积不可达、最少 6 主方向装夹。追查发现不是屏幕噪声：弹簧腔 Ø12.5×28（z=32..60）上端被 60..63 的管壁封死，下端只有 Ø6 推杆孔（z=27..32）；推杆 Ø12 盘在 z=32..35，**既不能从 Ø6 孔进入，也不能从封死顶部进入**。这是真实的装配死路，只是之前的 motion/装配检查没有把弹簧/推杆放进网格。
+
+**决策内容：**
+1. 基座 v061/v064：弹簧腔顶部开通到 z=60；顶部加 20×20×3 法兰、中心 Ø12.5 通孔；推杆/弹簧从 +Z 装入。
+2. 新增自制 **POM 顶盖 v063**：Ø12.6×3 插头 + Ø20×2 圆法兰；插头与 Ø12.5 孔**过盈 0.05**（直径差 0.1），压住弹簧；不需新增紧固件。
+3. 基座电缆座同时加宽到 y=3.5..17，把 Ø6 电缆孔完全包住，消除孔口 0.07 mm 薄边；限位臂加宽到 y=9..14.5、M4 紧定孔居中，孔/锪面周边壁 ≥1.1 mm。
+4. 契约 rev 18：36 子件、62 接口，新增 cap 与两条接口（过盈 diameter-match、法兰-顶面 distance）；BOM 增加 1 件 POM 顶盖，紧固件不变。
+
+**理由：** 不开口的话，唯一的 6 mm 杆孔决定了 Ø12 盘无法通过；把腔体做成“从顶部装入 + 压入式盖”是最少改动、最少新零件的方案。用**过盈压入**而非 M3 紧定，是因为库内只有 iso4026 无头紧定螺钉（无法夹住盖），而库内没有 M3 圆柱头/盘头螺钉；过盈 0.05 的 POM 插头在 10 N 弹簧力下由摩擦保持，仍可拔出维修。顶部开口同时把腔体从“6 mm 孔后的盲腔”变成 +Z 可达，CNC 屏幕从 28.3% 不可达降到 24.3%（剩余是孔壁/内腔，屏幕警告）。
+
+**依据：** r040（28.313% 不可达、6 装夹）→ r064（not-excluded，24.302%）；r061 低档静检 21 对 0 干涉；r062 契约 62/62；r059 全行程 24 位姿 0 干涉；r057 顶盖车削 not-excluded（Ø20<棒料22）；r063 基座壁 screen difficult（0.18 在限位臂外角，0.14% 面积）。退役 r040–r047、r055 共 9 条旧 run，原因保留在 `cad-data/runs/.retired/retired.json`。
+
+**影响：** 基座 v064、顶盖 v063、契约 rev 18、README/证据表、BOM +1；上/下/P/cage/滑轮/滑块几何不变；`examples/README.md` 一行更新。
+
+## 2026-11-21：按两次后拨会话的过程证据修插件闭环（证据/契约/检查语义）
+
+**触发条件：** 第 2 条（两次会话的 run/调用/错误数据对照）+ 第 3 条（run 生命周期、契约写入、检查坐标系都是难回退的契约）+ 第 4 条（影响 tools.ts、runs.ts、assembly-check、motion、inspect、版本存储等多个模块）。
+
+**要解决的问题：** 两次后拨设计都完成了几何，但都被插件侧的“闭环成本”拖住：历史失败 run 无法退役（A 只能手工移目录，B 退役 14 条）；大装配的 `manufacturing`/`claims` 被写入器静默丢弃（`M:policy`/`no-claims` 永远修不掉）；printability 把 0.18mm/0.68% 的实心锐边当薄壳（R1 反而更差）；turning 绕世界原点量回转半径；`validate.pose` 丢平移；stress 无预检直接 SIGKILL；CQ 版本 source 是可变 loader 且并行 generate 串味；motion 丢掉 warm-up 行程却报 5–8% 缺口。
+
+**决策内容：**
+1. run 增加“退役”第三态：`cad_deliver retire` 写索引 + run.json，不移动/删除 artifact；audit 过滤 retired，并把“引用版本全部过期”的失败视为历史。
+2. 契约写入器支持 `manufacturing`/`claims`/`patch`/`rootPath`；root-only merge 保留顶层字段；audit 默认读契约内 claims。
+3. printability 增加 `edgeOnlyThinPct`（默认 1.0%）：小面积/少样本的亚阈值读数判为实心锐边，不再作为 wall witness；CNC profile 可据此给 `not-excluded`。
+4. turning 回转半径改为绕“声明主轴 + 包围盒中心”；`pose` 的平移随 3×3 一起进入 mesh 变换。
+5. stress 增加无支撑/网格规模预检，OOM 错误给 dx/加厚/换 worker 三条可执行路径。
+6. CQ 版本把 `exec(open(...))` 依赖复制到 `source-deps/` 并改写 loader；generate 的 compile+save 按工程串行。
+7. motion 增加 `fullTravelMm`/`warmUpLostMm`/`warmUpOffsetMm` 和 `capabilities`（明确无弹簧/接触/重力）。
+8. CNC `maxSetups` 默认 6、支持工程 `profiles/` 按 id 加载、batch 接受 `profilesJson`、报告封闭腔与≥20% 不可达的装配风险。
+9. 新增 `cad_assembly suggest`（接口模板）与 `cad_deliver affected`（增量复验清单）、`cad_session kernel`（原地切内核）。
+10. DIN2098 六个弹簧进入标准件目录并写 `spring` 元数据（k/并圈高度，标 estimated）。
+
+**理由：** 这些不是“让设计更好看”，而是让一次检查的结论能被下一次检查继承：没有退役态，历史失败会永远否决当前几何；没有顶层字段，契约与 plan/audit 说的不是同一份文件；没有坐标系修正，假红会驱动错误的几何返工；没有版本快照，旧 run 无法复现。工具计算只占两次会话活跃时间的 4–5%，所以优先修“语义与账本”，不是提速内核。
+
+**依据：** 会话对比：A 125.2 min/234 calls/10 硬错误，B 196.6 min/451 calls/4 硬错误；B 15 次 audit、104 run、14 条退役；A audit 被 r006/r054/r055 卡住；B 的 `cad_assembly write` 0 次、CLI 29 次；B 的 printability 18/23 difficult、R1 3.75% excluded；B 的 v066/v067 几何互换；B r117 的 7.577/8.00。修复后的验收：`node scripts/accept-plugin-issues.mjs`（I01–I11）全过；`accept-run-index`/`accept-write-assembly`/`accept-assembly-contract`/`accept-kernel-switch`/`accept-tool-output` 全过。
+
+**影响：** `dsh-cad-harness` 的 `src/host/{runs,delivery-audit,write-assembly,assembly-contract,contract-cli,manifest,inspect,turning,assembly-check,assembly,solidify,motion,project,standard-parts,tools}.ts`、`src/shared/types.ts`、`python/cad_worker/worker.py`、`library/parts/din2098.*/part.json`、`scripts/accept-plugin-issues.mjs` 及两个 repro 脚本。插件构建产物 `lib/` 已重建。未完成：真正的弹簧/接触动力学、全序列拆装规划；已在 issue 文档中标注。
+
+## 2026-11-22：运动干涉的关节对改为“可扫描 + 覆盖门禁”
+
+**触发条件：** 第 1 条（用户选“先关检查器闸门”）＋第 3 条（改的是 `motion-clearance` 的证据语义，影响所有 motion run 与引用它们的装配契约）＋第 4 条（motion / assembly-check / worker / 契约文档 / 验收）。
+
+**要解决的问题：** 缝纫机旋梭的 r024 报“0 干涉”，装配契约 I14（arbor↔rod，转动副）直接引用它作为运动证据。但 `simulate_motion` 把所有旋转副连接的对整对排除在时间线之外（[motion.ts:694](../dsh-cad-harness/src/host/motion.ts#L694)），r024 的 55 对里只有 30 对进布尔；被排除的 4 对恰好包含 arbor↔rod。独立全对扫描在 5/26 个位姿上找到 arbor↔rod 重叠，峰值 **75.87 mm³**（t=1.047s），t=0 只有 0.2–0.3 mm 间隙，转到 60° 时杆身中心线离曲柄轴 2.7 mm、轮毂半径 5.9 mm，直接穿过轮毂。工具的行为早就在 [2026-10-19 条目](#2026-10-19工具按职责分三类按交付触发分两档门只能断言它能见证的东西) 与 toy-balance README 里写明“关节对之间的碰撞一律不报，只能由独立扫描负责”；但 `motion-clearance` 只验证 run 是 pass、不过期，不验证这一对在不在 run 的候选对里。2026-10-26 条目里的“覆盖数显式检查”一直是未决项，这次补上。
+
+**决策内容：**
+
+1. `simulate_motion` 报告新增 `excludedJointPairs`（未进时间线的旋转副对）、`jointPairScan`、`jointOverlapRadiusMm`。摘要同时打印“⚠ N 对旋转副未检”，不再只印“0 干涉”。
+2. 新增输入 `scanJointPairs`（默认 false）：为 true 时把旋转副对放回时间线，只豁免“运动关节锚点 + `jointOverlapRadiusMm`（默认 6 mm）”球内的销/轴承重叠；球外重叠照报，事件带 `jointPair: true`。这样干净的铰链对也能被 run 覆盖，而不是所有旋转副接口永远无法取证。
+3. `motion-clearance` 证据门禁：引用的 motion run 若在 `excludedJointPairs` 里排除了接口的这一对，判 **hard-violation**（“0 干涉”不覆盖它，提示用 `scanJointPairs: true` 重跑或改几何）。覆盖信息优先读 run 的 `report.json`，旧 run 回退读 `motion-spec.json`；两者都没有时**不判**（不追溯改写历史，也不假装覆盖）。
+4. 新增 `scripts/scan-joint-pairs.mjs`：对已存 run 做独立的关节对扫描（读 `motion-spec.json` + `trajectory.json` + `parts/*.stl`，按关节锚点球豁免），输出每对的重叠帧数/峰值/包围盒，有球外重叠时退出码 1。这是“独立扫描”的可复现入口。
+5. 新增验收 `accept-motion-joint-pairs`（合成 590 mm³ 铰链重叠：关=0 事件、开=找到、R=30=豁免）与 `accept-motion-pair-coverage`（r024 覆盖表 + 门禁 TS/Python 一致 + 独立扫描 75.87 mm³）。
+
+**理由：** 干涉检查的结论必须带上“查了哪些对”的分母。整对排除本身是对的（销/轴承本来重叠），错在把排除后的“0”当成全机构的“0”，并让契约可以引用一个从没看过该对的 run。门禁放在证据链而不是几何算法里，是因为几何豁免仍有价值；而 `scanJointPairs` 让“需要看铰链对”的模型有取证路径。默认不扫，避免把每个模型的销/轴承重叠都变成红。
+
+**依据：** r024 报告 `candidatePairs=30`、`interferencePairChecks=750`、`interferenceCount=0`、`excludedJointPairs` 推导为 `frame↔arbor、arbor↔rod、rod↔bar、bar↔needle`；独立扫描 arbor↔rod 在 t=0.5235/1.047/1.5705/2.094/2.6175s 分别 29.12/75.87/67.19/65.63/32.87 mm³，包围盒 y 恒为 −30.5..−28.5（杆厚），x/z 落在 r5.9 轮毂内；`bar↔needle` 仅 0.26 mm³（夹持过盈，低于 1 mm³ 阈值）。门禁在合成 fresh run 上把 r024 的 arbor↔rod 引用判红，TS 与 Python 的 verdict/detail 完全一致；`accept-motion-sampling`、`accept-motion-parity`、`accept-check-assembly-parity`、`accept-motion-axes` 全过；`npm run typecheck` 0 错误。
+
+**影响：** 所有新 motion run 的 `report.json` 多三个字段、摘要多一行覆盖率；引用旧 run 的 `motion-clearance` 接口在 run 有 spec 且排除了该对时变红（无 spec 的旧 run 不追溯）；toy-balance/roberval 的旧 run 没有 spec，暂不受影响，但它们的关节对若用新扫描复核，roberval 在 t=0.1–0.4s 有 300–680 mm³ 的关节对重叠，需要下一轮复核。`docs/TOOL-CONTRACTS.md`、`package.json` 脚本表、`examples/sewing-rotary-hook/README.md` 同步。**未决**：是否把 `scanJointPairs` 默认打开（先观察一轮），以及为旧 run 批量补 `motion-spec.json` 以消除“覆盖未知”。
+
+## 2026-11-22：缝纫机旋梭改为两轴 + 同步带（针杆曲柄上轴、旋梭下轴）
+
+**触发条件：** 第 1 条（用户在两个方案中选定"A. 同步带，需批准新增 1 个外购标准件"）＋第 3 条（推翻了此前的单轴叉形曲柄布局，涉及全部运动件与装配契约）＋第 4 条（机架/针杆/连杆/针板/装配/证据全部重做）。
+
+**要解决的问题：** 旧布局把针杆曲柄挂在旋梭轴上（叉形曲柄+连杆），在旋梭的轴向平面里连杆扫掠盘与钩盘/针板互相占位，任何连接都会侵入；独立关节对扫描已证伪 r024（`arbor↔rod` 峰值 75.87 mm³，连杆穿 r5.9 轮毂）。用户问"市面缝纫机怎么解决"，核实结果：针杆曲柄在**上轴/主轴**（US20160289875A1、US5125354），旋梭在**下轴**（US6814015），两轴由同步带或立轴锥齿轮保持相位（US7565873 描述钩尖与针线的同步）。即旧布局本身是非标准的。
+
+**决策内容：** 按市面机布局重做：上轴（z=155，前端 r13 针杆曲柄、后端 r20 手摇盘、y-70..-60 带轮座）；针杆曲柄-连杆-滑块驱动针杆（L=25.5，t=0 为下止点，行程 26）；上/下轴各 30T 带轮 + **GT2 260 同步带**（外购标准件，用户批准）；旋梭轴简化为 Ø45 旋梭 + Ø10 轴 + D 扁位（去叉臂/曲柄销/后法兰）；机架加带过槽与上轴承座安装孔；上轴由两个 6000 轴承座（悬臂下挂，z108→155）支承；手摇柄移到上轴后端。旧输入轴与 1:1 齿轮对（v057/v077/v016）移除。
+
+**理由：** 两个平面彻底分开（针杆链在机臂 y-16.5..-14.5，旋梭在 y-8..8），不存在同一轴向平面内的占位冲突；针杆链在运动工具里可直接建（转动+转动+滑动），不需要槽/齿轮副；同步带 1:1 正好替代原来有逐相位干涉的 1:1 齿轮对；新增外购件仅 1 条（同步带），用户已批准。
+
+**依据：** 新装配契约 rev 24：`check` 35/35、0 未声明邻接；`validate` 23 件/253 对 0 干涉、全 watertight；`motion r092` 驱动上轴 0.5 rad/s 1 圈：0 干涉、针杆/机针行程 26.001 mm、关节漂移 0、闭环 `frame~bar`。几何上针尖最低 18.5（下止点，> 旋梭轴顶 4.98）、针杆叉口最低 110.5（> 机臂顶 109.5）、最高 122.5（< 上轴底 150），导座前脸退到 -20 以让针柄 Ø3.2。旧 r024 不再作为任何接口证据。未完成：带耦合 physics run、时序脚本按新布局重算、新件工艺筛查、视觉复核。
+
+**影响：** `examples/sewing-rotary-hook` 的 assembly/assembly.json（rev 24）、README、机架 v117、导座 v140、针板 v111、旋梭轴 v100、上轴 v136、轴承座 v123、连杆 v137、针杆 v142、带轮 v126、带 v121、手摇柄 v114、叉口销 v109；`runs/r092`（运动）、`r093`（静态全对）。用户已批准新增外购标准件 GT2 同步带。
+
+## 2026-11-22：关节豁免区必须列出并给注意力，不能静默放过
+
+**触发条件：** 第 1 条（用户要求“豁免区还需要额外的注意力引导机制”）＋第 4 条（motion 报告、工具摘要、check 证据语义、验收）。
+
+**要解决的问题：** 上一条把“整对排除”改成了“锚点球内豁免”，但如果豁免本身不报告，就只是把一个大盲区换成一个小盲区：一个 999 mm³ 的重叠只要落在 30 mm 的球里就会被吞掉，报告仍然只写“0 干涉”。用户看不到“这里被原谅了多少、离边界多近、是不是配合面”。
+
+**决策内容：**
+
+1. motion 报告新增 `jointExemptions[]`：每对的豁免帧数、峰值体积与时刻、最大径向距离 / 半径、`attention` 码；`jointExemptRule` 随报告走。
+2. 注意力规则：`large`（峰值 > 10 mm³）、`near-boundary`（最大径向 > 0.9× 半径）。摘要、工具输出各打印一行“豁免区（销/轴承，未计入干涉）”，带峰值/时刻/径向/attention；`run.json` 的 summary 加“豁免区 N 对”。
+3. 关节对事件增加体积门槛 `jointPairToleranceMm3`（默认 1 mm³）：夹持/压配残差（0.1–0.3 mm³）在球外也不算碰撞，否则每个夹持副都会假红；严格模式可传 0。
+4. 合成验收补三条：豁免必须被列出、体积必须被测到、`large` 必须触发；R=30 吞掉 999 mm³ 时仍列出 24 帧/999 mm³/attention=`large`。
+
+**理由：** 豁免是“声明的配合公差”，不是“没看见”。把豁免量、边界余量和 attention 写进报告，读者才能判断它是轴承/压配，还是被球包住的碰撞；工具不替用户做这个判断，但必须把判断所需的事实摆出来。否则“0 干涉”仍然是一句无法审计的话。
+
+**依据：** 合成铰链重叠（R=6）：区外 590.16 mm³ 报事件，区内 408.92 mm³ 列出，attention=`large, near-boundary`（径向 12.35/6 mm），TS/Python 的帧数/体积完全一致；R=30：0 事件，但豁免仍列 24 帧、峰值 999.08 mm³、attention=`large`。`accept-motion-joint-pairs` 全过；`tsc --noEmit` 0 错误。
+
+**影响：** 所有 `scanJointPairs` run 的 `report.json`/摘要；面板 run 列表的 summary；`docs/TOOL-CONTRACTS.md`；`accept-motion-joint-pairs`。默认 `scanJointPairs: false` 的 run 不产生豁免行，行为不变。
+
+## 2026-11-22：关节豁免改为“按关节声明胶囊 + fit 门禁”（撤销 10 mm³ 与 1 mm³ 补丁）
+
+**触发条件：** 第 1 条（用户在 A+胶囊 / B 轻量之间选 A+胶囊）＋第 3 条（改 motion 输入/报告与 `motion-clearance` 证据语义）＋第 4 条（motion、worker、tools、验收、文档）。
+
+**要解决的问题：** 上一版用“全局 6 mm 球 + 10 mm³ large + 1 mm³ 事件门槛”三层阈值：球内重叠只写一行中文、不改变 verdict，agent 可以不理；10 mm³ 是拿 1 mm³×10 拍的，和 R=6 球体积（≈905 mm³）没有关系；全局 R 对 Ø6 销和 Ø26 轴承必然一边过松一边过紧。用户指出：注意力应引导 agent，阈值应定在豁免区本身。
+
+**决策内容：**
+
+1. 豁免区改为**每个旋转副自己声明**的 `overlapEnvelope { radiusMm, halfLengthMm? }`：沿关节轴的胶囊（halfLength=0 即球）。没有声明 = 没有豁免，任何重叠都是碰撞。
+2. 胶囊内重叠 = 配合候选，**不再是 pass**：`jointFitsUnresolved > 0` 时 run 为 `check`、judgement `difficult`，每条豁免带 `resolved:false`、`attention:["unresolved-fit"]`、`requiredAction:"declare joint.fit ... or change geometry/envelope"`。只有关节声明 `fit: bearing|press-fit|clamp|clearance` 后才允许 pass；胶囊外重叠不受 fit 豁免。
+3. 删除全局 `jointOverlapRadiusMm`、`jointPairToleranceMm3` 和 `large`（10 mm³）；事件门槛回到数值 epsilon 1e-3。`near-boundary`（>0.9×半径 或 >0.9×(halfLength+radius)）只作提示，不 gating。
+4. 摘要/工具输出打印“未声明配合 N 对 — run=check”，`run.json` summary 同样；`motion-clearance` 引用的 run 若是 check（含未解决 fit），已有状态门禁会判 hard-violation。
+5. 验收改为六种形态：scan off；无包络（全撞）；R=6 无 fit（外撞 + 未解决）；R=6 + fit（外撞仍撞）；R=30 + fit（0 撞、pass）；R=30 无 fit（0 撞但 check）。
+
+**理由：** 阈值必须是几何量（胶囊半径/半长），不是体积；配合是不是轴承/压配/夹持应由 agent/设计者**声明**并留痕，不能由工具按“转动副”三个字猜。把“未声明”变成 `check` 而不是一行提示，agent 才会在引用该 run 前处理它；`requiredAction` 给出唯一的两条出路。
+
+**依据：** 合成夹具（40×20×20 板 + 10³ 块，铰在板边）：无包络时 24 个采样全撞；R=6/L=10 时胶囊外 590.16 mm³ 仍报，胶囊内 517.28 mm³ 列出且 `unresolved-fit`；R=30+fit 时 0 撞、999.08 mm³ 被列出、`resolved:true`、run pass；R=30 无 fit 时 0 撞但 `jointFitsUnresolved=1`、run check、`requiredAction` 非空。TS 与 Python 的豁免帧数/体积/未解决数完全一致；`accept-motion-joint-pairs` 全过；`tsc --noEmit` 0 错误。
+
+**影响：** motion 的 `joints[].overlapEnvelope/fit` 输入、报告字段 `jointExemptions/jointFitsUnresolved`、工具 schema/摘要、`accept-motion-joint-pairs`、`docs/TOOL-CONTRACTS.md`。默认 `scanJointPairs:false` 的 run 不变；旧 run 没有包络，若用新扫描复核会按“无豁免”处理（这是有意的：旧球不是声明）。**未决**：是否给常用配合（6000 轴承、Ø6 销）提供包络模板，减少 agent 每次手填。
+
+## 2026-11-23：运动关节对必须逐位姿扫描——连杆穿上轴、针杆叉口改跨骑式
+
+**触发条件：** 第 1 条（用户看 r092 回放后指出“这个地方不是还存在这个问题么”）＋第 3 条（改的是针杆/连杆/上轴三个件的几何与 motion 的取证口径）＋第 4 条（契约、README、示例全部受影响）。
+
+**要解决的问题：** 两轴版 r092 报“0 干涉”，但 `upper_shaft↔rod` 是转动副对，按 `simulate_motion` 的设计整对排除在时间线之外；用 `scanJointPairs: true` 重跑同一模型，发现 **8 个位姿重叠、峰值 76.9 mm³（t=6.81s）**：连杆杆身 y−16.5..−14.5 落在上轴 y−96..−8.5 的轴向范围内，曲柄转到上死点附近时杆身直接横穿 Ø10 轴体。r092 的“0”只覆盖非关节对，和 r024 的 arbor↔rod 是同一个失效模式。
+
+**决策内容：**
+
+1. 连杆平面移到**上轴前端面之前**：y−6..−4（上轴前端 −8.5），曲柄销沿 y 从 −12.5 延长到 −4（销仍在 r13 上，不碰轴体）。
+2. 针杆叉口改**跨骑式**：两条侧轨 x±6.2..7.6（曲柄臂扫掠包络 x 到 8，靠 z 方向分离不够，改在 x 向外让）、前/后颊夹连杆（槽 y−6.2..−3.8）、T 板接杆身；侧轨顶 z121，顶行程 147 低于曲柄臂最小扫掠 z147.3。
+3. 取证口径：凡有曲柄-连杆这类**关节对可能互撞**的机构，motion 必须带 `scanJointPairs: true`，或对关节对做独立逐位姿扫描；“0 干涉”只有在报告写明候选对/关节对覆盖时才能引用。
+4. 叉口销移到 (0,−6,116.5)（Ø6×14 穿前/后颊与连杆小端）。
+
+**理由：** 关节对整对排除本身是为了让销/轴承的正常重叠不误报，但它让“曲柄-连杆”这种**真正会撞**的对失去了取证路径；而把连杆放到轴体前端面之前，是唯一不依赖扫掠包络的确定解（任何曲柄角度都不会穿轴）。跨骑式叉口则让针杆在曲柄平面两侧受力，而不是让颊板穿过曲柄平面。
+
+**依据：** r098（v142 针杆、连杆仍 y−16.5..−14.5，`scanJointPairs`）→ upper_shaft↔rod 76.9 mm³；r099（连杆平面 y−6..−4）→ 该对清零，但 upper_shaft↔bar 13.1 mm³（叉口板穿过曲柄臂平面）；r100（跨骑侧轨）→ 0.61 mm³（曲柄臂角点扫掠到侧轨顶）；r101（侧轨顶 121、顶行程 147）→ **38 对全扫 0 干涉、行程 26.001 mm、漂移 0**。`check` rev 29：36/36、0 未声明邻接；独立 253 对静态扫描 0 干涉、全 watertight。r092/r098/r099/r100 由 r101 取代。
+
+**影响：** `examples/sewing-rotary-hook`：上轴 v143、连杆 v144、针杆 v149、叉口销 v109 位置、装配契约 rev 29、README；runs r101（运动）。`docs/DECISION-LOG.md` 2026-11-22 条目里对 r092 的引用为历史记录，不再作为当前证据。
+
+## 2026-11-24：未覆盖关节对的 motion run 一律 check；交付审计只认“覆盖的 pass”，契约无 motion-clearance 直接 blocked
+
+**触发条件：** 第 1 条（用户指出 r092 回放里连杆穿轴，工具仍放行）＋第 3 条（改 motion 的 overallStatus、交付审计的证据语义、契约门）＋第 4 条（所有 mechanism 的交付）。
+
+**要解决的问题：** r092 报 pass、0 干涉，但 `upper_shaft↔rod` 是转动副对，按设计整对排除；报告里连 `excludedJointPairs` 都没有（旧 run 无覆盖字段）。交付审计的 `freshOfKind` 只要求 `status !== 'fail'`，连 `check` 都算证据；契约没有 `motion-clearance` 时只给 `warn`。于是“0 干涉”可以一路走到交付，直到用户手工指出 76.9 mm³。
+
+**决策内容：**
+
+1. `simulate_motion`：`excludedJointPairs` 非空（即没有 `scanJointPairs: true`）时 `overallStatus = check`，judgement `difficult`；摘要明确“N 对旋转副 UNCHECKED — run=check”。
+2. 交付审计：`verify-required-motion/strength/flow` 只认 `status === 'pass'` 的 fresh run；motion 还要求 `excludedJointPairs` 为空、`jointFitsUnresolved === 0`；旧 run 没有覆盖字段视为 UNKNOWN，不算覆盖。另有 `motion-coverage-incomplete` warn 指名哪些 pass run 没覆盖。
+3. 契约门：`interfaces > 0` 且没有任何 `motion-clearance` 时，从 `warn` 改为 **`blocked`**——机构没有进入契约，36/36 的装配通过不说明它会动。
+4. 验收同步：`accept-motion-axes` 的 roberval 场景现在断言 `check` + 非空 `excludedJointPairs`（未扫关节对就是 check），不再断言 pass。
+
+**理由：** “pass” 必须是“整个机构都看过了”。把未覆盖的 run 降为 check，是为了让 agent 在调用 `deliver` 前看到它；把审计从“非 fail”改成“覆盖的 pass”，是为了让 check 不能当证据；把契约无 motion-clearance 改为 blocked，是为了堵住“不声明就不需要证据”的路。r092 这种旧 pass 不会被追溯改写，但不会再被当作当前运动证据。
+
+**依据：** r092 报告无 `excludedJointPairs`/`jointPairScan` 字段、`candidatePairs=34`、0 事件；r101 `scanJointPairs=true`、38 对、`excludedJointPairs=[]`、`jointFitsUnresolved=0`、0 事件、26.001mm。用 r101 的场景做 0.5°（719 位姿）加密扫描仍 0；r092 的 `upper_shaft↔rod` 在独立扫描是 76.9mm³。缝合机审计现在 `verdict=excluded`，含 `blocked contract-without-motion`；若只给 r092，motion 要求会因“无覆盖的 pass”被 `verify-required-motion` blocked。`tsc --noEmit` 0 错误，`accept-motion-axes` 已按新口径通过。
+
+**影响：** 所有未扫关节对的 mechanism motion run 变成 check；旧 examples 需要迁移到 `scanJointPairs + overlapEnvelope/fit` 才能重新拿到 pass；面板里 r092 这类旧 run 仍可回放，但显示“源版本已过期”，不再是当前证据；交付审计对 sewing 的结论从“仅警告”变成 blocked。**未决**：是否把 `scanJointPairs` 默认设为 true（会迫使每个铰链声明包络），以及为旧 run 批量补 coverage 元数据。
+
+## 2026-11-25：DSH 兼容矩阵改为本地 rootless 容器（kern），CI 不再是唯一入口
+
+**触发条件：** 第 1 条（用户要求本地容器化测试、不污染宿主机，并在方案与范围上拍板）＋第 3 条（新增测试基础设施、容器运行时依赖与版本支持口径）＋第 4 条（影响发布门禁、CI 分工、README/DESIGN 与 `engines.dsh` 的解释）。
+
+**要解决的问题：** 现有 CI 只在一个固定版本（`0.2.2-rc.1`）上跑完整验收，插件的版本兼容性实际上没有本地证据；用户不想在宿主机上全局安装 dsh、OpenSCAD 或写 `~/.dsh`。同时“支持 0.2.0 以上所有版本”与 `package.json` 的 `engines.dsh: >=0.2.1-rc.2 <0.3.0` 不一致：0.2.x 共 21 个发布（含 alpha/rc），全量安装约 30 GB+、十几小时，不是可维护的门禁。
+
+**决策内容：**
+
+1. 用 **kern 0.56.0**（单二进制、rootless、无 daemon）做本地兼容矩阵；不引入 Docker daemon，也不直接用 runc（runc 只是 OCI runtime，镜像/网络/rootfs/seccomp 都要自己补，Podman 才是同层退路）。
+2. 矩阵只覆盖**声明范围的下界与当前最新**：`0.2.1-rc.2` 与 `0.2.2-rc.5`。`0.2.0-rc.x` 明确记为“不支持”，不作为通过项；`0.2.2-alpha.*` / `0.2.3-alpha.*` 在 DSH 的 `includePrerelease` 语义下仍落在 `engines.dsh` 内，但未入矩阵，预发布不承诺。
+3. 深度为 **T0–T2 + 一次真实工具调用**：先在该版本上用其自带的 `standard.patch.yml` 重跑 `dsh-cad-setup`（checked-in preset 只对应一个版本），再 `--dump-config` 组合（3 个插件标记）、headless 激活、模型请求里 9 个 CAD 工具面、mock LLM 驱动一次 `cad_session info` 并拿到 completed 结果。真实 OpenSCAD/Python 验收（T4）和 Web 客户端加载（T5）不在本矩阵内。
+4. 平台只覆盖 **Linux x64 容器**；Windows/macOS 的原生路径继续由 CI 覆盖，README 写明这是范围而不是缺陷。
+5. 运行约束固化进脚本：install box 用 `--net host --privileged --memory 4g`（无 pasta 时 box 默认无外网；默认 512 MB 会被 OOM）；test box 用 `--net none --privileged`（DSH 的嵌套 bwrap 需要放宽 seccomp；mock 只走 loopback）。镜像默认走 `docker.m.daocloud.io`（Docker Hub 在本机不可达），可用 `--image` 覆盖。
+6. 版本装进命名卷 `yingzao-dsh-versions`，首次后复用；输出写到 `dsh-cad-harness/verification/dsh-matrix/`（已 gitignore），结构化结果另出 Markdown 表。
+
+**理由：** kern 的宿主机足迹只有一个二进制和可 prune 的镜像/卷，符合“不把本机搞乱”；它支持 OCI 镜像与 Dockerfile，迁移成本低。用容器而不是 `--prefix` 临时目录，是为了把 Node 22、系统库、OpenSCAD/Python 的差异也隔离掉，并让本地与 CI 共用同一套断言。全量 21 版既装不下也不值得维护；下界 + 最新 + 明确的不支持边界，足以回答“这个插件在这个 DSH 上还能不能装、能不能激活、工具还能不能用”。
+
+**依据：** 2026-11-25 本机实测（EndeavourOS，kernel 7.3.5，cgroup v2，userns 开启）：kern 0.56.0 `doctor` 18 ok / 4 warnings；`node:22-bookworm` box 内 `--privileged` 使 `unshare -U/-m` 通过，`--net none` 下 loopback mock 可用；两版均 61.4–61.7 s 完成全部断言：`setup`（按各自 standard 重生成 preset）、`binary`、`engines`（includePrerelease 语义下满足 `>=0.2.1-rc.2 <0.3.0`）、`compose 3/3`、`boot`、`tools 9/9`、`tool-call cad_session`、`tool-result completed`、`tool-final tool-ok`。0.2.1-rc.2 重新生成的 preset 与 checked-in（来自 0.2.2-rc.1）确有差异（`applyPatch`、`modelSelection`、`list-agents`、`disabled` 行），只测 checked-in 会漏掉这一层。冷装一版 671 包 / 1.2 GB / 34 分 22 秒（0.2.2-rc.5），热缓存 615 包 / 4 分 33 秒（0.2.1-rc.2）。headless 下 `preset-cad` 报 `pending (waiting for service: agentPresets)` 是 headless 没有该服务，不是插件失败；工具仍注册并执行。
+
+**影响：** 新增 `dsh-cad-harness/scripts/accept-dsh-matrix.mjs`（宿主编排）、`accept-dsh-matrix-box.sh`（box 内断言）、`accept-dsh-matrix-mock.mjs`（loopback mock）、`dsh-matrix.json`；`package.json` 增加 `accept:dsh-matrix`；README/README.en/DESIGN §37.8 同步；`.gitignore` 忽略运行产物。CI 继续负责原生 Ubuntu/macOS 的完整 `accept:preview`，本地矩阵负责版本兼容，两者用同一套 T0–T2 断言但不等价。**未决**：是否把 Web 客户端加载（Playwright）纳入矩阵、是否在 CI 里也跑 kern 矩阵；`engines.dsh` 是否继续把下界钉在 `0.2.1-rc.2`。
+
+## 2026-11-25：DSH 兼容矩阵完成 0.2.x 全量扫描；支持承诺限定为 rc 线
+
+**触发条件：** 第 2 条（完整扫描的定量结果）＋第 4 条（改变 README 的支持口径与后续版本判断）。
+
+**要解决的问题：** 第一版矩阵只验证了 `0.2.1-rc.2` 与 `0.2.2-rc.5` 两个端点，无法回答中间 rc 是否漂移；同时 alpha 与 0.2.0 的边界没有实测数据。需要在不无限扩容镜像/磁盘的前提下，给“支持”一个可辩护的范围。
+
+**决策内容：**
+
+1. 把 `engines.dsh`（`>=0.2.1-rc.2 <0.3.0`，按 DSH 的 `includePrerelease` 语义）覆盖的 0.2.x 版本全部纳入矩阵：共 13 个（0.2.1-rc.2–rc.5、0.2.2-rc.1–rc.5、0.2.2-alpha.2/3、0.2.3-alpha.1/2）。
+2. **支持承诺只覆盖 rc 线**：9 个 rc 全过，作为 README 的“支持”主体；alpha 记录结果但不承诺。
+3. `0.2.3-alpha.1` 标为 **BLOCKED（上游）**：`dsh --version` 本身因 `dsh-app-boot` 需要 `EntryValidationError`、却解析到 `cordis-plugin-loader@1.1.0` 而失败；`0.2.3-alpha.2` 改用 `1.2.0-alpha.1` 后恢复。失败发生在插件加载前，不改判为插件回归。
+4. 范围外 8 个版本（`0.2.0-rc.1/2`、`0.2.1-alpha.1–5`、`0.2.1-rc.1`）不做安装测试，也不承诺；`0.3.0+` 同理。
+5. 记录文档：新增 `docs/dev/DSH-MATRIX.md`，README 指向它；矩阵的 T3/T4/T5 缺口继续明确写出。
+
+**理由：** rc 线是实际可安装、可回归的对象；alpha 会带上游自己的打包/依赖错误，把它算进支持范围会让“插件兼容”与“DSH 发布质量”混在一起。全量 13 个 in-range 版本约 11 GB，仍是单机可承受的上限；再往下扩到范围外版本只会重复验证 `engines` 的拒绝，没有新信息。
+
+**依据：** 2026-11-25 Kern 扫描：13 个版本一次完整运行 **12 PASS + 1 BLOCKED，整体 exit 0**；9 个 rc 全部 9/9 checks 通过（每版 61.3–62.4 s）；`0.2.2-alpha.2/3` 通过；`0.2.3-alpha.2` 通过；`0.2.3-alpha.1` 在 `binary` 即失败，`setup` 仍能跑但 `compose/boot` 全部失败。完整表与复现命令见 `docs/dev/DSH-MATRIX.md`。首轮 13 版装在 `yingzao-dsh-versions` 卷，约 11 GB。
+
+**影响：** `README.md` / `README.en.md` 的支持口径与链接、`DESIGN.md` §37.8、`docs/dev/DSH-MATRIX.md`。矩阵脚本无需改动（已支持任意 `--versions`），CI 分工不变。**未决**：是否把 T3（tarball 安装）或 T5（Web 客户端）纳入矩阵；是否在 CI 里跑 rc 线。
+
+## 2026-11-25：面板主题化：令牌改为 CSS 变量，亮/暗两张表
+
+**触发条件：** 第 4 条（这条约定会成为后续所有面板 UI 改动的前提：新元素必须走令牌，验收脚本与沙箱都要按明暗两套跑）。
+
+**要解决的问题：** 面板原先全部是内联样式 + 写死亮色，宿主切到 dark 模式后，没有显式 `color` 的文字继承 body 的浅色墨，落在白底按钮和卡片上；显式写了深色的控件又保持原样。仿真视口的传输按钮、时间读数是最明显的例子，但根因是面板没有"主题"这一层，不是几个漏改的颜色。
+
+**决策内容：**
+
+1. `src/client/tokens.ts` 改成同键的 `LIGHT` / `DARK` 两张表；`T.<role>` 生成为 `var(--cad-<role>, <亮色>)`，内联样式写一次即可跟随主题。
+2. 新增 `src/client/theme.ts`：把两张表注入 `:root` / `body[data-ds-dark-theme]`（宿主主题插件的既有约定），面板根加 `.cad-theme` 提供 `color-scheme`；`resolveCssColor()` 给 2D canvas 解析真实颜色。
+3. 3D 场景色（零件蓝、标注色板、坐标轴、场地预设）不进主题，作为 `SCENE` / `*_PALETTE` 常量保留——它们描述模型，贴在用户自选的底色上。
+4. 面板根显式 `color: T.ink`，按钮/输入/卡片凡有文字处都有 ink，不再依赖继承。
+5. `accept-tokens` 预算从 180 降为 **0**，并检查每个令牌都有独立暗色值；`accept-ui` 新增 `theme-light` / `theme-dark` / `theme-dark-playback` 三个对比度扫描场景。
+
+**理由：** 4 200 行内联样式不可能逐个改成函数或订阅主题重渲染；CSS 变量是唯一"写一次、按元素解析、不重渲染"的路径，`var(..., 亮色)` 的 fallback 保证样式表未安装时仍是原亮色。宿主只暴露十来个语义角色，面板自己的比较橙/测量红/壁厚青/剖切紫没有对应，照搬会丢语义，所以保留自有令牌、只借宿主的明暗开关。
+
+**依据：** 沙箱 `?dark=1`（与宿主相同的 `data-ds-dark-theme`）实测 `theme-light` / `theme-dark` / `theme-dark-playback` 全 PASS：对比度扫描 28–34 个文字元素、18–23 个控件，最低 5.10；`accept-tokens` 52 个令牌、暗色 52/52、表外颜色字面量 0（迁移前 237 处 hex/rgba；旧 lint 只数 `.ts` 和 hex，所以预算是 180）。截图 `sandbox/shots/ui-theme-{light,dark,dark-playback}.png`。亮色模式的令牌值取原值，`assert=layout` 等既有场景仍全绿。
+
+**影响：** 所有 `src/client` 组件的颜色写法；新增颜色必须先加到 `tokens.ts`（否则 lint 失败）。三维视口底色仍由「背景」预设决定，不随主题翻转；深色模式想要深底需选石墨/午夜。`README.md` / `README.en.md` 的面板能力清单与 `DESIGN.md` §6.9 已同步。

@@ -519,6 +519,30 @@ export async function projectInfoFor(exec: unknown): Promise<ProjectInfo> {
  * ancestor. `init_project` must be callable BEFORE that first call; it writes
  * no versions, parts or runs, and it never rebinds the calling session.
  */
+/**
+ * Change the project-level authoring kernel WITHOUT recreating the project.
+ *
+ * `createProjectMarker` sets `defaultKernel` only on a fresh marker, and the
+ * tool surface is derived from the kernel — so an OpenSCAD project could not be
+ * switched to CadQuery without starting a second project (which is exactly why
+ * the two Bicycle sessions became two independent designs). This writes the
+ * same marker field in place; existing versions keep their own backend pin.
+ */
+export async function setProjectKernel(
+  dir: string,
+  kernel: 'openscad' | 'cadquery',
+): Promise<{ root: string; key: string; previous: string | null; kernel: string }> {
+  const root = resolve(dir);
+  const markerPath = join(root, 'cad-data', 'project.json');
+  if (!existsSync(markerPath)) throw new Error(`no project marker at ${markerPath}; init_project first`);
+  const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as Record<string, unknown>;
+  const previous = typeof marker.defaultKernel === 'string' ? marker.defaultKernel : null;
+  marker.defaultKernel = kernel;
+  await writeJsonAtomic(markerPath, marker);
+  clearProjectRootCache();
+  return { root, key: String(marker.key ?? projectKey(root)), previous, kernel };
+}
+
 export async function createProjectMarker(
   dir: string,
   title?: string,

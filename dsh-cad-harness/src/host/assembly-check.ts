@@ -36,6 +36,78 @@ import type { RunEntry } from './runs.ts';
 
 type Vec3 = [number, number, number];
 
+const MOTION_PAIR_SEP = '\u0000';
+
+/** What a motion run did NOT boolean-test. Coverage, not outcome. */
+export interface MotionPairCoverage {
+  /** false for runs that predate the report field and carry no motion-spec.json. */
+  known: boolean;
+  excluded: Set<string>;
+}
+
+/** The run part id an interface address belongs to ("arbor.axis" -> "arbor"). */
+function endpointPartId(address: string): string {
+  const dot = address.indexOf('.');
+  return dot > 0 ? address.slice(0, dot) : address;
+}
+
+function motionPairKey(a: string, b: string): string {
+  return [a, b].sort().join(MOTION_PAIR_SEP);
+}
+
+/**
+ * Read a motion run's pair coverage WITHOUT trusting its headline.
+ *
+ * `simulate_motion` deliberately drops every revolute-linked pair from the
+ * interference timeline (bearing/pin overlap is expected), so "0 interference"
+ * is a claim about the remaining pairs only. A `motion-clearance` interface over
+ * a dropped pair must not be able to cite that run: the 2026-11-22 sewing
+ * rotary-hook case did exactly that (arbor↔rod, 65.6 mm³, hidden by the
+ * exclusion). New runs carry `metrics.excludedJointPairs`; older runs are read
+ * from their `motion-spec.json` when it exists. No file -> `known:false`, and
+ * the caller must not pretend the pair was covered.
+ */
+export async function readMotionPairCoverage(store: VersionStore, runId: string): Promise<MotionPairCoverage> {
+  const dir = join(store.root, 'runs', runId);
+  const readJson = async (file: string): Promise<unknown> => {
+    try { return JSON.parse(await readFile(join(dir, file), 'utf8')); } catch { return null; }
+  };
+  const report = await readJson('report.json') as { metrics?: { excludedJointPairs?: unknown } } | null;
+  const listed = report?.metrics?.excludedJointPairs;
+  if (Array.isArray(listed)) {
+    const excluded = new Set<string>();
+    for (const pair of listed) {
+      if (Array.isArray(pair) && pair.length === 2) excluded.add(motionPairKey(String(pair[0]), String(pair[1])));
+    }
+    return { known: true, excluded };
+  }
+  const spec = await readJson('motion-spec.json') as {
+    scanJointPairs?: boolean;
+    joints?: Array<{ type?: string; bodyA?: string; bodyB?: string }>;
+  } | null;
+  if (Array.isArray(spec?.joints)) {
+    const excluded = new Set<string>();
+    if (spec.scanJointPairs !== true) {
+      for (const j of spec.joints) {
+        if (j.type === 'revolute' && j.bodyA && j.bodyB) excluded.add(motionPairKey(j.bodyA, j.bodyB));
+      }
+    }
+    return { known: true, excluded };
+  }
+  return { known: false, excluded: new Set() };
+}
+
+export function excludedPairFor(coverage: MotionPairCoverage, a: string, b: string): [string, string] | null {
+  const pa = endpointPartId(a);
+  const pb = endpointPartId(b);
+  for (const key of coverage.excluded) {
+    const [x, y] = key.split(MOTION_PAIR_SEP);
+    if (!x || !y) continue;
+    if ((x === pa && y === pb) || (x === pb && y === pa)) return [x, y];
+  }
+  return null;
+}
+
 const RAD = Math.PI / 180;
 
 /** Rotate a vector about X, then Y, then Z (degrees) — Manifold rotate order. */
@@ -116,7 +188,7 @@ export function eulerMatrix(rot: [number, number, number]): Mat3 {
   ) as unknown as Mat3;
 }
 
-interface PartWorld {
+export interface PartWorld {
   id: string;
   node: ManifestNode;
   built: Awaited<ReturnType<typeof buildSolid>> | null;
@@ -132,7 +204,7 @@ interface PartWorld {
   workerMesh: { path: string; transform: PartTransform; scratch?: string } | null;
 }
 
-async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorkerMesh = true): Promise<PartWorld> {
+export async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorkerMesh = true): Promise<PartWorld> {
   const warnings: string[] = [];
   const dir = join(store.root, 'versions', node.version ?? '');
   let stl: Uint8Array | null = null;
@@ -166,7 +238,7 @@ async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorker
       // matrix already encodes rotate∘pose — never pass both.
       const transform: PartTransform = {
         ...(geo.matrix
-          ? { matrix: geo.matrix }
+          ? { matrix: geo.matrix, ...(geo.matrixTranslate ? { matrixTranslate: geo.matrixTranslate } : {}) }
           : { ...(node.transform?.rotate ? { rotate: node.transform.rotate } : {}) }),
         ...(node.transform?.translate ? { translate: node.transform.translate } : {}),
       };
@@ -216,11 +288,11 @@ async function loadPartWorld(store: VersionStore, node: ManifestNode, needWorker
 async function partWorldAffine(
   store: VersionStore,
   node: ManifestNode,
-): Promise<{ affine: Affine; matrix: Mat3 | null; poseError?: string }> {
+): Promise<{ affine: Affine; matrix: Mat3 | null; matrixTranslate?: Vec3; poseError?: string }> {
   const tr = node.transform?.translate;
   const rot = node.transform?.rotate;
   const pose = node.transform?.pose;
-  const noPose = (): { affine: Affine; matrix: Mat3 | null } => {
+  const noPose = (): { affine: Affine; matrix: Mat3 | null; matrixTranslate?: Vec3 } => {
     const rotA: Affine = { m: rot ? eulerMatrix(rot) : IDENTITY, t: [0, 0, 0] };
     const trA: Affine = { m: IDENTITY, t: tr ? [...tr] as Vec3 : [0, 0, 0] };
     return { affine: composeAffine(trA, rotA), matrix: null };
@@ -245,7 +317,12 @@ async function partWorldAffine(
     affine: composeAffine(composeAffine(trA, rotA), poseA),
     // buildSolidFromStl applies `matrix` first, then euler rotate, then
     // translate — so the matrix carries rotate∘pose and rotate stays absent.
+    // poseA is an AFFINE (rotation about the datum point); its translation must
+    // ride with the 3×3, otherwise the part is rotated about the origin. That was
+    // the high-pose false 61.03 mm³: numerically identical to an origin rotation
+    // (61.07), while a local rotation about B_axis gave 0.
     matrix: mm(rotM, poseA.m),
+    matrixTranslate: mv(rotM, poseA.t) as Vec3,
   };
 }
 
@@ -1123,7 +1200,15 @@ export async function runAssemblyCheckInTs(
               'which a part has since replaced. Re-run the motion over the current versions and cite that run ' +
               '(evidence expires with the version it cites).';
           } else {
-            r.detail += ` — motion evidenced by ${cited} (${run.summary}${run.supersededBy ? `, SUPERSEDED by ${run.supersededBy}` : ''})`;
+            const coverage = await readMotionPairCoverage(store, cited);
+            const hit = coverage.known ? excludedPairFor(coverage, iface.a, iface.b) : null;
+            if (hit) {
+              r.verdict = 'hard-violation';
+              r.detail += ` — cited motion run ${cited} excluded the revolute pair ${hit[0]}↔${hit[1]} from its interference timeline; ` +
+                '"0 interference" does not cover it — rerun simulate_motion with scanJointPairs: true, or fix the geometry';
+            } else {
+              r.detail += ` — motion evidenced by ${cited} (${run.summary}${run.supersededBy ? `, SUPERSEDED by ${run.supersededBy}` : ''})`;
+            }
           }
         }
       }
@@ -1357,12 +1442,19 @@ export async function runAssemblyCheck(
   const runPayload: Record<string, unknown> = {};
   for (const run of opts.runs ?? []) {
     const staleVersionIds = supersededVersionIds(versionList, run.sourceVersionIds);
+    // Coverage travels WITH the run: the worker cannot read the run directory,
+    // and a motion-clearance verdict depends on whether the cited run ever
+    // looked at that pair (see readMotionPairCoverage).
+    const coverage = run.kind === 'motion' ? await readMotionPairCoverage(store, run.id) : null;
     runPayload[run.id] = {
       kind: run.kind,
       status: run.status,
       summary: run.summary,
       supersededBy: run.supersededBy ?? null,
       staleVersionIds,
+      ...(coverage
+        ? { coverageKnown: coverage.known, excludedJointPairs: [...coverage.excluded].map((key) => key.split(MOTION_PAIR_SEP)) }
+        : {}),
     };
   }
 

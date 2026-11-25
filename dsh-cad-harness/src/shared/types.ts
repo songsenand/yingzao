@@ -87,6 +87,15 @@ export interface RunProduct {
   /** Ids of older runs this commit marked superseded. */
   supersedes?: string[];
   /**
+   * Set by `retire_run`: this run is kept as history but is no longer current
+   * evidence. The audit skips it; `list_runs` still returns it with this marker.
+   * Without this field the only way to clear a stale failure was to move the
+   * directory by hand — which changed the corpus outside any tool.
+   */
+  retiredAt?: string;
+  retiredReason?: string;
+  retiredBy?: string;
+  /**
    * The Python environment BEYOND the locked venv at commit time: the user
    * overlay's packages plus a digest over them. `packages: []` means "the locked
    * set only" and is written explicitly, so an absent field can only mean "an

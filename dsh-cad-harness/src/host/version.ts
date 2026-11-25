@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto';
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { withFileLock, writeJsonAtomic } from './file-lock.ts';
 import { newestVersionPerPart } from './latest.ts';
 import { readBackendConfig } from './backend.ts';
@@ -92,6 +92,16 @@ export interface VersionManifestEntry {
    * `model.py`). Absent on legacy rows and on imported/merged bodies.
    */
   sourceFile?: string;
+  /**
+   * Files a loader source (`exec(open(...))`) depended on, copied into
+   * `source-deps/`. A version whose model.py is only a three-line loader into a
+   * MUTABLE cq/part.py is not a snapshot: editing that file later rewrites what
+   * every old version means. saveVersion snapshots the referenced files and
+   * rewrites the loader to point at the copy.
+   */
+  sourceDeps?: string[];
+  /** sha256 of the AUTHORED source, before the loader was rewritten. */
+  sourceHash?: string;
   /** Native STEP artifact, when the provider produced one. */
   stepFile?: 'model.step';
   stepSha256?: string;
@@ -281,6 +291,47 @@ export interface SaveVersionInput {
 }
 
 /** Persist one generation round; returns the created version id. */
+/**
+ * Snapshot a Python loader's `exec(open('...'))` targets into `source-deps/` and
+ * rewrite the paths to the copies. Returns the code to store and the dep names.
+ *
+ * Only `.py` paths that exist are copied. A loader with no such reference is
+ * returned unchanged, so normal full-source versions keep their exact bytes.
+ */
+async function snapshotLoaderDeps(
+  source: string,
+  dir: string,
+): Promise<{ code: string; deps: string[]; hash: string }> {
+  const hash = createHash('sha256').update(source).digest('hex');
+  const paths: string[] = [];
+  const re = /(['"])([^'"\n]+\.py)\1/g;
+  for (const match of source.matchAll(re)) {
+    const path = match[2]!;
+    if (!paths.includes(path)) paths.push(path);
+  }
+  const copied: string[] = [];
+  for (const path of paths) {
+    if (!path.startsWith('/') && !path.startsWith('.')) continue;
+    try {
+      const bytes = await readFile(path);
+      await mkdir(join(dir, 'source-deps'), { recursive: true });
+      const name = basename(path);
+      await writeFile(join(dir, 'source-deps', name), bytes);
+      copied.push(name);
+    } catch { /* a missing dependency is left as-is; the original path still works in place */ }
+  }
+  if (copied.length === 0) return { code: source, deps: [], hash };
+  let rewritten = source;
+  for (const path of paths) {
+    const name = basename(path);
+    if (!copied.includes(name)) continue;
+    rewritten = rewritten.split(`'${path}'`).join(`os.path.join(__deps, '${name}')`);
+    rewritten = rewritten.split(`"${path}"`).join(`os.path.join(__deps, '${name}')`);
+  }
+  rewritten = `import os as _os\n__deps = _os.path.join(_os.path.dirname(__file__), 'source-deps')\n${rewritten}`;
+  return { code: rewritten, deps: copied, hash };
+}
+
 export async function saveVersion(store: VersionStore, input: SaveVersionInput): Promise<string> {
   // The id, the version directory and the index row are ONE critical section.
   //   * allocate the id outside the lock -> two writers get the same id and write
@@ -299,7 +350,16 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
     if (!/^[A-Za-z0-9._-]+$/.test(sourceFile) || sourceFile.startsWith('.')) {
       throw new Error(`unsafe sourceFile "${sourceFile}" (use a plain file name inside the version directory)`);
     }
-    if (sourceCode !== undefined) await writeFile(join(dir, sourceFile), sourceCode, 'utf8');
+    let storedSource = sourceCode;
+    let sourceDeps: string[] | undefined;
+    let sourceHash: string | undefined;
+    if (sourceCode !== undefined && sourceFile.endsWith('.py')) {
+      const snap = await snapshotLoaderDeps(sourceCode, dir);
+      storedSource = snap.code;
+      sourceHash = snap.hash;
+      if (snap.deps.length) sourceDeps = snap.deps;
+    }
+    if (storedSource !== undefined) await writeFile(join(dir, sourceFile), storedSource, 'utf8');
     if (input.stl) await writeFile(join(dir, 'model.stl'), input.stl);
     if (input.step) await writeFile(join(dir, 'model.step'), input.step);
     const datumSet = mergeDatumSet(input.datums, input.datumSet);
@@ -354,6 +414,8 @@ export async function saveVersion(store: VersionStore, input: SaveVersionInput):
             ? {}
             : { backend: { kernel: 'openscad', options: { compileBackend: readBackendConfig().config.compileBackend } } }),
       ...(sourceCode !== undefined ? { sourceFile } : {}),
+      ...(sourceDeps ? { sourceDeps } : {}),
+      ...(sourceHash ? { sourceHash } : {}),
       ...(input.step
         ? {
             stepFile: 'model.step' as const,

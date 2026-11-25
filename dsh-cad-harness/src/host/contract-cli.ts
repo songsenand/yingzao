@@ -15,7 +15,8 @@ function usage(message?: string): number {
   dsh-cad-contract verify [--manifest assembly/assembly.json] [--json]
   dsh-cad-contract read [--manifest ...] [--json]
   dsh-cad-contract rebuild [--manifest ...]
-  dsh-cad-contract write --reason <text> --expected-revision <n> [--mode merge|replace|create] [--patch <json>] [--root <json>] [--manifest ...] [--dry-run] [--json]`);
+  dsh-cad-contract write --reason <text> --expected-revision <n> [--mode merge|replace|create] [--patch <json>] [--root <json>] [--manifest ...] [--dry-run] [--json]
+  --patch merges the WHOLE manifest (manufacturing/claims/root); --root merges only the root node.`);
   return 2;
 }
 
@@ -87,14 +88,16 @@ export async function main(argv: string[]): Promise<number> {
       const patchPath = argValue(argv, '--patch');
       const rootPath = argValue(argv, '--root');
       if (!patchPath && !rootPath) return usage('write requires --patch or --root');
-      const root = await readJsonFile((patchPath ?? rootPath)!) as Record<string, unknown>;
+      const root = rootPath ? await readJsonFile(rootPath) as Record<string, unknown> : undefined;
+      const patch = patchPath ? await readJsonFile(patchPath) as Record<string, unknown> : undefined;
       const result = await writeAssemblyContract(projectStores(cwd), {
         manifestPath,
         mode: mode as 'create' | 'merge' | 'replace',
         expectedRevision: expectedRevisionRaw === undefined ? undefined : Number(expectedRevisionRaw),
         expectedHash,
         reason,
-        root,
+        ...(root ? { root } : {}),
+        ...(patch ? { patch } : {}),
         dryRun: has(argv, '--dry-run'),
         actor: { source: 'dsh-cad-contract' },
       });

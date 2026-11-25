@@ -38,6 +38,12 @@ export interface PrintabilityOptions {
   overhangDeg?: number | null;
   samples?: number;
   /**
+   * Thin area (percent of surface) at or below which a sub-threshold wall is
+   * classified as a sharp-edge artefact instead of a thin shell. Default 1.0.
+   * Set 0 to disable (every thin sample stays a blocking finding).
+   */
+  edgeOnlyThinPct?: number;
+  /**
    * G6 (2026-10-29): the PRINT orientation as Rz·Ry·Rx degrees, applied before the
    * overhang/wall analysis. The modelling pose is not the printing pose — the roberval
    * beams print flat but were modelled upright, and the tool judged 890 mm² of
@@ -92,6 +98,12 @@ export interface PrintabilityReport {
   printOrientationDeg?: [number, number, number];
   /** The per-sample values behind the attention digest (withSampleField). */
   field?: AttentionFieldSamples;
+  /**
+   * Thin area at or below this percentage is classified as a sharp-edge sampling
+   * artefact (a solid wedge), not a thin shell. A shell is SUSTAINED area; a
+   * 0.2 mm reading on 0.7% of a hub face is the ray crossing a deburring edge.
+   */
+  edgeOnlyThinPct?: number;
   findings: string[];
   watertight: boolean;
   /** Where to look next, per quantity — empty layers when nothing was measured. */
@@ -527,6 +539,16 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       };
 
       const findings: string[] = [];
+      const edgeOnlyPct = Math.max(0, options.edgeOnlyThinPct ?? 1.0);
+      // A sharp convex edge is a WEDGE, not a wall: the ray crosses it at a
+      // shallow angle and reads a few hundredths of a millimetre over a tiny
+      // area. The old verdict treated every sub-threshold sample as a shell, so
+      // agents chased 0.18 mm / 0.68% edges through chamfer and fillet rounds and
+      // never converged (R1 made the sampled thin area WORSE: 3.75%). A shell is
+      // sustained area; an edge is a small fraction with few samples.
+      const edgeOnly = wallMeasured && Number.isFinite(minWall) && minWall < wallMinMm &&
+        thinAreaPct > 0 && thinAreaPct <= edgeOnlyPct && thinArea <= 50 && thinSamples <= 60;
+      let thinBlocking = false;
       if (!watertight) {
         findings.push('mesh is NOT watertight — printability numbers below are computed on an open surface and are unreliable; fix the mesh first');
       }
@@ -536,12 +558,21 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
           '最可能是射线引擎不可用——**本次一个壁厚都没量过，下面的结论不能当通过读**；先修运行时再重跑',
         );
       } else if (minWallAt && minWall < wallMinMm) {
-        findings.push(
-          `最薄壁 ${minWall.toFixed(2)}mm @ [${minWallAt.map((x) => x.toFixed(1)).join(',')}]（阈值 ${wallMinMm}mm；` +
-          `${sampled} 个采样面中 ${thinSamples} 个低于阈值，薄区≈${thinArea.toFixed(1)}mm²` +
-          `（占表面 ${thinAreaPct.toFixed(1)}%））` +
-          ' — 薄**壳**（两自由面近似平行、成片）会断或翘；实心件收敛到棱线的**薄边**（翼型前后缘那种）不属此列，用薄区面积占比区分',
-        );
+        if (edgeOnly) {
+          findings.push(
+            `最薄壁 ${minWall.toFixed(2)}mm @ [${minWallAt.map((x) => x.toFixed(1)).join(',')}] 是**实心锐边**，不是薄壳：` +
+            `薄区仅 ${thinArea.toFixed(1)}mm²（${thinSamples} 个采样面，占表面 ${thinAreaPct.toFixed(2)}% ≤ ${edgeOnlyPct}%）— ` +
+            '按棱线采样伪影降级，去毛刺/倒角即可；若要把它当否决，设 edgeOnlyThinPct:0',
+          );
+        } else {
+          thinBlocking = true;
+          findings.push(
+            `最薄壁 ${minWall.toFixed(2)}mm @ [${minWallAt.map((x) => x.toFixed(1)).join(',')}]（阈值 ${wallMinMm}mm；` +
+            `${sampled} 个采样面中 ${thinSamples} 个低于阈值，薄区≈${thinArea.toFixed(1)}mm²` +
+            `（占表面 ${thinAreaPct.toFixed(1)}%））` +
+            ' — 薄**壳**（两自由面近似平行、成片）会断或翘',
+          );
+        }
       }
       if (overhangArea > 20) {
         findings.push(
@@ -553,8 +584,9 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       // A single sampled face must not decide a red verdict, and a screen that could
       // not measure the wall has not passed anything — so it can never be `ok`.
       const severe = wallMeasured && Number.isFinite(minWall) && minWall < wallMinMm * 0.4 &&
-        thinArea >= Math.max(UNPRINTABLE_MIN_THIN_AREA_MM2, UNPRINTABLE_MIN_THIN_AREA_FRACTION * surfaceArea);
-      const verdict = severe ? 'excluded' : wallMeasured && findings.length === 0 ? 'not-excluded' : 'difficult';
+        thinArea >= Math.max(UNPRINTABLE_MIN_THIN_AREA_MM2, UNPRINTABLE_MIN_THIN_AREA_FRACTION * surfaceArea) && !edgeOnly;
+      const verdict = severe ? 'excluded'
+        : wallMeasured && !thinBlocking && watertight && !(overhangArea > 20) ? 'not-excluded' : 'difficult';
       return {
         versionId: options.versionId,
         verdict,
@@ -566,6 +598,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
         ...(minWallAt ? { minWallAtMm: minWallAt.map((v) => +v.toFixed(2)) } : {}),
         thinSamples,
         sampled,
+        ...(edgeOnlyPct > 0 ? { edgeOnlyThinPct: edgeOnlyPct } : {}),
         overhangAreaMm2: +overhangArea.toFixed(1),
         overhangZRange: Number.isFinite(overhangZMin) ? [+overhangZMin.toFixed(1), +overhangZMax.toFixed(1)] : [],
         findings,
@@ -598,18 +631,44 @@ export async function checkPrintability(store: VersionStore, options: Printabili
     ...(options.withSampleField ? { withSampleField: true } : {}),
   });
   const { field, ...rest } = solved;
+  // The Python half measures the wall but has no notion of "a solid sharp edge vs
+  // a sustained thin shell". Apply the same classification as the TS half here, at
+  // the single point where both engines' words are already normalised. Without
+  // this, the tool path used edgeOnlyThinPct only in the TS parity path and every
+  // real call still reported 0.18 mm / 0.9% as `difficult`.
+  const edgePct = Math.max(0, options.edgeOnlyThinPct ?? 1.0);
+  const findings = [...(rest.findings ?? [])];
+  let verdict = asJudgement(rest.verdict);
+  let edgeOnly = false;
+  if (edgePct > 0 && rest.thinAreaPct > 0 && rest.thinAreaPct <= edgePct &&
+      (rest.thinAreaMm2 ?? 0) <= 50 && (rest.thinSamples ?? 0) <= 60 &&
+      typeof rest.minWallMm === 'number' && rest.minWallMm < (options.wallMinMm ?? 1.2)) {
+    edgeOnly = true;
+    const idx = findings.findIndex((f) => f.includes('薄**壳**') || f.includes('thin shell'));
+    const edgeFinding =
+      `最薄壁 ${rest.minWallMm.toFixed(2)}mm 是**实心锐边**，不是薄壳：薄区 ${(rest.thinAreaMm2 ?? 0).toFixed(1)}mm²，` +
+      `${rest.thinSamples ?? 0} 个采样面，占表面 ${rest.thinAreaPct.toFixed(2)}% ≤ ${edgePct}% — 去毛刺/倒角即可；` +
+      '若要把它当否决，设 edgeOnlyThinPct:0';
+    // Replace IN PLACE: the worker emits wall then overhang, and appending the
+    // edge note reordered the findings against the TS parity oracle.
+    if (idx >= 0) findings[idx] = edgeFinding;
+    else findings.push(edgeFinding);
+    if (verdict === 'difficult' && rest.watertight !== false && (rest.overhangAreaMm2 ?? 0) <= 20) verdict = 'not-excluded';
+  }
   // The worker measures but does not know which version it is reading; the caller
   // does. Every "go look here" command must be runnable as-is, so inject it once —
   // and the field's id carries the version, so a picture cannot outlive its geometry.
   return {
     versionId: options.versionId,
     ...rest,
+    verdict,
+    findings,
+    ...(edgeOnly ? { edgeOnlyThinPct: edgePct } : {}),
     ...(options.printOrientationDeg ? { printOrientationDeg: options.printOrientationDeg } : {}),
     // One normalisation point: the engine's own word (ok / check / unprintable, produced by
     // the Python path too) becomes the canonical three (src/shared/judgement.ts). Doing it
     // HERE rather than in the worker keeps the engine vocabulary internal and stops the two
     // implementations from drifting — which is what the parity acceptance compares.
-    verdict: asJudgement(rest.verdict),
     attention: withVersionInAttention(rest.attention, options.versionId),
     ...(field ? { field } : {}),
   };

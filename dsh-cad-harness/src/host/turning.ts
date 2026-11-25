@@ -47,6 +47,30 @@ export interface TurningAnalysis {
 
 const round3 = (v: number) => +v.toFixed(3);
 
+/**
+ * Largest radius from the spindle axis THROUGH THE BBOX CENTRE.
+ *
+ * The old inline version measured `hypot(x,y)` of raw vertices — i.e. the
+ * distance to the WORLD axis. A 20×20 cap modelled at (8,11) read Ø55.3 and was
+ * excluded; the same cap about its own centre is Ø20. The report has always
+ * claimed "the declared principal axis through the bbox centre"; this is that.
+ */
+export function maxRadiusAboutCentre(
+  verts: ArrayLike<number>,
+  centre: readonly [number, number, number],
+  axis: 'x' | 'y' | 'z',
+): number {
+  let maxRadius = 0;
+  for (let i = 0; i < verts.length; i += 3) {
+    const x = verts[i]! - centre[0];
+    const y = verts[i + 1]! - centre[1];
+    const z = verts[i + 2]! - centre[2];
+    const r = axis === 'x' ? Math.hypot(y, z) : axis === 'y' ? Math.hypot(x, z) : Math.hypot(x, y);
+    if (r > maxRadius) maxRadius = r;
+  }
+  return maxRadius;
+}
+
 export function analyzeTurning(metrics: TurningMetrics, params: TurningParams): TurningAnalysis {
   const witnesses: TurningWitness[] = [];
   const findings: string[] = [];

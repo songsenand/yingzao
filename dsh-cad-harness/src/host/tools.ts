@@ -13,11 +13,12 @@ import { storeFor } from './store.ts';
 import { contentDisposition, downloadName } from '../shared/download-name.ts';
 import { revertVersion as revertVersionHelper } from './version.ts';
 import { enqueueReviews, readQueue, setReviewStatus } from './review-queue.ts';
-import { beginRun, latestRun, listRuns, readRun, runFilePath, safeArtifactName, type RunKind, type RunStatus } from './runs.ts';
+import { beginRun, latestRun, listRuns, readRun, retireRun, runFilePath, safeArtifactName, unretireRun, type RunKind, type RunStatus } from './runs.ts';
 import { validateAssembly, type AssemblyPartInput } from './assembly.ts';
 import { validateVersionGeometry } from './geometry-validate.ts';
 import { weldToSolid } from './solidify.ts';
 import { writeAssemblyContract, type ContractWriteInput } from './assembly-contract.ts';
+import { withFileLock } from './file-lock.ts';
 import { runPearl } from './pearls/run.ts';
 import { executeContractRound } from './pearls/execute.ts';
 import { executeTemplate, type StepDispatcher } from './pearls/execute-template.ts';
@@ -31,14 +32,14 @@ import { formatSnapFitChecks, rotateVec, type InterfaceCheckResult } from './ass
 // require (`additionalProperties: true` infers `Record<string, JsonValue>`); without it a
 // typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
 import type { Json } from './inspect.ts';
-import { flattenParts, resolveAssemblyManifestPath } from './manifest.ts';
+import { flattenParts, loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
 import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-export.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
-import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, type ProjectStores } from './project.ts';
+import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, setProjectKernel, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
 import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { analyzeSheet2d, type SheetSection } from './sheet2d.ts';
-import { analyzeTurning } from './turning.ts';
+import { analyzeTurning, maxRadiusAboutCentre } from './turning.ts';
 import { analyzeCncAccess } from './cnc-access.ts';
 import { analyzeEdmAccess } from './edm-access.ts';
 import { attachAppearance, appearancePath } from './appearance.ts';
@@ -54,7 +55,7 @@ import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJoin
 import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { checkManifestFeatures } from './features.ts';
-import { auditDelivery } from './delivery-audit.ts';
+import { affectedChecks, auditDelivery } from './delivery-audit.ts';
 import { selectAttachedViews } from './render-attachments.ts';
 import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } from './visual-review.ts';
 import { asJudgement } from '../shared/judgement.ts';
@@ -447,8 +448,9 @@ const PROFILE_DIR_CANDIDATES = [
  * the report). An invalid profile is refused with the offending rule named — never
  * repaired, never partially applied.
  */
-async function resolveProcessProfiles(
+export async function resolveProcessProfiles(
   a: { profileIds?: string[]; profilesJson?: string },
+  extraDirs: string[] = [],
 ): Promise<{ profiles: ProcessProfile[]; source: 'declared' | 'builtin-default'; errors: string[] }> {
   const errors: string[] = [];
   const profiles: ProcessProfile[] = [];
@@ -468,23 +470,38 @@ async function resolveProcessProfiles(
       }
     }
   }
+  // Project-local profiles first: an authored `profiles/cnc-3axis-alu.json`
+  // used to be rejected ("no shipped profile") even though the file sat in the
+  // project, so the only path was pasting the whole JSON into every call.
+  const localDirs = extraDirs.filter(Boolean);
   for (const id of a.profileIds ?? []) {
-    const dir = PROFILE_DIR_CANDIDATES.find((u) => existsSync(u));
-    const file = dir ? new URL(`${id}.json`, dir) : null;
-    if (!file || !existsSync(file)) {
-      errors.push(`no shipped profile "${id}" — looked for ${id}.json in schemas/examples/`);
+    const clean = id.replace(/\.json$/i, '');
+    let file: string | null = null;
+    for (const dir of localDirs) {
+      const candidate = join(dir, `${clean}.json`);
+      if (existsSync(candidate)) { file = candidate; break; }
+    }
+    if (!file) {
+      const dir = PROFILE_DIR_CANDIDATES.find((u) => existsSync(u));
+      if (dir) {
+        const candidate = new URL(`${clean}.json`, dir);
+        if (existsSync(candidate)) file = candidate.pathname;
+      }
+    }
+    if (!file) {
+      errors.push(`no profile "${id}" — looked for ${clean}.json in ${[...localDirs, 'schemas/examples/'].join(', ')}`);
       continue;
     }
     let raw: unknown;
     try {
       raw = JSON.parse(await readFile(file, 'utf8'));
     } catch (e) {
-      errors.push(`${id}.json is not readable JSON: ${(e as Error).message}`);
+      errors.push(`${clean}.json is not readable JSON: ${(e as Error).message}`);
       continue;
     }
     const v = validateProfile(raw);
     if (v.ok) profiles.push(v.profile);
-    else errors.push(...v.errors.map((m) => `${id}: ${m}`));
+    else errors.push(...v.errors.map((m) => `${clean}: ${m}`));
   }
   if (profiles.length === 0 && errors.length === 0) {
     return { profiles: [builtinDefaultProfile()], source: 'builtin-default', errors };
@@ -742,6 +759,7 @@ export function registerCadTools(
       joints: a.joints ?? [],
       drive: a.drive ?? null,
       oscillators: a.oscillators ?? [],
+      ...(a.scanJointPairs === true ? { scanJointPairs: true } : {}),
       sourceVersionIds,
     };
   }
@@ -753,10 +771,14 @@ export function registerCadTools(
       anchorA?: number[]; anchorB?: number[]; anchorWorld?: number[];
       axis?: number[]; axisA?: number[]; axisB?: number[]; axisWorld?: number[];
       limits?: [number, number];
+      overlapEnvelope?: { radiusMm: number; halfLengthMm?: number };
+      fit?: 'bearing' | 'press-fit' | 'clamp' | 'clearance';
+      ratio?: number;
     }[];
     drive?: { body: string; axis: number[]; omegaRadPerSec: number };
     oscillators?: { body: string; axis: number[]; amplitudeMm?: number; periodSec?: number; phaseRad?: number; pitchRadiusMm?: number }[];
     cycles?: number;
+    scanJointPairs?: boolean;
   }, project: ProjectStores) {
     const { runStore } = project;
     // `cycles` is the only sampling-adjacent knob the caller controls, and 0 used
@@ -843,6 +865,31 @@ export function registerCadTools(
     };
     const jointsIn = (a.joints ?? []).map((j) => {
       let out = j;
+      if (j.type === 'gear') {
+        // A gear is a ratio coupling: no anchor, only each body's own shaft axis.
+        if (typeof j.ratio !== 'number' || !Number.isFinite(j.ratio) || j.ratio === 0) {
+          throw argError('simulate_motion', 'joints', 'a gear joint needs a non-zero finite ratio',
+            'turns of bodyB per turn of bodyA (external spur: -40/20 = -2)', { received: j.ratio });
+        }
+        if (j.axisWorld) {
+          if (!Array.isArray(j.axisWorld) || j.axisWorld.length !== 3) {
+            throw argError('simulate_motion', 'joints', 'axisWorld must be [x,y,z]', 'a world-space shaft direction', { received: j.axisWorld });
+          }
+          return { ...j, axisA: dirToLocal(j.bodyA, j.axisWorld), axisB: dirToLocal(j.bodyB, j.axisWorld), anchorA: [0, 0, 0], anchorB: [0, 0, 0] };
+        }
+        if (j.axisA || j.axisB) {
+          if (!Array.isArray(j.axisA) || !Array.isArray(j.axisB)) {
+            throw argError('simulate_motion', 'joints', 'a gear joint needs BOTH axisA and axisB (each body\'s own shaft axis)',
+              'axisA + axisB, axisWorld, or the same-frame axis shorthand', { received: { axisA: j.axisA, axisB: j.axisB } });
+          }
+          return { ...j, anchorA: [0, 0, 0], anchorB: [0, 0, 0] };
+        }
+        if (!Array.isArray(j.axis)) {
+          throw argError('simulate_motion', 'joints', 'a gear joint needs an axis',
+            'axis (same local shaft vector in both bodies), axisA + axisB, or axisWorld', { received: { bodyA: j.bodyA, bodyB: j.bodyB } });
+        }
+        return { ...j, axisA: j.axis, axisB: j.axis, anchorA: [0, 0, 0], anchorB: [0, 0, 0] };
+      }
       if (j.anchorA === undefined || j.anchorB === undefined) {
         if (!Array.isArray(j.anchorWorld) || j.anchorWorld.length !== 3) {
           throw argError('simulate_motion', 'joints', 'needs anchorA + anchorB (each body\'s own file frame) OR anchorWorld (world frame)',
@@ -882,7 +929,7 @@ export function registerCadTools(
       // Default: the anchor of the first joint that names this part — that IS
       // the axis the part is meant to turn or slide about — else the geometry's
       // own centre, which is what "spin it in place" means for a free body.
-      const joint = jointsIn.find((j) => j.bodyA === p.name || j.bodyB === p.name);
+      const joint = jointsIn.find((j) => j.type !== 'gear' && (j.bodyA === p.name || j.bodyB === p.name));
       const anchor = joint ? (joint.bodyA === p.name ? joint.anchorA : joint.anchorB) : null;
       const pivot: [number, number, number] = explicit
         ?? (anchor && anchor.length === 3 ? anchor as [number, number, number] : boundingBoxCentre(mesh));
@@ -913,6 +960,7 @@ export function registerCadTools(
       });
     }
     const rebasedJoints = jointsIn.map((j) => {
+      if (j.type === 'gear') return j;
       const pa = pivotOf.get(j.bodyA) ?? [0, 0, 0];
       const pb = pivotOf.get(j.bodyB) ?? [0, 0, 0];
       return {
@@ -968,6 +1016,7 @@ export function registerCadTools(
         : undefined,
       oscillators: (a.oscillators ?? []).map((o) => ({ ...o, axis: o.axis as [number, number, number] })),
       cycles: a.cycles,
+      ...(a.scanJointPairs === true ? { scanJointPairs: true } : {}),
       recordParts: a.parts.map((p) => p.name).filter((n) => n !== a.drive?.body),
     });
     // Same facts in the stored report: a fact that only exists in the chat reply
@@ -1027,12 +1076,15 @@ export function registerCadTools(
       // -> difficult, never a clean bill. Insufficient sampling is the same kind
       // of statement: there was no pose to test, so "0 interference" is unearned.
       judgement: interferenceBlocking ? 'excluded'
-        : (!samplingSatisfied || suspectWarn || report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2) ? 'difficult'
+        : (!samplingSatisfied || suspectWarn || report.metrics.jointViolations.length > 0 || report.metrics.maxJointDriftMm > 2
+          || report.metrics.jointFitsUnresolved > 0 || report.metrics.excludedJointPairs.length > 0) ? 'difficult'
           : 'not-excluded',
       summary: (interferenceBlocking ? '❌ 不可交付 · ' : '') +
         (initialGaps.length ? `初始最大失配 ${Math.max(...initialGaps.map((g) => g.gapMm)).toFixed(2)}mm · ` : '') +
         `采样 ${report.metrics.interferenceChecks}/${24}${samplingSatisfied ? '' : '（不足，干涉未检查）'}` +
         ` · 干涉 ${report.metrics.interferenceCount} 次` +
+        ((report.metrics.jointExemptions?.length ?? 0) > 0 ? ` · 豁免区 ${report.metrics.jointExemptions.length} 对` : '') +
+        (report.metrics.jointFitsUnresolved > 0 ? ` · ⚠ 未声明配合 ${report.metrics.jointFitsUnresolved} 对` : '') +
         (followerList.length ? ` · 行程 ${followerList[0]!.travelMm.toFixed(1)}mm` : '') +
         (suspectWarn ? ` · ⚠ 几何疑点 ${warnCount}` : ''),
     });
@@ -1048,6 +1100,7 @@ export function registerCadTools(
           '要么在装配契约中把该接口声明为有意过盈/预压（intent 严重级）。修复或声明之前，此机构不可交付。',
       } : {}),
       followers: report.metrics.followers,
+      gears: report.metrics.gears ?? [],
       // Empty is the normal case; when it is not, the rule travels with it so the
       // reader can see the criterion, not just the verdict.
       geometrySuspects: suspectLines,
@@ -1062,6 +1115,11 @@ export function registerCadTools(
       interferenceChecks: report.metrics.interferenceChecks,
       candidatePairs: report.metrics.candidatePairs,
       interferencePairChecks: report.metrics.interferencePairChecks,
+      excludedJointPairs: report.metrics.excludedJointPairs,
+      jointPairScan: report.metrics.jointPairScan,
+      jointFitsUnresolved: report.metrics.jointFitsUnresolved,
+      jointExemptions: report.metrics.jointExemptions,
+      jointExemptRule: report.metrics.jointExemptRule,
       samplingSatisfied: report.metrics.samplingSatisfied,
       // The declared output schema is a number (not nullable); omit it when the
       // scenario has no drive, instead of encoding "no crank" as a magic value.
@@ -1180,7 +1238,13 @@ export function registerCadTools(
       const project = await allStores(exec);
       const { store, partStore } = project;
       const part = await resolvePartForGeneration(a, project);
-      const result = await compileAndRender(source, { kernel, step: a.step === true });
+      // Serialize compile+save per project. Two parallel generate calls used to
+      // run the same Python worker and share module state: v066/v067 came back
+      // with each other's geometry (v066 was the base, v067 the P-knuckle) and
+      // the version index labelled them upper/lower. The lock is cross-process
+      // and covers only this project's generation, not the whole store.
+      const result = await withFileLock(join(project.cwd, '.cad-generate.lock'), () =>
+        compileAndRender(source, { kernel, step: a.step === true }));
       if (result.success && kernel === 'cadquery' && (result.renders?.length ?? 0) === 0 && result.stl) {
         // CadQuery returns geometry, not pictures. The shared renderer is the
         // STL→OpenSCAD path (no VTK in the CQ pack); a render failure is a
@@ -2344,6 +2408,29 @@ export function registerCadTools(
         type: 'object', additionalProperties: true,
         description: 'Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields.',
       },
+      rootPath: {
+        type: 'string',
+        description: 'Workspace-relative JSON file containing the root object. Use this for a large assembly instead of inlining ~20k characters; root wins if both are given.',
+      },
+      patch: {
+        type: 'object', additionalProperties: true,
+        description: 'JSON-merge patch of the WHOLE manifest (root / manufacturing / claims). Arrays and scalars replace; null deletes. Applied before the root merge.',
+      },
+      manufacturing: {
+        type: 'object', additionalProperties: true,
+        description: 'Top-level manufacturing policy: {allowed:[{id,note?}], approvedBy?, approvedAt?, mixApprovedBy?, mixApprovedAt?, delegate?}. Lives beside root; omitting it preserves the file\'s existing policy.',
+      },
+      claims: {
+        type: 'array',
+        description: 'Declared delivery claims persisted with the contract: [{kind, statement}]. delivery_audit reads them back, so no-claims-declared is avoidable.',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            kind: { type: 'string', required: true, description: 'strength | motion | assembly | manufacturability | appearance | review | flow' },
+            statement: { type: 'string', required: true, description: 'The claim in words.' },
+          },
+        },
+      },
       remove: {
         type: 'object', additionalProperties: false,
         description: 'Explicit root-level deletions; omitted ids are preserved, never deleted implicitly.',
@@ -2377,14 +2464,147 @@ export function registerCadTools(
     },
     timeoutMs: 30_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as ContractWriteInput;
-      const result = await writeAssemblyContract(await allStores(exec), {
+      const a = args as ContractWriteInput & { rootPath?: string };
+      const project = await allStores(exec);
+      let root = a.root;
+      if (!root && a.rootPath?.trim()) {
+        const target = isAbsolute(a.rootPath) ? a.rootPath : join(project.cwd, a.rootPath);
+        const rel = relative(project.cwd, target);
+        if (rel.startsWith('..') || isAbsolute(rel)) {
+          throw argError('write_assembly', 'rootPath', 'escapes the project workspace', 'a workspace-relative JSON file such as ".build/root.json"', { received: a.rootPath });
+        }
+        root = JSON.parse(await readFile(target, 'utf8')) as ContractWriteInput['root'];
+      }
+      if (!root && !a.patch) throw argError('write_assembly', 'root', 'is required for create/replace', 'pass root, rootPath, or a patch object', { received: { root: a.root, rootPath: a.rootPath ?? null } });
+      const result = await writeAssemblyContract(project, {
         ...a,
+        ...(root ? { root } : {}),
         actor: { sessionId: sessionIdOf(exec), source: 'cad_assembly.write' },
       });
       return { ...result, changeId: result.changeId ?? '', diff: result.diff ?? {} };
     },
   }), { id: 'cad_assembly', action: 'write' });
+
+  registerTool(defineTool({
+    name: 'suggest_interfaces',
+    description:
+      'Turn undeclared near-contact pairs into READY-TO-EDIT interface templates. The assembly check reports "52 undeclared" but not ' +
+      'which datums to use, so every contact had to be hand-written. This runs the same adjacency pass, reads each part\'s datums, and proposes ' +
+      'a distance interface with the measured gap and a symmetric tolerance. The template is a STARTING POINT: it uses the first point datum ' +
+      '(or first axis/plane/cylinder) on each part, so review the chosen datums — it never writes the contract.',
+    parameters: {
+      manifestPath: { type: 'string', description: 'Assembly manifest; default assembly/assembly.json.' },
+      adjacencyThresholdMm: { type: 'number', description: 'Near-contact gap below which a pair is proposed. Default 0.75.' },
+      maxSuggestions: { type: 'integer', description: 'Cap the reply. Default 20, max 60.' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          manifest: { type: 'string', required: true },
+          thresholdMm: { type: 'number', required: true },
+          undeclared: { type: 'integer', required: true },
+          suggestions: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                partA: { type: 'string', required: true },
+                partB: { type: 'string', required: true },
+                minDistanceMm: { type: 'number', required: true },
+                intersectionVolumeMm3: { type: 'number', required: true },
+                aDatum: { type: 'string', description: 'Chosen datum address, "part.datum".' },
+                bDatum: { type: 'string', description: 'Chosen datum address.' },
+                aDatumKind: { type: 'string' },
+                bDatumKind: { type: 'string' },
+                template: { type: 'object', required: true, additionalProperties: true, description: 'Interface object to merge into the root.' },
+                note: { type: 'string', required: true },
+              },
+            },
+          },
+          skipped: { type: 'array', required: true, items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: `${value.suggestions.length}/${value.undeclared} undeclared pair(s) templated (threshold ${value.thresholdMm}mm)\n` +
+          value.suggestions.map((s: any) => `  ${s.partA} ~ ${s.partB}: ${s.minDistanceMm}mm → ${s.aDatum ?? '?'} / ${s.bDatum ?? '?'}`).join('\n'),
+      }],
+    },
+    timeoutMs: 120_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { manifestPath?: string; adjacencyThresholdMm?: number; maxSuggestions?: number };
+      const project = await allStores(exec);
+      const threshold = a.adjacencyThresholdMm ?? 0.75;
+      const cap = Math.min(Math.max(a.maxSuggestions ?? 20, 1), 60);
+      const resolved = await resolveAssemblyManifestPath(a.manifestPath, { workspace: project.cwd, dataRoot: project.store.root });
+      const manifestFile = resolved.path;
+      const { runAssemblyCheck } = await import('./assembly-check.ts');
+      const report = await runAssemblyCheck(project.store, manifestFile, {
+        adjacencyThresholdMm: threshold,
+        runs: await listRuns(project.runStore),
+      });
+      const manifest = await loadAssemblyManifest(manifestFile);
+      const flat = flattenParts(manifest.root);
+      const byId = new Map(flat.map((f) => [f.id, f]));
+      const datumRows = async (id: string) => {
+        const node = byId.get(id)?.node;
+        if (!node?.version) return [] as { name: string; kind: string }[];
+        const d = await readVersionDatums(project.store, node.version);
+        return [
+          ...d.points.map((x) => ({ name: x.name, kind: 'point' })),
+          ...d.axes.map((x) => ({ name: x.name, kind: 'axis' })),
+          ...d.planes.map((x) => ({ name: x.name, kind: 'plane' })),
+          ...d.cylinders.map((x) => ({ name: x.name, kind: 'cylinder' })),
+        ];
+      };
+      const suggestions: any[] = [];
+      const skipped: string[] = [];
+      for (const pair of report.undeclared.slice(0, cap)) {
+        // A joint pair is not an adjacency gap; it belongs to motion-clearance.
+        const aD = await datumRows(pair.partA);
+        const bD = await datumRows(pair.partB);
+        const pick = (rows: { name: string; kind: string }[]) =>
+          rows.find((r) => r.kind === 'point') ?? rows.find((r) => r.kind === 'plane') ?? rows[0];
+        const aPick = pick(aD);
+        const bPick = pick(bD);
+        if (!aPick || !bPick) {
+          skipped.push(`${pair.partA} ~ ${pair.partB}: one side has no datums (add datum() to the part source)`);
+          continue;
+        }
+        const gap = pair.minDistance;
+        const tol = Math.max(0.05, Math.min(0.25, gap * 0.25));
+        suggestions.push({
+          partA: pair.partA,
+          partB: pair.partB,
+          minDistanceMm: gap,
+          intersectionVolumeMm3: pair.intersectionVolume,
+          aDatum: `${pair.partA}.${aPick.name}`,
+          bDatum: `${pair.partB}.${bPick.name}`,
+          aDatumKind: aPick.kind,
+          bDatumKind: bPick.kind,
+          template: {
+            id: `I_${pair.partA}_${pair.partB}`.replace(/[^A-Za-z0-9_]/g, '_'),
+            a: `${pair.partA}.${aPick.name}`,
+            b: `${pair.partB}.${bPick.name}`,
+            type: gap <= 0.01 ? '贴合' : '间隙',
+            check: 'distance',
+            severity: 'soft',
+            nominal: { quantity: '距离', value: gap },
+            tolerance: { min: Math.max(0, +(gap - tol).toFixed(3)), max: +(gap + tol).toFixed(3) },
+          },
+          note: 'Review the chosen datums and nominal; this pair was NOT declared in the contract.',
+        });
+      }
+      return {
+        manifest: manifestFile,
+        thresholdMm: threshold,
+        undeclared: report.undeclared.length,
+        suggestions,
+        skipped,
+      };
+    },
+  }), { id: 'cad_assembly', action: 'suggest' });
 
   // --- validate_assembly: multi-part interference and clearance check ---
 
@@ -3265,7 +3485,8 @@ export function registerCadTools(
   registerTool(defineTool({
     name: 'simulate_motion',
     description:
-      'Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.',
+      'Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off. ' +
+      'A revolute joint may declare `overlapEnvelope` (the fit capsule along its axis) and `fit`: overlap inside the capsule is listed in `jointExemptions` and, until `fit` is declared, keeps the run at check (`jointFitsUnresolved`); overlap outside it is interference. A joint may also be `type:"gear"` with a signed `ratio` (turns of B per turn of A) and each body\'s own `axisA`/`axisB`: the coupling is prescribed (rapier has no gear constraint), transfers no torque, and `metrics.gears` reports declared vs measured turns. Every interference event carries `overlapBboxMm` (min XYZ + max XYZ of the intersection), so a swept clash can be located without replaying the run.',
     parameters: {
       parts: {
         type: 'array',
@@ -3288,12 +3509,12 @@ export function registerCadTools(
       joints: {
         type: 'array',
         required: true,
-        description: 'Joints between parts.',
+        description: 'Joints between parts. A revolute joint may carry overlapEnvelope + fit (the declared fit capsule); with scanJointPairs those pairs enter the timeline instead of being excluded.',
         items: {
           type: 'object',
           additionalProperties: false,
           properties: {
-            type: { type: 'string', required: true, description: '"revolute" (hinge) or "prismatic" (slide).' },
+            type: { type: 'string', required: true, description: '"revolute" (hinge), "prismatic" (slide), or "gear" (a kinematic ratio coupling; needs ratio + axisA/axisB, no anchors).' },
             bodyA: { type: 'string', required: true },
             bodyB: { type: 'string', required: true },
             anchorA: { type: 'array', description: 'Joint anchor in A local frame [x,y,z] mm — give this AND anchorB, OR anchorWorld.', items: { type: 'number' } },
@@ -3304,6 +3525,21 @@ export function registerCadTools(
             axisB: { type: 'array', description: 'Axis in B\'s local frame — give with axisA.', items: { type: 'number' } },
             axisWorld: { type: 'array', description: 'Hinge/slide axis in WORLD coordinates at t=0; the tool converts it to each body\'s local frame. Use this whenever the two bodies have different rotations.', items: { type: 'number' } },
             limits: { type: 'array', description: 'Prismatic travel limits [min,max] mm.', items: { type: 'number' } },
+            ratio: { type: 'number', description: 'gear only: turns of bodyB per turn of bodyA about each body\'s own axisA/axisB, signed. External spur mesh with both axes +Z: ratio = -zA/zB (20T driving 40T -> -2). The coupling is kinematic and exact; it transfers no torque.' },
+            overlapEnvelope: {
+              type: 'object',
+              description: 'Revolute only: the DECLARED fit capsule along the joint axis — a cylinder of radius radiusMm and cylindrical half-length halfLengthMm (default 0 = a sphere). Overlap inside it is a fit candidate (the run stays check until `fit` is declared); overlap outside it is interference. Without a capsule every overlap is a clash. The capsule is re-placed at every sampled pose, and it never excuses overlap outside itself.',
+              additionalProperties: false,
+              properties: {
+                radiusMm: { type: 'number', required: true, description: 'Capsule radius, mm (> 0).' },
+                halfLengthMm: { type: 'number', description: 'Cylindrical half-length along the axis, mm. Default 0 = a sphere.' },
+              },
+            },
+            fit: {
+              type: 'string',
+              enum: ['bearing', 'press-fit', 'clamp', 'clearance'],
+              description: 'Revolute only, requires overlapEnvelope: declare that the in-envelope overlap is an intended fit (bearing / press-fit / clamp / clearance). Without it the run is check with jointFitsUnresolved > 0; a fit never excuses overlap outside the capsule. The tool does not infer "bearing" from the joint type.',
+            },
           },
         },
       },
@@ -3342,6 +3578,12 @@ export function registerCadTools(
           },
         },
       },
+      scanJointPairs: {
+        type: 'boolean',
+        description: 'Also boolean-test revolute-linked pairs. Off by default: those pairs are then listed in ' +
+          'excludedJointPairs. Turn it on when a motion-clearance interface needs evidence over a hinge pair — without ' +
+          'it that pair is never in the timeline.',
+      },
       cycles: {
         type: 'number',
         description: 'Drive cycles to simulate. Default 2. FRACTIONAL values are meaningful and are honoured: ' +
@@ -3356,11 +3598,26 @@ export function registerCadTools(
         properties: {
           overallStatus: { type: 'string', required: true },
           followers: { type: 'object', required: true, additionalProperties: true },
+          gears: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Gear couplings: declared ratio vs turnsA/turnsB/measuredRatio. The ratio is PRESCRIBED (kinematic), not solved — a contact run is what asks whether the teeth drive.' },
           interferenceCount: { type: 'integer', required: true },
           interferenceEvents: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
           interferenceChecks: { type: 'integer', required: true, description: 'Sampled poses actually boolean-tested. 0 means no interference check was performed.' },
           candidatePairs: { type: 'integer', required: true },
           interferencePairChecks: { type: 'integer', required: true, description: 'interferenceChecks × candidatePairs.' },
+          excludedJointPairs: {
+            type: 'array', required: true,
+            items: { type: 'array', items: { type: 'string' } },
+            description: 'Revolute-linked pairs that were NOT boolean-tested: "0 interference" says nothing about them. ' +
+              'A motion-clearance interface over one of these pairs cannot cite this run as evidence.',
+          },
+          jointPairScan: { type: 'boolean', required: true, description: 'Whether revolute pairs entered the timeline.' },
+          jointFitsUnresolved: { type: 'number', required: true, description: 'Exempted pairs with no declared joint.fit. Non-zero makes the run check: declare the fit or change the geometry/envelope.' },
+          jointExemptions: {
+            type: 'array', required: true,
+            items: { type: 'object', additionalProperties: true },
+            description: 'In-envelope overlaps, per pair: frames, peak volume/time, max radial/axial reach, resolved (joint.fit), attention. unresolved-fit = the run cannot pass until the fit is declared.',
+          },
+          jointExemptRule: { type: 'string', required: true, description: 'The attention rule applied to jointExemptions, in words.' },
           samplingSatisfied: { type: 'boolean', required: true, description: 'false when fewer than 24 poses could be sampled; the run is then check, never pass.' },
           maxSampleGapDeg: { type: 'number', description: 'Largest crank rotation between samples (null without a drive).' },
           blocking: { type: 'array', items: { type: 'string' }, description: 'Present (and run status = fail) when ANY interference occurred: partA↔partB, volume, time.' },
@@ -3428,12 +3685,17 @@ export function registerCadTools(
       const value = (result as {
         value?: {
           overallStatus: string;
-          followers: Record<string, { travelMm: number; axis: string; periodSec: number | null }>;
+          followers: Record<string, { travelMm: number; axis: string; periodSec: number | null; fullTravelMm?: number; warmUpOffsetMm?: number; warmUpLostMm?: number }>;
           interferenceCount: number;
           interferenceEvents: { timeSec: number; partA: string; partB: string; volumeMm3: number; label?: string }[];
           interferenceChecks: number;
           candidatePairs: number;
           interferencePairChecks: number;
+          excludedJointPairs?: string[][];
+          jointPairScan?: boolean;
+          jointFitsUnresolved?: number;
+          jointExemptions?: { partA: string; partB: string; frames: number; maxVolumeMm3: number; maxTimeSec: number; maxRadialMm: number; maxAxialMm: number; radiusMm: number; halfLengthMm: number; fit: string | null; resolved: boolean; attention: string[]; requiredAction: string | null }[];
+          jointExemptRule?: string;
           samplingSatisfied: boolean;
           maxSampleGapDeg?: number;
           maxJointDriftMm: number;
@@ -3471,15 +3733,35 @@ export function registerCadTools(
           (typeof value.maxSampleGapDeg === 'number' ? ` · max gap ${value.maxSampleGapDeg}°` : '') +
           (value.samplingSatisfied === true
             ? ''
-            : ' — INSUFFICIENT: too little travel to sample 24 poses; "0 interference" is NOT evidence.'),
+            : ' — INSUFFICIENT: too little travel to sample 24 poses; "0 interference" is NOT evidence.') +
+          ((value.excludedJointPairs?.length ?? 0) > 0
+            ? ` · ⚠ ${value.excludedJointPairs!.length} revolute pair(s) UNCHECKED: ` +
+              `${value.excludedJointPairs!.map(([a, b]) => `${a}↔${b}`).join(', ')} — not covered by this run's interference timeline; ` +
+              'run=check until scanJointPairs: true covers them.'
+            : '') +
+          ((value.jointFitsUnresolved ?? 0) > 0
+            ? ` · ⚠ ${value.jointFitsUnresolved} 对关节配合未声明 — run=check：声明 joint.fit 或改几何/包络`
+            : ''),
         ...(value.geometrySuspects?.length
           ? [`几何疑点（${value.geometrySuspectRule}）：${value.geometrySuspects.join('；')}`]
           : []),
+        ...((value.jointExemptions?.length ?? 0) > 0
+          ? [`豁免区（销/轴承包络，已声明配合才放行）：${value.jointExemptions!.map((e) =>
+              `${e.partA}↔${e.partB} ${e.frames} 帧 · 峰值 ${e.maxVolumeMm3.toFixed(2)}mm³ @ t=${e.maxTimeSec}s` +
+              ` · 径向 ${e.maxRadialMm.toFixed(1)}/${e.radiusMm}mm · 轴向 ${e.maxAxialMm.toFixed(1)}/${(e.halfLengthMm + e.radiusMm).toFixed(1)}mm` +
+              ` · ${e.resolved ? `fit=${e.fit}` : '未声明（unresolved-fit）'}` +
+              (e.attention.length ? ` ⚠ ${e.attention.join('/')}` : '')).join('；')}` +
+            `（规则：${value.jointExemptRule}）`]
+          : []),
+        'Capabilities: rigid bodies + joints. NOT simulated: springs, contact, gravity — an index/detent claim cannot be proven by this run.',
         `Max joint drift: ${value.maxJointDriftMm}mm` +
           ((value.jointViolations ?? []).length ? ` — VIOLATIONS: ${value.jointViolations.join('; ')}` : '.') +
           (pivots.length ? ` Rotation/slide pivots (part file frame): ${pivots.map(([n, p]) => `${n}[${(p as number[]).join(',')}]`).join(' ')}` : ''),
         ...followers.map(([name, f]) =>
           `${name}: travel ${typeof f.travelMm === 'number' ? f.travelMm.toFixed(3) : '—'}mm on ${f.axis}` +
+          (typeof f.fullTravelMm === 'number' && Math.abs((f.warmUpLostMm ?? 0)) > 0.05
+            ? ` (full ${f.fullTravelMm.toFixed(3)}mm; warm-up discarded ${(f.warmUpLostMm ?? 0).toFixed(3)}mm — compare the full range with the design stroke)`
+            : '') +
           (f.periodSec ? `, period ${f.periodSec.toFixed(3)}s` : '')),
         `Attached keyframes in order: ${state.refs.map((r) => r.view).join(', ') || 'none'}.`,
         'Read the interference timeline as the jamming test, not a single keyframe.',
@@ -3786,6 +4068,53 @@ export function registerCadTools(
       };
     },
   }), { id: 'cad_session', action: 'init' });
+
+  registerTool(defineTool({
+    name: 'set_project_kernel',
+    description:
+      'Change the project-level authoring kernel in place (openscad <-> cadquery). Existing versions keep their own backend pin and source file; ' +
+      'only NEW generate_part calls follow the new default. The session prompt updates on the next turn. Use this instead of creating a second project ' +
+      'just to switch engines — the previous design and its evidence stay in one corpus.',
+    parameters: {
+      kernel: { type: 'string', required: true, enum: ['openscad', 'cadquery'], description: 'New default kernel for this project.' },
+      dir: { type: 'string', description: 'Project directory; default the session\'s bound project (or live cwd).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          root: { type: 'string', required: true },
+          key: { type: 'string', required: true },
+          previous: { type: 'string', description: 'Previous defaultKernel; absent when the project had none.' },
+          kernel: { type: 'string', required: true },
+          note: { type: 'string', required: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{ type: 'text', text: `kernel → ${value.kernel} (was ${value.previous ?? 'global'}) at ${value.root}\n${value.note}` }],
+    },
+    timeoutMs: 15_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { kernel?: 'openscad' | 'cadquery'; dir?: string };
+      if (a.kernel !== 'openscad' && a.kernel !== 'cadquery') {
+        throw argError('set_project_kernel', 'kernel', 'must be openscad or cadquery', 'the authoring language for NEW versions', { received: a.kernel });
+      }
+      const info = await projectInfoFor(exec);
+      const live = await liveCwdOf(exec);
+      const dir = a.dir?.trim() || info.boundRoot || live;
+      if (!dir) throw new Error('set_project_kernel: no project is selected; pass dir');
+      const result = await setProjectKernel(dir, a.kernel);
+      // A null `previous` MUST NOT become an own property (null fails the output
+      // schema; an explicit undefined key fails the lossless-JSON check). Both
+      // were live bugs here: the marker was written, then the reply was rejected
+      // as "not a lossless JSON object". Destructure it out, add it only when real.
+      const { previous, ...rest } = result;
+      return {
+        ...rest,
+        ...(previous ? { previous } : {}),
+        note: 'Existing versions keep their backend pin. generate_part now accepts the new kernel\'s source field; the session prompt updates next turn.',
+      };
+    },
+  }), { id: 'cad_session', action: 'kernel' });
 
   registerTool(defineTool({
     name: 'bind_project',
@@ -4342,6 +4671,11 @@ export function registerCadTools(
       bPoint: { type: 'array', description: 'Endpoint B as a coordinate [x,y,z] mm — snapped to bOn\'s surface (bOn defaults to versionId). Give this OR bDatum.', items: { type: 'number' } },
       bDatum: { type: 'string', description: 'Endpoint B as a datum anchor on bOn (defaults to versionId). Resolved EXACT — prefer over bPoint.' },
       bOn: { type: 'string', description: 'Which part a bPoint/bDatum endpoint belongs to. Defaults to versionId. (This is what the retired measure_distance meant by bVersionId.)' },
+      runId: { type: 'string', description: 'Run mode: measure two parts of a SAVED run at one trajectory pose. Reads runs/<id>/trajectory.json + parts/*.stl, needs aPart/bPart and timeSec (or step, looked up in the run report). Solid endpoints only; no versionId needed.' },
+      timeSec: { type: 'number', description: 'Run mode: trajectory time in seconds (the run report\'s interference event carries it).' },
+      step: { type: 'number', description: 'Run mode: simulation step; looked up among the run report\'s interference events to get its timeSec.' },
+      aPart: { type: 'string', description: 'Run mode: part name as it appears in the run (trajectory parts[].name).' },
+      bPart: { type: 'string', description: 'Run mode: the second part name in the run.' },
       snap: { type: 'boolean', description: 'Snap raw coordinate inputs to the nearest surface point. Default true. Datum-resolved points are never snapped.' },
     },
     output: {
@@ -4360,6 +4694,10 @@ export function registerCadTools(
           bSnapDistanceMm: { type: 'number' },
           aOutside: { type: 'boolean', description: 'Whether endpoint A\'s input point was inside the part. Present for aPoint endpoints only.' },
           bOutside: { type: 'boolean' },
+          runId: { type: 'string', description: 'Run mode: the run this pose came from.' },
+          timeSec: { type: 'number', description: 'Run mode: the trajectory time (and, when `step` was given, the interference event time it resolved to).' },
+          aPart: { type: 'string', description: 'Run mode: part A name.' },
+          bPart: { type: 'string', description: 'Run mode: part B name.' },
           warnings: { type: 'array', items: { type: 'string' } },
         },
       },
@@ -4375,9 +4713,111 @@ export function registerCadTools(
         aPoint?: number[]; bPoint?: number[];
         aDatum?: string; bDatum?: string;
         bOn?: string; snap?: boolean;
+        runId?: string; timeSec?: number; step?: number; aPart?: string; bPart?: string;
       };
-      const { store } = await allStores(exec);
+      const project = await allStores(exec);
+      const { store, runStore } = project;
       const versionStl = (id: string) => join(store.root, 'versions', id, 'model.stl');
+      const warnings: string[] = [];
+      const axis = (p: [number, number, number], q: [number, number, number]) =>
+        [0, 1, 2].map((i) => {
+          const delta = +(q[i]! - p[i]!).toFixed(3);
+          return delta === 0 ? 0 : delta;
+        }) as [number, number, number];
+
+      // ---- run mode: the same closest-point solve, at a SAVED pose ----------
+      // A motion run already stores parts/*.stl (rebased) and trajectory.json
+      // (frame per sampled time). Reading those here turns "the report says they
+      // overlap 34mm³ at step 996" into "here is the clearance and the two witness
+      // points at that pose" without a new simulation or a hand-written script.
+      if (a.runId !== undefined) {
+        const runId = safeArtifactName(a.runId);
+        if (!runId) throw new Error(`runId ${JSON.stringify(a.runId)} is not a run id`);
+        if (!a.aPart?.trim() || !a.bPart?.trim()) {
+          throw argError('measure', 'aPart/bPart', 'are required in run mode', 'the two part names as they appear in the run trajectory',
+            { example: 'measure({ kind: "gap", runId: "r042", step: 996, aPart: "frame", bPart: "take_up_lever" })' });
+        }
+        const runDir = join(runStore.root, runId);
+        const trajectoryPath = join(runDir, 'trajectory.json');
+        if (!existsSync(trajectoryPath)) {
+          throw new Error(`run ${runId} has no trajectory.json — runId must name a motion run (the report's interferenceEvents cite one)`);
+        }
+        let timeSec = a.timeSec;
+        let resolvedEvent: { step: number; timeSec: number; partA?: string; partB?: string; volumeMm3?: number } | undefined;
+        if (timeSec === undefined && a.step !== undefined) {
+          const reportPath = join(runDir, 'report.json');
+          const report = existsSync(reportPath) ? JSON.parse(await readFile(reportPath, 'utf8')) as {
+            metrics?: { interferenceEvents?: { step: number; timeSec: number; partA?: string; partB?: string; volumeMm3?: number }[] };
+          } : null;
+          const events = report?.metrics?.interferenceEvents ?? [];
+          const hit = events.find((e) => e.step === a.step);
+          if (!hit) {
+            const known = [...new Set(events.map((e) => e.step))].slice(0, 12).join(', ');
+            throw new Error(`run ${runId} has no interference event at step ${a.step}; known event steps: ${known || '(none)'}`);
+          }
+          resolvedEvent = hit;
+          timeSec = hit.timeSec;
+        }
+        if (timeSec === undefined) {
+          throw argError('measure', 'timeSec/step', 'is required in run mode', 'timeSec in seconds, or the step of an interference event in this run',
+            { example: 'measure({ kind: "gap", runId: "r042", step: 996, aPart: "frame", bPart: "take_up_lever" })' });
+        }
+        const rawTrajectory = JSON.parse(await readFile(trajectoryPath, 'utf8')) as {
+          trajectory?: { times: number[]; parts: { name: string; frames: number[][] }[] };
+          times?: number[];
+          parts?: { name: string; frames: number[][] }[];
+        };
+        const tr = rawTrajectory.trajectory ?? rawTrajectory;
+        if (!Array.isArray(tr.times) || tr.times.length === 0 || !Array.isArray(tr.parts)) {
+          throw new Error(`run ${runId} trajectory.json has no times/parts`);
+        }
+        const times: number[] = tr.times;
+        const parts: { name: string; frames: number[][] }[] = tr.parts;
+        const idx = times.reduce((best, t, i) => Math.abs(t - timeSec!) < Math.abs(times[best]! - timeSec!) ? i : best, 0);
+        if (Math.abs(times[idx]! - timeSec) > 0.01) {
+          warnings.push(`requested t=${timeSec}s is between samples; measured at t=${times[idx]}s (the nearest trajectory pose)`);
+        }
+        const frameOf = (name: string): number[] => {
+          const part = parts.find((p) => p.name === name);
+          if (!part) throw new Error(`run ${runId} has no part ${JSON.stringify(name)}; parts: ${parts.map((p) => p.name).join(', ')}`);
+          const frame = part.frames[idx];
+          if (!frame || frame.length !== 7) throw new Error(`run ${runId} part ${JSON.stringify(name)} has no pose at t=${times[idx]}s`);
+          return frame;
+        };
+        const frameA = frameOf(a.aPart);
+        const frameB = frameOf(a.bPart);
+        // The pose belongs on the geometry, in the Python canonical. Send the run's
+        // own part STLs + the trajectory frame; do NOT transform vertices here.
+        const solved = await (await ensurePythonWorker()).request<MeshMeshSolve>('closest_mesh_mesh', {
+          meshA: join(runDir, 'parts', `${a.aPart}.stl`),
+          meshB: join(runDir, 'parts', `${a.bPart}.stl`),
+          poseA: { translationMm: frameA.slice(0, 3), rotation: frameA.slice(3, 7) },
+          poseB: { translationMm: frameB.slice(0, 3), rotation: frameB.slice(3, 7) },
+        });
+        const [dxMm, dyMm, dzMm] = axis(solved.pointA, solved.pointB);
+        if (!solved.watertightA || !solved.watertightB) {
+          warnings.push('a run part is NOT watertight — a closest-point pair on an open surface is not a clearance between solids');
+        }
+        // A closest-point distance is a SURFACE clearance, not a collision test: a
+        // part wholly embedded in another can report a positive distance while the
+        // run's boolean reports a real overlap. Say which question this answered.
+        if (resolvedEvent && resolvedEvent.volumeMm3 && resolvedEvent.volumeMm3 > 1e-3
+          && ((resolvedEvent.partA === a.aPart && resolvedEvent.partB === a.bPart)
+            || (resolvedEvent.partA === a.bPart && resolvedEvent.partB === a.aPart))) {
+          warnings.push(
+            `the run reports ${a.aPart}↔${a.bPart} OVERLAPPING ${resolvedEvent.volumeMm3}mm³ at step ${resolvedEvent.step}; ` +
+            "distanceMm is the surface clearance (an embedded part can report > 0) — use the event's overlapBboxMm for the overlap region");
+        }
+        return {
+          distanceMm: solved.distanceMm,
+          dxMm, dyMm, dzMm,
+          pointA: solved.pointA, pointB: solved.pointB,
+          method: solved.method,
+          runId, timeSec: times[idx]!, aPart: a.aPart, bPart: a.bPart,
+          warnings,
+        };
+      }
+
       if (a.versionId !== undefined && !existsSync(versionStl(a.versionId))) {
         throw new Error(await versionNotFound(store, a.versionId));
       }
@@ -4413,10 +4853,6 @@ export function registerCadTools(
           'way, or measure the two steps separately.',
         );
       }
-
-      const warnings: string[] = [];
-      const axis = (p: [number, number, number], q: [number, number, number]) =>
-        [0, 1, 2].map((i) => +(q[i]! - p[i]!).toFixed(3)) as [number, number, number];
 
       if (!solvedA && a.versionId === undefined) {
         throw argError('measure_gap', 'versionId', 'is required for a point/datum endpoint', 'the version the endpoint belongs to; a b-side point/datum may instead name another part with `bOn`. Only a solid/sphere pair can be measured without a base part',
@@ -5318,11 +5754,8 @@ export function registerCadTools(
       const radialOf = (v: Vector3) => (axisName === 'x' ? Math.hypot(v.y, v.z) : axisName === 'y' ? Math.hypot(v.x, v.z) : Math.hypot(v.x, v.y));
       const verts = mesh.vertProperties;
       const count = verts.length / 3;
-      let maxRadius = 0;
-      for (let i = 0; i < count; i++) {
-        const v = new Vector3(verts[i * 3]!, verts[i * 3 + 1]!, verts[i * 3 + 2]!);
-        maxRadius = Math.max(maxRadius, radialOf(v));
-      }
+      // Spindle = declared principal axis THROUGH THE BBOX CENTRE (turning.ts).
+      const maxRadius = maxRadiusAboutCentre(verts, [centre.x, centre.y, centre.z], axisName as 'x' | 'y' | 'z');
       const lengthMm = axialOf(new Vector3(bb.max[0], bb.max[1], bb.max[2])) - axialOf(new Vector3(bb.min[0], bb.min[1], bb.min[2]));
       const bvh = buildMeshBvh({ vertProperties: mesh.vertProperties, triVerts: mesh.triVerts.slice() });
       const step = Math.max(1, Math.floor(count / 800));
@@ -5330,7 +5763,7 @@ export function registerCadTools(
       let symmetryMaxDeviationMm = 0;
       for (let i = 0; i < count; i += step) {
         const p = new Vector3(verts[i * 3]!, verts[i * 3 + 1]!, verts[i * 3 + 2]!);
-        if (radialOf(p) < 1e-6) continue;
+        if (radialOf(p.clone().sub(centre)) < 1e-6) continue;
         for (const deg of [90, 180, 270]) {
           const r = p.clone().sub(centre).applyAxisAngle(axisVec, (deg * Math.PI) / 180).add(centre);
           const hit = bvh.closestPointToPoint(r);
@@ -5401,7 +5834,7 @@ export function registerCadTools(
       'with the cnc-3axis printability profile (wall + circular bores).',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version to screen, e.g. "v012".' },
-      maxSetups: { type: 'integer', required: true, description: 'Declared maximum number of principal setups (e.g. 2 for top+bottom).' },
+      maxSetups: { type: 'integer', description: 'Declared maximum number of principal setups. Default 6 (the six principal directions); declare fewer only if that is a real machine/fixture limit — exceeding it then excludes, which is a declared capability, not a geometric impossibility.' },
       requireAllAccessible: { type: 'boolean', description: 'true = any inaccessible area is a witness; false = warning. Default false.' },
       sampleLimit: { type: 'integer', description: 'Max sampled triangles; default 300, capped at 600 (each sample is 6 ray casts).' },
     },
@@ -5455,18 +5888,30 @@ export function registerCadTools(
               requireAllAccessible: { type: 'boolean', required: true },
             },
           },
+          sealedCavities: {
+            type: 'array', required: true,
+            description: 'Enclosed voids: no passage to the outside. They cannot be cleaned or fitted from outside.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                volumeMm3: { type: 'number', required: true },
+                centerMm: { type: 'array', required: true, items: { type: 'number' } },
+              },
+            },
+          },
           runId: { type: 'string' },
         },
       },
       render: (_args: unknown, value: unknown) => {
-        const v = value as { verdict: string; metrics: { setupsNeeded: number; inaccessiblePct: number; accessiblePct: number } };
-        return [{ type: 'text', text: `CNC 可达性 → ${v.verdict}\n  装夹 ${v.metrics.setupsNeeded} · 可达 ${v.metrics.accessiblePct}% · 不可达 ${v.metrics.inaccessiblePct}%` }];
+        const v = value as { verdict: string; metrics: { setupsNeeded: number; inaccessiblePct: number; accessiblePct: number }; sealedCavities?: unknown[] };
+        return [{ type: 'text', text: `CNC 可达性 → ${v.verdict}\n  装夹 ${v.metrics.setupsNeeded} · 可达 ${v.metrics.accessiblePct}% · 不可达 ${v.metrics.inaccessiblePct}%` +
+          ((v.sealedCavities?.length ?? 0) ? ` · 封闭腔 ${v.sealedCavities!.length}` : '') }];
       },
     },
     timeoutMs: 180_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as { versionId: string; maxSetups: number; requireAllAccessible?: boolean; sampleLimit?: number };
-      if (typeof a.maxSetups !== 'number' || !Number.isInteger(a.maxSetups) || a.maxSetups <= 0) {
+      const a = args as { versionId: string; maxSetups?: number; requireAllAccessible?: boolean; sampleLimit?: number };
+      if (a.maxSetups !== undefined && (typeof a.maxSetups !== 'number' || !Number.isInteger(a.maxSetups) || a.maxSetups <= 0)) {
         throw argError('check_cnc_access', 'maxSetups', 'must be a positive integer', 'declare how many principal setups your 3-axis workflow allows', { received: a.maxSetups });
       }
       const sampleLimit = a.sampleLimit ?? 300;
@@ -5556,9 +6001,33 @@ export function registerCadTools(
         directionAreaMm2: dirs.map((d) => ({ direction: d.name, areaMm2: directionAreaMm2[d.name] ?? 0 })),
       };
       const analysis = analyzeCncAccess(metrics, {
-        maxSetups: a.maxSetups,
+        maxSetups: a.maxSetups ?? 6,
         requireAllAccessible: a.requireAllAccessible === true,
       });
+      // A sealed cavity is a FACT this mesh can prove, and it is both a cleaning
+      // problem and an assembly dead-end: the B-knuckle's spring pocket passed the
+      // contract, then the Ø12 plunger disc could not pass the Ø6 stem hole and the
+      // top was closed. The CNC screen was the only place it surfaced (28.3%).
+      let sealedCavities: { volumeMm3: number; centerMm: number[] }[] = [];
+      try {
+        const cKey = versionCacheKey(store.root, a.versionId);
+        let conn = connectivityCache.get(cKey);
+        if (!conn) {
+          conn = await (await ensurePythonWorker()).request<ConnectivitySolve>('connectivity', { path });
+          connectivityCache.set(cKey, conn);
+        }
+        sealedCavities = (conn.voids ?? []).map((v) => ({ volumeMm3: +v.volumeMm3.toFixed(2), centerMm: v.center }));
+      } catch { /* a non-watertight mesh has no trustworthy void list; the report already says so */ }
+      const cavityFindings = [
+        ...(sealedCavities.length
+          ? [`封闭腔 ${sealedCavities.length} 处（最大 ${Math.max(...sealedCavities.map((v) => v.volumeMm3)).toFixed(0)}mm³）：从外部没有通道，` +
+             '里面的零件无法装入/取出，切屑和清洗液也出不来 — 开工艺孔/顶盖，或把腔体改成通腔']
+          : []),
+        ...(metrics.inaccessiblePct >= 20
+          ? [`${metrics.inaccessiblePct.toFixed(1)}% 面积从六个主方向都不可达：除了刀具问题，这也是**装配风险** —— ` +
+             '内腔深处的零件可能无法装入/取出；确认开口大于零件截面，或把腔体分成可装的两半']
+          : []),
+      ];
       const run = await beginRun(runStore, {
         kind: 'machinability',
         title: `CNC 可达性 · ${a.versionId} · ${analysis.verdict}`,
@@ -5566,7 +6035,9 @@ export function registerCadTools(
       const report = {
         versionId: a.versionId,
         ...analysis,
-        params: { maxSetups: a.maxSetups, requireAllAccessible: a.requireAllAccessible === true },
+        findings: [...analysis.findings, ...cavityFindings],
+        sealedCavities,
+        params: { maxSetups: a.maxSetups ?? 6, requireAllAccessible: a.requireAllAccessible === true },
       };
       await run.json('report.json', report);
       const warn = metrics.inaccessiblePct > 0 && a.requireAllAccessible !== true;
@@ -5926,6 +6397,11 @@ export function registerCadTools(
       bPoint: { type: 'array', description: 'gap: side b as a point.', items: { type: 'number' } },
       bDatum: { type: 'string', description: 'gap: side b as a datum name.' },
       bOn: { type: 'string', description: 'gap: which side the reported distance is measured TO ("a" | "b"); default both witness pairs.' },
+      runId: { type: 'string', description: 'gap: measure two parts of a saved run at one trajectory pose (needs aPart/bPart + timeSec or step).' },
+      timeSec: { type: 'number', description: 'gap run mode: trajectory time, s.' },
+      step: { type: 'number', description: 'gap run mode: simulation step, looked up in the run report.' },
+      aPart: { type: 'string', description: 'gap run mode: part A name in the run.' },
+      bPart: { type: 'string', description: 'gap run mode: part B name in the run.' },
       snap: { type: 'boolean', description: 'gap: snap a bare point onto the nearest surface of its version before measuring. Default true.' },
       // ---- thickness ----
       from: { type: 'array', description: 'thickness: starting point [x,y,z].', items: { type: 'number' } },
@@ -6018,6 +6494,7 @@ export function registerCadTools(
   async function screenVersionJob(
     a: {
       versionId: string; wallMinMm?: number; overhangDeg?: number; samples?: number;
+      edgeOnlyThinPct?: number;
       profileIds?: string[]; profilesJson?: string; mode?: string;
       printOrientationDeg?: [number, number, number];
     },
@@ -6025,7 +6502,10 @@ export function registerCadTools(
   ) {
     const store = project.store;
     const runStore = project.runStore;
-    const resolved = await resolveProcessProfiles(a);
+    const resolved = await resolveProcessProfiles(a, [
+      join(project.cwd, 'profiles'),
+      join(project.cwd, 'cad-data', 'profiles'),
+    ]);
     if (resolved.errors.length > 0) {
       throw new Error(`invalid process profile:\n  - ${resolved.errors.join('\n  - ')}`);
     }
@@ -6155,6 +6635,7 @@ export function registerCadTools(
         wallMinMm: wall?.value ?? a.wallMinMm,
         overhangDeg: overhang ? overhang.value : (overhangOff ? null : a.overhangDeg),
         samples: a.samples,
+        ...(a.edgeOnlyThinPct !== undefined ? { edgeOnlyThinPct: a.edgeOnlyThinPct } : {}),
         ...(a.printOrientationDeg ? { printOrientationDeg: a.printOrientationDeg } : {}),
         withSampleField: true,
       });
@@ -6163,7 +6644,9 @@ export function registerCadTools(
       const witnesses: ProfileEvaluation['witnesses'] = [];
       // Only a HARD constraint excludes. A too-steep overhang needs supports; it does
       // not make the part impossible, so it stays a finding, not a witness.
-      if (wall && screen.wallMeasured && screen.minWallMm !== undefined && violatesRule(screen.minWallMm, wall)) {
+      // An edge-classified thin reading is not a wall witness: a solid wedge is
+      // deburred, not redesigned. See check_printability's edgeOnlyThinPct.
+      if (wall && screen.wallMeasured && screen.minWallMm !== undefined && !screen.edgeOnlyThinPct && violatesRule(screen.minWallMm, wall)) {
         witnesses.push({
           rule: 'wallMinMm',
           measured: screen.minWallMm,
@@ -6405,6 +6888,15 @@ export function registerCadTools(
       );
     }
     let verdict = base!.verdict;
+    // An edge-classified thin reading is not a shell. The raw screen still says
+    // `difficult` (it also carries the FDM overhang finding), so promote it only
+    // when every declared profile is clean AND no declared profile governs
+    // overhang — a CNC profile must not inherit an FDM support rule.
+    if (verdict === 'difficult' && base?.edgeOnlyThinPct && marginalNotes.length === 0 &&
+        evaluations.every((e) => e.verdict === 'not-excluded')) {
+      const overhangGoverned = resolved.profiles.some((p) => p.rules.overhangDeg?.applies === true);
+      if (!overhangGoverned) verdict = 'not-excluded';
+    }
     if (resolved.source === 'builtin-default') {
       const p = resolved.profiles[0]!;
       findings.push(
@@ -6499,7 +6991,12 @@ export function registerCadTools(
         type: 'number',
         description: 'A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45.',
       },
+      printOrientationDeg: {
+        type: 'array', items: { type: 'number' },
+        description: 'The PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it (e.g. [180,0,0] for a part printed upside down); the reply\'s overhang/witness numbers are then in the printed frame. Absent = modelling pose.',
+      },
       samples: { type: 'number', description: 'Approximate surface samples. Default 600; raise for big meshes, lower for quick passes.' },
+      edgeOnlyThinPct: { type: 'number', description: 'Thin area at or below this % of surface is classified as a solid sharp-edge artefact, not a thin shell (default 1.0; 0 disables). A shell is sustained area; a deburring edge is a strip.' },
       profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles to judge against, e.g. ["fdm-pla-0.4"]. Each yields its own two-valued verdict. Omit (with profilesJson) to use the built-in fallback, which the report then names.' },
       profilesJson: { type: 'string', description: 'An inline JSON array of process profiles (schema: schemas/process-profile.schema.json). Use for a profile you authored; an invalid one is REFUSED with the offending rule named.' },
     },
@@ -6532,6 +7029,7 @@ export function registerCadTools(
           sampled: { type: 'number', required: true },
           thinAreaMm2: { type: 'number', required: true, description: 'Area of the sub-threshold region, scaled from the sample to the whole surface.' },
           thinAreaPct: { type: 'number', required: true, description: 'That area as a % of the whole surface — a thin SHELL spans a lot of it, a blunt edge only a strip.' },
+          edgeOnlyThinPct: { type: 'number', description: 'The threshold used to classify a tiny thin area as a sharp-edge artefact.' },
           surfaceAreaMm2: { type: 'number', required: true, description: 'Measured surface area; sqrt(area / sampled) is the sampling spacing, i.e. the smallest wall difference this screen can resolve (the band width, DESIGN §27.4).' },
           overhangAreaMm2: { type: 'number', required: true, description: 'Exact print-overhang area: summed over every triangle, not sampled. NOT structural overhang/self-weight stress.' },
           printOrientationDeg: { type: 'array', items: { type: 'number' }, description: 'The print frame these numbers were measured in; absent = modelling pose.' },
@@ -6668,7 +7166,9 @@ export function registerCadTools(
         type: 'array', items: { type: 'string' },
         description: 'Which halves to run: "measure" and/or "printability". Default both.',
       },
-      profileIds: { type: 'array', items: { type: 'string' }, description: 'Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability).' },
+      profileIds: { type: 'array', items: { type: 'string' }, description: 'Process profiles for the printability half: shipped ids, or a project-local profiles/<id>.json. Omit to use the built-in fallback (which downgrades a pass, as in check_printability).' },
+      profilesJson: { type: 'string', description: 'Inline JSON array of process profiles for the batch — the batch used to accept only shipped ids, forcing N single calls for a custom CNC profile.' },
+      edgeOnlyThinPct: { type: 'number', description: 'Printability half: thin area at or below this % is a sharp-edge artefact, not a shell. Default 1.0; 0 disables.' },
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported (printability half). Default 1.2.' },
       overhangDeg: { type: 'number', description: 'Down-facing faces steeper than this count as print-overhang (FDM support, printability half; NOT structural overhang/self-weight stress). Default 45.' },
       printOrientationDeg: { type: 'array', items: { type: 'number' }, description: 'G6 (2026-10-29): the PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it; the reply\'s overhang/witness numbers are then in the printed frame.' },
@@ -6741,8 +7241,8 @@ export function registerCadTools(
     timeoutMs: 180_000,
     async execute(args: unknown, exec: unknown) {
       const a = args as {
-        versionIds?: string[]; checks?: string[]; profileIds?: string[];
-        wallMinMm?: number; overhangDeg?: number; samples?: number;
+        versionIds?: string[]; checks?: string[]; profileIds?: string[]; profilesJson?: string;
+        wallMinMm?: number; overhangDeg?: number; samples?: number; edgeOnlyThinPct?: number;
         printOrientationDeg?: [number, number, number];
       };
       const ids = [...new Set((a.versionIds ?? []).filter((id) => typeof id === 'string' && id.trim()))].slice(0, 12);
@@ -6779,9 +7279,11 @@ export function registerCadTools(
             const screened = await screenVersionJob({
               versionId,
               ...(a.profileIds?.length ? { profileIds: a.profileIds } : {}),
+              ...(a.profilesJson ? { profilesJson: a.profilesJson } : {}),
               ...(a.wallMinMm !== undefined ? { wallMinMm: a.wallMinMm } : {}),
               ...(a.overhangDeg !== undefined ? { overhangDeg: a.overhangDeg } : {}),
               ...(a.samples !== undefined ? { samples: a.samples } : {}),
+              ...(a.edgeOnlyThinPct !== undefined ? { edgeOnlyThinPct: a.edgeOnlyThinPct } : {}),
               ...(a.printOrientationDeg ? { printOrientationDeg: a.printOrientationDeg } : {}),
             }, project);
             const report = screened.report;
@@ -6817,6 +7319,87 @@ export function registerCadTools(
       } as never;
     },
   }), { id: 'cad_check', action: 'parts' });
+
+  // --- check_sweep: 早期扫掠筛查（连续包络 + 采样 clearance + 自适应细化）---
+  //
+  // 2026-11-24：缝纫机的 take_up_lever↔frame 34mm³ 和 needle_bar↔frame 33mm³
+  // 都是"装配位姿刚好差 1mm，转到某个角度才撞"的问题；装配检查是静态的，看不见。
+  // 这个 screen 把早期阶段补上：它只报 SUSPECT，不判交付；motion 仍是唯一证据。
+  // 几何算法在 python/cad_worker/worker.py 的 screen_sweep（Python canonical）；
+  // 这里只做工具面：解析版本路径、转发参数、回传报告。
+  registerTool(defineTool({
+    name: 'check_sweep',
+    description:
+      'Early sweep screen for ONE moving version against static versions over a DECLARED joint range. ' +
+      'A continuous swept AABB envelope drops pairs that cannot touch; coarse closest-point clearance samples are then refined where clearance is below 2×minFeature, until the arc step is <= minFeature/2 or the sample budget is exhausted (then UNCOVERED, never clean). ' +
+      'Returns SUSPECTS, not a delivery verdict: a positive clearance is not a pass, and simulate_motion remains the pass/fail evidence. ' +
+      'Use it before building a motion run to find a swing/stroke collision early.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'The MOVING part (saved version id).' },
+      againstVersionIds: { type: 'array', required: true, items: { type: 'string' }, description: 'Static versions to screen against (at least one).' },
+      joint: {
+        type: 'object', required: true, additionalProperties: false,
+        description: 'The declared sweep: revolute (degrees) or prismatic (mm) about/along a world axis and anchor.',
+        properties: {
+          type: { type: 'string', required: true, enum: ['revolute', 'prismatic'], description: 'revolute = rotate by from..to degrees; prismatic = translate by from..to mm.' },
+          anchorMm: { type: 'array', required: true, items: { type: 'number' }, description: 'A point on the axis, world mm.' },
+          axis: { type: 'array', required: true, items: { type: 'number' }, description: 'Axis direction, world (normalised internally).' },
+          from: { type: 'number', required: true, description: 'Start parameter: degrees for revolute, mm for prismatic.' },
+          to: { type: 'number', required: true, description: 'End parameter.' },
+        },
+      },
+      minFeatureMm: { type: 'number', description: 'The smallest feature that must not be stepped over. Default 0.5. The refinement target is half of it.' },
+      maxSamples: { type: 'number', description: 'Sample budget per pair. Default 48; when exhausted the pair is UNCOVERED, not clean.' },
+      clearanceThresholdMm: { type: 'number', description: 'Clearance at or below this is a collision. Default 0 (touching).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: true,
+        properties: {
+          moving: { type: 'string', required: true },
+          joint: { type: 'object', required: true, additionalProperties: true },
+          rows: { type: 'array', required: true, items: { type: 'object', additionalProperties: true } },
+          overall: { type: 'string', required: true, description: 'clean | suspect | uncovered | collision (worst row).' },
+          rule: { type: 'string', required: true },
+          notes: { type: 'array', required: true, items: { type: 'string' } },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: `sweep ${value.overall}: ` + (value.rows ?? []).map((r: any) =>
+          `${r.partName} ${r.status} min=${r.minClearanceMm ?? '—'}mm @${r.at}${r.budgetExhausted ? ' (budget)' : ''}`).join('; '),
+      }],
+    },
+    timeoutMs: 300_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId?: string; againstVersionIds?: string[];
+        joint?: { type?: string; anchorMm?: number[]; axis?: number[]; from?: number; to?: number };
+        minFeatureMm?: number; maxSamples?: number; clearanceThresholdMm?: number;
+      };
+      if (!a.versionId?.trim()) throw new Error('check_sweep: versionId is required (the moving part)');
+      const against = (a.againstVersionIds ?? []).filter((x) => typeof x === 'string' && x.trim());
+      if (against.length === 0) throw new Error('check_sweep: againstVersionIds needs at least one static version');
+      const j = a.joint;
+      if (!j || (j.type !== 'revolute' && j.type !== 'prismatic')) throw new Error('check_sweep: joint.type must be "revolute" or "prismatic"');
+      if (!Array.isArray(j.anchorMm) || j.anchorMm.length !== 3) throw new Error('check_sweep: joint.anchorMm must be [x,y,z]');
+      if (!Array.isArray(j.axis) || j.axis.length !== 3) throw new Error('check_sweep: joint.axis must be [x,y,z]');
+      if (typeof j.from !== 'number' || typeof j.to !== 'number') throw new Error('check_sweep: joint.from/to must be numbers');
+      const { store } = await allStores(exec);
+      const pathOf = (id: string) => join(store.root, 'versions', id, 'model.stl');
+      if (!existsSync(pathOf(a.versionId))) throw new Error(await versionNotFound(store, a.versionId));
+      for (const id of against) if (!existsSync(pathOf(id))) throw new Error(await versionNotFound(store, id));
+      const worker = await ensurePythonWorker();
+      return await worker.request('screen_sweep', {
+        moving: { id: a.versionId, name: a.versionId, path: pathOf(a.versionId) },
+        statics: against.map((id) => ({ id, name: id, path: pathOf(id) })),
+        joint: { type: j.type, anchorMm: j.anchorMm, axis: j.axis, from: j.from, to: j.to },
+        minFeatureMm: a.minFeatureMm ?? 0.5,
+        maxSamples: a.maxSamples ?? 48,
+        clearanceThresholdMm: a.clearanceThresholdMm ?? 0,
+      }) as never;
+    },
+  }), { id: 'cad_check', action: 'sweep' });
 
   // --- simulate_stress: 内部应力的"注意力场"（DECISION-LOG 2026-10-19）--------
   //
@@ -7050,6 +7633,29 @@ export function registerCadTools(
       const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
       const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
 
+      // PREFLIGHT, before a 30–60 s solve: a load case with no support is a
+      // rigid-body mode, and the worker only says "no constrained node" after it
+      // has built the voxel grid. Say it now, with the fix.
+      const supportCount = (a.supports ?? []).filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
+      if (supportCount === 0) {
+        throw argError('simulate_stress', 'supports',
+          'is empty — the solve would be a rigid-body mode',
+          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}',
+          { received: a.supports ?? [] });
+      }
+      // Mesh-size preflight. The OOM message from the worker was a bare SIGKILL;
+      // the caller had no way to know that dx 0.7/0.5 were beyond this machine.
+      const dxGuess = a.dxMm ?? 0.6;
+      const cells = [0, 1, 2].map((i) => Math.ceil((bbox[1]![i]! - bbox[0]![i]!) / dxGuess) + 2);
+      const estimatedGridCells = cells[0]! * cells[1]! * cells[2]!;
+      if (estimatedGridCells > 12_000_000) {
+        const suggested = Math.max(0.9, Math.cbrt((bbox[1]![0]! - bbox[0]![0]!) * (bbox[1]![1]! - bbox[0]![1]!) * (bbox[1]![2]! - bbox[0]![2]!) / 6_000_000));
+        throw argError('simulate_stress', 'dxMm',
+          'dx ' + dxGuess + 'mm would need about ' + estimatedGridCells.toExponential(2) + ' voxel cells; this worker OOMs before that',
+          'use dx >= ' + suggested.toFixed(2) + 'mm (the strength claim is directional either way), or thicken the thin member so a coarser grid still resolves it',
+          { received: { dxMm: a.dxMm ?? null, estimatedGridCells, suggestedDxMm: +suggested.toFixed(2) } });
+      }
+
       // The field is an artifact of ONE run, so it lives IN that run (2026-10-23 audit,
       // FIX-E4). Previously the filename was `<version>-<material>-<dx>`, which says
       // nothing about the LOAD CASE: two different loads on the same version overwrote
@@ -7062,7 +7668,9 @@ export function registerCadTools(
       await mkdir(run.dir, { recursive: true });
       const fieldPath = join(run.dir, 'stress-field.f32');
 
-      const result = await solveStress({
+      let result: Awaited<ReturnType<typeof solveStress>>;
+      try {
+        result = await solveStress({
         path: modelPath,
         material,
         dxMm: a.dxMm,
@@ -7093,7 +7701,18 @@ export function registerCadTools(
         criticalDistanceMm: a.criticalDistanceMm,
         runConvergence: a.runConvergence,
         fieldPath,
-      });
+        });
+      } catch (error) {
+        const message = String((error as Error)?.message ?? error);
+        if (/SIGKILL|worker exited|out of memory|Killed/i.test(message)) {
+          throw new Error(
+            `simulate_stress OOM at dx ${a.dxMm ?? 'default'}mm on ${a.versionId}: the worker was killed, no field was produced. ` +
+            `Retry with a coarser dx (>= 0.9 mm on this machine), thicken the thin member, or run it on a worker with more memory. ` +
+            `This is an ENVIRONMENT limit, not a pass and not a geometry failure. Original: ${message}`,
+          );
+        }
+        throw error;
+      }
       if (result.refused) throw new Error(`simulate_stress refused ${a.versionId}: ${result.refused}`);
       const field = await readStressField(fieldPath);
 
@@ -7489,6 +8108,132 @@ export function registerCadTools(
       return value;
     },
   }), { id: 'cad_deliver', action: 'audit' });
+
+  // --- retire_run: the third state between "current evidence" and "deleted" ---
+  //
+  // A failed run about geometry that no longer exists is history, not a lie. The
+  // corpus had no way to say that: the only escape was moving runs/rNNN by hand,
+  // outside every tool, which loses the index/audit trail. This action marks the
+  // run retired (index + run.json) and leaves every artifact in place.
+  registerTool(defineTool({
+    name: 'retire_run',
+    description:
+      'Retire (or un-retire) a run: keep all artifacts and history, but stop counting it as current evidence. ' +
+      'Use it for a failure/screen whose geometry a later version replaced, or a declaration error that a re-run fixed. ' +
+      'A retirement REQUIRES a reason; it is written to the run index and the run\'s own run.json, and delivery_audit ' +
+      'excludes retired runs from failing/latest/stale verdicts (they still appear in runs.retired). ' +
+      'This is not deletion: nothing is moved or removed. Prefer a fresh run with the same subject when the geometry ' +
+      'is still current; retire only when the run can never become current again.',
+    parameters: {
+      runId: { type: 'string', required: true, description: 'Run id, e.g. "r006".' },
+      reason: { type: 'string', required: true, description: 'Why this run is history, e.g. "v017 washer face overlap; fixed in v026".' },
+      by: { type: 'string', description: 'Who/what approved the retirement (default: the calling session).' },
+      undo: { type: 'boolean', description: 'true = clear an existing retirement (the artifacts were never changed).' },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          runId: { type: 'string', required: true },
+          kind: { type: 'string', required: true },
+          status: { type: 'string', required: true },
+          retiredAt: { type: 'string', required: true },
+          reason: { type: 'string', required: true },
+          retiredCount: { type: 'integer', required: true, description: 'Retired runs now in the corpus.' },
+          activeCount: { type: 'integer', required: true, description: 'Runs still counted as evidence.' },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: `${value.retiredAt ? 'retired' : 'un-retired'} ${value.runId} (${value.kind}, ${value.status}) — ${value.reason}\n` +
+          `  active ${value.activeCount} · retired ${value.retiredCount}`,
+      }],
+    },
+    timeoutMs: 15_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { runId?: string; reason?: string; by?: string; undo?: boolean };
+      const { runStore } = await allStores(exec);
+      if (!a.runId?.trim()) throw argError('retire_run', 'runId', 'is required', 'a run id such as "r006"', { received: a?.runId });
+      if (!a.undo && !a.reason?.trim()) {
+        throw argError('retire_run', 'reason', 'is required', 'why the run is history, e.g. "geometry replaced by v026"', { received: a?.reason });
+      }
+      const by = a.by?.trim() || sessionIdOf(exec) || 'cad_deliver.retire';
+      const entry = a.undo
+        ? await unretireRun(runStore, a.runId.trim())
+        : await retireRun(runStore, a.runId.trim(), { reason: a.reason!, by });
+      const all = await listRuns(runStore);
+      return {
+        runId: entry.id,
+        kind: entry.kind,
+        status: entry.status,
+        retiredAt: entry.retiredAt ?? '',
+        reason: entry.retiredReason ?? (a.undo ? 'un-retired' : ''),
+        retiredCount: all.filter((r) => r.retiredAt).length,
+        activeCount: all.filter((r) => !r.retiredAt).length,
+      };
+    },
+  }), { id: 'cad_deliver', action: 'retire' });
+
+
+  // --- affected_checks: what did this change invalidate? ---
+  registerTool(defineTool({
+    name: 'affected_checks',
+    description:
+      'Return, per changed/newest version, which part-level checks already cite it (fresh) and which only cite an older version (stale), ' +
+      'plus the atomic calls that would refresh it. This is the INCREMENTAL half of delivery_audit: the audit says the corpus is incoherent, ' +
+      'this says which checks the change actually invalidated. Manifest-level checks (assembly/motion) stay in deliver plan — their freshness ' +
+      'depends on the contract, not one version.',
+    parameters: {
+      changed: {
+        type: 'array', items: { type: 'string' },
+        description: 'Version ids that changed. Omit to use the newest version of every part.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          changedVersionIds: { type: 'array', required: true, items: { type: 'string' } },
+          parts: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                partId: { type: 'string', required: true },
+                partName: { type: 'string', required: true },
+                versionId: { type: 'string', required: true },
+                freshKinds: { type: 'array', required: true, items: { type: 'string' } },
+                staleKinds: { type: 'array', required: true, items: { type: 'string' } },
+                next: {
+                  type: 'array', required: true,
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      tool: { type: 'string', required: true },
+                      args: { type: 'object', required: true, additionalProperties: true },
+                      why: { type: 'string', required: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          summary: { type: 'string', required: true },
+        },
+      },
+      render: (_args: unknown, value: any) => [{
+        type: 'text',
+        text: `${value.summary}\n` + value.parts.map((p: any) =>
+          `  ${p.partName} ${p.versionId}: fresh [${p.freshKinds.join(', ') || '—'}] · stale [${p.staleKinds.join(', ') || '—'}]` +
+          (p.next.length ? `\n    next: ${p.next.map((n: any) => `${n.tool}(${JSON.stringify(n.args)})`).join('; ')}` : '')).join('\n'),
+      }],
+    },
+    timeoutMs: 20_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as { changed?: string[] };
+      return (await affectedChecks(await allStores(exec), { changed: a.changed })) as never;
+    },
+  }), { id: 'cad_deliver', action: 'affected' });
 
 
   // --- pearl_run: read-only six-pearl gate ---
@@ -8037,7 +8782,7 @@ export function registerCadTools(
       let bandSource = 'declared heuristic: lower 1.2 mm / upper 4.0 mm — NO process profile ' +
         '(DESIGN §27.1: an unsigned threshold quietly shapes the design)';
       if (a.profileIds?.length) {
-        const resolvedBand = await resolveProcessProfiles({ profileIds: a.profileIds });
+        const resolvedBand = await resolveProcessProfiles({ profileIds: a.profileIds }, [join(project.cwd, 'profiles'), join(project.cwd, 'cad-data', 'profiles')]);
         if (resolvedBand.errors.length > 0) {
           throw new Error(`invalid process profile:\n  - ${resolvedBand.errors.join('\n  - ')}`);
         }

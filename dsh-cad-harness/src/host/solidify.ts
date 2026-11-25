@@ -111,11 +111,13 @@ export async function buildSolidFromStl(
      * solid without being folded through Euler angles.
      */
     matrix?: readonly (readonly [number, number, number])[];
+    /** Translation that belongs to `matrix` (pose about a datum point). */
+    matrixTranslate?: [number, number, number];
   } | undefined,
   parse: (bytes: Uint8Array) => ParsedMesh,
 ): Promise<{ solid: ManifoldSolid; parsed: ParsedMesh }> {
   let parsed = parse(stl);
-  if (transform?.matrix) parsed = transformMesh(parsed, transform.matrix, [0, 0, 0]);
+  if (transform?.matrix) parsed = transformMesh(parsed, transform.matrix, transform.matrixTranslate ?? [0, 0, 0]);
   const result = await weldToSolid(parsed);
   if (!result.ok || !result.solid) throw new Error(result.reason ?? 'not a solid');
   // Inverted winding closes the surface but points every face inward, so a

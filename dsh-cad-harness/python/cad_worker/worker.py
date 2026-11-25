@@ -129,8 +129,28 @@ OPS = [
 MAX_QUERY_POINTS = 20000
 
 
+def _lossless(value):
+    """Replace -0.0 with 0.0 anywhere in a reply.
+
+    -0.0 is not lossless JSON: JSON.stringify(-0) is "0", so the sign does not
+    survive the round trip and the harness rejects the WHOLE body as "value is
+    not a lossless JSON object" (the model never sees the measurement). A signed
+    zero is almost always an accident of subtraction — `round(dy, 4)` of a
+    -3.6e-15 delta — so normalise once at the wire instead of at every op that
+    can emit a tiny negative component (measure_distance dx/dy/dz, angle
+    distance, section ...).
+    """
+    if isinstance(value, float):
+        return 0.0 if value == 0 else value
+    if isinstance(value, dict):
+        return {key: _lossless(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_lossless(item) for item in value]
+    return value
+
+
 def _send(frame: dict) -> None:
-    sys.stdout.write(json.dumps(frame, ensure_ascii=False) + "\n")
+    sys.stdout.write(json.dumps(_lossless(frame), ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
@@ -323,13 +343,216 @@ def _closest_between_meshes(mesh_a, mesh_b) -> dict:
     }
 
 
+def _apply_pose(mesh, pose):
+    """Apply a {translationMm, rotation:[x,y,z,w]} world pose to a mesh.
+
+    The run's parts/*.stl are stored rebased on their pivot and trajectory.json
+    carries the body pose; the pose belongs on the geometry, in Python (the
+    canonical side), not in a host-side vertex loop.
+    """
+    if not pose:
+        return mesh
+    import numpy as np
+    import trimesh
+    x, y, z, w = (float(v) for v in (pose.get("rotation") or [0.0, 0.0, 0.0, 1.0]))
+    rot = np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ], dtype=float)
+    shift = np.asarray(pose.get("translationMm") or [0.0, 0.0, 0.0], dtype=float).reshape(3)
+    verts = np.asarray(mesh.vertices, dtype=float) @ rot.T + shift
+    return trimesh.Trimesh(vertices=verts, faces=np.asarray(mesh.faces), process=False)
+
+
 def op_closest_mesh_mesh(params: dict) -> dict:
-    mesh_a = _load(params["meshA"])
-    mesh_b = _load(params["meshB"])
+    mesh_a = _apply_pose(_load(params["meshA"]), params.get("poseA"))
+    mesh_b = _apply_pose(_load(params["meshB"]), params.get("poseB"))
     result = _closest_between_meshes(mesh_a, mesh_b)
     result["watertightA"] = bool(mesh_a.is_watertight)
     result["watertightB"] = bool(mesh_b.is_watertight)
     return result
+
+def _sweep_basis(axis):
+    import numpy as np
+    a = np.asarray(axis, dtype=float).reshape(3)
+    a = a / (np.linalg.norm(a) or 1.0)
+    helper = np.array([1.0, 0.0, 0.0]) if abs(a[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = np.cross(a, helper)
+    u = u / (np.linalg.norm(u) or 1.0)
+    v = np.cross(a, u)
+    return a, u, v
+
+
+def _sweep_transform(mesh, joint, at):
+    import numpy as np
+    import trimesh
+    a, u, v = _sweep_basis(joint["axis"])
+    anchor = np.asarray(joint["anchorMm"], dtype=float).reshape(3)
+    verts = np.asarray(mesh.vertices, dtype=float)
+    if joint["type"] == "prismatic":
+        out = verts + a * float(at)
+    else:
+        th = math.radians(float(at))
+        c, s = math.cos(th), math.sin(th)
+        p = verts - anchor
+        out = anchor + p * c + np.cross(a, p) * s + a * (p @ a)[:, None] * (1.0 - c)
+    return trimesh.Trimesh(vertices=out, faces=np.asarray(mesh.faces), process=False)
+
+
+def _swept_aabb(mesh, joint):
+    """Conservative AABB of the swept solid.
+
+    Revolute: per-vertex arc AABB (endpoints + every cardinal angle inside the arc).
+    A triangle's AABB at any angle lies inside the union of its vertices' AABBs, so
+    the union over vertices bounds the swept solid. Prismatic: the two end AABBs.
+    """
+    import numpy as np
+    verts = np.asarray(mesh.vertices, dtype=float)
+    lo_box = np.full(3, np.inf)
+    hi_box = np.full(3, -np.inf)
+    if joint["type"] == "prismatic":
+        for at in (joint["from"], joint["to"]):
+            v = verts + _sweep_basis(joint["axis"])[0] * float(at)
+            lo_box = np.minimum(lo_box, v.min(axis=0))
+            hi_box = np.maximum(hi_box, v.max(axis=0))
+        return lo_box, hi_box
+    a, u, v = _sweep_basis(joint["axis"])
+    anchor = np.asarray(joint["anchorMm"], dtype=float).reshape(3)
+    lo = math.radians(min(joint["from"], joint["to"]))
+    hi = math.radians(max(joint["from"], joint["to"]))
+    p = verts - anchor
+    z = p @ a
+    x = p @ u
+    y = p @ v
+    r = np.hypot(x, y)
+    a0 = np.arctan2(y, x)
+    c0 = a0 + lo
+    c1 = a0 + hi
+    for i in range(len(verts)):
+        cands = [c0[i], c1[i]]
+        k = math.ceil(c0[i] / (math.pi / 2))
+        while k * (math.pi / 2) <= c1[i]:
+            cands.append(k * (math.pi / 2))
+            k += 1
+        for ang in cands:
+            w = anchor + u * (r[i] * math.cos(ang)) + v * (r[i] * math.sin(ang)) + a * z[i]
+            lo_box = np.minimum(lo_box, w)
+            hi_box = np.maximum(hi_box, w)
+    return lo_box, hi_box
+
+
+def _sweep_r_max(mesh, joint):
+    import numpy as np
+    if joint["type"] == "prismatic":
+        return 1.0
+    a, u, v = _sweep_basis(joint["axis"])
+    anchor = np.asarray(joint["anchorMm"], dtype=float).reshape(3)
+    p = np.asarray(mesh.vertices, dtype=float) - anchor
+    return float(np.max(np.hypot(p @ u, p @ v)))
+
+
+def _sweep_step_for_mm(mm, r_max, joint):
+    return float(mm) if joint["type"] == "prismatic" else (float(mm) / max(r_max, 1e-9)) * (180.0 / math.pi)
+
+
+def op_screen_sweep(params: dict) -> dict:
+    """Early sweep screen: continuous envelope -> coarse clearance -> refinement.
+
+    This is the Python canonical (decision log 2026-10-08: domain logic defaults to
+    Python). It returns SUSPECTS, not a delivery verdict; simulate_motion remains the
+    only pass/fail evidence.
+    """
+    import numpy as np
+    joint = dict(params["joint"])
+    moving = _load(params["moving"]["path"])
+    statics = [{"id": p.get("id") or p["name"], "name": p["name"], "mesh": _load(p["path"])} for p in params["statics"]]
+    min_feature = max(1e-3, float(params.get("minFeatureMm") or 0.5))
+    max_samples = max(5, min(200, int(params.get("maxSamples") or 48)))
+    threshold = float(params.get("clearanceThresholdMm") or 0.0)
+    target_arc = min_feature / 2.0
+    r_max = _sweep_r_max(moving, joint)
+    target_step = _sweep_step_for_mm(target_arc, r_max, joint)
+    moving_box = _swept_aabb(moving, joint)
+    rows = []
+    for s in statics:
+        sb = np.asarray(s["mesh"].bounds, dtype=float)
+        hit = bool(np.all(moving_box[0] <= sb[1]) and np.all(moving_box[1] >= sb[0]))
+        if not hit:
+            rows.append({
+                "partId": s["id"], "partName": s["name"], "envelopeHit": False, "samples": 0,
+                "minClearanceMm": None, "at": float(joint["from"]), "maxArcStepMm": 0.0,
+                "targetArcStepMm": target_arc, "budgetExhausted": False, "status": "skipped",
+                "clearanceCurve": [], "notes": ["continuous swept envelope does not overlap this part"],
+            })
+            continue
+        def cl(at):
+            return _closest_between_meshes(_sweep_transform(moving, joint, at), s["mesh"])["distanceMm"]
+        n0 = min(10, max_samples)
+        samples = []
+        for i in range(n0):
+            at = float(joint["from"]) + (float(joint["to"]) - float(joint["from"])) * i / max(1, n0 - 1)
+            samples.append({"at": round(at, 4), "clearanceMm": round(cl(at), 4)})
+        refine_below = max(threshold, 2.0 * min_feature)
+        budget = False
+        changed = True
+        while changed:
+            changed = False
+            samples.sort(key=lambda x: x["at"])
+            for i in range(len(samples) - 1):
+                a, b = samples[i], samples[i + 1]
+                step = abs(b["at"] - a["at"])
+                if step <= target_step or min(a["clearanceMm"], b["clearanceMm"]) > refine_below:
+                    continue
+                if len(samples) >= max_samples:
+                    budget = True
+                    break
+                mid = (a["at"] + b["at"]) / 2.0
+                if any(abs(x["at"] - mid) < 1e-9 for x in samples):
+                    continue
+                samples.append({"at": round(mid, 4), "clearanceMm": round(cl(mid), 4)})
+                changed = True
+                if len(samples) >= max_samples:
+                    budget = True
+                    break
+        samples.sort(key=lambda x: x["at"])
+        best = min(samples, key=lambda x: x["clearanceMm"])
+        witness = _closest_between_meshes(_sweep_transform(moving, joint, best["at"]), s["mesh"])
+        max_arc = 0.0
+        for i in range(len(samples) - 1):
+            dt = abs(samples[i + 1]["at"] - samples[i]["at"])
+            max_arc = max(max_arc, dt if joint["type"] == "prismatic" else math.radians(dt) * r_max)
+        # Priority: an actual collision beats a near-contact suspect, and a
+        # near-contact suspect beats "the budget ran out". The lever fixture is
+        # exactly this: 0.003mm at -8.6° while the coverage budget was exhausted.
+        status = "collision" if best["clearanceMm"] <= threshold else (
+            "suspect" if best["clearanceMm"] < refine_below else (
+                "uncovered" if budget and max_arc > target_arc else "clean"))
+        notes = []
+        if status == "collision":
+            notes.append("clearance is at or below the declared threshold at this pose")
+        if status == "uncovered":
+            notes.append(f"budget {max_samples} exhausted before arc step {target_arc:.3f}mm was reached (max {max_arc:.3f}mm)")
+        rows.append({
+            "partId": s["id"], "partName": s["name"], "envelopeHit": True, "samples": len(samples),
+            "minClearanceMm": best["clearanceMm"], "at": best["at"],
+            "witnessA": witness["pointA"], "witnessB": witness["pointB"],
+            "maxArcStepMm": round(max_arc, 4), "targetArcStepMm": round(target_arc, 4),
+            "budgetExhausted": budget, "status": status, "clearanceCurve": samples, "notes": notes,
+        })
+    rank = {"collision": 3, "suspect": 2, "uncovered": 1, "clean": 0, "skipped": 0}
+    overall = max((r["status"] for r in rows), key=lambda s: rank[s], default="clean")
+    return {
+        "moving": params["moving"].get("id") or params["moving"]["name"],
+        "joint": joint, "minFeatureMm": min_feature, "maxSamples": max_samples,
+        "clearanceThresholdMm": threshold, "rows": rows,
+        "overall": "clean" if overall == "skipped" else overall,
+        "rule": "continuous swept AABB prefilter; closest-point clearance samples; refine near clearance < 2*minFeature until arc step <= minFeature/2 or the sample budget is exhausted (then UNCOVERED, never clean). A positive clearance is not a delivery verdict.",
+        "notes": [
+            "This is a SCREEN. It does not prove the mechanism: run simulate_motion for the pass/fail interference timeline.",
+            "The swept AABB is conservative, so an envelope hit still needs the samples.",
+        ],
+    }
 
 
 def op_closest_mesh_sphere(params: dict) -> dict:
@@ -2065,6 +2288,28 @@ def _datum_distance(ra: dict, rb: dict):
     return _round_js(math.dist(pa, pb), 4), "point-to-point distance between declared datums"
 
 
+def _endpoint_part_id(address: str) -> str:
+    return address.split(".", 1)[0] if "." in address else address
+
+
+def _motion_pair_excluded(pairs, a, b):
+    """The run's excluded revolute pair matching this interface, or None.
+
+    `simulate_motion` drops every revolute-linked pair from its timeline, so a
+    `motion-clearance` interface over one of them cannot cite that run as
+    evidence (2026-11-22 sewing rotary-hook: arbor↔rod, 65.6 mm³, hidden).
+    """
+    if not isinstance(pairs, list):
+        return None
+    pa, pb = _endpoint_part_id(str(a)), _endpoint_part_id(str(b))
+    for pair in pairs:
+        if isinstance(pair, (list, tuple)) and len(pair) == 2:
+            x, y = str(pair[0]), str(pair[1])
+            if {x, y} == {pa, pb}:
+                return (x, y)
+    return None
+
+
 def op_assembly_contracts(params: dict) -> dict:
     """Evaluate the declared interfaces and discover undeclared neighbours.
 
@@ -2141,6 +2386,13 @@ def op_assembly_contracts(params: dict) -> dict:
                             f" — cited motion run {cited} is STALE: it verified {', '.join(stale)}, "
                             "which a part has since replaced. Re-run the motion over the current versions and cite that run "
                             "(evidence expires with the version it cites)."
+                        )
+                    elif run.get("coverageKnown") and (hit := _motion_pair_excluded(run.get("excludedJointPairs"), iface.get("a"), iface.get("b"))):
+                        verdict["verdict"] = "hard-violation"
+                        verdict["detail"] += (
+                            f" — cited motion run {cited} excluded the revolute pair {hit[0]}↔{hit[1]} "
+                            'from its interference timeline; "0 interference" does not cover it — '
+                            "rerun simulate_motion with scanJointPairs: true, or fix the geometry"
                         )
                     else:
                         superseded = f", SUPERSEDED by {run['supersededBy']}" if run.get("supersededBy") else ""
@@ -4071,6 +4323,8 @@ def _joint_loop_closers(joints) -> list:
 
     closers: list = []
     for j in joints:
+        if j.get("type") == "gear":
+            continue
         a = find(j["bodyA"])
         b = find(j["bodyB"])
         if a == b:
@@ -6254,6 +6508,41 @@ def op_simulate_motion(params: dict) -> dict:
     import rapier3d as R
     from manifold3d import Manifold, Mesh
 
+    def capsule_at(radius, half_length, center, axis):
+        """Capsule along `axis`: cylinder of half-length L + hemispherical caps."""
+        if half_length <= 1e-9:
+            solid = Manifold.sphere(radius, 32)
+        else:
+            solid = Manifold.cylinder(half_length * 2, radius, radius, 32, center=True)
+            solid = (
+                solid
+                + Manifold.sphere(radius, 32).translate([0.0, 0.0, half_length])
+                + Manifold.sphere(radius, 32).translate([0.0, 0.0, -half_length])
+            )
+        w = [float(v) for v in axis]
+        helper = [1.0, 0.0, 0.0] if abs(w[0]) < 0.9 else [0.0, 1.0, 0.0]
+        v = [
+            w[1] * helper[2] - w[2] * helper[1],
+            w[2] * helper[0] - w[0] * helper[2],
+            w[0] * helper[1] - w[1] * helper[0],
+        ]
+        length = math.sqrt(sum(x * x for x in v)) or 1.0
+        v = [x / length for x in v]
+        b = [
+            w[1] * v[2] - w[2] * v[1],
+            w[2] * v[0] - w[0] * v[2],
+            w[0] * v[1] - w[1] * v[0],
+        ]
+        matrix = np.array(
+            [
+                [b[0], v[0], w[0], float(center[0])],
+                [b[1], v[1], w[1], float(center[1])],
+                [b[2], v[2], w[2], float(center[2])],
+            ],
+            dtype=np.float64,
+        )
+        return solid.transform(matrix)
+
     scenario = params["scenario"]
     dt = 1 / 2000
     # FRACTIONAL cycles are meaningful and must not be truncated: the design range of a
@@ -6344,6 +6633,8 @@ def op_simulate_motion(params: dict) -> dict:
         world.rigid_bodies[bodies[drive["body"]]].angvel = (axis[0] * omega, axis[1] * omega, axis[2] * omega)
 
     for joint in scenario["joints"]:
+        if joint["type"] == "gear":
+            continue  # a ratio coupling has no rapier constraint; projected below
         a = bodies.get(joint["bodyA"])
         b = bodies.get(joint["bodyB"])
         if a is None or b is None:
@@ -6378,6 +6669,31 @@ def op_simulate_motion(params: dict) -> dict:
                 .local_anchor2(anchor_b)
             )
         world.impulse_joints.insert(a, b, builder.build())
+
+    gears = []
+    for joint in scenario["joints"]:
+        if joint["type"] != "gear":
+            continue
+        ratio = float(joint.get("ratio") or 0)
+        if not math.isfinite(ratio) or ratio == 0:
+            raise ValueError(f"joint {joint['bodyA']}↔{joint['bodyB']}: gear needs a non-zero finite ratio")
+        a_name, b_name = joint["bodyA"], joint["bodyB"]
+        if a_name not in bodies or b_name not in bodies:
+            raise ValueError(f"motion: gear references unknown body ({a_name}, {b_name})")
+        if drive and drive.get("body") == b_name:
+            raise ValueError(f"gear {a_name}↔{b_name}: bodyB cannot also be the drive body")
+        gears.append({
+            "a": a_name,
+            "b": b_name,
+            "ratio": ratio,
+            "axisA": _norm3(joint.get("axisA") or joint["axis"]),
+            "axisB": _norm3(joint.get("axisB") or joint["axis"]),
+            "prevA": tuple(float(v) for v in base_pose[a_name]["q"]),
+            "qB0": tuple(float(v) for v in base_pose[b_name]["q"]),
+            "thetaA": 0.0,
+            "turnsA": 0.0,
+            "turnsB": 0.0,
+        })
 
     oscillators = []
     for entry in oscillator_inputs:
@@ -6456,6 +6772,37 @@ def op_simulate_motion(params: dict) -> dict:
                 )
             )
         world.step()
+        # Gear coupling: rapier has no gear constraint, so the ratio is PRESCRIBED
+        # (mirrors physics). Project the follower's pose before this frame is
+        # sampled; torque is not transferred.
+        for gear in gears:
+            body_a = world.rigid_bodies[bodies[gear["a"]]]
+            body_b = world.rigid_bodies[bodies[gear["b"]]]
+            if float(body_b.inv_mass) == 0.0:
+                continue
+            qa = tuple(float(v) for v in body_a.rotation.quaternion)
+            rel = _quat_mul(_quat_conj(gear["prevA"]), qa)
+            gear["prevA"] = qa
+            vlen = math.sqrt(rel[0] ** 2 + rel[1] ** 2 + rel[2] ** 2)
+            ma = _quat_to_matrix3(qa)
+            ua = [sum(ma[i][j] * gear["axisA"][j] for j in range(3)) for i in range(3)]
+            dot = rel[0] * ua[0] + rel[1] * ua[1] + rel[2] * ua[2]
+            theta_step = (1 if dot > 0 else -1 if dot < 0 else 1) * 2 * math.atan2(vlen, rel[3])
+            gear["thetaA"] += theta_step
+            theta_b = gear["ratio"] * gear["thetaA"]
+            mb = _quat_to_matrix3(body_b.rotation.quaternion)
+            ub = [sum(mb[i][j] * gear["axisB"][j] for j in range(3)) for i in range(3)]
+            half = theta_b / 2
+            sin_half = math.sin(half)
+            turn = (ub[0] * sin_half, ub[1] * sin_half, ub[2] * sin_half, math.cos(half))
+            body_b.rotation = _quat_mul(turn, gear["qB0"])
+            w_a = body_a.angvel
+            w_a_axis = w_a[0] * ua[0] + w_a[1] * ua[1] + w_a[2] * ua[2]
+            body_b.angvel = (ub[0] * gear["ratio"] * w_a_axis,
+                             ub[1] * gear["ratio"] * w_a_axis,
+                             ub[2] * gear["ratio"] * w_a_axis)
+            gear["turnsA"] = gear["thetaA"] / (2 * math.pi)
+            gear["turnsB"] = theta_b / (2 * math.pi)
         warm += 1
         if warm == warm_up_steps:
             seed_travel()
@@ -6515,12 +6862,60 @@ def op_simulate_motion(params: dict) -> dict:
         for joint in scenario["joints"]
         if joint["type"] == "revolute"
     }
+    scan_joint_pairs = scenario.get("scanJointPairs") is True
+    joint_exemptions: dict = {}
+    joint_pair_info: dict = {}
+    for joint in scenario["joints"]:
+        if joint["type"] != "revolute" and (joint.get("overlapEnvelope") or joint.get("fit")):
+            raise ValueError(
+                f"joint {joint['bodyA']}↔{joint['bodyB']} declares a fit capsule but is {joint['type']} — "
+                "only a revolute joint can carry overlapEnvelope/fit"
+            )
+        if joint["type"] != "revolute":
+            continue
+        key = "\u0000".join(sorted([joint["bodyA"], joint["bodyB"]]))
+        if key in joint_pair_info:
+            continue
+        envelope = joint.get("overlapEnvelope")
+        fit = joint.get("fit")
+        if fit and not envelope:
+            raise ValueError(
+                f"joint {joint['bodyA']}↔{joint['bodyB']} declares fit \"{fit}\" but no overlapEnvelope — "
+                "the envelope is what the fit is allowed to overlap"
+            )
+        raw_axis = joint.get("axisA") or joint.get("axis")
+        if envelope and not raw_axis:
+            raise ValueError(f"joint {joint['bodyA']}↔{joint['bodyB']} declares overlapEnvelope but no axisA/axis")
+        if envelope and not float(envelope.get("radiusMm") or 0) > 0:
+            raise ValueError(f"joint {joint['bodyA']}↔{joint['bodyB']} overlapEnvelope.radiusMm must be > 0")
+        axis = [float(v) for v in (raw_axis or [0, 1, 0])]
+        axis_len = math.sqrt(sum(v * v for v in axis)) or 1.0
+        axis = [v / axis_len for v in axis]
+        joint_pair_info[key] = {
+            "bodyA": joint["bodyA"],
+            "anchorA": joint["anchorA"],
+            "axisA": axis,
+            "envelope": (
+                {"radiusMm": float(envelope["radiusMm"]), "halfLengthMm": float(envelope.get("halfLengthMm") or 0)}
+                if envelope else None
+            ),
+            "fit": fit,
+        }
+    # Coverage, not outcome: unless scanJointPairs is on, every revolute-linked
+    # pair is absent from the timeline below, so "0 interference" says nothing
+    # about it. Downstream (motion-clearance) must be able to see that.
+    excluded_joint_pairs = [] if scan_joint_pairs else sorted({
+        tuple(sorted((joint["bodyA"], joint["bodyB"])))
+        for joint in scenario["joints"]
+        if joint["type"] == "revolute"
+    })
     pairs = []
     for index, first in enumerate(scenario["parts"]):
         for second in scenario["parts"][index + 1 :]:
             if is_fixed[first["name"]] and is_fixed[second["name"]]:
                 continue
-            if "\u0000".join(sorted([first["name"], second["name"]])) in revolute_linked:
+            key = "\u0000".join(sorted([first["name"], second["name"]]))
+            if not scan_joint_pairs and key in revolute_linked:
                 continue
             pairs.append((first["name"], second["name"]))
 
@@ -6550,22 +6945,121 @@ def op_simulate_motion(params: dict) -> dict:
                 faces = welded[b_name][1]
                 manifold_b = Manifold(Mesh(np.asarray(verts[b_name], dtype=np.float32), np.asarray(faces, dtype=np.uint32)))
             intersection = manifold_a ^ manifold_b
+            joint = joint_pair_info.get("\u0000".join(sorted([a_name, b_name]))) if scan_joint_pairs else None
+            if joint is not None and joint.get("envelope") is not None and not intersection.is_empty():
+                # The DECLARED capsule is the only thing forgiven. The anchor and
+                # axis are body-A-local, so the capsule is re-placed every sample.
+                pose = poses[joint["bodyA"]]
+                matrix = _quat_to_matrix3(pose["rotation"])
+                local = joint["anchorA"]
+                anchor = [
+                    float(pose["position"][i]) + sum(matrix[i][j] * float(local[j]) for j in range(3))
+                    for i in range(3)
+                ]
+                la = joint["axisA"]
+                u = [
+                    sum(matrix[i][j] * float(la[j]) for j in range(3))
+                    for i in range(3)
+                ]
+                ul = math.sqrt(sum(v * v for v in u)) or 1.0
+                u = [v / ul for v in u]
+                envelope = joint["envelope"]
+                full_intersection = intersection
+                total_volume = float(full_intersection.volume())
+                capsule = capsule_at(envelope["radiusMm"], envelope["halfLengthMm"], anchor, u)
+                outside = full_intersection - capsule
+                outside_volume = 0.0 if outside.is_empty() else float(outside.volume())
+                intersection = outside
+                exempt_volume = max(0.0, total_volume - outside_volume)
+                if exempt_volume > 0.01:
+                    key = "\u0000".join(sorted([a_name, b_name]))
+                    current = joint_exemptions.get(key) or {
+                        "partA": a_name, "partB": b_name, "frames": 0,
+                        "maxVolumeMm3": 0.0, "maxTimeSec": sample_times[k],
+                        "maxRadialMm": 0.0, "maxAxialMm": 0.0,
+                        "radiusMm": envelope["radiusMm"], "halfLengthMm": envelope["halfLengthMm"],
+                        "fit": joint.get("fit"),
+                    }
+                    current["frames"] += 1
+                    xmin, ymin, zmin, xmax, ymax, zmax = full_intersection.bounding_box()
+                    radial_max = 0.0
+                    axial_max = 0.0
+                    for x in (xmin, xmax):
+                        for y in (ymin, ymax):
+                            for z in (zmin, zmax):
+                                dx, dy, dz = x - anchor[0], y - anchor[1], z - anchor[2]
+                                axial = dx * u[0] + dy * u[1] + dz * u[2]
+                                radial = math.sqrt(
+                                    max(0.0, dx * dx + dy * dy + dz * dz - axial * axial)
+                                )
+                                radial_max = max(radial_max, radial)
+                                axial_max = max(axial_max, abs(axial))
+                    if exempt_volume > current["maxVolumeMm3"]:
+                        current["maxVolumeMm3"] = exempt_volume
+                        current["maxTimeSec"] = sample_times[k]
+                        current["maxRadialMm"] = radial_max
+                        current["maxAxialMm"] = axial_max
+                    joint_exemptions[key] = current
+            elif joint is not None:
+                # No declared envelope: nothing is forgiven, the whole overlap clashes.
+                pass
             volume = 0.0 if intersection.is_empty() else float(intersection.volume())
             if volume > 1e-3:
                 interference_count += 1
                 time_sec = sample_times[k]
-                interference_events.append(
-                    {
-                        "step": sample_steps[k],
-                        "timeSec": time_sec,
-                        "partA": a_name,
-                        "partB": b_name,
-                        "volumeMm3": round(volume, 3),
-                    }
-                )
+                event = {
+                    "step": sample_steps[k],
+                    "timeSec": time_sec,
+                    "partA": a_name,
+                    "partB": b_name,
+                    "volumeMm3": round(volume, 3),
+                }
+                # Locate the overlap, not just measure it: a swept clash at one
+                # sampled pose is otherwise only findable by re-loading this run's
+                # parts + trajectory and redoing the boolean. -0 is not lossless
+                # JSON, so normalise it at the source (the reply validator rejects
+                # a bare -0 and would drop the whole report).
+                if not intersection.is_empty():
+                    event["overlapBboxMm"] = [
+                        0.0 if round(v, 3) == 0 else round(v, 3)
+                        for v in intersection.bounding_box()
+                    ]
+                if joint is not None:
+                    event["jointPair"] = True
+                interference_events.append(event)
                 if first_interference_sample < 0:
                     first_interference_sample = k
     interference_events.sort(key=lambda event: (event["step"], -event["volumeMm3"]))
+
+    # Attention, not a verdict: every in-envelope overlap is listed, and a pair
+    # without a declared fit keeps the run at check until it is resolved.
+    joint_exemption_list = []
+    for entry in joint_exemptions.values():
+        resolved = entry["fit"] is not None
+        attention = []
+        if not resolved:
+            attention.append("unresolved-fit")
+        axial_bound = entry["halfLengthMm"] + entry["radiusMm"]
+        if entry["maxRadialMm"] > 0.9 * entry["radiusMm"] or entry["maxAxialMm"] > 0.9 * axial_bound:
+            attention.append("near-boundary")
+        joint_exemption_list.append({
+            **entry,
+            "maxVolumeMm3": round(entry["maxVolumeMm3"], 3),
+            "maxTimeSec": round(entry["maxTimeSec"], 4),
+            "maxRadialMm": round(entry["maxRadialMm"], 3),
+            "maxAxialMm": round(entry["maxAxialMm"], 3),
+            "resolved": resolved,
+            "attention": attention,
+            "requiredAction": None if resolved else (
+                "declare joint.fit (bearing/press-fit/clamp/clearance) or change the geometry/envelope"
+            ),
+        })
+    joint_exemption_list.sort(key=lambda e: -e["maxVolumeMm3"])
+    joint_fits_unresolved = sum(1 for e in joint_exemption_list if not e["resolved"])
+    joint_exempt_rule = (
+        "an in-envelope overlap is a fit ONLY when joint.fit is declared; without it the run is check. "
+        "near-boundary = reach >0.9× radius or >0.9×(halfLength+radius)"
+    )
 
     # ---- followers: every part that is not fixed and not the drive body ----
     followers = {}
@@ -6601,6 +7095,8 @@ def op_simulate_motion(params: dict) -> dict:
     max_joint_drift = 0.0
     joint_violations = []
     for joint in scenario["joints"]:
+        if joint["type"] == "gear":
+            continue
         a = bodies[joint["bodyA"]]
         b = bodies[joint["bodyB"]]
         wa = _world_anchor(world, a, joint["anchorA"])
@@ -6647,11 +7143,27 @@ def op_simulate_motion(params: dict) -> dict:
     sampling_satisfied = interference_checks >= MIN_MOTION_INTERFERENCE_POSES
     max_sample_gap_deg = round(360.0 * sample_every * dt / cycle_period, 2) if omega > 0 else None
 
+    gear_report = []
+    for gear in gears:
+        turns_a = gear["turnsA"]
+        turns_b = gear["turnsB"]
+        measured = (turns_b / turns_a) if abs(turns_a) > 1e-12 else None
+        gear_report.append({
+            "a": gear["a"], "b": gear["b"], "ratio": gear["ratio"],
+            "turnsA": round(turns_a, 6), "turnsB": round(turns_b, 6),
+            "measuredRatio": None if measured is None else round(measured, 6),
+            "agrees": None if measured is None else bool(abs(measured - gear["ratio"]) < 1e-6),
+        })
+
     clean = (
         interference_count == 0
+        and joint_fits_unresolved == 0
+        and not excluded_joint_pairs
         and not diverged
         and max_joint_drift <= 2
         and sampling_satisfied
+        # A declared gear that did not turn (agrees is None) is unproven, not pass.
+        and all(g["agrees"] is True for g in gear_report)
     )
 
     trajectory_frames = [initial] + sample_poses
@@ -6689,11 +7201,17 @@ def op_simulate_motion(params: dict) -> dict:
             "driveOmegaRadPerSec": float(drive["omegaRadPerSec"]) if drive and drive.get("omegaRadPerSec") is not None else None,
             "cyclePeriodSec": round(cycle_period, 4) if omega > 0 else None,
             "followers": followers,
+            "gears": gear_report,
             "interferenceCount": interference_count,
             "interferenceEvents": interference_events[:20],
             "interferenceChecks": interference_checks,
             "candidatePairs": candidate_pairs,
             "interferencePairChecks": interference_pair_checks,
+            "excludedJointPairs": [list(pair) for pair in excluded_joint_pairs],
+            "jointPairScan": scan_joint_pairs,
+            "jointExemptions": joint_exemption_list,
+            "jointFitsUnresolved": joint_fits_unresolved,
+            "jointExemptRule": joint_exempt_rule,
             "samplingSatisfied": sampling_satisfied,
             "maxSampleGapDeg": max_sample_gap_deg,
             "maxJointDriftMm": round(max_joint_drift, 4),
@@ -8650,6 +9168,7 @@ HANDLERS = {
     "stl_stats": op_stl_stats,
     "closest_points": op_closest_points,
     "closest_mesh_mesh": op_closest_mesh_mesh,
+    "screen_sweep": op_screen_sweep,
     "closest_mesh_sphere": op_closest_mesh_sphere,
     "support_map": op_support_map,
     "connectivity": op_connectivity,

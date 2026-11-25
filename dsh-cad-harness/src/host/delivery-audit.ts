@@ -49,12 +49,25 @@ export interface DeliveryClaim {
 /** Interfaces that make the deliverable a MECHANISM (see ManifestInterface.type). */
 const KINEMATIC_INTERFACE_TYPES = new Set(['转动副', '滑动副', '弹簧']);
 
+/**
+ * The run kinds that count as MANUFACTURING evidence. The claim used to accept only
+ * `printability`, so a turned brass shaft or a laser-cut plate had to be screened for
+ * FDM overhangs it will never see (and the sewing machine's audit demanded exactly
+ * that for 10 machined parts). The process is declared on the manifest node; the audit
+ * does not need to re-derive it to know that "a fresh manufacturing run of SOME kind
+ * cites this version" is the enforceable half. The process-aware plan (deliver-plan)
+ * still names the exact evaluator per process — this set is the claim's floor.
+ */
+export const MANUFACTURING_RUN_KINDS: ReadonlySet<string> = new Set([
+  'printability', 'machinability', 'turning', 'sheet2d',
+]);
+
 /** What each claim kind needs, and how to say it in a finding. */
 export const CLAIM_EVIDENCE: Record<DeliveryClaim['kind'], { kinds: string[]; label: string }> = {
   strength: { kinds: ['stress'], label: 'a fresh stress run citing the newest version' },
   motion: { kinds: ['motion', 'physics'], label: 'a fresh motion/physics run' },
   assembly: { kinds: ['assembly-check'], label: 'a fresh assembly check' },
-  manufacturability: { kinds: ['printability'], label: 'a fresh printability run for EVERY printed part (stock/research roles are exempt by declaration)' },
+  manufacturability: { kinds: ['printability', 'machinability', 'turning', 'sheet2d'], label: 'a fresh manufacturing run (printability / CNC access / turning / sheet2d) for EVERY fabricated part (stock/research roles are exempt by declaration)' },
   appearance: { kinds: ['appearance', 'assembly'], label: 'a fresh appearance run (check_appearance), or an assembly run carrying the renders' },
   review: { kinds: ['assembly'], label: 'a fresh assembly render to look at' },
   flow: { kinds: ['fluid'], label: 'a fresh fluid run citing the newest flow-domain version' },
@@ -85,6 +98,8 @@ export interface DeliveryAudit {
   parts: { total: number; newestNeverValidated: string[] };
   runs: {
     total: number;
+    /** Retired runs are kept as history and deliberately excluded from every verdict. */
+    retired: { id: string; kind: string; reason: string; retiredAt: string }[];
     stale: { id: string; kind: string; status: string; superseded: string[] }[];
     /** Every failed run, with `current` = no newer run for the same scope. */
     failing: { id: string; kind: string; summary: string; sourceVersionIds: string[]; current: boolean }[];
@@ -156,9 +171,14 @@ export async function auditDelivery(
     visualReview?: 'required' | 'off';
   } = {},
 ): Promise<DeliveryAudit> {
-  const [versions, parts, runs] = await Promise.all([
+  const [versions, parts, allRuns] = await Promise.all([
     listVersions(project.store), listParts(project.partStore), listRuns(project.runStore),
   ]);
+  // A retired run is history: keep it in the corpus (with its reason) but never
+  // let it decide the current design. Before this filter the ONLY way to clear a
+  // stale failure was to move its directory by hand, outside every tool.
+  const retiredRuns = allRuns.filter((r) => r.retiredAt);
+  const runs = allRuns.filter((r) => !r.retiredAt);
   const versionById = new Map(versions.map((v) => [v.id, v]));
   const versionList = versions.map((v) => ({ ...v })) as VersionManifestEntry[];
 
@@ -203,7 +223,7 @@ export async function auditDelivery(
   // A part-scope failure is only actionable with its subject. The run entry
   // carries the version ids; the version index carries the part id; the parts
   // index carries the human name. Join them once, here.
-  const partScope = new Set(['printability', 'sheet2d', 'turning']);
+  const partScope = new Set(['printability', 'machinability', 'sheet2d', 'turning']);
   const subjectOf = (run: { kind: string; sourceVersionIds?: string[] }): string => {
     if (!partScope.has(run.kind)) return '';
     const names = (run.sourceVersionIds ?? []).map((vid) => {
@@ -234,7 +254,13 @@ export async function auditDelivery(
     const run = runs.find((x) => x.id === r.id)!;
     const newer = runs.some((o) =>
       o.id !== run.id && o.kind === run.kind && o.timestamp > run.timestamp && scopeKey(o) === scopeKey(run));
-    return { ...r, current: !run.supersededBy && !newer };
+    // A failure about geometry that has since been replaced is history even when
+    // its subject string never gets a successor (the r006 washer case: the subject
+    // encoded a version set, so no later run could ever share it). If EVERY cited
+    // version is superseded, the run cannot be current evidence.
+    const cited = run.sourceVersionIds ?? [];
+    const allCitedStale = cited.length > 0 && superseded(cited).length === cited.length;
+    return { ...r, current: !run.supersededBy && !run.retiredAt && !allCitedStale && !newer };
   });
 
   // Duplicate work: same kind, same geometry/parameters, same outcome. The
@@ -294,6 +320,7 @@ export async function auditDelivery(
   /** Delivered versions named by the manifest: the visual gate's subject. */
   const manifestVersions = new Map<string, string>();
   let brief: DeliveryAudit['brief'] = { manifest: false, present: false, processes: [], verify: [], assumed: [] };
+  let manifestClaims: NonNullable<import('./manifest.ts').AssemblyManifest['claims']> = [];
   try {
     const resolved = await resolveAssemblyManifestPath(opts.manifestPath, {
       workspace: opts.workspace ?? project.cwd,
@@ -301,6 +328,7 @@ export async function auditDelivery(
     });
     contractPath = resolved.path;
     const manifest = await loadAssemblyManifest(resolved.path);
+    manifestClaims = manifest.claims ?? [];
     contract.name = manifest.name ?? null;
     contract.revision = manifest.contractRevision ?? 0;
     contract.hash = manifest.contractHash ?? manifest.manifestHash ?? null;
@@ -466,14 +494,14 @@ export async function auditDelivery(
   }
   if (visualRequired && visualMissing.length > 0) {
     push('blocked', 'visual-review-missing',
-      `${visualMissing.length} delivered printed part(s) have NO visual review: ` +
+      `${visualMissing.length} delivered fabricated part(s) have NO visual review: ` +
       `${visualMissing.slice(0, 8).map((x) => `${x.name} ${x.version}`).join(', ')}` +
       `${visualMissing.length > 8 ? ` … (+${visualMissing.length - 8})` : ''} — ` +
       'call review_visual (top+iso, with a note) on the exact version before claiming delivery');
   }
   if (visualRequired && visualStale.length > 0) {
     push('blocked', 'visual-review-stale',
-      `${visualStale.length} delivered printed part(s) have a STALE/INCOMPLETE visual review: ` +
+      `${visualStale.length} delivered fabricated part(s) have a STALE/INCOMPLETE visual review: ` +
       `${visualStale.slice(0, 8).map((x) => `${x.name} ${x.version}${x.reviewedAt ? ` @ ${x.reviewedAt}` : ''}`).join(', ')}` +
       `${visualStale.length > 8 ? ` … (+${visualStale.length - 8})` : ''} — ` +
       'the review predates the version or lacks top/iso; look again at the current geometry');
@@ -484,7 +512,7 @@ export async function auditDelivery(
   }
   if (visualRequired && visualTargets.size === 0) {
     push('warn', 'visual-review-no-targets',
-      'no delivered printed version was found for the visual gate (no manifest, or every part is stock/research) — nothing was required, which is not the same as reviewed');
+      'no delivered fabricated version was found for the visual gate (no manifest, or every part is stock/research) — nothing was required, which is not the same as reviewed');
   }
   const visual = {
     required: visualRequired,
@@ -520,6 +548,28 @@ export async function auditDelivery(
   const staleIds = new Set(staleRuns.map((r) => r.id));
   const newestVersions = new Set([...newestOfPart.values()]);
   const freshRuns = runs.filter((r) => !staleIds.has(r.id));
+  // Motion COVERAGE, not just "a run exists". A motion run can pass while it
+  // never put its revolute pairs in the timeline (or while an in-envelope
+  // overlap has no declared fit). Such a run is not motion evidence: the sewing
+  // rotary-hook's r092 passed with 0 events and hid upper_shaft↔rod (76.9mm³).
+  const motionCoverage = new Map<string, { covered: boolean; known: boolean; excluded: number; unresolved: number }>();
+  for (const r of freshRuns.filter((r) => r.kind === 'motion')) {
+    try {
+      const report = JSON.parse(await readFile(join(project.runStore.root, r.id, 'report.json'), 'utf8')) as {
+        metrics?: { excludedJointPairs?: unknown; jointFitsUnresolved?: unknown };
+      };
+      const excluded = Array.isArray(report.metrics?.excludedJointPairs) ? report.metrics!.excludedJointPairs!.length : -1;
+      const unresolved = typeof report.metrics?.jointFitsUnresolved === 'number' ? report.metrics!.jointFitsUnresolved! : 0;
+      motionCoverage.set(r.id, {
+        known: excluded >= 0,
+        excluded: Math.max(0, excluded),
+        unresolved,
+        covered: excluded === 0 && unresolved === 0,
+      });
+    } catch {
+      motionCoverage.set(r.id, { covered: false, known: false, excluded: 0, unresolved: 0 });
+    }
+  }
   // A run that FAILED is not evidence that a claim holds: it is evidence that something
   // is wrong (2026-10-23 audit, FIX-B4). `check` still counts — an inconclusive run is
   // better than no run, and the verdict already carries the doubt.
@@ -528,6 +578,12 @@ export async function auditDelivery(
       (r) => kinds.includes(r.kind) && r.status !== 'fail' &&
         (r.sourceVersionIds ?? []).some((id) => newestVersions.has(id)),
     );
+  // Delivery evidence must be a PASS with complete motion coverage. `check` is
+  // not evidence for a required scope: it says "inconclusive", and an
+  // inconclusive mechanism is exactly what this audit must not deliver.
+  const freshPassCovered = (kinds: string[]) =>
+    freshOfKind(kinds).filter((r) => r.status === 'pass'
+      && (r.kind !== 'motion' || motionCoverage.get(r.id)?.covered === true));
   // ── declared/derived verification scope → evidence ───────────────────────
   //
   // The wind-up-frog delivery carried "未测: simulate_physics" in its README and
@@ -547,15 +603,20 @@ export async function auditDelivery(
     for (const kind of [...required].filter((k) => ENFORCED.has(k))) {
       const spec = CLAIM_EVIDENCE[kind as keyof typeof CLAIM_EVIDENCE];
       if (!spec) continue; // unknown kinds are surfaced by the claims loop
-      if (freshOfKind(spec.kinds).length > 0) continue;
+      if (freshPassCovered(spec.kinds).length > 0) continue;
       const why = declared
         ? `brief.verify declares "${kind}"`
         : `the ICD declares ${contract.kinematicInterfaces} kinematic interface(s)`;
       const tail = kind === 'flow'
         ? 'a flow scope with no fresh fluid run is not a flow check.'
         : 'a mechanism that was never run is not a delivered mechanism.';
+      const any = freshOfKind(spec.kinds);
+      const coverageNote = any.length > 0 && kind === 'motion'
+        ? ` ${any.length} fresh motion run(s) exist but none is a PASS with complete joint-pair coverage ` +
+          '(excludedJointPairs empty, jointFitsUnresolved 0); re-run with scanJointPairs and declared envelopes/fits.'
+        : '';
       push('blocked', `verify-required-${kind}`,
-        `${why}, but no FRESH run of the right kind exists (${spec.label}). ` +
+        `${why}, but no FRESH PASS run of the right kind exists (${spec.label}).${coverageNote} ` +
         `Run it, or narrow the scope explicitly in assembly.json \`brief.verify\` — ${tail}`);
     }
     if (!declared && derivedMotion) {
@@ -569,14 +630,17 @@ export async function auditDelivery(
     }
   }
 
-  const partsMissingPrintability = [...newestOfPart.entries()]
+  const partsMissingManufacturability = [...newestOfPart.entries()]
     .filter(([pid, vid]) => {
       if (roleExemptIds.has(pid)) return false;
-      return !freshRuns.some((r) => r.kind === 'printability' && r.status !== 'fail' &&
+      return !freshRuns.some((r) => MANUFACTURING_RUN_KINDS.has(r.kind) && r.status !== 'fail' &&
         (r.sourceVersionIds ?? []).includes(vid));
     })
     .map(([pid]) => parts.find((x) => x.id === pid)?.name ?? pid);
-  const claims = opts.claims ?? [];
+  // An explicit per-call claim list wins; otherwise read the claims persisted with
+  // the contract. Before this, no-claims-declared was unfixable: the writer had no
+  // claims field, so the next audit always forgot the previous call's list.
+  const claims = opts.claims ?? manifestClaims;
   // `brief.verify` is the user's scope; a claim is the caller's promise to back
   // that scope. If verify says flow but no flow claim was declared, the audit
   // would otherwise never look at the fluid evidence. Make the mismatch visible
@@ -602,15 +666,19 @@ export async function auditDelivery(
       continue;
     }
     if (claim.kind === 'manufacturability') {
-      if (partsMissingPrintability.length > 0) {
+      if (partsMissingManufacturability.length > 0) {
         push('blocked', 'claim-without-evidence',
-          `claim "${claim.statement}" needs ${spec.label}; missing for: ${partsMissingPrintability.join(', ')}`);
+          `claim "${claim.statement}" needs ${spec.label}; missing for: ${partsMissingManufacturability.join(', ')}`);
       }
       continue;
     }
-    if (freshOfKind(spec.kinds).length === 0) {
+    const evidence = claim.kind === 'motion' ? freshPassCovered(spec.kinds) : freshOfKind(spec.kinds);
+    if (evidence.length === 0) {
+      const coverageNote = claim.kind === 'motion'
+        ? ' (a motion claim needs a PASS with complete joint-pair coverage, not a check or a legacy run)'
+        : '';
       push('blocked', 'claim-without-evidence',
-        `claim "${claim.statement}" needs ${spec.label}, and no such run cites the newest version of any part`);
+        `claim "${claim.statement}" needs ${spec.label}, and no such run cites the newest version of any part${coverageNote}`);
     }
   }
   if (claims.length === 0) {
@@ -622,8 +690,11 @@ export async function auditDelivery(
   // ── findings, worst first ─────────────────────────────────────────────────
 
   for (const [kind, latest] of Object.entries(latestByKind)) {
-    if (latest.status === 'fail') {
-      const subject = subjectOf(runs.find((x) => x.id === latest.id) ?? { kind, sourceVersionIds: [] });
+    const latestRun = runs.find((x) => x.id === latest.id);
+    const latestCited = latestRun?.sourceVersionIds ?? [];
+    const latestStale = latestCited.length > 0 && superseded(latestCited).length === latestCited.length;
+    if (latest.status === 'fail' && !latestStale) {
+      const subject = subjectOf(latestRun ?? { kind, sourceVersionIds: [] });
       push('blocked', `latest-${kind}-failing`,
         `the newest ${kind} run (${latest.id})${subject ? ` ${subject}` : ''} is RED` +
         ' — the current design has an unresolved blocking result');
@@ -679,6 +750,19 @@ export async function auditDelivery(
   // but you cannot re-run it on a new version without rebuilding the mechanism.
   const motionRuns = runs.filter((r) => r.kind === 'motion');
   const nonReplayable = motionRuns.filter((r) => !existsSync(join(project.runStore.root, r.id, 'motion-spec.json')));
+  const uncoveredMotion = freshRuns.filter((r) => r.kind === 'motion' && r.status === 'pass'
+    && motionCoverage.get(r.id)?.covered !== true);
+  if (uncoveredMotion.length > 0) {
+    const sample = uncoveredMotion.slice(0, 5).map((r) => {
+      const c = motionCoverage.get(r.id);
+      const why = c?.known ? `${c.excluded} excluded pair(s), ${c.unresolved} unresolved fit(s)` : 'coverage UNKNOWN (run predates joint-pair coverage)';
+      return `${r.id} (${why})`;
+    });
+    push('warn', 'motion-coverage-incomplete',
+      `${uncoveredMotion.length} motion run(s) report pass but do not cover revolute pairs: ${sample.join(', ')}` +
+      (uncoveredMotion.length > 5 ? ' …' : '') +
+      ' — their "0 interference" is scoped to the pairs they looked at; only a covered PASS counts as motion evidence');
+  }
   if (nonReplayable.length > 0) {
     push('info', 'motion-not-replayable',
       `${nonReplayable.length}/${motionRuns.length} motion run(s) predate motion-spec.json and cannot be replayed: ` +
@@ -686,9 +770,13 @@ export async function auditDelivery(
       ' — re-running them means rebuilding the joints/drive by hand');
   }
   if (contract.interfaces > 0 && !contract.byCheck['motion-clearance'] && parts.length > 1) {
-    push('warn', 'contract-without-motion',
+    // A mechanism whose contract has no motion-clearance interface has no place
+    // where a motion claim is judged: the 2026-11-23 sewing contract was 36/36
+    // while the rod passed through the upper shaft. A warning was not enough.
+    push('blocked', 'contract-without-motion',
       'the contract declares interfaces but NO motion-clearance one: the mechanism is not part of the contract, ' +
-      'so a green contract says nothing about whether it moves without collision');
+      'so a green contract says nothing about whether it moves without collision — declare the kinematic interfaces ' +
+      'with check:"motion-clearance" and cite a covered motion run');
   }
   if (contract.geometryNewerThanCheck) {
     push('warn', 'evidence-predates-geometry',
@@ -783,7 +871,13 @@ export async function auditDelivery(
       newestTimestamp: newestOf(versionList)?.timestamp ?? null,
     },
     parts: { total: parts.length, newestNeverValidated },
-    runs: { total: runs.length, stale: staleRuns, failing, duplicateGroups, latestByKind },
+    runs: {
+      total: runs.length,
+      retired: retiredRuns.map((r) => ({
+        id: r.id, kind: r.kind, reason: r.retiredReason ?? '', retiredAt: r.retiredAt ?? '',
+      })),
+      stale: staleRuns, failing, duplicateGroups, latestByKind,
+    },
     brief,
     contract,
     unregistered: scan,
@@ -805,4 +899,93 @@ export async function persistDeliveryAudit(
     ...value,
   });
   return path;
+}
+
+/** One version whose evidence needs refreshing after a change. */
+export interface AffectedCheck {
+  partId: string;
+  partName: string;
+  versionId: string;
+  /** Kinds that already cite this exact version (fresh evidence). */
+  freshKinds: string[];
+  /** Kinds that only cite an older version of this part (stale evidence). */
+  staleKinds: string[];
+  /** Atomic tool calls that would refresh the part-level checks. */
+  next: { tool: string; args: Record<string, unknown>; why: string }[];
+}
+
+/**
+ * "What must be re-run now?" — the missing half of the audit.
+ *
+ * The audit says a corpus is incoherent; it does not say which checks the change
+ * actually invalidated. Agents therefore re-ran the whole suite after every
+ * chamfer (104 runs, 15 audits in the Bicycle session). This reads the version
+ * and run indexes and returns, per changed/newest version, the checks already
+ * fresh on it and the part-level checks that only cite an older version.
+ *
+ * It is a PLAN, not a verdict: manifest-level checks (assembly/motion) are left
+ * to `deliver plan`, because their freshness depends on the contract, not one
+ * version.
+ */
+export async function affectedChecks(
+  project: ProjectStores,
+  opts: { changed?: string[] } = {},
+): Promise<{ changedVersionIds: string[]; parts: AffectedCheck[]; summary: string }> {
+  const [versions, parts, allRuns] = await Promise.all([
+    listVersions(project.store), listParts(project.partStore), listRuns(project.runStore),
+  ]);
+  const runs = allRuns.filter((r) => !r.retiredAt);
+  const newest = newestVersionPerPart(versions);
+  const versionById = new Map(versions.map((v) => [v.id, v]));
+  const partById = new Map(parts.map((p) => [p.id, p]));
+  const changed = opts.changed?.length ? new Set(opts.changed) : new Set(newest.values());
+  const rows: AffectedCheck[] = [];
+  for (const [partId, versionId] of newest) {
+    if (!changed.has(versionId)) continue;
+    const part = partById.get(partId);
+    const fresh = new Set<string>();
+    const stale = new Set<string>();
+    for (const run of runs) {
+      const ids = run.sourceVersionIds ?? [];
+      if (ids.includes(versionId)) fresh.add(run.kind);
+      else if (ids.some((id) => versionById.get(id)?.partId === partId)) stale.add(run.kind);
+    }
+    const next: AffectedCheck['next'] = [];
+    const role = part ? partRoleOf(part) : 'printed';
+    // "printed" is the default role, not a process claim. Any fresh manufacturing
+    // run (printability / CNC access / turning / sheet2d) is enough to answer
+    // "was this newest version screened?" — the process-specific evaluator is the
+    // deliver plan's job, and demanding printability here re-imposed FDM on
+    // turned brass.
+    const hasManufacturing = ['printability', 'machinability', 'turning', 'sheet2d']
+      .some((kind) => fresh.has(kind));
+    if (role === 'printed' && !hasManufacturing) {
+      next.push({
+        tool: 'check_printability',
+        args: { versionId },
+        why: 'no fresh manufacturing evidence (printability / CNC access / turning / sheet2d) cites this newest version',
+      });
+    }
+    if (stale.has('turning') && !fresh.has('turning')) {
+      next.push({ tool: 'check_turning', args: { versionId }, why: 'turning only cites an older version of this part' });
+    }
+    if ((stale.has('machinability') || stale.has('cnc')) && !fresh.has('machinability')) {
+      next.push({ tool: 'check_cnc_access', args: { versionId }, why: 'CNC access only cites an older version of this part' });
+    }
+    rows.push({
+      partId,
+      partName: part?.name ?? partId,
+      versionId,
+      freshKinds: [...fresh].sort(),
+      staleKinds: [...stale].filter((k) => !fresh.has(k)).sort(),
+      next,
+    });
+  }
+  const missing = rows.filter((r) => r.next.length > 0).length;
+  return {
+    changedVersionIds: [...changed].sort(),
+    parts: rows,
+    summary: `${rows.length} changed part(s) · ${missing} need a part-level re-run · ` +
+      `${rows.reduce((n, r) => n + r.next.length, 0)} suggested call(s)`,
+  };
 }

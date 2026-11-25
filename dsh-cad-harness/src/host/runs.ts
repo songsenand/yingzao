@@ -140,6 +140,56 @@ export async function readRun(store: RunStore, id: string): Promise<RunEntry | n
   return (await readRunManifest(store)).runs.find((r) => r.id === id) ?? null;
 }
 
+/**
+ * Retire a run: keep every artifact, but stop counting it as current evidence.
+ *
+ * WHY this is a first-class operation and not "delete the directory": a failed
+ * run about geometry that no longer exists is HISTORY, not a lie. Deleting it
+ * destroys the audit trail; leaving it unmarked makes `delivery_audit` block the
+ * current design on an old washer/link/cap. The corpus needs a third state.
+ *
+ * The marker is written to BOTH the index and the run's own `run.json` under one
+ * lock, so the run stays self-describing after an index rebuild. Nothing on disk
+ * is moved or deleted.
+ */
+export async function retireRun(
+  store: RunStore,
+  id: string,
+  input: { reason: string; by?: string },
+): Promise<RunEntry> {
+  const reason = String(input.reason ?? '').trim();
+  if (!reason) throw new Error('retire_run: reason is required — a retirement without a reason is indistinguishable from hiding evidence');
+  if (!/^r\d{3,}$/.test(id)) throw new Error(`retire_run: "${id}" is not a run id (expected rNNN)`);
+  return withFileLock(join(store.root, MANIFEST), async () => {
+    const manifest = await readRunManifest(store);
+    const entry = manifest.runs.find((r) => r.id === id);
+    if (!entry) throw new Error(`retire_run: run "${id}" not found`);
+    if (entry.retiredAt) throw new Error(`retire_run: run "${id}" is already retired (${entry.retiredAt}: ${entry.retiredReason ?? 'no reason'})`);
+    entry.retiredAt = new Date().toISOString();
+    entry.retiredReason = reason;
+    if (input.by) entry.retiredBy = String(input.by);
+    await writeFile(join(store.root, id, 'run.json'), JSON.stringify(entry, null, 2)).catch(() => {});
+    await writeJsonAtomic(join(store.root, MANIFEST), manifest);
+    return entry;
+  });
+}
+
+/** Undo a retirement (the artifacts were never touched). */
+export async function unretireRun(store: RunStore, id: string): Promise<RunEntry> {
+  if (!/^r\d{3,}$/.test(id)) throw new Error(`unretire_run: "${id}" is not a run id (expected rNNN)`);
+  return withFileLock(join(store.root, MANIFEST), async () => {
+    const manifest = await readRunManifest(store);
+    const entry = manifest.runs.find((r) => r.id === id);
+    if (!entry) throw new Error(`unretire_run: run "${id}" not found`);
+    delete entry.retiredAt;
+    delete entry.retiredReason;
+    delete entry.retiredBy;
+    await writeFile(join(store.root, id, 'run.json'), JSON.stringify(entry, null, 2)).catch(() => {});
+    await writeJsonAtomic(join(store.root, MANIFEST), manifest);
+    return entry;
+  });
+}
+
 /** Latest run, optionally restricted to some kinds (legacy route aliases). */
 export async function latestRun(store: RunStore, kinds?: RunKind[]): Promise<RunEntry | null> {
   const runs = await listRuns(store);

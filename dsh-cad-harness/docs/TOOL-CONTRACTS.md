@@ -4,6 +4,23 @@
 
 > **Call surface:** production exposes 9 surfaces; each section below documents an internal op. Call the `Model-facing call` surface/action, not the section heading.
 
+## `affected_checks`
+
+Model-facing call: `cad_deliver` action `affected` (this section documents the internal op).
+
+Return, per changed/newest version, which part-level checks already cite it (fresh) and which only cite an older version (stale), plus the atomic calls that would refresh it. This is the INCREMENTAL half of delivery_audit: the audit says the corpus is incoherent, this says which checks the change actually invalidated. Manifest-level checks (assembly/motion) stay in deliver plan — their freshness depends on the contract, not one version.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `changed` | array | — | Version ids that changed. Omit to use the newest version of every part. |
+
+```js
+cad_deliver({ action: "affected", args: { changed: [] } })
+```
+
+returns: `changedVersionIds`, `parts`, `summary`
+
+
 ## `analyze`
 
 Model-facing call: `cad_inspect` action `analyze` (this section documents the internal op).
@@ -117,15 +134,15 @@ CNC 3-AXIS ACCESS SCREEN: sample the mesh and test visibility from ±X/±Y/±Z; 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version to screen, e.g. "v012". |
-| `maxSetups` | integer | **required** | Declared maximum number of principal setups (e.g. 2 for top+bottom). |
+| `maxSetups` | integer | — | Declared maximum number of principal setups. Default 6 (the six principal directions); declare fewer only if that is a real machine/fixture limit — exceeding it then excludes, which is a declared capability, not a geometric impossibility. |
 | `requireAllAccessible` | boolean | — | true = any inaccessible area is a witness; false = warning. Default false. |
 | `sampleLimit` | integer | — | Max sampled triangles; default 300, capped at 600 (each sample is 6 ray casts). |
 
 ```js
-cad_check({ action: "cnc", args: { versionId: "…", maxSetups: 0 } })
+cad_check({ action: "cnc", args: { versionId: "…" } })
 ```
 
-returns: `versionId`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `runId`
+returns: `versionId`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `sealedCavities`, `runId`
 
 
 ## `check_edm_access`
@@ -158,7 +175,9 @@ Screen up to 12 saved versions in ONE call: per version, the measure half (water
 |---|---|---|---|
 | `versionIds` | array | **required** | Versions to screen, e.g. ["v031","v032","v033"]. Duplicates are removed; at most 12 are screened per call. |
 | `checks` | array | — | Which halves to run: "measure" and/or "printability". Default both. |
-| `profileIds` | array | — | Shipped process profiles for the printability half, e.g. ["fdm-pla-0.4"]. Omit to use the built-in fallback (which downgrades a pass, as in check_printability). |
+| `profileIds` | array | — | Process profiles for the printability half: shipped ids, or a project-local profiles/<id>.json. Omit to use the built-in fallback (which downgrades a pass, as in check_printability). |
+| `profilesJson` | string | — | Inline JSON array of process profiles for the batch — the batch used to accept only shipped ids, forcing N single calls for a custom CNC profile. |
+| `edgeOnlyThinPct` | number | — | Printability half: thin area at or below this % is a sharp-edge artefact, not a shell. Default 1.0; 0 disables. |
 | `wallMinMm` | number | — | Wall thinner than this is reported (printability half). Default 1.2. |
 | `overhangDeg` | number | — | Down-facing faces steeper than this count as print-overhang (FDM support, printability half; NOT structural overhang/self-weight stress). Default 45. |
 | `printOrientationDeg` | array | — | G6 (2026-10-29): the PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it; the reply's overhang/witness numbers are then in the printed frame. |
@@ -183,7 +202,9 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 | `versionId` | string | **required** | Saved version id to screen, e.g. "v012". |
 | `wallMinMm` | number | — | Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width). |
 | `overhangDeg` | number | — | A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45. |
+| `printOrientationDeg` | array | — | The PRINT orientation as [rx,ry,rz] degrees (Rz·Ry·Rx), applied before the overhang/wall analysis. The modelling pose is not the printing pose — declare it (e.g. [180,0,0] for a part printed upside down); the reply's overhang/witness numbers are then in the printed frame. Absent = modelling pose. |
 | `samples` | number | — | Approximate surface samples. Default 600; raise for big meshes, lower for quick passes. |
+| `edgeOnlyThinPct` | number | — | Thin area at or below this % of surface is classified as a solid sharp-edge artefact, not a thin shell (default 1.0; 0 disables). A shell is sustained area; a deburring edge is a strip. |
 | `profileIds` | array | — | Shipped process profiles to judge against, e.g. ["fdm-pla-0.4"]. Each yields its own two-valued verdict. Omit (with profilesJson) to use the built-in fallback, which the report then names. |
 | `profilesJson` | string | — | An inline JSON array of process profiles (schema: schemas/process-profile.schema.json). Use for a profile you authored; an invalid one is REFUSED with the offending rule named. |
 
@@ -191,7 +212,7 @@ Manufacturability screen for a saved version: sampled wall thickness (ray to the
 cad_check({ action: "printability", args: { versionId: "…" } })
 ```
 
-returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `printOrientationDeg`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
+returns: `versionId`, `nextLook`, `verdict`, `minWallMm`, `wallMeasured`, `thinSamples`, `sampled`, `thinAreaMm2`, `thinAreaPct`, `edgeOnlyThinPct`, `surfaceAreaMm2`, `overhangAreaMm2`, `printOrientationDeg`, `overhangZRange`, `findings`, `minWallAtMm`, `watertight`, `attention`, `profileSource`, `profiles`
 
 
 ## `check_sheet2d`
@@ -220,6 +241,28 @@ cad_check({ action: "sheet2d", args: { versionId: "…", kerfMm: 0, minHoleMm: 0
 ```
 
 returns: `versionId`, `axisMm`, `atMm`, `uAxisMm`, `vAxisMm`, `verdict`, `witnesses`, `findings`, `unevaluable`, `metrics`, `params`, `section`, `runId`
+
+
+## `check_sweep`
+
+Model-facing call: `cad_check` action `sweep` (this section documents the internal op).
+
+Early sweep screen for ONE moving version against static versions over a DECLARED joint range. A continuous swept AABB envelope drops pairs that cannot touch; coarse closest-point clearance samples are then refined where clearance is below 2×minFeature, until the arc step is <= minFeature/2 or the sample budget is exhausted (then UNCOVERED, never clean). Returns SUSPECTS, not a delivery verdict: a positive clearance is not a pass, and simulate_motion remains the pass/fail evidence. Use it before building a motion run to find a swing/stroke collision early.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | The MOVING part (saved version id). |
+| `againstVersionIds` | array | **required** | Static versions to screen against (at least one). |
+| `joint` | object | **required** | The declared sweep: revolute (degrees) or prismatic (mm) about/along a world axis and anchor. |
+| `minFeatureMm` | number | — | The smallest feature that must not be stepped over. Default 0.5. The refinement target is half of it. |
+| `maxSamples` | number | — | Sample budget per pair. Default 48; when exhausted the pair is UNCOVERED, not clean. |
+| `clearanceThresholdMm` | number | — | Clearance at or below this is a collision. Default 0 (touching). |
+
+```js
+cad_check({ action: "sweep", args: { versionId: "…", againstVersionIds: [], joint: {} } })
+```
+
+returns: `moving`, `joint`, `rows`, `overall`, `rule`, `notes`
 
 
 ## `check_turning`
@@ -303,7 +346,7 @@ returns: `verdict`, `judgement`, `findings`, `summary`, `versions`, `parts`, `ru
 
 Model-facing call: `cad_part` action `generate` (this section documents the internal op).
 
-Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (CadQuery Python); exactly one is required. CadQuery scripts must leave a `result` (Workplane/Shape) or call `show_object(...)`; declare anchors with datum/datum_axis/datum_plane/datum_cyl (point first, same schema as OpenSCAD). OpenSCAD code is self-contained with $fn=64 (BOSL2 available); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. Renders are attached by default; trim with `views` on numeric iterations. CadQuery renders are produced by the shared STL→OpenSCAD path, never by VTK. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
+Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (CadQuery Python); exactly one is required. CadQuery scripts must leave a `result` (Workplane/Shape) or call `show_object(...)`; declare anchors with datum/datum_axis/datum_plane/datum_cyl (point first, same schema as OpenSCAD). OpenSCAD code is self-contained with $fn=64 (BOSL2 available when installed); declare datum("name",[x,y,z]) at top level in final world coordinates. G2: datum_axis/datum_plane/datum_cyl are (name, point, dir) — POINT FIRST; a swapped OpenSCAD positional call compiles silently and corrupts the contract. Renders are attached by default; trim with `views` on numeric iterations. CadQuery renders are produced by the shared STL→OpenSCAD path, never by VTK. The FIRST version of a part also gets a sampled wall screen (minWallMm + warning) — when several parts share a new feature (a slot, a snap, a thread), generate ONE representative, fix its screen, then generate the family; regenerating N parts after a shared defect costs N rounds.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -418,6 +461,11 @@ All measurements are mm, z-up, and read the SAVED version: the answer is about t
 | `bPoint` | array | — | gap: side b as a point. |
 | `bDatum` | string | — | gap: side b as a datum name. |
 | `bOn` | string | — | gap: which side the reported distance is measured TO ("a" \| "b"); default both witness pairs. |
+| `runId` | string | — | gap: measure two parts of a saved run at one trajectory pose (needs aPart/bPart + timeSec or step). |
+| `timeSec` | number | — | gap run mode: trajectory time, s. |
+| `step` | number | — | gap run mode: simulation step, looked up in the run report. |
+| `aPart` | string | — | gap run mode: part A name in the run. |
+| `bPart` | string | — | gap run mode: part B name in the run. |
 | `snap` | boolean | — | gap: snap a bare point onto the nearest surface of its version before measuring. Default true. |
 | `from` | array | — | thickness: starting point [x,y,z]. |
 | `fromDatum` | string | — | thickness: start from a datum instead of a point. |
@@ -592,6 +640,26 @@ cad_session({ action: "review", args: { items: [] } })
 returns: `queued`, `merged`, `dropped`, `unread`, `rateLimited`
 
 
+## `retire_run`
+
+Model-facing call: `cad_deliver` action `retire` (this section documents the internal op).
+
+Retire (or un-retire) a run: keep all artifacts and history, but stop counting it as current evidence. Use it for a failure/screen whose geometry a later version replaced, or a declaration error that a re-run fixed. A retirement REQUIRES a reason; it is written to the run index and the run's own run.json, and delivery_audit excludes retired runs from failing/latest/stale verdicts (they still appear in runs.retired). This is not deletion: nothing is moved or removed. Prefer a fresh run with the same subject when the geometry is still current; retire only when the run can never become current again.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `runId` | string | **required** | Run id, e.g. "r006". |
+| `reason` | string | **required** | Why this run is history, e.g. "v017 washer face overlap; fixed in v026". |
+| `by` | string | — | Who/what approved the retirement (default: the calling session). |
+| `undo` | boolean | — | true = clear an existing retirement (the artifacts were never changed). |
+
+```js
+cad_deliver({ action: "retire", args: { runId: "…", reason: "…" } })
+```
+
+returns: `runId`, `kind`, `status`, `retiredAt`, `reason`, `retiredCount`, `activeCount`
+
+
 ## `review_visual`
 
 Model-facing call: `cad_see` action `review` (this section documents the internal op).
@@ -689,6 +757,24 @@ cad_part({ action: "role", args: { part: "…", role: "…" } })
 returns: `partId`, `name`, `role`, `previousRole`, `effect`
 
 
+## `set_project_kernel`
+
+Model-facing call: `cad_session` action `kernel` (this section documents the internal op).
+
+Change the project-level authoring kernel in place (openscad <-> cadquery). Existing versions keep their own backend pin and source file; only NEW generate_part calls follow the new default. The session prompt updates on the next turn. Use this instead of creating a second project just to switch engines — the previous design and its evidence stay in one corpus.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `kernel` | string (openscad \| cadquery) | **required** | New default kernel for this project. |
+| `dir` | string | — | Project directory; default the session's bound project (or live cwd). |
+
+```js
+cad_session({ action: "kernel", args: { kernel: "openscad" } })
+```
+
+returns: `root`, `key`, `previous`, `kernel`, `note`
+
+
 ## `simulate_fluid`
 
 Model-facing call: `cad_simulate` action `fluid` (this section documents the internal op).
@@ -737,21 +823,22 @@ returns: `overallStatus`, `metrics`
 
 Model-facing call: `cad_simulate` action `motion` (this section documents the internal op).
 
-Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off.
+Assembled-mechanism kinematics: a constant-speed crank AND/OR prescribed sinusoidal movers (no crank is required when every mover is an oscillator), revolute/prismatic followers, optionally parts on prescribed sinusoidal paths. Returns stroke/period, an exact interference timeline at >=24 sampled poses per run (final pose included; fewer means check, never pass), joint anchor drift, keyframes. Gravity is off. A revolute joint may declare `overlapEnvelope` (the fit capsule along its axis) and `fit`: overlap inside the capsule is listed in `jointExemptions` and, until `fit` is declared, keeps the run at check (`jointFitsUnresolved`); overlap outside it is interference. A joint may also be `type:"gear"` with a signed `ratio` (turns of B per turn of A) and each body's own `axisA`/`axisB`: the coupling is prescribed (rapier has no gear constraint), transfers no torque, and `metrics.gears` reports declared vs measured turns. Every interference event carries `overlapBboxMm` (min XYZ + max XYZ of the intersection), so a swept clash can be located without replaying the run.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `parts` | array | **required** | Parts of the mechanism. The crank should be bodyType "kinematic". |
-| `joints` | array | **required** | Joints between parts. |
+| `joints` | array | **required** | Joints between parts. A revolute joint may carry overlapEnvelope + fit (the declared fit capsule); with scanJointPairs those pairs enter the timeline instead of being excluded. |
 | `drive` | object | — | The constant-speed crank drive. Omit it when every mover is a prescribed oscillator (a guide/valve following a sinusoid): the time base is then the oscillator period. A run with neither a drive nor an oscillator is refused — nothing would move. |
 | `oscillators` | array | — | Prescribed sinusoidal movers (valves). bodyType must be "kinematic". |
+| `scanJointPairs` | boolean | — | Also boolean-test revolute-linked pairs. Off by default: those pairs are then listed in excludedJointPairs. Turn it on when a motion-clearance interface needs evidence over a hinge pair — without it that pair is never in the timeline. |
 | `cycles` | number | — | Drive cycles to simulate. Default 2. FRACTIONAL values are meaningful and are honoured: a balance whose design range is ±14° sweeps 0.078 of a turn, and asking for a whole turn instead answers a different question (the beam becomes a windmill and every part of it collides). |
 
 ```js
 cad_simulate({ action: "motion", args: { parts: [], joints: [] } })
 ```
 
-returns: `overallStatus`, `followers`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `closedLoop`, `loopJoints`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `runId`, `playback`, `stepsRun`, `durationSec`
+returns: `overallStatus`, `followers`, `gears`, `interferenceCount`, `interferenceEvents`, `interferenceChecks`, `candidatePairs`, `interferencePairChecks`, `excludedJointPairs`, `jointPairScan`, `jointFitsUnresolved`, `jointExemptions`, `jointExemptRule`, `samplingSatisfied`, `maxSampleGapDeg`, `blocking`, `deliverability`, `maxJointDriftMm`, `closedLoop`, `loopJoints`, `geometrySuspects`, `geometrySuspectRule`, `hasCrank`, `initialJointGaps`, `jointToleranceMm`, `jointViolations`, `pivots`, `keyframes`, `runId`, `playback`, `stepsRun`, `durationSec`
 
 
 ## `simulate_physics`
@@ -810,6 +897,25 @@ cad_simulate({ action: "stress", args: { versionId: "…" } })
 returns: `versionId`, `nextLook`, `verdict`, `delivery`, `material`, `loadCase`, `selfWeight`, `method`, `checks`, `resultants`, `capability`, `attention`
 
 
+## `suggest_interfaces`
+
+Model-facing call: `cad_assembly` action `suggest` (this section documents the internal op).
+
+Turn undeclared near-contact pairs into READY-TO-EDIT interface templates. The assembly check reports "52 undeclared" but not which datums to use, so every contact had to be hand-written. This runs the same adjacency pass, reads each part's datums, and proposes a distance interface with the measured gap and a symmetric tolerance. The template is a STARTING POINT: it uses the first point datum (or first axis/plane/cylinder) on each part, so review the chosen datums — it never writes the contract.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `manifestPath` | string | — | Assembly manifest; default assembly/assembly.json. |
+| `adjacencyThresholdMm` | number | — | Near-contact gap below which a pair is proposed. Default 0.75. |
+| `maxSuggestions` | integer | — | Cap the reply. Default 20, max 60. |
+
+```js
+cad_assembly({ action: "suggest", args: { manifestPath: "…" } })
+```
+
+returns: `manifest`, `thresholdMm`, `undeclared`, `suggestions`, `skipped`
+
+
 ## `validate_assembly`
 
 Model-facing call: `cad_assembly` action `validate` (this section documents the internal op).
@@ -844,6 +950,10 @@ Write or update the assembly contract. This is the ONLY write entry: the contrac
 | `reason` | string | **required** | Why this change is made. Recorded in the change log; empty is refused. |
 | `dryRun` | boolean | — | Validate and return the diff without writing or appending a change record. |
 | `root` | object | — | Assembly root (create/replace) or patch (merge). Merge upserts children/interfaces by id and preserves unspecified fields. |
+| `rootPath` | string | — | Workspace-relative JSON file containing the root object. Use this for a large assembly instead of inlining ~20k characters; root wins if both are given. |
+| `patch` | object | — | JSON-merge patch of the WHOLE manifest (root / manufacturing / claims). Arrays and scalars replace; null deletes. Applied before the root merge. |
+| `manufacturing` | object | — | Top-level manufacturing policy: {allowed:[{id,note?}], approvedBy?, approvedAt?, mixApprovedBy?, mixApprovedAt?, delegate?}. Lives beside root; omitting it preserves the file's existing policy. |
+| `claims` | array | — | Declared delivery claims persisted with the contract: [{kind, statement}]. delivery_audit reads them back, so no-claims-declared is avoidable. |
 | `remove` | object | — | Explicit root-level deletions; omitted ids are preserved, never deleted implicitly. |
 
 ```js

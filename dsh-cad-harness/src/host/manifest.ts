@@ -243,6 +243,11 @@ export interface ManufacturingPolicy {
   delegate?: boolean;
 }
 
+export interface ManifestClaim {
+  kind: 'strength' | 'motion' | 'assembly' | 'manufacturability' | 'appearance' | 'review' | 'flow';
+  statement: string;
+}
+
 export interface AssemblyManifest {
   schemaVersion: 1;
   name: string;
@@ -251,6 +256,13 @@ export interface AssemblyManifest {
   root: ManifestNode;
   /** Project-level manufacturing policy (one user decision, N delegated parts). */
   manufacturing?: ManufacturingPolicy;
+  /**
+   * Declared delivery claims, stored WITH the contract so every audit after a
+   * write sees the same claim set. Before this field the audit's
+   * `no-claims-declared` info was unfixable through the writer: the claims
+   * existed only as a per-call argument, so the next audit forgot them.
+   */
+  claims?: ManifestClaim[];
   /**
    * Content hash of the file this document was parsed from (8 hex chars).
    *

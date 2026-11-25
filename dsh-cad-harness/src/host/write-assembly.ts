@@ -14,8 +14,10 @@ import {
   validateManifest,
   loadAssemblyManifest,
   type AssemblyManifest,
+  type ManifestClaim,
   type ManifestInterface,
   type ManifestNode,
+  type ManufacturingPolicy,
   type Quantity,
 } from './manifest.ts';
 
@@ -26,6 +28,16 @@ export interface WriteAssemblyInput {
   mode?: WriteAssemblyMode;
   expectedHash?: string;
   root?: Partial<ManifestNode> & { id?: string };
+  /** JSON-merge patch applied to the whole manifest before `root` is merged. */
+  patch?: Record<string, unknown>;
+  /**
+   * Top-level manufacturing policy. It lives BESIDE `root`, so a `root`-only
+   * writer silently dropped it and `deliver plan` kept reporting M:policy
+   * unobserved. `undefined` preserves what the file already has.
+   */
+  manufacturing?: ManufacturingPolicy;
+  /** Declared delivery claims, persisted with the contract (audit reads them back). */
+  claims?: ManifestClaim[];
   remove?: { children?: string[]; interfaces?: string[] };
 }
 
@@ -238,6 +250,56 @@ export interface PreparedAssemblyWrite {
   existingText: string | null;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** RFC-7386-ish merge: objects merge, arrays/scalars replace, null deletes. */
+function mergePatch<T>(base: T, patch: unknown): T {
+  if (patch === null) return undefined as T;
+  if (!isPlainObject(patch)) return patch as T;
+  const out: Record<string, unknown> = isPlainObject(base) ? { ...base } : {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) { delete out[key]; continue; }
+    out[key] = isPlainObject(value) && isPlainObject(out[key])
+      ? mergePatch(out[key], value)
+      : value;
+  }
+  return out as T;
+}
+
+function validateTopLevel(manifest: AssemblyManifest): string[] {
+  const issues: string[] = [];
+  const m = manifest.manufacturing;
+  if (m !== undefined) {
+    if (!isPlainObject(m)) issues.push('manufacturing must be an object');
+    else {
+      if (!Array.isArray(m.allowed)) issues.push('manufacturing.allowed must be an array');
+      else {
+        m.allowed.forEach((entry, i) => {
+          if (!entry || typeof entry.id !== 'string' || !entry.id.trim()) issues.push(`manufacturing.allowed[${i}].id must be a non-empty string`);
+        });
+        const ids = m.allowed.map((entry) => entry?.id).filter(Boolean);
+        if (new Set(ids).size !== ids.length) issues.push('manufacturing.allowed contains duplicate ids');
+      }
+      for (const key of ['approvedBy', 'approvedAt', 'mixApprovedBy', 'mixApprovedAt'] as const) {
+        if (m[key] !== undefined && typeof m[key] !== 'string') issues.push(`manufacturing.${key} must be a string`);
+      }
+      if (m.delegate !== undefined && typeof m.delegate !== 'boolean') issues.push('manufacturing.delegate must be a boolean');
+    }
+  }
+  if (manifest.claims !== undefined) {
+    if (!Array.isArray(manifest.claims)) issues.push('claims must be an array');
+    else {
+      manifest.claims.forEach((claim, i) => {
+        if (!claim || typeof claim.kind !== 'string') issues.push(`claims[${i}].kind must be a string`);
+        if (!claim || typeof claim.statement !== 'string' || !claim.statement.trim()) issues.push(`claims[${i}].statement must be a non-empty string`);
+      });
+    }
+  }
+  return issues;
+}
+
 /**
  * Validate and build the next manifest WITHOUT writing it.
  *
@@ -279,16 +341,22 @@ export async function prepareAssemblyWrite(project: ProjectStores, input: WriteA
   }
 
   const warnings: string[] = [];
+  // A whole-manifest patch may carry the root; accepting only `root` made
+  // `--patch` fail with "merge requires root" even when the patch had one.
+  const patchRoot = isPlainObject(input.patch) && isPlainObject(input.patch.root)
+    ? input.patch.root as Partial<ManifestNode> & { id?: string }
+    : undefined;
+  const rootInput = input.root ?? patchRoot;
   let root: ManifestNode;
   if (mode === 'merge' && existing) {
-    if (!input.root) throw new Error('merge requires root (children/interfaces patch)');
-    if (input.root.id && input.root.id !== existing.root.id) {
-      throw new Error(`root id "${input.root.id}" does not match existing "${existing.root.id}"`);
+    if (!rootInput) throw new Error('merge requires root (children/interfaces patch or patch.root)');
+    if (rootInput.id && rootInput.id !== existing.root.id) {
+      throw new Error(`root id "${rootInput.id}" does not match existing "${existing.root.id}"`);
     }
-    root = mergeNode(existing.root, input.root as Partial<ManifestNode>);
+    root = mergeNode(existing.root, rootInput as Partial<ManifestNode>);
   } else {
-    if (!input.root) throw new Error(`${mode} requires root`);
-    root = structuredClone(input.root as ManifestNode);
+    if (!rootInput) throw new Error(`${mode} requires root (or patch.root)`);
+    root = structuredClone(rootInput as ManifestNode);
   }
 
   normalizeExpected(root, warnings);
@@ -304,17 +372,36 @@ export async function prepareAssemblyWrite(project: ProjectStores, input: WriteA
     root.children = (root.children ?? []).filter((c) => !(input.remove!.children ?? []).includes(c.id));
   }
 
+  // Top-level fields (manufacturing, claims) live BESIDE root. Start from the
+  // existing manifest so a merge preserves them, apply an explicit patch, then
+  // overlay the fields this call declared.
+  let top: AssemblyManifest | null = existing ? structuredClone(existing) : null;
+  if (input.patch !== undefined) {
+    if (!isPlainObject(input.patch)) throw new Error('patch must be a JSON object');
+    top = mergePatch(top ?? {
+      schemaVersion: 1, name: root.name ?? 'assembly', unit: 'mm', up: 'z', root,
+    } as AssemblyManifest, input.patch);
+    if (top.root) root = top.root;
+  }
   const next: AssemblyManifest = {
     schemaVersion: 1,
-    name: existing?.name ?? root.name ?? 'assembly',
+    name: top?.name ?? existing?.name ?? root.name ?? 'assembly',
     unit: 'mm',
     up: 'z',
     root,
+    ...(input.manufacturing !== undefined
+      ? { manufacturing: input.manufacturing }
+      : top?.manufacturing !== undefined ? { manufacturing: top.manufacturing } : {}),
+    ...(input.claims !== undefined
+      ? { claims: input.claims }
+      : top?.claims !== undefined ? { claims: top.claims } : {}),
   };
   const issues = validateManifest(next);
   if (issues.length) {
     throw new Error(`schema validation failed:\n${issues.map((i) => `- ${i.path}: expected ${i.expected}, got ${i.got}`).join('\n')}`);
   }
+  const topIssues = validateTopLevel(next);
+  if (topIssues.length) throw new Error(`manifest validation failed:\n${topIssues.map((i) => `- ${i}`).join('\n')}`);
   const endpointErrors = await validateEndpoints(project, root, warnings);
   if (endpointErrors.length) throw new Error(`endpoint validation failed:\n${endpointErrors.map((e) => `- ${e}`).join('\n')}`);
 

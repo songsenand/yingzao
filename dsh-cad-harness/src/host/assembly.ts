@@ -29,6 +29,12 @@ export interface PartTransform {
    * when present it already includes rotate∘pose, so `rotate` must be absent.
    */
   matrix?: readonly (readonly [number, number, number])[];
+  /**
+   * Translation applied WITH `matrix` (before rotate/translate). A pose about a
+   * datum axis is affine, not linear: the 3×3 alone rotates the part about the
+   * ORIGIN, which is why a link pivoting at (0,0,20) reported a false 61 mm³.
+   */
+  matrixTranslate?: [number, number, number];
 }
 
 export interface AssemblyPartInput {

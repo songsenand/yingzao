@@ -96,6 +96,7 @@ export function assertAssembledAtStart(
   const gaps: InitialJointGap[] = [];
   const broken: string[] = [];
   for (const j of joints) {
+    if (j.type === 'gear') continue; // a ratio coupling has no anchor to assemble
     const a = parts.find((p) => p.name === j.bodyA);
     const b = parts.find((p) => p.name === j.bodyB);
     if (!a || !b) continue;
@@ -137,7 +138,7 @@ export function assertAssembledAtStart(
 }
 
 export interface MotionJointInput {
-  type: 'revolute' | 'prismatic';
+  type: 'revolute' | 'prismatic' | 'gear';
   bodyA: string;
   bodyB: string;
   /** Anchor in A's local frame, mm. */
@@ -153,6 +154,21 @@ export interface MotionJointInput {
   axisWorld?: [number, number, number];
   /** Prismatic travel limits [min, max] in mm along the axis. */
   limits?: [number, number];
+  /** `gear` only: turns of bodyB per turn of bodyA about each body's own axis (signed). */
+  ratio?: number;
+  /**
+   * Declared pin/bearing envelope for a revolute joint: a capsule along the
+   * joint axis, radius `radiusMm`, cylindrical half-length `halfLengthMm`
+   * (default 0 = sphere). Overlap inside it is a fit candidate, not a collision;
+   * overlap outside it is interference. Absent -> every overlap is interference.
+   */
+  overlapEnvelope?: { radiusMm: number; halfLengthMm?: number };
+  /**
+   * The designer/agent declares this joint's in-envelope overlap is an intended
+   * fit. WITHOUT it, an in-envelope overlap keeps the run at `check` and asks
+   * for a decision; the tool does not assume "bearing" from the joint type.
+   */
+  fit?: 'bearing' | 'press-fit' | 'clamp' | 'clearance';
 }
 
 /** Constant-speed spin drive on one kinematic body (the crank). */
@@ -194,6 +210,13 @@ export interface MotionScenario {
   samplePerCycle?: number;
   /** Parts whose per-sample axial position is recorded (phase analysis input). */
   recordParts?: string[];
+  /**
+   * Also boolean-test revolute-linked pairs against their declared
+   * `overlapEnvelope` capsule. The default is false because a pin/bearing is
+   * expected to share space; without this, a motion-clearance interface over a
+   * revolute pair cannot be evidenced at all (the pair is never in the timeline).
+   */
+  scanJointPairs?: boolean;
 }
 
 export interface MotionReport {
@@ -201,13 +224,62 @@ export interface MotionReport {
   metrics: {
     driveOmegaRadPerSec: number | null;
     cyclePeriodSec: number | null;
-    followers: Record<string, { travelMm: number; axis: 'x' | 'y' | 'z'; periodSec: number | null }>;
+    followers: Record<string, {
+      travelMm: number; axis: 'x' | 'y' | 'z'; periodSec: number | null;
+      /**
+       * max−min INCLUDING the t=0 pose. The warm-up is deliberately excluded
+       * from `travelMm` (it absorbs the assembly gap), but a driven mechanism
+       * that starts 0.4 mm away from its low stop then reports a 5% short
+       * stroke with no explanation. Publishing both makes the difference
+       * auditable instead of something the agent has to reverse-engineer.
+       */
+      fullTravelMm?: number;
+      /** |settled − initial| when the warm-up ends; the settling transient. */
+      warmUpOffsetMm?: number;
+      /** fullTravelMm − travelMm: how much of the stroke the warm-up discarded. */
+      warmUpLostMm?: number;
+    }>;
     interferenceCount: number;
-    interferenceEvents: { step: number; timeSec: number; partA: string; partB: string; volumeMm3: number }[];
+    interferenceEvents: { step: number; timeSec: number; partA: string; partB: string; volumeMm3: number; jointPair?: boolean; overlapBboxMm?: [number, number, number, number, number, number] }[];
+    /** Gear couplings: the declared ratio and the turns the run produced. */
+    gears?: { a: string; b: string; ratio: number; turnsA: number; turnsB: number; measuredRatio: number | null; agrees: boolean | null }[];
     /** Sampled poses that were actually boolean-tested (coverage, not outcome). */
     interferenceChecks: number;
     /** Candidate pairs after fixed↔fixed and revolute-linked exclusions. */
     candidatePairs: number;
+    /**
+     * Revolute-linked pairs that were NOT in the interference timeline. This is
+     * coverage, not an outcome: "0 interference" says nothing about them. Every
+     * entry here is a pair whose relative motion was constraint-governed only.
+     * Empty when `scanJointPairs` is on (they were scanned, with the pin zone
+     * forgiven).
+     */
+    excludedJointPairs: [string, string][];
+    /** Whether revolute pairs entered the timeline. */
+    jointPairScan: boolean;
+    /**
+     * What the declared capsule envelope forgave, per pair. This is the agent's
+     * to-do list: an entry with `resolved:false` means the run cannot pass until
+     * the fit is declared (or the geometry/envelope changes).
+     */
+    jointExemptions: {
+      partA: string; partB: string;
+      frames: number;
+      maxVolumeMm3: number;
+      maxTimeSec: number;
+      maxRadialMm: number;
+      maxAxialMm: number;
+      radiusMm: number;
+      halfLengthMm: number;
+      fit: string | null;
+      resolved: boolean;
+      attention: string[];
+      requiredAction: string | null;
+    }[];
+    /** How many exempted pairs still lack a fit declaration (a run gate). */
+    jointFitsUnresolved: number;
+    /** The rule that produced `jointExemptions.attention`, in words. */
+    jointExemptRule: string;
     /** interferenceChecks × candidatePairs. */
     interferencePairChecks: number;
     /** false when the run could not fit 24 poses — a check, never a pass. */
@@ -230,6 +302,13 @@ export interface MotionReport {
     closedLoop?: boolean;
     /** The joints that close a loop, in declaration order. */
     loopJoints?: string[];
+    /**
+     * What this engine actually simulates. It is a rigid-body kinematic solver:
+     * it has no springs, no contact and no gravity. A "0 interference" motion run
+     * therefore cannot prove a detent, a preload or a click — a boundary the
+     * Bicycle sessions had to state by hand.
+     */
+    capabilities?: { rigidBodies: true; joints: true; springs: false; contact: false; gravity: false };
   };
   /** Per-sample positions along each recorded part's dominant axis. */
   followersDetail: Record<string, { t: number[]; vals: number[]; axis: 'x' | 'y' | 'z' }>;
@@ -281,6 +360,28 @@ function quatToMatrix3(q: { x: number; y: number; z: number; w: number }): numbe
   ];
 }
 
+function quatMul(
+  a: { x: number; y: number; z: number; w: number },
+  b: { x: number; y: number; z: number; w: number },
+): { x: number; y: number; z: number; w: number } {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+  };
+}
+
+function quatConj(q: { x: number; y: number; z: number; w: number }): { x: number; y: number; z: number; w: number } {
+  return { x: -q.x, y: -q.y, z: -q.z, w: q.w };
+}
+
+function quatFromAxisAngle(axis: [number, number, number], angle: number): { x: number; y: number; z: number; w: number } {
+  const h = angle / 2;
+  const s = Math.sin(h);
+  return { x: axis[0] * s, y: axis[1] * s, z: axis[2] * s, w: Math.cos(h) };
+}
+
 function worldAnchor(body: RAPIER.RigidBody, local: [number, number, number]): [number, number, number] {
   const t = body.translation();
   const m = quatToMatrix3(body.rotation());
@@ -315,6 +416,50 @@ function transformedAABB(verts: Float32Array): { min: [number, number, number]; 
     }
   }
   return { min, max };
+}
+
+/**
+ * A capsule along `axis`: cylinder of half-length `halfLength` plus hemispherical
+ * caps of `radius`, centred at `anchor`. With halfLength=0 it is a sphere.
+ * Used as the DECLARED pin/bearing envelope, not a guessed one.
+ */
+function capsuleAt(
+  mod: any,
+  radius: number,
+  halfLength: number,
+  anchor: [number, number, number],
+  axis: [number, number, number],
+): any {
+  const sph = (): any => mod.Manifold.sphere(radius, 32);
+  let solid: any;
+  if (halfLength <= 1e-9) {
+    solid = sph();
+  } else {
+    solid = mod.Manifold.cylinder(halfLength * 2, radius, radius, 32, true)
+      .add(sph().translate([0, 0, halfLength]))
+      .add(sph().translate([0, 0, -halfLength]));
+  }
+  const w: [number, number, number] = axis;
+  const helper: [number, number, number] = Math.abs(w[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+  const cross = (u: number[], v: number[]): [number, number, number] => [
+    u[1]! * v[2]! - u[2]! * v[1]!,
+    u[2]! * v[0]! - u[0]! * v[2]!,
+    u[0]! * v[1]! - u[1]! * v[0]!,
+  ];
+  const norm = (u: number[]): [number, number, number] => {
+    const l = Math.hypot(u[0]!, u[1]!, u[2]!) || 1;
+    return [u[0]! / l, u[1]! / l, u[2]! / l];
+  };
+  const v = norm(cross(w, helper));
+  const b = cross(w, v);
+  // Column-major Mat4: first column = image of +X, ..., last = translation.
+  const m: number[] = [
+    b[0]!, b[1]!, b[2]!, 0,
+    v[0]!, v[1]!, v[2]!, 0,
+    w[0]!, w[1]!, w[2]!, 0,
+    anchor[0], anchor[1], anchor[2], 1,
+  ];
+  return solid.transform(m);
 }
 
 function aabbOverlap(
@@ -383,6 +528,7 @@ export async function runMotion(scenario: MotionScenario): Promise<MotionReport>
         ...(scenario.cycles !== undefined ? { cycles: scenario.cycles } : {}),
         ...(scenario.samplePerCycle !== undefined ? { samplePerCycle: scenario.samplePerCycle } : {}),
         ...(scenario.recordParts ? { recordParts: scenario.recordParts } : {}),
+        ...(scenario.scanJointPairs ? { scanJointPairs: true } : {}),
       },
     });
   } finally {
@@ -473,6 +619,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
 
   // joints
   for (const j of scenario.joints) {
+    if (j.type === 'gear') continue; // rapier has no gear constraint; projected below
     const a = bodyByName.get(j.bodyA);
     const b = bodyByName.get(j.bodyB);
     if (!a || !b) throw new Error(`motion: joint references unknown body (${j.bodyA}, ${j.bodyB})`);
@@ -501,6 +648,26 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     }
     world.createImpulseJoint(data, a, b, true);
   }
+
+  // gear couplings: rapier has no gear constraint, so the ratio is PRESCRIBED by
+  // projecting the follower's pose each step (mirrors the Python canonical and
+  // physics). Torque is not transferred; a contact run answers "do the teeth drive".
+  const gearStates = scenario.joints.filter((j) => j.type === 'gear').map((j) => {
+    const a = bodyByName.get(j.bodyA);
+    const b = bodyByName.get(j.bodyB);
+    if (!a || !b) throw new Error(`motion: gear references unknown body (${j.bodyA}, ${j.bodyB})`);
+    if (typeof j.ratio !== 'number' || !Number.isFinite(j.ratio) || j.ratio === 0) {
+      throw new Error(`motion: gear ${j.bodyA}↔${j.bodyB} needs a non-zero finite ratio`);
+    }
+    if (scenario.drive?.body === j.bodyB) throw new Error(`motion: gear ${j.bodyA}↔${j.bodyB}: bodyB cannot also be the drive body`);
+    const axisA = norm(j.axisA ?? j.axis!);
+    const axisB = norm(j.axisB ?? j.axis!);
+    return {
+      a, b, aName: j.bodyA, bName: j.bodyB, ratio: j.ratio, axisA, axisB,
+      prevA: a.rotation(), qB0: b.rotation(),
+      thetaA: 0, turnsA: 0, turnsB: 0,
+    };
+  });
 
   // oscillators: prescribed translation on kinematic bodies. Two modes:
   //   * sinusoidal                     — a valve-like back-and-forth (amplitudeMm)
@@ -564,15 +731,18 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   let warm = 0;
   const travelLo = new Map<string, [number, number, number]>();
   const travelHi = new Map<string, [number, number, number]>();
-  const seedTravel = () => {
+  const initialPos = new Map<string, [number, number, number]>();
+  const settledPos = new Map<string, [number, number, number]>();
+  const seedTravel = (target?: Map<string, [number, number, number]>) => {
     for (const p of scenario.parts) {
       if (p.bodyType === 'fixed') continue;
       const b = bodyByName.get(p.name)!.translation();
       travelLo.set(p.name, [b.x, b.y, b.z]);
       travelHi.set(p.name, [b.x, b.y, b.z]);
+      target?.set(p.name, [b.x, b.y, b.z]);
     }
   };
-  seedTravel();
+  seedTravel(initialPos);
   const trackTravel = () => {
     if (warm < warmUpSteps) return;
     for (const p of scenario.parts) {
@@ -599,8 +769,37 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       });
     }
     world.step();
+    for (const g of gearStates) {
+      if (g.b.isFixed()) continue;
+      const qa = g.a.rotation();
+      const rel = quatMul(quatConj(g.prevA), qa);
+      g.prevA = qa;
+      const vlen = Math.hypot(rel.x, rel.y, rel.z);
+      const ma = quatToMatrix3(qa);
+      const ua: [number, number, number] = [
+        ma[0]![0]! * g.axisA[0] + ma[0]![1]! * g.axisA[1] + ma[0]![2]! * g.axisA[2],
+        ma[1]![0]! * g.axisA[0] + ma[1]![1]! * g.axisA[1] + ma[1]![2]! * g.axisA[2],
+        ma[2]![0]! * g.axisA[0] + ma[2]![1]! * g.axisA[1] + ma[2]![2]! * g.axisA[2],
+      ];
+      const dot = rel.x * ua[0] + rel.y * ua[1] + rel.z * ua[2];
+      const thetaStep = (dot > 0 ? 1 : dot < 0 ? -1 : 1) * 2 * Math.atan2(vlen, rel.w);
+      g.thetaA += thetaStep;
+      const thetaB = g.ratio * g.thetaA;
+      const mb = quatToMatrix3(g.b.rotation());
+      const ub: [number, number, number] = [
+        mb[0]![0]! * g.axisB[0] + mb[0]![1]! * g.axisB[1] + mb[0]![2]! * g.axisB[2],
+        mb[1]![0]! * g.axisB[0] + mb[1]![1]! * g.axisB[1] + mb[1]![2]! * g.axisB[2],
+        mb[2]![0]! * g.axisB[0] + mb[2]![1]! * g.axisB[1] + mb[2]![2]! * g.axisB[2],
+      ];
+      g.b.setRotation(quatMul(quatFromAxisAngle(ub, thetaB), g.qB0), true);
+      const wa = g.a.angvel();
+      const waAxis = wa.x * ua[0] + wa.y * ua[1] + wa.z * ua[2];
+      g.b.setAngvel({ x: ub[0] * g.ratio * waAxis, y: ub[1] * g.ratio * waAxis, z: ub[2] * g.ratio * waAxis }, true);
+      g.turnsA = g.thetaA / (2 * Math.PI);
+      g.turnsB = thetaB / (2 * Math.PI);
+    }
     warm++;
-    if (warm === warmUpSteps) seedTravel(); // discard the settling transient
+    if (warm === warmUpSteps) seedTravel(settledPos); // discard the settling transient
     trackTravel();
 
     if ((i + 1) % sampleEvery === 0 || (i + 1) === steps) {
@@ -674,11 +873,70 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   const linked = new Set(scenario.joints
     .filter((j) => j.type === 'revolute')
     .map((j) => [j.bodyA, j.bodyB].sort().join('\u0000')));
+  const scanJointPairs = scenario.scanJointPairs === true;
+  const jointExemptions = new Map<string, {
+    partA: string; partB: string; frames: number;
+    maxVolumeMm3: number; maxTimeSec: number; maxRadialMm: number; maxAxialMm: number;
+    radiusMm: number; halfLengthMm: number; fit: string | null;
+  }>();
+  // The capsule is declared PER JOINT: the anchor and axis move with body A, so
+  // it is re-placed at every sample. No envelope means no exemption at all.
+  const jointPairInfo = new Map<string, {
+    bodyA: string; anchorA: [number, number, number]; axisA: [number, number, number];
+    envelope: { radiusMm: number; halfLengthMm: number } | null;
+    fit: string | null;
+  }>();
+  for (const j of scenario.joints) {
+    if (j.type !== 'revolute' && (j.overlapEnvelope || j.fit)) {
+      throw new Error(
+        `motion: joint ${j.bodyA}↔${j.bodyB} declares ${j.overlapEnvelope ? 'overlapEnvelope' : 'fit'} but is ${j.type} — ` +
+        'only a revolute joint can carry a fit capsule',
+      );
+    }
+    if (j.type !== 'revolute') continue;
+    const key = [j.bodyA, j.bodyB].sort().join('\u0000');
+    if (jointPairInfo.has(key)) continue;
+    if (j.fit && !j.overlapEnvelope) {
+      throw new Error(`motion: joint ${j.bodyA}↔${j.bodyB} declares fit "${j.fit}" but no overlapEnvelope — the envelope is what the fit is allowed to overlap`);
+    }
+    const rawAxis = j.axisA ?? j.axis;
+    if (j.overlapEnvelope && !rawAxis) {
+      throw new Error(`motion: joint ${j.bodyA}↔${j.bodyB} declares overlapEnvelope but no axisA/axis to orient the capsule`);
+    }
+    if (j.overlapEnvelope && !(j.overlapEnvelope.radiusMm > 0)) {
+      throw new Error(`motion: joint ${j.bodyA}↔${j.bodyB} overlapEnvelope.radiusMm must be > 0`);
+    }
+    const axis = (() => {
+      const raw = rawAxis ?? [0, 1, 0];
+      const l = Math.hypot(raw[0]!, raw[1]!, raw[2]!) || 1;
+      return [raw[0]! / l, raw[1]! / l, raw[2]! / l] as [number, number, number];
+    })();
+    jointPairInfo.set(key, {
+      bodyA: j.bodyA,
+      anchorA: j.anchorA,
+      axisA: axis,
+      envelope: j.overlapEnvelope
+        ? { radiusMm: j.overlapEnvelope.radiusMm, halfLengthMm: j.overlapEnvelope.halfLengthMm ?? 0 }
+        : null,
+      fit: j.fit ?? null,
+    });
+  }
+  // Coverage is part of the report: a "0 interference" headline is only about
+  // the candidate pairs below, and every revolute pair above was NOT one of
+  // them unless `scanJointPairs` put it back. Downstream (motion-clearance) must
+  // be able to see that a cited run never looked at the pair it cites.
+  const excludedJointPairs: [string, string][] = scanJointPairs ? [] : [...new Set(
+    scenario.joints
+      .filter((j) => j.type === 'revolute')
+      .map((j) => [j.bodyA, j.bodyB].sort().join('\u0000')),
+  )].map((key) => key.split('\u0000') as [string, string])
+    .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
   for (let i = 0; i < scenario.parts.length; i++) {
     for (let j = i + 1; j < scenario.parts.length; j++) {
       const a = scenario.parts[i]!, b = scenario.parts[j]!;
       if (isFixed.get(a.name) && isFixed.get(b.name)) continue;
-      if (linked.has([a.name, b.name].sort().join('\u0000'))) continue;
+      const key = [a.name, b.name].sort().join('\u0000');
+      if (!scanJointPairs && linked.has(key)) continue;
       pairs.push([a.name, b.name]);
     }
   }
@@ -715,16 +973,113 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       const ma = fixedManifold.get(aName) ?? new mod.Manifold(new mod.Mesh({ numProp: 3, vertProperties: verts.get(aName)!, triVerts: welded.get(aName)!.triVerts }));
       const mb = fixedManifold.get(bName) ?? new mod.Manifold(new mod.Mesh({ numProp: 3, vertProperties: verts.get(bName)!, triVerts: welded.get(bName)!.triVerts }));
       const inter = ma.intersect(mb);
-      const vol = inter.isEmpty() ? 0 : inter.volume();
+      let measured = inter;
+      const joint = scanJointPairs
+        ? jointPairInfo.get([aName, bName].sort().join('\u0000'))
+        : undefined;
+      if (joint && !inter.isEmpty() && joint.envelope) {
+        // The DECLARED capsule is the only thing forgiven. The anchor and axis
+        // are body-A-local, so the capsule is re-placed at every sample.
+        const anchorPose = poses[joint.bodyA]!;
+        const am = quatToMatrix3({
+          x: anchorPose.rotation[0], y: anchorPose.rotation[1], z: anchorPose.rotation[2], w: anchorPose.rotation[3],
+        });
+        const a = joint.anchorA;
+        const ax = am[0][0]! * a[0] + am[0][1]! * a[1] + am[0][2]! * a[2] + anchorPose.position[0];
+        const ay = am[1][0]! * a[0] + am[1][1]! * a[1] + am[1][2]! * a[2] + anchorPose.position[1];
+        const az = am[2][0]! * a[0] + am[2][1]! * a[1] + am[2][2]! * a[2] + anchorPose.position[2];
+        const la = joint.axisA;
+        const ux0 = am[0][0]! * la[0] + am[0][1]! * la[1] + am[0][2]! * la[2];
+        const uy0 = am[1][0]! * la[0] + am[1][1]! * la[1] + am[1][2]! * la[2];
+        const uz0 = am[2][0]! * la[0] + am[2][1]! * la[1] + am[2][2]! * la[2];
+        const ul = Math.hypot(ux0, uy0, uz0) || 1;
+        const ux = ux0 / ul, uy = uy0 / ul, uz = uz0 / ul;
+        const totalVolume = inter.volume();
+        const capsule = capsuleAt(mod, joint.envelope.radiusMm, joint.envelope.halfLengthMm, [ax, ay, az], [ux, uy, uz]);
+        const outside = inter.subtract(capsule);
+        const outsideVolume = outside.isEmpty() ? 0 : outside.volume();
+        measured = outside;
+        const exemptVolume = Math.max(0, totalVolume - outsideVolume);
+        if (exemptVolume > 0.01) {
+          const key = [aName, bName].sort().join('\u0000');
+          const current = jointExemptions.get(key) ?? {
+            partA: aName, partB: bName, frames: 0,
+            maxVolumeMm3: 0, maxTimeSec: sampleTimes[k]!,
+            maxRadialMm: 0, maxAxialMm: 0,
+            radiusMm: joint.envelope.radiusMm, halfLengthMm: joint.envelope.halfLengthMm,
+            fit: joint.fit,
+          };
+          current.frames++;
+          const bb = inter.boundingBox();
+          let radialMax = 0;
+          let axialMax = 0;
+          for (const x of [bb.min[0], bb.max[0]]) {
+            for (const y of [bb.min[1], bb.max[1]]) {
+              for (const z of [bb.min[2], bb.max[2]]) {
+                const dx = x - ax, dy = y - ay, dz = z - az;
+                const axial = dx * ux + dy * uy + dz * uz;
+                radialMax = Math.max(radialMax, Math.hypot(dx - axial * ux, dy - axial * uy, dz - axial * uz));
+                axialMax = Math.max(axialMax, Math.abs(axial));
+              }
+            }
+          }
+          if (exemptVolume > current.maxVolumeMm3) {
+            current.maxVolumeMm3 = exemptVolume;
+            current.maxTimeSec = sampleTimes[k]!;
+            current.maxRadialMm = radialMax;
+            current.maxAxialMm = axialMax;
+          }
+          jointExemptions.set(key, current);
+        }
+      } else if (joint) {
+        // No declared envelope: nothing is forgiven, the whole overlap is a clash.
+        measured = inter;
+      }
+      const vol = measured.isEmpty() ? 0 : measured.volume();
       if (vol > 1e-3) {
         interferenceCount++;
         const timeSec = sampleTimes[k]!;
-        interferenceEvents.push({ step: sampleSteps[k]!, timeSec, partA: aName, partB: bName, volumeMm3: +vol.toFixed(3) });
+        // Where the overlap IS, not just how big it is: a swept collision at one
+        // pose is otherwise only localizable by re-loading this run's parts and
+        // trajectory and re-doing the boolean by hand. The intersection solid is
+        // already computed, so its bbox is nearly free. Normalise -0: the reply
+        // is lossless-JSON-checked and -0 is not a lossless number.
+        const bb = measured.isEmpty() ? null : measured.boundingBox();
+        const q = (v: number): number => { const r = +v.toFixed(3); return r === 0 ? 0 : r; };
+        interferenceEvents.push({
+          step: sampleSteps[k]!, timeSec, partA: aName, partB: bName, volumeMm3: +vol.toFixed(3),
+          ...(bb ? {
+            overlapBboxMm: [q(bb.min[0]!), q(bb.min[1]!), q(bb.min[2]!), q(bb.max[0]!), q(bb.max[1]!), q(bb.max[2]!)] as [number, number, number, number, number, number],
+          } : {}),
+          ...(joint ? { jointPair: true } : {}),
+        });
         if (firstInterferenceSample < 0) firstInterferenceSample = k;
       }
     }
   }
   interferenceEvents.sort((a, b) => a.step - b.step || b.volumeMm3 - a.volumeMm3);
+
+  // Attention, not a verdict: the exemption is a declared fit zone, so every
+  // forgiven overlap is listed. Large or near-boundary ones ask the reader to
+  // confirm it is a bearing/press fit and not a collision the sphere covered.
+  const jointExemptionList = [...jointExemptions.values()].map((e) => {
+    const resolved = e.fit !== null;
+    const attention: string[] = [];
+    if (!resolved) attention.push('unresolved-fit');
+    if (e.maxRadialMm > 0.9 * e.radiusMm || e.maxAxialMm > 0.9 * (e.halfLengthMm + e.radiusMm)) {
+      attention.push('near-boundary');
+    }
+    return {
+      ...e,
+      resolved,
+      attention,
+      requiredAction: resolved
+        ? null
+        : 'declare joint.fit (bearing/press-fit/clamp/clearance) or change the geometry/envelope',
+    };
+  }).sort((a, b) => b.maxVolumeMm3 - a.maxVolumeMm3);
+  const jointFitsUnresolved = jointExemptionList.filter((e) => !e.resolved).length;
+  const jointExemptRule = 'an in-envelope overlap is a fit ONLY when joint.fit is declared; without it the run is check. near-boundary = reach >0.9× radius or >0.9×(halfLength+radius)';
 
   // ---- followers: every part that is not fixed and not the drive body ----
   const followers: MotionReport['metrics']['followers'] = {};
@@ -746,10 +1101,23 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
     const axisIdx = ranges[0]! >= ranges[1]! && ranges[0]! >= ranges[2]! ? 0 : ranges[1]! >= ranges[2]! ? 1 : 2;
     const axis = (['x', 'y', 'z'] as const)[axisIdx]!;
     const vals = samplePoses.map((poses) => +poses[part.name]!.position[axisIdx]!.toFixed(4));
+    const init = initialPos.get(part.name);
+    const settled = settledPos.get(part.name);
+    const initAxis = init ? init[axisIdx]! : undefined;
+    const settledAxis = settled ? settled[axisIdx]! : undefined;
+    const fullRange = initAxis !== undefined && settledAxis !== undefined
+      ? Math.max(travelHi.get(part.name)![axisIdx]!, initAxis) - Math.min(travelLo.get(part.name)![axisIdx]!, initAxis)
+      : ranges[axisIdx]!;
+    const warmUpOffsetMm = init && settled
+      ? Math.hypot(init[0] - settled[0], init[1] - settled[1], init[2] - settled[2])
+      : 0;
     followers[part.name] = {
       travelMm: +ranges[axisIdx]!.toFixed(3),
       axis,
       periodSec: periodFromSamples(vals, sampleDt),
+      fullTravelMm: +fullRange.toFixed(3),
+      warmUpOffsetMm: +warmUpOffsetMm.toFixed(3),
+      warmUpLostMm: +(fullRange - ranges[axisIdx]!).toFixed(3),
     };
     if (recordSet.has(part.name)) {
       followersDetail[part.name] = { t: sampleTimes.map((t) => +t.toFixed(4)), vals, axis };
@@ -760,6 +1128,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   let maxJointDriftMm = 0;
   const jointViolations: string[] = [];
   for (const j of scenario.joints) {
+    if (j.type === 'gear') continue; // no anchor: the coupling is not a constraint to drift
     const a = bodyByName.get(j.bodyA)!;
     const b = bodyByName.get(j.bodyB)!;
     const wa = worldAnchor(a, j.anchorA);
@@ -816,7 +1185,21 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
   const samplingSatisfied = interferenceChecks >= MIN_MOTION_INTERFERENCE_POSES;
   const maxSampleGapDeg = omega > 0 ? +((360 * sampleEvery * dt) / cyclePeriod).toFixed(2) : null;
 
+  const gearReport = gearStates.map((g) => {
+    const measured = Math.abs(g.turnsA) > 1e-12 ? g.turnsB / g.turnsA : null;
+    return {
+      a: g.aName, b: g.bName, ratio: g.ratio,
+      turnsA: +g.turnsA.toFixed(6), turnsB: +g.turnsB.toFixed(6),
+      measuredRatio: measured === null ? null : +measured.toFixed(6),
+      agrees: measured === null ? null : Math.abs(measured - g.ratio) < 1e-6,
+    };
+  });
   const clean = interferenceCount === 0
+    && jointFitsUnresolved === 0
+    && gearReport.every((g) => g.agrees === true)
+    // A run that never put its revolute pairs in the timeline is not a clean
+    // mechanism run: "0 interference" is scoped to the pairs it looked at.
+    && excludedJointPairs.length === 0
     && !diverged
     && maxJointDriftMm <= JOINT_DRIFT_TOLERANCE_MM
     && samplingSatisfied;
@@ -847,11 +1230,23 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       driveOmegaRadPerSec: scenario.drive?.omegaRadPerSec ?? null,
       cyclePeriodSec: omega > 0 ? +cyclePeriod.toFixed(4) : null,
       followers,
+      gears: gearReport,
       interferenceCount,
       interferenceEvents: interferenceEvents.slice(0, 20),
       interferenceChecks,
       candidatePairs,
       interferencePairChecks,
+      excludedJointPairs,
+      jointPairScan: scanJointPairs,
+      jointExemptions: jointExemptionList.map((e) => ({
+        ...e,
+        maxVolumeMm3: +e.maxVolumeMm3.toFixed(3),
+        maxTimeSec: +e.maxTimeSec.toFixed(4),
+        maxRadialMm: +e.maxRadialMm.toFixed(3),
+        maxAxialMm: +e.maxAxialMm.toFixed(3),
+      })),
+      jointFitsUnresolved,
+      jointExemptRule,
       samplingSatisfied,
       maxSampleGapDeg,
       maxJointDriftMm: +maxJointDriftMm.toFixed(4),
@@ -859,6 +1254,7 @@ export async function runMotionInTs(scenario: MotionScenario): Promise<MotionRep
       diverged,
       closedLoop: loopJoints.length > 0,
       loopJoints,
+      capabilities: { rigidBodies: true, joints: true, springs: false, contact: false, gravity: false },
     },
     followersDetail,
     keyframes: keyframes.slice(0, 8),
