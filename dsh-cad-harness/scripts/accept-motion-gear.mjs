@@ -1,9 +1,9 @@
 // Acceptance for the prescribed GEAR coupling in simulate_motion.
 //
 // A gear is a ratio coupling, not a contact problem: rapier has no gear constraint,
-// so the follower's pose is projected each step (Python canonical + TS oracle).
+// so the follower's pose is projected each step (Python canonical).
 // Fixture: a driven 4mm cube at the origin and a follower 30mm away, ratio 2 about
-// +Z, quarter turn. Expect turnsA≈0.25, turnsB≈0.5, measuredRatio≈2 on BOTH engines.
+// +Z, quarter turn. Expect turnsA≈0.25, turnsB≈0.5, measuredRatio≈2.
 //
 //   node --experimental-strip-types scripts/accept-motion-gear.mjs
 
@@ -17,7 +17,7 @@ if (!process.env.DSH_CAD_PYTHON_ROOT?.trim() && existsSync(join(localRuntime, 'v
   process.env.DSH_CAD_PYTHON_ROOT = localRuntime;
 }
 
-const { runMotion, runMotionInTs } = await import('../src/host/motion.ts');
+const { runMotion } = await import('../src/host/motion.ts');
 const { resetPythonWorker } = await import('../src/host/python-worker.ts');
 
 let failures = 0;
@@ -60,20 +60,13 @@ const scenario = {
 };
 
 const py = await runMotion(scenario);
-const ts = await runMotionInTs(scenario);
-for (const [label, r] of [['Python', py], ['TS', ts]]) {
-  const g = r.metrics.gears?.[0];
-  check(Boolean(g), `${label}: the gear coupling is reported`, JSON.stringify(g));
-  check(Math.abs((g?.turnsA ?? 0) - 0.25) < 1e-3, `${label}: driven gear turned 0.25 turn`, String(g?.turnsA));
-  check(Math.abs((g?.turnsB ?? 0) - 0.5) < 1e-3, `${label}: follower turned 0.5 turn (ratio 2)`, String(g?.turnsB));
-  check(Math.abs((g?.measuredRatio ?? 0) - 2) < 1e-3, `${label}: measured ratio is 2`, String(g?.measuredRatio));
-  check(g?.agrees === true, `${label}: the run agrees with the declared ratio`, String(g?.agrees));
-  check(r.overallStatus === 'pass', `${label}: a clean gear run is pass`, r.overallStatus);
-}
-check(Math.abs((py.metrics.gears?.[0]?.turnsA ?? 0) - (ts.metrics.gears?.[0]?.turnsA ?? 0)) < 1e-4,
-  'Python and TS agree on the driven angle');
-check(Math.abs((py.metrics.gears?.[0]?.turnsB ?? 0) - (ts.metrics.gears?.[0]?.turnsB ?? 0)) < 1e-4,
-  'Python and TS agree on the follower angle');
+const g = py.metrics.gears?.[0];
+check(Boolean(g), 'the gear coupling is reported', JSON.stringify(g));
+check(Math.abs((g?.turnsA ?? 0) - 0.25) < 1e-3, 'driven gear turned 0.25 turn', String(g?.turnsA));
+check(Math.abs((g?.turnsB ?? 0) - 0.5) < 1e-3, 'follower turned 0.5 turn (ratio 2)', String(g?.turnsB));
+check(Math.abs((g?.measuredRatio ?? 0) - 2) < 1e-3, 'measured ratio is 2', String(g?.measuredRatio));
+check(g?.agrees === true, 'the run agrees with the declared ratio', String(g?.agrees));
+check(py.overallStatus === 'pass', 'a clean gear run is pass', py.overallStatus);
 
 resetPythonWorker();
 console.log(failures === 0 ? '\nOK' : `\nFAILED (${failures})`);

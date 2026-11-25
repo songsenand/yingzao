@@ -6900,3 +6900,31 @@ fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
 
 **影响：** assembly 数值有固定期望；引擎升级若改变 volume/bbox/minDistance 会显式失败。
 **未覆盖：** 任意语料的数值；那仍是端到端验收的职责。
+
+## 2026-11-25：退役 motion 的 TS 实现
+
+**触发条件：** 第 4 条（影响测试/依赖/后续维护）＋第 2 条（平台矩阵与代码量的定量评估）。
+
+**要解决的问题：** `runMotionInTs` 原本的正当理由是 darwin-x64 没有 `rapier3d` wheel；但
+darwin-x64 已于 2026-11-16 退役，支持平台上 Python 都有 wheel。于是这段 TS 只剩 parity
+oracle，却继续带着 `@dimforge/rapier3d-compat` 依赖和 6 个对拍脚本；`PYTHON_MOTION_UNAVAILABLE`
+在支持平台上永远是 false。物理的 `runPhysicsInTs` 已在同一天按同一原则删除。
+
+**决策内容：** 删除 `runMotionInTs` 及其 TS solver/helpers、`PYTHON_MOTION_UNAVAILABLE`、
+`@dimforge/rapier3d-compat` 依赖；删除 `accept-motion-parity`、`smoke-motion`、
+`probe-spring-joint`；把 `accept-motion-axes`、`accept-motion-gear`、
+`accept-motion-joint-pairs`、`accept-motion-sampling` 改为 Python-only；`accept-plugin-issues`
+移除只测 TS warm-up 的 I09。`runMotion` 只保留 Python 路径；`assertAssembledAtStart` /
+`rebasedBodyPosition` 等宿主逻辑不变。
+
+**理由：** 支持平台上没有第二运行时需求；TS 与 Python 的 rapier 版本不同，接触/约束分歧
+无法裁定谁对，保留 oracle 的价格高于收益。物理已有先例。
+
+**依据：** Python-only 重跑 `accept-motion-axes`（drift 0、24 poses、闭环 2）、
+`accept-motion-gear`（turns 0.25/0.5、ratio 2）、`accept-motion-joint-pairs`（fit/bbox/包围盒）、
+`accept-motion-sampling`（754 steps/24 poses）、`accept-motion-fit-tool`、`accept-check-sweep`、
+`accept-plugin-issues` 全过；`tsc --noEmit`、`npm run build` 通过。
+
+**影响：** motion 只剩 Python 一条实现，少约 700 行 TS 和一个运行时依赖；失去第二实现，
+数值由现有数值断言 + motion golden 型验收（axes/gear/sampling）守住。**未退：** printability
+（preflight）、fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。

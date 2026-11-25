@@ -20,7 +20,6 @@ import { writeBinaryStl, parseBinaryStl } from '../src/host/mesh.ts';
 import { STANDARD_SPRINGS } from '../src/host/standard-parts.ts';
 import { createProjectMarker, setProjectKernel } from '../src/host/project.ts';
 import { resolveProcessProfiles } from '../src/host/tools.ts';
-import { runMotionInTs } from '../src/host/motion.ts';
 
 const only = (() => {
   const i = process.argv.indexOf('--only');
@@ -198,24 +197,7 @@ await run('I10-cq-snapshot', async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-await run('I09-motion-warmup', async () => {
-  const runtime = await mkdtemp(join(tmpdir(), 'cad-issue-motion-'));
-  process.env.DSH_CAD_PYTHON_ROOT = runtime;
-  try {
-    const r = await runMotionInTs({
-      parts: [
-        { name: 'base', stl: boxStl(10, 10, 1), bodyType: 'fixed', position: [0, 0, 0] },
-        { name: 'slide', stl: boxStl(2, 2, 1), bodyType: 'dynamic', position: [0, 0, 1] },
-      ],
-      joints: [],
-      oscillators: [{ body: 'slide', axis: [1, 0, 0], periodSec: 2, amplitudeMm: 5 }],
-      cycles: 1,
-    });
-    const f = r.metrics.followers.slide;
-    check(typeof f?.fullTravelMm === 'number' && typeof f?.warmUpLostMm === 'number' && typeof f?.warmUpOffsetMm === 'number',
-      'motion reports full travel, warm-up loss and settling offset', JSON.stringify(f));
-  } finally { await rm(runtime, { recursive: true, force: true }); }
-});
+
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

@@ -3849,10 +3849,12 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 （rapier Python 绑定有 `add_soft_body` 系列，JS 绑定没有）→ MPM 弹性本构降级为"显式要求才
 做"。**防越界条款**：连续介质问题（流量/死区/灌装/颗粒）的答案必须来自 MPM，不允许用 rapier
 输出冒充；任一方向的越界使用都应说明理由供人审。
-**canonical 现状（2026-11-16 校订）**：物理/运动的 canonical 在 **Python worker**，且**物理
-已无 TS 实现**——`runPhysicsInTs` 随 darwin-x64 一起于 2026-11-16 退役（它的分歧在接触场景
-无法裁定，`accept-physics-parity` 同时删除）。`runMotionInTs` 仍在，作为运动的 parity oracle。
-决策谱系见 DECISION-LOG 2026-09-28 补记、2026-10-08 各条与 2026-11-16 条目。
+**canonical 现状（2026-11-25 校订）**：物理/运动的 canonical 在 **Python worker**，且**两者
+都已无 TS 实现**——`runPhysicsInTs` 随 darwin-x64 于 2026-11-16 退役，`runMotionInTs` 于
+2026-11-25 退役（darwin-x64 已不支持，TS 只剩 parity oracle；分歧无法裁定，按物理同一原则删）。
+`@dimforge/rapier3d-compat` 依赖随之移除；运动验收已改为 Python-only（axes/gear/joint-pairs/
+sampling），另由 `accept-check-sweep` / `accept-motion-fit-tool` 覆盖早期筛查与配合。
+决策谱系见 DECISION-LOG 2026-09-28 补记、2026-10-08 各条、2026-11-16 与 2026-11-25 条目。
 
 **31.5 B-rep / STEP 边界**（2026-10-16 校订）
 - 主循环**不需要 OCCT**：网格几何/装配检查/仿真用 manifold3d/trimesh/numpy。

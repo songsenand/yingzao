@@ -15,7 +15,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runMotion, runMotionInTs } from '../src/host/motion.ts';
+import { runMotion } from '../src/host/motion.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,7 +68,6 @@ console.log('--- motion sampling: short sweep must be CHECKED, not assumed ---')
 {
   const scenario = { ...BASE, cycles: 0.03 };
   const py = await runMotion(scenario);
-  const ts = await runMotionInTs(scenario);
   const m = py.metrics;
 
   check(py.stepsRun === 754 && py.durationSec === 0.377,
@@ -91,19 +90,6 @@ console.log('--- motion sampling: short sweep must be CHECKED, not assumed ---')
   check(typeof m.maxSampleGapDeg === 'number' && m.maxSampleGapDeg < 1,
     'short sweep: max crank gap < 1°', `${m.maxSampleGapDeg}°`);
 
-  // The two engines must agree on the coverage numbers, not only the verdict.
-  check(ts.metrics.interferenceChecks === m.interferenceChecks,
-    'short sweep: TS/Python checks agree', `TS ${ts.metrics.interferenceChecks} · py ${m.interferenceChecks}`);
-  check(ts.metrics.interferencePairChecks === m.interferencePairChecks,
-    'short sweep: TS/Python pair checks agree', `TS ${ts.metrics.interferencePairChecks} · py ${m.interferencePairChecks}`);
-  check(ts.metrics.interferenceCount === m.interferenceCount,
-    'short sweep: TS/Python interference events agree', `TS ${ts.metrics.interferenceCount} · py ${m.interferenceCount}`);
-  check(ts.metrics.maxSampleGapDeg === m.maxSampleGapDeg,
-    'short sweep: TS/Python max gap agree', `TS ${ts.metrics.maxSampleGapDeg}° · py ${m.maxSampleGapDeg}°`);
-  check(ts.metrics.samplingSatisfied === m.samplingSatisfied,
-    'short sweep: TS/Python coverage flag agree', String(m.samplingSatisfied));
-  check(ts.overallStatus === py.overallStatus,
-    'short sweep: TS/Python status agree', `TS ${ts.overallStatus} · py ${py.overallStatus}`);
 }
 
 // 2. A full turn keeps the old density (24/cycle) and still adds the final pose.

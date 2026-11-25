@@ -20,7 +20,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runMotion, runMotionInTs } from '../src/host/motion.ts';
+import { runMotion } from '../src/host/motion.ts';
 import { parseBinaryStl, rebaseMesh, writeBinaryStl } from '../src/host/mesh.ts';
 import { resetPythonWorker } from '../src/host/python-worker.ts';
 
@@ -128,16 +128,12 @@ function assertMotion(tag, report) {
 }
 
 console.log('--- motion axes regression: r001 ---');
-const ts = await runMotionInTs(scenario);
-assertMotion('TS', ts);
-if (havePython) {
-  const py = await runMotion(scenario);
-  assertMotion('Python', py);
-  check(Math.abs(py.metrics.maxJointDriftMm - ts.metrics.maxJointDriftMm) < 0.1,
-    'Python vs TS drift agree', `TS ${ts.metrics.maxJointDriftMm} · py ${py.metrics.maxJointDriftMm}`);
-} else {
-  console.log(`SKIP  Python worker (no venv at ${venvPython})`);
+if (!havePython) {
+  console.error(`no venv python at ${venvPython} — the Python motion path is the only one`);
+  process.exit(2);
 }
+const py = await runMotion(scenario);
+assertMotion('Python', py);
 
 resetPythonWorker();
 console.log(`\n${failures === 0 ? 'all checks passed' : `${failures} check(s) FAILED`}`);

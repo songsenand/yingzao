@@ -196,7 +196,6 @@
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.3",
     "@deepseek-ai/dsh-attachment": "0.1.5-rc.3",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
-    "@dimforge/rapier3d-compat": "^0.20.0",
     "manifold-3d": "^3.5.3",
     "three": "^0.170.0",
     "three-mesh-bvh": "^0.9.15"
