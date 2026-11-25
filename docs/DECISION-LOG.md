@@ -6761,3 +6761,21 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** 沙箱 `?dark=1`（与宿主相同的 `data-ds-dark-theme`）实测 `theme-light` / `theme-dark` / `theme-dark-playback` 全 PASS：对比度扫描 28–34 个文字元素、18–23 个控件，最低 5.10；`accept-tokens` 52 个令牌、暗色 52/52、表外颜色字面量 0（迁移前 237 处 hex/rgba；旧 lint 只数 `.ts` 和 hex，所以预算是 180）。截图 `sandbox/shots/ui-theme-{light,dark,dark-playback}.png`。亮色模式的令牌值取原值，`assert=layout` 等既有场景仍全绿。
 
 **影响：** 所有 `src/client` 组件的颜色写法；新增颜色必须先加到 `tokens.ts`（否则 lint 失败）。三维视口底色仍由「背景」预设决定，不随主题翻转；深色模式想要深底需选石墨/午夜。`README.md` / `README.en.md` 的面板能力清单与 `DESIGN.md` §6.9 已同步。
+
+## 2026-11-25：装配阶段的扫掠筛查层（连续包络 + 自适应 clearance）
+
+**触发条件：** 第 1 条（用户在讨论中拍板“按照你的方案执行”）＋第 4 条（新增 `cad_check` action `sweep`，影响装配→运动的取证流程）。
+
+**要解决的问题：** 装配检查是静态位姿，看不见“装配时差 1mm、转到某个角度才撞”的零件；完整 motion 又能给出精确时间线，但要求驱动/关节/全机构都就位，来得太晚。缝纫机的 `take_up_lever↔frame` 34mm³ 和 `needle_bar↔frame` 33mm³ 都是这个形态。
+
+**决策内容：**
+1. 新增 `check_sweep`（`cad_check` action `sweep`）：一个运动件 + 一组静态件 + 声明的关节行程（转动角度/滑动 mm）。
+2. 三层算法：连续扫掠 AABB 包络先筛（转动副按每顶点弧、滑动副按两端 AABB）→ 粗采样最近距离（不是 boolean）→ 只对 clearance < 2×`minFeatureMm` 的区间自适应细化，目标弧步长 ≤ `minFeatureMm/2`。
+3. 结果状态 `collision` > `suspect` > `uncovered` > `clean`；预算耗尽报 `uncovered`，**永不报 clean**。它是**筛查**，不是交付判定；motion 仍是唯一 pass/fail 证据。
+4. 几何算法放在 `worker.py` 的 `screen_sweep`（Python canonical）；TS 只保留工具面/路径解析，不做顶点变换。
+
+**理由：** 密度不由“表面光不光滑”决定，而由最薄特征 `minFeatureMm` 和力臂 `r_max` 决定；均匀加密又贵又不可靠（0.5mm 薄边在 15° 步长下会漏）。连续包络先排除不可能相撞的 pair，clearance 曲线比 boolean 更平滑，细化只花在接近接触的区间。结果是“早说、指路”，不冒充证据。
+
+**依据：** 合成夹具（10mm 立方体绕 Y 0→−90°，静态块在 x=12）报 `collision` @−52.5°、envelope=true、40 样本；远处静态块 `skipped`、0 样本。真实缝纫机 `take_up_lever v120 ↔ frame v123`（revolute，anchor (33,160,0)，axis +X，−40…+40°）报 `suspect`：min 0.0031mm @−8.611°，envelope=true，48 样本。`accept-check-sweep` 全过。
+
+**影响：** `check_sweep`、`tool-groups` 的 detect 组、`skills/cad-assembly`、`docs/llm/assembly.md`、`TOOL-CONTRACTS`；装配阶段多一个“去跑 motion 之前”的嫌疑入口。**未决**：行程（travel）目前由调用方直接给，尚未写进装配契约的接口；接口级 travel 是下一步。
