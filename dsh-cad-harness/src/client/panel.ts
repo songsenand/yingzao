@@ -22,7 +22,7 @@ import { ANN_PALETTE, SCENE as SCENE_COLOR, T } from './tokens.ts';
 import { resolveCssColor } from './theme.ts';
 import { runFacts, type RunFact, type RunTone } from './run-facts';
 import { buildRunChart, RunChart } from './run-chart';
-import { attentionQuery, buildHeatColors, pickHeatLayer, type AttentionPayload } from './heat';
+import { attentionQuery, buildHeatColors, heatLayers, type AttentionPayload, type HeatLayer } from './heat';
 import {
   axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
   planeToWorld, projectToCutPlane, sectionLoops, sectionSegments,
@@ -669,7 +669,10 @@ export function CadPanel(): React.ReactElement {
   const pendingFocusRef = useRef<string | null>(null);
   const [section, setSection] = useState(false);
   /** Attention heatmap: the layer's own legend, or null when it is off. */
-  const [heat, setHeat] = useState<{ legend: string } | null>(null);
+  const [heat, setHeat] = useState<{ legend: string; layerId: string; layers: { id: string; label: string }[] } | null>(null);
+  /** The fetched field and its available layers; kept out of React state (samples are heavy). */
+  const heatPayloadRef = useRef<AttentionPayload | null>(null);
+  const heatLayersRef = useRef<HeatLayer[]>([]);
   /** Set when this environment cannot give us a WebGL context at all. */
   const [glError, setGlError] = useState<string | null>(null);
   const [measureMode, setMeasureMode] = useState(false);
@@ -1714,6 +1717,50 @@ export function CadPanel(): React.ReactElement {
   // 🔥 Heatmap: fetch the per-sample values behind the attention field and colour the
   // surface by the layer's OWN thresholds. Off = restore the flat material; nothing is
   // cached across versions, because a picture must not outlive the geometry it shows.
+  /** Paint one already-fetched layer onto the current mesh. */
+  const paintHeatLayer = (layer: HeatLayer): boolean => {
+    const mesh = meshRef.current;
+    const geo = mesh?.geometry as THREE.BufferGeometry | undefined;
+    const mat = mesh?.material as THREE.MeshStandardMaterial | undefined;
+    if (!geo || !mat) {
+      setHint(tr('ui.hint.heatNeedPreview'));
+      return false;
+    }
+    const { colors } = buildHeatColors(geo, layer);
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    mat.vertexColors = true;
+    mat.needsUpdate = true;
+    // Each layer names its own source run: the same version can have a press field
+    // and a stress field, and "which one am I looking at" must not be a guess.
+    const payload = heatPayloadRef.current;
+    const legend = payload?.source
+      ? tr('ui.hint.heatSource', { legend: layer.legend, run: payload.source.runId, kind: payload.source.kind })
+      : layer.legend;
+    setHeat({
+      legend,
+      layerId: layer.id,
+      layers: heatLayersRef.current.map((l) => ({ id: l.id, label: l.label })),
+    });
+    return true;
+  };
+
+  const clearHeat = () => {
+    const mesh = meshRef.current;
+    const geo = mesh?.geometry as THREE.BufferGeometry | undefined;
+    const mat = mesh?.material as THREE.MeshStandardMaterial | undefined;
+    if (geo) geo.deleteAttribute('color');
+    if (mat) {
+      mat.vertexColors = false;
+      mat.needsUpdate = true;
+    }
+    heatPayloadRef.current = null;
+    heatLayersRef.current = [];
+    setHeat(null);
+  };
+
+  // 🔥 Heatmap: fetch the per-sample values behind the attention field and colour the
+  // surface by the layer's OWN thresholds. Off = restore the flat material; nothing is
+  // cached across versions, because a picture must not outlive the geometry it shows.
   const toggleHeat = async () => {
     const mesh = meshRef.current;
     const geo = mesh?.geometry as THREE.BufferGeometry | undefined;
@@ -1730,10 +1777,7 @@ export function CadPanel(): React.ReactElement {
       return;
     }
     if (heat) {
-      geo.deleteAttribute('color');
-      mat.vertexColors = false;
-      mat.needsUpdate = true;
-      setHeat(null);
+      clearHeat();
       return;
     }
     try {
@@ -1754,18 +1798,14 @@ export function CadPanel(): React.ReactElement {
         return;
       }
       const payload = (await res.json()) as AttentionPayload;
-      const layer = pickHeatLayer(payload);
-      if (!layer) {
+      const layers = heatLayers(payload);
+      if (layers.length === 0) {
         setHint(tr('ui.hint.heatNoLayers', { layers: payload.samples ? Object.keys(payload.samples).join('/') : 'empty' }));
         return;
       }
-      const { colors } = buildHeatColors(geo, layer);
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      mat.vertexColors = true;
-      mat.needsUpdate = true;
-      // Name the source run in the legend: the same version can have a press field and a
-      // stress field, and "which one am I looking at" must not be a guess (FIX-E5).
-      setHeat({ legend: payload.source ? tr('ui.hint.heatSource', { legend: layer.legend, run: payload.source.runId, kind: payload.source.kind }) : layer.legend });
+      heatPayloadRef.current = payload;
+      heatLayersRef.current = layers;
+      if (!paintHeatLayer(layers[0]!)) return;
       setHint(fellBack
         ? tr('ui.hint.heatFallback')
         : null);
@@ -1773,6 +1813,13 @@ export function CadPanel(): React.ReactElement {
       setHint(tr('ui.hint.heatFailed', { error: String(err).slice(0, 80) }));
     }
   };
+
+  // A field belongs to the version/run that produced it. Switching either one
+  // while the heatmap is on would leave the previous picture on the new mesh.
+  useEffect(() => {
+    if (heat) clearHeat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionId, run?.id]);
 
   // add/remove probe dots + dimension lines inside the scene
   useEffect(() => {
@@ -4041,6 +4088,19 @@ export function CadPanel(): React.ReactElement {
         style: { fontSize: 12, fontWeight: 700, color: T.danger, flex: 'none', lineHeight: '18px' },
       }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : t('ui.feedback.selectedOne')),
       measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, t('ui.feedback.clearMeasure')),
+      heat && heat.layers.length > 1 && React.createElement('select', {
+        value: heat.layerId,
+        title: tr('ui.heat.layerTitle'),
+        'aria-label': tr('ui.heat.layer'),
+        onChange: (e: any) => {
+          const layer = heatLayersRef.current.find((l) => l.id === e.target.value);
+          if (layer) paintHeatLayer(layer);
+        },
+        style: {
+          fontSize: 11, height: 18, flex: 'none', padding: '0 2px',
+          border: `1px solid ${T.line}`, borderRadius: 4,
+        },
+      }, ...heat.layers.map((l) => React.createElement('option', { key: l.id, value: l.id }, l.label))),
       heat && React.createElement('span', {
         style: { fontSize: 11, color: T.danger, flex: '1 1 auto', lineHeight: '16px' },
       }, heat.legend),

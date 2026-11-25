@@ -39,14 +39,17 @@ export interface AttentionPayload {
 
 export interface HeatLayer {
   id: string;
+  /** Short label for the user-facing layer selector. */
+  label: string;
   samples: AttentionSample[];
   legend: string;
   /** 0 = safe end of the ramp, 1 = worst end. */
   score: (value: number) => number;
 }
 
-/** Pick a layer to draw, and say in words what its colours mean. */
-export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
+/** Every layer the payload can draw, in the panel's default order. */
+export function heatLayers(payload: AttentionPayload): HeatLayer[] {
+  const layers: HeatLayer[] = [];
   const wall = payload.samples?.wall ?? [];
   const overhang = payload.samples?.overhang ?? [];
   const wallNorm = payload.normalization?.wall ?? {};
@@ -57,12 +60,13 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
   // comparable by its own DECLARED band, not by a weight invented here.
   const fused = payload.samples?.fused ?? [];
   if (fused.length >= 8) {
-    return {
+    layers.push({
       id: 'fused',
+      label: tr('ui.heat.layerFused'),
       samples: fused,
       legend: tr('ui.heat.risk', { count: fused.length }),
       score: (v) => Math.min(1, Math.max(0, v)),
-    };
+    });
   }
 
   // Wall thickness next: a thin wall is a defect, an overhang is a process cost.
@@ -70,21 +74,23 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     const warn = wallNorm.warnAt ?? 1.2;
     const bad = wallNorm.badAt ?? warn * 0.4;
     const span = Math.max(1e-6, warn - bad);
-    return {
+    layers.push({
       id: 'wall',
+      label: tr('ui.heat.layerWall'),
       samples: wall,
       legend: tr('ui.heat.wall', { bad: bad.toFixed(2), warn: warn.toFixed(2), count: wall.length }),
       score: (v) => Math.min(1, Math.max(0, (warn - v) / span)),
-    };
+    });
   }
   if (overhang.length >= 8) {
     const warn = overhangNorm.warnAt ?? 20;
-    return {
+    layers.push({
       id: 'overhang',
+      label: tr('ui.heat.layerOverhang'),
       samples: overhang,
       legend: tr('ui.heat.overhang', { warn, count: overhang.length }),
       score: (v) => Math.min(1, Math.max(0, v / warn)),
-    };
+    });
   }
   // Structural stress (`simulate_stress`, DECISION-LOG 2026-10-19). The ramp is the
   // opposite of the wall layer's: for stress, LARGER is worse, so the layer's own
@@ -97,14 +103,21 @@ export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
     const warn = norm.warnAt ?? 10;
     const bad = norm.badAt ?? warn * 1.6;
     const span = Math.max(1e-6, bad - warn);
-    return {
+    layers.push({
       id: 'von-mises',
+      label: tr('ui.heat.layerStress'),
       samples: stress,
       legend: tr('ui.heat.stress', { bad, warn, count: stress.length }),
       score: (v) => Math.min(1, Math.max(0, (v - warn) / span)),
-    };
+    });
   }
-  return null;
+  return layers;
+}
+
+/** Pick the default layer to draw. The user can switch layers; the agent sees only
+ *  `analyze`'s fused digest. One layer at a time, never a weighted sum. */
+export function pickHeatLayer(payload: AttentionPayload): HeatLayer | null {
+  return heatLayers(payload)[0] ?? null;
 }
 
 /** blue (safe) → cyan → yellow → red (worst). */
