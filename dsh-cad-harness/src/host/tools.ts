@@ -37,7 +37,7 @@ import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, setProjectKernel, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
-import { checkPrintability, checkPrintabilityInTs, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
+import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
 import { analyzeSheet2d, type SheetSection } from './sheet2d.ts';
 import { analyzeTurning, maxRadiusAboutCentre } from './turning.ts';
 import { analyzeCncAccess } from './cnc-access.ts';
@@ -558,6 +558,27 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
   analyze: 300_000,
   check_assembly: 300_000,
 };
+
+/** Wall screen for an UNSAVED compiled STL (generate dryRun/preflight).
+ *  The saved-version path uses checkPrintability; this one writes the bytes to the
+ *  worker scratch, asks the SAME Python op, and deletes the file. */
+async function preflightWallFromStl(stl: Uint8Array): Promise<{ minWallMm?: number; minWallAtMm?: number[] }> {
+  const dir = await mkdtemp(join(tmpdir(), 'cad-preflight-'));
+  const path = join(dir, 'model.stl');
+  await writeFile(path, stl);
+  try {
+    const solved = await (await ensurePythonWorker()).request<{ minWallMm?: number; minWallAtMm?: number[] }>(
+      'check_printability',
+      { path, wallMinMm: 1.2, overhangDeg: 45, samples: 600 },
+    );
+    return {
+      ...(typeof solved.minWallMm === 'number' ? { minWallMm: solved.minWallMm } : {}),
+      ...(Array.isArray(solved.minWallAtMm) ? { minWallAtMm: solved.minWallAtMm } : {}),
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 export function registerCadTools(
   ctx: Context,
@@ -1350,13 +1371,11 @@ export function registerCadTools(
         let minWallMm: number | undefined;
         let minWallAtMm: number[] | undefined;
         try {
-          const screen = await checkPrintabilityInTs(store, {
-            versionId: '__preflight__',
-            ...(result.stl ? { stlBytes: result.stl } : {}),
-            wallMinMm: 1.2, overhangDeg: 45, samples: 600,
-          });
-          minWallMm = screen.minWallMm ?? undefined;
-          minWallAtMm = screen.minWallAtMm ?? undefined;
+          if (result.stl) {
+            const screen = await preflightWallFromStl(result.stl);
+            minWallMm = screen.minWallMm;
+            minWallAtMm = screen.minWallAtMm;
+          }
         } catch (e) {
           result.warnings.push(`preflight wall screen unavailable: ${String((e as Error).message ?? e)}`);
         }
@@ -1532,7 +1551,7 @@ export function registerCadTools(
       let minWallAtMm: number[] | undefined;
       if (!a.parentVersion) {
         try {
-          const screen = await checkPrintabilityInTs(store, {
+          const screen = await checkPrintability(store, {
             versionId, wallMinMm: 1.2, overhangDeg: 45, samples: 600,
           });
           minWallMm = screen.minWallMm;

@@ -3441,7 +3441,7 @@ findings 里**点名并附内容 hash**，且把 `ok` **降级为 `check`** —�
   `profileSource`、`profiles[]` 两值判定、反例与披露）。
 - 几何引擎：`python/cad_worker/worker.py` 的 `op_check_printability`（含 `draft` 块）、
   `op_connectivity`（`voids`）、`op_void_reach`（**已实现未接线**）。
-- 验收：`accept-process-profiles` 27/27、`accept-p3` 89/89、`accept-printability-parity` 45/45、
+- 验收：`accept-process-profiles` 27/27、`accept-p3` 89/89、`accept-generate-preflight`（Python 预检）、
   `accept-connectivity` 12/12 与 `accept-connectivity-parity` 21/21。
 - 文档：`skills/cad-manufacturing/SKILL.md` 写清档案契约、四种规则与**如何撰写档案**
   （出处的信任阶梯、草稿是有名字的假设、用即验证、阶梯试件标定、每个反例都要解释）。

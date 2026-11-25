@@ -6963,3 +6963,26 @@ TODO R5）。
 `docs/dev/RELEASE-NOTES-0.1.2.md`；README 与 `docs/user/preview.md` 版本口径；
 `docs/dev/DSH-MATRIX.md` 插件版本列；`docs/dev/RELEASE-0.1.1.md` 转历史。
 **未定：** 0.1.2 是否开多个 preview（决定 §3 剩余项是留在 0.1.2 线还是并入 0.2）。
+
+## 2026-11-25：退役 check_printability 的 TS 实现
+
+**触发条件：** 第 4 条（影响规则一致性与测试）＋第 2 条（双实现清单的定量评估）。
+
+**要解决的问题：** `checkPrintabilityInTs` 是 Python `check_printability` 的 parity oracle，
+但 `generate_part` 的 `dryRun/preflight` 真的在生产用它；于是同一条规则（壁厚/悬垂/边沿分类）
+要改两处——2026-11-25 的悬垂改动就是例子。darwin-x64 退役后，它也不再是平台兜底。
+
+**决策内容：** `generate_part` 的预检改为“把编译后的 STL 写到临时目录 → 调 Python
+`check_printability` → 删除临时目录”；首版壁厚屏幕改为 Python `checkPrintability`。
+删除 `checkPrintabilityInTs` 及其常量/聚类 helper、`PrintabilityOptions.stlBytes`、
+`accept-printability-parity.mjs`。`buildMeshBvh` 保留（tools.ts 的几何路径仍在用）。
+
+**理由：** 预检没有“已保存版本”可走文件路径，但临时文件只多一次 worker 往返；换来规则只有
+一份、悬垂/壁厚不会两处漂移。TS 不再有生产 printability 实现。
+
+**依据：** `accept-generate-preflight`（dryRun 不落版本、preflight 拒绝多实体、0.8mm 薄壁
+只警告、普通 generate 仍保存）全过；`accept-p3`、`accept-check-parts`、`accept-overhang-policy`
+与 `tsc --noEmit` 通过。
+
+**影响：** preflight 多一次 Python 往返；printability 只剩 Python。**未退：** fluid/MPM
+（env fallback）、connectivity/SCAD（host/client 需要）。
