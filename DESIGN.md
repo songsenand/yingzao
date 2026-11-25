@@ -1433,7 +1433,7 @@ npm run setup
 
 - **datum 三类扩展**（compile.ts）：`datum_axis/datum_plane/datum_cyl` 模块 + `parseDatumFeatures` → `DatumSet{points,axes,planes,cylinders}`；datums.json 新格式（向后兼容旧点数组，`readVersionDatums` 双读）；generate_part 全量入库
 - **manifest.ts**：assembly.json schema v0.1 读写/结构校验/遍历——节点同构可递归（part/assembly 同 schema）、接口挂装配节点（描述其直接子件间关系）、端点用 `<childId>.<datumName>` 地址引用；真相文件语言无关（JSON，裁决见提案 §9）
-- **assembly-check.ts**：L0 算子 `distance`（点对点）+ `diameter-match`（datum_cyl 孔-轴直径间隙，负间隙自动升级 hard）；违反双通道（hard=报错 fail / intent=标记 check）；**邻接发现**（干涉或 <0.75mm 的未声明零件对 → undeclared 警告）；报告落 `data/runs/rNNN/report.json`（v2.13 起；旧 `GET /api/cad/assembly` 保留为「最近一次装配运行」别名）
+- **assembly-check.ts**：L0 算子 `distance`（点对点）+ `diameter-match`（datum_cyl 孔-轴直径间隙，负间隙自动升级 hard；报告的 `check` 用实际算子，`紧固` 不再误报 `distance`）；违反双通道（hard=报错 fail / intent=标记 check）；**邻接发现**（干涉或 <0.75mm 的未声明零件对 → undeclared 警告）；报告落 `data/runs/rNNN/report.json`（v2.13 起；旧 `GET /api/cad/assembly` 保留为「最近一次装配运行」别名）
 - **接线**：`check_assembly` 工具（LLM 发起）+ GET `/api/cad/assembly/manifest` + POST `/api/cad/assembly/run`（人工发起②，同一 runAssemblyCheckJob）
 - **验收 accept-assembly.mjs 14/14**（豚鼠=显微镜第一级：镜架/滑座/轴/垫圈）：正样本 3 接口全过（0.2/Ø0.4/2.0 精确命中）；负样本轴 r4.6 → 硬违反 Ø-0.8、status=fail；邻接发现 shaft↔washer（0.1mm 未声明）；node transform 旋转+平移下 datum 世界解析正确
 - **回归**：accept-measure 18/18、accept-m3 ✓、accept-m36 17/17、accept-m4 ✓ 全过；tsc 干净

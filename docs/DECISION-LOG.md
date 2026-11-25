@@ -6852,3 +6852,30 @@ assembly/measure 的端到端验收；用 smoke 保留“工具还能算对”�
 **影响：** 再少约 1,000 行 TS oracle 与 6 个 parity/unit 脚本；assembly 的独立第二实现消失，
 后续以 Python 输出 + fixture 为准。**未退：** motion（darwin 兜底）、printability（preflight）、
 fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
+
+## 2026-11-25：check_assembly 的 `check` 用派生算子，并恢复 Python 分支覆盖
+
+**触发条件：** 第 4 条（影响报告语义与测试）＋第 2 条（基于删除 parity oracle 后的风险评估）。
+
+**要解决的问题：** 删除 `accept-check-assembly-parity` 后，原 synthetic manifest 的 17 接口分支
+（coaxial、spring-preload/behaviour、snap-fit、motion-clearance 五种证据结局、未知 check、
+未解析地址、未声明邻接、stock 跳过）没有替代覆盖；同时 `_assembly_verdict` 把 `check` 写成
+`iface.check ?? 'distance'`，导致“紧固”接口实际跑 `diameter-match` 却报告 `distance`。后者是
+迁移前既有行为，为保 parity 原样搬过来，现在只有一条实现，可以修。
+
+**决策内容：**
+1. `_assembly_verdict` 的 `check` 改为 `iface.check or DEFAULT_DERIVED[type][1]`；`紧固` 报
+   `diameter-match`，`间隙`/`贴合` 仍报 `distance`。
+2. 把原 parity 的 synthetic manifest 移植成 Python-only 的
+   `accept-check-assembly-branches.mjs`：只跑 `runAssemblyCheck`，断言每条分支的
+   verdict/check/detail/undeclared/stock，不再与另一实现比较。
+
+**理由：** 分支覆盖不能随 oracle 一起消失；用 Python-only 断言保留“这些分支确实被走到”的证据。
+`check` 字段是给人读的算子标签，报告错算子比数字错更难发现，应在单实现时修正。
+
+**依据：** `accept-check-assembly-branches` 全过（含新增的 `紧固→diameter-match` 与
+`间隙→distance` 两条断言，以及原有 25 条分支断言）；`accept-assembly`、`accept-icd`、
+`accept-motion-pair-coverage`、`accept-tool-contracts`、`tsc --noEmit` 全过。
+
+**影响：** 报告语义修正（`紧固` 的 `check` 从 `distance` 变为 `diameter-match`）；恢复分支覆盖；
+未恢复与 TS 的逐字段对拍（有意，oracle 已退）。

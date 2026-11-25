@@ -2196,10 +2196,9 @@ def _assembly_base(iface: dict) -> dict:
 
 
 def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
-    """`verdictFor` in assembly-check.ts — including its layer/check defaults, which
-    differ from `_assembly_base`'s (L0/distance here vs the type-derived pair there).
-    That difference is reproduced deliberately: the parity acceptance is what proves
-    the migration changed no number and no word."""
+    """`verdictFor` in assembly-check.ts. Layer defaults to L0 here (the base
+    derives it from the type); `check` is the declared operator or the type-derived
+    one — a 紧固 interface must report diameter-match, not a blanket distance."""
     tolerance = iface.get("tolerance")
     severity = iface["severity"]
     if not tolerance:
@@ -2221,7 +2220,9 @@ def _assembly_verdict(iface: dict, measured: float, detail: str) -> dict:
         "type": iface["type"],
         "severity": severity,
         "layer": iface.get("layer") or "L0",
-        "check": iface.get("check") or "distance",
+        # The DERIVED operator, not a blanket "distance": a 紧固 interface runs
+        # diameter-match, and reporting it as distance was a pre-migration bug.
+        "check": iface.get("check") or DEFAULT_DERIVED.get(iface.get("type"), ("L0", "distance"))[1],
         "verdict": verdict,
         "measured": measured,
         "detail": detail,

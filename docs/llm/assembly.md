@@ -128,6 +128,8 @@ working, not an error.
 
 ## Facts that are not obvious from the tool descriptions
 
+- **`cad_assembly` (`action: "check"`) reports the operator it actually ran.** `check` is the declared `check`, else the type-derived operator: `紧固` runs `diameter-match` (not a blanket `distance`), while `间隙`/`贴合` run `distance`. If you cite a check, cite that field.
+
 - **`cad_assembly` (`action: "check"`) machine-checks seven operators.** `distance` is datum-kind
   aware: **plane/plane → perpendicular plane distance** (lateral anchor offset is
   not a gap), **plane/point → point-to-plane**, anything else → point-to-point.
