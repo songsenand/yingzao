@@ -15,6 +15,7 @@
 | [AUDIT-2026-10-23.md](../AUDIT-2026-10-23.md) | 一次全量审计的发现与修复 | 查已知缺陷/修复依据 |
 | [ASSESSMENT-2026-10-28.md](ASSESSMENT-2026-10-28.md) | 能力评估：玩具→准生产的证据、缺口与路线图 | 排优先级/看现状 |
 | [TEST-COVERAGE-2026-11-16.md](TEST-COVERAGE-2026-11-16.md) | 工具单元测试覆盖率实测：9 surface/39 op、172 个 accept 脚本、src 行 89.0% / 函数 83.0% | 补测试/判断工具面质量 |
+| [DSH-MATRIX.md](DSH-MATRIX.md) | 本地 DSH 版本矩阵：13 个 in-range 0.2.x 的 rc/alpha 实测表、T0–T2 断言与复现 | 判断支持范围/加版本前 |
 | [TODO.md](TODO.md) | **项目 TODO 总表**：0.1.1（CadQuery）与中远期（L2–L16）的顺序、状态、出口 | 每次开工前/每周 review |
 | [RELEASE-0.1.1.md](RELEASE-0.1.1.md) | 0.1.1 版本目标：CadQuery 成为一等公民；范围、验收、排期；L1.8 预设与 dsh 版本对齐（发布阻断） | 排 0.1.1/改引擎 seam 前 |
 | [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md) | 0.1.0 预览版发布计划：L2 外壳的 P0/P1 索引；C1 风险标注导出、A3 后端选择、A2 安装时预设（历史） | 查预览版设计/历史时 |

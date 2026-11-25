@@ -260,6 +260,44 @@ node scripts/verify.mjs /path/to/project --advisory
 - 项目特定判据放在 `<project>/checks/<id>/`：先 `check-register` 注册，再用 `--checks` 启用。注册时会跑负样本，负样本通过则拒收；每条判据都要有 finding 或 skipped；检查不得写项目。
 - 详见 [docs/llm/verify.md](docs/llm/verify.md)。
 
+### DSH 版本兼容（本地容器矩阵）
+
+支持的 DSH 范围写在 `dsh-cad-harness/package.json` 的 `engines.dsh`（当前
+`>=0.2.1-rc.2 <0.3.0`）。0.2.x 中满足该范围的 13 个版本已全部扫描：**9 个 rc 全过**，
+4 个 alpha 中 3 个过（`0.2.3-alpha.1` 是上游自身启动失败，不是插件问题）。默认命令只跑
+下界 + 最新；完整表见 [docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)。
+
+仓库带一个本地可跑的兼容矩阵：用
+[kern](https://github.com/getkern/kern)（rootless、无 daemon）在一次性容器里对每个版本跑
+**按该版本重生成 preset → 组合 → 激活 → 9 个 CAD 工具面 → 一次真实 `cad_session` 调用**。
+它不会全局安装 dsh，也不会写 `~/.dsh`。
+
+```bash
+cd dsh-cad-harness
+node scripts/accept-dsh-matrix.mjs          # 默认 0.2.1-rc.2 + 0.2.2-rc.5
+node scripts/accept-dsh-matrix.mjs --json
+node scripts/accept-dsh-matrix.mjs --engine local   # 调试：在本机跑同一套断言
+```
+
+需要先装 [kern](https://github.com/getkern/kern)（rootless 单二进制，无 daemon）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
+```
+
+不想装到 `~/.local/bin` 时，把二进制放到 `<--state>/bin/kern` 即可（脚本先找 `PATH`，再找这里；也可用 `KERN_BIN` 指定）。
+
+没有容器运行时可用 `--engine local` 调试，但它用的是宿主机的 Node，不作为版本兼容的证据。
+
+测试 box 会加 `--privileged`（让 DSH 的嵌套 bwrap 能起来）和 `--memory 4g`；仍是 rootless、无 daemon，只挂载仓库与版本卷。安装阶段用 `--net host` 拉包，测试阶段用 `--net none`，模型请求只走 loopback。
+
+首次运行把 DSH 装进一个命名卷（每版约 1.2 GB），之后复用；结果写到
+`dsh-cad-harness/verification/dsh-matrix/`。缓存默认在 `~/.cache/yingzao-dsh-matrix`，可用
+`--state` 指到仓库内的临时目录，整个目录可直接删除。容器只覆盖 Linux x64，Windows/macOS 的
+原生路径仍由 CI 覆盖。
+
+> 必须在普通终端里跑：kern 需要 systemd 用户总线，不能嵌套在 DSH 自己的 bwrap 沙箱里。
+
 ## 已知边界
 
 - **不是原生 CAD**：没有特征树、草图约束和拖拽编辑，几何源头是代码，STEP 能进不能出。

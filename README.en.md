@@ -249,6 +249,53 @@ node scripts/verify.mjs /path/to/project --advisory
 - Project-specific criteria live in `<project>/checks/<id>/`: register with `check-register`, enable with `--checks`. Registration runs the negative samples; a check whose negative sample passes is refused. Every check must account for each criterion with a finding or `skipped`, and a check must not write to the project.
 - Details: [docs/en/llm/verify.md](docs/en/llm/verify.md).
 
+### DSH version compatibility (local container matrix)
+
+The supported DSH range is declared in `dsh-cad-harness/package.json` under
+`engines.dsh` (currently `>=0.2.1-rc.2 <0.3.0`). All 13 0.2.x versions inside that
+range have been scanned: **9/9 rc versions pass**; 3 of 4 alpha versions pass
+(`0.2.3-alpha.1` fails to start upstream, not because of the plugin). The default
+command covers only the floor and the latest; the full table is in
+[docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md). The repository ships a local
+matrix that uses [kern](https://github.com/getkern/kern) (rootless, no daemon)
+to run each version in a throwaway container: **regenerate the preset for that
+version → composition → activation → the 9 CAD tool surfaces → one real
+`cad_session` call**. It never installs dsh globally and never writes to `~/.dsh`.
+
+```bash
+cd dsh-cad-harness
+node scripts/accept-dsh-matrix.mjs          # 0.2.1-rc.2 + 0.2.2-rc.5 by default
+node scripts/accept-dsh-matrix.mjs --json
+node scripts/accept-dsh-matrix.mjs --engine local   # debug: same assertions on the host
+```
+
+Install [kern](https://github.com/getkern/kern) first (rootless single binary, no daemon):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
+```
+
+To avoid installing into `~/.local/bin`, put the binary at `<--state>/bin/kern`
+(the script checks `PATH` first, then that path; `KERN_BIN` also works).
+
+Without a container runtime, `--engine local` runs the same assertions on the host,
+but it uses the host's Node and is not evidence of version compatibility.
+
+The test box uses `--privileged` (so DSH's nested bwrap can start) and `--memory 4g`.
+It is still rootless and daemonless, and only the repo and the version volume are
+mounted. Installation uses `--net host`; the test phase uses `--net none`, with
+model traffic on loopback only.
+
+The first run installs DSH into a named volume (about 1.2 GB per version) and
+later runs reuse it; results go to `dsh-cad-harness/verification/dsh-matrix/`.
+The cache defaults to `~/.cache/yingzao-dsh-matrix`; `--state` can point it at a
+throwaway directory inside the repo, and the whole directory can be deleted.
+Containers cover Linux x64 only; the native Windows/macOS paths remain covered
+by CI.
+
+> Run this from a normal terminal: kern needs the systemd user bus and cannot
+> start inside DSH's own bwrap sandbox.
+
 ## Known limits
 
 - **Not native CAD**: no feature tree, sketch constraints or drag editing; the source of geometry is code, and STEP can come in but cannot go out.

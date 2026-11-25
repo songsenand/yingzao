@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "image": "docker.m.daocloud.io/library/node:22-bookworm",
+  "versions": [
+    "0.2.1-rc.2",
+    "0.2.2-rc.5"
+  ],
+  "markers": [
+    "cad-harness-host",
+    "preset-cad",
+    "cad-skill-filesystem"
+  ],
+  "cadTools": [
+    "cad_part",
+    "cad_session",
+    "cad_check",
+    "cad_simulate",
+    "cad_inspect",
+    "cad_see",
+    "cad_assembly",
+    "cad_deliver",
+    "cad_python"
+  ],
+  "knownBlocked": {
+    "0.2.3-alpha.1": "upstream: dsh-app-boot 0.2.3-alpha.1 requires EntryValidationError, but resolves cordis-plugin-loader@1.1.0; 0.2.3-alpha.2 uses 1.2.0-alpha.1 and works"
+  }
+}
