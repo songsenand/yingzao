@@ -204,3 +204,18 @@ found", never "this can be made".
 - **Current scope is measure + printability.** CNC, turning and sheet2d have no
   family-batch action yet; a batch that spans process kinds would need the same
   per-version run writing, not a merged verdict.
+
+## Overhang policy (2026-11-25)
+
+- **Overhang is a support cost, not a feasibility failure.** `check_printability` still
+  measures the exact down-facing area and reports it as a finding; with a declared FDM
+  profile it no longer turns that finding into `difficult`. Supports are mature, and
+  "needs support" is not "cannot be made".
+- **A profile can still make it hard.** Set `overhangDeg.hard: true` when the process/
+  product cannot accept supports: no support allowed, a visible/sealing surface where
+  support marks are unacceptable, or a trapped cavity where support cannot be removed.
+  Then an overhang area >20mm² lowers the verdict to `difficult`, and the finding names
+  the profile that did it.
+- **No profile declared is still `difficult`.** The built-in fallback is not a process
+  choice; the tool says so. Overhang being advisory does not make the undeclared case a
+  pass.
