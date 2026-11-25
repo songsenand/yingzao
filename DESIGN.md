@@ -4185,6 +4185,19 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 - 包内 `LICENSE` + `NOTICE`；tarball 无 AppImage/BOSL2/node_modules；`accept:license` 15/15。
 - `docs/dev/SCHEMA.md` 定义 project/assembly/claims/policy 的 schemaVersion 支持面；未知新版拒绝，
   迁移前备份，不自动迁移。
-- `.github/workflows/preview.yml`：tag/手动触发，Ubuntu+macOS，build、accept:preview、干净安装、
-  doctor、pack、解包 smoke、artifact。`scripts/rehearse-preview.mjs` 是本地等价全流程；
-  **GitHub 实际运行待网络**。
+- `.github/workflows/preview.yml`：按事件分档（2026-11-25）。`fast`（typecheck + build + 根 shim
+  版本）在每次 push/PR 都跑；push `main` 追加 Ubuntu 全量 `accept:preview`（doctor、pack、
+  解包 smoke、artifact）；nightly（19:00 UTC = 03:00 Asia/Shanghai）跑 Ubuntu+macOS 全量 +
+  Windows smoke；tag `v0.*` 再追加 CadQuery pack。同 ref 的并发组会取消被后续 push 取代的
+  运行（tag 除外）；pnpm store、Python runtime、OpenSCAD 快照按 lock/脚本哈希缓存。
+  `scripts/rehearse-preview.mjs` 是本地等价全流程。
+- `scripts/accept-dsh-matrix.mjs`：本地 DSH 版本矩阵，不把 CI 当唯一入口。kern rootless box：
+  install box（`--net host --privileged --memory 4g`）把缺失版本装进命名卷；test box
+  （`--net none --privileged`）用 loopback mock 跑 T0–T2：先用该版本自带的 `standard.patch.yml`
+  重跑 `dsh-cad-setup` 生成 preset（checkout 的 checked-in preset 只对应一个版本），再
+  `--dump-config` 组合、headless 激活、模型请求里 9 个 CAD 工具面、一次 `cad_session info` 真实执行。`--engine local` 复用同一
+  `accept-dsh-matrix-box.sh` 调试。容器只覆盖 Linux x64；0.2.0-rc.x / 0.2.1-alpha / 0.2.1-rc.1 不在 `engines.dsh` 范围，
+  不作为通过项。0.2.x 内满足范围的 13 个版本已全量扫描（rc 9/9、alpha 3/4；
+  0.2.3-alpha.1 因上游 `dsh-app-boot` 与 `cordis-plugin-loader@1.1.0` 不匹配，发生在插件加载前）。
+  容器只是测试基础设施，不是新的产品依赖：宿主运行时仍不引入
+  Docker/daemon（§13 第 6 条不变）。

@@ -6779,3 +6779,22 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** 合成夹具（10mm 立方体绕 Y 0→−90°，静态块在 x=12）报 `collision` @−52.5°、envelope=true、40 样本；远处静态块 `skipped`、0 样本。真实缝纫机 `take_up_lever v120 ↔ frame v123`（revolute，anchor (33,160,0)，axis +X，−40…+40°）报 `suspect`：min 0.0031mm @−8.611°，envelope=true，48 样本。`accept-check-sweep` 全过。
 
 **影响：** `check_sweep`、`tool-groups` 的 detect 组、`skills/cad-assembly`、`docs/llm/assembly.md`、`TOOL-CONTRACTS`；装配阶段多一个“去跑 motion 之前”的嫌疑入口。**未决**：行程（travel）目前由调用方直接给，尚未写进装配契约的接口；接口级 travel 是下一步。
+
+## 2026-11-25：CI 分档：快检 / 夜间全量 / tag 发布门
+
+**触发条件：** 第 1 条（用户在“如何调整 CI 触发”的方案选择中拍板“按推荐改”）＋ 第 4 条（决定了 push / PR / nightly / tag 各跑什么，是后续所有门禁与发布流程的前提）。
+
+**要解决的问题：** 每次直推 `main` 都跑 Ubuntu+macOS 全量加 Windows smoke，一次 push 约 38 机器分钟（run 45421640626 实测 16m18s + 12m37s + 9m17s）；11-17 一天 25 次 push 约 16 机器小时。同时 workflow 没有 `concurrency`，五分钟内连推两次会各跑一遍（11-24 15:01 与 15:06 两次 push 都完整跑完，18m04s + 16m22s）；Python runtime 与 OpenSCAD 每次现下（provision 步骤因此挂 40 分钟超时）。代价不是账单（public 仓库标准 runner 不计费），而是反馈延迟、队列占用和网络导致的偶发红。
+
+**决策内容：**
+
+1. 按事件分档：`push main` → `fast` + Ubuntu 全量；`pull_request` → 仅 `fast`；`schedule`（19:00 UTC / 03:00 Asia/Shanghai）→ Ubuntu+macOS 全量 + Windows smoke；`tag v0.*` → 全矩阵 + Windows smoke + CadQuery pack；`workflow_dispatch` 等同 tag 但不打 tag。
+2. 新增 `fast` job（`pnpm install` + `npm run build` + 根 shim 版本校验），其余 job `needs: fast`；新增 `plan` job 依事件产出 matrix 的 `os` 列表——job 级 `if` 读不到 matrix 值，所以选择放在单独的 job 里。
+3. `concurrency: group: workflow-ref`，`cancel-in-progress` 对非 tag 为 true：新 push 取代进行中的 run，发布 run 不被无关 push 取消。
+4. 加缓存：pnpm store；`~/.dsh/cad/runtime`（key 绑 `python-lock.ts` / `python-runtime.ts` / `provision-python.mjs`）；macOS/Windows 的 `~/.dsh/cad/{tools,cache,backend.json}`（key 绑 `provision-openscad.mjs`）。
+
+**理由：** 反馈延迟与证据强度要分开看：提交者需要分钟级的“还能不能编译”，全平台证据要的是覆盖而不是频次。把 macOS/Windows 挪到夜间不削弱证据，只降低频率；缓存把“每次都重新下载”变成“lock 变了才下载”。CadQuery job 早有同一原则（注释写着 release gate, not a per-commit tax），这次只是把它推到其余 job。
+
+**依据：** run 45421640626 三个 job 实测 16m18s / 12m37s / 9m17s；`gh run list` 显示 11-24 15:01 与 15:06 两次 push 均完整跑完；workflow 原文无 `concurrency`、无 `actions/cache`；11-17 共 25 次 push。改后 YAML 通过 actionlint 1.7.7（exit 0）；`plan` 分支用 5 种事件本地模拟：push→`["ubuntu-latest"]`、PR→ubuntu 且 verify=false、schedule/tag/dispatch→ubuntu+macOS 且 windows=true。**未验证**：缓存命中率与改后的真实时长，需要下一次 run 和首个夜间 run 的数据。
+
+**影响：** `.github/workflows/preview.yml`、`DESIGN.md` §37.8。**未决**：纯文档提交是否用 `paths-ignore` 跳过全量（与 required checks 的 pending 语义冲突，等启用分支保护时再定）；PR 是否恢复 Ubuntu 全量；nightly 失败是否自动开 issue（当前依赖 GitHub 对 cron 编辑者的失败通知）。
