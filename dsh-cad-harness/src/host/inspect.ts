@@ -1,7 +1,6 @@
 // Inspection tools (M3.5+): exact geometry measurements and on-demand
 // section/perspective renders of saved versions.
 
-import ManifoldModule from 'manifold-3d';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -742,65 +741,6 @@ export async function measureVersion(store: VersionStore, versionId: string): Pr
   const worker = await ensurePythonWorker();
   const solved = await worker.request<MeasureSolve>('measure_part', { path });
   return { versionId, ...solved };
-}
-
-/**
- * The TS implementation — the parity oracle for the worker's `measure_part` (and
- * the darwin-x64 fallback, which needs no special branch here: this half is pure
- * TypeScript and only the WORKER half is platform-dependent).
- */
-export async function measureVersionInTs(store: VersionStore, versionId: string): Promise<MeasureReport> {
-  const stl = await readFile(join(store.root, 'versions', versionId, 'model.stl'));
-  const mesh = parseBinaryStl(stl);
-  const M = await ManifoldModule(); M.setup();
-  const gm = new M.Mesh({ numProp: 3, vertProperties: mesh.vertProperties, triVerts: mesh.triVerts });
-  gm.merge();
-  const solid = new M.Manifold(gm); // throws on non-manifold
-
-  // Surface area from triangle cross products.
-  let area = 0;
-  for (let t = 0; t < mesh.triVerts.length; t += 3) {
-    const a = mesh.triVerts[t]! * 3, b = mesh.triVerts[t + 1]! * 3, c = mesh.triVerts[t + 2]! * 3;
-    const ux = mesh.vertProperties[b]! - mesh.vertProperties[a]!;
-    const uy = mesh.vertProperties[b! + 1]! - mesh.vertProperties[a! + 1]!;
-    const uz = mesh.vertProperties[b! + 2]! - mesh.vertProperties[a! + 2]!;
-    const vx = mesh.vertProperties[c]! - mesh.vertProperties[a]!;
-    const vy = mesh.vertProperties[c! + 1]! - mesh.vertProperties[a! + 1]!;
-    const vz = mesh.vertProperties[c! + 2]! - mesh.vertProperties[a! + 2]!;
-    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
-    area += Math.hypot(cx, cy, cz) / 2;
-  }
-
-  // Volume-weighted centroid.
-  let vol6 = 0, cx = 0, cy = 0, cz = 0;
-  for (let t = 0; t < mesh.triVerts.length; t += 3) {
-    const a = mesh.triVerts[t]! * 3, b = mesh.triVerts[t + 1]! * 3, c = mesh.triVerts[t + 2]! * 3;
-    const ax = mesh.vertProperties[a]!, ay = mesh.vertProperties[a! + 1]!, az = mesh.vertProperties[a! + 2]!;
-    const bx = mesh.vertProperties[b]!, by = mesh.vertProperties[b! + 1]!, bz = mesh.vertProperties[b! + 2]!;
-    const mx = mesh.vertProperties[c]!, my = mesh.vertProperties[c! + 1]!, mz = mesh.vertProperties[c! + 2]!;
-    const v = (ax * (by * mz - bz * my) - ay * (bx * mz - bz * mx) + az * (bx * my - by * mx));
-    vol6 += v;
-    cx += (ax + bx + mx) * v; cy += (ay + by + my) * v; cz += (az + bz + mz) * v;
-  }
-  const com: [number, number, number] = vol6 !== 0
-    ? [cx / (4 * vol6), cy / (4 * vol6), cz / (4 * vol6)]
-    : [0, 0, 0];
-
-  const bb = boundingBox(mesh);
-  return {
-    versionId,
-    watertight: isWatertight(mesh).watertight,
-    triangles: mesh.triVerts.length / 3,
-    boundingBoxMm: {
-      min: bb.min.map(round3) as [number, number, number],
-      max: bb.max.map(round3) as [number, number, number],
-      size: [round3(bb.max[0] - bb.min[0]), round3(bb.max[1] - bb.min[1]), round3(bb.max[2] - bb.min[2])],
-    },
-    volumeMm3: round3(solid.volume()),
-    surfaceAreaMm2: round3(area),
-    centerOfMassMm: com.map(round3) as [number, number, number],
-    genus: solid.genus(),
-  };
 }
 
 /**

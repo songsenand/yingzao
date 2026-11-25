@@ -6,13 +6,9 @@
 // the raw input was from the surface (guess quality), and whether each input
 // point was inside the solid (face-normal sign test).
 //
-// PARITY ORACLE (2026-10-08): `closestPointsBetweenMeshes` / `closestMeshVsSphere`
-// are no longer the production path for `measure_closest` — that solve moved to
-// the Python worker (`python/cad_worker/worker.py`). They stay here because
-// `scripts/accept-measure-closest.mjs` compares the Python answer against them on
-// real meshes, which is what makes "the numbers did not change" checkable instead
-// of merely asserted. `measureDistance` and `buildMeshBvh` below are still live
-// for `measure_distance`.
+// `measureDistance` and `buildMeshBvh` are live for measure_distance / printability.
+// The closest-point pair solver moved to the Python worker; its TS oracle was retired
+// on 2026-11-25 (see DECISION-LOG), because the worker path is the only production one.
 
 import { BufferAttribute, BufferGeometry, Vector3 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
@@ -116,64 +112,3 @@ export function measureDistance(
   };
 }
 
-// ---------- closest-point pair between two solids (solver, not annotation) ----------
-
-export interface ClosestPairResult {
-  distanceMm: number;
-  pointA: [number, number, number];
-  pointB: [number, number, number];
-}
-
-/**
- * Minimum distance between two triangle meshes with the closest point pair.
- * Method: every vertex of A projected exactly onto B (and vice versa) — exact
- * whenever the closest pair involves a vertex (dominant case), facet-sagitta
- * bounded otherwise (≈0.03mm at $fn=64). The sphere-vs-mesh case has an exact
- * analytic branch: see closestPointsMeshVsSphere.
- */
-export function closestPointsBetweenMeshes(meshA: MeshData, meshB: MeshData): ClosestPairResult {
-  const bvhA = buildMeshBvh(meshA);
-  const bvhB = buildMeshBvh(meshB);
-  let bestD = Infinity;
-  let pa: [number, number, number] = [0, 0, 0];
-  let pb: [number, number, number] = [0, 0, 0];
-
-  const scan = (verts: Float32Array, target: MeshBVH, side: 'a' | 'b') => {
-    const count = verts.length / 3;
-    const stride = Math.max(1, Math.ceil(count / 20000));
-    for (let i = 0; i < count; i += stride) {
-      const p = new Vector3(verts[i * 3]!, verts[i * 3 + 1]!, verts[i * 3 + 2]!);
-      const hit = target.closestPointToPoint(p)!;
-      if (hit.distance < bestD) {
-        bestD = hit.distance;
-        const q: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
-        if (side === 'a') { pa = [p.x, p.y, p.z]; pb = q; }
-        else { pa = q; pb = [p.x, p.y, p.z]; }
-      }
-    }
-  };
-  scan(meshA.vertProperties, bvhB, 'a');
-  scan(meshB.vertProperties, bvhA, 'b');
-  return { distanceMm: +bestD.toFixed(4), pointA: pa, pointB: pb };
-}
-
-/**
- * Exact distance between a mesh and an analytic sphere: one BVH projection of
- * the sphere centre; the sphere-side point lies on the centre→hit direction.
- * Returns null when the sphere intersects the mesh (distance would be 0/ambiguous).
- */
-export function closestPointsMeshVsSphere(
-  mesh: MeshData,
-  center: [number, number, number],
-  radius: number,
-): ClosestPairResult {
-  const bvh = buildMeshBvh(mesh);
-  const c = new Vector3(center[0], center[1], center[2]);
-  const hit = bvh.closestPointToPoint(c)!;
-  const dir = hit.point.clone().sub(c);
-  const distC = dir.length();
-  if (distC <= radius) return { distanceMm: 0, pointA: [hit.point.x, hit.point.y, hit.point.z], pointB: [hit.point.x, hit.point.y, hit.point.z] };
-  const n = dir.clone().normalize();
-  const pb: [number, number, number] = [c.x + n.x * radius, c.y + n.y * radius, c.z + n.z * radius];
-  return { distanceMm: +(distC - radius).toFixed(4), pointA: [hit.point.x, hit.point.y, hit.point.z], pointB: pb };
-}

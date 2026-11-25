@@ -107,29 +107,5 @@ async function meshOf(scad) {
   check('f datum points never snapped', JSON.stringify(rSnap.aSnapped) === JSON.stringify(hole.point), `${JSON.stringify(rSnap.aSnapped)}`);
 }
 
-// ---- case g: solver — sphere probe vs pipe (analytic: 11mm) ----
-{
-  const { closestPointsMeshVsSphere, closestPointsBetweenMeshes } = await import('../src/host/measure.ts');
-  const pipe = await meshOf(`$fn=64; difference() {
-    translate([30,0,0]) rotate([0,90,0]) cylinder(h=60, d=48, center=true);
-    translate([30,0,0]) rotate([0,90,0]) cylinder(h=70, d=40, center=true);
-  }`);
-  // sphere r=5 at (30,40,0): pipe outer wall r=24 → closest surfaces (30,24,0)/(30,35,0) → 11mm
-  const r = closestPointsMeshVsSphere(pipe, [30, 40, 0], 5);
-  console.log(`  g: d=${r.distanceMm} pa=${JSON.stringify(r.pointA.map(v=>+v.toFixed(2)))} pb=${JSON.stringify(r.pointB.map(v=>+v.toFixed(2)))}`);
-  check('g sphere-vs-pipe distance = 11mm', near(r.distanceMm, 11, 0.1), `${r.distanceMm}`);
-  check('g mesh point on outer wall (y≈24)', near(r.pointA[1], 24, 0.1), `y=${r.pointA[1].toFixed(2)}`);
-  check('g sphere point on sphere (y≈35)', near(r.pointB[1], 35, 0.05), `y=${r.pointB[1].toFixed(2)}`);
-
-  // ---- case h: mesh-vs-mesh (rotated pipe vs box) — vertex-exact method ----
-  const box = await meshOf('cube([20,20,20], center=true);');
-  const r2 = closestPointsBetweenMeshes(pipe, box);
-  console.log(`  h: mesh-vs-mesh d=${r2.distanceMm} pa=${JSON.stringify(r2.pointA.map(v=>+v.toFixed(2)))} pb=${JSON.stringify(r2.pointB.map(v=>+v.toFixed(2)))}`);
-  check('h mesh-vs-mesh positive & finite', r2.distanceMm > 0 && Number.isFinite(r2.distanceMm), `${r2.distanceMm}`);
-  // box spans ±10 (x 20..40) — pipe bore r20 outer r24, walls at x 0..60:
-  // closest approach should be near x 20..30 region; sanity: both points finite
-  check('h both points on surfaces (non-degenerate)', r2.pointA.every(Number.isFinite) && r2.pointB.every(Number.isFinite), 'ok');
-}
-
 console.log(fail === 0 ? '\nMEASURE_DISTANCE ACCEPTANCE PASSED' : `\nMEASURE_DISTANCE ACCEPTANCE FAILED (${fail})`);
 process.exit(fail === 0 ? 0 : 1);

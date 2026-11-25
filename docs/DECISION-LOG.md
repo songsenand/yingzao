@@ -6798,3 +6798,28 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 **依据：** run 45421640626 三个 job 实测 16m18s / 12m37s / 9m17s；`gh run list` 显示 11-24 15:01 与 15:06 两次 push 均完整跑完；workflow 原文无 `concurrency`、无 `actions/cache`；11-17 共 25 次 push。改后 YAML 通过 actionlint 1.7.7（exit 0）；`plan` 分支用 5 种事件本地模拟：push→`["ubuntu-latest"]`、PR→ubuntu 且 verify=false、schedule/tag/dispatch→ubuntu+macOS 且 windows=true。**未验证**：缓存命中率与改后的真实时长，需要下一次 run 和首个夜间 run 的数据。
 
 **影响：** `.github/workflows/preview.yml`、`DESIGN.md` §37.8。**未决**：纯文档提交是否用 `paths-ignore` 跳过全量（与 required checks 的 pending 语义冲突，等启用分支保护时再定）；PR 是否恢复 Ubuntu 全量；nightly 失败是否自动开 issue（当前依赖 GitHub 对 cron 编辑者的失败通知）。
+
+## 2026-11-25：退役 measure 的两个 TS oracle（先退一部分）
+
+**触发条件：** 第 4 条（影响测试与后续维护）＋第 2 条（基于双实现清单的定量评估）。
+
+**要解决的问题：** `measure_part` 与 `measure_closest` 的 Python 迁移早已完成，但 TS 侧还留着
+`measureVersionInTs`、`closestPointsBetweenMeshes` / `closestPointsMeshVsSphere` 及两个 parity
+脚本。它们不是生产路径，却随每次改动一起维护，且 `closestPoints*` 只被验收脚本使用。
+
+**决策内容：** 先退役这两个 oracle：删除上述三个 TS 函数、`accept-measure-part-parity.mjs`、
+`accept-measure-closest.mjs`，并移除 `accept-measure.mjs` 中只测 TS closest solver 的 case g/h；
+新增 `accept-measure-part-smoke.mjs` 用 Python `measure` 验证 20mm 立方体的 8000mm³ / bbox /
+watertight / 单实体。`measureDistance`、`buildMeshBvh` 保留（前者仍被 `accept-measure.mjs` 使用，
+后者是 printability 的生产依赖）。
+
+**理由：** Python 已是唯一生产路径；oracle 的独立校验价值已被迁移期的对拍证据留下。先退
+“只被测试引用”的函数，风险最低；assembly/motion/fluid 的 oracle 与平台兜底绑定，另批处理。
+
+**依据：** 清单中 `measureVersionInTs` / `closestPoints*` 的生产 caller 为 0；删除后 `tsc --noEmit`
+通过，`accept-measure`、`accept-measure-part-smoke`、`accept-motion-fit-tool`、`accept-tool-output`
+通过；Python 最近点仍由 motion/fit/sweep 验收覆盖。
+
+**影响：** 少维护约 150 行 TS 与两个 parity 脚本；`accept` 链新增 measure-part smoke。
+**未退：** assembly validate/check、merge、motion（darwin 兜底）、printability（preflight）、
+fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
