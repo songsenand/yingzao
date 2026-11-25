@@ -1,0 +1,10 @@
+{
+  "runId": "r103",
+  "checkedAt": "2026-11-23T14:32:07.855Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/sewing-rotary-hook/assembly/assembly.json",
+  "manifestHash": "bdbc3baf",
+  "contractRevision": 29,
+  "contractHash": "sha256:bdbc3bafba308c3e2accd0b2ded2eb1582d36c8085ccc70e6899191c3c3c5d25",
+  "contractStatus": "sealed",
+  "schema": "assembly-check-pointer/v1"
+}

@@ -1,0 +1,1126 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-20T20:57:34.393Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/bicycle-derailleur-3spd-cq",
+  "claims": [],
+  "verdict": "difficult",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "brief-assumed",
+      "detail": "5 item(s) were decided by the agent, not the user: assumption: 三档横向间距 0/4/8 mm（飞轮间距 4.0 mm）；三档钢缆位移 0/2.21/4.56 mm; assumption: 库内 din2098 弹簧无 k/并紧高度；按 visual 圈数 8 估算 k=2.04 N/mm、并紧 9.6 mm; assumption: 弹簧为 BOM-only，不放进干涉网格；用两端座距离做 spring-behaviour; assumption: 链条/飞轮/车架/指拨/钢缆为外部边界；链条张力是声明载荷; assumption: 导轮 10T 齿形为简化轮廓，未做链条啮合验证"
+    },
+    {
+      "severity": "info",
+      "code": "no-claims-declared",
+      "detail": "audited the CORPUS only: with no claims declared this audit cannot say whether a delivery claim is backed — declare `claims` to make it answer that question (a green corpus is not a delivered design)"
+    },
+    {
+      "severity": "info",
+      "code": "versions-uncited-history",
+      "detail": "27 superseded/unreferenced version(s) have no run: v084, v082, v080, v078, v076, v074, v067, v066, v053, v052 … — history, not a delivery gap"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "85/104 runs cite geometry that has since been replaced — e.g. r005(assembly-check, superseded v044/v045/v046/v047), r004(assembly-check, superseded v027/v040/v041/v042/v044), r003(assembly-check, superseded v027/v033/v040/v041/v042), r002(assembly-check, superseded v027/v033/v034/v035/v036/v037), r001(assembly-check, superseded v020/v021/v022/v023/v027/v030/v031/v032)"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "104 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 16,
+    "missing": [],
+    "stale": []
+  },
+  "versions": {
+    "total": 85,
+    "neverCited": [
+      "v084",
+      "v082",
+      "v080",
+      "v078",
+      "v076",
+      "v074",
+      "v067",
+      "v066",
+      "v053",
+      "v052",
+      "v050",
+      "v019",
+      "v018",
+      "v017",
+      "v016",
+      "v015",
+      "v014",
+      "v013",
+      "v010",
+      "v009",
+      "v008",
+      "v006",
+      "v005",
+      "v004",
+      "v003",
+      "v002",
+      "v001"
+    ],
+    "currentUncited": [],
+    "supersededUncited": [
+      "v084",
+      "v082",
+      "v080",
+      "v078",
+      "v076",
+      "v074",
+      "v067",
+      "v066",
+      "v053",
+      "v052",
+      "v050",
+      "v019",
+      "v018",
+      "v017",
+      "v016",
+      "v015",
+      "v014",
+      "v013",
+      "v010",
+      "v009",
+      "v008",
+      "v006",
+      "v005",
+      "v004",
+      "v003",
+      "v002",
+      "v001"
+    ],
+    "newest": "v085",
+    "newestTimestamp": "2026-11-20T20:54:31.455Z"
+  },
+  "parts": {
+    "total": 17,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 104,
+    "stale": [
+      {
+        "id": "r113",
+        "kind": "stress",
+        "status": "check",
+        "superseded": [
+          "v079"
+        ]
+      },
+      {
+        "id": "r112",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v081"
+        ]
+      },
+      {
+        "id": "r111",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v079"
+        ]
+      },
+      {
+        "id": "r110",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v081"
+        ]
+      },
+      {
+        "id": "r109",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v079"
+        ]
+      },
+      {
+        "id": "r108",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v079",
+          "v081"
+        ]
+      },
+      {
+        "id": "r107",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v079",
+          "v081"
+        ]
+      },
+      {
+        "id": "r106",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v079",
+          "v081"
+        ]
+      },
+      {
+        "id": "r104",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v071",
+          "v072"
+        ]
+      },
+      {
+        "id": "r103",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v071",
+          "v072"
+        ]
+      },
+      {
+        "id": "r102",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v077"
+        ]
+      },
+      {
+        "id": "r100",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v075",
+          "v077"
+        ]
+      },
+      {
+        "id": "r099",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v075",
+          "v077"
+        ]
+      },
+      {
+        "id": "r098",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v075",
+          "v077"
+        ]
+      },
+      {
+        "id": "r097",
+        "kind": "stress",
+        "status": "check",
+        "superseded": [
+          "v072"
+        ]
+      },
+      {
+        "id": "r096",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r095",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v072"
+        ]
+      },
+      {
+        "id": "r093",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r092",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v072"
+        ]
+      },
+      {
+        "id": "r090",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v071",
+          "v072"
+        ]
+      },
+      {
+        "id": "r089",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v071",
+          "v072"
+        ]
+      },
+      {
+        "id": "r088",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v071",
+          "v072"
+        ]
+      },
+      {
+        "id": "r087",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r086",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v070"
+        ]
+      },
+      {
+        "id": "r085",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v065"
+        ]
+      },
+      {
+        "id": "r083",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v065",
+          "v070",
+          "v071"
+        ]
+      },
+      {
+        "id": "r082",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v065",
+          "v070",
+          "v071"
+        ]
+      },
+      {
+        "id": "r081",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v065",
+          "v068",
+          "v069"
+        ]
+      },
+      {
+        "id": "r080",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v065",
+          "v068",
+          "v069"
+        ]
+      },
+      {
+        "id": "r073",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v046"
+        ]
+      },
+      {
+        "id": "r072",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v060"
+        ]
+      },
+      {
+        "id": "r066",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v046"
+        ]
+      },
+      {
+        "id": "r065",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v060"
+        ]
+      },
+      {
+        "id": "r064",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v064"
+        ]
+      },
+      {
+        "id": "r063",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v064"
+        ]
+      },
+      {
+        "id": "r062",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v064"
+        ]
+      },
+      {
+        "id": "r061",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v064"
+        ]
+      },
+      {
+        "id": "r060",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v064"
+        ]
+      },
+      {
+        "id": "r059",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v064"
+        ]
+      },
+      {
+        "id": "r058",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v061"
+        ]
+      },
+      {
+        "id": "r056",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v061"
+        ]
+      },
+      {
+        "id": "r054",
+        "kind": "machinability",
+        "status": "check",
+        "superseded": [
+          "v061"
+        ]
+      },
+      {
+        "id": "r053",
+        "kind": "stress",
+        "status": "check",
+        "superseded": [
+          "v060"
+        ]
+      },
+      {
+        "id": "r052",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v061",
+          "v062"
+        ]
+      },
+      {
+        "id": "r050",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v061"
+        ]
+      },
+      {
+        "id": "r049",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v061"
+        ]
+      },
+      {
+        "id": "r048",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v060",
+          "v061"
+        ]
+      },
+      {
+        "id": "r039",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v059",
+          "v060"
+        ]
+      },
+      {
+        "id": "r038",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v059"
+        ]
+      },
+      {
+        "id": "r037",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v059",
+          "v060"
+        ]
+      },
+      {
+        "id": "r036",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v059",
+          "v060"
+        ]
+      },
+      {
+        "id": "r035",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v059",
+          "v060"
+        ]
+      },
+      {
+        "id": "r034",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v058"
+        ]
+      },
+      {
+        "id": "r033",
+        "kind": "stress",
+        "status": "check",
+        "superseded": [
+          "v054"
+        ]
+      },
+      {
+        "id": "r032",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v058"
+        ]
+      },
+      {
+        "id": "r031",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v058"
+        ]
+      },
+      {
+        "id": "r030",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v058"
+        ]
+      },
+      {
+        "id": "r029",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v058"
+        ]
+      },
+      {
+        "id": "r028",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v057"
+        ]
+      },
+      {
+        "id": "r027",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v057"
+        ]
+      },
+      {
+        "id": "r026",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v057"
+        ]
+      },
+      {
+        "id": "r025",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v057"
+        ]
+      },
+      {
+        "id": "r024",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v055"
+        ]
+      },
+      {
+        "id": "r023",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r021",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r020",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r019",
+        "kind": "assembly-check",
+        "status": "fail",
+        "superseded": [
+          "v046",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r018",
+        "kind": "assembly-check",
+        "status": "fail",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r017",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v051"
+        ]
+      },
+      {
+        "id": "r016",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r015",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r014",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r013",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r012",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ]
+      },
+      {
+        "id": "r011",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v045",
+          "v046",
+          "v049",
+          "v051"
+        ]
+      },
+      {
+        "id": "r010",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v045",
+          "v046",
+          "v049",
+          "v051"
+        ]
+      },
+      {
+        "id": "r009",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ]
+      },
+      {
+        "id": "r008",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ]
+      },
+      {
+        "id": "r007",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ]
+      },
+      {
+        "id": "r006",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ]
+      },
+      {
+        "id": "r005",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ]
+      },
+      {
+        "id": "r004",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v027",
+          "v040",
+          "v041",
+          "v042",
+          "v044"
+        ]
+      },
+      {
+        "id": "r003",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v027",
+          "v033",
+          "v040",
+          "v041",
+          "v042"
+        ]
+      },
+      {
+        "id": "r002",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v027",
+          "v033",
+          "v034",
+          "v035",
+          "v036",
+          "v037"
+        ]
+      },
+      {
+        "id": "r001",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v027",
+          "v030",
+          "v031",
+          "v032"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r019",
+        "kind": "assembly-check",
+        "summary": "60 接口 · 通过 55 · 硬冲突 5 · 未声明 0",
+        "sourceVersionIds": [
+          "v007",
+          "v012",
+          "v024",
+          "v025",
+          "v026",
+          "v028",
+          "v029",
+          "v038",
+          "v039",
+          "v043",
+          "v046",
+          "v048",
+          "v054",
+          "v055",
+          "v056"
+        ],
+        "current": false
+      },
+      {
+        "id": "r018",
+        "kind": "assembly-check",
+        "summary": "60 接口 · 通过 58 · 硬冲突 2 · 未声明 0",
+        "sourceVersionIds": [
+          "v007",
+          "v012",
+          "v024",
+          "v025",
+          "v026",
+          "v028",
+          "v029",
+          "v038",
+          "v039",
+          "v043",
+          "v046",
+          "v048",
+          "v051",
+          "v054",
+          "v055"
+        ],
+        "current": false
+      },
+      {
+        "id": "r014",
+        "kind": "assembly",
+        "summary": "21 对 · 干涉 1 · 过紧 0",
+        "sourceVersionIds": [
+          "v012",
+          "v043",
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ],
+        "current": false
+      },
+      {
+        "id": "r013",
+        "kind": "assembly",
+        "summary": "21 对 · 干涉 1 · 过紧 0",
+        "sourceVersionIds": [
+          "v012",
+          "v043",
+          "v046",
+          "v051",
+          "v054",
+          "v055"
+        ],
+        "current": false
+      },
+      {
+        "id": "r011",
+        "kind": "assembly",
+        "summary": "21 对 · 干涉 1 · 过紧 1",
+        "sourceVersionIds": [
+          "v012",
+          "v043",
+          "v045",
+          "v046",
+          "v049",
+          "v051"
+        ],
+        "current": false
+      },
+      {
+        "id": "r009",
+        "kind": "assembly",
+        "summary": "21 对 · 干涉 2 · 过紧 1",
+        "sourceVersionIds": [
+          "v012",
+          "v043",
+          "v044",
+          "v045",
+          "v046",
+          "v047"
+        ],
+        "current": false
+      }
+    ],
+    "duplicateGroups": [],
+    "latestByKind": {
+      "stress": {
+        "id": "r120",
+        "status": "check",
+        "timestamp": "2026-11-20T20:56:16.470Z"
+      },
+      "assembly-check": {
+        "id": "r119",
+        "status": "pass",
+        "timestamp": "2026-11-20T20:55:33.653Z"
+      },
+      "assembly": {
+        "id": "r118",
+        "status": "pass",
+        "timestamp": "2026-11-20T20:55:15.087Z"
+      },
+      "motion": {
+        "id": "r117",
+        "status": "pass",
+        "timestamp": "2026-11-20T20:55:13.311Z"
+      },
+      "printability": {
+        "id": "r116",
+        "status": "check",
+        "timestamp": "2026-11-20T20:54:51.300Z"
+      },
+      "machinability": {
+        "id": "r112",
+        "status": "check",
+        "timestamp": "2026-11-20T20:47:20.129Z"
+      },
+      "turning": {
+        "id": "r057",
+        "status": "pass",
+        "timestamp": "2026-11-20T20:21:19.739Z"
+      }
+    }
+  },
+  "brief": {
+    "manifest": true,
+    "present": true,
+    "processes": [
+      "cnc-3axis",
+      "cnc-turning"
+    ],
+    "verify": [
+      "assembly",
+      "motion",
+      "strength",
+      "appearance"
+    ],
+    "assumed": [
+      {
+        "item": "assumption: 三档横向间距 0/4/8 mm（飞轮间距 4.0 mm）；三档钢缆位移 0/2.21/4.56 mm",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 库内 din2098 弹簧无 k/并紧高度；按 visual 圈数 8 估算 k=2.04 N/mm、并紧 9.6 mm",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 弹簧为 BOM-only，不放进干涉网格；用两端座距离做 spring-behaviour",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 链条/飞轮/车架/指拨/钢缆为外部边界；链条张力是声明载荷",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 导轮 10T 齿形为简化轮廓，未做链条啮合验证",
+        "kind": "assumption"
+      }
+    ]
+  },
+  "contract": {
+    "name": "三级自行车后拨（CadQuery）",
+    "interfaces": 62,
+    "kinematicInterfaces": 29,
+    "byCheck": {
+      "coaxial": 19,
+      "diameter-match": 24,
+      "distance": 12,
+      "spring-behaviour": 2,
+      "motion-clearance": 5
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false,
+    "revision": 24,
+    "hash": "sha256:32b522aa9648fd27e5592c9137c855b499f37d544dfb70f58353a61cd114e154",
+    "changedSinceCheck": false,
+    "checkRevision": 24,
+    "checkHash": "sha256:32b522aa9648fd27e5592c9137c855b499f37d544dfb70f58353a61cd114e154"
+  },
+  "unregistered": {
+    "scanned": 4,
+    "files": [],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "difficult",
+  "summary": "DIFFICULT · 0 blocked · 1 warn · 4 info · 0 current failing · 0 current uncited · 85 versions / 17 parts / 104 runs · stale runs 85"
+}

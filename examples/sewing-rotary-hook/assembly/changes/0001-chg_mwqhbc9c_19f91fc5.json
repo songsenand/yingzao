@@ -1,0 +1,38 @@
+{
+  "schema": "assembly-change/v1",
+  "changeId": "chg_mwqhbc9c_19f91fc5",
+  "seq": 1,
+  "parent": "genesis",
+  "resulting": "sha256:2757287e59f93751feed34bbe2294ed0b963cacb3db07e03d1fae3f89c3f251b",
+  "reason": "minimal test",
+  "actor": {
+    "sessionId": "session-1eb583e4-a14b-4c2a-8e3e-dc0670490f0a",
+    "source": "cad_assembly.write"
+  },
+  "at": "2026-11-21T14:04:08.016Z",
+  "diff": {
+    "root": [],
+    "children": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    },
+    "interfaces": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "name": "assembly",
+    "unit": "mm",
+    "up": "z",
+    "root": {
+      "id": "t",
+      "kind": "assembly",
+      "children": [],
+      "interfaces": []
+    }
+  }
+}

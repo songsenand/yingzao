@@ -1,0 +1,10 @@
+{
+  "runId": "r119",
+  "checkedAt": "2026-11-20T20:55:33.546Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/bicycle-derailleur-3spd-cq/assembly/assembly.json",
+  "manifestHash": "32b522aa",
+  "contractRevision": 24,
+  "contractHash": "sha256:32b522aa9648fd27e5592c9137c855b499f37d544dfb70f58353a61cd114e154",
+  "contractStatus": "sealed",
+  "schema": "assembly-check-pointer/v1"
+}

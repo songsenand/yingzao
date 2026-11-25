@@ -101,3 +101,6 @@ dsh-cad-harness/verification/dsh-matrix/
 # ---- 本地会话调试脚本与扫描器临时克隆（都不入库）----
 /.scratch/
 /.vet-tmp/
+
+# 示例里的本地几何试验产物（各 README 已注明“未登记”）
+examples/*/.build/

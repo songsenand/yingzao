@@ -1,0 +1,566 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-23T22:10:49.663Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/sewing-rotary-hook-cq",
+  "claims": [
+    {
+      "kind": "assembly",
+      "statement": "14 件 91 对无干涉（clearanceThreshold 0、interferenceEpsilon 5mm³）；14 条接口契约全部 pass：2:1 中心距 30.00mm、两处衬套同轴、梭档轴向净空 0.6mm、开梭钩舌片到梭壳压边 0.4mm"
+    },
+    {
+      "kind": "motion",
+      "statement": "run r018：旋梭体连续 2 转，49 个位姿/882 对次检查，0 干涉，关节漂移 0mm，excludedJointPairs 为空（scanJointPairs 开启）；梭壳被定位钩约束、在 0.52mm 行程内被抬升"
+    },
+    {
+      "kind": "manufacturability",
+      "statement": "只使用四种工艺与三种材料：CNC 车/铣（旋梭体、梭壳、轴、衬套）、激光切（20T/40T 齿轮、开梭钩）、钣金折弯（底板、定位钩）、FDM-PLA（机架、梭芯、手轮）；三个 PLA 件均过 fdm-pla-0.4 筛查，机架铰孔边 0.9mm 与梭芯/手轮悬垂为已知 difficult"
+    }
+  ],
+  "verdict": "excluded",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "brief-assumed",
+      "detail": "7 item(s) were decided by the agent, not the user: assumption: 2× 演示尺度：旋梭体外径 44、梭芯外径 27、齿轮 m=1（20T/40T，中心距 30）; assumption: 演示线为 0.3 mm（相当 #50 涤纶线 2×）；梭壳抬升 0.26 mm，梭档唇边两侧净空 0.6 mm; assumption: 齿轮为激光切 1.2 黄铜片 + 压配（0.05 过盈）在 Ø14 轴上，无键；摩擦传扭，扭矩未验证; assumption: 2:1 链在下轴与旋梭轴之间；motion 工具无齿轮关节，run r002 只驱动旋梭体，2:1 由静态装配与中心距保证; assumption: 开梭钩由旋梭底部凸轮驱动（每转一次）；motion 中开梭钩为从动静止件，凸轮接触未求解; assumption: 夹线簧片与回位簧未建模（标准件）；梭壳出线槽已给出; assumption: 旋梭体支承在衬套法兰上（黄铜对黄铜推力面），轴靠重力与键定位，无上推轴承"
+    },
+    {
+      "severity": "blocked",
+      "code": "visual-review-missing",
+      "detail": "10 delivered printed part(s) have NO visual review: 旋梭体 v012, 梭壳 v004, 旋梭齿轮 20T v013, 下轴齿轮 40T v014, 旋梭轴 v023, 下轴 v026, 铜衬套 B v017, 底板 v020 … (+2) — call review_visual (top+iso, with a note) on the exact version before claiming delivery"
+    },
+    {
+      "severity": "blocked",
+      "code": "claim-without-evidence",
+      "detail": "claim \"只使用四种工艺与三种材料：CNC 车/铣（旋梭体、梭壳、轴、衬套）、激光切（20T/40T 齿轮、开梭钩）、钣金折弯（底板、定位钩）、FDM-PLA（机架、梭芯、手轮）；三个 PLA 件均过 fdm-pla-0.4 筛查，机架铰孔边 0.9mm 与梭芯/手轮悬垂为已知 difficult\" needs a fresh printability run for EVERY printed part (stock/research roles are exempt by declaration); missing for: lower_shaft, hook_shaft, opener_lever, position_finger, base_plate, collar, bushing, gear_40t, gear_20t, hook_body, bobbin_case"
+    },
+    {
+      "severity": "blocked",
+      "code": "latest-machinability-failing",
+      "detail": "the newest machinability run (r012) is RED — the current design has an unresolved blocking result"
+    },
+    {
+      "severity": "blocked",
+      "code": "failing-motion",
+      "detail": "r001 (motion) failed: ❌ 不可交付 · 初始最大失配 0.00mm · 采样 49/24 · 干涉 49 次 · 行程 0.5mm"
+    },
+    {
+      "severity": "blocked",
+      "code": "newest-version-unvalidated",
+      "detail": "1 part(s) have a newest version NO run ever checked: collar"
+    },
+    {
+      "severity": "warn",
+      "code": "versions-never-cited",
+      "detail": "2 CURRENT version(s) were never used by any run: v030 (assembly_body, research), v018 (collar) — a current version without evidence is a delivery gap, not history"
+    },
+    {
+      "severity": "info",
+      "code": "versions-uncited-history",
+      "detail": "10 superseded/unreferenced version(s) have no run: v016, v015, v011, v009, v007, v006, v005, v003, v002, v001 — history, not a delivery gap"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "9/19 runs cite geometry that has since been replaced — e.g. r005(assembly, superseded v010), r004(assembly, superseded v010), r003(assembly, superseded v010/v019/v024), r002(motion, superseded v010), r001(motion, superseded v008/v010)"
+    },
+    {
+      "severity": "warn",
+      "code": "unregistered-geometry",
+      "detail": "8 unregistered mesh file(s) predate the newest version: .build/finger.stl, .build/crank.stl, .build/collar.stl, .build/lower_shaft.stl, .build/hook_shaft.stl … (+3) — if one is part of the delivery, import it or declare it exempt"
+    },
+    {
+      "severity": "info",
+      "code": "role-exempt-parts",
+      "detail": "1 part(s) declared stock/research and exempt from the printability and newest-version-validated checks: assembly_body (research) — if one of these IS delivered as a printed part, set its role back to printed"
+    },
+    {
+      "severity": "info",
+      "code": "duplicate-runs",
+      "detail": "1 group(s) repeat the same kind+geometry/parameters+outcome — 1 run(s) spent without new information; superseded runs are excluded"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "19 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 13,
+    "missing": [
+      {
+        "name": "旋梭体",
+        "version": "v012"
+      },
+      {
+        "name": "梭壳",
+        "version": "v004"
+      },
+      {
+        "name": "旋梭齿轮 20T",
+        "version": "v013"
+      },
+      {
+        "name": "下轴齿轮 40T",
+        "version": "v014"
+      },
+      {
+        "name": "旋梭轴",
+        "version": "v023"
+      },
+      {
+        "name": "下轴",
+        "version": "v026"
+      },
+      {
+        "name": "铜衬套 B",
+        "version": "v017"
+      },
+      {
+        "name": "底板",
+        "version": "v020"
+      },
+      {
+        "name": "定位钩",
+        "version": "v021"
+      },
+      {
+        "name": "开梭钩",
+        "version": "v022"
+      }
+    ],
+    "stale": []
+  },
+  "versions": {
+    "total": 30,
+    "neverCited": [
+      "v030",
+      "v018",
+      "v016",
+      "v015",
+      "v011",
+      "v009",
+      "v007",
+      "v006",
+      "v005",
+      "v003",
+      "v002",
+      "v001"
+    ],
+    "currentUncited": [
+      "v030",
+      "v018"
+    ],
+    "supersededUncited": [
+      "v016",
+      "v015",
+      "v011",
+      "v009",
+      "v007",
+      "v006",
+      "v005",
+      "v003",
+      "v002",
+      "v001"
+    ],
+    "newest": "v030",
+    "newestTimestamp": "2026-11-23T22:10:16.752Z"
+  },
+  "parts": {
+    "total": 15,
+    "newestNeverValidated": [
+      "collar"
+    ]
+  },
+  "runs": {
+    "total": 19,
+    "retired": [],
+    "stale": [
+      {
+        "id": "r010",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r008",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r007",
+        "kind": "assembly-check",
+        "status": "fail",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r006",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r005",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r004",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r003",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v010",
+          "v019",
+          "v024"
+        ]
+      },
+      {
+        "id": "r002",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v010"
+        ]
+      },
+      {
+        "id": "r001",
+        "kind": "motion",
+        "status": "fail",
+        "superseded": [
+          "v008",
+          "v010"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r017",
+        "kind": "assembly-check",
+        "summary": "14 接口 · 通过 12 · 硬冲突 2 · 未声明 8",
+        "sourceVersionIds": [
+          "v004",
+          "v012",
+          "v013",
+          "v014",
+          "v017",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v025",
+          "v026",
+          "v027",
+          "v029"
+        ],
+        "current": false
+      },
+      {
+        "id": "r012",
+        "kind": "machinability",
+        "summary": "26.881% 面积从 ±X/±Y/±Z 都不可达：可能是倒扣/封闭腔，也可能只是需要一个斜装夹或第四轴。默认是警告；若要求三轴六面全可达，设 requireAllAccessible:true。",
+        "sourceVersionIds": [
+          "v012"
+        ],
+        "current": true
+      },
+      {
+        "id": "r008",
+        "kind": "printability",
+        "summary": "打印悬垂 3886.4mm² · 最薄 0.35mm · 可疑处 5",
+        "sourceVersionIds": [
+          "v010"
+        ],
+        "current": false
+      },
+      {
+        "id": "r007",
+        "kind": "assembly-check",
+        "summary": "14 接口 · 通过 13 · 硬冲突 1 · 未声明 8",
+        "sourceVersionIds": [
+          "v004",
+          "v010",
+          "v012",
+          "v013",
+          "v014",
+          "v017",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v025",
+          "v026",
+          "v027"
+        ],
+        "current": false
+      },
+      {
+        "id": "r004",
+        "kind": "assembly",
+        "summary": "91 对 · 干涉 0 · 过紧 8",
+        "sourceVersionIds": [
+          "v004",
+          "v010",
+          "v012",
+          "v013",
+          "v014",
+          "v017",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v025",
+          "v026",
+          "v027"
+        ],
+        "current": false
+      },
+      {
+        "id": "r003",
+        "kind": "assembly",
+        "summary": "91 对 · 干涉 2 · 过紧 8",
+        "sourceVersionIds": [
+          "v004",
+          "v010",
+          "v012",
+          "v013",
+          "v014",
+          "v017",
+          "v019",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v024",
+          "v025"
+        ],
+        "current": false
+      },
+      {
+        "id": "r001",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 49/24 · 干涉 49 次 · 行程 0.5mm",
+        "sourceVersionIds": [
+          "v004",
+          "v008",
+          "v010",
+          "v012",
+          "v020",
+          "v021",
+          "v022"
+        ],
+        "current": true
+      }
+    ],
+    "duplicateGroups": [
+      {
+        "signature": "sheet2d|versions:v020|pass",
+        "count": 2,
+        "runIds": [
+          "r011",
+          "r014"
+        ]
+      }
+    ],
+    "latestByKind": {
+      "assembly-check": {
+        "id": "r019",
+        "status": "check",
+        "timestamp": "2026-11-23T22:10:33.363Z"
+      },
+      "motion": {
+        "id": "r018",
+        "status": "pass",
+        "timestamp": "2026-11-23T22:09:29.842Z"
+      },
+      "printability": {
+        "id": "r016",
+        "status": "check",
+        "timestamp": "2026-11-23T22:08:56.601Z"
+      },
+      "sheet2d": {
+        "id": "r014",
+        "status": "pass",
+        "timestamp": "2026-11-23T22:08:46.569Z"
+      },
+      "turning": {
+        "id": "r013",
+        "status": "check",
+        "timestamp": "2026-11-23T22:08:25.258Z"
+      },
+      "machinability": {
+        "id": "r012",
+        "status": "fail",
+        "timestamp": "2026-11-23T22:08:25.142Z"
+      },
+      "assembly": {
+        "id": "r005",
+        "status": "pass",
+        "timestamp": "2026-11-23T22:06:52.927Z"
+      }
+    }
+  },
+  "brief": {
+    "manifest": true,
+    "present": true,
+    "processes": [
+      "cnc-3axis",
+      "cnc-turning",
+      "laser-cut-sheet",
+      "sheet-metal-bend",
+      "fdm-pla-0.4"
+    ],
+    "verify": [
+      "assembly",
+      "motion"
+    ],
+    "assumed": [
+      {
+        "item": "assumption: 2× 演示尺度：旋梭体外径 44、梭芯外径 27、齿轮 m=1（20T/40T，中心距 30）",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 演示线为 0.3 mm（相当 #50 涤纶线 2×）；梭壳抬升 0.26 mm，梭档唇边两侧净空 0.6 mm",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 齿轮为激光切 1.2 黄铜片 + 压配（0.05 过盈）在 Ø14 轴上，无键；摩擦传扭，扭矩未验证",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 2:1 链在下轴与旋梭轴之间；motion 工具无齿轮关节，run r002 只驱动旋梭体，2:1 由静态装配与中心距保证",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 开梭钩由旋梭底部凸轮驱动（每转一次）；motion 中开梭钩为从动静止件，凸轮接触未求解",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 夹线簧片与回位簧未建模（标准件）；梭壳出线槽已给出",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 旋梭体支承在衬套法兰上（黄铜对黄铜推力面），轴靠重力与键定位，无上推轴承",
+        "kind": "assumption"
+      }
+    ]
+  },
+  "contract": {
+    "name": "缝纫机旋梭机构（2× 演示件）",
+    "interfaces": 14,
+    "kinematicInterfaces": 3,
+    "byCheck": {
+      "coaxial": 10,
+      "motion-clearance": 2,
+      "distance": 2
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false,
+    "revision": 7,
+    "hash": "sha256:c1f2b592911a89387ed3569439a1326e5e15da7a299c091bed1941020a0bc860",
+    "changedSinceCheck": false,
+    "checkRevision": 7,
+    "checkHash": "sha256:c1f2b592911a89387ed3569439a1326e5e15da7a299c091bed1941020a0bc860"
+  },
+  "unregistered": {
+    "scanned": 14,
+    "files": [
+      {
+        "path": ".build/finger.stl",
+        "bytes": 33484,
+        "modified": "2026-11-23T21:55:08.384Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/crank.stl",
+        "bytes": 75484,
+        "modified": "2026-11-23T21:55:08.335Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/collar.stl",
+        "bytes": 90884,
+        "modified": "2026-11-23T21:55:08.289Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/lower_shaft.stl",
+        "bytes": 28884,
+        "modified": "2026-11-23T21:55:08.213Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/hook_shaft.stl",
+        "bytes": 27084,
+        "modified": "2026-11-23T21:55:08.190Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/gear40.stl",
+        "bytes": 280684,
+        "modified": "2026-11-23T21:55:07.743Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/gear20.stl",
+        "bytes": 140684,
+        "modified": "2026-11-23T21:55:06.932Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      },
+      {
+        "path": ".build/hb.stl",
+        "bytes": 123984,
+        "modified": "2026-11-23T21:47:10.948Z",
+        "severity": "warn",
+        "format": "stl",
+        "importable": true,
+        "previewable": true
+      }
+    ],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "excluded",
+  "summary": "EXCLUDED · 5 blocked · 3 warn · 5 info · 2 current failing · 2 current uncited · 30 versions / 15 parts / 19 runs · stale runs 9 · unregistered files 8"
+}

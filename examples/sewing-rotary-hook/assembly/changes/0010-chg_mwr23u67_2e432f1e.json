@@ -1,0 +1,1949 @@
+{
+  "schema": "assembly-change/v1",
+  "changeId": "chg_mwr23u67_2e432f1e",
+  "seq": 10,
+  "parent": "sha256:ebde25477756599d799d5de4bcc5ccb948a4cbf6a8ee2b1503355bd474357ac1",
+  "resulting": "sha256:162d40443b8fdce4e45e38ad50047db4fb62766503ae0304983cd83073b1d1dd",
+  "reason": "两轴布局重做（case-axis）",
+  "actor": {
+    "source": "dsh-cad-contract"
+  },
+  "at": "2026-11-21T23:46:09.919Z",
+  "diff": {
+    "root": [
+      {
+        "path": "root.brief.assumptions",
+        "before": [
+          {
+            "text": "按 1.5× 家用 15 类旋梭：梭芯 Ø30.4、旋梭外径 Ø45、钩尖轨迹 R22.5",
+            "by": "user"
+          },
+          {
+            "text": "冲压没有独立评估器：冲压件（连杆、梭壳定位指）按 sheet-metal-bend 档筛切割特征，模具/回弹/落料为 handoff",
+            "by": "assumed"
+          },
+          {
+            "text": "缝线路径不建模（线张力/成缝机理为 handoff）；运动只验钩尖-机针时序与干涉",
+            "by": "assumed"
+          },
+          {
+            "text": "齿轮为 PLA FDM；1:1 传动比另用 physics 轮齿接触 run 验证，motion run 直接驱动旋梭轴",
+            "by": "assumed"
+          },
+          {
+            "text": "轴承库件实测 Ø26×8（非 ISO 6000 的 Ø22），轴承座按库几何 Ø26",
+            "by": "assumed"
+          },
+          {
+            "text": "所有配合按名义尺寸留 0.1–0.5 mm 建模间隙，公差在接口里声明",
+            "by": "assumed"
+          }
+        ],
+        "after": [
+          {
+            "text": "市面缝纫机为两轴布局：针杆曲柄在上轴、旋梭在下轴，两轴由同步带（或立轴锥齿轮）保持 1:1 相位（专利 US20160289875A1/US6814015/US5125354）；本示例按两轴+GT2 带重做，用户 2026-11-22 批准",
+            "by": "user"
+          },
+          {
+            "text": "同步带轮 30T GT2 近似齿（外 r10.3），带 260mm；带为外购标准件，几何仅见证",
+            "by": "assumed"
+          },
+          {
+            "text": "上轴由两个 6000 轴承座（悬臂下挂）支承，后壁 Ø12 为过孔；手摇柄在上轴后端",
+            "by": "assumed"
+          },
+          {
+            "text": "冲压件（连杆、定位指）按 sheet-metal-bend 档筛切割特征，模具/回弹/落料为 handoff",
+            "by": "assumed"
+          },
+          {
+            "text": "缝线路径不建模；运动验针杆行程、钩尖-针眼时序与干涉",
+            "by": "assumed"
+          }
+        ]
+      },
+      {
+        "path": "root.brief.buyVsMake",
+        "before": [
+          {
+            "item": "旋梭轴组/齿轮/输入轴/轴承座/针杆/导杆座/针板/梭壳定位指/连杆/机架/梭壳/梭芯/曲柄销",
+            "decision": "make",
+            "by": "user"
+          },
+          {
+            "item": "6000 深沟球轴承 ×4",
+            "decision": "buy",
+            "by": "user",
+            "note": "标准件库 iso15.6000（实测 Ø26×Ø10×8）"
+          },
+          {
+            "item": "M3 螺钉、DIN471 Ø10 卡簧",
+            "decision": "buy",
+            "by": "user",
+            "note": "BOM 项，不装几何"
+          },
+          {
+            "item": "机针（DB×1 11#）",
+            "decision": "buy",
+            "by": "assumed",
+            "note": "只画 Ø2.5/Ø3.2 包络作时序见证，不制造"
+          }
+        ],
+        "after": [
+          {
+            "item": "旋梭/梭壳/梭芯/旋梭轴/上轴/针杆/连杆/机架/轴承座/带轮/销",
+            "decision": "make",
+            "by": "user"
+          },
+          {
+            "item": "6000 深沟球轴承 ×6",
+            "decision": "buy",
+            "by": "user",
+            "note": "标准件库 iso15.6000（Ø26×Ø10×8）：旋梭轴 2 + 上轴 2 + 备用 2"
+          },
+          {
+            "item": "M3 螺钉、DIN471 Ø10 卡簧",
+            "decision": "buy",
+            "by": "user",
+            "note": "BOM 项，不装几何"
+          },
+          {
+            "item": "GT2 同步带 260mm 闭合环",
+            "decision": "buy",
+            "by": "user",
+            "note": "2026-11-22 用户批准新增；几何仅作见证"
+          },
+          {
+            "item": "机针（DB×1 11#）",
+            "decision": "buy",
+            "by": "assumed",
+            "note": "只画包络作时序见证"
+          }
+        ]
+      },
+      {
+        "path": "root.name",
+        "before": "缝纫机旋梭工作单元（1.5× 演示）",
+        "after": "缝纫机旋梭工作单元（两轴：上轴针杆驱动 + 下轴旋梭 + 同步带）"
+      }
+    ],
+    "children": {
+      "added": [
+        {
+          "id": "upper_shaft",
+          "name": "上轴",
+          "version": "v102"
+        },
+        {
+          "id": "bracket_f",
+          "name": "上轴前轴承座",
+          "version": "v104"
+        },
+        {
+          "id": "bracket_r",
+          "name": "上轴后轴承座",
+          "version": "v104"
+        },
+        {
+          "id": "pin_clevis",
+          "name": "叉口销",
+          "version": "v109"
+        },
+        {
+          "id": "pulley_low",
+          "name": "下带轮",
+          "version": "v108"
+        },
+        {
+          "id": "pulley_up",
+          "name": "上带轮",
+          "version": "v108"
+        },
+        {
+          "id": "belt",
+          "name": "同步带",
+          "version": "v113"
+        },
+        {
+          "id": "bearing_ar",
+          "name": "轴承(后)",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_af",
+          "name": "轴承(前)",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_uf",
+          "name": "上轴轴承(前)",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_ur",
+          "name": "上轴轴承(后)",
+          "version": "v043"
+        }
+      ],
+      "removed": [
+        {
+          "id": "hook_gear",
+          "name": "旋梭齿轮",
+          "version": "v016"
+        },
+        {
+          "id": "input_shaft",
+          "name": "输入轴",
+          "version": "v057"
+        },
+        {
+          "id": "input_gear",
+          "name": "输入齿轮",
+          "version": "v077"
+        },
+        {
+          "id": "bearing_arbor_rear",
+          "name": "旋梭后轴承",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_arbor_front",
+          "name": "旋梭前轴承",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_input_rear",
+          "name": "输入后轴承",
+          "version": "v043"
+        },
+        {
+          "id": "bearing_input_front",
+          "name": "输入前轴承",
+          "version": "v043"
+        },
+        {
+          "id": "pin_crank",
+          "name": "曲柄销",
+          "version": "v065"
+        },
+        {
+          "id": "pin_needle",
+          "name": "针杆销",
+          "version": "v053"
+        }
+      ],
+      "changed": [
+        {
+          "id": "frame",
+          "path": "root/frame",
+          "fields": [
+            {
+              "path": "root/frame.color",
+              "before": "#6f7f8f",
+              "after": "#8a9a7b"
+            },
+            {
+              "path": "root/frame.process.rationale",
+              "before": "激光切割 + 折弯 C 形架",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/frame.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/frame.version",
+              "before": "v034",
+              "after": "v101"
+            }
+          ]
+        },
+        {
+          "id": "block",
+          "path": "root/block",
+          "fields": [
+            {
+              "path": "root/block.color",
+              "before": "#2f6f9f",
+              "after": "#b5533c"
+            },
+            {
+              "path": "root/block.process.rationale",
+              "before": "四轴承孔 + 针板凸台，Y 轴竖放打印",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/block.role",
+              "after": "printed"
+            }
+          ]
+        },
+        {
+          "id": "guide",
+          "path": "root/guide",
+          "fields": [
+            {
+              "path": "root/guide.color",
+              "before": "#3f9f6f",
+              "after": "#c9a227"
+            },
+            {
+              "path": "root/guide.process.rationale",
+              "before": "Ø8.2 导孔 + 2×M3",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/guide.role",
+              "after": "printed"
+            }
+          ]
+        },
+        {
+          "id": "plate",
+          "path": "root/plate",
+          "fields": [
+            {
+              "path": "root/plate.color",
+              "before": "#c8c8c8",
+              "after": "#9a9a9a"
+            },
+            {
+              "path": "root/plate.process.rationale",
+              "before": "开口观察板，平放打印",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/plate.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/plate.version",
+              "before": "v074",
+              "after": "v111"
+            }
+          ]
+        },
+        {
+          "id": "case",
+          "path": "root/case",
+          "fields": [
+            {
+              "path": "root/case.color",
+              "before": "#c8a24a",
+              "after": "#b08d57"
+            },
+            {
+              "path": "root/case.material",
+              "before": "黄铜 CuZn39Pb3",
+              "after": "黄铜"
+            },
+            {
+              "path": "root/case.process.rationale",
+              "before": "车杯 + 铣定位耳/孔，2 装夹",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/case.role",
+              "after": "printed"
+            }
+          ]
+        },
+        {
+          "id": "bobbin",
+          "path": "root/bobbin",
+          "fields": [
+            {
+              "path": "root/bobbin.color",
+              "before": "#d4b05a",
+              "after": "#b08d57"
+            },
+            {
+              "path": "root/bobbin.material",
+              "before": "黄铜 CuZn39Pb3",
+              "after": "黄铜"
+            },
+            {
+              "path": "root/bobbin.process.rationale",
+              "before": "回转体车削",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/bobbin.role",
+              "after": "printed"
+            }
+          ]
+        },
+        {
+          "id": "finger",
+          "path": "root/finger",
+          "fields": [
+            {
+              "path": "root/finger.color",
+              "before": "#9a5b3f",
+              "after": "#b8b8b8"
+            },
+            {
+              "path": "root/finger.process.rationale",
+              "before": "冲压 L 形簧片 + Ø2 定位销",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/finger.role",
+              "after": "printed"
+            }
+          ]
+        },
+        {
+          "id": "arbor",
+          "path": "root/arbor",
+          "fields": [
+            {
+              "path": "root/arbor.color",
+              "before": "#8a8f98",
+              "after": "#c0392b"
+            },
+            {
+              "path": "root/arbor.process.rationale",
+              "before": "车轴 + 铣旋梭沉孔/钩尖/叉形曲柄，2-3 装夹",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/arbor.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/arbor.version",
+              "before": "v070",
+              "after": "v100"
+            }
+          ]
+        },
+        {
+          "id": "rod",
+          "path": "root/rod",
+          "fields": [
+            {
+              "path": "root/rod.color",
+              "before": "#8f9aa5",
+              "after": "#2e8b57"
+            },
+            {
+              "path": "root/rod.process.rationale",
+              "before": "冲压连杆，两端凸台 + 4mm 杆身",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/rod.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/rod.version",
+              "before": "v068",
+              "after": "v107"
+            }
+          ]
+        },
+        {
+          "id": "bar",
+          "path": "root/bar",
+          "fields": [
+            {
+              "path": "root/bar.color",
+              "before": "#a0a6ae",
+              "after": "#c0392b"
+            },
+            {
+              "path": "root/bar.process.rationale",
+              "before": "车杆 + 铣夹针头/夹紧缝/连杆叉口",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/bar.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/bar.version",
+              "before": "v063",
+              "after": "v106"
+            }
+          ]
+        },
+        {
+          "id": "needle",
+          "path": "root/needle",
+          "fields": [
+            {
+              "path": "root/needle.color",
+              "before": "#cfd4da",
+              "after": "#8e5bb5"
+            },
+            {
+              "path": "root/needle.material",
+              "before": "外购 DB×1 11#",
+              "after": "外购 DB×1"
+            },
+            {
+              "path": "root/needle.process",
+              "after": {
+                "id": "stock"
+              }
+            },
+            {
+              "path": "root/needle.role",
+              "after": "stock"
+            }
+          ]
+        },
+        {
+          "id": "knob",
+          "path": "root/knob",
+          "fields": [
+            {
+              "path": "root/knob.color",
+              "before": "#c06040",
+              "after": "#5b8ec9"
+            },
+            {
+              "path": "root/knob.process.rationale",
+              "before": "Ø18 握柄，Ø8.1 孔",
+              "after": "按政策工艺集分配"
+            },
+            {
+              "path": "root/knob.role",
+              "after": "printed"
+            },
+            {
+              "path": "root/knob.transform",
+              "after": {
+                "translate": [
+                  0,
+                  0,
+                  88
+                ]
+              }
+            },
+            {
+              "path": "root/knob.version",
+              "before": "v051",
+              "after": "v114"
+            }
+          ]
+        }
+      ]
+    },
+    "interfaces": {
+      "added": [
+        {
+          "id": "I1",
+          "a": "arbor.hook-axis",
+          "b": "block.arbor-bore"
+        },
+        {
+          "id": "I2",
+          "a": "arbor.bearing-rear",
+          "b": "block.arbor-bore"
+        },
+        {
+          "id": "I3",
+          "a": "arbor.bearing-front",
+          "b": "block.arbor-bore"
+        },
+        {
+          "id": "I4",
+          "a": "upper_shaft.upper-axis",
+          "b": "bracket_f.bearing-bore"
+        },
+        {
+          "id": "I5",
+          "a": "upper_shaft.upper-axis",
+          "b": "bracket_r.bearing-bore"
+        },
+        {
+          "id": "I6",
+          "a": "upper_shaft.upper-axis",
+          "b": "frame.upper-shaft-axis"
+        },
+        {
+          "id": "I7",
+          "a": "rod.rod-big-end",
+          "b": "upper_shaft.needle-crank-pin"
+        },
+        {
+          "id": "I8",
+          "a": "rod.rod-small-end",
+          "b": "bar.clamp-pin"
+        },
+        {
+          "id": "I9",
+          "a": "bar.bar-axis",
+          "b": "guide.guide-axis"
+        }
+      ],
+      "removed": [
+        {
+          "id": "I01",
+          "a": "arbor.hook-axis",
+          "b": "block.arbor-bore"
+        },
+        {
+          "id": "I02",
+          "a": "input_shaft.input-axis",
+          "b": "block.input-bore"
+        },
+        {
+          "id": "I03",
+          "a": "arbor.gear-seat-axis",
+          "b": "hook_gear.gear-bore"
+        },
+        {
+          "id": "I04",
+          "a": "input_shaft.input-gear-seat",
+          "b": "input_gear.gear-bore"
+        },
+        {
+          "id": "I05",
+          "a": "hook_gear.gear-axis",
+          "b": "input_gear.gear-axis"
+        },
+        {
+          "id": "I06",
+          "a": "arbor.bearing-rear",
+          "b": "bearing_arbor_rear.bore-axis"
+        },
+        {
+          "id": "I07",
+          "a": "arbor.bearing-front",
+          "b": "bearing_arbor_front.bore-axis"
+        },
+        {
+          "id": "I08",
+          "a": "input_shaft.input-bearing-rear",
+          "b": "bearing_input_rear.bore-axis"
+        },
+        {
+          "id": "I09",
+          "a": "input_shaft.input-bearing-front",
+          "b": "bearing_input_front.bore-axis"
+        },
+        {
+          "id": "I22",
+          "a": "finger.finger-pin",
+          "b": "case.case-tab-hole"
+        },
+        {
+          "id": "I23",
+          "a": "plate.boss-hole-1",
+          "b": "block.plate-boss-1"
+        },
+        {
+          "id": "I24",
+          "a": "plate.boss-hole-2",
+          "b": "block.plate-boss-2"
+        },
+        {
+          "id": "I25",
+          "a": "block.block-bottom",
+          "b": "frame.frame-base-top"
+        },
+        {
+          "id": "I26",
+          "a": "frame.frame-arm-bar",
+          "b": "guide.guide-axis"
+        },
+        {
+          "id": "I27",
+          "a": "pin_crank.pin-axis",
+          "b": "arbor.crank-pin-axis"
+        },
+        {
+          "id": "I28",
+          "a": "pin_needle.pin-axis",
+          "b": "bar.clamp-pin"
+        },
+        {
+          "id": "I29",
+          "a": "knob.knob-axis",
+          "b": "input_shaft.knob-pin-axis"
+        },
+        {
+          "id": "I30",
+          "a": "input_shaft.input-axis",
+          "b": "frame.frame-input-window"
+        },
+        {
+          "id": "I31",
+          "a": "pin_crank.pin-axis",
+          "b": "rod.rod-big-end"
+        },
+        {
+          "id": "I32",
+          "a": "pin_needle.pin-axis",
+          "b": "rod.rod-small-end"
+        },
+        {
+          "id": "I33",
+          "a": "pin_crank.pin-end",
+          "b": "bearing_arbor_front.inner-face"
+        },
+        {
+          "id": "I34",
+          "a": "pin_crank.pin-end",
+          "b": "block.block-front"
+        },
+        {
+          "id": "I35",
+          "a": "plate.plate-bottom",
+          "b": "finger.finger-top"
+        }
+      ],
+      "changed": [
+        {
+          "id": "I10",
+          "fields": [
+            {
+              "path": "root.interfaces.I10.a",
+              "before": "block.arbor-bore",
+              "after": "needle.needle-axis"
+            },
+            {
+              "path": "root.interfaces.I10.b",
+              "before": "bearing_arbor_rear.bore-axis",
+              "after": "plate.needle-hole"
+            },
+            {
+              "path": "root.interfaces.I10.tolerance.max",
+              "before": 0.05,
+              "after": 1
+            },
+            {
+              "path": "root.interfaces.I10.type",
+              "before": "轴承外圈",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I11",
+          "fields": [
+            {
+              "path": "root.interfaces.I11.a",
+              "before": "block.arbor-bore",
+              "after": "needle.needle-axis"
+            },
+            {
+              "path": "root.interfaces.I11.b",
+              "before": "bearing_arbor_front.bore-axis",
+              "after": "bar.needle-axis"
+            },
+            {
+              "path": "root.interfaces.I11.tolerance.max",
+              "before": 0.05,
+              "after": 0.2
+            },
+            {
+              "path": "root.interfaces.I11.type",
+              "before": "轴承外圈",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I12",
+          "fields": [
+            {
+              "path": "root.interfaces.I12.a",
+              "before": "block.input-bore",
+              "after": "case.case-back"
+            },
+            {
+              "path": "root.interfaces.I12.b",
+              "before": "bearing_input_rear.bore-axis",
+              "after": "arbor.hook-recess-floor"
+            },
+            {
+              "path": "root.interfaces.I12.check",
+              "before": "coaxial",
+              "after": "distance"
+            },
+            {
+              "path": "root.interfaces.I12.nominal.quantity",
+              "before": "同轴度",
+              "after": "距离"
+            },
+            {
+              "path": "root.interfaces.I12.nominal.value",
+              "before": 0,
+              "after": 0.6
+            },
+            {
+              "path": "root.interfaces.I12.tolerance.max",
+              "before": 0.05,
+              "after": 1.2
+            },
+            {
+              "path": "root.interfaces.I12.tolerance.min",
+              "before": 0,
+              "after": 0.2
+            },
+            {
+              "path": "root.interfaces.I12.type",
+              "before": "轴承外圈",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I13",
+          "fields": [
+            {
+              "path": "root.interfaces.I13.a",
+              "before": "block.input-bore",
+              "after": "case.case-axis"
+            },
+            {
+              "path": "root.interfaces.I13.b",
+              "before": "bearing_input_front.bore-axis",
+              "after": "bobbin.bobbin-axis"
+            },
+            {
+              "path": "root.interfaces.I13.tolerance.max",
+              "before": 0.05,
+              "after": 0.5
+            },
+            {
+              "path": "root.interfaces.I13.type",
+              "before": "轴承外圈",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I14",
+          "fields": [
+            {
+              "path": "root.interfaces.I14.a",
+              "before": "arbor.crank-pin-axis",
+              "after": "plate.plate-bottom"
+            },
+            {
+              "path": "root.interfaces.I14.b",
+              "before": "rod.rod-big-end",
+              "after": "finger.finger-top"
+            },
+            {
+              "path": "root.interfaces.I14.check",
+              "before": "motion-clearance",
+              "after": "distance"
+            },
+            {
+              "path": "root.interfaces.I14.evidence",
+              "before": {
+                "runId": "r024",
+                "note": "1 圈 25 位姿、行程 26mm、0 干涉、0 关节漂移"
+              }
+            },
+            {
+              "path": "root.interfaces.I14.tolerance.max",
+              "before": 0.2,
+              "after": 0.3
+            },
+            {
+              "path": "root.interfaces.I14.type",
+              "before": "转动副",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I15",
+          "fields": [
+            {
+              "path": "root.interfaces.I15.a",
+              "before": "rod.rod-small-end",
+              "after": "plate.boss-hole-1"
+            },
+            {
+              "path": "root.interfaces.I15.b",
+              "before": "bar.clamp-pin",
+              "after": "block.plate-boss-1"
+            },
+            {
+              "path": "root.interfaces.I15.check",
+              "before": "motion-clearance",
+              "after": "distance"
+            },
+            {
+              "path": "root.interfaces.I15.evidence",
+              "before": {
+                "runId": "r024",
+                "note": "1 圈 25 位姿、行程 26mm、0 干涉、0 关节漂移"
+              }
+            },
+            {
+              "path": "root.interfaces.I15.tolerance.max",
+              "before": 0.2,
+              "after": 0.3
+            },
+            {
+              "path": "root.interfaces.I15.type",
+              "before": "转动副",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I16",
+          "fields": [
+            {
+              "path": "root.interfaces.I16.a",
+              "before": "bar.bar-axis",
+              "after": "plate.boss-hole-2"
+            },
+            {
+              "path": "root.interfaces.I16.b",
+              "before": "guide.guide-axis",
+              "after": "block.plate-boss-2"
+            },
+            {
+              "path": "root.interfaces.I16.check",
+              "before": "coaxial",
+              "after": "distance"
+            },
+            {
+              "path": "root.interfaces.I16.nominal.quantity",
+              "before": "同轴度",
+              "after": "距离"
+            },
+            {
+              "path": "root.interfaces.I16.tolerance.max",
+              "before": 0.2,
+              "after": 0.3
+            },
+            {
+              "path": "root.interfaces.I16.type",
+              "before": "滑动副",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I17",
+          "fields": [
+            {
+              "path": "root.interfaces.I17.a",
+              "before": "bar.needle-axis",
+              "after": "pulley_low.pulley-axis"
+            },
+            {
+              "path": "root.interfaces.I17.b",
+              "before": "needle.needle-axis",
+              "after": "arbor.pulley-seat-axis"
+            },
+            {
+              "path": "root.interfaces.I17.tolerance.max",
+              "before": 0.3,
+              "after": 0.1
+            },
+            {
+              "path": "root.interfaces.I17.type",
+              "before": "夹持",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I18",
+          "fields": [
+            {
+              "path": "root.interfaces.I18.a",
+              "before": "plate.needle-hole",
+              "after": "pulley_up.pulley-axis"
+            },
+            {
+              "path": "root.interfaces.I18.b",
+              "before": "needle.needle-axis",
+              "after": "upper_shaft.pulley-seat"
+            },
+            {
+              "path": "root.interfaces.I18.tolerance.max",
+              "before": 1,
+              "after": 0.1
+            },
+            {
+              "path": "root.interfaces.I18.type",
+              "before": "过针孔",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I19",
+          "fields": [
+            {
+              "path": "root.interfaces.I19.a",
+              "before": "arbor.hook-axis",
+              "after": "knob.knob-axis"
+            },
+            {
+              "path": "root.interfaces.I19.b",
+              "before": "case.case-axis",
+              "after": "upper_shaft.hand-crank-pin"
+            },
+            {
+              "path": "root.interfaces.I19.tolerance.max",
+              "before": 0.5,
+              "after": 0.1
+            },
+            {
+              "path": "root.interfaces.I19.type",
+              "before": "梭道配合",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I20",
+          "fields": [
+            {
+              "path": "root.interfaces.I20.a",
+              "before": "case.case-back",
+              "after": "pin_clevis.pin-axis"
+            },
+            {
+              "path": "root.interfaces.I20.b",
+              "before": "arbor.hook-recess-floor",
+              "after": "bar.clamp-pin"
+            },
+            {
+              "path": "root.interfaces.I20.check",
+              "before": "distance",
+              "after": "coaxial"
+            },
+            {
+              "path": "root.interfaces.I20.nominal.quantity",
+              "before": "距离",
+              "after": "同轴度"
+            },
+            {
+              "path": "root.interfaces.I20.nominal.value",
+              "before": 0.6,
+              "after": 0
+            },
+            {
+              "path": "root.interfaces.I20.tolerance.max",
+              "before": 1.2,
+              "after": 0.1
+            },
+            {
+              "path": "root.interfaces.I20.tolerance.min",
+              "before": 0.2,
+              "after": 0
+            },
+            {
+              "path": "root.interfaces.I20.type",
+              "before": "轴向间隙",
+              "after": "配合"
+            }
+          ]
+        },
+        {
+          "id": "I21",
+          "fields": [
+            {
+              "path": "root.interfaces.I21.a",
+              "before": "bobbin.bobbin-axis",
+              "after": "guide.guide-axis"
+            },
+            {
+              "path": "root.interfaces.I21.b",
+              "before": "case.case-axis",
+              "after": "frame.frame-arm-bar"
+            },
+            {
+              "path": "root.interfaces.I21.tolerance.max",
+              "before": 0.5,
+              "after": 0.3
+            },
+            {
+              "path": "root.interfaces.I21.type",
+              "before": "梭芯在梭壳内",
+              "after": "配合"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "name": "assembly",
+    "unit": "mm",
+    "up": "z",
+    "root": {
+      "id": "rotary_hook_unit",
+      "name": "缝纫机旋梭工作单元（两轴：上轴针杆驱动 + 下轴旋梭 + 同步带）",
+      "brief": {
+        "processes": [
+          "sheet-metal-bend",
+          "cnc-3axis",
+          "cnc-turning",
+          "fdm-pla-0.4"
+        ],
+        "verify": [
+          "assembly",
+          "motion"
+        ],
+        "buyVsMake": [
+          {
+            "item": "旋梭/梭壳/梭芯/旋梭轴/上轴/针杆/连杆/机架/轴承座/带轮/销",
+            "decision": "make",
+            "by": "user"
+          },
+          {
+            "item": "6000 深沟球轴承 ×6",
+            "decision": "buy",
+            "by": "user",
+            "note": "标准件库 iso15.6000（Ø26×Ø10×8）：旋梭轴 2 + 上轴 2 + 备用 2"
+          },
+          {
+            "item": "M3 螺钉、DIN471 Ø10 卡簧",
+            "decision": "buy",
+            "by": "user",
+            "note": "BOM 项，不装几何"
+          },
+          {
+            "item": "GT2 同步带 260mm 闭合环",
+            "decision": "buy",
+            "by": "user",
+            "note": "2026-11-22 用户批准新增；几何仅作见证"
+          },
+          {
+            "item": "机针（DB×1 11#）",
+            "decision": "buy",
+            "by": "assumed",
+            "note": "只画包络作时序见证"
+          }
+        ],
+        "assumptions": [
+          {
+            "text": "市面缝纫机为两轴布局：针杆曲柄在上轴、旋梭在下轴，两轴由同步带（或立轴锥齿轮）保持 1:1 相位（专利 US20160289875A1/US6814015/US5125354）；本示例按两轴+GT2 带重做，用户 2026-11-22 批准",
+            "by": "user"
+          },
+          {
+            "text": "同步带轮 30T GT2 近似齿（外 r10.3），带 260mm；带为外购标准件，几何仅见证",
+            "by": "assumed"
+          },
+          {
+            "text": "上轴由两个 6000 轴承座（悬臂下挂）支承，后壁 Ø12 为过孔；手摇柄在上轴后端",
+            "by": "assumed"
+          },
+          {
+            "text": "冲压件（连杆、定位指）按 sheet-metal-bend 档筛切割特征，模具/回弹/落料为 handoff",
+            "by": "assumed"
+          },
+          {
+            "text": "缝线路径不建模；运动验针杆行程、钩尖-针眼时序与干涉",
+            "by": "assumed"
+          }
+        ],
+        "processesBy": "user",
+        "verifyBy": "user"
+      },
+      "children": [
+        {
+          "id": "frame",
+          "name": "机架",
+          "version": "v101",
+          "role": "printed",
+          "process": {
+            "id": "sheet-metal-bend",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#8a9a7b",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢 1.5"
+        },
+        {
+          "id": "block",
+          "name": "轴承座",
+          "version": "v073",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b5533c",
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "guide",
+          "name": "针杆导座",
+          "version": "v023",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#c9a227",
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "plate",
+          "name": "针板",
+          "version": "v111",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#9a9a9a",
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "case",
+          "name": "梭壳",
+          "version": "v009",
+          "role": "printed",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b08d57",
+          "kind": "part",
+          "source": "generated",
+          "material": "黄铜"
+        },
+        {
+          "id": "bobbin",
+          "name": "梭芯",
+          "version": "v010",
+          "role": "printed",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b08d57",
+          "kind": "part",
+          "source": "generated",
+          "material": "黄铜"
+        },
+        {
+          "id": "finger",
+          "name": "梭壳定位指",
+          "version": "v031",
+          "role": "printed",
+          "process": {
+            "id": "sheet-metal-bend",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b8b8b8",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢 1.5"
+        },
+        {
+          "id": "arbor",
+          "name": "旋梭轴组",
+          "version": "v100",
+          "role": "printed",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#c0392b",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢"
+        },
+        {
+          "id": "upper_shaft",
+          "name": "上轴",
+          "version": "v102",
+          "role": "printed",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#c0392b",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢"
+        },
+        {
+          "id": "bracket_f",
+          "name": "上轴前轴承座",
+          "version": "v104",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b5533c",
+          "transform": {
+            "translate": [
+              0,
+              -40,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "bracket_r",
+          "name": "上轴后轴承座",
+          "version": "v104",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b5533c",
+          "transform": {
+            "translate": [
+              0,
+              -80,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "rod",
+          "name": "连杆",
+          "version": "v107",
+          "role": "printed",
+          "process": {
+            "id": "sheet-metal-bend",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#2e8b57",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢 2.0"
+        },
+        {
+          "id": "bar",
+          "name": "针杆",
+          "version": "v106",
+          "role": "printed",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#c0392b",
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢"
+        },
+        {
+          "id": "needle",
+          "name": "机针",
+          "version": "v072",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#8e5bb5",
+          "kind": "part",
+          "source": "stock",
+          "material": "外购 DB×1"
+        },
+        {
+          "id": "pin_clevis",
+          "name": "叉口销",
+          "version": "v109",
+          "role": "printed",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#b8b8b8",
+          "transform": {
+            "translate": [
+              0,
+              -20,
+              130.5
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "304 不锈钢"
+        },
+        {
+          "id": "knob",
+          "name": "手摇柄",
+          "version": "v114",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#5b8ec9",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              88
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "pulley_low",
+          "name": "下带轮",
+          "version": "v108",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#ded6c8",
+          "transform": {
+            "translate": [
+              0,
+              -67,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "pulley_up",
+          "name": "上带轮",
+          "version": "v108",
+          "role": "printed",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy",
+            "rationale": "按政策工艺集分配"
+          },
+          "color": "#ded6c8",
+          "transform": {
+            "translate": [
+              0,
+              -67,
+              88
+            ]
+          },
+          "kind": "part",
+          "source": "generated",
+          "material": "PLA"
+        },
+        {
+          "id": "belt",
+          "name": "同步带",
+          "version": "v113",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#2c2c2c",
+          "transform": {
+            "translate": [
+              0,
+              -64,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "stock",
+          "material": "GT2 橡胶带（外购）"
+        },
+        {
+          "id": "bearing_ar",
+          "name": "轴承(后)",
+          "version": "v043",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#b8b8b8",
+          "transform": {
+            "translate": [
+              0,
+              -46,
+              0
+            ],
+            "rotate": [
+              90,
+              0,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "stock",
+          "material": "外购 6000"
+        },
+        {
+          "id": "bearing_af",
+          "name": "轴承(前)",
+          "version": "v043",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#b8b8b8",
+          "transform": {
+            "translate": [
+              0,
+              -34,
+              0
+            ],
+            "rotate": [
+              90,
+              0,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "stock",
+          "material": "外购 6000"
+        },
+        {
+          "id": "bearing_uf",
+          "name": "上轴轴承(前)",
+          "version": "v043",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#b8b8b8",
+          "transform": {
+            "translate": [
+              0,
+              -40,
+              88
+            ],
+            "rotate": [
+              90,
+              0,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "stock",
+          "material": "外购 6000"
+        },
+        {
+          "id": "bearing_ur",
+          "name": "上轴轴承(后)",
+          "version": "v043",
+          "role": "stock",
+          "process": {
+            "id": "stock"
+          },
+          "color": "#b8b8b8",
+          "transform": {
+            "translate": [
+              0,
+              -80,
+              88
+            ],
+            "rotate": [
+              90,
+              0,
+              0
+            ]
+          },
+          "kind": "part",
+          "source": "stock",
+          "material": "外购 6000"
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "I1",
+          "a": "arbor.hook-axis",
+          "b": "block.arbor-bore",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.05
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I2",
+          "a": "arbor.bearing-rear",
+          "b": "block.arbor-bore",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.05
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I3",
+          "a": "arbor.bearing-front",
+          "b": "block.arbor-bore",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.05
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I4",
+          "a": "upper_shaft.upper-axis",
+          "b": "bracket_f.bearing-bore",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.05
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I5",
+          "a": "upper_shaft.upper-axis",
+          "b": "bracket_r.bearing-bore",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.05
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I6",
+          "a": "upper_shaft.upper-axis",
+          "b": "frame.upper-shaft-axis",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.3
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I7",
+          "a": "rod.rod-big-end",
+          "b": "upper_shaft.needle-crank-pin",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I8",
+          "a": "rod.rod-small-end",
+          "b": "bar.clamp-pin",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I9",
+          "a": "bar.bar-axis",
+          "b": "guide.guide-axis",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.2
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I10",
+          "a": "needle.needle-axis",
+          "b": "plate.needle-hole",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I11",
+          "a": "needle.needle-axis",
+          "b": "bar.needle-axis",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.2
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I12",
+          "a": "case.case-back",
+          "b": "arbor.hook-recess-floor",
+          "check": "distance",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0.6
+          },
+          "tolerance": {
+            "min": 0.2,
+            "max": 1.2
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I13",
+          "a": "case.case-axis",
+          "b": "bobbin.bobbin-axis",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.5
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I14",
+          "a": "plate.plate-bottom",
+          "b": "finger.finger-top",
+          "check": "distance",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.3
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I15",
+          "a": "plate.boss-hole-1",
+          "b": "block.plate-boss-1",
+          "check": "distance",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.3
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I16",
+          "a": "plate.boss-hole-2",
+          "b": "block.plate-boss-2",
+          "check": "distance",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.3
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I17",
+          "a": "pulley_low.pulley-axis",
+          "b": "arbor.pulley-seat-axis",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I18",
+          "a": "pulley_up.pulley-axis",
+          "b": "upper_shaft.pulley-seat",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I19",
+          "a": "knob.knob-axis",
+          "b": "upper_shaft.hand-crank-pin",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I20",
+          "a": "pin_clevis.pin-axis",
+          "b": "bar.clamp-pin",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.1
+          },
+          "severity": "hard",
+          "type": "配合"
+        },
+        {
+          "id": "I21",
+          "a": "guide.guide-axis",
+          "b": "frame.frame-arm-bar",
+          "check": "coaxial",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "tolerance": {
+            "min": 0,
+            "max": 0.3
+          },
+          "severity": "hard",
+          "type": "配合"
+        }
+      ],
+      "kind": "assembly"
+    },
+    "manufacturing": {
+      "allowed": [
+        {
+          "id": "sheet-metal-bend",
+          "note": "钣金折弯/冲压（冲压件按此档筛切割特征，模具/回弹 handoff）"
+        },
+        {
+          "id": "cnc-3axis",
+          "note": "3 轴铣（含车后二次铣）"
+        },
+        {
+          "id": "cnc-turning",
+          "note": "车削"
+        },
+        {
+          "id": "fdm-pla-0.4",
+          "note": "FDM PLA，0.4 喷嘴"
+        }
+      ],
+      "approvedBy": "user",
+      "approvedAt": "2026-11-21",
+      "mixApprovedBy": "user (delegated 2026-11-21)",
+      "delegate": true
+    }
+  }
+}

@@ -1,0 +1,10 @@
+import cadquery as cq
+s = cq.Solid.makeCylinder(5.0, 6.0, cq.Vector(0,0,0), cq.Vector(0,1,0))
+s = s.fuse(cq.Solid.makeCylinder(7.0, 1.5, cq.Vector(0,0,0), cq.Vector(0,1,0)))
+s = s.cut(cq.Solid.makeCylinder(3.0, 9.0, cq.Vector(0,-1,0), cq.Vector(0,1,0)))
+result = cq.Workplane(obj=s)
+datum_axis("axis",[0,0,0],[0,1,0])
+datum("flange_face",[0,0,0])
+datum("body_end",[0,6,0])
+datum_cyl("od",[0,0,0],[0,1,0],5)
+datum_cyl("id",[0,0,0],[0,1,0],3)

@@ -1,0 +1,510 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-20T11:08:57.274Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/bicycle-derailleur-3spd",
+  "claims": [
+    {
+      "kind": "assembly",
+      "statement": "整机 17 件 136 对 0 干涉（r035）；契约 29/29（r037）；曾失败的 cage+inner_link 对位 2.05mm 间隙（r039）"
+    },
+    {
+      "kind": "motion",
+      "statement": "运动学 r036：1→3 档 24 位姿 2496 对次 0 干涉；三档 0/5.05/10.00 mm；钢缆 10.0 mm；关节漂移 ≤0.2 mm"
+    },
+    {
+      "kind": "strength",
+      "statement": "钢缆张力 60 N 应力筛查 r018/r023：difficult，无法认证表面应力，只有 declared-distance 读数与积分平衡"
+    },
+    {
+      "kind": "manufacturability",
+      "statement": "CNC 铣削 r041/r045/r047/r042/r043；车削 r048/r051/r052/r053/r058；全部打印件有 printability run；外购轴承为 stock 豁免"
+    }
+  ],
+  "verdict": "difficult",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "brief-assumed",
+      "detail": "6 item(s) were decided by the agent, not the user: buyVsMake: 钢缆与链条 → buy; assumption: 飞轮节距 5.0 mm、三档总横向行程 10.0 mm（1/8 寸三速量级）; assumption: 钢缆每档位移 5.0 mm、总 10.0 mm；钢缆与链条不建模; assumption: 弹簧刚度按 DIN2098 名义几何估算（k=1.27 / 1.36 / 1.70 N/mm），未实测; assumption: 链轮齿形不建模：导轮为 V 槽轮，链条啮合不在本轮验证范围; assumption: 所有配合按名义尺寸留 0.05–0.2 mm 建模间隙，配合公差在接口中声明"
+    },
+    {
+      "severity": "info",
+      "code": "versions-uncited-history",
+      "detail": "9 superseded/unreferenced version(s) have no run: v016, v015, v013, v009, v008, v007, v004, v003, v001 — history, not a delivery gap"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "18/51 runs cite geometry that has since been replaced — e.g. r005(assembly-check, superseded v002/v012/v017/v020/v022), r004(assembly-check, superseded v002/v012/v017/v020/v021/v022/v023), r003(assembly, superseded v006/v018), r002(assembly, superseded v012/v019), r001(assembly-check, superseded v002/v006/v012/v017/v018/v019/v020)"
+    },
+    {
+      "severity": "info",
+      "code": "role-exempt-parts",
+      "detail": "1 part(s) declared stock/research and exempt from the printability and newest-version-validated checks: 轴承6000 (stock) — if one of these IS delivered as a printed part, set its role back to printed"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "51 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 10,
+    "missing": [],
+    "stale": []
+  },
+  "versions": {
+    "total": 32,
+    "neverCited": [
+      "v016",
+      "v015",
+      "v013",
+      "v009",
+      "v008",
+      "v007",
+      "v004",
+      "v003",
+      "v001"
+    ],
+    "currentUncited": [],
+    "supersededUncited": [
+      "v016",
+      "v015",
+      "v013",
+      "v009",
+      "v008",
+      "v007",
+      "v004",
+      "v003",
+      "v001"
+    ],
+    "newest": "v032",
+    "newestTimestamp": "2026-11-20T10:39:54.489Z"
+  },
+  "parts": {
+    "total": 11,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 51,
+    "stale": [
+      {
+        "id": "r031",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v012"
+        ]
+      },
+      {
+        "id": "r024",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r017",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r016",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r015",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r014",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r013",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v028",
+          "v029"
+        ]
+      },
+      {
+        "id": "r012",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r011",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r010",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r009",
+        "kind": "motion",
+        "status": "fail",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r008",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r007",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v012",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r005",
+        "kind": "assembly-check",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v012",
+          "v017",
+          "v020",
+          "v022"
+        ]
+      },
+      {
+        "id": "r004",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v012",
+          "v017",
+          "v020",
+          "v021",
+          "v022",
+          "v023"
+        ]
+      },
+      {
+        "id": "r003",
+        "kind": "assembly",
+        "status": "fail",
+        "superseded": [
+          "v006",
+          "v018"
+        ]
+      },
+      {
+        "id": "r002",
+        "kind": "assembly",
+        "status": "pass",
+        "superseded": [
+          "v012",
+          "v019"
+        ]
+      },
+      {
+        "id": "r001",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v006",
+          "v012",
+          "v017",
+          "v018",
+          "v019",
+          "v020"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r050",
+        "kind": "turning",
+        "summary": "轴 y · 回转对称是绕“经过包围盒中心的声明主轴”测的；不搜索其他轴偏置。",
+        "sourceVersionIds": [
+          "v027"
+        ],
+        "current": false
+      },
+      {
+        "id": "r049",
+        "kind": "turning",
+        "summary": "轴 z · spindleAxis 未声明，默认 z；若零件主轴是 x/y，请显式传 spindleAxis 后重跑。",
+        "sourceVersionIds": [
+          "v027"
+        ],
+        "current": false
+      },
+      {
+        "id": "r046",
+        "kind": "machinability",
+        "summary": "9.346% 面积从 ±X/±Y/±Z 都不可达：可能是倒扣/封闭腔，也可能只是需要一个斜装夹或第四轴。默认是警告；若要求三轴六面全可达，设 requireAllAccessible:true。",
+        "sourceVersionIds": [
+          "v024"
+        ],
+        "current": false
+      },
+      {
+        "id": "r044",
+        "kind": "machinability",
+        "summary": "11.022% 面积从 ±X/±Y/±Z 都不可达：可能是倒扣/封闭腔，也可能只是需要一个斜装夹或第四轴。默认是警告；若要求三轴六面全可达，设 requireAllAccessible:true。",
+        "sourceVersionIds": [
+          "v005"
+        ],
+        "current": false
+      },
+      {
+        "id": "r040",
+        "kind": "machinability",
+        "summary": "18.905% 面积从 ±X/±Y/±Z 都不可达：可能是倒扣/封闭腔，也可能只是需要一个斜装夹或第四轴。默认是警告；若要求三轴六面全可达，设 requireAllAccessible:true。",
+        "sourceVersionIds": [
+          "v032"
+        ],
+        "current": false
+      },
+      {
+        "id": "r014",
+        "kind": "assembly",
+        "summary": "136 对 · 干涉 0 · 过紧 2",
+        "sourceVersionIds": [
+          "v005",
+          "v010",
+          "v011",
+          "v014",
+          "v024",
+          "v025",
+          "v026",
+          "v027",
+          "v028",
+          "v030",
+          "v031"
+        ],
+        "current": false
+      },
+      {
+        "id": "r013",
+        "kind": "assembly",
+        "summary": "136 对 · 干涉 1 · 过紧 2",
+        "sourceVersionIds": [
+          "v005",
+          "v010",
+          "v011",
+          "v014",
+          "v024",
+          "v025",
+          "v026",
+          "v027",
+          "v028",
+          "v029",
+          "v030"
+        ],
+        "current": false
+      },
+      {
+        "id": "r012",
+        "kind": "assembly",
+        "summary": "136 对 · 干涉 8 · 过紧 6",
+        "sourceVersionIds": [
+          "v002",
+          "v005",
+          "v010",
+          "v011",
+          "v012",
+          "v014",
+          "v020",
+          "v022",
+          "v024",
+          "v025",
+          "v026"
+        ],
+        "current": false
+      },
+      {
+        "id": "r009",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 24/24 · 干涉 4 次 · 行程 0.0mm",
+        "sourceVersionIds": [
+          "v002",
+          "v005",
+          "v010",
+          "v012",
+          "v014",
+          "v020",
+          "v022",
+          "v024",
+          "v025",
+          "v026"
+        ],
+        "current": false
+      },
+      {
+        "id": "r003",
+        "kind": "assembly",
+        "summary": "1 对 · 干涉 1 · 过紧 0",
+        "sourceVersionIds": [
+          "v006",
+          "v018"
+        ],
+        "current": false
+      }
+    ],
+    "duplicateGroups": [],
+    "latestByKind": {
+      "turning": {
+        "id": "r058",
+        "status": "pass",
+        "timestamp": "2026-11-20T10:55:31.735Z"
+      },
+      "printability": {
+        "id": "r057",
+        "status": "pass",
+        "timestamp": "2026-11-20T10:55:22.383Z"
+      },
+      "machinability": {
+        "id": "r047",
+        "status": "check",
+        "timestamp": "2026-11-20T10:51:27.408Z"
+      },
+      "assembly": {
+        "id": "r039",
+        "status": "pass",
+        "timestamp": "2026-11-20T10:49:57.363Z"
+      },
+      "appearance": {
+        "id": "r038",
+        "status": "check",
+        "timestamp": "2026-11-20T10:44:30.503Z"
+      },
+      "assembly-check": {
+        "id": "r037",
+        "status": "pass",
+        "timestamp": "2026-11-20T10:44:19.337Z"
+      },
+      "motion": {
+        "id": "r036",
+        "status": "pass",
+        "timestamp": "2026-11-20T10:44:00.054Z"
+      },
+      "stress": {
+        "id": "r023",
+        "status": "check",
+        "timestamp": "2026-11-20T10:38:15.907Z"
+      }
+    }
+  },
+  "brief": {
+    "manifest": true,
+    "present": true,
+    "processes": [
+      "cnc"
+    ],
+    "verify": [
+      "assembly",
+      "motion",
+      "strength"
+    ],
+    "assumed": [
+      {
+        "item": "buyVsMake: 钢缆与链条 → buy",
+        "kind": "buyVsMake"
+      },
+      {
+        "item": "assumption: 飞轮节距 5.0 mm、三档总横向行程 10.0 mm（1/8 寸三速量级）",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 钢缆每档位移 5.0 mm、总 10.0 mm；钢缆与链条不建模",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 弹簧刚度按 DIN2098 名义几何估算（k=1.27 / 1.36 / 1.70 N/mm），未实测",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 链轮齿形不建模：导轮为 V 槽轮，链条啮合不在本轮验证范围",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 所有配合按名义尺寸留 0.05–0.2 mm 建模间隙，配合公差在接口中声明",
+        "kind": "assumption"
+      }
+    ]
+  },
+  "contract": {
+    "name": "三级后拨（3-speed derailleur）",
+    "interfaces": 29,
+    "kinematicInterfaces": 20,
+    "byCheck": {
+      "motion-clearance": 4,
+      "coaxial": 17,
+      "distance": 5,
+      "spring-behaviour": 3
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false
+  },
+  "unregistered": {
+    "scanned": 0,
+    "files": [],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "difficult",
+  "summary": "DIFFICULT · 0 blocked · 1 warn · 4 info · 0 current failing · 0 current uncited · 32 versions / 11 parts / 51 runs · stale runs 18"
+}

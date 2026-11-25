@@ -1,0 +1,1694 @@
+{
+  "schema": "assembly-change/v1",
+  "changeId": "chg_mwpda081_ecbbc582",
+  "seq": 8,
+  "parent": "sha256:31d1d0e6c2dc30691eec0462ea9e84ecd8fe5173df986447d3918d3688be6377",
+  "resulting": "sha256:4e5b99ed2aa8f326c4e77d0479e4daa3943b97b3aaab36aa4794454a9a1e9e20",
+  "reason": "v8：上连杆夹块内移、基座停位臂外移并降顶、高档 b/upper 0 干涉",
+  "actor": {
+    "source": "dsh-cad-contract"
+  },
+  "at": "2026-11-20T19:23:21.121Z",
+  "diff": {
+    "root": [],
+    "children": {
+      "added": [],
+      "removed": [],
+      "changed": [
+        {
+          "id": "b",
+          "path": "root/b",
+          "fields": [
+            {
+              "path": "root/b.version",
+              "before": "v049",
+              "after": "v055"
+            }
+          ]
+        },
+        {
+          "id": "upper",
+          "path": "root/upper",
+          "fields": [
+            {
+              "path": "root/upper.version",
+              "before": "v045",
+              "after": "v054"
+            }
+          ]
+        }
+      ]
+    },
+    "interfaces": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "name": "三级自行车后拨（CadQuery）",
+    "unit": "mm",
+    "up": "z",
+    "root": {
+      "id": "root",
+      "name": "三级自行车后拨（CadQuery）",
+      "kind": "assembly",
+      "brief": {
+        "buyVsMake": [
+          {
+            "item": "轴承/圆柱销/轴环/卡簧/紧固件/压缩弹簧",
+            "decision": "buy",
+            "by": "user",
+            "note": "只允许插件 library/ 内标准件"
+          },
+          {
+            "item": "基座/上连杆/下连杆/P-knuckle/cage/滑轮/衬套/推杆/滑块",
+            "decision": "make",
+            "by": "user",
+            "note": "CNC 6061-T6 / POM"
+          }
+        ],
+        "processes": [
+          "cnc-3axis",
+          "cnc-turning"
+        ],
+        "processesBy": "user",
+        "verify": [
+          "assembly",
+          "motion",
+          "strength",
+          "appearance"
+        ],
+        "verifyBy": "user",
+        "assumptions": [
+          {
+            "text": "三档横向间距 0/4/8 mm（飞轮间距 4.0 mm）；三档钢缆位移 0/2.21/4.56 mm",
+            "by": "assumed"
+          },
+          {
+            "text": "库内 din2098 弹簧无 k/并紧高度；按 visual 圈数 8 估算 k=2.04 N/mm、并紧 9.6 mm",
+            "by": "assumed"
+          },
+          {
+            "text": "弹簧为 BOM-only，不放进干涉网格；用两端座距离做 spring-behaviour",
+            "by": "assumed"
+          },
+          {
+            "text": "链条/飞轮/车架/指拨/钢缆为外部边界；链条张力是声明载荷",
+            "by": "assumed"
+          },
+          {
+            "text": "导轮 10T 齿形为简化轮廓，未做链条啮合验证",
+            "by": "assumed"
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "b",
+          "name": "基座 B-knuckle",
+          "kind": "part",
+          "version": "v055",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#8a8f98",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "upper",
+          "name": "上连杆（含拨线杠杆）",
+          "kind": "part",
+          "version": "v054",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#4a90d9",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "lower",
+          "name": "下连杆",
+          "kind": "part",
+          "version": "v046",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#2f6db3",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "p",
+          "name": "P-knuckle 从动节",
+          "kind": "part",
+          "version": "v051",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#d94a4a",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "cage",
+          "name": "导轮笼 cage",
+          "kind": "part",
+          "version": "v043",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#d9a24a",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "guide_pulley",
+          "name": "导向轮 10T",
+          "kind": "part",
+          "version": "v012",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              15,
+              30,
+              -103
+            ]
+          },
+          "color": "#4ad991",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "tension_pulley",
+          "name": "张力轮 10T",
+          "kind": "part",
+          "version": "v012",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              15,
+              -20,
+              -123
+            ]
+          },
+          "color": "#3fbf7f",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "bush_upper_b",
+          "name": "上连杆 B 长衬套",
+          "kind": "part",
+          "version": "v024",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              -3,
+              20
+            ]
+          },
+          "color": "#b8b8b8",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "bush_upper_p",
+          "name": "上连杆 P 短衬套",
+          "kind": "part",
+          "version": "v025",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              14.984,
+              3,
+              -17.087
+            ],
+            "rotate": [
+              180,
+              0,
+              0
+            ]
+          },
+          "color": "#b8b8b8",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "bush_lower_b",
+          "name": "下连杆 B 短衬套",
+          "kind": "part",
+          "version": "v025",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              -3,
+              -20
+            ]
+          },
+          "color": "#b8b8b8",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "bush_lower_p",
+          "name": "下连杆 P 短衬套",
+          "kind": "part",
+          "version": "v025",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              14.984,
+              3,
+              -57.087
+            ],
+            "rotate": [
+              180,
+              0,
+              0
+            ]
+          },
+          "color": "#b8b8b8",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "bush_cage",
+          "name": "cage 衬套",
+          "kind": "part",
+          "version": "v026",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              4,
+              0,
+              -73
+            ],
+            "rotate": [
+              0,
+              0,
+              -90
+            ]
+          },
+          "color": "#b8b8b8",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "plunger",
+          "name": "回位推杆",
+          "kind": "part",
+          "version": "v038",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              8,
+              11,
+              32
+            ]
+          },
+          "color": "#c8c8a0",
+          "process": {
+            "id": "cnc-turning",
+            "source": "policy",
+            "rationale": "POM 回转体衬套/推杆，数控车"
+          }
+        },
+        {
+          "id": "slider",
+          "name": "cage 滑块",
+          "kind": "part",
+          "version": "v039",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              15,
+              0,
+              -94
+            ]
+          },
+          "color": "#c8c8a0",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "policy",
+            "rationale": "6061-T6/POM 平板类零件，3 轴铣 + 2-4 次装夹"
+          }
+        },
+        {
+          "id": "pin_upper_b",
+          "name": "销 6×30 上 B",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              -10,
+              20
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "pin_lower_b",
+          "name": "销 6×30 下 B",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              -16,
+              -20
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "pin_upper_p",
+          "name": "销 6×30 上 P",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              14.984,
+              -4,
+              -17.087
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "pin_lower_p",
+          "name": "销 6×30 下 P",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              14.984,
+              -4,
+              -57.087
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "pin_cage",
+          "name": "销 6×30 cage",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              -73
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "pin_cam",
+          "name": "销 6×30 cage 凸轮",
+          "kind": "part",
+          "version": "v048",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              -87
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "axle_guide",
+          "name": "销 10×50 导向轴",
+          "kind": "part",
+          "version": "v028",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              -10,
+              30,
+              -103
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "axle_tension",
+          "name": "销 10×50 张力轴",
+          "kind": "part",
+          "version": "v028",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              -10,
+              -20,
+              -123
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#c0c0c0"
+        },
+        {
+          "id": "bearing_guide",
+          "name": "6000 轴承（导向）",
+          "kind": "part",
+          "version": "v007",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              11,
+              30,
+              -103
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#888888"
+        },
+        {
+          "id": "bearing_tension",
+          "name": "6000 轴承（张力）",
+          "kind": "part",
+          "version": "v007",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              11,
+              -20,
+              -123
+            ],
+            "rotate": [
+              0,
+              90,
+              0
+            ]
+          },
+          "color": "#888888"
+        },
+        {
+          "id": "collar_upper_b",
+          "name": "轴环 6 上 B",
+          "kind": "part",
+          "version": "v029",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              12,
+              20
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#999999"
+        },
+        {
+          "id": "collar_lower_b",
+          "name": "轴环 6 下 B",
+          "kind": "part",
+          "version": "v029",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              3,
+              -20
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#999999"
+        },
+        {
+          "id": "collar_upper_p",
+          "name": "轴环 6 上 P",
+          "kind": "part",
+          "version": "v029",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              14.984,
+              3,
+              -17.087
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#999999"
+        },
+        {
+          "id": "collar_lower_p",
+          "name": "轴环 6 下 P",
+          "kind": "part",
+          "version": "v029",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              14.984,
+              3,
+              -57.087
+            ],
+            "rotate": [
+              -90,
+              0,
+              0
+            ]
+          },
+          "color": "#999999"
+        },
+        {
+          "id": "m3_set",
+          "name": "M3×5 紧定螺钉（钢缆夹）",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "iso4026.M3x5",
+          "qty": 1,
+          "role": "purchased"
+        },
+        {
+          "id": "m4_stop",
+          "name": "M4×6 紧定螺钉（限位）",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "iso4026.M4x6",
+          "qty": 2,
+          "role": "purchased"
+        },
+        {
+          "id": "spring_return",
+          "name": "din2098 压缩弹簧 w1.2×12×30（回位）",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "din2098.1.2x12x30",
+          "qty": 1,
+          "role": "purchased"
+        },
+        {
+          "id": "spring_cage",
+          "name": "din2098 压缩弹簧 w1.2×12×30（cage）",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "din2098.1.2x12x30",
+          "qty": 1,
+          "role": "purchased"
+        },
+        {
+          "id": "m10_bolt",
+          "name": "M10×50 六角螺栓（尾钩）",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "iso4014.M10x50",
+          "qty": 1,
+          "role": "purchased"
+        },
+        {
+          "id": "m10_nut",
+          "name": "M10 螺母",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "iso4032.M10",
+          "qty": 1,
+          "role": "purchased"
+        },
+        {
+          "id": "m10_washer",
+          "name": "M10 平垫",
+          "kind": "part",
+          "source": "stock",
+          "stockRef": "iso7089.M10",
+          "qty": 2,
+          "role": "purchased"
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "I1",
+          "name": "上连杆 B 铰",
+          "a": "upper.B_axis",
+          "b": "b.upper_pivot",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I2",
+          "name": "下连杆 B 铰",
+          "a": "lower.B_axis",
+          "b": "b.lower_pivot",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I3",
+          "name": "上连杆 P 铰",
+          "a": "upper.P_axis",
+          "b": "p.upper_pivot",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I4",
+          "name": "下连杆 P 铰",
+          "a": "lower.P_axis",
+          "b": "p.lower_pivot",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I5",
+          "name": "cage 铰",
+          "a": "cage.cage_axis",
+          "b": "p.cage_pivot",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I6",
+          "name": "导向轮-轴承同轴",
+          "a": "guide_pulley.axis",
+          "b": "bearing_guide.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I7",
+          "name": "张力轮-轴承同轴",
+          "a": "tension_pulley.axis",
+          "b": "bearing_tension.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I8",
+          "name": "导向轴承-轴同轴",
+          "a": "bearing_guide.axis",
+          "b": "axle_guide.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I9",
+          "name": "张力轴承-轴同轴",
+          "a": "bearing_tension.axis",
+          "b": "axle_tension.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I10",
+          "name": "上B衬套-销同轴",
+          "a": "bush_upper_b.axis",
+          "b": "pin_upper_b.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I11",
+          "name": "上P衬套-销同轴",
+          "a": "bush_upper_p.axis",
+          "b": "pin_upper_p.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I12",
+          "name": "下B衬套-销同轴",
+          "a": "bush_lower_b.axis",
+          "b": "pin_lower_b.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I13",
+          "name": "下P衬套-销同轴",
+          "a": "bush_lower_p.axis",
+          "b": "pin_lower_p.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I14",
+          "name": "cage衬套-销同轴",
+          "a": "bush_cage.axis",
+          "b": "pin_cage.axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I16",
+          "name": "上B轴环-销同轴",
+          "a": "collar_upper_b.axis",
+          "b": "pin_upper_b.axis",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I17",
+          "name": "下B轴环-销同轴",
+          "a": "collar_lower_b.axis",
+          "b": "pin_lower_b.axis",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I18",
+          "name": "上P轴环-销同轴",
+          "a": "collar_upper_p.axis",
+          "b": "pin_upper_p.axis",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I19",
+          "name": "下P轴环-销同轴",
+          "a": "collar_lower_p.axis",
+          "b": "pin_lower_p.axis",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I20",
+          "name": "导向轴承外径-轮座",
+          "a": "bearing_guide.od",
+          "b": "guide_pulley.bearing_seat",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 26
+          }
+        },
+        {
+          "id": "I21",
+          "name": "张力轴承外径-轮座",
+          "a": "bearing_tension.od",
+          "b": "tension_pulley.bearing_seat",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 26
+          }
+        },
+        {
+          "id": "I22",
+          "name": "导向轴承内径-轴",
+          "a": "bearing_guide.id",
+          "b": "axle_guide.od",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I23",
+          "name": "张力轴承内径-轴",
+          "a": "bearing_tension.id",
+          "b": "axle_tension.od",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I24",
+          "name": "上B衬套外径-连杆孔",
+          "a": "bush_upper_b.od",
+          "b": "upper.B_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I25",
+          "name": "上B衬套内径-销",
+          "a": "bush_upper_b.id",
+          "b": "pin_upper_b.od",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I26",
+          "name": "下B衬套外径-连杆孔",
+          "a": "bush_lower_b.od",
+          "b": "lower.B_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I27",
+          "name": "下B衬套内径-销",
+          "a": "bush_lower_b.id",
+          "b": "pin_lower_b.od",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I28",
+          "name": "上P衬套外径-连杆孔",
+          "a": "bush_upper_p.od",
+          "b": "upper.P_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I29",
+          "name": "上P衬套内径-销",
+          "a": "bush_upper_p.id",
+          "b": "pin_upper_p.od",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I30",
+          "name": "下P衬套外径-连杆孔",
+          "a": "bush_lower_p.od",
+          "b": "lower.P_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I31",
+          "name": "下P衬套内径-销",
+          "a": "bush_lower_p.id",
+          "b": "pin_lower_p.od",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I32",
+          "name": "cage衬套外径-笼孔",
+          "a": "bush_cage.od",
+          "b": "cage.hub_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I33",
+          "name": "cage衬套内径-销",
+          "a": "bush_cage.id",
+          "b": "pin_cage.od",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I34",
+          "name": "上B销-基座耳孔",
+          "a": "pin_upper_b.od",
+          "b": "b.upper_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I35",
+          "name": "下B销-基座耳孔",
+          "a": "pin_lower_b.od",
+          "b": "b.lower_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I36",
+          "name": "上P销-从动节耳孔",
+          "a": "pin_upper_p.od",
+          "b": "p.upper_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I37",
+          "name": "下P销-从动节耳孔",
+          "a": "pin_lower_p.od",
+          "b": "p.lower_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I38",
+          "name": "cage销-叉耳孔",
+          "a": "pin_cage.od",
+          "b": "p.cage_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I39",
+          "name": "凸轮销-叉耳孔",
+          "a": "pin_cam.od",
+          "b": "p.cam_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I40",
+          "name": "导向轴-笼板孔",
+          "a": "axle_guide.od",
+          "b": "cage.guide_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I41",
+          "name": "张力轴-笼板孔",
+          "a": "axle_tension.od",
+          "b": "cage.tension_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.03,
+            "max": 0.03
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 10
+          }
+        },
+        {
+          "id": "I42",
+          "name": "低档限位",
+          "a": "upper.low_stop_face",
+          "b": "b.low_stop",
+          "type": "限位",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I43",
+          "name": "回位弹簧推杆接触",
+          "a": "upper.spring_pad_contact",
+          "b": "plunger.tip",
+          "type": "弹簧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I44",
+          "name": "cage凸轮接触",
+          "a": "p.cam_contact",
+          "b": "slider.nose",
+          "type": "弹簧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.1,
+            "max": 0.1
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I45",
+          "name": "回位弹簧行为",
+          "a": "b.return_spring_seat",
+          "b": "plunger.spring_seat",
+          "type": "弹簧",
+          "severity": "intent",
+          "check": "spring-behaviour",
+          "elastic": {
+            "behavior": "axial-spring",
+            "direction": "compression",
+            "freeLengthMm": 30,
+            "stiffnessNPerMm": 2.04,
+            "solidHeightMm": 9.6,
+            "outerDiameterMm": 12,
+            "guided": true,
+            "forceBudgetN": 15,
+            "requiredTravelMm": 0.9,
+            "source": "estimated"
+          }
+        },
+        {
+          "id": "I46",
+          "name": "cage弹簧行为",
+          "a": "cage.spring_seat",
+          "b": "slider.spring_seat",
+          "type": "弹簧",
+          "severity": "intent",
+          "check": "spring-behaviour",
+          "elastic": {
+            "behavior": "axial-spring",
+            "direction": "compression",
+            "freeLengthMm": 30,
+            "stiffnessNPerMm": 2.04,
+            "solidHeightMm": 9.6,
+            "outerDiameterMm": 12,
+            "guided": true,
+            "forceBudgetN": 20,
+            "requiredTravelMm": 2.1,
+            "source": "estimated"
+          }
+        },
+        {
+          "id": "I47",
+          "name": "凸轮销-叉耳同轴",
+          "a": "pin_cam.axis",
+          "b": "p.cam_axis",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I48",
+          "name": "凸轮销-叉耳孔",
+          "a": "pin_cam.od",
+          "b": "p.cam_bore",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "diameter-match",
+          "tolerance": {
+            "min": -0.02,
+            "max": 0.02
+          },
+          "nominal": {
+            "quantity": "直径",
+            "value": 6
+          }
+        },
+        {
+          "id": "I49",
+          "name": "上连杆-上B轴环端面",
+          "a": "upper.B_outboard",
+          "b": "collar_upper_b.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I50",
+          "name": "下连杆-下B轴环端面",
+          "a": "lower.B_outboard",
+          "b": "collar_lower_b.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I51",
+          "name": "上B衬套-轴环",
+          "a": "bush_upper_b.outboard_face",
+          "b": "collar_upper_b.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I52",
+          "name": "上P衬套-轴环",
+          "a": "bush_upper_p.flange_face",
+          "b": "collar_upper_p.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I53",
+          "name": "下B衬套-轴环",
+          "a": "bush_lower_b.body_end",
+          "b": "collar_lower_b.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I54",
+          "name": "下P衬套-轴环",
+          "a": "bush_lower_p.flange_face",
+          "b": "collar_lower_p.seat0",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I55",
+          "name": "cage衬套-P叉耳内面",
+          "a": "p.cage_face",
+          "b": "bush_cage.inboard_face",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        },
+        {
+          "id": "I56",
+          "name": "cage滑块-凸轮销",
+          "a": "slider.nose",
+          "b": "pin_cam.contact",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.05,
+            "max": 0.05
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          }
+        }
+      ]
+    }
+  }
+}

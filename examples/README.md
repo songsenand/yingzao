@@ -12,6 +12,9 @@
 
 | 示例 | 角色 | 最后活动 | 本地语料 | 当前证据 / 说明 |
 |---|---|---:|---:|---|
+| [sewing-rotary-hook](sewing-rotary-hook/README.md) | 缝纫机旋梭工作单元（1.5×；OpenSCAD；钣金/冲压/CNC/FDM；黄铜/不锈钢/PLA） | 2026-11-21 | 本地 | r053(契约 35/35) / r052(整机 210 对 0 干涉) / r024(motion 25 位姿 26mm 0 干涉) / r015(齿轮 1:1) / evidence/hook_needle_timing；audit excluded：旋梭轴组 5 装夹 + 齿轮齿面逐相位（README §6） |
+| [bicycle-derailleur-3spd](bicycle-derailleur-3spd/README.md) | 三级后拨（内置三档定位；CNC 自制 + 库内标准件，钢缆/链条为输入边界） | 2026-11-20 | 本地 | r036(motion 24 位姿 0 干涉/三档 0-5.05-10.00) / r037(契约 29/29) / r035(整机 136 对 0 干涉) |
+| [bicycle-derailleur-3spd-cq](bicycle-derailleur-3spd-cq/README.md) | CadQuery 三速后拨（外置三档；平行四连杆；CNC 6061/POM + 库内标准件；回位/cage 弹簧；顶部开口+POM 过盈顶盖） | 2026-11-21 | CadQuery | r119(契约 62/62) / r117(全行程) / r118(低档静检) / r071(cage 16°) / r120(应力 check) / v073(基座壁 not-excluded) / r111–r112(装夹可达性) / r057(顶盖车削)；audit difficult 0 blocked |
 | [ball-valve-dn100](ball-valve-dn100/README.md) | DN100 PN16 两片式法兰浮动球阀（铸造+锻造+CNC，不外购成品件） | 2026-11-17 | 本地 | r002(90° motion 0 干涉) / r017-r018(流体) / r015(assembly) / r016(29/29 接口) |
 | [roberval-balance](roberval-balance/README.md) | 准生产罗伯威尔天平；物理/运动闭环修复的主证据 | 2026-11-02 | 24MB | r038（physics）/ r042（当前版本 motion）/ r043（assembly 26/26）；r001/r002 为旧引擎负结果，已 superseded |
 | [windup-frog](windup-frog/README.md) | 发条青蛙机芯 | 2026-11-02 | 41MB | r066（凸轮—滑块 motion）/ r068（assembly 14/14）/ r069（12 件 0 干涉）；r064 演示未重跑 |

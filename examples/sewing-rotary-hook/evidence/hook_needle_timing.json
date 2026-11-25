@@ -1,0 +1,216 @@
+{
+ "run": "r024",
+ "method": "beak vertices (y<-8, r>19) vs needle vertices, 24 poses + final",
+ "poses": 26,
+ "needleStrokeMm": 25.938,
+ "needleTipZRangeMm": [
+  15.838,
+  41.776
+ ],
+ "closestApproach": {
+  "t": 12.04,
+  "needleTipZ": 20.752,
+  "beakTipAngleDeg": 111.06,
+  "beakTipZ": 20.996,
+  "minDistBeakToNeedle": 4.3
+ },
+ "beakAtTop": {
+  "t": 0.0,
+  "needleTipZ": 18.5,
+  "beakTipAngleDeg": 96.0,
+  "beakTipZ": 22.377,
+  "minDistBeakToNeedle": 4.541
+ },
+ "authoredPose": {
+  "t": 0.0,
+  "needleTipZ": 18.5,
+  "beakTipAngleDeg": 96.0,
+  "beakTipZ": 22.377,
+  "minDistBeakToNeedle": 4.541
+ },
+ "rows": [
+  {
+   "t": 0.0,
+   "needleTipZ": 18.5,
+   "beakTipAngleDeg": 96.0,
+   "beakTipZ": 22.377,
+   "minDistBeakToNeedle": 4.541
+  },
+  {
+   "t": 0.523,
+   "needleTipZ": 16.905,
+   "beakTipAngleDeg": 81.0,
+   "beakTipZ": 22.223,
+   "minDistBeakToNeedle": 5.673
+  },
+  {
+   "t": 1.047,
+   "needleTipZ": 16.009,
+   "beakTipAngleDeg": 66.01,
+   "beakTipZ": 20.556,
+   "minDistBeakToNeedle": 9.45
+  },
+  {
+   "t": 1.571,
+   "needleTipZ": 15.838,
+   "beakTipAngleDeg": 51.01,
+   "beakTipZ": 17.488,
+   "minDistBeakToNeedle": 13.959
+  },
+  {
+   "t": 2.094,
+   "needleTipZ": 16.397,
+   "beakTipAngleDeg": 36.01,
+   "beakTipZ": 13.228,
+   "minDistBeakToNeedle": 18.616
+  },
+  {
+   "t": 2.618,
+   "needleTipZ": 17.67,
+   "beakTipAngleDeg": 358.51,
+   "beakTipZ": -0.585,
+   "minDistBeakToNeedle": 23.723
+  },
+  {
+   "t": 3.141,
+   "needleTipZ": 19.618,
+   "beakTipAngleDeg": 358.51,
+   "beakTipZ": -0.584,
+   "minDistBeakToNeedle": 28.79
+  },
+  {
+   "t": 3.664,
+   "needleTipZ": 22.167,
+   "beakTipAngleDeg": 351.02,
+   "beakTipZ": -3.513,
+   "minDistBeakToNeedle": 33.266
+  },
+  {
+   "t": 4.188,
+   "needleTipZ": 25.2,
+   "beakTipAngleDeg": 336.02,
+   "beakTipZ": -9.144,
+   "minDistBeakToNeedle": 31.412
+  },
+  {
+   "t": 4.712,
+   "needleTipZ": 28.55,
+   "beakTipAngleDeg": 321.02,
+   "beakTipZ": -14.152,
+   "minDistBeakToNeedle": 29.024
+  },
+  {
+   "t": 5.235,
+   "needleTipZ": 31.993,
+   "beakTipAngleDeg": 306.03,
+   "beakTipZ": -18.196,
+   "minDistBeakToNeedle": 26.253
+  },
+  {
+   "t": 5.758,
+   "needleTipZ": 35.273,
+   "beakTipAngleDeg": 291.03,
+   "beakTipZ": -21.001,
+   "minDistBeakToNeedle": 23.485
+  },
+  {
+   "t": 6.282,
+   "needleTipZ": 38.117,
+   "beakTipAngleDeg": 276.03,
+   "beakTipZ": -22.375,
+   "minDistBeakToNeedle": 21.394
+  },
+  {
+   "t": 6.806,
+   "needleTipZ": 40.269,
+   "beakTipAngleDeg": 261.04,
+   "beakTipZ": -22.225,
+   "minDistBeakToNeedle": 20.787
+  },
+  {
+   "t": 7.329,
+   "needleTipZ": 41.529,
+   "beakTipAngleDeg": 246.04,
+   "beakTipZ": -20.561,
+   "minDistBeakToNeedle": 22.095
+  },
+  {
+   "t": 7.853,
+   "needleTipZ": 41.776,
+   "beakTipAngleDeg": 231.04,
+   "beakTipZ": -17.496,
+   "minDistBeakToNeedle": 23.303
+  },
+  {
+   "t": 8.376,
+   "needleTipZ": 40.985,
+   "beakTipAngleDeg": 216.04,
+   "beakTipZ": -13.239,
+   "minDistBeakToNeedle": 21.169
+  },
+  {
+   "t": 8.899,
+   "needleTipZ": 39.233,
+   "beakTipAngleDeg": 201.05,
+   "beakTipZ": -8.08,
+   "minDistBeakToNeedle": 20.88
+  },
+  {
+   "t": 9.423,
+   "needleTipZ": 36.686,
+   "beakTipAngleDeg": 186.05,
+   "beakTipZ": -2.37,
+   "minDistBeakToNeedle": 22.364
+  },
+  {
+   "t": 9.947,
+   "needleTipZ": 33.579,
+   "beakTipAngleDeg": 171.05,
+   "beakTipZ": 3.5,
+   "minDistBeakToNeedle": 24.911
+  },
+  {
+   "t": 10.47,
+   "needleTipZ": 30.179,
+   "beakTipAngleDeg": 156.06,
+   "beakTipZ": 9.132,
+   "minDistBeakToNeedle": 20.95
+  },
+  {
+   "t": 10.993,
+   "needleTipZ": 26.754,
+   "beakTipAngleDeg": 141.06,
+   "beakTipZ": 14.142,
+   "minDistBeakToNeedle": 13.421
+  },
+  {
+   "t": 11.517,
+   "needleTipZ": 23.548,
+   "beakTipAngleDeg": 126.06,
+   "beakTipZ": 18.189,
+   "minDistBeakToNeedle": 7.169
+  },
+  {
+   "t": 12.04,
+   "needleTipZ": 20.752,
+   "beakTipAngleDeg": 111.06,
+   "beakTipZ": 20.996,
+   "minDistBeakToNeedle": 4.3
+  },
+  {
+   "t": 12.564,
+   "needleTipZ": 18.509,
+   "beakTipAngleDeg": 96.07,
+   "beakTipZ": 22.374,
+   "minDistBeakToNeedle": 4.538
+  },
+  {
+   "t": 12.566,
+   "needleTipZ": 18.5,
+   "beakTipAngleDeg": 96.0,
+   "beakTipZ": 22.377,
+   "minDistBeakToNeedle": 4.541
+  }
+ ],
+ "note": "钩尖角以 +X=0°、+Z=90°；时序判据：钩尖到顶（90°）时针尖应≈18.5、针眼≈22.5（=钩尖半径）。"
+}

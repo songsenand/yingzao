@@ -1,0 +1,1066 @@
+{
+  "schema": "assembly-change/v1",
+  "changeId": "chg_mwtyp3um_fbf70f18",
+  "seq": 10,
+  "parent": "sha256:0c017571aa521ceb75c3ed945b4e1377548e5161731227c063a737ca94f68109",
+  "resulting": "sha256:198ddf960c8b7f88845961582e0f27527c6b60175d7d27e91d987bab95b060a9",
+  "reason": "上轴驱动链入库：空心顶臂 v096、上轴 v099、针杆 v091、针杆连杆 v084、挑线杆 v071/连杆 v090、四个外购圆柱销",
+  "actor": {
+    "sessionId": "session-dfaef19c-0cde-4893-ad7b-59d33e4e7340",
+    "source": "cad_assembly.write"
+  },
+  "at": "2026-11-24T00:34:02.302Z",
+  "diff": {
+    "root": [],
+    "children": {
+      "added": [
+        {
+          "id": "upper_shaft",
+          "name": "上轴（含曲柄臂）",
+          "version": "v099"
+        },
+        {
+          "id": "needle_rod",
+          "name": "针杆连杆",
+          "version": "v084"
+        },
+        {
+          "id": "pin_crank_needle",
+          "name": "曲柄销（针杆）",
+          "version": "v100"
+        },
+        {
+          "id": "pin_fork",
+          "name": "叉头销",
+          "version": "v104"
+        },
+        {
+          "id": "pin_crank_takeup",
+          "name": "曲柄销（挑线）",
+          "version": "v102"
+        },
+        {
+          "id": "pin_lever",
+          "name": "挑线杆销",
+          "version": "v103"
+        }
+      ],
+      "removed": [],
+      "changed": [
+        {
+          "id": "frame",
+          "path": "root/frame",
+          "fields": [
+            {
+              "path": "root/frame.version",
+              "before": "v057",
+              "after": "v096"
+            }
+          ]
+        },
+        {
+          "id": "needle_bar",
+          "path": "root/needle_bar",
+          "fields": [
+            {
+              "path": "root/needle_bar.version",
+              "before": "v052",
+              "after": "v091"
+            }
+          ]
+        },
+        {
+          "id": "take_up_link",
+          "path": "root/take_up_link",
+          "fields": [
+            {
+              "path": "root/take_up_link.version",
+              "before": "v072",
+              "after": "v090"
+            }
+          ]
+        }
+      ]
+    },
+    "interfaces": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "name": "缝纫机旋梭机构（2× 演示件）",
+    "unit": "mm",
+    "up": "z",
+    "root": {
+      "id": "root",
+      "name": "缝纫机旋梭机构（2× 演示件）",
+      "kind": "assembly",
+      "brief": {
+        "buyVsMake": [
+          {
+            "item": "M3 紧固件（螺钉/螺母）",
+            "decision": "buy",
+            "by": "user",
+            "note": "用户批准采购标准轴承+紧固件；本设计最终未用滚动轴承（旋梭用铜衬套），仅外购 M3 紧固件"
+          },
+          {
+            "item": "旋梭体/梭壳/梭芯/旋梭轴/下轴/衬套/齿轮/手轮/机架/底板/定位钩/开梭钩",
+            "decision": "make",
+            "by": "user",
+            "note": "仅黄铜 H62 / 不锈锉 304 / PLA，限四种工艺"
+          }
+        ],
+        "processes": [
+          "cnc-3axis",
+          "cnc-turning",
+          "laser-cut-sheet",
+          "sheet-metal-bend",
+          "fdm-pla-0.4"
+        ],
+        "processesBy": "user",
+        "verify": [
+          "assembly",
+          "motion"
+        ],
+        "verifyBy": "user",
+        "assumptions": [
+          {
+            "text": "2× 演示尺度：旋梭体外径 44、梭芯外径 27、齿轮 m=1（20T/40T，中心距 30）",
+            "by": "assumed"
+          },
+          {
+            "text": "演示线为 0.3 mm（相当 #50 涤纶线 2×）；梭壳抬升 0.26 mm，梭档唇边两侧净空 0.6 mm",
+            "by": "assumed"
+          },
+          {
+            "text": "齿轮为激光切 1.2 黄铜片 + 压配（0.05 过盈）在 Ø14 轴上，无键；摩擦传扭，扭矩未验证",
+            "by": "assumed"
+          },
+          {
+            "text": "2:1 链在下轴与旋梭轴之间；motion 工具无齿轮关节，run r002 只驱动旋梭体，2:1 由静态装配与中心距保证",
+            "by": "assumed"
+          },
+          {
+            "text": "开梭钩由旋梭底部凸轮驱动（每转一次）；motion 中开梭钩为从动静止件，凸轮接触未求解",
+            "by": "assumed"
+          },
+          {
+            "text": "夹线簧片与回位簧未建模（标准件）；梭壳出线槽已给出",
+            "by": "assumed"
+          },
+          {
+            "text": "旋梭体支承在衬套法兰上（黄铜对黄铜推力面），轴靠重力与键定位，无上推轴承",
+            "by": "assumed"
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "hook",
+          "name": "旋梭体",
+          "kind": "part",
+          "version": "v012",
+          "source": "generated",
+          "role": "make",
+          "color": "#b08d57",
+          "material": "黄铜 H62",
+          "process": {
+            "id": "cnc-3axis",
+            "source": "agent",
+            "rationale": "Ø50 黄铜棒车杯体 + 3轴铣梭档/梭尖/键槽，2 装夹"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "case",
+          "name": "梭壳",
+          "kind": "part",
+          "version": "v004",
+          "source": "generated",
+          "role": "make",
+          "color": "#c9a227",
+          "material": "黄铜 H62",
+          "process": {
+            "id": "cnc-turning",
+            "source": "agent",
+            "rationale": "车削杯体/唇边/顶部压边 + 铣定位缺口"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "bobbin",
+          "name": "梭芯",
+          "kind": "part",
+          "version": "v025",
+          "source": "generated",
+          "role": "make",
+          "color": "#e8e8e8",
+          "material": "PLA",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "agent",
+            "rationale": "立式打印，凸缘 1.6 厚，不受载"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "frame",
+          "name": "机架",
+          "kind": "part",
+          "version": "v096",
+          "source": "generated",
+          "role": "make",
+          "color": "#4a90d9",
+          "material": "PLA",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "agent",
+            "rationale": "翻转打印（桌面贴床，四腿向上），无需支撑"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "crank",
+          "name": "手轮",
+          "kind": "part",
+          "version": "v027",
+          "source": "generated",
+          "role": "make",
+          "color": "#4a90d9",
+          "material": "PLA",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "agent",
+            "rationale": "平躺/立式皆可，键盘平滑"
+          },
+          "transform": {
+            "translate": [
+              0,
+              -30,
+              0
+            ]
+          }
+        },
+        {
+          "id": "gear_hook",
+          "name": "旋梭齿轮 20T",
+          "kind": "part",
+          "version": "v013",
+          "source": "generated",
+          "role": "make",
+          "color": "#c9a227",
+          "material": "黄铜 H62 1.2 片",
+          "process": {
+            "id": "laser-cut-sheet",
+            "source": "agent",
+            "rationale": "齿廓为二维轮廓，1.2 板激光切；量产可改冲压精冲"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "gear_low",
+          "name": "下轴齿轮 40T",
+          "kind": "part",
+          "version": "v014",
+          "source": "generated",
+          "role": "make",
+          "color": "#c9a227",
+          "material": "黄铜 H62 1.2 片",
+          "process": {
+            "id": "laser-cut-sheet",
+            "source": "agent",
+            "rationale": "同上；齿相位 +4.5° 保证与 20T 啮合"
+          },
+          "transform": {
+            "translate": [
+              0,
+              -30,
+              0
+            ]
+          }
+        },
+        {
+          "id": "shaft_hook",
+          "name": "旋梭轴",
+          "kind": "part",
+          "version": "v023",
+          "source": "generated",
+          "role": "make",
+          "color": "#9aa4ad",
+          "material": "不锈锉 304",
+          "process": {
+            "id": "cnc-turning",
+            "source": "agent",
+            "rationale": "Ø16 棒料车 Ø14 + 铣顶部平键"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "shaft_low",
+          "name": "下轴",
+          "kind": "part",
+          "version": "v026",
+          "source": "generated",
+          "role": "make",
+          "color": "#9aa4ad",
+          "material": "不锈锉 304",
+          "process": {
+            "id": "cnc-turning",
+            "source": "agent",
+            "rationale": "Ø16 棒料车 Ø14 + 铣顶部平键"
+          },
+          "transform": {
+            "translate": [
+              0,
+              -30,
+              0
+            ]
+          }
+        },
+        {
+          "id": "bush_hook",
+          "name": "铜衬套 A",
+          "kind": "part",
+          "version": "v017",
+          "source": "generated",
+          "role": "make",
+          "color": "#b08d57",
+          "material": "黄铜 H62",
+          "process": {
+            "id": "cnc-turning",
+            "source": "agent",
+            "rationale": "车削 Ø18/Ø14.4/Ø24 法兰"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "bush_low",
+          "name": "铜衬套 B",
+          "kind": "part",
+          "version": "v017",
+          "source": "generated",
+          "role": "make",
+          "color": "#b08d57",
+          "material": "黄铜 H62",
+          "process": {
+            "id": "cnc-turning",
+            "source": "agent",
+            "rationale": "同 A，共用图号"
+          },
+          "transform": {
+            "translate": [
+              0,
+              -30,
+              0
+            ]
+          }
+        },
+        {
+          "id": "plate",
+          "name": "底板",
+          "kind": "part",
+          "version": "v020",
+          "source": "generated",
+          "role": "make",
+          "color": "#9aa4ad",
+          "material": "不锈锉 304 3.0",
+          "process": {
+            "id": "sheet-metal-bend",
+            "source": "agent",
+            "rationale": "激光切外形/孔 + 两侧上折 7.5 竖边"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "finger",
+          "name": "定位钩",
+          "kind": "part",
+          "version": "v066",
+          "source": "generated",
+          "role": "make",
+          "color": "#9aa4ad",
+          "material": "不锈锉 304 1.5",
+          "process": {
+            "id": "sheet-metal-bend",
+            "source": "agent",
+            "rationale": "冲剪外形 + 两处折弯（立座/舌片）"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "opener",
+          "name": "开梭钩",
+          "kind": "part",
+          "version": "v022",
+          "source": "generated",
+          "role": "make",
+          "color": "#9aa4ad",
+          "material": "不锈锉 304 1.5",
+          "process": {
+            "id": "laser-cut-sheet",
+            "source": "agent",
+            "rationale": "平板件无折弯，二维轮廓 + 铰孔"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "color": "#b9c2cc",
+          "id": "needle",
+          "kind": "part",
+          "material": "外购机针 DB×1 #90（2× 建档）",
+          "name": "机针",
+          "role": "purchased",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v051"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "needle_bar",
+          "kind": "part",
+          "material": "不锈钢 304",
+          "name": "针杆",
+          "process": {
+            "id": "cnc-turning",
+            "rationale": "Ø16 棒料车 Ø8 + 铣针夹块",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v091"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "throat_plate",
+          "kind": "part",
+          "material": "不锈钢 304 1.2",
+          "name": "针板",
+          "process": {
+            "id": "laser-cut-sheet",
+            "rationale": "2D 轮廓 + 针孔 + 送布槽",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v067"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "presser",
+          "kind": "part",
+          "material": "不锈钢 304",
+          "name": "压脚",
+          "process": {
+            "id": "sheet-metal-bend",
+            "rationale": "Ø8 杆 + 压脚板折弯",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v054"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "take_up_lever",
+          "kind": "part",
+          "material": "不锈钢 304 1.5",
+          "name": "挑线杆",
+          "process": {
+            "id": "laser-cut-sheet",
+            "rationale": "激光切平板",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v071"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "take_up_link",
+          "kind": "part",
+          "material": "不锈钢 304 1.5",
+          "name": "挑线连杆",
+          "process": {
+            "id": "laser-cut-sheet",
+            "rationale": "激光切平板 + 两销孔",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v090"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "feed_dog",
+          "kind": "part",
+          "material": "不锈钢 304",
+          "name": "送布牙",
+          "process": {
+            "id": "laser-cut-sheet",
+            "rationale": "激光切 + 折齿",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v065"
+        },
+        {
+          "color": "#8f979f",
+          "id": "upper_shaft",
+          "kind": "part",
+          "material": "不锈钢 304",
+          "name": "上轴（含曲柄臂）",
+          "process": {
+            "id": "cnc-turning",
+            "rationale": "阶梯轴车削 + 铣曲柄臂与销孔",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v099"
+        },
+        {
+          "color": "#9aa4ad",
+          "id": "needle_rod",
+          "kind": "part",
+          "material": "不锈钢 304",
+          "name": "针杆连杆",
+          "process": {
+            "id": "laser-cut-sheet",
+            "rationale": "激光切平板 + 两销孔",
+            "source": "agent"
+          },
+          "role": "make",
+          "source": "generated",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v084"
+        },
+        {
+          "color": "#c9b18a",
+          "id": "pin_crank_needle",
+          "kind": "part",
+          "material": "不锈钢圆柱销 Ø4×12",
+          "name": "曲柄销（针杆）",
+          "role": "purchased",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v100"
+        },
+        {
+          "color": "#c9b18a",
+          "id": "pin_fork",
+          "kind": "part",
+          "material": "不锈钢圆柱销 Ø4×15",
+          "name": "叉头销",
+          "role": "purchased",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v104"
+        },
+        {
+          "color": "#c9b18a",
+          "id": "pin_crank_takeup",
+          "kind": "part",
+          "material": "不锈钢圆柱销 Ø4×6",
+          "name": "曲柄销（挑线）",
+          "role": "purchased",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v102"
+        },
+        {
+          "color": "#c9b18a",
+          "id": "pin_lever",
+          "kind": "part",
+          "material": "不锈钢圆柱销 Ø4×4",
+          "name": "挑线杆销",
+          "role": "purchased",
+          "source": "stock",
+          "transform": {
+            "translate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "version": "v103"
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "I1",
+          "name": "旋梭体装在旋梭轴上",
+          "a": "hook.bore",
+          "b": "shaft_hook.journal",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I2",
+          "name": "旋梭轴在铜衬套A内转",
+          "a": "shaft_hook.journal",
+          "b": "bush_hook.bore",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I3",
+          "name": "下轴在铜衬套B内转",
+          "a": "shaft_low.journal",
+          "b": "bush_low.bore",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I4",
+          "name": "20T 齿轮压在旋梭轴上（中心距30）",
+          "a": "gear_hook.bore",
+          "b": "shaft_hook.journal",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.15,
+            "max": 0.15
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I5",
+          "name": "40T 齿轮压在下轴上",
+          "a": "gear_low.bore",
+          "b": "shaft_low.journal",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.15,
+            "max": 0.15
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I6",
+          "name": "手轮装在下轴顶部（平键传扭）",
+          "a": "crank.bore",
+          "b": "shaft_low.journal",
+          "type": "紧固",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I7",
+          "name": "梭芯套在梭壳中心柱上",
+          "a": "bobbin.bore",
+          "b": "case.post",
+          "type": "间隙",
+          "severity": "intent",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I8",
+          "name": "梭壳在旋梭杯中同轴",
+          "a": "case.case_axis",
+          "b": "hook.hook_axis",
+          "type": "间隙",
+          "severity": "intent",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.8,
+            "max": 0.8
+          },
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          }
+        },
+        {
+          "id": "I9",
+          "name": "梭档轴向净空（梭壳唇边在旋梭环槽内 0.6）",
+          "a": "hook.race_bottom",
+          "b": "case.lip_plane",
+          "type": "间隙",
+          "severity": "intent",
+          "check": "motion-clearance",
+          "tolerance": {
+            "max": 1.5,
+            "min": 0.15
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0.6
+          },
+          "evidence": {
+            "runId": "r018"
+          }
+        },
+        {
+          "id": "I10",
+          "name": "开梭钩舌片到梭壳压边下缘（0.4 待抬升量）",
+          "a": "case.brim_under",
+          "b": "opener.tab_top",
+          "type": "间隙",
+          "severity": "intent",
+          "check": "motion-clearance",
+          "tolerance": {
+            "max": 0.8,
+            "min": 0.1
+          },
+          "nominal": {
+            "quantity": "距离",
+            "value": 0.4
+          },
+          "evidence": {
+            "runId": "r018"
+          }
+        },
+        {
+          "a": "gear_hook.gear_axis",
+          "b": "gear_low.gear_axis",
+          "check": "distance",
+          "id": "I11",
+          "name": "20T/40T 中心距 30（m=1, z=20/40）",
+          "nominal": {
+            "quantity": "距离",
+            "value": 30
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 30.05,
+            "min": 29.95
+          },
+          "type": "间隙"
+        },
+        {
+          "a": "bush_hook.bush_axis",
+          "b": "frame.hook_bore",
+          "check": "coaxial",
+          "id": "I14",
+          "name": "铜衬套A 压入机架轴座",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 0.2,
+            "min": -0.2
+          },
+          "type": "紧固"
+        },
+        {
+          "a": "bush_low.bush_axis",
+          "b": "frame.lower_bore",
+          "check": "coaxial",
+          "id": "I15",
+          "name": "铜衬套B 压入机架轴座",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 0.2,
+            "min": -0.2
+          },
+          "type": "紧固"
+        },
+        {
+          "a": "case.brim_under",
+          "b": "finger.blade_under",
+          "check": "distance",
+          "id": "I17",
+          "name": "定位钩舌片在梭壳压边缺口内的轴向关系",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0.2
+          },
+          "severity": "intent",
+          "tolerance": {
+            "max": 0.6,
+            "min": 0.1
+          },
+          "type": "间隙"
+        },
+        {
+          "a": "needle.needle_axis",
+          "b": "needle_bar.bar_axis",
+          "check": "coaxial",
+          "id": "I18",
+          "name": "机针夹在针杆上",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 0.3,
+            "min": -0.3
+          },
+          "type": "紧固"
+        },
+        {
+          "a": "needle_bar.bar_axis",
+          "b": "frame.needle_guide",
+          "check": "coaxial",
+          "id": "I19",
+          "name": "针杆在导座内往复",
+          "nominal": {
+            "quantity": "同轴度",
+            "value": 0
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 0.3,
+            "min": -0.3
+          },
+          "type": "滑动副"
+        },
+        {
+          "a": "throat_plate.bottom",
+          "b": "frame.shelf_top",
+          "check": "distance",
+          "id": "I20",
+          "name": "针板坐在台板支架上",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0
+          },
+          "severity": "hard",
+          "tolerance": {
+            "max": 0.3,
+            "min": -0.1
+          },
+          "type": "贴合"
+        },
+        {
+          "a": "presser.foot_under",
+          "b": "throat_plate.top",
+          "check": "distance",
+          "id": "I21",
+          "name": "压脚与针板的缝料间隙 0.5",
+          "nominal": {
+            "quantity": "距离",
+            "value": 0.5
+          },
+          "severity": "intent",
+          "tolerance": {
+            "max": 1,
+            "min": 0.2
+          },
+          "type": "间隙"
+        }
+      ]
+    },
+    "manufacturing": {
+      "allowed": [
+        {
+          "id": "cnc-3axis"
+        },
+        {
+          "id": "cnc-turning"
+        },
+        {
+          "id": "laser-cut-sheet"
+        },
+        {
+          "id": "sheet-metal-bend"
+        },
+        {
+          "id": "fdm-pla-0.4"
+        }
+      ],
+      "approvedBy": "user"
+    }
+  }
+}
