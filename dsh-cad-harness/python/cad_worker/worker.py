@@ -6138,13 +6138,6 @@ def op_check_printability(params: dict) -> dict:
             " — 薄**壳**（两自由面近似平行、成片）会断或翘；实心件收敛到棱线的**薄边**"
             "（翼型前后缘那种）不属此列，用薄区面积占比区分"
         )
-    if overhang_area > 20 and not overhang_off:
-        findings.append(
-            f"{_js_to_fixed(overhang_area, 0)}mm² 朝下悬垂面比 {overhang_deg}° 更平"
-            f"（z ∈ [{_js_to_fixed(overhang_z_min, 0)}, {_js_to_fixed(overhang_z_max, 0)}]）"
-            " — 需要支撑、改打印朝向、或改成 45° 以内/桥接"
-        )
-
     severe = (
         wall_measured
         and math.isfinite(min_wall)
@@ -6154,7 +6147,17 @@ def op_check_printability(params: dict) -> dict:
     )
     # `ok` means "this part passed the screen". A screen that could not measure the
     # wall has not passed anything, so it can never return `ok`.
+    # PRINT overhang is a support COST, not a feasibility failure (2026-11-25): supports
+    # are mature, and a supported FDM part is not "impossible". It is reported a few
+    # lines below as a finding; a process profile that marks overhangDeg.hard=true is
+    # what turns it into a verdict, and that gate lives in the tool layer.
     verdict = "unprintable" if severe else ("ok" if (wall_measured and not findings) else "check")
+    if overhang_area > 20 and not overhang_off:
+        findings.append(
+            f"{_js_to_fixed(overhang_area, 0)}mm² 朝下悬垂面比 {overhang_deg}° 更平"
+            f"（z ∈ [{_js_to_fixed(overhang_z_min, 0)}, {_js_to_fixed(overhang_z_max, 0)}]）"
+            " — 需要支撑/改打印朝向/桥接；这是支撑成本，不是不可制造（工艺档案声明 hard 才 gate）"
+        )
     return _json_safe({
         "verdict": verdict,
         **({"minWallMm": float(_js_to_fixed(min_wall, 3))} if math.isfinite(min_wall) else {}),

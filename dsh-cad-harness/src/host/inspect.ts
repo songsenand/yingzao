@@ -587,8 +587,11 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       // not measure the wall has not passed anything — so it can never be `ok`.
       const severe = wallMeasured && Number.isFinite(minWall) && minWall < wallMinMm * 0.4 &&
         thinArea >= Math.max(UNPRINTABLE_MIN_THIN_AREA_MM2, UNPRINTABLE_MIN_THIN_AREA_FRACTION * surfaceArea) && !edgeOnly;
+      // PRINT overhang is a support COST, not a feasibility failure. It is reported
+      // as a finding above; only a process profile with overhangDeg.hard=true gates it
+      // (the tool layer applies that gate after this screen).
       const verdict = severe ? 'excluded'
-        : wallMeasured && !thinBlocking && watertight && !(overhangArea > 20) ? 'not-excluded' : 'difficult';
+        : wallMeasured && !thinBlocking && watertight ? 'not-excluded' : 'difficult';
       return {
         versionId: options.versionId,
         verdict,
@@ -655,7 +658,7 @@ export async function checkPrintability(store: VersionStore, options: Printabili
     // edge note reordered the findings against the TS parity oracle.
     if (idx >= 0) findings[idx] = edgeFinding;
     else findings.push(edgeFinding);
-    if (verdict === 'difficult' && rest.watertight !== false && (rest.overhangAreaMm2 ?? 0) <= 20) verdict = 'not-excluded';
+    if (verdict === 'difficult' && rest.watertight !== false) verdict = 'not-excluded';
   }
   // The worker measures but does not know which version it is reading; the caller
   // does. Every "go look here" command must be runnable as-is, so inject it once —

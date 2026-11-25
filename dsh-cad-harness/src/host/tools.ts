@@ -7009,6 +7009,20 @@ export function registerCadTools(
       );
     }
     let verdict = base!.verdict;
+    // PRINT overhang is advisory by default (supports are mature, and a supported FDM
+    // part is not impossible). A profile that declares `overhangDeg.hard: true` is
+    // making a process claim — no supports / visible surface / trapped cavity — and
+    // that claim is allowed to gate the verdict.
+    const overhangHard = resolved.profiles.some((p) =>
+      p.rules.overhangDeg?.applies === true && p.rules.overhangDeg.hard === true);
+    if (overhangHard && (base?.overhangAreaMm2 ?? 0) > 20) {
+      if (verdict === 'not-excluded') verdict = 'difficult';
+      const ids = resolved.profiles.filter((p) => p.rules.overhangDeg?.hard === true).map((p) => p.id);
+      findings.push(
+        `悬垂被工艺档案标为硬约束（${ids.join(', ')}）：${(base!.overhangAreaMm2 ?? 0).toFixed(0)}mm² ` +
+        '需要支撑，而该档案声明支撑不可接受/不可拆除 —— 判定降为困难。',
+      );
+    }
     // An edge-classified thin reading is not a shell. The raw screen still says
     // `difficult` (it also carries the FDM overhang finding), so promote it only
     // when every declared profile is clean AND no declared profile governs
@@ -7097,7 +7111,7 @@ export function registerCadTools(
       // the cad-manufacturing skill (loaded on demand). What stays HERE is what a caller
       // must know at call time — every token in a tool description is paid on EVERY
       // request, while the skill is not (DESIGN §31.4 / DESIGN 13.12).
-      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
+      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. PRINT overhang is a support COST, reported as a finding: it gates the verdict only when the process profile declares `overhangDeg.hard: true` (no supports / visible surface / trapped cavity); otherwise a supported FDM part can be not-excluded. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
       'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. ' +
       'JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).',
     parameters: {
@@ -7110,7 +7124,7 @@ export function registerCadTools(
       wallMinMm: { type: 'number', description: 'Wall thinner than this is reported. Default 1.2 (≈2× a 0.4mm nozzle line width).' },
       overhangDeg: {
         type: 'number',
-        description: 'A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45.',
+        description: 'A down-facing face tilted more than this many degrees from vertical counts as print-overhang (FDM support, NOT structural overhang/self-weight stress). Default 45. The area is reported as a support-cost finding; only a process profile with overhangDeg.hard=true lets it gate the verdict.',
       },
       printOrientationDeg: {
         type: 'array', items: { type: 'number' },

@@ -49,6 +49,8 @@ export interface ProfileRule {
   value?: number | null;
   /** `min` = measured must be >= value; `max` = measured must be <= value. */
   direction?: 'min' | 'max';
+  /** true = this rule can flip the verdict; false/absent = advisory only. */
+  hard?: boolean;
   /** Required when applies=false: why this rule does not govern the process. */
   reason?: string;
   source?: Provenance;
@@ -113,6 +115,7 @@ export function validateProfile(input: unknown): ValidationResult {
     if (typeof r.decidable !== 'string' || !['geometry', 'declared-requirement', 'not-decidable'].includes(r.decidable)) {
       errors.push(`rule ${name}: decidable must be geometry | declared-requirement | not-decidable`);
     }
+    if (r.hard !== undefined && typeof r.hard !== 'boolean') errors.push(`rule ${name}: hard must be true or false`);
     if (r.applies) {
       if (typeof r.value !== 'number') errors.push(`rule ${name}: applies=true needs a numeric value`);
       if (r.direction !== 'min' && r.direction !== 'max') errors.push(`rule ${name}: applies=true needs direction min | max`);
@@ -262,7 +265,7 @@ export function builtinDefaultProfile(): ProcessProfile {
     description: 'Built-in fallback used when no profile was declared. Reproduces the literals that check_printability hardcoded (wallMinMm 1.2, overhangDeg 45).',
     rules: {
       wallMinMm: { applies: true, decidable: 'geometry', value: 1.2, direction: 'min', source: assumed('inherited literal; NOT calibrated against any machine') },
-      overhangDeg: { applies: true, decidable: 'geometry', value: 45, direction: 'max', source: assumed('inherited literal; NOT calibrated against any machine') },
+      overhangDeg: { applies: true, decidable: 'geometry', value: 45, direction: 'max', hard: false, source: assumed('inherited literal; NOT calibrated against any machine') },
       draftMinDeg: { applies: false, decidable: 'geometry', reason: 'FDM has no mold release.' },
       escapePassageMinMm: { applies: false, decidable: 'geometry', reason: 'No trapped medium to evacuate.' },
       toolRadiusMm: { applies: false, decidable: 'geometry', reason: 'Not a cutting process.' },
