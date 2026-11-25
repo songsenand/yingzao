@@ -357,12 +357,14 @@ Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (
 | `part` | string | — | Which part this version belongs to — the name the user would call it, e.g. "调焦轴". ALWAYS pass this when iterating: it is what groups versions into one part in the panel. Omit only for a brand-new part with no parentVersion (a name is then derived from userIntent), or to inherit the parentVersion's part. |
 | `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded. |
 | `step` | boolean | — | CadQuery only: also write model.step and record BRepCheck provenance (optional; adds ~tens of KB and a STEP/STL consistency check). |
+| `dryRun` | boolean | — | Compile + check WITHOUT saving: no version, no images, no part row. Reports watertight / bodies / bbox / min-wall (600 samples) and refuses to create anything. Use it when you want to probe geometry before spending a version. |
+| `preflight` | boolean | — | Compile + check BEFORE saving: a version is written only when the mesh is watertight AND a single connected body; a sub-1.2mm wall is reported as a warning (legitimate thin ears must not be blocked). A refusal writes no version and no image. Default false preserves the current "failed rounds land in history" behavior. |
 
 ```js
 cad_part({ action: "generate", args: { userIntent: "…" } })
 ```
 
-returns: `versionId`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `kernel`, `step`, `errorCode`, `fix`, `minWallMm`, `minWallAtMm`, `part`
+returns: `versionId`, `saved`, `dryRun`, `preflight`, `success`, `errors`, `warnings`, `durationMs`, `views`, `sizeMm`, `bboxMin`, `bboxMax`, `watertight`, `triangles`, `shells`, `kernel`, `step`, `errorCode`, `fix`, `minWallMm`, `minWallAtMm`, `part`
 
 
 ## `import_part`

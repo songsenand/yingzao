@@ -33,6 +33,8 @@ export interface MeasureReport {
 /** Options the printability screen takes (all optional except the version). */
 export interface PrintabilityOptions {
   versionId: string;
+  /** In-memory STL for a preflight/dry run that has no saved version; when absent, reads versions/<versionId>/model.stl. */
+  stlBytes?: Uint8Array;
   wallMinMm?: number;
   /** `null` = this process has no overhang limit (molding); not the same as the default. */
   overhangDeg?: number | null;
@@ -248,7 +250,7 @@ export async function checkPrintabilityInTs(store: VersionStore, options: Printa
       const overhangDeg = overhangOff ? 45 : (options.overhangDeg ?? 45);
       const targetSamples = Math.max(100, Math.min(options.samples ?? 600, 4000));
 
-      const bytes = new Uint8Array(await readFile(join(store.root, 'versions', options.versionId, 'model.stl')));
+      const bytes = options.stlBytes ?? new Uint8Array(await readFile(join(store.root, 'versions', options.versionId, 'model.stl')));
       const mesh = parseBinaryStl(bytes);
       const watertight = isWatertight(mesh).watertight;
       // Sample the mesh AS PARSED. `buildMeshBvh` hands three-mesh-bvh the live index

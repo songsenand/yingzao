@@ -104,6 +104,10 @@ interface GeneratePartArgs {
   views?: string[];
   /** CadQuery only: also write model.step and record its BRepCheck provenance. */
   step?: boolean;
+  /** Compile + check, never save. */
+  dryRun?: boolean;
+  /** Compile + check, save only when watertight and a single body. */
+  preflight?: boolean;
 }
 
 interface PhysicsToolArgs {
@@ -146,7 +150,18 @@ interface PhysicsToolArgs {
 }
 
 interface GeneratePartResult {
-  versionId: string;
+  versionId?: string;
+  /** False for dryRun and for a preflight refusal; true when a version was written. */
+  saved: boolean;
+  dryRun?: boolean;
+  preflight?: {
+    ok: boolean;
+    watertight: boolean;
+    bodies: number;
+    minWallMm?: number;
+    minWallAtMm?: number[];
+    thresholdMm: number;
+  };
   success: boolean;
   /** Part this version was filed under (the panel's browse axis). */
   part: string;
@@ -1193,13 +1208,34 @@ export function registerCadTools(
         type: 'boolean',
         description: 'CadQuery only: also write model.step and record BRepCheck provenance (optional; adds ~tens of KB and a STEP/STL consistency check).',
       },
+      dryRun: {
+        type: 'boolean',
+        description: 'Compile + check WITHOUT saving: no version, no images, no part row. Reports watertight / bodies / bbox / min-wall (600 samples) and refuses to create anything. Use it when you want to probe geometry before spending a version.',
+      },
+      preflight: {
+        type: 'boolean',
+        description: 'Compile + check BEFORE saving: a version is written only when the mesh is watertight AND a single connected body; a sub-1.2mm wall is reported as a warning (legitimate thin ears must not be blocked). A refusal writes no version and no image. Default false preserves the current "failed rounds land in history" behavior.',
+      },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          versionId: { type: 'string', required: true },
+          versionId: { type: 'string', description: 'Absent for dryRun and for a preflight refusal (saved=false).' },
+          saved: { type: 'boolean', required: true, description: 'True when a version was written. dryRun and preflight refusals are false.' },
+          dryRun: { type: 'boolean' },
+          preflight: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              ok: { type: 'boolean', required: true },
+              watertight: { type: 'boolean', required: true },
+              bodies: { type: 'integer', required: true },
+              minWallMm: { type: 'number' },
+              minWallAtMm: { type: 'array', items: { type: 'number' } },
+              thresholdMm: { type: 'number', required: true },
+            },
+          },
           success: { type: 'boolean', required: true },
           errors: { type: 'array', required: true, items: { type: 'string' } },
           warnings: { type: 'array', required: true, items: { type: 'string' } },
@@ -1235,17 +1271,21 @@ export function registerCadTools(
       const kernel = cqCode ? 'cadquery' as const : 'openscad' as const;
       if (a.step && kernel !== 'cadquery') throw new Error('generate_part: step is only available with code (CadQuery)');
       const source = (cqCode ?? scad)!;
+      if (a.dryRun && a.preflight) throw new Error('generate_part: pass dryRun OR preflight, not both');
+      const probeMode = a.dryRun === true || a.preflight === true;
+      const reportPart = a.part ?? derivePartName(a.userIntent);
       const project = await allStores(exec);
       const { store, partStore } = project;
-      const part = await resolvePartForGeneration(a, project);
       // Serialize compile+save per project. Two parallel generate calls used to
       // run the same Python worker and share module state: v066/v067 came back
       // with each other's geometry (v066 was the base, v067 the P-knuckle) and
       // the version index labelled them upper/lower. The lock is cross-process
       // and covers only this project's generation, not the whole store.
       const result = await withFileLock(join(project.cwd, '.cad-generate.lock'), () =>
-        compileAndRender(source, { kernel, step: a.step === true }));
-      if (result.success && kernel === 'cadquery' && (result.renders?.length ?? 0) === 0 && result.stl) {
+        probeMode
+          ? compileStlOnly(source, { kernel, step: a.step === true })
+          : compileAndRender(source, { kernel, step: a.step === true }));
+      if (!probeMode && result.success && kernel === 'cadquery' && (result.renders?.length ?? 0) === 0 && result.stl) {
         // CadQuery returns geometry, not pictures. The shared renderer is the
         // STL→OpenSCAD path (no VTK in the CQ pack); a render failure is a
         // warning, never a reason to pretend the version was seen.
@@ -1260,7 +1300,20 @@ export function registerCadTools(
         }
       }
       if (!result.success) {
+        if (probeMode) {
+          // A dry run / refused preflight creates nothing: no version, no image,
+          // no part row. The provider's error is returned as-is.
+          return {
+            saved: false, success: false, part: reportPart, kernel,
+            ...(a.dryRun ? { dryRun: true } : {}),
+            ...(result.errorCode ? { errorCode: result.errorCode } : {}),
+            ...(result.fix ? { fix: result.fix } : {}),
+            errors: result.errors, warnings: result.warnings,
+            durationMs: result.durationMs, views: [],
+          };
+        }
         // A failed round still lands on the part: the error is part of its history.
+        const part = await resolvePartForGeneration(a, project);
         const versionId = await saveVersion(store, {
           ...(kernel === 'cadquery'
             ? { sourceCode: source, sourceFile: 'model.py', backend: { kernel, version: result.meta?.version ?? null } }
@@ -1273,13 +1326,79 @@ export function registerCadTools(
         });
         await attachVersion(partStore, part.id, versionId);
         return {
-          versionId, success: false, part: part.name, kernel,
+          versionId, saved: true, success: false, part: part.name, kernel,
           ...(result.errorCode ? { errorCode: result.errorCode } : {}),
           ...(result.fix ? { fix: result.fix } : {}),
           errors: result.errors, warnings: result.warnings,
           durationMs: result.durationMs, views: [],
         };
       }
+      // ---- preflight gate -------------------------------------------------
+      let preflightReport: GeneratePartResult['preflight'];
+      // The compiled STL is the contract here: a version that is not watertight,
+      // or that is several disconnected bodies, is not a part. Min wall is a
+      // warning because legitimate thin ears exist; callers who need it hard can
+      // check the number before saving.
+      if (probeMode) {
+        const parsed = result.stl ? parseBinaryStl(result.stl) : null;
+        const watertight = parsed ? isWatertight(parsed).watertight : false;
+        const bodies = parsed ? shellCount(parsed) : 0;
+        const bbox = parsed ? boundingBoxOf(parsed) : null;
+        const sizeMm = bbox
+          ? [bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2]].map((v) => +v.toFixed(2))
+          : undefined;
+        let minWallMm: number | undefined;
+        let minWallAtMm: number[] | undefined;
+        try {
+          const screen = await checkPrintabilityInTs(store, {
+            versionId: '__preflight__',
+            ...(result.stl ? { stlBytes: result.stl } : {}),
+            wallMinMm: 1.2, overhangDeg: 45, samples: 600,
+          });
+          minWallMm = screen.minWallMm ?? undefined;
+          minWallAtMm = screen.minWallAtMm ?? undefined;
+        } catch (e) {
+          result.warnings.push(`preflight wall screen unavailable: ${String((e as Error).message ?? e)}`);
+        }
+        const errors: string[] = [];
+        if (!watertight) errors.push('mesh is NOT watertight (open surface) — fix before saving a version');
+        if (bodies > 1) errors.push(`${bodies} disconnected bodies in one version — a part must be one connected solid; union them or model separate parts`);
+        if (minWallMm !== undefined && minWallMm < 1.2) {
+          const where = minWallAtMm ? ` @ [${minWallAtMm.map((n) => +n.toFixed(2)).join(', ')}]` : '';
+          result.warnings.push(`preflight wall: thinnest ${minWallMm}mm${where} < 1.2mm — allowed, but fix the representative before generating its family`);
+        }
+        const ok = errors.length === 0;
+        preflightReport = {
+          ok, watertight, bodies, thresholdMm: 1.2,
+          ...(minWallMm !== undefined ? { minWallMm } : {}),
+          ...(minWallAtMm ? { minWallAtMm } : {}),
+        };
+        if (!ok || a.dryRun) {
+          return {
+            saved: false, success: ok, part: reportPart, kernel,
+            ...(a.dryRun ? { dryRun: true } : {}),
+            errors, warnings: result.warnings, durationMs: result.durationMs, views: [],
+            ...(sizeMm ? { sizeMm } : {}),
+            ...(bbox ? { bboxMin: bbox.min.map((v) => +v.toFixed(2)), bboxMax: bbox.max.map((v) => +v.toFixed(2)) } : {}),
+            ...(parsed ? { watertight, triangles: parsed.triVerts.length / 3, shells: bodies } : {}),
+            ...(minWallMm !== undefined ? { minWallMm } : {}),
+            ...(minWallAtMm ? { minWallAtMm } : {}),
+            preflight: preflightReport,
+          };
+        }
+        // Preflight passed: render from the STL we already compiled (no second
+        // compile), then fall through to the normal save path.
+        try {
+          const renderDir = await mkdtemp(join(tmpdir(), 'cad-preflight-render-'));
+          const stlPath = join(renderDir, 'model.stl');
+          await writeFile(stlPath, result.stl!);
+          result.renders = await renderStlViews(stlPath);
+          await rm(renderDir, { recursive: true, force: true }).catch(() => {});
+        } catch (e) {
+          result.warnings.push(`preflight render failed: ${String((e as Error).message ?? e)}`);
+        }
+      }
+      const part = await resolvePartForGeneration(a, project);
       // Anchors are part of what a version means: dropping them makes every
       // interface that names one stop resolving. Saving is still allowed (a
       // deliberate rename must be possible), but it cannot be silent.
@@ -1433,7 +1552,7 @@ export function registerCadTools(
       }
 
       return {
-        versionId, success: true, kernel,
+        versionId, saved: true, success: true, kernel,
         ...(result.step ? { step: true } : {}),
         part: part.name,
         errors: [], warnings: result.warnings,
@@ -1450,13 +1569,15 @@ export function registerCadTools(
               shells: shellCount(parsed),
             }
           : {}),
+        ...(preflightReport ? { preflight: preflightReport } : {}),
       };
     },
     finalizeContent(_exec, result) {
       const value = (result as { value?: GeneratePartResult }).value;
-      if (!value) return undefined;
-      const refs = pendingRenderRefs.get(value.versionId) ?? [];
-      pendingRenderRefs.delete(value.versionId);
+      if (!value?.versionId) return undefined;
+      const versionId = value.versionId;
+      const refs = pendingRenderRefs.get(versionId) ?? [];
+      pendingRenderRefs.delete(versionId);
       const scale = value.sizeMm
         ? `Model size ${value.sizeMm.join(' × ')} mm (bbox min [${(value.bboxMin ?? []).join(', ')}] → max [${(value.bboxMax ?? []).join(', ')}]). `
         : '';
