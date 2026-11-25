@@ -45,12 +45,12 @@
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
 | R1 | P0 | done | 版本号与根 shim | 包与根 `package.json` 均为 `0.1.2-preview.1`（根依赖 `^0.1.2-preview.1`）；`node scripts/sync-root-version.mjs --check` 输出 in sync（2026-11-25）。tag 的 gitHead 校验移到 R8，发布时做 | 0.5d |
-| R2 | P0 | doing | 新建 `RELEASE-NOTES-0.1.2.md` | 草稿已建：C1–C12 各有小节，升级/已知问题/发布步骤齐全；**待 R6/R7/R8 把证据表的“待填”换成数字与 run 链接**，发布时不允许留空 | 1d |
+| R2 | P0 | done | 新建 `RELEASE-NOTES-0.1.2.md` | C1–C12 各有小节，升级/已知问题/发布步骤齐全；证据表已回填 CI run 45645941780、许可/打包与 `publish --dry-run` 结果。发布后由 R8 追加 npm 安装记录 | 1d |
 | R3 | P0 | partial | 预设与 DSH 兼容矩阵 | 预设 `setup --check` ok、`check-release-preset` ok、`doctor` 的 `preset-standard-drift` PASS（2026-11-25）；**13 版本矩阵尚未用 0.1.2-preview.1 重跑**：本沙箱无 systemd 用户总线，kern 起不来，需普通终端重跑或等 tag CI，结果回填 `DSH-MATRIX.md` | 1d |
 | R4 | P0 | done | 用户文档 + 架构文档同步 | 根 README/README.en 与包 README/README.en 已到 0.1.2-preview.1，新能力进“本版变化/已知边界/预览说明”；`docs/user/{preview,install,README}`(+en)、`docs/llm/library.md`(+en)、`skills/cad-toolbox/SKILL.md`、`library/README.md` 版本口径更新；DESIGN.md 新增 §38（dryRun/preflight、sweep、fit/gear、悬垂、热力图/主题、oracle 退役、示例展示）；examples 索引按“进新退旧”移动 3 个；`grep "0.1.1-preview.1"` 只剩历史文件与旧运行说明 | 2d |
 | R5 | P1 | done | 发布门禁补齐 | `accept:preview` 从 29 增至 44 个脚本：本版 15 个验收全部接入（assembly golden/分支、measure 两个 smoke、motion joint-pairs/gear/sweep/fit、overhang/heat/analyze/generate-preflight、library-catalog、tokens、plugin-issues）；`accept` 聚合也纳入 plugin-issues（68→69）。15 个脚本逐个 exit 0（本地用可写 runtime overlay；assembly/motion 的 EROFS 是沙箱只读导致，不是脚本问题） | 1d |
-| R6 | P0 | next | 发布证据：全矩阵 + 本地 release gate | tag 前一次 `workflow_dispatch` 全矩阵 run 成功（Ubuntu + macOS + Windows smoke + CadQuery pack），run 链接进发布说明；Linux 本地 `npm run accept:release` PASS；若 Windows 失败，发布说明如实写并开 issue，不阻塞 Linux 预览 | 1d（等 CI） |
-| R7 | P1 | next | 许可与打包 | 把 `RELEASE-LICENSE-CHECKLIST.md` 的版本标题与勾选项更新到 0.1.2-preview.1；`accept:license`、`npm pack --dry-run`、`rehearse:preview` 全过；包内无 `cad-data/`、`bin/`、BOSL2、site-packages；NOTICE 覆盖 CQ/OCP/VTK；DIN 2098 估算参数在 `library/README.md` 标明 `source=estimated` | 0.5d |
+| R6 | P0 | partial | 发布证据：全矩阵 + release gate | CI [run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）：Ubuntu/macOS `accept:preview`、Windows smoke、CadQuery job 全 PASS；本地单条 `accept:release` 未跑（沙箱），其组成由 CI 两个 job 覆盖。**余**：DSH 13 版本矩阵需普通终端重跑（或另立 CI job） | 1d |
+| R7 | P1 | done | 许可与打包 | `accept:license` 15/15；`npm pack --dry-run` 651 files / 10.1 MB packed / 34.1 MB unpacked；`npm publish --dry-run --tag preview` exit 0；CI Ubuntu 解包后 setup/doctor smoke PASS（含 packed preset 无绝对路径）。本机未跑 `rehearse:preview`（沙箱），其链路由 CI 同步骤覆盖 | 0.5d |
 | R8 | P0 | next | 发布后验证 | `npm view dsh-cad-harness dist-tags.latest` = 0.1.2-preview.1；tag `v0.1.2-preview.1` 的 gitHead 与 `npm view dsh-cad-harness@0.1.2-preview.1 gitHead` 相等；干净 profile 按 README 安装 → `dsh-cad-setup` → `dsh-cad-doctor` → 生成 bracket → 导出 STL/STEP，日志留档；从 0.1.1-preview.1 升级时 `doctor` 能指出 `preset-standard-drift` 并给修复命令 | 0.5d |
 
 > R5 的缺口依据：`accept:preview` 覆盖 29 个脚本，`accept` 是 68 个脚本。上面 15 个缺口里，
@@ -266,16 +266,13 @@
 
 ## 10. 当前建议（2026-11-25）
 
-- **已完成（2026-11-25）**：R1 版本与根 shim；R2 发布说明草稿；R3 预设与 doctor（矩阵待普通终端）；
-  R4 用户/架构文档与示例展示。
-- **剩下四件**：R5 门禁补齐 → R6 全矩阵证据 + Linux `accept:release` → R7 许可/打包 → R8 发布与发布后验证。
-- **R3 的地雷**：13 版本矩阵在本沙箱跑不了（kern 需要 systemd 用户总线）；在普通终端跑
-  `node scripts/accept-dsh-matrix.mjs`，或等 tag CI 后回填 `DSH-MATRIX.md`。不要把 0.1.1 的运行当成本版证据。
-- **再补门禁**：R5 把 C1–C12 对应的验收脚本接进 `accept:preview`；当前 15 个本版相关脚本
-  不在发布门禁里（13 个在 `accept` 聚合、2 个连聚合都没进）——等于“测了但不拦”。
-- **证据一次做全**：R6 用一次 `workflow_dispatch` 全矩阵 + Linux `accept:release`；
-  不要用“本机绿”代替 tag 证据。
-- **打包与发布后**：R7/R8；干净 profile 安装记录是“包能用”的唯一证据。
+- **已完成（2026-11-25）**：R1 版本与根 shim；R2 发布说明（证据已回填）；R4 文档与示例展示；
+  R5 门禁补齐；R7 许可/打包。**R6 证据已拿到**：CI run 45645941780 全绿（Ubuntu/macOS 全量 +
+  Windows smoke + CadQuery）。
+- **发布前只剩两件**：① DSH 13 版本矩阵（R3/R6 的余项，普通终端跑 `node scripts/accept-dsh-matrix.mjs`
+  或另立 CI job，回填 `DSH-MATRIX.md`）；② R8：tag `v0.1.2-preview.1` → `npm publish --tag preview`
+  → 干净 profile 安装验证。
+- **R3 的地雷**：13 版本矩阵在本沙箱跑不了（kern 需要 systemd 用户总线）；不要把 0.1.1 的运行当成本版证据。
 - **本版不要做**：U01/U02 的视觉与示例重做、L10/N15、第三个引擎、社区适配、渲染器替换；视口点选已延后（X14）。
 - **判断本版 ready 的一句话**：`npm view dsh-cad-harness dist-tags.latest` 指向 `0.1.2-preview.1`，
   且干净环境按 README 能装、能 `doctor`、能生成并导出——否则不算发完。

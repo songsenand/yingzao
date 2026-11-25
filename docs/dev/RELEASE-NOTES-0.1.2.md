@@ -1,6 +1,6 @@
 # 0.1.2-preview.1 发布说明
 
-> **状态**：草稿；版本号已改为 `0.1.2-preview.1`，发布证据（R6/R7）待填。
+> **状态**：发布候选（2026-11-25）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack；待 R8 的 tag 与 npm 发布。
 > **基线**：`v0.1.1-preview.1`（2026-11-20）→ 本版。
 > **目标/范围/验收**：[TODO.md](TODO.md) §1 的 R1–R8；用户文档入口：[docs/user/preview.md](../user/preview.md)。
 
@@ -179,16 +179,19 @@ DSH_CAD_CQ_PACK=/path/to/cadquery npx dsh-cad-backend --show
 
 ---
 
-## 5. 发布前证据（发布时填）
+## 5. 发布前证据（2026-11-25）
 
-| 门禁 | 结果 |
+| 门禁 | 结果（2026-11-25） |
 |---|---|
 | `accept:preview` 覆盖 | 44 个脚本（R5；本版 15 个验收全部接入）；`accept:release` = preview + `accept:step-validation` |
-| Linux 本地 `npm run accept:release` | 待填（R6） |
-| tag 全矩阵（Ubuntu + macOS + Windows smoke + CadQuery pack） | 待填（R6，附 run 链接） |
-| `accept:license` / `npm pack --dry-run` / `rehearse:preview` | 待填（R7） |
-| DSH 矩阵（13 版本） | 待普通终端重跑（R3）；本沙箱无 systemd 用户总线，kern 起不来。结果表见 [DSH-MATRIX.md](DSH-MATRIX.md) |
-| 干净 profile 安装 → setup → doctor → generate → export | 待填（R8） |
+| Ubuntu `accept:preview` | **PASS** — [run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（含 `accept:plugin-add`、pack、解包 setup/doctor smoke） |
+| macOS `accept:preview` | **PASS** — 同一 run / `macos-latest` |
+| Windows install smoke | **PASS** — 同一 run / `windows-latest` |
+| CadQuery job（`accept:cadquery` / `authoring` / `kernel-switch` / `step-validation`） | **PASS** — 同一 run |
+| `accept:license` / `npm pack --dry-run` | `15/15`；651 files / **10.1 MB packed** / 34.1 MB unpacked（本机） |
+| `npm publish --dry-run --tag preview` | exit 0（`prepublishOnly` + `prepack` + `postpack`） |
+| DSH 13 版本矩阵 | **待普通终端重跑**（本沙箱无 systemd 用户总线，kern 起不来）；见 [DSH-MATRIX.md](DSH-MATRIX.md) |
+| 干净 profile 从 npm 安装 | 待 R8（发布后） |
 
 > 发布时这一节不能留“待填”；任何一项没跑，发布说明必须写明原因，不允许用“本机绿”代替 tag 证据。
 
@@ -203,8 +206,15 @@ DSH_CAD_REQUIRE_CQ=1 DSH_CAD_CQ_PACK=/path/to/cadquery npm run accept:release
 node scripts/sync-root-version.mjs --check
 npm pack --dry-run
 npm run rehearse:preview
-npm publish --tag preview        # 预发布版本必须带 --tag
+npm publish --tag latest         # 预发布版本必须显式给 tag；本版要让 latest 指向 0.1.2-preview.1
 ```
+
+> 预发布版本必须显式给 `--tag`；本版用 `latest`，与 0.1.1 的发布方式一致（`dsh plugin add
+> dsh-cad-harness` 应装到本版）。如需 `preview` 别名，发布后执行
+> `npm dist-tag add dsh-cad-harness@0.1.2-preview.1 preview`。
+>
+> 本机沙箱不能跑 `rehearse:preview` 的 pnpm 步骤；CI 的 Ubuntu job 已覆盖等价链路
+> （build → `accept:preview` → pack → 解包 setup/doctor），见 §5。
 
 发布后：
 
