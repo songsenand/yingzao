@@ -42,7 +42,7 @@ does not appear at all — no error, just a missing mode. `npx dsh-cad-doctor` r
 - BOSL2 optional, under `lib/BOSL2/` in the source checkout
 - Python runtime is provisioned on first use (about 400 MB)
 
-## What's new in 0.1.2-preview.1
+## What's new in 0.1.2-preview.2
 
 - `generate` takes `dryRun` (compile + measure, save nothing) and `preflight` (save only watertight single-body meshes).
 - `cad_check` `sweep` screens a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`; motion supports a `gear` ratio.

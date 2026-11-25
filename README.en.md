@@ -140,7 +140,7 @@ The motion check answers whether it moves, collides or runs out of stroke; it do
 | Layer | Used |
 |---|---|
 | Geometry kernel | **OpenSCAD** + **Manifold** backend; optional **CadQuery** (B-rep, separate pack); BOSL2 is an optional **OpenSCAD modelling library** (threads/gears/screws), not the standard-parts catalogue |
-| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.2-preview.1** — see [library/README](dsh-cad-harness/library/README.md) |
+| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.2-preview.2** — see [library/README](dsh-cad-harness/library/README.md) |
 | Numerical checks | Python, trimesh, manifold3d, numpy, shapely |
 | Host | **DeepSeek Harness** plugin; Node.js ≥ 20, TypeScript |
 | Panel | React + WebGL viewport, running inside the DSH Web GUI |
@@ -308,14 +308,14 @@ by CI.
 > Run this from a normal terminal: kern needs the systemd user bus and cannot
 > start inside DSH's own bwrap sandbox.
 
-## What's new (0.1.2-preview.1)
+## What's new (0.1.2-preview.2)
 
 - **Check before you save**: `cad_part generate` now takes `dryRun` (compile + measure, write nothing) and `preflight` (save only when the mesh is watertight and a single body; a sub-1.2mm wall is a warning).
 - **A layer between assembly and motion**: `cad_check` `sweep` screens one moving part over a declared joint range and reports `suspect`, never a delivery verdict; revolute joints can declare `overlapEnvelope` / `fit`, and motion supports a `gear` ratio.
 - **Overhang is a support cost, not a failure**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`.
 - **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host.
 - **Examples**: sewing rotary hook and 3-speed derailleur, each with a CadQuery variant; per the "new in, old out" policy, 3 older examples moved to the history table while keeping their directories and corpora.
-- Full details, evidence and known issues: [0.1.2-preview.1 release notes](docs/dev/RELEASE-NOTES-0.1.2.md).
+- Full details, evidence and known issues: [0.1.2-preview.2 release notes](docs/dev/RELEASE-NOTES-0.1.2.md).
 
 ## Known limits
 

@@ -1,4 +1,4 @@
-# 0.1.2-preview.1 preview notes
+# 0.1.2-preview.2 preview notes
 
 [中文](../../user/preview.md) | English
 
@@ -31,7 +31,7 @@
 See [install](install.md). The minimum path:
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.2.tgz
 dsh plugin --profile <profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup

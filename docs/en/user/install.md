@@ -10,7 +10,7 @@
 | **Node ≥ 20 + pnpm** | For install/runtime; tarball users do not build, but dsh still uses pnpm internally |
 | **OpenSCAD** | Prepared by `setup --openscad=auto`; an existing 2025.06+ system install is used as-is. Official snapshot first; the OSS mirror is used only when the official source is unreachable or stays below 256 KB/s. You can also point `CAD_OPENSCAD_BIN` at a binary |
 | **BOSL2** | Optional **OpenSCAD-only modelling library** (gears/threads/screws/walls), not the 99-item standard-parts catalogue. Download it yourself into `lib/BOSL2/`; it is not shipped |
-| **Standard-parts catalogue v0** | 99 pre-generated specs (fit/visual, STEP/STL) shipped with the package; no install needed. **0.1.2-preview.1 has no `cad_part` catalogue select/import action yet.** See [the catalogue reference](../llm/library.md) |
+| **Standard-parts catalogue v0** | 99 pre-generated specs (fit/visual, STEP/STL) shipped with the package; no install needed. **0.1.2-preview.2 has no `cad_part` catalogue select/import action yet.** See [the catalogue reference](../llm/library.md) |
 | **Python** | **Not shipped.** The first analysis/simulation downloads about 400 MB into `$DSH_HOME/cad/runtime/` |
 
 The preview bundles the 99-part standard-parts catalogue but does **not** bundle OpenSCAD, BOSL2 or the Python runtime. OpenSCAD is provisioned as a portable download (official first, OSS mirror fallback) or reused from the system; the plugin calls it through a process boundary.
@@ -20,7 +20,7 @@ The preview bundles the 99-part standard-parts catalogue but does **not** bundle
 ### A. Tarball (preview release; no build)
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
+tar -xzf dsh-cad-harness-0.1.2-preview.2.tgz
 dsh plugin --profile <your-profile> add -w "$PWD/package"
 cd package
 npx dsh-cad-setup --openscad=auto

@@ -1,6 +1,7 @@
-# 0.1.2-preview.1 发布说明
+# 0.1.2-preview.2 发布说明
 
-> **状态**：发布候选（2026-11-25）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack；待 R8 的 tag 与 npm 发布（本环境 `npm whoami` 401，需用户凭据）。
+> **状态**：发布候选（2026-11-26）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`，preview.1 代码）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack。
+> **版本号从 `0.1.2-preview.1` 提到 `0.1.2-preview.2`**：preview.1 用 stage-only token 进了 npm staging，CLI `stage approve`/`reject` 均 404、直发 E409，且用户 web 2FA 设备不可用；preview.1 **未公开发布**。preview.2 仅版本号/文档变化，用 package:write token 直发；tag CI 会重跑。
 > **基线**：`v0.1.1-preview.1`（2026-11-20）→ 本版。
 > **目标/范围/验收**：[TODO.md](TODO.md) §1 的 R1–R8；用户文档入口：[docs/user/preview.md](../user/preview.md)。
 
@@ -119,7 +120,7 @@ motion 49 位姿 / 0 干涉；后拨 check 29/29、motion 24 位姿 / 0 干涉�
 - **CI 分档**：`push main` → fast + Ubuntu 全量；PR → 仅 fast；夜间 → Ubuntu+macOS 全量 + Windows smoke；
   tag `v0.*` → 全矩阵 + Windows smoke + CadQuery pack；外加 `concurrency` 取消与运行时缓存。
 - **本地 DSH 矩阵**：13 个 in-range 0.2.x 已在 0.1.1-preview.1 那轮全量实测（12 PASS + 1 BLOCKED；
-  0.2.3-alpha.1 上游 `dsh --version` 自身起不来，不算插件失败）。**0.1.2-preview.1 的全矩阵待重跑**，
+  0.2.3-alpha.1 上游 `dsh --version` 自身起不来，不算插件失败）。**0.1.2-preview.2 的全矩阵待重跑**，
   见 §5 与 [DSH-MATRIX.md](DSH-MATRIX.md)。
 - **根 shim 版本同步**：仓库根 `package.json` 不再手写版本，由脚本从包同步，CI 每次 push 校验；
   `dsh plugin add github:songsenand/yingzao` 能解析到真实包。
@@ -191,7 +192,7 @@ DSH_CAD_CQ_PACK=/path/to/cadquery npx dsh-cad-backend --show
 | `accept:license` / `npm pack --dry-run` | `15/15`；651 files / **10.1 MB packed** / 34.1 MB unpacked（本机） |
 | `npm publish --dry-run --tag preview` | exit 0（`prepublishOnly` + `prepack` + `postpack`） |
 | DSH 13 版本矩阵 | **待普通终端重跑**（本沙箱无 systemd 用户总线，kern 起不来）；见 [DSH-MATRIX.md](DSH-MATRIX.md) |
-| npm 登录 | 本环境 `npm whoami` 返回 **401**；`tag` 与 `publish` 需用户执行（命令见 §6） |
+| npm token | `package:write` + `bypass_2fa`；**不能管理 staged 记录**（approve/reject 404）。preview.2 直接 `npm publish` |
 | 干净 profile 从 npm 安装 | 待 R8（发布后） |
 
 > 发布时这一节不能留“待填”；任何一项没跑，发布说明必须写明原因，不允许用“本机绿”代替 tag 证据。
@@ -207,12 +208,12 @@ DSH_CAD_REQUIRE_CQ=1 DSH_CAD_CQ_PACK=/path/to/cadquery npm run accept:release
 node scripts/sync-root-version.mjs --check
 npm pack --dry-run
 npm run rehearse:preview
-npm publish --tag latest         # 预发布版本必须显式给 tag；本版要让 latest 指向 0.1.2-preview.1
+npm publish --tag latest         # 预发布版本必须显式给 tag；本版要让 latest 指向 0.1.2-preview.2
 ```
 
 > 预发布版本必须显式给 `--tag`；本版用 `latest`，与 0.1.1 的发布方式一致（`dsh plugin add
 > dsh-cad-harness` 应装到本版）。如需 `preview` 别名，发布后执行
-> `npm dist-tag add dsh-cad-harness@0.1.2-preview.1 preview`。
+> `npm dist-tag add dsh-cad-harness@0.1.2-preview.2 preview`。
 >
 > 本机沙箱不能跑 `rehearse:preview` 的 pnpm 步骤；CI 的 Ubuntu job 已覆盖等价链路
 > （build → `accept:preview` → pack → 解包 setup/doctor），见 §5。
@@ -221,7 +222,7 @@ npm publish --tag latest         # 预发布版本必须显式给 tag；本版�
 
 ```bash
 npm view dsh-cad-harness dist-tags
-# latest 应为 0.1.2-preview.1；gitHead 与 tag v0.1.2-preview.1 相同
+# latest 应为 0.1.2-preview.2；gitHead 与 tag v0.1.2-preview.2 相同
 ```
 
 ---

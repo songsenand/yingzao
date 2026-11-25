@@ -2,10 +2,10 @@
 
 最后完整运行：**2026-11-25** · Linux x64 · `node:22-bookworm` · kern 0.56.0 · 插件 `0.1.1-preview.1`
 
-> **0.1.2-preview.1 的状态（2026-11-25）**：预设与 `doctor` 的 `preset-standard-drift` 已通过；
-> **13 版全矩阵尚未用 0.1.2-preview.1 重跑**——当前开发沙箱无法启动 kern（无 systemd 用户总线），
+> **0.1.2-preview.2 的状态（2026-11-25）**：预设与 `doctor` 的 `preset-standard-drift` 已通过；
+> **13 版全矩阵尚未用 0.1.2-preview.2 重跑**——当前开发沙箱无法启动 kern（无 systemd 用户总线），
 > 需在普通终端重跑或等 tag CI。下表是 0.1.1-preview.1 的实测；引擎与预设机制未变，但
-> **不要把它当作 0.1.2-preview.1 的证据**。重跑后把首行的插件版本与下表一起更新。
+> **不要把它当作 0.1.2-preview.2 的证据**。重跑后把首行的插件版本与下表一起更新。
 
 支持范围以 `dsh-cad-harness/package.json` 的 `engines.dsh` 为准：`>=0.2.1-rc.2 <0.3.0`。
 DSH 的插件管理器用 `semver.satisfies(..., { includePrerelease: true })` 判定，因此 0.2.x 中满足该范围的共 **13 个版本**；本表覆盖全部 13 个。

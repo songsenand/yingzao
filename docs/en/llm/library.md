@@ -4,7 +4,7 @@
 
 > Long-form reference; short rules live in `skills/cad-toolbox/SKILL.md`.
 
-Short version: **99 pre-generated standard parts ship in the package, but 0.1.2-preview.1 has
+Short version: **99 pre-generated standard parts ship in the package, but 0.1.2-preview.2 has
 no first-class tool entry for them.** Do not confuse the catalogue with BOSL2 or the spring
 `standardId` used by assembly checks.
 
@@ -59,7 +59,7 @@ There is no `library` / `catalog` / `standardPart` action, no `libRef` field and
   `cad_part` (`action: "import"`) as a `stock` version; that is ordinary import, not catalogue
   selection.
 - If the user only says “use an M5 bolt”, there is no discoverable catalogue entry; state that
-  the catalogue is not tool-exposed in 0.1.2-preview.1, or ask for a STEP/STL.
+  the catalogue is not tool-exposed in 0.1.2-preview.2, or ask for a STEP/STL.
 - Use **BOSL2** for threads/gears; that is OpenSCAD modelling, not a pre-generated catalogue part.
 
 `assembly.json`'s `stockRef` is free text, not a catalogue resolver; `elastic.standardId` only
