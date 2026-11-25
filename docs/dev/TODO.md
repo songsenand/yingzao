@@ -51,7 +51,7 @@
 | R5 | P1 | done | 发布门禁补齐 | `accept:preview` 从 29 增至 44 个脚本：本版 15 个验收全部接入（assembly golden/分支、measure 两个 smoke、motion joint-pairs/gear/sweep/fit、overhang/heat/analyze/generate-preflight、library-catalog、tokens、plugin-issues）；`accept` 聚合也纳入 plugin-issues（68→69）。15 个脚本逐个 exit 0（本地用可写 runtime overlay；assembly/motion 的 EROFS 是沙箱只读导致，不是脚本问题） | 1d |
 | R6 | P0 | partial | 发布证据：全矩阵 + release gate | CI [run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）：Ubuntu/macOS `accept:preview`、Windows smoke、CadQuery job 全 PASS；本地单条 `accept:release` 未跑（沙箱），其组成由 CI 两个 job 覆盖。**余**：DSH 13 版本矩阵需普通终端重跑（或另立 CI job） | 1d |
 | R7 | P1 | done | 许可与打包 | `accept:license` 15/15；`npm pack --dry-run` 651 files / 10.1 MB packed / 34.1 MB unpacked；`npm publish --dry-run --tag preview` exit 0；CI Ubuntu 解包后 setup/doctor smoke PASS（含 packed preset 无绝对路径）。本机未跑 `rehearse:preview`（沙箱），其链路由 CI 同步骤覆盖 | 0.5d |
-| R8 | P0 | next | 发布后验证 | `npm view dsh-cad-harness dist-tags.latest` = 0.1.2-preview.1；tag `v0.1.2-preview.1` 的 gitHead 与 `npm view dsh-cad-harness@0.1.2-preview.1 gitHead` 相等；干净 profile 按 README 安装 → `dsh-cad-setup` → `dsh-cad-doctor` → 生成 bracket → 导出 STL/STEP，日志留档；从 0.1.1-preview.1 升级时 `doctor` 能指出 `preset-standard-drift` 并给修复命令 | 0.5d |
+| R8 | P0 | next | 发布与发布后验证 | 本环境 `npm whoami` 返回 401，不能代发；需用户执行：`git tag v0.1.2-preview.1 && git push github v0.1.2-preview.1` → `cd dsh-cad-harness && npm publish --tag latest` → 可选 `npm dist-tag add dsh-cad-harness@0.1.2-preview.1 preview`。出口：`dist-tags.latest` = 0.1.2-preview.1、tag 的 gitHead 与 `npm view ... gitHead` 相等、干净 profile 安装 → setup → doctor → 生成/导出留档 | 0.5d |
 
 > R5 的缺口依据：`accept:preview` 覆盖 29 个脚本，`accept` 是 68 个脚本。上面 15 个缺口里，
 > 13 个脚本在 `accept` 里但不在 `accept:preview`/`accept:release` 里；另 2 个
@@ -270,8 +270,8 @@
   R5 门禁补齐；R7 许可/打包。**R6 证据已拿到**：CI run 45645941780 全绿（Ubuntu/macOS 全量 +
   Windows smoke + CadQuery）。
 - **发布前只剩两件**：① DSH 13 版本矩阵（R3/R6 的余项，普通终端跑 `node scripts/accept-dsh-matrix.mjs`
-  或另立 CI job，回填 `DSH-MATRIX.md`）；② R8：tag `v0.1.2-preview.1` → `npm publish --tag preview`
-  → 干净 profile 安装验证。
+  或另立 CI job，回填 `DSH-MATRIX.md`）；② R8：用户 `npm login` 后 tag `v0.1.2-preview.1` →
+  `npm publish --tag latest` → 干净 profile 安装验证（本环境 npm 未登录，不能代发）。
 - **R3 的地雷**：13 版本矩阵在本沙箱跑不了（kern 需要 systemd 用户总线）；不要把 0.1.1 的运行当成本版证据。
 - **本版不要做**：U01/U02 的视觉与示例重做、L10/N15、第三个引擎、社区适配、渲染器替换；视口点选已延后（X14）。
 - **判断本版 ready 的一句话**：`npm view dsh-cad-harness dist-tags.latest` 指向 `0.1.2-preview.1`，

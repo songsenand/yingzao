@@ -1,6 +1,6 @@
 # 0.1.2-preview.1 发布说明
 
-> **状态**：发布候选（2026-11-25）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack；待 R8 的 tag 与 npm 发布。
+> **状态**：发布候选（2026-11-25）。CI 全绿：[run 45645941780](https://github.com/songsenand/yingzao/actions/runs/45645941780)（commit `da2fc2d`）——Ubuntu/macOS 全量 + Windows smoke + CadQuery pack；待 R8 的 tag 与 npm 发布（本环境 `npm whoami` 401，需用户凭据）。
 > **基线**：`v0.1.1-preview.1`（2026-11-20）→ 本版。
 > **目标/范围/验收**：[TODO.md](TODO.md) §1 的 R1–R8；用户文档入口：[docs/user/preview.md](../user/preview.md)。
 
@@ -191,6 +191,7 @@ DSH_CAD_CQ_PACK=/path/to/cadquery npx dsh-cad-backend --show
 | `accept:license` / `npm pack --dry-run` | `15/15`；651 files / **10.1 MB packed** / 34.1 MB unpacked（本机） |
 | `npm publish --dry-run --tag preview` | exit 0（`prepublishOnly` + `prepack` + `postpack`） |
 | DSH 13 版本矩阵 | **待普通终端重跑**（本沙箱无 systemd 用户总线，kern 起不来）；见 [DSH-MATRIX.md](DSH-MATRIX.md) |
+| npm 登录 | 本环境 `npm whoami` 返回 **401**；`tag` 与 `publish` 需用户执行（命令见 §6） |
 | 干净 profile 从 npm 安装 | 待 R8（发布后） |
 
 > 发布时这一节不能留“待填”；任何一项没跑，发布说明必须写明原因，不允许用“本机绿”代替 tag 证据。
