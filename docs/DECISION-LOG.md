@@ -6879,3 +6879,24 @@ fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
 
 **影响：** 报告语义修正（`紧固` 的 `check` 从 `distance` 变为 `diameter-match`）；恢复分支覆盖；
 未恢复与 TS 的逐字段对拍（有意，oracle 已退）。
+
+## 2026-11-25：validate_assembly 的 golden 数值 fixture
+
+**触发条件：** 第 4 条（影响测试与升级风险）＋第 2 条（oracle 退役后的风险评估）。
+
+**要解决的问题：** 删除 TS oracle 后，`validate_assembly` 的 volume/bbox/minDistance 没有
+独立数值参照；Python 的 `manifold3d` / `trimesh` 升级或焊接路径改动可能悄悄改变数字。
+
+**决策内容：** 新增 `accept-assembly-golden.mjs`：固定二进制 STL（20mm 立方体 vs 10mm 立方体
+间隙 5mm；两个 10mm 立方体 2mm 嵌入 → 200mm³；transform 平移 20mm → 间隙 10mm；单三角形拒绝），
+断言 volume、bbox、minDistance、interference 与拒绝行为。期望值来自解析几何，不是从同一次
+运行抄回来的。
+
+**理由：** 这是 oracle 删除后最低成本的数值护栏：不恢复第二实现，但 Python 引擎升级时能看见
+数字漂移，而不是靠端到端“还能跑”。
+
+**依据：** `accept-assembly-golden` 全过（8000/1000mm³、bbox 15..25、gap 5/10、200mm³、
+非实体拒绝）；`accept-assembly`、`accept-check-assembly-branches`、`tsc --noEmit` 通过。
+
+**影响：** assembly 数值有固定期望；引擎升级若改变 volume/bbox/minDistance 会显式失败。
+**未覆盖：** 任意语料的数值；那仍是端到端验收的职责。

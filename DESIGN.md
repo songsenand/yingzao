@@ -3212,7 +3212,8 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
   对才做 1200 三角形抽样距离）。parts 以**路径**进 worker，报告形状不变；
   `validateAssemblyInTs` 曾留作 parity oracle；该 oracle 与 `buildSolid` / `pairMinDistance`
   于 2026-11-25 退役。**迁移期 8 个用例曾全字段一致**（真实零件、rotate、matrix/pose、干涉、
-  too_tight、非实体拒绝）。
+  too_tight、非实体拒绝）。数值现在由 `accept-assembly-golden` 用固定 STL 的
+  volume/bbox/minDistance 期望值守住。
 - **worker 是子进程，生命周期归插件管**：`ctx.effect` 里注册 `resetPythonWorker()`，
   卸载即停。这不是理论担忧——迁移 `validate_assembly` 后 `accept-m2.mjs` 实测**挂住不退出**
   （worker 的 stdio 句柄让事件循环一直活着），验收脚本因此也要显式收尾。
