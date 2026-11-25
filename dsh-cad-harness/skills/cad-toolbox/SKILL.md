@@ -90,7 +90,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 
 ## Default path
 
-想知道**往哪看** → `cad_inspect` (`action: "analyze"`)（|u| 风险图 + 峰表；`attention.json` 的 `fused` 层就是面板画的那张图）。要**交付** → `cad_deliver` (`action: "preflight"`)（一次跑必跑序列，未编排的步骤带原因报出）→ 有强度/运动主张才跑 `cad_simulate` → `cad_deliver` (`action: "audit"`) with `{claims}`。任何一步报 `difficult` / `unevaluable`，回到本文件查该组的原子工具，或加载对应的深度 skill。
+想知道**往哪看** → `cad_inspect` (`action: "analyze"`)（|u| 风险图 + 峰表；`attention.json` 的 `fused` 层就是面板画的那张图；每个峰带 `probe`（measure section）和 `look`（render_part section），直接可执行）。要**交付** → `cad_deliver` (`action: "preflight"`)（一次跑必跑序列，未编排的步骤带原因报出）→ 有强度/运动主张才跑 `cad_simulate` → `cad_deliver` (`action: "audit"`) with `{claims}`。任何一步报 `difficult` / `unevaluable`，回到本文件查该组的原子工具，或加载对应的深度 skill。
 
 ## Router
 
