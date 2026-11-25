@@ -1,6 +1,6 @@
 {
   "name": "yingzao",
-  "version": "0.1.1-preview.1",
+  "version": "0.1.2-preview.1",
   "private": true,
   "description": "Scanner-facing manifest for the repository root. The installable package lives in dsh-cad-harness/; this file exists so GitHub-topic indexers and catalog gates that only read the repository root can see that the repository is a DSH plugin.",
   "license": "Apache-2.0",
@@ -15,6 +15,6 @@
     }
   },
   "dependencies": {
-    "dsh-cad-harness": "^0.1.1-preview.1"
+    "dsh-cad-harness": "^0.1.2-preview.1"
   }
 }
