@@ -183,6 +183,7 @@ DSH_CAD_CQ_PACK=/path/to/cadquery npx dsh-cad-backend --show
 
 | 门禁 | 结果 |
 |---|---|
+| `accept:preview` 覆盖 | 44 个脚本（R5；本版 15 个验收全部接入）；`accept:release` = preview + `accept:step-validation` |
 | Linux 本地 `npm run accept:release` | 待填（R6） |
 | tag 全矩阵（Ubuntu + macOS + Windows smoke + CadQuery pack） | 待填（R6，附 run 链接） |
 | `accept:license` / `npm pack --dry-run` / `rehearse:preview` | 待填（R7） |
