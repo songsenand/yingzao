@@ -26,6 +26,12 @@ The hard part is naming the thing you want measured. `cad_inspect` (`action: "fe
 - **`cad_inspect` (`action: "measure"`, `kind: "gap"`) can read a saved run's pose.** Pass `runId`, `aPart`, `bPart` and either `timeSec` or `step` (looked up in that run's interference events). It returns the closest surface distance and both witness points at that trajectory pose; no re-run and no hand-written trajectory math.
 - **A closest-point number is surface clearance, not a collision test.** An embedded part can report a positive distance while the run's boolean reports a real overlap. When the cited run reports an overlap at that step, the reply carries a warning; use the event's `overlapBboxMm` for the overlap region.
 
+## Preflight before spending a version
+
+- **`dryRun: true` compiles and checks without creating anything.** It returns watertight / bodies / bbox / min-wall and writes no version, no image, no part row. Use it when you want to probe a script before committing it.
+- **`preflight: true` saves only when the mesh is watertight AND one connected body.** A sub-1.2mm wall is a warning, not a refusal — legitimate thin ears exist. A refusal writes no version and no image, so the failed attempt does not pollute the part's history; the reply carries `preflight.ok / bodies / minWallMm`.
+- **Do not batch design iterations.** The sewing session's 94 `parentVersion` generations were one-at-a-time feedback; preflight removes the bad ones, it does not make a batch of alternatives safe.
+
 ## Modeling
 
 - **`cad_part` (`action: "merge"`) is for "one rigid body", not tidying a corpus.** It reports **shells**: more than one means the merged parts do not all touch — a pile, not a machine.

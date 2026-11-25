@@ -99,3 +99,20 @@ The hard part is almost never the arithmetic — it is naming the thing you want
 - **That number is surface clearance, not a collision test.** A part wholly embedded
   in another can report a positive distance while the run's boolean reports an
   overlap; in that case the reply says so and points at the event's `overlapBboxMm`.
+
+## Preflight before versioning (2026-11-25)
+
+- **`cad_part generate` has `dryRun` and `preflight`.** `dryRun: true` compiles the
+  source, measures watertight / bodies / bbox / min-wall (600 samples), and creates
+  nothing: no version, no image, no part row. `preflight: true` is the gate: it saves
+  only when the mesh is watertight and one connected body, and renders the views from
+  the STL it already compiled (no second compile).
+- **A thin wall is reported, not blocked.** Min wall below 1.2mm produces a warning
+  and `preflight.minWallMm`; it does not refuse the version. The sewing frame has a
+  legitimate 0.9mm ear, and a gate that rejects it would force a worse geometry. A
+  caller that needs a hard wall limit checks the number before the next call.
+- **A refusal is not a version.** `saved:false` + no `versionId` means the part's
+  history stays clean; the reply has the same `preflight` object as a dry run. Use
+  this after a known-bad round (open surface, two bodies), not as a batch of
+  alternative designs — the 94 `parentVersion` iterations needed one-at-a-time
+  feedback.
