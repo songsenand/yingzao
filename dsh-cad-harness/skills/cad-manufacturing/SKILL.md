@@ -26,6 +26,7 @@ A screen answers "does this violate a declared rule". It never answers "which pr
 - **A missing number is not "no constraint".** Undeclared rules come back in `unevaluable`; not-applicable rules are named, not silently dropped.
 - **Never rank or recommend.** Give each profile's verdict and margins; the user decides.
 - **The wall half is sampled; `wallMeasured: false` means the ray half measured nothing — never a pass.** Overhang area is exact.
+- **Batch the family screen.** `cad_check` (`action: "parts"`) screens up to 12 saved versions in ONE call (measure + printability); each printability row writes its own `runId`, so the batch is evidence, not a shortcut. Loop `check_printability` only when you need one part's full findings; the CadQuery session's 5 printability + 4 measure calls fit in one `parts` call.
 - **A sealed cavity is the only escape-passage failure a mesh can prove.** A passage that merely narrows is not claimed.
 - **CNC tool reach is exact only for circular bores.** Non-circular slots/pockets are not covered, and the report says so.
 - **`judge` / `scan` / `both`**: `scan` returns the field and **no verdict**; `judge` returns `nextLook` (where to look) — the field is not a gate.

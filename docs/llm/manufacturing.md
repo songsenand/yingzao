@@ -189,3 +189,18 @@ found", never "this can be made".
   overhang screen. The process-specific evaluator is still the deliver plan's job;
   `set_part_role` has only `printed` / `stock` / `research` (there is no `machined`
   role — the run kind is the evidence).
+
+## Batch screening (2026-11-25)
+
+- **`cad_check` (`action: "parts"`) is the family screen.** One call covers up to
+  12 saved versions: the measure half (watertight / bodies / volume / bbox) and the
+  same profile-aware printability job as `check_printability`. It writes one
+  printability run per version and returns each `runId`, so a batch is evidence, not
+  a shortcut around the evidence path.
+- **Use it before looping the single-part tools.** The CadQuery sewing session made
+  5 `printability` calls (all `fdm-pla-0.4`) and 4 `measure` calls that fit in one
+  `parts` call. The single tool remains right when one part's full findings/attention
+  are the question.
+- **Current scope is measure + printability.** CNC, turning and sheet2d have no
+  family-batch action yet; a batch that spans process kinds would need the same
+  per-version run writing, not a merged verdict.
