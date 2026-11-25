@@ -12,7 +12,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAssemblyCheck } from '../src/host/assembly-check.ts';
 import { pythonRuntimeRoot } from '../src/host/python-runtime.ts';
-import { listVersions, openVersionStore } from '../src/host/version.ts';
+import { saveVersion, openVersionStore } from '../src/host/version.ts';
+import { writeBinaryStl } from '../src/host/mesh.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN = resolve(HERE, '..');
@@ -33,38 +34,49 @@ if (!existsSync(venvPython)) {
   process.exit(2);
 }
 let failures = 0;
+const near = (actual, expected) => typeof actual === 'number' && Math.abs(actual - expected) < 1e-6;
 const check = (ok, label, detail = '') => {
   if (!ok) failures++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
 };
-const store = openVersionStore(join(PLUGIN, 'data'));
-const versions = await listVersions(store);
-console.log(`check_assembly branches (store: ${store.root}, ${versions.length} versions)\n`);
+// Self-contained fixture: the old version of this test read `dsh-cad-harness/data`,
+// which is an ephemeral local corpus (0 tracked files). On CI it held only the
+// rows other accepts happened to create, so every datum lookup missed and 21
+// branches "failed" for lack of a fixture. Build the versions here instead.
+const cubeStl = (sizeMm, centre) => {
+  const h = sizeMm / 2;
+  const [cx, cy, cz] = centre;
+  const corners = [
+    [cx - h, cy - h, cz - h], [cx + h, cy - h, cz - h], [cx + h, cy + h, cz - h], [cx - h, cy + h, cz - h],
+    [cx - h, cy - h, cz + h], [cx + h, cy - h, cz + h], [cx + h, cy + h, cz + h], [cx - h, cy + h, cz + h],
+  ];
+  const faces = [
+    [0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
+    [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7],
+  ];
+  return writeBinaryStl({ vertProperties: new Float32Array(corners.flat()), triVerts: new Uint32Array(faces.flat()) });
+};
+const work = await mkdtemp(join(REPO, '.tmp-assembly-branches-'));
+const store = openVersionStore(join(work, 'cad-data'));
+const holderDatum = [{ name: '轴孔', point: [0, 0, 0] }];
+const holderV1 = await saveVersion(store, { partId: 'holder', userIntent: 'synthetic holder v1', stl: cubeStl(20, [0, 0, 0]), datums: holderDatum });
+const holderV2 = await saveVersion(store, { partId: 'holder', userIntent: 'synthetic holder v2', stl: cubeStl(20, [0, 0, 0]), datums: holderDatum });
+const pinV = await saveVersion(store, { partId: 'pin', userIntent: 'synthetic pin', stl: cubeStl(10, [27.6268, 0, 0]), datums: [{ name: '轴径', point: [27.6268, 0, 0] }] });
+const ghostV = await saveVersion(store, { partId: 'ghost', userIntent: 'synthetic ghost', stl: cubeStl(10, [4, 0, 0]), datums: [{ name: '轴孔', point: [4, 0, 0] }] });
+console.log(`check_assembly branches (synthetic store: ${store.root}, 4 versions)\n`);
 
 // --- 3. a synthetic manifest over every operator ------------------------------
 console.log('\n--- synthetic manifest (every operator) ---');
 // Two versions of the SAME part, so one run can cite current geometry and another
 // can cite superseded geometry (the staleness rule).
-const byPart = new Map();
-for (const version of versions) {
-  if (!version.partId) continue;
-  const list = byPart.get(version.partId) ?? [];
-  list.push(version);
-  byPart.set(version.partId, list);
-}
-const twoVersionPart = [...byPart.values()].find((list) => list.length >= 2);
-const versionPool = new Map();
-for (const version of versions) {
-  if (version.id === 'v001' || version.id === 'v003' || version.id === 'v006') versionPool.set(version.id, version);
-}
-const holderVersion = versionPool.get('v001') ?? versions[0];
-const pinVersion = versionPool.get('v003') ?? versions[1] ?? versions[0];
-const thirdVersion = versionPool.get('v006') ?? versions[2] ?? versions[0];
+const holderVersion = { id: holderV1 };
+const pinVersion = { id: pinV };
+const thirdVersion = { id: ghostV };
 if (!holderVersion || !pinVersion || !thirdVersion) {
   console.log('SKIP  synthetic manifest — the fixture store needs at least three versions');
 } else {
-  const currentCitation = twoVersionPart ? [twoVersionPart[1].id] : [];
-  const staleCitation = twoVersionPart ? [twoVersionPart[0].id] : [];
+  const currentCitation = [holderV2];
+  const staleCitation = [holderV1];
   const dir = await mkdtemp(join(REPO, '.tmp-check-parity-'));
   const manifest = {
     schemaVersion: 1,
@@ -152,8 +164,8 @@ if (!holderVersion || !pinVersion || !thirdVersion) {
     ['spring-behaviour reports a positive force inside its band and all declared checks OK', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-pass' && r.elastic !== undefined && r.elastic.forceN > 0 && r.elastic.forceBandN !== undefined && r.elastic.forceBandN[0] <= r.elastic.forceN && r.elastic.forceN <= r.elastic.forceBandN[1] && r.elastic.checks.direction === 'ok' && r.elastic.checks.solidHeight === 'ok' && r.elastic.checks.forceBudget === 'ok')],
     ['spring-behaviour always exposes an order-of-magnitude band', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-pass' && r.elastic !== undefined && r.elastic.forceDecadeN[0] <= Math.abs(r.elastic.forceN) && Math.abs(r.elastic.forceN) <= r.elastic.forceDecadeN[1])],
     ['spring-behaviour without a budget is skipped, not passed', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-no-budget' && r.verdict === 'skipped')],
-    ['spring-behaviour checks the force at the travel endpoint, not only the preload', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-travel-over' && r.verdict === 'hard-violation' && r.elastic?.forceN === 18.7464 && r.elastic?.forceAtTravelN === 26.7464 && r.elastic?.checks.forceBudget === 'violation')],
-    ['a standardId fills the catalog and explicit fields still win', report.results.some((r) => r.interfaceId === 'if-spring-standard-override' && r.elastic?.standardId === 'comp-od5.4-w0.6-l30' && r.elastic?.freeLengthMm === 40 && r.elastic?.stiffnessNPerMm === 2 && r.elastic?.forceAtTravelN === 26.7464)],
+    ['spring-behaviour checks the force at the travel endpoint, not only the preload', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-travel-over' && r.verdict === 'hard-violation' && near(r.elastic?.forceN, 18.7464) && near(r.elastic?.forceAtTravelN, 26.7464) && r.elastic?.checks.forceBudget === 'violation')],
+    ['a standardId fills the catalog and explicit fields still win', report.results.some((r) => r.interfaceId === 'if-spring-standard-override' && r.elastic?.standardId === 'comp-od5.4-w0.6-l30' && r.elastic?.freeLengthMm === 40 && r.elastic?.stiffnessNPerMm === 2 && near(r.elastic?.forceAtTravelN, 26.7464))],
     ['spring-behaviour below solid height is a hard violation', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-clash' && r.verdict === 'hard-violation')],
     ['a compression spring that is stretched is a hard violation', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-stretched' && r.verdict === 'hard-violation')],
     ['an undeclared direction cannot pass even with a budget', report.results.some((r) => r.interfaceId === 'if-spring-behaviour-no-direction' && r.verdict === 'intent-flag' && r.elastic?.checks.direction === 'unknown')],
