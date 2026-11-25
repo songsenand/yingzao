@@ -17,7 +17,7 @@
 **`0.1.2-preview.1`：把 2026-11-20 之后已经落地、但还没进版的改动收成可发布的预览版。**
 
 - 0.1.1 的双内核主线已经收口（L1.0–L1.12 全绿，`0.1.1-preview.1` 已发布）。本版**不新增引擎、不改 seam**。
-- 本版内容是 11-20 → 11-25 的 33 个提交（截至 2026-11-25），按 §2 归为 C1–C12：关节包络/fit、扫掠筛查、motion gear、
+- 本版内容是 11-20 → 11-25 的 36 个提交（截至 2026-11-25 22:30，含发布文档），按 §2 归为 C1–C12：关节包络/fit、扫掠筛查、motion gear、
   悬垂政策、热力图图层、analyze probe/look、generate dryRun/preflight、插件 issue 修复、
   DIN 2098 弹簧参数、四个新示例、主题变量、CI 分层、DSH 矩阵、TS oracle 退役。
 - **本版没有“再写一个功能”的阻断项；阻断项全在“包与说明”**：版本号/tag、发布说明、预设与 dsh 对齐、
@@ -44,14 +44,14 @@
 
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
-| R1 | P0 | next | 版本号、根 shim 与 tag | 包与根 `package.json` 版本均为 `0.1.2-preview.1`（根依赖范围 `^0.1.2-preview.1`）；`node scripts/sync-root-version.mjs --check` exit 0；tag `v0.1.2-preview.1` 的 gitHead 与 `npm view dsh-cad-harness@0.1.2-preview.1 gitHead` 相等 | 0.5d |
-| R2 | P0 | next | 新建 `RELEASE-NOTES-0.1.2.md` | §2 的 C1–C12 每条都有对应小节；升级须知（装后必须重跑 `dsh-cad-setup`）保留；已知问题至少覆盖：render/sim 仍同步、标准件目录无工具入口、CQ pack 1.4–1.6 GiB、DSH 0.2.3-alpha.1 上游不可用、平台证据（Linux 本机实跑；macOS/Windows 走 CI：tag 全矩阵，夜间也有 macOS 全量 + Windows smoke）；含 Linux `accept:release` 与全矩阵 run 的链接 | 1d |
-| R3 | P0 | next | 预设与 DSH 兼容矩阵 | 用发布机的 dsh 重生成 `presets/cad/preset.patch.yml`；`node scripts/check-release-preset.mjs` exit 0；`dsh-cad-doctor` 的 `preset-standard-drift` PASS；`DSH-MATRIX.md` 重跑 13 个 in-range 版本并把“插件版本”改为 0.1.2-preview.1；README 的版本表与矩阵一致 | 1d |
-| R4 | P0 | next | 用户文档 + 架构文档同步 | 根 README/README.en 与包 README/README.en（npm 页）的徽章与安装段 = 0.1.2-preview.1；新能力（fit/扫掠/gear、dryRun/preflight、热力图、悬垂政策）在用法/已知边界有落点；`docs/user/preview.md`(+en) 改名并补本版能力与边界，`docs/user/install.md`、`docs/user/README.md`、`dsh-cad-harness/library/README.md` 同步；`docs/llm/library.md`(+en)、`skills/cad-toolbox/SKILL.md` 的版本口径更新；DESIGN.md 补新增模块语义（joint fit、sweep、gear、heat layers、overhang、dryRun/preflight、oracle 退役）；`grep -rn "0.1.1-preview.1"` 只命中历史文件（`RELEASE-0.1.1.md`、`RELEASE-NOTES-0.1.1.md`、DECISION-LOG、archive） | 2d |
+| R1 | P0 | done | 版本号与根 shim | 包与根 `package.json` 均为 `0.1.2-preview.1`（根依赖 `^0.1.2-preview.1`）；`node scripts/sync-root-version.mjs --check` 输出 in sync（2026-11-25）。tag 的 gitHead 校验移到 R8，发布时做 | 0.5d |
+| R2 | P0 | doing | 新建 `RELEASE-NOTES-0.1.2.md` | 草稿已建：C1–C12 各有小节，升级/已知问题/发布步骤齐全；**待 R6/R7/R8 把证据表的“待填”换成数字与 run 链接**，发布时不允许留空 | 1d |
+| R3 | P0 | partial | 预设与 DSH 兼容矩阵 | 预设 `setup --check` ok、`check-release-preset` ok、`doctor` 的 `preset-standard-drift` PASS（2026-11-25）；**13 版本矩阵尚未用 0.1.2-preview.1 重跑**：本沙箱无 systemd 用户总线，kern 起不来，需普通终端重跑或等 tag CI，结果回填 `DSH-MATRIX.md` | 1d |
+| R4 | P0 | done | 用户文档 + 架构文档同步 | 根 README/README.en 与包 README/README.en 已到 0.1.2-preview.1，新能力进“本版变化/已知边界/预览说明”；`docs/user/{preview,install,README}`(+en)、`docs/llm/library.md`(+en)、`skills/cad-toolbox/SKILL.md`、`library/README.md` 版本口径更新；DESIGN.md 新增 §38（dryRun/preflight、sweep、fit/gear、悬垂、热力图/主题、oracle 退役、示例展示）；examples 索引按“进新退旧”移动 3 个；`grep "0.1.1-preview.1"` 只剩历史文件与旧运行说明 | 2d |
 | R5 | P1 | next | 发布门禁补齐 | `accept:preview` 当前只覆盖 29 个脚本（`accept` 68 个）。本版相关的 15 个缺口：`accept-library-catalog`、`accept-tokens`、`accept-measure-part-smoke`、`accept-measure-gap-smoke`、`accept-check-assembly-branches`、`accept-assembly-golden`、`accept-heat-layers`、`accept-overhang-policy`、`accept-analyze-peaks`、`accept-generate-preflight`、`accept-motion-gear`、`accept-check-sweep`、`accept-motion-fit-tool`、`accept-motion-joint-pairs`、`accept-plugin-issues`。其中 `accept-plugin-issues` 与 `accept-motion-joint-pairs` 连 `accept` 聚合都没进，`accept-library-catalog`/`accept-tokens`/`accept-plugin-issues` 没有 `accept:*` 别名；先把别名与聚合补齐，再全部接进 `accept:preview`。出口：`accept:release` 全绿；preview 覆盖的脚本数从 29 增至 ≥43 | 1d |
 | R6 | P0 | next | 发布证据：全矩阵 + 本地 release gate | tag 前一次 `workflow_dispatch` 全矩阵 run 成功（Ubuntu + macOS + Windows smoke + CadQuery pack），run 链接进发布说明；Linux 本地 `npm run accept:release` PASS；若 Windows 失败，发布说明如实写并开 issue，不阻塞 Linux 预览 | 1d（等 CI） |
 | R7 | P1 | next | 许可与打包 | 把 `RELEASE-LICENSE-CHECKLIST.md` 的版本标题与勾选项更新到 0.1.2-preview.1；`accept:license`、`npm pack --dry-run`、`rehearse:preview` 全过；包内无 `cad-data/`、`bin/`、BOSL2、site-packages；NOTICE 覆盖 CQ/OCP/VTK；DIN 2098 估算参数在 `library/README.md` 标明 `source=estimated` | 0.5d |
-| R8 | P0 | next | 发布后验证 | `npm view dsh-cad-harness dist-tags.latest` = 0.1.2-preview.1；干净 profile 按 README 安装 → `dsh-cad-setup` → `dsh-cad-doctor` → 生成 bracket → 导出 STL/STEP，日志留档；从 0.1.1-preview.1 升级时 `doctor` 能指出 `preset-standard-drift` 并给修复命令 | 0.5d |
+| R8 | P0 | next | 发布后验证 | `npm view dsh-cad-harness dist-tags.latest` = 0.1.2-preview.1；tag `v0.1.2-preview.1` 的 gitHead 与 `npm view dsh-cad-harness@0.1.2-preview.1 gitHead` 相等；干净 profile 按 README 安装 → `dsh-cad-setup` → `dsh-cad-doctor` → 生成 bracket → 导出 STL/STEP，日志留档；从 0.1.1-preview.1 升级时 `doctor` 能指出 `preset-standard-drift` 并给修复命令 | 0.5d |
 
 > R5 的缺口依据：`accept:preview` 覆盖 29 个脚本，`accept` 是 68 个脚本。上面 15 个缺口里，
 > 13 个脚本在 `accept` 里但不在 `accept:preview`/`accept:release` 里；另 2 个
@@ -76,7 +76,7 @@
 | C8 | 四个新示例：缝纫旋梭、三速后拨（各含 CadQuery 变体） | `18a0245`；[examples/README.md](../../examples/README.md) |
 | C9 | 面板配色改 CSS 变量、跟随宿主亮/暗主题 | `4e2a553`；`accept-tokens` + `accept-ui` 的 `assert=theme` |
 | C10 | CI 分层（快检/夜间全量/tag 门）+ 并发取消 + 运行时缓存；本地 13 版本 DSH 矩阵 | `0d8a85e`、`75293b1`；`.github/workflows/preview.yml`、[DSH-MATRIX.md](DSH-MATRIX.md) |
-| C11 | 退役 TS oracle：measure/assembly/motion 的 parity 脚本删除，改 Python smoke + golden/分支覆盖 | `dc4af83`、`88e1174`、`c838f25`、`8ed9040`、`1fd9703`；`accept-measure-part-smoke` / `accept-measure-gap-smoke` / `accept-check-assembly-branches` / `accept-assembly-golden` / `accept-motion-joint-pairs` |
+| C11 | 退役 TS oracle：measure/assembly/motion/printability 的 parity 实现删除，改 Python smoke + golden/分支覆盖 | `dc4af83`、`88e1174`、`c838f25`、`8ed9040`、`1fd9703`、`150c26b`；`accept-measure-part-smoke` / `accept-measure-gap-smoke` / `accept-check-assembly-branches` / `accept-assembly-golden` / `accept-motion-joint-pairs` |
 | C12 | 根 shim 版本脚本 + CI 校验；`dsh plugin add github:…` 解析到真实包 | `70a0e1e`、`8e0b3fa`；fast gate 的 `sync-root-version --check` |
 
 ---
@@ -265,8 +265,11 @@
 
 ## 10. 当前建议（2026-11-25）
 
-- **先做发布机械项**：R1（版本/tag）→ R2（发布说明）→ R3（预设/矩阵）→ R4（文档口径）。
-  这四项不做完，后面的门禁与证据都会返工。
+- **已完成（2026-11-25）**：R1 版本与根 shim；R2 发布说明草稿；R3 预设与 doctor（矩阵待普通终端）；
+  R4 用户/架构文档与示例展示。
+- **剩下四件**：R5 门禁补齐 → R6 全矩阵证据 + Linux `accept:release` → R7 许可/打包 → R8 发布与发布后验证。
+- **R3 的地雷**：13 版本矩阵在本沙箱跑不了（kern 需要 systemd 用户总线）；在普通终端跑
+  `node scripts/accept-dsh-matrix.mjs`，或等 tag CI 后回填 `DSH-MATRIX.md`。不要把 0.1.1 的运行当成本版证据。
 - **再补门禁**：R5 把 C1–C12 对应的验收脚本接进 `accept:preview`；当前 15 个本版相关脚本
   不在发布门禁里（13 个在 `accept` 聚合、2 个连聚合都没进）——等于“测了但不拦”。
 - **证据一次做全**：R6 用一次 `workflow_dispatch` 全矩阵 + Linux `accept:release`；

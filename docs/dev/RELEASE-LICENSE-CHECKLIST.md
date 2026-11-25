@@ -1,4 +1,4 @@
-# 0.1.1-preview.1 许可检查清单
+# 0.1.2-preview.1 许可检查清单
 
 > 预览版不随包分发 OpenSCAD、BOSL2、Python 运行时或 CadQuery pack；它们由用户安装/首次使用下载。
 > 本清单在每次 `npm pack` 前后各跑一次。
