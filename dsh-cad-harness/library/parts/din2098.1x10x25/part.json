@@ -88,5 +88,15 @@
         25.0
       ]
     }
+  },
+  "spring": {
+    "wireMm": 1,
+    "outerDiameterMm": 10,
+    "freeLengthMm": 25,
+    "coils": 8,
+    "stiffnessNPerMm": 1.69,
+    "solidHeightMm": 8,
+    "source": "estimated",
+    "note": "Calculated from catalog wire/OD/free length: n=round(L/(3w)), k=G*w^4/(8*(OD-w)^3*n), G=79 GPa. Verify before load-bearing use."
   }
 }
