@@ -4,7 +4,8 @@
 > 功能、证据、安装/升级、已知问题与发布步骤见下文；标准件目录的现状见 §8 与
 > `docs/llm/library.md`。
 > **基线**：`v0.1.0-preview.5` → 本版。
-> **目标/范围/验收**：[RELEASE-0.1.1.md](RELEASE-0.1.1.md)；**状态**：[TODO.md](TODO.md) 的 L1.8。
+> **目标/范围/验收**：[RELEASE-0.1.1.md](RELEASE-0.1.1.md)；**状态**：已发布（2026-11-20，npm `latest`，
+> gitHead `f62124b`）；L1.8 已收口，见 [TODO.md](TODO.md) §7.1。
 
 ---
 

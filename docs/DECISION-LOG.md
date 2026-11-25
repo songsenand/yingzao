@@ -6928,3 +6928,38 @@ oracle，却继续带着 `@dimforge/rapier3d-compat` 依赖和 6 个对拍脚本
 **影响：** motion 只剩 Python 一条实现，少约 700 行 TS 和一个运行时依赖；失去第二实现，
 数值由现有数值断言 + motion golden 型验收（axes/gear/sampling）守住。**未退：** printability
 （preflight）、fluid/MPM（env fallback）、connectivity/SCAD（host/client 需要）。
+
+## 2026-11-25：下一版按 `0.1.2-preview.1` 发布，0.1.1 线不再单独补发修订版
+
+**触发条件：** 第 1 条（用户在本次会话中明确“近期将发布 0.1.2 预览版”）＋第 4 条（决定发布版本口径、
+门禁与文档的后续顺序）。
+
+**要解决的问题：** `0.1.1-preview.1` 已于 2026-11-20 发布（npm `latest`，gitHead `f62124b`）；此后
+11-20 → 11-25 又落了 33 个提交（fit/扫掠/gear、悬垂政策、热力图图层、analyze probe/look、
+generate dryRun/preflight、插件 issue 修复、DIN 2098 弹簧参数、四个示例、主题变量、CI 分层、
+TS oracle 退役（measure/assembly/motion）），全部未进版。原 TODO 仍按 0.1.1 排期，并保留“latest 仍是坏包、待发 0.1.1
+修订版”的旧结论——该结论已过时：发布包的 gitHead `f62124b` 中 `presets/cad/preset.patch.yml`
+的 `list-agents` 出现 0 次，坏包问题已由 0.1.1-preview.1 修复。
+
+**决策内容：**
+1. 下一版发布号 = `0.1.2-preview.1`；0.1.1 线不再单独补发修订版，上述改动随本版发布。
+2. `0.1.2-preview.1` 的发布阻断只含版本/tag、发布说明、预设与 dsh 对齐、文档口径、门禁覆盖、
+   全矩阵证据、许可打包、发布后验证（TODO §1 的 R1–R8）。
+3. U01/U02/L10/N15/L15/L1.13/P2-10/P3-15/L16 归入“0.1.2 线剩余”，**不阻断 preview.1**，随
+   `0.1.2-preview.2` 或 0.2 继续。
+
+**理由：** 距上次发布只有 5 天，改动是连续的体验/证据修复；单独发 0.1.1 修订版会让用户装两次，
+而把版本推进到 0.1.2 也符合“0.1.2 不新增引擎、补齐体验/证据”的原定主题。发布阻断集中在
+“包与说明”，而不是再写功能——功能已经在树里并通过了各自的 acceptance。
+
+**依据：** npm registry `time`：`0.1.1-preview.1` = 2026-11-20T08:53Z，`gitHead f62124b`；
+`git show v0.1.1-preview.1:dsh-cad-harness/presets/cad/preset.patch.yml | grep -c list-agents` = 0；
+`git rev-list --count --since=2026-11-20 HEAD` = 33；`accept-library-catalog` 本地 PASS（99/14）；
+`accept:preview` 覆盖 29 个脚本、`accept` 68 个脚本；本版相关的 15 个脚本不在发布门禁里
+（13 个只在 `accept` 聚合，`accept-motion-joint-pairs` 与 `accept-plugin-issues` 连聚合都不在；
+TODO R5）。
+
+**影响：** `docs/dev/TODO.md` 全表重排（R1–R8 / C1–C12 / §3 剩余）；将新建
+`docs/dev/RELEASE-NOTES-0.1.2.md`；README 与 `docs/user/preview.md` 版本口径；
+`docs/dev/DSH-MATRIX.md` 插件版本列；`docs/dev/RELEASE-0.1.1.md` 转历史。
+**未定：** 0.1.2 是否开多个 preview（决定 §3 剩余项是留在 0.1.2 线还是并入 0.2）。
