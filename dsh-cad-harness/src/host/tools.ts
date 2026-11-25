@@ -72,7 +72,7 @@ import { withOutputContract } from './tool-contract.ts';
 import type { SurfaceMeta } from './surface.ts';
 import { withOriginSession } from './provenance.ts';
 import { nextLookFor } from './next-look.ts';
-import { analyzeVersion, type BandNorm, type SuspectLike } from './analyze.ts';
+import { analyzeVersion, withPeakActions, type BandNorm, type SuspectLike } from './analyze.ts';
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
@@ -8848,8 +8848,9 @@ export function registerCadTools(
       '`strength-concentration` at |u|=0.5 (a LOOK, not a risk); the absolute `strength` layer may be silent. ' +
       'Overhang area / thick-wall are reported once per part in `partNotes`; the ' +
       'mass-based unsupported regions are in `support`. It never gates and never returns a verdict: a peak ' +
-      'means "look here", not "this will break". Comfortable regions are dropped, so an empty peak list ' +
-      'means "nothing stands out", NOT "safe".',
+      'means "look here", not "this will break". Every peak carries a runnable `probe` (measure section) and ' +
+      '`look` (render_part section) at its Z — a coordinate without a next action is not attention guidance. ' +
+      'Comfortable regions are dropped, so an empty peak list means "nothing stands out", NOT "safe".',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v069".' },
       cellMm: { type: 'number', description: 'Clustering cell for peaks (default 8 mm).' },
@@ -9043,6 +9044,8 @@ export function registerCadTools(
         cellMm: a.cellMm,
         stress: stressLayer,
       });
+      // A peak without a next action is a coordinate, not attention guidance.
+      out.peaks = withPeakActions(a.versionId, out.peaks);
       if (cornerError) out.notMapped.push(`corner-scan: ${cornerError}`);
       if (supportError) out.notMapped.push(`support: ${supportError}`);
       if (!screen.field) out.notMapped.push('wall-field: per-sample field missing — wall layer absent from this map');

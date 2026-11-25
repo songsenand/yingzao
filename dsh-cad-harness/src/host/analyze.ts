@@ -98,6 +98,10 @@ export interface AnalyzePeak {
   risk: number;
   count: number;
   layers: string[];
+  /** Runnable re-measure at the peak's section; filled by the `analyze` tool. */
+  probe?: { tool: string; args: Record<string, unknown> };
+  /** Runnable visual next step at the peak's section; filled by the `analyze` tool. */
+  look?: { tool: string; args: Record<string, unknown> };
 }
 
 /** Stress (MPa) -> |u|: 0.5 at the declared `warnAt`, 1 at `badAt`; below warn is
@@ -131,6 +135,23 @@ function cornerU(s: SuspectLike, band?: BandNorm): number {
  * the peaks sorted by risk. Comfortable points are DROPPED from the peak list (|u| < 0.5):
  * a heat map that lists "the whole part is fine" as a peak is noise, not guidance.
  */
+/**
+ * Give each fused peak a runnable next step. The peak may come from wall/corner/
+ * strength, each with a different local normal, so the honest generic action is a
+ * Z-section at the peak: `measure` (section) re-measures, `render_part` draws it.
+ * A peak with no command is a coordinate, not attention guidance.
+ */
+export function withPeakActions(versionId: string, peaks: readonly AnalyzePeak[]): AnalyzePeak[] {
+  return peaks.map((p) => {
+    const at = p.atMm?.length === 3 ? +p.atMm[2]!.toFixed(3) : 0;
+    return {
+      ...p,
+      probe: { tool: 'measure', args: { versionId, kind: 'section', axis: 'z', atMm: at } },
+      look: { tool: 'render_part', args: { versionId, section: { axis: 'z', atMm: at } } },
+    };
+  });
+}
+
 export function analyzeVersion(
   input: {
     suspects?: readonly SuspectLike[];
