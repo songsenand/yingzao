@@ -262,10 +262,20 @@ node scripts/verify.mjs /path/to/project --advisory
 
 ### DSH 版本兼容（本地容器矩阵）
 
-支持的 DSH 范围写在 `dsh-cad-harness/package.json` 的 `engines.dsh`（当前
-`>=0.2.1-rc.2 <0.3.0`）。0.2.x 中满足该范围的 13 个版本已全部扫描：**9 个 rc 全过**，
-4 个 alpha 中 3 个过（`0.2.3-alpha.1` 是上游自身启动失败，不是插件问题）。默认命令只跑
-下界 + 最新；完整表见 [docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)。
+支持的 DSH 范围写在 `dsh-cad-harness/package.json` 的 `engines.dsh`：
+`>=0.2.1-rc.2 <0.3.0`。范围内 13 个版本已逐个实测，可以直接照下表挑版本：
+
+| 状态 | DSH 版本 |
+|---|---|
+| ✅ 可用（9 个 rc，支持承诺覆盖） | `0.2.1-rc.2` `0.2.1-rc.3` `0.2.1-rc.4` `0.2.1-rc.5` `0.2.2-rc.1` `0.2.2-rc.2` `0.2.2-rc.3` `0.2.2-rc.4` `0.2.2-rc.5` |
+| ✅ 验证通过（3 个 alpha；预发布，不承诺） | `0.2.2-alpha.2` `0.2.2-alpha.3` `0.2.3-alpha.2` |
+| ❌ 不可用（上游问题，与插件无关） | `0.2.3-alpha.1` |
+
+`0.2.2-rc.1` 是当前 CI 与 checked-in preset 的基准版本。低于下界的 8 个版本
+（`0.2.0-rc.1/2`、`0.2.1-alpha.1–5`、`0.2.1-rc.1`）和 `0.3.0+` 不在测试范围，既不承诺
+也不排斥。上表每一行都跑同一套 T0–T2 断言（安装 → 用该版本自带的 `standard.patch.yml`
+重生成 preset → 组合 → 激活 → 9 个 CAD 工具面 → 一次真实 `cad_session` 调用），完整表
+与失败原因见 [docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)。
 
 仓库带一个本地可跑的兼容矩阵：用
 [kern](https://github.com/getkern/kern)（rootless、无 daemon）在一次性容器里对每个版本跑

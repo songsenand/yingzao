@@ -252,11 +252,22 @@ node scripts/verify.mjs /path/to/project --advisory
 ### DSH version compatibility (local container matrix)
 
 The supported DSH range is declared in `dsh-cad-harness/package.json` under
-`engines.dsh` (currently `>=0.2.1-rc.2 <0.3.0`). All 13 0.2.x versions inside that
-range have been scanned: **9/9 rc versions pass**; 3 of 4 alpha versions pass
-(`0.2.3-alpha.1` fails to start upstream, not because of the plugin). The default
-command covers only the floor and the latest; the full table is in
-[docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md). The repository ships a local
+`engines.dsh`: `>=0.2.1-rc.2 <0.3.0`. All 13 versions inside that range have been
+tested one by one, so you can pick from this table directly:
+
+| Status | DSH version |
+|---|---|
+| ✅ Works (9 rc versions, covered by the support promise) | `0.2.1-rc.2` `0.2.1-rc.3` `0.2.1-rc.4` `0.2.1-rc.5` `0.2.2-rc.1` `0.2.2-rc.2` `0.2.2-rc.3` `0.2.2-rc.4` `0.2.2-rc.5` |
+| ✅ Passed (3 alpha versions; prereleases, not promised) | `0.2.2-alpha.2` `0.2.2-alpha.3` `0.2.3-alpha.2` |
+| ❌ Unusable (upstream bug, not the plugin) | `0.2.3-alpha.1` |
+
+`0.2.2-rc.1` is the baseline pinned by CI and by the checked-in preset. The 8 versions
+below the floor (`0.2.0-rc.1/2`, `0.2.1-alpha.1–5`, `0.2.1-rc.1`) and `0.3.0+` are
+outside the tested range: neither promised nor ruled out. Every row ran the same
+T0–T2 assertions (install → regenerate the preset from that version's own
+`standard.patch.yml` → compose → activate → the 9 CAD tool surfaces → one real
+`cad_session` call); the full table and failure reasons are in
+[docs/dev/DSH-MATRIX.md](docs/dev/DSH-MATRIX.md). The repository also ships a local
 matrix that uses [kern](https://github.com/getkern/kern) (rootless, no daemon)
 to run each version in a throwaway container: **regenerate the preset for that
 version → composition → activation → the 9 CAD tool surfaces → one real
