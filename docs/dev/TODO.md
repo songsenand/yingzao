@@ -232,6 +232,7 @@
 | 来源 | 里面有什么 | 本文件对应 |
 |---|---|---|
 | [RELEASE-0.1.1.md](RELEASE-0.1.1.md) | 0.1.1 目标、范围、验收、排期（已发布，历史） | §7.1 |
+| [RELEASE-NOTES-0.1.2.md](RELEASE-NOTES-0.1.2.md) | **本版发布说明**：C1–C12 用户可见变化、升级、已知问题、证据表 | R2、R4 |
 | [RELEASE-NOTES-0.1.1.md](RELEASE-NOTES-0.1.1.md) | 0.1.1-preview.1 发布说明与已知问题 | §7.1 |
 | [RELEASE-0.1.0-PREVIEW.md](RELEASE-0.1.0-PREVIEW.md) | 预览版 DoD、P0/P1、C1/A3/A2 设计、排期（历史） | §7.2 |
 | [RELEASE-NOTES-0.1.0-preview.2.md](RELEASE-NOTES-0.1.0-preview.2.md) | preview.2 发布说明与已知问题（历史） | §7.2 |
