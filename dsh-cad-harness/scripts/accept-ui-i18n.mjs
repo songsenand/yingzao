@@ -16,6 +16,10 @@ const ALLOW = new Set([
   '角度', '预紧力', '弹簧力', '插入力',
   '零件名', '版本', '数量', '材料', '工艺', '来源', '库存编号',
   '（未确认）',
+  // Auto-NAMES of measurements (`距离-1`). A name is data: the user renames it,
+  // it travels into a screenshot caption, and it must not change language under a
+  // reader who is comparing two revisions.
+  '距离', '面积', '孔',
 ]);
 let failed = 0;
 

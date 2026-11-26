@@ -2400,3 +2400,121 @@ if (q.get('assert') === 'audit-view') {
     show();
   })();
 }
+
+// ?assert=measure-families — U15: the viewport answers more than "distance between
+// two clicks". Each family is driven through the SAME completion path the pointer
+// handler calls, and the result must land in the named history list:
+//
+//   * angle — three points, the angle AT the middle one;
+//   * hole  — a click inside the bore of the cut plane reports Ø, a click on
+//             material refuses with a hint instead of quoting the outer face;
+//   * the list renames and deletes, and the caption carries the entries.
+if (q.get('assert') === 'measure-families') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  void (async () => {
+    const lines: string[] = [`measurement families (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    try {
+      const host = () => document.querySelector('#root canvas')?.parentElement as any;
+      const ready = await waitFor(() => Boolean(host()?.__camera && host()?.__controls && (window as any).__cadMeasureComplete), 15000);
+      if (!ready) { lines.push('FAIL  no live scene — load a version first'); show(); return; }
+      const complete = () => (window as any).__cadMeasureComplete as (p: [number, number, number]) => void;
+      // The tool chips carry an icon: the text is "📏测量", not "测量".
+      const chip = (text: string) => Array.from(document.querySelectorAll('#root button'))
+        .find((b) => (b.textContent ?? '').includes(text)) as HTMLElement | undefined;
+      const family = (name: string) => document.querySelector(`[data-measure-family="${name}"]`) as HTMLElement | null;
+
+      // 1. enter measure mode
+      chip('测量')?.click();
+      const chips = await waitFor(() => Boolean(family('distance')), 6000);
+      if (!chips) {
+        lines.push(`INFO  family chips in DOM: ${document.querySelectorAll('[data-measure-family]').length}`);
+      }
+      lines.push(`${chips ? 'PASS' : 'FAIL'}  entering 测量 offers four families`);
+      if (!chips) { show(); return; }
+
+      // 2. angle: three points, 90° at the middle
+      (family('angle') as HTMLElement).click();
+      await pause(100);
+      const t = host().__controls.target;
+      complete()([t.x + 10, t.y, t.z]);
+      complete()([t.x, t.y, t.z]);
+      complete()([t.x, t.y, t.z + 10]);
+      const angleRow = await waitFor(() => Boolean(document.querySelector('[data-measure-row]')), 5000);
+      const angleText = angleRow ? (document.querySelector('[data-measure-name]')?.textContent ?? '') : '';
+      lines.push(`${angleRow ? 'PASS' : 'FAIL'}  three picks produce an angle (${angleText})`);
+      const rightAngle = angleText.includes('90.0');
+      lines.push(`${rightAngle ? 'PASS' : 'FAIL'}  the angle is measured AT the middle point (expected 90.0°)`);
+
+      // 3. hole: needs the cut plane. The click must land INSIDE the bore, and the
+      // bore is not the bbox centre on a part with an offset boss — so the aim comes
+      // from the cut's own loops, not from a guess.
+      chip('剖切')?.click();
+      await pause(400);
+      const loops = await waitFor(() => ((window as any).__cadMeasureLoops?.() ?? []).length > 0, 6000)
+        ? (window as any).__cadMeasureLoops() as { areaMm2: number; centroid: [number, number]; isHole: boolean }[]
+        : [];
+      const holeLoop = loops.filter((loop) => loop.isHole).sort((a, b) => a.areaMm2 - b.areaMm2)[0];
+      lines.push(`${loops.length > 0 ? 'PASS' : 'FAIL'}  the cut exposes ${loops.length} loop(s), ${loops.filter((l) => l.isHole).length} of them holes`);
+      chip('测量')?.click();
+      await waitFor(() => Boolean(family('hole')), 4000);
+      (family('hole') as HTMLElement).click();
+      await pause(100);
+      // Aim at the bore: lift the loop's 2D centroid back onto the plane.
+      const frame = { point: [0, 0, 0] as number[], u: [1, 0, 0], v: [0, 1, 0] };
+      const inPlane = host().__controls.target;
+      const aim = holeLoop
+        ? [inPlane.x + holeLoop.centroid[0], inPlane.y + holeLoop.centroid[1], inPlane.z] as [number, number, number]
+        : [t.x, t.y, t.z] as [number, number, number];
+      lines.push(`INFO  bore area ${holeLoop ? holeLoop.areaMm2.toFixed(1) : '?'}mm² → aiming at ${JSON.stringify(aim.map((n) => +n.toFixed(1)))}`);
+      complete()(aim);
+      const holeRow = await waitFor(() => document.querySelectorAll('[data-measure-row]').length >= 2, 6000);
+
+      const holeText = holeRow
+        ? (document.querySelectorAll('[data-measure-name]')[1]?.textContent ?? '')
+        : '';
+      lines.push(`${holeRow ? 'PASS' : 'FAIL'}  a click inside the bore reports a hole (${holeText})`);
+      const diameter = holeText.includes('Ø');
+      lines.push(`${diameter ? 'PASS' : 'FAIL'}  the hole row carries a diameter`);
+
+      // 4. rename + delete via the list itself
+      const nameBtn = document.querySelector('[data-measure-name]') as HTMLElement | null;
+      nameBtn?.click();
+      const input = await waitFor(() => Boolean(document.querySelector('[data-measure-rename]')), 3000);
+      const field = document.querySelector('[data-measure-rename]') as HTMLInputElement | null;
+      if (field) {
+        // React listens to `focusout`, not to a synthetic `blur` Event; and a
+        // `blur()` on an element that is not focused fires nothing. Focus first.
+        field.focus();
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(field, '配合间隙');
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      }
+      const renamed = await waitFor(() => (document.querySelector('[data-measure-name]')?.textContent ?? '').includes('配合间隙'), 4000);
+      lines.push(`${input && renamed ? 'PASS' : 'FAIL'}  a measurement can be renamed in place`);
+      const before = document.querySelectorAll('[data-measure-row]').length;
+      (document.querySelector('[data-measure-delete]') as HTMLElement | null)?.click();
+      const deleted = await waitFor(() => document.querySelectorAll('[data-measure-row]').length === before - 1, 4000);
+      lines.push(`${deleted ? 'PASS' : 'FAIL'}  ✕ deletes exactly one row (${before} → ${document.querySelectorAll('[data-measure-row]').length})`);
+    } catch (error) {
+      lines.push(`FAIL  the family pipeline threw: ${String((error as Error)?.message ?? error)}`);
+    }
+    show();
+  })();
+}

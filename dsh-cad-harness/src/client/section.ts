@@ -130,7 +130,7 @@ export function planeBasis(axis: SectionAxis): { u: [number, number, number]; v:
 }
 
 /** Shoelace area of a closed 2D loop (sign = winding). */
-export function signedArea2(loop: readonly [number, number][]): number {
+export function signedArea2(loop: readonly (readonly [number, number])[]): number {
   let total = 0;
   for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
     total += loop[j]![0] * loop[i]![1] - loop[i]![0] * loop[j]![1];
@@ -139,7 +139,7 @@ export function signedArea2(loop: readonly [number, number][]): number {
 }
 
 /** Ray-casting point-in-polygon, used to decide which loop is nested in which. */
-export function pointInLoop(point: readonly [number, number], loop: readonly [number, number][]): boolean {
+export function pointInLoop(point: readonly [number, number], loop: readonly (readonly [number, number])[]): boolean {
   let inside = false;
   for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
     const [xi, yi] = loop[i]!;

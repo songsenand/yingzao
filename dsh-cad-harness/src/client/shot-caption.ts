@@ -109,6 +109,8 @@ export interface PartShotFacts {
    */
   section?: { axis: string; keepPct: number; plane?: { normal: readonly number[]; pointMm: readonly number[]; keep: 'negative' | 'positive' } };
   measureMm?: { dist: number; a: readonly number[]; b: readonly number[] };
+  /** U15: named measurements (one line per entry) — they travel with the picture. */
+  measurementLines?: readonly string[];
   thicknessMm?: number;
   annotations?: number;
   /**
@@ -148,6 +150,9 @@ export function partShotCaption(f: PartShotFacts): string {
     } else {
       facts.push(tr('ui.caption.section', { axis: f.section.axis, keep: Math.round(f.section.keepPct * 100) }));
     }
+  }
+  if (f.measurementLines?.length) {
+    facts.push(tr('ui.caption.measureList', { list: f.measurementLines.join(' · ') }));
   }
   if (f.measureMm) {
     facts.push(tr('ui.caption.measure', { dist: f.measureMm.dist.toFixed(2), a: f.measureMm.a.map((n) => n.toFixed(1)).join(', '), b: f.measureMm.b.map((n) => n.toFixed(1)).join(', ') }));

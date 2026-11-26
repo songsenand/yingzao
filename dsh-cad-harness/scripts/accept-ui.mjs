@@ -65,6 +65,9 @@ const SCENARIOS = [
   // U11: standard views, axis snap, projection toggle and 复原 — asserted as
   // camera pose facts (direction dot products), not from a picture.
   { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
+  // U15: the viewport's measurement families (angle / section area / hole) and the
+  // named, deletable history — driven through the same completion path a click uses.
+  { name: 'measure-families', query: 'w=760&h=1000&subject=p010&assert=measure-families&debug=0' },
   // U19: the audit view answers "what is blocked / what has not been run" from the
   // host's own judgement, and a row leads to the run it names.
   { name: 'audit-view', query: 'w=860&h=1000&assert=audit-view&debug=0' },

@@ -23,6 +23,10 @@ import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
 import { cameraUpFor, orthoBounds, viewDirection, type AxisSnap, type StandardView } from './view-orientation';
+import {
+  addMeasurement, angleDeg, describeLoops, equivalentDiameterMm, loopAt, measurementSummary, removeMeasurement, renameMeasurement,
+  type MeasureKind, type Measurement,
+} from './measure-families';
 import { ANN_PALETTE, SCENE as SCENE_COLOR, T } from './tokens.ts';
 import { resolveCssColor } from './theme.ts';
 import { runFacts, type RunFact, type RunTone } from './run-facts';
@@ -826,6 +830,23 @@ export function CadPanel(): React.ReactElement {
     b?: [number, number, number];
     dist?: number;
   } | null>(null);
+  /**
+   * U15: which question the next clicks answer, and the measurements they left
+   * behind. The host's `measure` tool has answered five kinds for a while; the
+   * viewport only ever asked one of them, which is why "角度/间隙/面积/孔" came back
+   * as a conversation turn instead of a number.
+   */
+  const [measureFamily, setMeasureFamily] = useState<MeasureKind>('distance');
+  const [measurePicks, setMeasurePicks] = useState<[number, number, number][]>([]);
+  /**
+   * The picks in a REF as well as in state: a fast triple (or a scripted one) can
+   * arrive before React re-renders, and then every call would see an empty list and
+   * never complete. State is for the hint ("已点 2/3"); the ref is the truth.
+   */
+  const measurePicksRef = useRef<[number, number, number][]>([]);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  /** The row whose name is being edited (inline input); null = none. */
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const measureGroupRef = useRef<any>(null);
   /**
    * The cut plane's outline lives in its OWN group: the annotation effect above
@@ -1749,6 +1770,9 @@ export function CadPanel(): React.ReactElement {
     // The plane's angles belong to the PART that was on screen: a 35°/30° cut of a
     // bracket means nothing on the next part, and silently keeping it would look
     // like the section is broken ("why is my z-slider tilted?").
+    setMeasurements([]);
+    measurePicksRef.current = [];
+    setMeasurePicks([]);
     setSectionMode('axis');
     setSectionAzimuth(35);
     setSectionElevation(30);
@@ -1897,27 +1921,102 @@ export function CadPanel(): React.ReactElement {
   };
 
   // CAD-style two-point pick on the mesh surface (measure mode)
+  /**
+   * The click that COMPLETES (or advances) a measurement, for every family.
+   *
+   * Shared by the pointer handler and the sandbox hook on purpose: the family
+   * pipeline is the thing worth testing, and a test that re-implemented the pick
+   * would prove nothing about what a person clicks.
+   */
+  const completeMeasurePick = (point: [number, number, number]) => {
+    const p = point;
+    if (measureFamily === 'distance') {
+      const finishing = !!measureRef.current && !measureRef.current.b;
+      setMeasure((cur) => {
+        if (!cur) return { a: p };
+        if (!cur.b) {
+          const dist = Math.hypot(p[0] - cur.a[0], p[1] - cur.a[1], p[2] - cur.a[2]);
+          if (dist < 1e-6) return cur;
+          return { a: cur.a, b: p, dist: +dist.toFixed(2) };
+        }
+        return { a: p };
+      });
+      setHint(null);
+      if (finishing) setMeasureMode(false);
+      return;
+    }
+
+    if (measureFamily === 'angle') {
+      const picks = [...measurePicksRef.current, p];
+      if (picks.length < 3) { measurePicksRef.current = picks; setMeasurePicks(picks); setHint(null); return; }
+      const value = angleDeg(picks[0]!, picks[1]!, picks[2]!);
+      if (value === null) {
+        setHint(tr('ui.measure.degenerate'));
+        measurePicksRef.current = [];
+        setMeasurePicks([]);
+        return;
+      }
+      setMeasurements((list) => addMeasurement(list, { kind: 'angle', value: +value.toFixed(2), points: picks }));
+      measurePicksRef.current = [];
+      setMeasurePicks([]);
+      setMeasureMode(false);
+      setHint(null);
+      return;
+    }
+
+    // section area / hole: the click names a LOOP on the current cut plane.
+    const geometry = (pickTarget()?.geometry ?? meshRef.current?.geometry) as THREE.BufferGeometry | undefined;
+    const plane = clipPlaneOf(clipRef.current, geometry?.boundingBox ?? null);
+    if (!plane || !geometry) { setHint(tr('ui.measure.needSection')); return; }
+    const frame = planeFrame(plane);
+    const local: [number, number] = [
+      (p[0] - frame.point[0]) * frame.u[0] + (p[1] - frame.point[1]) * frame.u[1] + (p[2] - frame.point[2]) * frame.u[2],
+      (p[0] - frame.point[0]) * frame.v[0] + (p[1] - frame.point[1]) * frame.v[1] + (p[2] - frame.point[2]) * frame.v[2],
+    ];
+    const loop = loopAt(sectionLoopsOnPlane(geometry, plane), local);
+    if (!loop) { setHint(tr('ui.measure.noLoop')); return; }
+    if (measureFamily === 'section') {
+      setMeasurements((list) => addMeasurement(list, {
+        kind: 'section', value: +loop.areaMm2.toFixed(2), points: [p],
+      }));
+    } else {
+      // A bore: the loop the click landed in must BE a hole, or the "diameter" is
+      // the part's outer face — say so instead of quoting a number.
+      if (!loop.isHole) { setHint(tr('ui.measure.notHole')); return; }
+      setMeasurements((list) => addMeasurement(list, {
+        kind: 'hole', name: null, value: +equivalentDiameterMm(loop.areaMm2).toFixed(2), points: [p],
+      }));
+    }
+    setMeasureMode(false);
+    setHint(null);
+  };
+
+  // Debug hook for `?assert=measure-families`: it calls the completion path the
+  // pointer handler calls. A test that re-implemented a three-point angle would
+  // prove nothing about what a person clicks.
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as { __cadMeasureComplete?: unknown; __cadMeasureLoops?: unknown };
+    w.__cadMeasureComplete = completeMeasurePick;
+    /**
+     * The cut plane's loops as measured facts (area, centroid, hole-ness). A runner
+     * needs to AIM at a bore; the bbox centre is not the bore centre on a part with
+     * an offset boss, and a test that clicks the wrong place proves nothing.
+     */
+    w.__cadMeasureLoops = () => {
+      const geometry = (meshRef.current?.geometry ?? null) as THREE.BufferGeometry | null;
+      const plane = clipPlaneOf(clipRef.current, geometry?.boundingBox ?? null);
+      if (!plane || !geometry) return [];
+      return describeLoops(sectionLoopsOnPlane(geometry, plane));
+    };
+  }
+
   const pickMeasurePoint = (e: React.MouseEvent) => {
     const target = pickTarget();
     const raycaster = pickRay(e);
     if (!target || !raycaster) return;
     const hits = visibleHits(raycaster, target);
     if (hits.length === 0) { setHint(tr('ui.hint.noSurface')); return; }
-    const p = xyz(new THREE.Vector3(...refinePick(xyz(hits[0]!.point))));
-    // Completing the pair ends the mode: the measurement (dots, line, value)
-    // stays, but the viewport goes back to orbit/zoom without a second click.
-    const finishing = !!measureRef.current && !measureRef.current.b;
-    setMeasure((cur) => {
-      if (!cur) return { a: p };                                   // first point
-      if (!cur.b) {                                                // second point → complete
-        const dist = Math.hypot(p[0] - cur.a[0], p[1] - cur.a[1], p[2] - cur.a[2]);
-        if (dist < 1e-6) return cur;                               // same spot — ignore
-        return { a: cur.a, b: p, dist: +dist.toFixed(2) };
-      }
-      return { a: p };                                             // complete → start a new one
-    });
-    setHint(null);
-    if (finishing) setMeasureMode(false);
+    completeMeasurePick(xyz(new THREE.Vector3(...refinePick(xyz(hits[0]!.point)))));
   };
 
   /**
@@ -2295,6 +2394,7 @@ export function CadPanel(): React.ReactElement {
           })
         : undefined,
       measureMm: measure?.b ? { dist: measure.dist ?? 0, a: measure.a, b: measure.b } : undefined,
+      measurementLines: measurements.length ? measurements.map((entry) => measurementSummary(entry)) : undefined,
       thicknessMm: thick ? thick.dist : undefined,
       annotations: annotations.length,
       heatLegend: heat?.legend,
@@ -2906,10 +3006,84 @@ export function CadPanel(): React.ReactElement {
       : []),
   ];
 
+  // U15: the family chips and the measurement history, as arrays so the strip can
+  // spread them (a JSX children list cannot hold `condition && ...array`).
+  const familyLabel = (family: MeasureKind) => (
+    family === 'distance' ? t('ui.measure.distance')
+      : family === 'angle' ? t('ui.measure.angle')
+        : family === 'section' ? t('ui.measure.section')
+          : t('ui.measure.hole')
+  );
+  const measureFamilyChips = measureMode
+    ? (['distance', 'angle', 'section', 'hole'] as const).map((family) => React.createElement('button', {
+      key: `fm-${family}`,
+      type: 'button',
+      'data-measure-family': family,
+      'data-measure-active': measureFamily === family ? '1' : '0',
+      onClick: () => { setMeasureFamily(family); measurePicksRef.current = []; setMeasurePicks([]); setMeasure(null); },
+      title: familyLabel(family),
+      style: {
+        ...S.smallBtn, flex: 'none',
+        fontWeight: measureFamily === family ? 700 : 400,
+        borderColor: measureFamily === family ? T.active : undefined,
+      },
+    }, familyLabel(family)))
+    : [];
+  const measurementChips = measurements.map((entry) => React.createElement('span', {
+    key: `m-${entry.id}`,
+    'data-measure-row': entry.id,
+    style: { display: 'flex', alignItems: 'center', gap: 2, flex: 'none' },
+  },
+    renamingId === entry.id
+      ? React.createElement('input', {
+        type: 'text', defaultValue: entry.name ?? '',
+        autoFocus: true,
+        'data-measure-rename': entry.id,
+        // Commit on Enter as well as on blur: a headless page (and a user who hits
+        // Enter) must not leave the row stuck in edit mode. Escape cancels.
+        // The value must be READ HERE, not inside the updater: React runs the
+        // updater during the next render, by which time `currentTarget` is null —
+        // reading it there threw and left the row stuck in edit mode (found by the
+        // sandbox assertion: the input held the new name, the row never changed).
+        onKeyDown: (event: any) => {
+          if (event.key === 'Escape') { setRenamingId(null); return; }
+          if (event.key !== 'Enter') return;
+          const value = String(event.currentTarget.value ?? '');
+          setMeasurements((list) => renameMeasurement(list, entry.id, value));
+          setRenamingId(null);
+        },
+        onBlur: (event: any) => {
+          const value = String(event.target.value ?? '');
+          setMeasurements((list) => renameMeasurement(list, entry.id, value));
+          setRenamingId(null);
+        },
+        style: { width: 76, fontSize: 10, height: 16 },
+      })
+      : React.createElement('button', {
+        type: 'button',
+        'data-measure-name': entry.id,
+        title: tr('ui.measure.renameHint'),
+        onClick: () => setRenamingId(entry.id),
+        style: { ...S.smallBtn, padding: '0 3px', fontSize: 10, flex: 'none' },
+      }, measurementSummary(entry)),
+    React.createElement('button', {
+      type: 'button',
+      'data-measure-delete': entry.id,
+      title: tr('ui.measure.delete'),
+      onClick: () => setMeasurements((list) => removeMeasurement(list, entry.id)),
+      style: { ...S.smallBtn, padding: '0 3px', fontSize: 10, flex: 'none' },
+    }, '✕'),
+  ));
+
   /** One line, whatever the state: the feedback block's height is fixed. */
   const feedbackText = annotateMode ? tr('ui.feedback.annotate')
-    : measureMode ? (!measure ? tr('ui.feedback.measureFirst')
-      : tr('ui.feedback.measureSecond'))
+    : measureMode ? tr(
+      measureFamily === 'distance' ? (measurePicks.length ? 'ui.feedback.measureSecond' : 'ui.feedback.measureFirst')
+        : measureFamily === 'angle' ? 'ui.feedback.measureAngle'
+          : measureFamily === 'section' ? 'ui.feedback.measureSection'
+            : 'ui.feedback.measureHole',
+      { done: measurePicks.length + (measure ? 1 : 0) },
+    )
     : thickMode ? tr('ui.feedback.thickness')
     : hint ?? (version
       ? tr('ui.feedback.tools')
@@ -4691,6 +4865,8 @@ export function CadPanel(): React.ReactElement {
         style: { fontSize: 12, fontWeight: 700, color: T.danger, flex: 'none', lineHeight: '18px' },
       }, measure.b ? `${(measure.dist ?? 0).toFixed(2)} mm` : t('ui.feedback.selectedOne')),
       measure && React.createElement('button', { type: 'button', onClick: clearMeasure, style: S.smallBtn }, t('ui.feedback.clearMeasure')),
+      ...measureFamilyChips,
+      ...measurementChips,
       heat && heat.layers.length > 1 && React.createElement('select', {
         value: heat.layerId,
         title: tr('ui.heat.layerTitle'),
