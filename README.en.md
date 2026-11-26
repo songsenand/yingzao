@@ -208,7 +208,8 @@ This is what it looks like (windup-frog assembly, 12 parts / 12 versions):
 The panel gives you:
 
 - **Version history**: `v001`, `v002`, … every generation/modification is an immutable version; open, compare, pin, revisit.
-- **3D viewport**: orbit, zoom and pan; top/front/side/iso views with bounding-box numbers.
+- **3D viewport**: orbit, zoom and pan, with bounding-box numbers.
+- **Whole-machine preview**: assembles the manifest's part@version nodes directly (no run needed); an **exploded view** slider moves parts outward from the assembly centre.
 - **Measure and annotate**: two-point distance, wall thickness, section cuts, red-box annotations, and send the annotation back to the session.
 - **Run playback**: motion, rigid-body and fluid timelines; pause on a frame.
 - **Verification state**: assembly checks, printability and delivery audit results, including "needs review".
@@ -308,14 +309,17 @@ by CI.
 > Run this from a normal terminal: kern needs the systemd user bus and cannot
 > start inside DSH's own bwrap sandbox.
 
-## What's new (0.1.2-preview.1)
+## What's new (0.2.0-preview.1)
 
-- **Check before you save**: `cad_part generate` now takes `dryRun` (compile + measure, write nothing) and `preflight` (save only when the mesh is watertight and a single body; a sub-1.2mm wall is a warning).
-- **A layer between assembly and motion**: `cad_check` `sweep` screens one moving part over a declared joint range and reports `suspect`, never a delivery verdict; revolute joints can declare `overlapEnvelope` / `fit`, and motion supports a `gear` ratio.
-- **Overhang is a support cost, not a failure**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`.
-- **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host.
-- **Examples**: sewing rotary hook and 3-speed derailleur, each with a CadQuery variant; per the "new in, old out" policy, 3 older examples moved to the history table while keeping their directories and corpora.
-- Full details, evidence and known issues: [0.1.2-preview.1 release notes](docs/dev/RELEASE-NOTES-0.1.2.md).
+- **Four measurement families + history**: distance, three-point angle (measured AT the middle point), section area, and bore diameter; entries can be renamed, deleted, and travel with the screenshot caption.
+- **Viewport navigation**: iso/top/front/right plus six-way axis snapping, perspective↔orthographic, Home; **per-part hide / isolate / highlight** in the assembly preview.
+- **Audit view**: the machine page answers "which step has not been run", ordered by judgement, and a row jumps to the run or version it names.
+- **Fluid**: the flow axis comes from the cavity (a stubby part is no longer driven across its own wall); a long run shows "steps done / total" and can be cancelled (cancelling stops the solver process); a wall under two cells is refined or refused; particles that cross the wall are held at it (penetration 7,098 → 0).
+- **Checks can be re-run**: `run.json` now records the request, so manufacturing/assembly re-run in one click and stress can be replayed with the version re-pinned; runs that never saved their inputs are **refused with the missing list**, not re-run on defaults.
+- **BOM CSV export**: seven columns (part, version, qty, material, process, source, stock id), with unconfirmed processes marked.
+- Full details, evidence and known issues: [0.2.0-preview.1 release notes](docs/dev/RELEASE-NOTES-0.2.0-preview.1.md).
+
+> This is a **preview**: 9 of the 13 gate items are closed and 4 are partial (Q1's A/B, U20 visual sign-off, U21 on a real machine, F1's Python parity). The reasons are in the release notes §1/§4 and are not counted as done.
 
 ## Known limits
 
