@@ -151,6 +151,30 @@ def _lossless(value):
 
 def _send(frame: dict) -> None:
     sys.stdout.write(json.dumps(_lossless(frame), ensure_ascii=False) + "\n")
+    # FLUSH, always: the worker is spawned with a pipe, where Python block-buffers
+    # stdout. Without this the hello sits in the buffer until the process exits and
+    # every handshake times out at 30 s (found by accept-jobs after adding
+    # progress frames: the frame writer was rewritten and dropped the flush).
+    sys.stdout.flush()
+
+
+# The request id of the op currently running, so a long op can report progress
+# without every handler taking an id it does not otherwise need (N15: a 161 s
+# fluid run used to be a silent rectangle).
+_CURRENT_REQUEST_ID = [None]
+
+
+def _progress(done: int, total: int) -> None:
+    """In-band progress for a long op: `{type:'progress', id, done, total}`.
+
+    Not a reply — the caller keeps waiting for the result frame. Dropped silently
+    when the id is unknown (a script driving the worker directly) because progress
+    is a courtesy, never a precondition.
+    """
+    request_id = _CURRENT_REQUEST_ID[0]
+    if request_id is None:
+        return
+    _send({"type": "progress", "id": request_id, "done": int(done), "total": int(total)})
     sys.stdout.flush()
 
 
@@ -5360,7 +5384,12 @@ def op_fluid_run(params: dict) -> dict:
     skip_project = bool(params.get("skipProject"))
     debug_enabled = bool(params.get("debugPenetration"))
     block_checksums = []
+    # Every ~5% of the run, never more often than every 10 steps: a frame per step
+    # would be thousands of lines on a 1200-step solve.
+    progress_every = max(10, steps // 20)
     for step in range(1, steps + 1):
+        if step % progress_every == 0:
+            _progress(step, steps)
         _mpm_step_once(world)
         if not skip_project:
             project_particles(is_last=(debug_enabled and step == steps))
@@ -9231,7 +9260,11 @@ def main() -> int:
             handler = HANDLERS.get(op)
             if handler is None:
                 raise KeyError(f"unknown op {op!r} (ops: {', '.join(OPS)})")
-            result = handler(params)
+            _CURRENT_REQUEST_ID[0] = request_id
+            try:
+                result = handler(params)
+            finally:
+                _CURRENT_REQUEST_ID[0] = None
             _send(
                 {
                     "id": request_id,

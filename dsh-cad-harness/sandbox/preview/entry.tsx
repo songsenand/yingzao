@@ -2518,3 +2518,60 @@ if (q.get('assert') === 'measure-families') {
     show();
   })();
 }
+
+// ?assert=fluid-job — N15: a long fluid run must show a percentage and stop when
+// cancelled. The host's job routes are mocked at the HTTP boundary (a real solve
+// is 161 s), so what is under test is the PANEL's contract: start → poll → show →
+// cancel → leave the busy state. A percentage that never moves, or a cancel that
+// leaves the button disabled forever, fails here.
+if (q.get('assert') === 'fluid-job') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`fluid job progress + cancel (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    try {
+      const ready = await waitFor(() => Boolean(document.querySelector('[data-fluid-run]')), 15000);
+      lines.push(`${ready ? 'PASS' : 'FAIL'}  the evidence panel offers a fluid run`);
+      if (!ready) { show(); return; }
+      (document.querySelector('[data-fluid-run]') as HTMLElement).click();
+      const pill = () => document.querySelector('[data-fluid-progress]') as HTMLElement | null;
+      const started = await waitFor(() => Boolean(pill()), 8000);
+      lines.push(`${started ? 'PASS' : 'FAIL'}  starting it shows a progress readout`);
+      const first = pill()?.getAttribute('data-fluid-progress') ?? '';
+      const advanced = await waitFor(() => {
+        const now = pill()?.getAttribute('data-fluid-progress');
+        return Boolean(now && now !== first);
+      }, 8000);
+      lines.push(`${advanced ? 'PASS' : 'FAIL'}  the percentage ADVANCES (${first}% → ${pill()?.getAttribute('data-fluid-progress')}%)`);
+      const cancel = document.querySelector('[data-fluid-cancel]') as HTMLElement | null;
+      lines.push(`${cancel ? 'PASS' : 'FAIL'}  a cancel control appears next to it`);
+      cancel?.click();
+      const cleared = await waitFor(() => !document.querySelector('[data-fluid-progress]'), 8000);
+      lines.push(`${cleared ? 'PASS' : 'FAIL'}  cancelling stops the poll and clears the readout`);
+      const idle = await waitFor(() => {
+        const run = document.querySelector('[data-fluid-run]') as HTMLButtonElement | null;
+        return Boolean(run && !run.disabled);
+      }, 8000);
+      lines.push(`${idle ? 'PASS' : 'FAIL'}  the run button goes back to enabled (no stuck busy state)`);
+      const text = (document.querySelector('#root')?.textContent ?? '');
+      lines.push(`${/取消|cancel/i.test(text) ? 'PASS' : 'FAIL'}  the panel says the run was cancelled`);
+    } catch (error) {
+      lines.push(`FAIL  the fluid job flow threw: ${String((error as Error)?.message ?? error)}`);
+    }
+    show();
+  })();
+}

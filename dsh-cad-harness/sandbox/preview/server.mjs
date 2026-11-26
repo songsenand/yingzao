@@ -75,6 +75,8 @@ const DEMO_QUEUE = () => ({
 // invisible in a screenshot when the two versions differ only inside, so the
 // request log is how we prove the second mesh was actually fetched.
 const stlSeen = new Set();
+let fluidJobSeq = 0;
+const fluidJobs = new Map();
 
 const readBody = (req) => new Promise((resolve, reject) => {
   const chunks = [];
@@ -122,6 +124,31 @@ async function api(req, url) {
       return new Response(null, { status: 304, headers: { etag } });
     }
     return json({ ...wire, seq }, 200, { etag });
+  }
+
+  // --- fluid job (N15): progress + cancel, mocked at the HTTP boundary -------
+  // A real solve is 161 s; the panel's job is to SHOW progress and to stop when
+  // told, so the mock advances the counter per poll and records a cancel.
+  if (p === '/api/cad/fluid/job') {
+    if (req.method === 'POST') {
+      const id = `fj${++fluidJobSeq}`;
+      fluidJobs.set(id, { done: 0, total: 100, status: 'running' });
+      return json({ id });
+    }
+    const id = url.searchParams.get('id') ?? '';
+    const job = fluidJobs.get(id);
+    if (!job) return json({ error: 'no such job' }, 404);
+    if (job.status === 'running') {
+      job.done = Math.min(job.total, job.done + 10);
+      if (job.done >= job.total) job.status = 'done';
+    }
+    return json({ ...job });
+  }
+  if (p === '/api/cad/fluid/job/cancel') {
+    const body = JSON.parse((await readBody(req)) || '{}');
+    const job = fluidJobs.get(body.id);
+    if (job && job.status === 'running') job.status = 'cancelled';
+    return json({ cancelled: Boolean(job) });
   }
 
   // --- deliver audit (U19): the SAME value the tool returns -----------------

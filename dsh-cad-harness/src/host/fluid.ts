@@ -418,7 +418,10 @@ function readSnapshotFile(path: string): FluidSnapshot[] {
  * later Rust/C implementation, whose native ceiling measured 3.7–4.6× FASTER than
  * the TS kernel).
  */
-export async function runFluid(scenario: FluidScenario): Promise<{ report: FluidReport; sdf: SdfField }> {
+export async function runFluid(
+  scenario: FluidScenario,
+  hooks: { onProgress?: (done: number, total: number) => void } = {},
+): Promise<{ report: FluidReport; sdf: SdfField }> {
   // ---------------------------------------------------------------------------
   // The Python worker is canonical (batch 4). The path cost one real debugging
   // round: the run first went out with NO wall boundary conditions — the SDF's
@@ -537,7 +540,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
       inlet: Boolean(scenario.inlet),
       skipProject: process.env.CAD_FLUID_NO_PROJECT === '1',
       debugPenetration: process.env.CAD_FLUID_DEBUG_PENETRATION === '1',
-    }, { timeoutMs: 1_800_000 });
+    }, { timeoutMs: 1_800_000, ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}) });
   } finally {
     for (const path of [sdfPath, seedsPath]) rmSync(path, { force: true });
   }

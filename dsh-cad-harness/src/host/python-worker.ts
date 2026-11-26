@@ -207,6 +207,8 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
+  /** Long ops report progress between the request and its result (N15). */
+  onProgress?: (done: number, total: number) => void;
 }
 
 const DEFAULT_WORKER_TIMEOUT_MS = 120_000;
@@ -303,6 +305,17 @@ export class PythonWorker {
       }
       const id = Number(frame.id);
       const entry = this.pending.get(id);
+      if (frame.type === 'progress') {
+        // In-band progress, OUT of band of the reply: the request stays pending
+        // and the timer keeps running. A missing entry means the run was
+        // cancelled or already answered — the frame is dropped, not forwarded.
+        if (entry?.onProgress) {
+          const done = Number(frame.done);
+          const total = Number(frame.total);
+          if (Number.isFinite(done) && Number.isFinite(total)) entry.onProgress(done, total);
+        }
+        continue;
+      }
       if (!entry) {
         this.onLog?.(`unsolicited worker frame id=${String(frame.id)}`);
         continue;
@@ -352,7 +365,11 @@ export class PythonWorker {
   }
 
   /** Send one request. Replies are correlated by id, not by order. */
-  request<T = unknown>(op: string, params: Record<string, unknown> = {}, options: { timeoutMs?: number } = {}): Promise<T> {
+  request<T = unknown>(
+    op: string,
+    params: Record<string, unknown> = {},
+    options: { timeoutMs?: number; onProgress?: (done: number, total: number) => void } = {},
+  ): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
     const timeoutMs = options.timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
@@ -368,6 +385,7 @@ export class PythonWorker {
         resolve: resolvePromise as (value: unknown) => void,
         reject: rejectPromise,
         timer,
+        ...(options.onProgress ? { onProgress: options.onProgress } : {}),
       });
       this.child.stdin?.write(`${JSON.stringify({ id, op, params })}\n`);
     });

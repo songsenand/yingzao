@@ -54,6 +54,7 @@ import { runPhysics, renderKeyframes, type PhysicsPartInput, type PhysicsReport 
 import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJointInput, type MotionPartInput } from './motion.ts';
 import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
+import { FluidJobRegistry } from './fluid-jobs.ts';
 import { checkManifestFeatures } from './features.ts';
 import { affectedChecks, auditDelivery } from './delivery-audit.ts';
 import { deliveryAuditValue } from './deliver-audit-value.ts';
@@ -81,7 +82,7 @@ import { pythonRuntimeStatus } from './python-runtime.ts';
 import { readBackendConfig } from './backend.ts';
 import { effectiveKernelForSession } from './kernel-context.ts';
 import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jobs.ts';
-import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
+import { resetPythonWorker, ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { scanStressHotspots } from './stress-hotspots.ts';
 import { buildMeshBvh } from './measure.ts';
@@ -3511,7 +3512,11 @@ export function registerCadTools(
     gravityMmPerSec2?: number[];
   }
 
-  async function runFluidJob(a: FluidToolArgs, project: ProjectStores) {
+  async function runFluidJob(
+    a: FluidToolArgs,
+    project: ProjectStores,
+    hooks: { onProgress?: (done: number, total: number) => void } = {},
+  ) {
     const { store, runStore } = project;
     let pipeStl: Uint8Array;
     if (a.versionId) {
@@ -3528,6 +3533,9 @@ export function registerCadTools(
 
     const preset = await deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100);
     const steps = a.steps ?? preset.steps;
+    // Report the total BEFORE the solve starts: a bar that only learns its range at
+    // the end is a spinner with extra steps.
+    hooks.onProgress?.(0, steps);
     const { report, sdf } = await runFluid({
       pipeStl,
       gridCells: preset.gridCells,
@@ -3547,7 +3555,7 @@ export function registerCadTools(
       steps,
       gravityMmPerSec2: a.gravityMmPerSec2 as [number, number, number] | undefined,
       snapshotCount: 8,
-    });
+    }, hooks.onProgress ? { onProgress: hooks.onProgress } : {});
 
     // render snapshot PNGs + playback frames into the run's own directory
     const run = await beginRun(runStore, {
@@ -10892,6 +10900,56 @@ export function registerCadTools(
         } catch (e: any) {
           return new Response(`motion run failed: ${String((e as Error)?.message ?? e)}`, { status: 500 });
         }
+      },
+    });
+
+    // N15: the same fluid run, as a JOB — progress while it runs, cancel that kills
+    // the worker. The synchronous route below stays for scripts; the panel uses
+    // this one because 161 s with no percentage is what "looks dead" meant.
+    const fluidJobs = new FluidJobRegistry();
+    void connection.fetch.register({
+      path: '/api/cad/fluid/job',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        try {
+          const body = await request.json() as FluidToolArgs;
+          if (!body?.pipeScad && !body?.versionId) return new Response('bad request: pipeScad or versionId required', { status: 400 });
+          const project = requestStores(request);
+          const id = fluidJobs.start({
+            ...(body.versionId ? { versionId: body.versionId } : {}),
+            run: (onProgress) => runFluidJob(body, project, { onProgress }),
+            // Cancelling is KILLING the worker: the solve runs in that process, and a
+            // promise that merely stops being awaited would leave it burning a core
+            // — the orphan this registry exists to prevent.
+            cancel: () => resetPythonWorker(),
+          });
+          return new Response(JSON.stringify({ id }), { status: 200, headers: { 'content-type': 'application/json' } });
+        } catch (e: any) {
+          return new Response(`fluid job failed to start: ${String(e?.message ?? e)}`, { status: 500 });
+        }
+      },
+    });
+    void connection.fetch.register({
+      path: '/api/cad/fluid/job',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const id = new URL(request.url).searchParams.get('id') ?? '';
+        const record = fluidJobs.get(id);
+        if (!record) return new Response('no such fluid job', { status: 404 });
+        return new Response(JSON.stringify(record), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+    void connection.fetch.register({
+      path: '/api/cad/fluid/job/cancel',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const body = await request.json().catch(() => ({}) as { id?: string });
+        const id = typeof body?.id === 'string' ? body.id : '';
+        const cancelled = fluidJobs.cancel(id);
+        return new Response(JSON.stringify({ cancelled }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });
 

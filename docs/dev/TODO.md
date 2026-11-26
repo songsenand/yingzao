@@ -26,8 +26,8 @@
 门禁共 **17 项**，每项必须有可复跑的证据；缺一项不发：
 
 - **工具面 / token（先行，可与 U20 并行）**：Q1（Q2 已收口，见下）
-- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 26 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 17 项，含旧规则反证）
-- **主线**：U20、U21、F1、N15、U14
+- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 26 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 17 项，含旧规则反证）；**N15**（2026-11-27，流体长跑进度=已跑/总步数、取消=杀求解器进程；worker 进度帧 + `FluidJobRegistry` + 面板百分比/取消；`accept-fluid-jobs` 19 项 + `accept-ui fluid-job` 7 项）
+- **主线**：U20、U21、F1、U14
 - **收口**：Q3、Q4（含 R3/R6）、Q5、Q6
 
 **`0.2.0-preview.1` 范围（2026-11-26 用户定）：M1 + M2 = 13 项**（Q2、Q1、U20、U21、U12、U11、
@@ -56,7 +56,6 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | Q5 | P1 | planned | 用户文档 0.2.0 覆盖 + 中英对照 | 覆盖矩阵（安装/首件/验证/视口/剖切/装配/测量/导出/交付/升级/排障）无空缺；中英同文件集、同标题、版本号一致；截图更新；`accept-docs-parity` 进 CI | 4–5d |
 | Q6 | P0 | planned | 0.2.0 发布工程 | 版本号、release notes、迁移指南、CI 全绿、tag、npm staged（手机批准提示）、发布后 `doctor`/`verify`/安装冒烟、回滚包 | 1–2d |
 | F1 | P0 | partial | 流体域闭合与「管外」审计 | 已修种子与 `outsideSnapshotMax`（`accept-fluid-sign` 21/21、`accept-m4` 全过）。**余**：壁厚 <2 格的政策（拒绝或自动细化）；穿壁后的粒子级约束/入口回流；dx 减半的收敛曲线 | 2–3d |
-| N15 | P1 | partial | 流体长任务的进度 / 取消（A） | 只做流体：进度 = 已跑步数/总步数；取消 = 终止 worker 并标 `cancelled`，不留孤儿。出口：161s 的跑能看到百分比，取消后 1s 内回空闲 | 2d |
 | U14 | P1 | planned | 任一检查一键重跑 | 从当前版本重跑制造/应力/装配/运动/物理任一检查；来源版本 = 当前版本；新 run 可取消 | 2d |
 | U16 | P1 | planned | 结构化请求 + 几何标注 | 标注携带 `(versionId, 面/点, 相机)`，切视角仍回原位；请求草稿含版本 + 区域 bbox + 实测 + 目标值，一键发进会话 | 3d |
 | U17 | P1 | planned | 接口 / datum 可视化（9a） | 点契约表一行 → 高亮两个零件、datum 点之间画线、显示实测间隙 vs 容差；不预生成接口图 | 3–4d |

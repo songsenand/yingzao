@@ -729,6 +729,11 @@ export function CadPanel(): React.ReactElement {
   bgRef.current = bg;
   const [runReport, setRunReport] = useState<any>(null);
   const [fluidBusy, setFluidBusy] = useState(false);
+  /**
+   * N15: the fluid job being watched — `{id, done, total}` while it runs. A 161 s
+   * solve used to be a disabled button; now it is a percentage and a cancel.
+   */
+  const [fluidJob, setFluidJob] = useState<{ id: string; done: number; total: number; status: string } | null>(null);
   /** 本地 STL 对话框：预览（不登记）或按路径导入为版本。 */
   const [fileOpen, setFileOpen] = useState(false);
   /**
@@ -2641,18 +2646,47 @@ export function CadPanel(): React.ReactElement {
     setFluidBusy(true);
     setError(null);
     try {
-      const res = await fetch(withProject('/api/cad/fluid/run'), {
+      const started = await fetch(withProject('/api/cad/fluid/job'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ versionId }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      await refresh();
+      if (!started.ok) throw new Error(`HTTP ${started.status}: ${await started.text()}`);
+      const { id } = await started.json() as { id: string };
+      setFluidJob({ id, done: 0, total: 0, status: 'running' });
+      // Poll until it leaves `running`. 500 ms: a percentage that updates twice a
+      // second reads as alive without hammering the host.
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const poll = await fetch(withProject(`/api/cad/fluid/job?id=${encodeURIComponent(id)}`));
+        if (!poll.ok) throw new Error(`HTTP ${poll.status}`);
+        const record = await poll.json() as { status: string; done: number; total: number; error?: string };
+        setFluidJob({ id, done: record.done, total: record.total, status: record.status });
+        if (record.status === 'running') continue;
+        if (record.status === 'failed') throw new Error(record.error ?? 'fluid run failed');
+        if (record.status === 'cancelled') { setHint(tr('ui.fluid.cancelled')); break; }
+        await refresh();
+        break;
+      }
     } catch (e: any) {
       setError(tr('ui.fluid.failed', { error: String(e?.message ?? e) }));
     } finally {
       setFluidBusy(false);
+      setFluidJob(null);
     }
+  };
+
+  /** Cancel kills the solver process on the host; the poll then sees `cancelled`. */
+  const cancelFluid = async () => {
+    const job = fluidJob;
+    if (!job) return;
+    try {
+      await fetch(withProject('/api/cad/fluid/job/cancel'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: job.id }),
+      });
+    } catch { /* the poll's status is the authority, not this request */ }
   };
 
   /**
@@ -3299,6 +3333,7 @@ export function CadPanel(): React.ReactElement {
         { style: { borderTop: `1px solid ${T.border}`, paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
         React.createElement('button', {
           type: 'button',
+          'data-fluid-run': '1',
           onClick: () => void runFluid(),
           disabled: fluidBusy,
           style: { ...S.smallBtn, border: `1px solid ${T.info}`, background: T.infoSoft, opacity: fluidBusy ? 0.55 : 1 },
@@ -3306,6 +3341,18 @@ export function CadPanel(): React.ReactElement {
           : version.id !== latestVersionId
             ? tr('ui.fluid.old', { version: version.id })
             : tr('ui.fluid.run', { version: version.id })),
+        fluidJob && React.createElement('span', {
+          'data-fluid-progress': fluidJob.total > 0 ? String(Math.round((fluidJob.done / fluidJob.total) * 100)) : '0',
+          style: { fontSize: 11, fontWeight: 600, color: T.infoInk, flex: 'none' },
+        }, fluidJob.total > 0
+          ? tr('ui.fluid.progress', { pct: Math.round((fluidJob.done / fluidJob.total) * 100), done: fluidJob.done, total: fluidJob.total })
+          : tr('ui.fluid.progressUnknown', { done: fluidJob.done })),
+        fluidJob && React.createElement('button', {
+          type: 'button',
+          'data-fluid-cancel': '1',
+          onClick: () => void cancelFluid(),
+          style: { ...S.smallBtn, flex: 'none' },
+        }, tr('ui.fluid.cancel')),
         React.createElement('span', { style: S.hint }, tr('ui.fluid.hint')),
       ),
     );
