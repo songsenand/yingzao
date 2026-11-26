@@ -53,6 +53,10 @@ export interface StressHotspot {
   maxPeakDirection: string;
   meanPeakMPa: number;
   peakCount: number;
+  /** Distance to the nearest declared support point (mm). */
+  distanceToSupportMm?: number;
+  /** True when the hot spot sits on a support patch; its stress is the idealisation's. */
+  nearSupport?: boolean;
 }
 
 export interface StressHotspotCase {
@@ -239,9 +243,20 @@ export async function scanStressHotspots(req: StressHotspotScanRequest): Promise
     });
   }
 
+  const hotspots = clusterStressPeaks(allPeaks, clusterRadiusMm, maxHotspots).map((h) => {
+    const points = req.fixedPoints ?? [];
+    if (points.length === 0) return h;
+    let best = Number.POSITIVE_INFINITY;
+    for (const p of points) {
+      const r = p.radiusMm ?? 1.5 * req.dxMm;
+      best = Math.min(best, Math.max(0, distance(h.atMm, p.atMm) - r));
+    }
+    const near = best <= Math.max(2 * req.dxMm, 3 * (points[0]?.radiusMm ?? 1.5 * req.dxMm));
+    return { ...h, distanceToSupportMm: +best.toFixed(2), nearSupport: near };
+  });
   return {
     versionId: req.versionId,
-    hotspots: clusterStressPeaks(allPeaks, clusterRadiusMm, maxHotspots),
+    hotspots,
     cases,
     method: {
       dxMm: req.dxMm,

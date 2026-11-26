@@ -320,7 +320,7 @@ async function partWorldAffine(
 }
 
 /** Resolve "childId.datumName" on an owning assembly node to a world feature. */
-function resolveEndpoint(
+export function resolveEndpoint(
   parts: Map<string, PartWorld>,
   owner: ManifestNode,
   address: string,

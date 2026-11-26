@@ -86,6 +86,7 @@ import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jo
 import { resetPythonWorker, ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { scanStressHotspots } from './stress-hotspots.ts';
+import { deriveAssemblySupports } from './support-seats.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -8119,9 +8120,14 @@ export function registerCadTools(
       'Use it to pick the coordinates, then run simulate_stress with a declared case before judging.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v061".' },
+      supportsFrom: {
+        type: 'string',
+        description: '"explicit" (default) uses `supports`; "assembly" derives them from the structural joints in assembly/assembly.json (revolute/fixed/pin, then contact seats). With "assembly", do not pass `supports`; pass `part` when the version is placed more than once.',
+      },
+      part: { type: 'string', description: 'Assembly instance id (e.g. "spool3"). Required for supportsFrom:"assembly" when the version has several placements.' },
       supports: {
-        type: 'array', required: true,
-        description: 'Where the part is held; the same support forms simulate_stress accepts. At least one is required (otherwise the solve is a rigid-body mode).',
+        type: 'array',
+        description: 'Where the part is held; the same support forms simulate_stress accepts. Required for supportsFrom:"explicit" (default); omitted when supportsFrom:"assembly".',
         items: {
           type: 'object', additionalProperties: false,
           properties: {
@@ -8154,6 +8160,23 @@ export function registerCadTools(
         type: 'object', additionalProperties: false,
         properties: {
           versionId: { type: 'string', required: true },
+          supportSource: { type: 'string', required: true, description: '"explicit" or "assembly".' },
+          supports: {
+            type: 'array', required: true,
+            description: 'The supports actually used, with the interface that supplied each one.',
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                atMm: { type: 'array', items: { type: 'number' } },
+                atWorldMm: { type: 'array', items: { type: 'number' } },
+                radiusMm: { type: 'number' },
+                face: { type: 'object', additionalProperties: true },
+                ground: { type: 'boolean' },
+                source: { type: 'string' },
+              },
+            },
+          },
+          supportWarnings: { type: 'array', items: { type: 'string' } },
           hotspots: {
             type: 'array', required: true,
             items: {
@@ -8167,6 +8190,8 @@ export function registerCadTools(
                 maxPeakDirection: { type: 'string', required: true },
                 meanPeakMPa: { type: 'number', required: true },
                 peakCount: { type: 'number', required: true },
+                distanceToSupportMm: { type: 'number' },
+                nearSupport: { type: 'boolean' },
               },
             },
           },
@@ -8197,6 +8222,8 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as {
         versionId: string;
+        supportsFrom?: 'explicit' | 'assembly';
+        part?: string;
         supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
         materialIds?: string[];
         materialJson?: string;
@@ -8207,19 +8234,12 @@ export function registerCadTools(
         maxHotspots?: number;
         excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
       };
-      const { store } = await allStores(exec);
+      const { store, cwd } = await allStores(exec);
       const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
       if (!existsSync(modelPath)) throw new Error(await versionNotFound(store, a.versionId));
       const material = resolveStressMaterial(a.materialJson, a.materialIds);
       if (!(material.densityKgPerM3 && material.densityKgPerM3 > 0)) {
         throw new Error('scan_stress_hotspots: material densityKgPerM3 is required for a self-weight scan');
-      }
-      const supports = a.supports ?? [];
-      const supportCount = supports.filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
-      if (supportCount === 0) {
-        throw argError('scan_stress_hotspots', 'supports', 'is empty — the solve would be a rigid-body mode',
-          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}',
-          { received: supports });
       }
       const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
       const spans = [0, 1, 2]
@@ -8227,6 +8247,37 @@ export function registerCadTools(
         .filter((v) => Number.isFinite(v) && v > 0);
       const thinnest = spans.length ? Math.min(...spans) : 1;
       const dxMm = a.dxMm ?? Math.max(0.8, Math.min(2, thinnest / 8));
+
+      const supportsFrom = a.supportsFrom ?? 'explicit';
+      let supports = a.supports ?? [];
+      const supportSource = supportsFrom === 'assembly' ? 'assembly' : 'explicit';
+      let supportWarnings: string[] = [];
+      if (supportsFrom === 'assembly') {
+        if (supports.length > 0) {
+          throw argError('scan_stress_hotspots', 'supports',
+            'is set together with supportsFrom:"assembly" — pick one',
+            'omit supports to derive them from the assembly, or pass supportsFrom:"explicit"',
+            { received: { supportsFrom, supports } });
+        }
+        const derived = await deriveAssemblySupports(store, {
+          versionId: a.versionId,
+          partId: a.part,
+          workspace: cwd,
+          dataRoot: store.root,
+          radiusHintMm: Math.max(2, Math.min(12, thinnest / 3)),
+        });
+        supports = derived.supports.map((s) => ({ atMm: s.atMm, radiusMm: s.radiusMm, source: s.source }));
+        supportWarnings = derived.warnings;
+        (supportWarnings as string[]).unshift(
+          `supports derived for ${derived.partId} (ground ${derived.groundId}) from ${derived.manifestPath}`,
+        );
+      }
+      const supportCount = supports.filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
+      if (supportCount === 0) {
+        throw argError('scan_stress_hotspots', 'supports', 'is empty — the solve would be a rigid-body mode',
+          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}, or pass supportsFrom:"assembly"',
+          { received: supports });
+      }
       const value = await scanStressHotspots({
         versionId: a.versionId,
         modelPath,
@@ -8248,6 +8299,16 @@ export function registerCadTools(
       // jsonSafe: numpy's -0 is not lossless JSON; the same normalisation the stress tool uses.
       return jsonSafe({
         ...value,
+        supportSource,
+        supports: supports.map((s) => ({
+          ...(Array.isArray(s.atMm) ? { atMm: s.atMm } : {}),
+          ...(Array.isArray((s as { atWorldMm?: number[] }).atWorldMm) ? { atWorldMm: (s as { atWorldMm?: number[] }).atWorldMm } : {}),
+          ...(typeof s.radiusMm === 'number' ? { radiusMm: s.radiusMm } : {}),
+          ...(s.face ? { face: s.face } : {}),
+          ...(s.ground ? { ground: true } : {}),
+          source: supportSource === 'assembly' ? ((s as { source?: string }).source ?? 'assembly') : 'caller',
+        })),
+        ...(supportWarnings.length ? { supportWarnings } : {}),
         cases: value.cases.map((c) => ({ ...c, atMm: c.atMm ?? undefined })),
       }) as any;
     },

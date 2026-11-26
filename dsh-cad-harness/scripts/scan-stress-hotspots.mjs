@@ -2,6 +2,7 @@
 // Gravity hot-spot scan through the real tool object.
 //
 //   node scripts/scan-stress-hotspots.mjs <project-dir> <versionId> \
+//     [--from-assembly] [--part <instanceId>] \
 //     [--support x,y,z[,r]]... [--face x:min]... [--ground] \
 //     [--exclude x,y,z[,r]]... [--direction gx,gy,gz]... [--dx 1.2] [--cluster 4] [--max 12]
 //
@@ -15,7 +16,7 @@ import { join, resolve } from 'node:path';
 
 const [projectArg, versionId, ...rest] = process.argv.slice(2);
 if (!projectArg || !versionId) {
-  console.error('usage: scan-stress-hotspots.mjs <project-dir> <versionId> [--support x,y,z[,r]] [--face x:min] [--ground] [--dx 1.2] [--cluster 4] [--max 12]');
+  console.error('usage: scan-stress-hotspots.mjs <project-dir> <versionId> [--from-assembly] [--part id] [--support x,y,z[,r]] [--face x:min] [--ground] [--dx 1.2] [--cluster 4] [--max 12]');
   process.exit(3);
 }
 
@@ -31,6 +32,8 @@ const num3 = (text, label) => {
 const supports = [];
 const excludes = [];
 const directions = [];
+let fromAssembly = false;
+let part;
 let dxMm;
 let clusterRadiusMm;
 let maxHotspots;
@@ -46,6 +49,11 @@ for (let i = 0; i < rest.length; i++) {
     supports.push({ face: { axis, side } });
   } else if (arg === '--ground') {
     supports.push({ ground: true });
+  } else if (arg === '--from-assembly') {
+    fromAssembly = true;
+  } else if (arg === '--part') {
+    part = next();
+    if (!part) { console.error('--part needs an instance id'); process.exit(3); }
   } else if (arg === '--direction') {
     const p = num3(next(), '--direction');
     directions.push(p.slice(0, 3));
@@ -79,7 +87,7 @@ const exec = { agent: { session: { header: { cwd: project } } } };
 
 const args = {
   versionId,
-  supports,
+  ...(fromAssembly ? { supportsFrom: 'assembly', ...(part ? { part } : {}) } : { supports }),
   ...(directions.length ? { directions } : {}),
   ...(excludes.length ? { excludeFromReport: excludes } : {}),
   ...(dxMm !== undefined ? { dxMm } : {}),
