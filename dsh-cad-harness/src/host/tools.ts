@@ -82,6 +82,7 @@ import { effectiveKernelForSession } from './kernel-context.ts';
 import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jobs.ts';
 import { ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
+import { scanStressHotspots } from './stress-hotspots.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -553,6 +554,7 @@ export const CAD_TOOL_TIMEOUTS: Record<string, number> = {
   measure: 60_000,
   check_printability: 180_000,
   simulate_stress: 600_000,
+  scan_stress_hotspots: 900_000,
   preflight: 600_000,
   deliver: 120_000,
   analyze: 300_000,
@@ -7763,6 +7765,7 @@ export function registerCadTools(
         excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
         materialIds?: string[];
         materialJson?: string;
+        directions?: number[][];
         dxMm?: number;
         includeSelfWeight?: boolean;
         gravityMmPerS2?: number[];
@@ -8048,6 +8051,157 @@ export function registerCadTools(
       return jsonSafe(out) as any;
     },
   }), { id: 'cad_simulate', action: 'stress' });
+
+  // --- scan_stress_hotspots: 重力基热点扫描（detection，不是交付判定）--------
+  //
+  // 2026-11-26: “找热点”和“判强度”是两件事。线性模型里 1g 与 100g 的应力场只差一个
+  // 常数，热点位置不变；所以 1g 就够，高倍重力不增加位置信息。这个工具跑 ±X/±Y/±Z
+  // 六个重力方向，把跨方向重复出现的峰值聚类，输出“该看哪里”。它故意没有 verdict /
+  // delivery 字段：风险图不能被当成闸门（DESIGN §25.7）。
+  registerTool(defineTool({
+    name: 'scan_stress_hotspots',
+    description:
+      'Gravity hot-spot scan of a saved version: six unit-gravity directions (±X/±Y/±Z), one linear-elastic solve each, then cluster the peaks that recur. ' +
+      'This is DETECTION, not a verdict — the output has no verdict/delivery field, because "where to look" is not "is it strong enough". ' +
+      '1g is enough: the field is linear in the load, so the LOCATION of a hot spot does not move with magnitude; high-g would only scale the number. ' +
+      'The default dxMm is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); a thin feature (a 0.8 mm hub ring, a D-flat edge) needs a finer dxMm explicitly. ' +
+      'It does NOT model contact/Hertz, preload, fatigue/creep or layer-direction failure, and gravity is a BODY force: a pure torque path needs an explicit service load and simulate_stress. ' +
+      'Use it to pick the coordinates, then run simulate_stress with a declared case before judging.',
+    parameters: {
+      versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v061".' },
+      supports: {
+        type: 'array', required: true,
+        description: 'Where the part is held; the same support forms simulate_stress accepts. At least one is required (otherwise the solve is a rigid-body mode).',
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            face: { type: 'object', additionalProperties: false, properties: { axis: { type: 'string', required: true, description: 'x | y | z' }, side: { type: 'string', description: '"min" (default) or "max"' } } },
+            atMm: { type: 'array', items: { type: 'number' }, description: 'Lock the nodes within radiusMm of this point.' },
+            radiusMm: { type: 'number', description: 'Radius around atMm. Default 1.5 cells.' },
+            ground: { type: 'boolean', description: 'Hold the lowest z face (bed/ground).' },
+          },
+        },
+      },
+      materialIds: { type: 'array', items: { type: 'string' }, description: 'Shipped materials, e.g. ["fdm-pla"]. Default fdm-pla.' },
+      materialJson: { type: 'string', description: 'Inline material; densityKgPerM3 is required for self-weight.' },
+      directions: {
+        type: 'array',
+        description: 'Gravity vectors to sweep (mm/s^2). Default six ±axis directions at 1g. Pass fewer for a quick look; the labels become d1..dN in `cases`.',
+        items: { type: 'array', items: { type: 'number' } },
+      },
+      dxMm: { type: 'number', description: 'Voxel size. Default: thinnest bbox span / 8, clamped to 0.8–2.0 mm. Coarse by design; refine the top hot spots separately.' },
+      criticalDistanceMm: { type: 'number', description: 'Distance inside the surface at which peaks are read. Default 1.0 mm.' },
+      clusterRadiusMm: { type: 'number', description: 'Peaks within this distance belong to one cluster. Default max(1.5, 2.5*dxMm).' },
+      maxHotspots: { type: 'number', description: 'Maximum clusters returned. Default 12.' },
+      excludeFromReport: {
+        type: 'array',
+        description: 'Support/load patches to drop from the reported peaks (their stress is the idealisation\'s).',
+        items: { type: 'object', additionalProperties: false, properties: { atMm: { type: 'array', required: true, items: { type: 'number' } }, radiusMm: { type: 'number' } } },
+      },
+    },
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          versionId: { type: 'string', required: true },
+          hotspots: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                atMm: { type: 'array', required: true, items: { type: 'number' } },
+                bboxMm: { type: 'array', required: true, items: { type: 'array', items: { type: 'number' } } },
+                persistence: { type: 'number', required: true },
+                directions: { type: 'array', required: true, items: { type: 'string' } },
+                maxPeakMPa: { type: 'number', required: true },
+                maxPeakDirection: { type: 'string', required: true },
+                meanPeakMPa: { type: 'number', required: true },
+                peakCount: { type: 'number', required: true },
+              },
+            },
+          },
+          cases: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                label: { type: 'string', required: true },
+                gravityMmPerS2: { type: 'array', required: true, items: { type: 'number' } },
+                loadCase: { type: 'string', required: true },
+                dxMm: { type: 'number', required: true },
+                solidCells: { type: 'number', required: true },
+                peakCount: { type: 'number', required: true },
+                peakMPa: { type: 'number', required: true },
+                atMm: { type: 'array', items: { type: 'number' } },
+                durationMs: { type: 'number', required: true },
+              },
+            },
+          },
+          method: { type: 'object', required: true, additionalProperties: true },
+          capability: { type: 'object', required: true, additionalProperties: true },
+        },
+      },
+      render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    timeoutMs: 900_000,
+    async execute(args: unknown, exec: unknown) {
+      const a = args as {
+        versionId: string;
+        supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
+        materialIds?: string[];
+        materialJson?: string;
+        directions?: number[][];
+        dxMm?: number;
+        criticalDistanceMm?: number;
+        clusterRadiusMm?: number;
+        maxHotspots?: number;
+        excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
+      };
+      const { store } = await allStores(exec);
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) throw new Error(await versionNotFound(store, a.versionId));
+      const material = resolveStressMaterial(a.materialJson, a.materialIds);
+      if (!(material.densityKgPerM3 && material.densityKgPerM3 > 0)) {
+        throw new Error('scan_stress_hotspots: material densityKgPerM3 is required for a self-weight scan');
+      }
+      const supports = a.supports ?? [];
+      const supportCount = supports.filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
+      if (supportCount === 0) {
+        throw argError('scan_stress_hotspots', 'supports', 'is empty — the solve would be a rigid-body mode',
+          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}',
+          { received: supports });
+      }
+      const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
+      const spans = [0, 1, 2]
+        .map((i) => bb.max[i]! - bb.min[i]!)
+        .filter((v) => Number.isFinite(v) && v > 0);
+      const thinnest = spans.length ? Math.min(...spans) : 1;
+      const dxMm = a.dxMm ?? Math.max(0.8, Math.min(2, thinnest / 8));
+      const value = await scanStressHotspots({
+        versionId: a.versionId,
+        modelPath,
+        material,
+        dxMm,
+        directions: a.directions?.length
+          ? a.directions.map((g, i) => ({ label: `d${i + 1}`, gravityMmPerS2: g }))
+          : undefined,
+        criticalDistanceMm: a.criticalDistanceMm,
+        clusterRadiusMm: a.clusterRadiusMm,
+        maxHotspots: a.maxHotspots,
+        excludeFromReport: a.excludeFromReport ?? [],
+        fixedFaces: [
+          ...supports.filter((s) => s.face).map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
+          ...supports.filter((s) => s.ground).map(() => ({ axis: 'z' as const, side: 'min' as const })),
+        ],
+        fixedPoints: supports.filter((s) => s.atMm).map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
+      });
+      // jsonSafe: numpy's -0 is not lossless JSON; the same normalisation the stress tool uses.
+      return jsonSafe({
+        ...value,
+        cases: value.cases.map((c) => ({ ...c, atMm: c.atMm ?? undefined })),
+      }) as any;
+    },
+  }), { id: 'cad_simulate', action: 'hotspots' });
 
   // --- scan_attention: 把注意力指向可能出错的几何（HARNESS §11.14）------------
   //
