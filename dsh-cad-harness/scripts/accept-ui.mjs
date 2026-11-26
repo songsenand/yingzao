@@ -50,6 +50,13 @@ const SCENARIOS = [
   { name: 'theme-dark-playback', query: 'w=520&h=1200&dark=1&assert=theme&debug=0', resolve: 'motion' },
   // A 3D-only control, exercised under Xvfb; SKIP when this box cannot give GL.
   { name: 'section', query: 'w=520&h=1200&open=剖切&assert=section&debug=0', resolve: 'motion' },
+  // U20: an oblique cut of a TUBE must fill the cut and leave the bore as a hole.
+  // p010 镜筒 is the corpus part with a through bore; the assert reads the cap
+  // mesh's own triangles (area vs its convex hull), so "hollow shell" fails.
+  // `freezeat` past the assert: the sandbox snapshots the canvas into an <img>,
+  // so a default 2.9 s freeze would photograph the part BEFORE the cut and the
+  // evidence picture would disagree with the verdict.
+  { name: 'section-free', query: 'w=520&h=1200&subject=p010&assert=section-free&freezeat=9000&debug=0' },
   // The no-WebGL path must still show the run's data and keyframe strip.
   { name: 'playback-no-gl', query: 'w=520&h=1200&assert=playback&debug=0', resolve: 'motion', noXvfb: true },
 ];

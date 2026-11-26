@@ -62,7 +62,10 @@ const defs = new Map();
   });
 }
 const registry = new Set(defs.keys());
-check(registry.size === 39, 'the registry exposes 39 ops', String(registry.size));
+// No typed total: this line said 39 while the registry had 45, which is the same
+// drift the surface counts had. What matters is that the sheet and the skills
+// agree with whatever the registry is — checked on the next lines.
+check(registry.size > 0, 'the registry exposes ops', String(registry.size));
 check(toolNames.size === registry.size && [...registry].every((n) => toolNames.has(n)),
   'the contract sheet lists exactly the registered ops',
   `${toolNames.size} sheet vs ${registry.size} registered`);
@@ -100,8 +103,12 @@ const toolbox = skills.find((s) => s.name === 'cad-toolbox').text;
 check(/(?:Nine job surfaces|9 个 surface)/.test(toolbox),
   'cad-toolbox states the 9-surface model (not the retired 43-tool count)',
   toolbox.match(/^.*surface.*$/m)?.[0]?.slice(0, 90) ?? '');
-check(/\b39\b/.test(toolbox) && registry.size === 39,
-  'cad-toolbox states the 39-op count', `${registry.size}`);
+// A typed count is drift bait: the skill said 44 while the registry had 45, and
+// the assertion repeated 39 long after. Parse the stated number instead.
+const stated = toolbox.match(/\((\d+) ops\)/)?.[1];
+check(stated !== undefined && Number(stated) === registry.size,
+  'cad-toolbox states the live op count',
+  `skill says ${stated ?? '(none)'}, registry has ${registry.size}`);
 
 // 3) every registered op reaches a skill through its SURFACE. Under the cutover the
 // model never sees a legacy name, so naming the surface (whose catalog() lists every

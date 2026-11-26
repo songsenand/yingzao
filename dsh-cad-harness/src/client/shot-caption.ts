@@ -101,7 +101,13 @@ export interface PartShotFacts {
   latestVersionId?: string | null;
   label: string;
   bboxMm?: readonly number[];
-  section?: { axis: string; keepPct: number };
+  /**
+   * The cut a reader would otherwise have to guess. `axis` + `keepPct` is the axis
+   * cut; `plane` (U20) carries the normal and the point, because an oblique cut
+   * cannot be described by an axis name and "the picture" alone does not say which
+   * half was removed.
+   */
+  section?: { axis: string; keepPct: number; plane?: { normal: readonly number[]; pointMm: readonly number[]; keep: 'negative' | 'positive' } };
   measureMm?: { dist: number; a: readonly number[]; b: readonly number[] };
   thicknessMm?: number;
   annotations?: number;
@@ -133,7 +139,15 @@ export function partShotCaption(f: PartShotFacts): string {
   const facts: string[] = [];
   if (f.bboxMm) facts.push(tr('ui.caption.bbox', { values: f.bboxMm.map(round3).join(' × ') }));
   if (f.section) {
-    facts.push(tr('ui.caption.section', { axis: f.section.axis, keep: Math.round(f.section.keepPct * 100) }));
+    if (f.section.plane) {
+      facts.push(tr('ui.caption.sectionPlane', {
+        normal: f.section.plane.normal.map(round3).join(', '),
+        point: f.section.plane.pointMm.map(round3).join(', '),
+        side: f.section.plane.keep,
+      }));
+    } else {
+      facts.push(tr('ui.caption.section', { axis: f.section.axis, keep: Math.round(f.section.keepPct * 100) }));
+    }
   }
   if (f.measureMm) {
     facts.push(tr('ui.caption.measure', { dist: f.measureMm.dist.toFixed(2), a: f.measureMm.a.map((n) => n.toFixed(1)).join(', '), b: f.measureMm.b.map((n) => n.toFixed(1)).join(', ') }));

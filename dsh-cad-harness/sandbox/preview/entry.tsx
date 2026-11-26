@@ -1462,6 +1462,30 @@ if (q.get('assert') === 'machine') {
     ];
     pre.textContent = lines.join('\n');
   }, 3000);
+  // The whole-machine 3D preview is a separate surface from the run viewer:
+  // click 整机预览, assert the overlay is up and its close button tears it down.
+  // (Headless may have no WebGL; the overlay still has to exist and be closable.)
+  setTimeout(() => {
+    (document.querySelector('[data-machine-preview]') as HTMLElement | null)?.click();
+  }, 3400);
+  setTimeout(() => {
+    const overlay = document.querySelector('[data-machine-preview-overlay]');
+    const close = document.querySelector('[data-machine-preview-close]') as HTMLElement | null;
+    const before = Boolean(overlay);
+    const header = (overlay?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    close?.click();
+    setTimeout(() => {
+      const gone = !document.querySelector('[data-machine-preview-overlay]');
+      const pre = document.querySelector('#stage pre');
+      if (pre) {
+        pre.textContent += '\n' + [
+          `${before ? 'PASS' : 'FAIL'}  machine preview overlay opens`,
+          `${gone ? 'PASS' : 'FAIL'}  machine preview overlay closes`,
+          `INFO  preview header: ${header || '(none)'}`,
+        ].join('\n');
+      }
+    }, 500);
+  }, 3900);
 }
 
 // ?assert=evidence — the evidence table must be scannable, not N identical rows.
@@ -1600,3 +1624,252 @@ if (q.get('debug') !== '0' && q.get('assert') !== 'layout' && q.get('assert') !=
   }, 2600);
 }
 
+
+// ?assert=section-free — U20: an ARBITRARY cut plane must fill the cut with real
+// geometry, and a bore must come back as a HOLE in that fill rather than being
+// painted over. "斜切管道能看到空腔而不是空壳" is the claim, and it is checked
+// against the cap mesh's own triangles, not against a pixel impression:
+//
+//   1. the strip's mode button turns the cut from an axis into a free plane;
+//   2. the two angle sliders aim it obliquely (a person's gesture, via input
+//      events — not by reaching into React state);
+//   3. the section group holds a cap mesh whose total triangle area is > 0
+//      (a shader clip alone leaves a hollow shell: area 0);
+//   4. the cap's area is materially SMALLER than the convex hull of its own
+//      vertices (a filled disc would be ≈ hull). The difference IS the bore.
+//   5. flipping keeps/cuts swaps which side survives, so the cap stays on screen
+//      while the material on one side disappears — the plane did not move.
+if (q.get('assert') === 'section-free') {
+  const waitFor = (fn: () => boolean, ms = 12000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  const group = () => (document.querySelector('#root canvas')?.parentElement as any)?.__sectionGroup ?? null;
+  /** The canvas the part viewport draws into (the mount owns __sectionGroup). */
+  const partCanvas = (): HTMLCanvasElement | null => {
+    for (const c of Array.from(document.querySelectorAll('#root canvas')) as HTMLCanvasElement[]) {
+      if ((c.parentElement as any)?.__sectionGroup) return c;
+    }
+    return (document.querySelector('#root canvas') as HTMLCanvasElement | null) ?? null;
+  };
+
+  /** Share of the frame that is not the corner (background) pixel. */
+  const modelShare = (canvas: HTMLCanvasElement | null) => {
+    if (!canvas) return -1;
+    const probe = document.createElement('canvas');
+    probe.width = 96; probe.height = 96;
+    const ctx = probe.getContext('2d');
+    if (!ctx) return -1;
+    ctx.drawImage(canvas, 0, 0, 96, 96);
+    const d = ctx.getImageData(0, 0, 96, 96).data;
+    const bg = [d[0], d[1], d[2]];
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 24) n++;
+    }
+    return n / (96 * 96);
+  };
+
+  /** Total area of a triangle-soup position array. */
+  const area = (positions: number[]) => {
+    let total = 0;
+    for (let i = 0; i + 8 < positions.length; i += 9) {
+      const ax = positions[i], ay = positions[i + 1], az = positions[i + 2];
+      const bx = positions[i + 3], by = positions[i + 4], bz = positions[i + 5];
+      const cx = positions[i + 6], cy = positions[i + 7], cz = positions[i + 8];
+      const ux = bx - ax, uy = by - ay, uz = bz - az;
+      const vx = cx - ax, vy = cy - ay, vz = cz - az;
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      total += Math.hypot(nx, ny, nz) / 2;
+    }
+    return total;
+  };
+
+  /**
+   * Convex hull area of the cap's vertices, projected onto the cut plane's own
+   * frame — the same u/v the panel uses (world axis least aligned with the
+   * normal seeds u). Projecting onto two world axes instead degenerates whenever
+   * the plane is edge-on to them, which is exactly what an oblique cut is.
+   */
+  const hullArea = (positions: number[], normal: [number, number, number]) => {
+    const abs = normal.map(Math.abs);
+    let seedIndex = 0;
+    for (let i = 1; i < 3; i++) if (abs[i] < abs[seedIndex]) seedIndex = i;
+    const seed = [0, 0, 0];
+    seed[seedIndex] = 1;
+    const along = seed[0] * normal[0] + seed[1] * normal[1] + seed[2] * normal[2];
+    const rawU = [seed[0] - along * normal[0], seed[1] - along * normal[1], seed[2] - along * normal[2]];
+    const length = Math.hypot(rawU[0], rawU[1], rawU[2]) || 1;
+    const u = [rawU[0] / length, rawU[1] / length, rawU[2] / length];
+    const v = [
+      normal[1] * u[2] - normal[2] * u[1],
+      normal[2] * u[0] - normal[0] * u[2],
+      normal[0] * u[1] - normal[1] * u[0],
+    ];
+    const pts: [number, number][] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+      pts.push([x * u[0] + y * u[1] + z * u[2], x * v[0] + y * v[1] + z * v[2]]);
+    }
+    pts.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+    const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+      (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lower: [number, number][] = [];
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+      lower.push(p);
+    }
+    const upper: [number, number][] = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    const ring = lower.slice(0, -1).concat(upper.slice(0, -1));
+    let total = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      total += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    }
+    return Math.abs(total) / 2;
+  };
+
+  const capPositions = (): number[] | null => {
+    const g = group();
+    if (!g) return null;
+    for (const child of g.children as any[]) {
+      const attribute = child?.geometry?.getAttribute?.('position');
+      if (attribute && child.material && !child.isLineSegments) {
+        return Array.from(attribute.array as Float32Array);
+      }
+    }
+    return null;
+  };
+
+  void (async () => {
+    const lines: string[] = [`free-plane section (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+
+    const toggle = await waitFor(() => Boolean(document.querySelector('[data-section-toggle]')), 12000);
+    lines.push(`${toggle ? 'PASS' : 'FAIL'}  the section toggle exists`);
+    if (!toggle) { lines.push('FAIL  no panel — load a version first (`&record=<version>`)'); show(); return; }
+
+    // The panel starts with the section OFF: turn it on, then read the axis cap.
+    (document.querySelector('[data-section-toggle]') as HTMLElement).click();
+    const gotAxis = await waitFor(() => {
+      const cap = capPositions();
+      return Boolean(cap && area(cap) > 0);
+    }, 12000);
+    const axisCap = capPositions();
+    const axisArea = axisCap ? area(axisCap) : 0;
+    lines.push(`${gotAxis ? 'PASS' : 'FAIL'}  the axis cut is filled with real geometry (${axisArea.toFixed(2)}mm²)`);
+    const axisShare = modelShare(partCanvas());
+
+    // The gesture: mode button, then the two angle sliders (input events, the
+    // same thing a person's drag produces).
+    (document.querySelector('[data-section-mode]') as HTMLElement | null)?.click();
+    const mode = await waitFor(() => document.querySelector('[data-section-mode]')?.getAttribute('data-section-mode') === 'plane', 6000);
+    lines.push(`${mode ? 'PASS' : 'FAIL'}  the mode button switched the cut to a free plane`);
+
+    const setRange = (selector: string, value: number) => {
+      const input = document.querySelector(selector) as HTMLInputElement | null;
+      if (!input) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, String(value));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    };
+    const aimed = mode && setRange('[data-section-azimuth]', 90) && setRange('[data-section-elevation]', 45);
+    lines.push(`${aimed ? 'PASS' : 'FAIL'}  two range inputs aim the normal (az 90°, el 45°)`);
+
+    const oblique = await waitFor(() => {
+      const now = capPositions();
+      return Boolean(now && area(now) > 0 && Math.abs(area(now) - axisArea) > 1e-3);
+    }, 12000);
+    const cap = capPositions();
+    const capArea = cap ? area(cap) : 0;
+    const aimedNormal: [number, number, number] = [
+      Math.cos((45 * Math.PI) / 180) * Math.cos((90 * Math.PI) / 180),
+      Math.cos((45 * Math.PI) / 180) * Math.sin((90 * Math.PI) / 180),
+      Math.sin((45 * Math.PI) / 180),
+    ];
+    const hull = cap ? hullArea(cap, aimedNormal) : 0;
+    lines.push(`${oblique ? 'PASS' : 'FAIL'}  the oblique cut is filled (cap ${capArea.toFixed(2)}mm² vs axis ${axisArea.toFixed(2)}mm²)`);
+    // The bore: a filled disc makes cap ≈ hull. 0.95 leaves room for tessellation;
+    // a part with no internal void fails on purpose — this scenario needs a tube
+    // (microscope5 p010 镜筒), which is named by the runner, not guessed.
+    const ratio = hull > 0 ? capArea / hull : 0;
+    lines.push(`${capArea > 0 && hull > 0 && ratio < 0.95 ? 'PASS' : 'FAIL'}  the cut face has a HOLE, not a fill: cap ${capArea.toFixed(1)} < hull ${hull.toFixed(1)} (ratio ${ratio.toFixed(3)})`);
+
+    // Is the CUT installed on the material a frame is drawn with? A cap mesh
+    // that exists while the shader clips nothing renders as a hollow shell, and
+    // that looks correct in a thumbnail — so it is asserted, not eyeballed.
+    const host = (document.querySelector('#root canvas')?.parentElement ?? null) as any;
+    const partMesh = host?.__mesh ?? null;
+    const renderer = host?.__renderer ?? null;
+    const planeCount = partMesh?.material?.clippingPlanes?.length ?? 0;
+    lines.push(`${planeCount === 1 ? 'PASS' : 'FAIL'}  the part material carries one clipping plane (${planeCount})`);
+    lines.push(`${renderer?.localClippingEnabled === true ? 'PASS' : 'FAIL'}  local clipping is enabled on the renderer`);
+
+    // Carry the FRAME into the verdict page. The live canvas can stop painting
+    // after the initial settle (headless GL), and a verdict with no picture is
+    // the thing this whole scenario exists to prevent — so the assert takes the
+    // pixels at the moment the oblique cut is on screen, and reports how much of
+    // the frame is model rather than background (a blank capture must FAIL).
+    const canvas = partCanvas();
+    let url = '';
+    let coverage = 0;
+    if (canvas) {
+      try {
+        url = canvas.toDataURL('image/png');
+        const probe = document.createElement('canvas');
+        probe.width = 64; probe.height = 64;
+        const ctx = probe.getContext('2d');
+        ctx?.drawImage(canvas, 0, 0, 64, 64);
+        const data = ctx?.getImageData(0, 0, 64, 64).data ?? new Uint8ClampedArray(0);
+        const seen = new Set<string>();
+        for (let i = 0; i < data.length; i += 4) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+        coverage = seen.size;
+      } catch { /* a blocked canvas is reported below */ }
+    }
+    lines.push(`${coverage > 8 ? 'PASS' : 'FAIL'}  the cut frame is painted (${coverage} distinct colours in a 64×64 probe; 1–2 = blank)`);
+    const obliqueShare = modelShare(canvas);
+    // The clip must CHANGE the pixels: if the part occupies exactly as much of
+    // the frame before and after the cut, the shader is not clipping and the
+    // "cap" is floating over an intact shell.
+    lines.push(`${axisShare >= 0 && obliqueShare >= 0 && Math.abs(obliqueShare - axisShare) > 0.005 ? 'PASS' : 'FAIL'}  the clip changes the frame (model pixels ${(axisShare * 100).toFixed(1)}% axis → ${(obliqueShare * 100).toFixed(1)}% oblique)`);
+
+    // Put THIS frame on top of the viewport, fixed to the canvas's on-screen
+    // rectangle. The sandbox's own freeze is a DOM sibling that a later canvas
+    // rebuild can end up behind, and a stale frame is worse than no picture.
+    if (canvas && url) {
+      const rect = canvas.getBoundingClientRect();
+      const frame = document.createElement('img');
+      frame.dataset.frozen = '1';
+      frame.src = url;
+      frame.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;`
+        + `width:${rect.width}px;height:${rect.height}px;z-index:2147483647;pointer-events:none;`;
+      document.body.appendChild(frame);
+    }
+
+    // Flip: swapping the kept half must keep the SAME cut face on screen.
+    const before = capPositions();
+    (document.querySelector('[data-section-flip]') as HTMLElement | null)?.click();
+    const flipped = await waitFor(() => document.querySelector('[data-section-flip]')?.getAttribute('data-section-flip') === 'cut', 6000);
+    const afterCap = capPositions();
+    lines.push(`${flipped ? 'PASS' : 'FAIL'}  the flip button reports the cut side`);
+    lines.push(`${afterCap && area(afterCap) > 0 && before && Math.abs(area(afterCap) - area(before)) < 1e-6 ? 'PASS' : 'FAIL'}  flipping keeps/cut leaves the same cut face (the plane did not move)`);
+
+    show();
+  })();
+}

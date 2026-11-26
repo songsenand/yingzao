@@ -6,7 +6,7 @@ import { buildSurfaceFromToolMeta, type LegacyTool } from './surface.ts';
 export const INSPECT_SURFACE_NAME = 'cad_inspect';
 export const INSPECT_SURFACE_DESCRIPTION =
   'One entry point for geometry truth about a saved version. '
-  + 'action="catalog" lists the four ops; action="help" with args.op=<op> gives the legacy parameters; '
+  + 'action="catalog" lists the {n} ops; action="help" with args.op=<op> gives the legacy parameters; '
   + 'an op delegates to the same implementation and output contract as the old tool.';
 
 export function buildCadInspectSurface(tools: ReadonlyMap<string, LegacyTool>) {

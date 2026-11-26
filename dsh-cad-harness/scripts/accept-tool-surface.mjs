@@ -3,14 +3,16 @@
 //
 // It does not require a live session, CAD engine or Python runtime: the audit
 // captures the registered definitions with a fake ctx and derives the 9 surfaces
-// from each tool's metadata. A failure means a tool is unlabelled or an
-// (surface, action) pair is duplicated.
+// from each tool's metadata. A failure means a tool is unlabelled, an
+// (surface, action) pair is duplicated, or the frozen ledger is out of sync.
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const LEDGER = join(ROOT, 'docs/TOOL-SURFACE-V1.json');
 let failed = 0;
 function check(name, ok, detail = '') {
   if (ok) console.log(`  PASS ${name}`);
@@ -42,6 +44,30 @@ check('simulate is the largest current surface',
 check('schema is measured, not assumed',
   Number(report?.schemaChars) > 0 && Number(report?.approxTokens) > 0,
   String(report?.schemaChars));
+
+// ── Frozen ledger (Q2, 2026-11-26) ───────────────────────────────────────────
+// The nine surface names and their action names are FROZEN for 0.2.x: add only.
+// The ledger is the checked-in copy; a live pair missing from it, or a frozen
+// surface whose actions changed, means the commit either forgot
+// `node scripts/audit-tool-surface.mjs --write` or removed something the
+// compatibility contract forbids. Additions pass after regeneration — that is
+// the whole point of putting the freeze in a file instead of in literals.
+let ledger = null;
+try { ledger = JSON.parse(readFileSync(LEDGER, 'utf8')); } catch { /* reported below */ }
+check('frozen ledger exists (docs/TOOL-SURFACE-V1.json)', ledger !== null);
+if (ledger) {
+  const live = new Map((report?.pairs ?? []).map((row) => [`${row.surface}.${row.action}`, row.tool]));
+  const frozen = new Map(Object.entries(ledger.tools ?? {})
+    .map(([tool, entry]) => [`${entry.surface}.${entry.action}`, tool]));
+  const removed = [...frozen.keys()].filter((pair) => !live.has(pair));
+  const unfrozen = [...live.keys()].filter((pair) => !frozen.has(pair));
+  check('no frozen action was removed', removed.length === 0,
+    `${removed.join(', ')} — removal needs a deprecation cycle, see docs/dev/COMPATIBILITY.md`);
+  check('every live action is in the frozen ledger (run --write in this change)', unfrozen.length === 0,
+    unfrozen.join(', '));
+  check('surface set is unchanged',
+    Object.keys(ledger.surfaces ?? {}).sort().join(',') === (report?.bySurface ?? []).map((f) => f.id).sort().join(','));
+}
 
 console.log(`\naccept-tool-surface: ${failed === 0 ? 'PASS' : `${failed} FAILURE(S)`}`);
 process.exit(failed === 0 ? 0 : 1);

@@ -37,6 +37,40 @@ export interface SurfaceOp {
   readonly summary: string;
 }
 
+/**
+ * A placeholder for one required argument, chosen by declared type.
+ *
+ * `catalog`/`help` used to list the required NAMES only, so a caller still had
+ * to guess the shape of the call. Every op now carries a runnable-looking
+ * example; the values are deliberately placeholders (a quoted `<name>` for a
+ * string, 0/[]/{}/false for the containers), because a made-up plausible value
+ * (a real version id, a real datum) would read as advice and be wrong half the
+ * time. Type-appropriate, so a number field never receives a quoted string.
+ */
+function placeholderValue(type: string, name: string): unknown {
+  switch (type) {
+    case 'number': return 0;
+    case 'boolean': return false;
+    case 'array': return [];
+    case 'json': return {};
+    default: return `<${name}>`;
+  }
+}
+
+/** Build `{ surface, action, args }` for one op from its required parameters. */
+export function exampleArgs(tool: LegacyTool | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const row of paramRows(tool?.parameters)) {
+    if (row.required) out[row.name] = placeholderValue(row.type, row.name);
+  }
+  return out;
+}
+
+/** The one call a caller can paste: `cad_x({ action, args })`, JSON-encoded. */
+export function exampleCall(surfaceName: string, action: string, tool: LegacyTool | undefined): string {
+  return `${surfaceName}({ action: ${JSON.stringify(action)}, args: ${JSON.stringify(exampleArgs(tool))} })`;
+}
+
 export interface SurfaceSpec {
   readonly name: string;
   readonly description: string;
@@ -148,9 +182,15 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
 
   const byOp = new Map(spec.ops.map((entry) => [entry.op, entry]));
 
+  // The op COUNT in the description is derived, never typed: "lists the four
+  // ops" was wrong for five of the nine surfaces (deliver had six, check eight)
+  // and every new op made it wronger. `{n}` is substituted from the ledger the
+  // surface is actually built from, so the text cannot drift again.
+  const described = spec.description.replaceAll('{n}', String(spec.ops.length));
+
   return defineTool({
     name: spec.name,
-    description: spec.description,
+    description: described,
     parameters: {
       action: {
         type: 'string',
@@ -177,12 +217,14 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
         return {
           surface: spec.name,
           gate: Boolean(spec.gate),
+          count: spec.ops.length,
           ops: spec.ops.map((entry) => ({
             op: entry.op,
             summary: entry.summary,
             required: paramRows(tools.get(entry.tool)?.parameters)
               .filter((row) => row.required)
               .map((row) => row.name),
+            example: exampleCall(spec.name, entry.op, tools.get(entry.tool)),
           })),
         } as never;
       }
@@ -207,6 +249,7 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
           summary: entry.summary,
           description: tool.description ?? '',
           parameters: paramRows(tool.parameters),
+          example: exampleCall(spec.name, entry.op, tool),
         } as never;
       }
 

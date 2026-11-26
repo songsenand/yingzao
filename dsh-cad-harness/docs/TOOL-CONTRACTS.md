@@ -722,6 +722,34 @@ cad_inspect({ action: "attention", args: { versionId: "…" } })
 returns: `versionId`, `stats`, `suspects`
 
 
+## `scan_stress_hotspots`
+
+Model-facing call: `cad_simulate` action `hotspots` (this section documents the internal op).
+
+Gravity hot-spot scan of a saved version: six unit-gravity directions (±X/±Y/±Z), one linear-elastic solve each, then cluster the peaks that recur. This is DETECTION, not a verdict — the output has no verdict/delivery field, because "where to look" is not "is it strong enough". 1g is enough: the field is linear in the load, so the LOCATION of a hot spot does not move with magnitude; high-g would only scale the number. The default dxMm is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); a thin feature (a 0.8 mm hub ring, a D-flat edge) needs a finer dxMm explicitly. It does NOT model contact/Hertz, preload, fatigue/creep or layer-direction failure, and gravity is a BODY force: a pure torque path needs an explicit service load and simulate_stress. Use it to pick the coordinates, then run simulate_stress with a declared case before judging.
+
+| parameter | type | default | meaning |
+|---|---|---|---|
+| `versionId` | string | **required** | Saved version id, e.g. "v061". |
+| `supportsFrom` | string | — | "explicit" (default) uses `supports`; "assembly" derives them from the structural joints in assembly/assembly.json (revolute/fixed/pin, then contact seats). With "assembly", do not pass `supports`; pass `part` when the version is placed more than once. |
+| `part` | string | — | Assembly instance id (e.g. "spool3"). Required for supportsFrom:"assembly" when the version has several placements. |
+| `supports` | array | — | Where the part is held; the same support forms simulate_stress accepts. Required for supportsFrom:"explicit" (default); omitted when supportsFrom:"assembly". |
+| `materialIds` | array | — | Shipped materials, e.g. ["fdm-pla"]. Default fdm-pla. |
+| `materialJson` | string | — | Inline material; densityKgPerM3 is required for self-weight. |
+| `directions` | array | — | Gravity vectors to sweep (mm/s^2). Default six ±axis directions at 1g. Pass fewer for a quick look; the labels become d1..dN in `cases`. |
+| `dxMm` | number | — | Voxel size. Default: thinnest bbox span / 8, clamped to 0.8–2.0 mm. Coarse by design; refine the top hot spots separately. |
+| `criticalDistanceMm` | number | — | Distance inside the surface at which peaks are read. Default 1.0 mm. |
+| `clusterRadiusMm` | number | — | Peaks within this distance belong to one cluster. Default max(1.5, 2.5*dxMm). |
+| `maxHotspots` | number | — | Maximum clusters returned. Default 12. |
+| `excludeFromReport` | array | — | Support/load patches to drop from the reported peaks (their stress is the idealisation's). |
+
+```js
+cad_simulate({ action: "hotspots", args: { versionId: "…" } })
+```
+
+returns: `versionId`, `supportSource`, `supports`, `supportWarnings`, `hotspots`, `cases`, `method`, `capability`
+
+
 ## `set_datums`
 
 Model-facing call: `cad_assembly` action `datums` (this section documents the internal op).
@@ -781,7 +809,7 @@ returns: `root`, `key`, `previous`, `kernel`, `note`
 
 Model-facing call: `cad_simulate` action `fluid` (this section documents the internal op).
 
-MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.
+MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. Seeds are restricted to the bore (a bbox-corner seed box is rejected, and the count is reported), and `metrics.outsideSnapshotMax` reports captured fluid that is outside the bore. A wall thinner than ~2 cells leaks by resolution — the run says so instead of hiding it. Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.
 
 | parameter | type | default | meaning |
 |---|---|---|---|

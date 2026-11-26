@@ -1,0 +1,254 @@
+{
+  "frozenAt": "2026-11-26",
+  "updatedAt": "2026-11-26",
+  "revision": 1,
+  "policy": "add only; removal or rename needs a deprecation cycle of at least one minor version",
+  "schemaCharsBudget": 6144,
+  "surfaces": {
+    "cad_assembly": [
+      "check",
+      "datums",
+      "suggest",
+      "validate",
+      "write"
+    ],
+    "cad_check": [
+      "appearance",
+      "cnc",
+      "edm",
+      "parts",
+      "printability",
+      "sheet2d",
+      "sweep",
+      "turning"
+    ],
+    "cad_deliver": [
+      "affected",
+      "audit",
+      "pearl",
+      "plan",
+      "preflight",
+      "retire"
+    ],
+    "cad_inspect": [
+      "analyze",
+      "attention",
+      "features",
+      "measure"
+    ],
+    "cad_part": [
+      "appearance",
+      "create",
+      "generate",
+      "import",
+      "merge",
+      "role"
+    ],
+    "cad_python": [
+      "run",
+      "runtime"
+    ],
+    "cad_see": [
+      "reference",
+      "render",
+      "review"
+    ],
+    "cad_session": [
+      "bind",
+      "info",
+      "init",
+      "kernel",
+      "review"
+    ],
+    "cad_simulate": [
+      "fluid",
+      "hotspots",
+      "lbm",
+      "motion",
+      "physics",
+      "stress"
+    ]
+  },
+  "tools": {
+    "affected_checks": {
+      "surface": "cad_deliver",
+      "action": "affected"
+    },
+    "analyze": {
+      "surface": "cad_inspect",
+      "action": "analyze"
+    },
+    "attach_appearance": {
+      "surface": "cad_part",
+      "action": "appearance"
+    },
+    "bind_project": {
+      "surface": "cad_session",
+      "action": "bind"
+    },
+    "check_appearance": {
+      "surface": "cad_check",
+      "action": "appearance"
+    },
+    "check_assembly": {
+      "surface": "cad_assembly",
+      "action": "check"
+    },
+    "check_cnc_access": {
+      "surface": "cad_check",
+      "action": "cnc"
+    },
+    "check_edm_access": {
+      "surface": "cad_check",
+      "action": "edm"
+    },
+    "check_parts": {
+      "surface": "cad_check",
+      "action": "parts"
+    },
+    "check_printability": {
+      "surface": "cad_check",
+      "action": "printability"
+    },
+    "check_sheet2d": {
+      "surface": "cad_check",
+      "action": "sheet2d"
+    },
+    "check_sweep": {
+      "surface": "cad_check",
+      "action": "sweep"
+    },
+    "check_turning": {
+      "surface": "cad_check",
+      "action": "turning"
+    },
+    "create_part": {
+      "surface": "cad_part",
+      "action": "create"
+    },
+    "deliver": {
+      "surface": "cad_deliver",
+      "action": "plan"
+    },
+    "delivery_audit": {
+      "surface": "cad_deliver",
+      "action": "audit"
+    },
+    "generate_part": {
+      "surface": "cad_part",
+      "action": "generate"
+    },
+    "import_part": {
+      "surface": "cad_part",
+      "action": "import"
+    },
+    "init_project": {
+      "surface": "cad_session",
+      "action": "init"
+    },
+    "list_features": {
+      "surface": "cad_inspect",
+      "action": "features"
+    },
+    "measure": {
+      "surface": "cad_inspect",
+      "action": "measure"
+    },
+    "merge_parts": {
+      "surface": "cad_part",
+      "action": "merge"
+    },
+    "pearl_run": {
+      "surface": "cad_deliver",
+      "action": "pearl"
+    },
+    "preflight": {
+      "surface": "cad_deliver",
+      "action": "preflight"
+    },
+    "project_info": {
+      "surface": "cad_session",
+      "action": "info"
+    },
+    "python_runtime": {
+      "surface": "cad_python",
+      "action": "runtime"
+    },
+    "recall_reference_image": {
+      "surface": "cad_see",
+      "action": "reference"
+    },
+    "render_part": {
+      "surface": "cad_see",
+      "action": "render"
+    },
+    "request_review": {
+      "surface": "cad_session",
+      "action": "review"
+    },
+    "retire_run": {
+      "surface": "cad_deliver",
+      "action": "retire"
+    },
+    "review_visual": {
+      "surface": "cad_see",
+      "action": "review"
+    },
+    "run_python": {
+      "surface": "cad_python",
+      "action": "run"
+    },
+    "scan_attention": {
+      "surface": "cad_inspect",
+      "action": "attention"
+    },
+    "scan_stress_hotspots": {
+      "surface": "cad_simulate",
+      "action": "hotspots"
+    },
+    "set_datums": {
+      "surface": "cad_assembly",
+      "action": "datums"
+    },
+    "set_part_role": {
+      "surface": "cad_part",
+      "action": "role"
+    },
+    "set_project_kernel": {
+      "surface": "cad_session",
+      "action": "kernel"
+    },
+    "simulate_fluid": {
+      "surface": "cad_simulate",
+      "action": "fluid"
+    },
+    "simulate_lbm": {
+      "surface": "cad_simulate",
+      "action": "lbm"
+    },
+    "simulate_motion": {
+      "surface": "cad_simulate",
+      "action": "motion"
+    },
+    "simulate_physics": {
+      "surface": "cad_simulate",
+      "action": "physics"
+    },
+    "simulate_stress": {
+      "surface": "cad_simulate",
+      "action": "stress"
+    },
+    "suggest_interfaces": {
+      "surface": "cad_assembly",
+      "action": "suggest"
+    },
+    "validate_assembly": {
+      "surface": "cad_assembly",
+      "action": "validate"
+    },
+    "write_assembly": {
+      "surface": "cad_assembly",
+      "action": "write"
+    }
+  }
+}

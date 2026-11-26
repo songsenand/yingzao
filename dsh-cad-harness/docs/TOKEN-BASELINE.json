@@ -1,0 +1,71 @@
+{
+  "recordedAt": "2026-11-26",
+  "surfaceSchemaChars": 4065,
+  "skillCatalogChars": 1865,
+  "fixedPrefixChars": 5930,
+  "surfaceBudgetChars": 6144,
+  "tolerance": 0.1,
+  "legacySchemaChars": 104675,
+  "components": {
+    "surfaces": [
+      {
+        "name": "cad_session",
+        "chars": 395
+      },
+      {
+        "name": "cad_part",
+        "chars": 399
+      },
+      {
+        "name": "cad_assembly",
+        "chars": 420
+      },
+      {
+        "name": "cad_check",
+        "chars": 522
+      },
+      {
+        "name": "cad_simulate",
+        "chars": 485
+      },
+      {
+        "name": "cad_inspect",
+        "chars": 546
+      },
+      {
+        "name": "cad_see",
+        "chars": 375
+      },
+      {
+        "name": "cad_python",
+        "chars": 498
+      },
+      {
+        "name": "cad_deliver",
+        "chars": 425
+      }
+    ],
+    "skills": [
+      {
+        "name": "cad-assembly",
+        "chars": 335
+      },
+      {
+        "name": "cad-manufacturing",
+        "chars": 417
+      },
+      {
+        "name": "cad-modeling-measure",
+        "chars": 386
+      },
+      {
+        "name": "cad-simulation",
+        "chars": 445
+      },
+      {
+        "name": "cad-toolbox",
+        "chars": 282
+      }
+    ]
+  }
+}

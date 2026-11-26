@@ -4,44 +4,129 @@
 // section" is arithmetic — where a click lands once it is constrained to the cut
 // plane, and which mesh vertices are worth snapping to. Arithmetic buried inside a
 // 2,500-line React panel can only be checked by clicking at it; here it is checked
-// by `scripts/accept-section-pick.mjs`, which drives exactly these functions.
+// by `scripts/accept-section-pick.mjs` and `scripts/accept-section-free.mjs`, which
+// drive exactly these functions.
 //
 // The problem it solves: a three.js clip plane is a shader effect, so the cut face
 // has NO geometry. A click that looks like it lands on the cut actually passes
 // through the opening and hits the far interior wall, tens of millimetres behind —
 // which is how two points that look adjacent in a section end up measuring the
 // diagonal of the part.
+//
+// 2026-11-26 (U20): the plane is no longer required to be a principal axis. Every
+// operation below takes a `SectionPlane` (a point + a normal), and the axis
+// functions (`sectionSegments(geometry, 'z', 5)`) are thin wrappers over
+// `axisPlane(axis, cut)`. An axis cut is the special case with an exact zero in
+// the normal, which is also why the wrappers stay literally exact: `dot(n, p)`
+// with n = (0,0,1) is `p.z` in IEEE arithmetic, so the old vertex-on-plane
+// behaviour is unchanged bit for bit.
 
 import { Box3, BufferAttribute, BufferGeometry, ShapeUtils, Vector2, Vector3 } from 'three';
 
 export type SectionAxis = 'x' | 'y' | 'z';
 
+/**
+ * A cut plane: a point it passes through and a normal. Both may be non-unit and
+ * non-principal; everything here normalises them, and `normalizePlane` is the one
+ * place that decides what "degenerate" means.
+ */
+export interface SectionPlane {
+  readonly pointMm: readonly [number, number, number];
+  readonly normal: readonly [number, number, number];
+}
+
+/** A normalised plane plus its orthonormal in-plane frame. */
+export interface PlaneFrame {
+  readonly point: [number, number, number];
+  readonly normal: [number, number, number];
+  /** In-plane u axis, unit, world. */
+  readonly u: [number, number, number];
+  /** In-plane v axis, unit, world. `(u, v, normal)` is right-handed. */
+  readonly v: [number, number, number];
+}
+
 export function axisIndex(axis: SectionAxis): number {
   return axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+}
+
+function unit(vector: readonly [number, number, number], what: string): [number, number, number] {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (!Number.isFinite(length) || length < 1e-9) {
+    throw new Error(`${what} must be a non-zero finite vector, got [${vector.join(', ')}]`);
+  }
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
+}
+
+function dot(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function cross(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): [number, number, number] {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+/** Normalise a plane. Throws on a zero/NaN normal — a cut with no direction is a bug, not a default. */
+export function normalizePlane(plane: SectionPlane): { pointMm: [number, number, number]; normal: [number, number, number] } {
+  return {
+    pointMm: [plane.pointMm[0], plane.pointMm[1], plane.pointMm[2]],
+    normal: unit(plane.normal, 'section plane normal'),
+  };
 }
 
 /**
  * The plane's own 2D frame, as world direction vectors.
  *
- * The rule matches the Python side (`_plane_basis` in the worker) so that a section
- * drawn in the panel and a section measured by `measure_section` agree on what
- * "u,v" mean: the world axis LEAST aligned with the normal seeds u. A +z cut gets
- * u=x, v=y; a +x cut gets u=y, v=z.
+ * The rule matches the Python side (`_plane_basis` in worker.py) so that a section
+ * drawn in the panel and a section measured by `measure` agree on what "u,v"
+ * mean: the world axis LEAST aligned with the normal seeds u (first index wins a
+ * tie), then v = normal × u keeps `(u, v, normal)` right-handed.
+ *
+ * A +z cut gets u=x, v=y; a +x cut gets u=y, v=z; a +y cut gets u=x, v=−z. That
+ * last one used to be u=z, v=x on the TypeScript side only, which disagreed with
+ * the worker for no reason: same plane, rotated/reflected frame, so the two halves
+ * of the product quoted different coordinates for the same cut. The Python rule
+ * wins because `measure(section)` is the artifact that gets written down.
  */
-export function planeBasis(axis: SectionAxis): { u: [number, number, number]; v: [number, number, number] } {
-  const normal = [0, 0, 0];
-  normal[axisIndex(axis)] = 1;
-  const seedIndex = axis === 'x' ? 1 : axis === 'y' ? 2 : 0;
-  const seed = [0, 0, 0];
+export function planeBasisFor(normal: readonly [number, number, number]): { u: [number, number, number]; v: [number, number, number] } {
+  const n = unit(normal, 'section plane normal');
+  const abs = [Math.abs(n[0]), Math.abs(n[1]), Math.abs(n[2])];
+  let seedIndex = 0;
+  for (let i = 1; i < 3; i++) if (abs[i]! < abs[seedIndex]!) seedIndex = i;
+  const seed: [number, number, number] = [0, 0, 0];
   seed[seedIndex] = 1;
-  // seed is already perpendicular to a principal normal, so no Gram-Schmidt is
-  // needed; v = normal × u keeps (u, v, normal) right-handed.
-  const cross = [
-    normal[1]! * seed[2]! - normal[2]! * seed[1]!,
-    normal[2]! * seed[0]! - normal[0]! * seed[2]!,
-    normal[0]! * seed[1]! - normal[1]! * seed[0]!,
-  ];
-  return { u: seed as [number, number, number], v: cross as [number, number, number] };
+  const along = dot(seed, n);
+  const u = unit(
+    [seed[0] - along * n[0], seed[1] - along * n[1], seed[2] - along * n[2]],
+    'section plane basis',
+  );
+  return { u, v: cross(n, u) };
+}
+
+/** The principal-axis plane through `cut` (the pre-U20 case). */
+export function axisPlane(axis: SectionAxis, cut: number): SectionPlane {
+  const pointMm: [number, number, number] = [0, 0, 0];
+  pointMm[axisIndex(axis)] = cut;
+  const normal: [number, number, number] = [0, 0, 0];
+  normal[axisIndex(axis)] = 1;
+  return { pointMm, normal };
+}
+
+export function planeFrame(plane: SectionPlane): PlaneFrame {
+  const { pointMm, normal } = normalizePlane(plane);
+  const { u, v } = planeBasisFor(normal);
+  return { point: pointMm, normal, u, v };
+}
+
+/** Backwards-compatible axis basis. */
+export function planeBasis(axis: SectionAxis): { u: [number, number, number]; v: [number, number, number] } {
+  return planeBasisFor(axisPlane(axis, 0).normal);
 }
 
 /** Shoelace area of a closed 2D loop (sign = winding). */
@@ -165,19 +250,21 @@ export function loopCentroids(loops: readonly (readonly [number, number][])[]): 
 }
 
 /** Lift an in-plane 2D point onto the cut plane, in world coordinates. */
+export function frameToWorld(frame: PlaneFrame, point: readonly [number, number]): [number, number, number] {
+  return [
+    frame.point[0] + frame.u[0] * point[0] + frame.v[0] * point[1],
+    frame.point[1] + frame.u[1] * point[0] + frame.v[1] * point[1],
+    frame.point[2] + frame.u[2] * point[0] + frame.v[2] * point[1],
+  ];
+}
+
+/** Lift an in-plane 2D point onto a principal-axis plane (pre-U20 signature). */
 export function planeToWorld(
   point: readonly [number, number],
   axis: SectionAxis,
   cut: number,
 ): [number, number, number] {
-  const { u, v } = planeBasis(axis);
-  const origin = [0, 0, 0];
-  origin[axisIndex(axis)] = cut;
-  return [
-    origin[0]! + u[0] * point[0] + v[0] * point[1],
-    origin[1]! + u[1] * point[0] + v[1] * point[1],
-    origin[2]! + u[2] * point[0] + v[2] * point[1],
-  ];
+  return frameToWorld(planeFrame(axisPlane(axis, cut)), point);
 }
 
 /**
@@ -187,18 +274,23 @@ export function planeToWorld(
  * property worth asserting directly: an outer square plus an inner one, not one
  * merged ring and not two loops with missing vertices.
  */
-export function sectionLoops(geometry: BufferGeometry, axis: SectionAxis, cut: number): [number, number][][] {
-  const flat = sectionSegments(geometry, axis, cut);
+export function sectionLoopsOnPlane(geometry: BufferGeometry, plane: SectionPlane): [number, number][][] {
+  const frame = planeFrame(plane);
+  const flat = sectionSegmentsOnPlane(geometry, plane);
   if (flat.length === 0) return [];
-  const { u, v } = planeBasis(axis);
   const points2: [number, number][] = [];
   for (let i = 0; i < flat.length; i += 3) {
     points2.push([
-      flat[i]! * u[0] + flat[i + 1]! * u[1] + flat[i + 2]! * u[2],
-      flat[i]! * v[0] + flat[i + 1]! * v[1] + flat[i + 2]! * v[2],
+      flat[i]! * frame.u[0] + flat[i + 1]! * frame.u[1] + flat[i + 2]! * frame.u[2],
+      flat[i]! * frame.v[0] + flat[i + 1]! * frame.v[1] + flat[i + 2]! * frame.v[2],
     ]);
   }
   return chainLoops(points2);
+}
+
+/** Pre-U20 signature: loops of a principal-axis cut. */
+export function sectionLoops(geometry: BufferGeometry, axis: SectionAxis, cut: number): [number, number][][] {
+  return sectionLoopsOnPlane(geometry, axisPlane(axis, cut));
 }
 
 /**
@@ -211,12 +303,10 @@ export function sectionLoops(geometry: BufferGeometry, axis: SectionAxis, cut: n
  * loops containing the loop, so even = a material boundary, odd = a hole, and depth
  * two (an island inside a hole) comes back as its own cap.
  */
-export function capTriangles(geometry: BufferGeometry, axis: SectionAxis, cut: number): number[] {
-  const loops = sectionLoops(geometry, axis, cut);
+export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlane): number[] {
+  const frame = planeFrame(plane);
+  const loops = sectionLoopsOnPlane(geometry, plane);
   if (loops.length === 0) return [];
-  const { u, v } = planeBasis(axis);
-  const origin = [0, 0, 0];
-  origin[axisIndex(axis)] = cut;
 
   const depths = loops.map((loop, index) => loops.reduce((depth, other, otherIndex) => (
     otherIndex === index ? depth : depth + (pointInLoop(loop[0]!, other) ? 1 : 0)
@@ -239,12 +329,6 @@ export function capTriangles(geometry: BufferGeometry, axis: SectionAxis, cut: n
   });
 
   const triangles: number[] = [];
-  const toWorld = (point: [number, number]): [number, number, number] => [
-    origin[0]! + u[0] * point[0] + v[0] * point[1],
-    origin[1]! + u[1] * point[0] + v[1] * point[1],
-    origin[2]! + u[2] * point[0] + v[2] * point[1],
-  ];
-
   for (const [index, outer] of loops.entries()) {
     if (depths[index]! % 2 !== 0) continue;
     const mine = loops.filter((_hole, holeIndex) => parents[holeIndex] === index);
@@ -258,11 +342,16 @@ export function capTriangles(geometry: BufferGeometry, axis: SectionAxis, cut: n
     const vertices = contour.concat(...holes);
     for (const face of ShapeUtils.triangulateShape(contour, holes)) {
       for (const corner of face) {
-        triangles.push(...toWorld([vertices[corner]!.x, vertices[corner]!.y]));
+        triangles.push(...frameToWorld(frame, [vertices[corner]!.x, vertices[corner]!.y]));
       }
     }
   }
   return triangles;
+}
+
+/** Pre-U20 signature: cap triangles of a principal-axis cut. */
+export function capTriangles(geometry: BufferGeometry, axis: SectionAxis, cut: number): number[] {
+  return capTrianglesOnPlane(geometry, axisPlane(axis, cut));
 }
 
 /**
@@ -295,6 +384,41 @@ export function projectToCutPlane(
   return out;
 }
 
+/** Signed distance from a point to the plane (positive on the normal's side). */
+export function planeDistance(plane: SectionPlane, point: readonly [number, number, number]): number {
+  const { pointMm: origin, normal } = normalizePlane(plane);
+  return (point[0] - origin[0]) * normal[0]
+    + (point[1] - origin[1]) * normal[1]
+    + (point[2] - origin[2]) * normal[2];
+}
+
+/** Constrain a picked point to an arbitrary cut plane (keeps the in-plane part). */
+export function projectToPlane(
+  point: Vector3 | readonly [number, number, number],
+  plane: SectionPlane,
+): [number, number, number] {
+  const p = components(point);
+  const d = planeDistance(plane, p);
+  const { normal } = normalizePlane(plane);
+  return [p[0] - normal[0] * d, p[1] - normal[1] * d, p[2] - normal[2] * d];
+}
+
+/**
+ * The same plane in three.js `Plane` form: `normal·p + constant = 0`.
+ *
+ * `flip` swaps which half is CUT AWAY. three.js CLIPS what lies on the negative
+ * side, so without a flip the plane keeps the half the normal points at. The
+ * axis path historically kept the low half (normal = −axis), which is just
+ * `flip = true` on the axis plane — the panel passes that explicitly instead of
+ * relying on a sign hidden in the caller.
+ */
+export function clippingPlane(plane: SectionPlane, flip = false): { normal: [number, number, number]; constant: number } {
+  const { pointMm, normal } = normalizePlane(plane);
+  const sign = flip ? -1 : 1;
+  const n: [number, number, number] = [normal[0] * sign, normal[1] * sign, normal[2] * sign];
+  return { normal: n, constant: -(n[0] * pointMm[0] + n[1] * pointMm[1] + n[2] * pointMm[2]) };
+}
+
 /**
  * The cut plane's intersection with the mesh, as flat segment pairs
  * `[ax,ay,az, bx,by,bz, ...]` for a `LineSegments`.
@@ -306,23 +430,34 @@ export function projectToCutPlane(
  * plane counts as a crossing for both edges that touch it — otherwise an
  * axis-aligned cut through a cube's own vertices comes back with gaps.
  */
-export function sectionSegments(geometry: BufferGeometry, axis: SectionAxis, cut: number): number[] {
+export function sectionSegmentsOnPlane(geometry: BufferGeometry, plane: SectionPlane): number[] {
   const position = geometry.getAttribute('position') as BufferAttribute | undefined;
   if (!position) return [];
+  const { pointMm: origin, normal } = normalizePlane(plane);
+  const offset = origin[0] * normal[0] + origin[1] * normal[1] + origin[2] * normal[2];
   const index = geometry.getIndex();
-  const component = axisIndex(axis);
   const triangles = index ? index.count / 3 : position.count / 3;
   const out: number[] = [];
+  const seen = new Set<string>();
 
   const vertex = (i: number): [number, number, number] => [
     position.getX(i),
     position.getY(i),
     position.getZ(i),
   ];
+  // Signed distance in one expression: for a principal normal the x/y terms are
+  // exactly 0 and this reduces to `p_axis − cut`, the pre-U20 expression, bit for
+  // bit. Exact zeros therefore still mean "the vertex is on the plane".
+  const distance = (corner: number): number => (
+    position.getX(corner) * normal[0]
+    + position.getY(corner) * normal[1]
+    + position.getZ(corner) * normal[2]
+    - offset
+  );
 
   for (let t = 0; t < triangles; t++) {
-    const corners = [0, 1, 2].map((offset) => (index ? index.getX(t * 3 + offset) : t * 3 + offset));
-    const distances = corners.map((corner) => position.getComponent(corner, component) - cut);
+    const corners = [0, 1, 2].map((offsetIndex) => (index ? index.getX(t * 3 + offsetIndex) : t * 3 + offsetIndex));
+    const distances = corners.map(distance);
 
     const hits: [number, number, number][] = [];
     for (let edge = 0; edge < 3; edge++) {
@@ -347,9 +482,27 @@ export function sectionSegments(geometry: BufferGeometry, axis: SectionAxis, cut
         ]);
       }
     }
-    if (hits.length === 2) out.push(...hits[0]!, ...hits[1]!);
+    if (hits.length !== 2) continue;
+    // A segment lying along a SHARED edge is emitted by BOTH triangles that own
+    // that edge (a 45° cut makes the plane coincide with the cube's own edges).
+    // The doubled multiset makes `chainLoops` walk out and back, so the loop's
+    // signed area cancels to 0 and the cap comes back EMPTY — measured as
+    // "45° cube: 1 loop of 8 points, area 0.0000mm²" before this dedupe. GEOS does
+    // the same thing on the Python side: `unary_union` merges coincident lines.
+    // Key on the quantized endpoint pair so the two triangles' last bits agree.
+    const key = [hits[0]!, hits[1]!].map((point) => `${Math.round(point[0] * 1e6)},${Math.round(point[1] * 1e6)},${Math.round(point[2] * 1e6)}`);
+    key.sort();
+    const id = `${key[0]}|${key[1]}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(...hits[0]!, ...hits[1]!);
   }
   return out;
+}
+
+/** Pre-U20 signature: outline segments of a principal-axis cut. */
+export function sectionSegments(geometry: BufferGeometry, axis: SectionAxis, cut: number): number[] {
+  return sectionSegmentsOnPlane(geometry, axisPlane(axis, cut));
 }
 
 /**

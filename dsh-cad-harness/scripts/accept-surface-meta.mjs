@@ -34,7 +34,9 @@ const ctx = {
   logger: { debug() {}, info() {}, warn() {}, error() {} },
 };
 registerCadTools(ctx);
-check('real catalogue has 39 tools', tools.size === 39, String(tools.size));
+// Derived, not typed: this check exists to prove the real catalogue was captured,
+// not to pin a count that changes whenever a tool is added.
+check('real catalogue is captured', tools.size > 0 && [...tools.values()].every((definition) => 'execute' in definition), String(tools.size));
 
 const META = {
   measure: { id: 'cad_inspect', action: 'measure', summary: 'geometry truth' },

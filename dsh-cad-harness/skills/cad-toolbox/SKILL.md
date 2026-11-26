@@ -1,6 +1,6 @@
 ---
 name: cad-toolbox
-description: "CAD router: the three job groups, the 9-surface map (44 ops), conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
+description: "CAD router: the three job groups, the 9-surface map (45 ops), conventions, and the delivery discipline. Load first; depth lives in the four per-job skills and docs/llm/."
 whenToUse: "Any CAD work, before choosing a tool. Start here even when you think you know which tool you need."
 ---
 
@@ -9,7 +9,7 @@ whenToUse: "Any CAD work, before choosing a tool. Start here even when you think
 > **生产工具面（2026-11-16）**：模型只看到 9 个 surface。旧工具名（如 `project_info`、`render_part`）只是内部实现名，直接调用会报 `unknown tool`。
 > 调用格式：`cad_session` / `cad_part` / `cad_assembly` / `cad_check` / `cad_simulate` / `cad_inspect` / `cad_see` / `cad_python` / `cad_deliver` + `action` + `args`。
 
-Nine job surfaces (44 ops), but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
+Nine job surfaces (45 ops), but **three jobs first**. Pick the group, not the tool — the group tells you what the output is allowed to mean. (`instrument` is the fourth *tool class*, not a fourth job: it is where numbers/coordinates live, and a session may declare it separately in `groups`.)
 
 | 组 | 问的问题 | 代表工具 | 输出允许是什么 | 会导致什么 |
 | --- | --- | --- | --- | --- |

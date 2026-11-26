@@ -11,7 +11,7 @@ import {
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
-import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, RunKeyframeStrip } from './playback';
+import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, PartsPreview, RunKeyframeStrip, type PartSpec } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { downloadName } from '../shared/download-name';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
@@ -24,8 +24,9 @@ import { runFacts, type RunFact, type RunTone } from './run-facts';
 import { buildRunChart, RunChart } from './run-chart';
 import { attentionQuery, buildHeatColors, heatLayers, type AttentionPayload, type HeatLayer } from './heat';
 import {
-  axisIndex, capTriangles, clipCut, loopCentroids, millimetresPerPixel, nearestVertex,
-  planeToWorld, projectToCutPlane, sectionLoops, sectionSegments,
+  axisIndex, axisPlane, capTrianglesOnPlane, clipCut, clippingPlane, frameToWorld,
+  loopCentroids, millimetresPerPixel, nearestVertex, planeDistance, planeFrame, projectToPlane,
+  sectionLoopsOnPlane, sectionSegmentsOnPlane, type SectionPlane,
 } from './section';
 import {
   attachStudioLights, configureStudioRenderer, backgroundById, loadBackgroundId, saveBackgroundId,
@@ -162,25 +163,84 @@ function scaleScreenDots(dots: THREE.Object3D[], camera: THREE.PerspectiveCamera
 }
 
 /**
- * Section cut: keep `z <= cut`, so the removed half is the one facing the
- * default (above/front) camera and the view looks INTO the part. The old plane
- * sat at `box.max.z` with normal (0,0,-1), which keeps everything — the ◐剖切
- * toggle was a no-op.
+ * Section cut: keep the half AWAY from the plane's normal, so the removed half is
+ * the one facing the default (above/front) camera and the view looks INTO the part.
+ * The old plane sat at `box.max.z` with normal (0,0,-1), which keeps everything —
+ * the ◐剖切 toggle was a no-op.
+ *
+ * 2026-11-26 (U20): the cut is a plane, not an axis. `mode: 'axis'` derives the
+ * plane from the slider (`pos`, `axis`), `mode: 'plane'` uses `normal`/`pointMm`
+ * verbatim; everything downstream (clip, cap, outline, picking) is the same code.
  *
  * `axisIndex` / `clipCut` live in ./section.ts (with the picking maths) so the
  * arithmetic is testable without a browser.
  */
 
+export interface ClipState {
+  on: boolean;
+  mode: 'axis' | 'plane';
+  /** Axis mode: slider fraction 0..1 along `axis`. Plane mode: 0..1 along the normal. */
+  pos: number;
+  axis: 'x' | 'y' | 'z';
+  /** Plane mode: unit surface normal, world. */
+  normal: [number, number, number];
+  /** true = keep the side opposite the normal (the axis habit: keep z ≤ cut). */
+  keepNegative: boolean;
+}
+
+/** Plane mode's position: the 0..1 slider mapped onto ±half-diagonal along the normal. */
+export function planeOffsetOf(pos: number): number {
+  return pos * 2 - 1;
+}
+
+/** The one place a clip state becomes a plane; null when the section is off. */
+export function clipPlaneOf(clip: ClipState, box: THREE.Box3 | null | undefined): SectionPlane | null {
+  if (!clip.on || !box) return null;
+  if (clip.mode === 'axis') return axisPlane(clip.axis, clipCut(box, clip));
+  // The position is derived, never stored: the slider is the only place it lives,
+  // so a stale `pointMm` cannot outlive a part switch or a bbox change.
+  return { pointMm: planePointFor(box, clip.normal, planeOffsetOf(clip.pos)), normal: clip.normal };
+}
+
+/** A unit normal from two angles in degrees (azimuth about z, elevation from the xy-plane). */
+export function normalFromAngles(azimuthDeg: number, elevationDeg: number): [number, number, number] {
+  const az = (azimuthDeg * Math.PI) / 180;
+  const el = (elevationDeg * Math.PI) / 180;
+  return [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)];
+}
+
+/**
+ * Where the free plane sits: the bbox centre, pushed along the normal by `offset`
+ * (−1..1 of the half-diagonal). Expressing the position in the box's own size is
+ * what makes the same slider mean "middle" on a 10mm bracket and a 300mm frame.
+ */
+export function planePointFor(
+  box: THREE.Box3 | null | undefined,
+  normal: readonly [number, number, number],
+  offset: number,
+): [number, number, number] {
+  if (!box) return [0, 0, 0];
+  const centre = box.getCenter(new THREE.Vector3());
+  const halfDiagonal = box.getSize(new THREE.Vector3()).length() / 2;
+  return [
+    centre.x + normal[0] * halfDiagonal * offset,
+    centre.y + normal[1] * halfDiagonal * offset,
+    centre.z + normal[2] * halfDiagonal * offset,
+  ];
+}
+
 function applyClip(
   mesh: THREE.Mesh,
-  clip: { on: boolean; pos: number; axis: 'x' | 'y' | 'z' },
+  clip: ClipState,
   tint?: THREE.Mesh | null,
 ): void {
   const material = mesh.material as THREE.Material & { clippingPlanes?: THREE.Plane[] | null };
   const box = (mesh.geometry as THREE.BufferGeometry).boundingBox;
-  const normal = new THREE.Vector3();
-  normal.setComponent(axisIndex(clip.axis), -1);   // keep the half the default camera does not face
-  const planes = clip.on && box ? [new THREE.Plane(normal, clipCut(box, clip))] : null;
+  const plane = clipPlaneOf(clip, box);
+  const clipped = plane ? clippingPlane(plane, clip.keepNegative) : null;
+  const planes = clipped
+    ? [new THREE.Plane(new THREE.Vector3(...clipped.normal), clipped.constant)]
+    : null;
   const countChanged = (material.clippingPlanes?.length ?? 0) !== (planes?.length ?? 0);
   material.clippingPlanes = planes;
   material.side = clip.on ? THREE.DoubleSide : THREE.FrontSide;
@@ -685,6 +745,13 @@ export function CadPanel(): React.ReactElement {
   } | null>(null);
   const [sectionPos, setSectionPos] = useState(0.5);
   const [sectionAxis, setSectionAxis] = useState<'x' | 'y' | 'z'>('z');
+  // U20: an arbitrary plane. The axis slider stays the default (one drag is still
+  // the fastest cut); switching to 'plane' unlocks two angles + a flip. The angles
+  // are in degrees because that is what the UI shows and what a person thinks in.
+  const [sectionMode, setSectionMode] = useState<'axis' | 'plane'>('axis');
+  const [sectionAzimuth, setSectionAzimuth] = useState(35);
+  const [sectionElevation, setSectionElevation] = useState(30);
+  const [sectionKeepNegative, setSectionKeepNegative] = useState(true);
   /** Inline section (the strip's selection) and the one expanded into the sheet. */
   const [tab, setTab] = useState<string>('overview');
   const [sheet, setSheet] = useState<string | null>(null);
@@ -723,7 +790,9 @@ export function CadPanel(): React.ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
   /** Live section state, read by the async scene builder and the pickers. */
-  const clipRef = useRef<{ on: boolean; pos: number; axis: 'x' | 'y' | 'z' }>({ on: false, pos: 0.5, axis: 'z' });
+  const clipRef = useRef<ClipState>({
+    on: false, mode: 'axis', pos: 0.5, axis: 'z', normal: [0, 0, 1], keepNegative: true,
+  });
   /** Probe dots, rescaled every frame by the render loop. */
   const measureDotsRef = useRef<THREE.Object3D[]>([]);
   const [measure, setMeasure] = useState<{
@@ -815,6 +884,11 @@ export function CadPanel(): React.ReactElement {
   const [unregError, setUnregError] = useState<string | null>(null);
   // The machine the assembly manifest describes (null: no manifest).
   const [machine, setMachine] = useState<Machine | null>(null);
+  // Whole-machine 3D preview. This is NOT a run: it is assembled from the
+  // contract's part@version nodes, so a project with no assembly run (the
+  // winder has 12 assembly-CHECK runs and zero geometry runs) still has a
+  // model preview. Explode lives inside PartsPreview.
+  const [machinePreview, setMachinePreview] = useState(false);
   const [fileSubject, setFileSubject] = useState<string>('');
   const [fileMeta, setFileMeta] = useState<FileMeta | null>(null);
   // The 未登记 import form (inline, not a modal): the file is already chosen, so
@@ -1291,6 +1365,14 @@ export function CadPanel(): React.ReactElement {
         const sGroup = new THREE.Group();
         scene.add(sGroup);
         sectionGroupRef.current = sGroup;
+        // Debug hook for `?assert=section-free`: the cap and outline meshes live in
+        // this group, and "is the cut filled, and is the bore a hole" is checkable
+        // from their geometry — a screenshot alone can look right while empty.
+        (mount as unknown as { __sectionGroup?: THREE.Group }).__sectionGroup = sGroup;
+        // The part mesh + the renderer, so an assert can check that the CLIP is
+        // actually installed on the material a frame is drawn with — a cap that
+        // exists while the shader clips nothing is the "hollow shell" failure.
+        Object.assign(mount as unknown as Record<string, unknown>, { __mesh: mesh });
         // Clipping is enabled on the renderer once and for all: toggling the
         // section or sliding its plane must NOT rebuild the scene, because every
         // rebuild costs a WebGL context (see forceContextLoss below).
@@ -1527,6 +1609,13 @@ export function CadPanel(): React.ReactElement {
     setThickMode(false);
     setSection(false);
     setSectionPos(0.5);
+    // The plane's angles belong to the PART that was on screen: a 35°/30° cut of a
+    // bracket means nothing on the next part, and silently keeping it would look
+    // like the section is broken ("why is my z-slider tilted?").
+    setSectionMode('axis');
+    setSectionAzimuth(35);
+    setSectionElevation(30);
+    setSectionKeepNegative(true);
     setHeat(null);
     // The bbox is a fact of the mesh being left, not of the panel. A run view
     // has no version mesh, so the scene builder returns before its own
@@ -1544,6 +1633,9 @@ export function CadPanel(): React.ReactElement {
   clipRef.current.on = section;
   clipRef.current.pos = sectionPos;
   clipRef.current.axis = sectionAxis;
+  clipRef.current.mode = sectionMode;
+  clipRef.current.normal = normalFromAngles(sectionAzimuth, sectionElevation);
+  clipRef.current.keepNegative = sectionKeepNegative;
 
   /** Ray under the pointer, or null if this gesture was an orbit drag. */
   const pickRay = (e: React.MouseEvent): THREE.Raycaster | null => {
@@ -1580,10 +1672,12 @@ export function CadPanel(): React.ReactElement {
     }
     const clip = clipRef.current;
     const box = (target.geometry as THREE.BufferGeometry).boundingBox;
-    if (!clip.on || !box) return hits;
-    const i = axisIndex(clip.axis);
-    const cut = clipCut(box, clip) + 1e-6;
-    return hits.filter((h) => h.point.getComponent(i) <= cut);
+    const plane = clipPlaneOf(clip, box);
+    if (!plane) return hits;
+    // One tolerance for every plane: a signed distance in mm, so the axis case is
+    // `p_axis - cut` exactly and the free case is the same number for a tilted cut.
+    const side = clip.keepNegative ? 1 : -1;
+    return hits.filter((h) => side * planeDistance(plane, [h.point.x, h.point.y, h.point.z]) <= 1e-6);
   };
 
   /** The mesh to pick against: the double-sided twin when we have it. */
@@ -1626,9 +1720,10 @@ export function CadPanel(): React.ReactElement {
     const mount = mountRef.current;
     const clip = clipRef.current;
     const box = geometry?.boundingBox;
+    const plane = clipPlaneOf(clip, box);
     let point = raw;
-    if (clip.on && box) {
-      point = projectToCutPlane(point, clip.axis, clipCut(box, clip));
+    if (plane) {
+      point = projectToPlane(point, plane);
     }
     const positions = geometry?.getAttribute('position');
     if (!geometry || !camera || !mount || !positions) return point;
@@ -1642,12 +1737,13 @@ export function CadPanel(): React.ReactElement {
     const snapped = nearestVertex(positions.array as ArrayLike<number>, point, radius);
     // In a section the centre of a HOLE is the target a user actually wants, and a
     // hole centre is not a mesh vertex — so the cut's own loops contribute snap
-    // candidates too (see loopCentroids).
+    // candidates too (see loopCentroids). The plane carries its own frame, so an
+    // oblique cut lifts its centroids with the same code the axis cut used.
     let centre: [number, number, number] | null = null;
-    if (clip.on && box) {
-      const cut = clipCut(box, clip);
-      for (const candidate of loopCentroids(sectionLoops(geometry, clip.axis, cut))) {
-        const world = planeToWorld(candidate, clip.axis, cut);
+    if (plane) {
+      const frame = planeFrame(plane);
+      for (const candidate of loopCentroids(sectionLoopsOnPlane(geometry, plane))) {
+        const world = frameToWorld(frame, candidate);
         const away = Math.hypot(world[0] - point[0], world[1] - point[1], world[2] - point[2]);
         if (away > radius) continue;
         if (!centre || away < Math.hypot(centre[0] - point[0], centre[1] - point[1], centre[2] - point[2])) {
@@ -1893,12 +1989,16 @@ export function CadPanel(): React.ReactElement {
       stale.material?.dispose?.();
     }
     if (!section || !geometry?.boundingBox) return;
-    const cut = clipCut(geometry.boundingBox, { pos: sectionPos, axis: sectionAxis });
+    // U20: the plane comes from the same resolver the clip and the pickers use, so
+    // "what is drawn" and "what is removed" cannot disagree — an axis slider and a
+    // two-angle oblique cut are one code path.
+    const plane = clipPlaneOf(clipRef.current, geometry.boundingBox);
+    if (!plane) return;
     // The cap: a clip plane removes material and leaves an open shell, so the cut is
     // filled with the actual cross-section — holes subtracted, not filled in. It is
     // NOT clipped itself (no clippingPlanes): it IS the boundary, and putting it on
     // the same plane as the clip would erase it.
-    const cap = capTriangles(geometry, sectionAxis, cut);
+    const cap = capTrianglesOnPlane(geometry, plane);
     if (cap.length > 0) {
       const capGeometry = new THREE.BufferGeometry();
       capGeometry.setAttribute('position', new THREE.Float32BufferAttribute(cap, 3));
@@ -1909,20 +2009,21 @@ export function CadPanel(): React.ReactElement {
       capMesh.renderOrder = 996;
       group.add(capMesh);
     }
-    const flat = sectionSegments(geometry, sectionAxis, cut);
+    const flat = sectionSegmentsOnPlane(geometry, plane);
     if (flat.length === 0) return;
     const outline = new THREE.BufferGeometry();
     outline.setAttribute('position', new THREE.Float32BufferAttribute(flat, 3));
     const line = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({ color: SECTION_COLOR }));
     line.renderOrder = 997;
     group.add(line);
-  }, [section, sectionPos, sectionAxis, versionId, spec]);
+  }, [section, sectionMode, sectionPos, sectionAxis, sectionAzimuth, sectionElevation, sectionKeepNegative, versionId, spec]);
 
-  // Section toggle / slider: update the live material, never rebuild the scene.
+  // Section toggle / slider / plane angles: update the live material, never
+  // rebuild the scene.
   useEffect(() => {
     const mesh = meshRef.current as THREE.Mesh | null;
     if (mesh?.material) applyClip(mesh, clipRef.current, tintRef.current);
-  }, [section, sectionPos, sectionAxis, versionId]);
+  }, [section, sectionMode, sectionPos, sectionAxis, sectionAzimuth, sectionElevation, sectionKeepNegative, versionId]);
 
   const clearMeasure = () => { setMeasure(null); };
   const measureNote = measure?.b
@@ -2031,7 +2132,25 @@ export function CadPanel(): React.ReactElement {
       latestVersionId,
       label,
       bboxMm: spec?.size,
-      section: section ? { axis: sectionAxis, keepPct: sectionPos } : undefined,
+      section: section
+        ? (sectionMode === 'axis'
+          ? { axis: sectionAxis, keepPct: sectionPos }
+          // An oblique cut has no axis name: record the plane itself, or the
+          // caption is a picture nobody can reproduce.
+          : {
+            axis: 'free',
+            keepPct: sectionPos,
+            plane: {
+              normal: clipRef.current.normal,
+              pointMm: planePointFor(
+                (meshRef.current?.geometry as THREE.BufferGeometry | undefined)?.boundingBox,
+                clipRef.current.normal,
+                planeOffsetOf(sectionPos),
+              ),
+              keep: sectionKeepNegative ? 'negative' as const : 'positive' as const,
+            },
+          })
+        : undefined,
       measureMm: measure?.b ? { dist: measure.dist ?? 0, a: measure.a, b: measure.b } : undefined,
       thicknessMm: thick ? thick.dist : undefined,
       annotations: annotations.length,
@@ -2875,6 +2994,26 @@ export function CadPanel(): React.ReactElement {
     );
   };
 
+  // One spec per pinned node; unpinned nodes cannot be resolved to an STL here,
+  // so they are counted and reported rather than silently dropped.
+  const machineSpecs: PartSpec[] = (machine?.nodes ?? [])
+    .filter((n) => n.version)
+    .map((n) => ({
+      name: n.part,
+      url: withProject(`/api/cad/stl?v=${encodeURIComponent(n.version!)}`),
+      translate: n.translate,
+      rotate: n.rotate,
+      color: n.color,
+    }));
+  const machineUnpinned = (machine?.nodes ?? []).length - machineSpecs.length;
+
+  useEffect(() => {
+    if (!machinePreview) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMachinePreview(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [machinePreview]);
+
   /** What the machine physically is, and where its evidence went. */
   const machineOverview = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
     React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, machine?.name ?? tr('ui.machine.title')),
@@ -2883,6 +3022,10 @@ export function CadPanel(): React.ReactElement {
     React.createElement('div', { style: S.hint },
       tr('ui.machine.note')),
     React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      machine && React.createElement('button', {
+        type: 'button', onClick: () => setMachinePreview(true), style: S.smallBtn,
+        title: tr('ui.machine.previewTitle'), 'data-machine-preview': '1',
+      }, tr('ui.machine.preview')),
       React.createElement('button', {
         type: 'button', onClick: () => setTab('evidence'), style: S.smallBtn,
       }, tr('ui.machine.evidenceCta', { count: machineRuns.length })),
@@ -3757,6 +3900,50 @@ export function CadPanel(): React.ReactElement {
       ),
     ),
 
+    // ── whole-machine 3D preview (contract nodes, not a run) ──
+    machinePreview && machine && React.createElement('div', {
+      'data-machine-preview-overlay': '1',
+      style: {
+        position: 'fixed', inset: 0, background: T.scrimStrong, zIndex: 70,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
+      },
+      onClick: (e: any) => { if (e.target === e.currentTarget) setMachinePreview(false); },
+    },
+      React.createElement('div', {
+        style: {
+          width: 'min(1100px, 94vw)', height: 'min(760px, 88vh)', background: T.plate,
+          borderRadius: 10, boxShadow: T.shadowXl, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        },
+      },
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: `1px solid ${T.divider}` },
+        },
+          React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink, flex: 1 } },
+            `${machine.name} · ${machineSpecs.length}/${machine.nodes.length}`),
+          React.createElement('button', {
+            type: 'button', onClick: () => setMachinePreview(false), style: S.smallBtn,
+            title: tr('ui.machine.close'), 'data-machine-preview-close': '1',
+          }, '✕'),
+        ),
+        machineSpecs.length === 0
+          ? React.createElement('div', { style: { padding: 16, fontSize: 12, color: T.muted } },
+              tr('ui.machine.previewEmpty'))
+          : React.createElement('div', { style: { flex: 1, position: 'relative', minHeight: 0 } },
+              React.createElement(PartsPreview, {
+                parts: machineSpecs,
+                background: bg.hex,
+                label: `${machine.name} · ${machineSpecs.length}/${machine.nodes.length}`,
+                shotLabel: tr('ui.machine.shot'),
+                fileBase: 'machine',
+                onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) =>
+                  openShotDraft(canvas, label, undefined, frame),
+              })),
+        machineUnpinned > 0 && React.createElement('div', {
+          style: { padding: '4px 10px', fontSize: 10, color: T.warn, borderTop: `1px solid ${T.divider}` },
+        }, tr('ui.machine.previewUnpinned', { count: machineUnpinned })),
+      ),
+    ),
+
     // ── 本地 STL：看（不登记）或登记（成版本）──
     // The write target is the project the human explicitly selected, NOT the
     // session cwd. No selection = no import: "path is empty" is an error, not a
@@ -3957,6 +4144,10 @@ export function CadPanel(): React.ReactElement {
           setThickMode(false);
           setSection(false);
           setSectionPos(0.5);
+          setSectionMode('axis');
+          setSectionAzimuth(35);
+          setSectionElevation(30);
+          setSectionKeepNegative(true);
           setHint(t('ui.restore.hint'));
         },
       }),
@@ -4067,6 +4258,7 @@ export function CadPanel(): React.ReactElement {
       React.createElement('button', {
         type: 'button', title: section ? t('ui.tool.sectionOnTitle') : t('ui.tool.sectionTitle'),
         onClick: () => setSection((v) => !v),
+        'data-section-toggle': '',
         style: viewToolStyle(section, T.clip),
       }, t('ui.tool.section')),
       React.createElement('button', {
@@ -4120,15 +4312,50 @@ export function CadPanel(): React.ReactElement {
           style: { display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 170px', minWidth: 80, height: 20 },
         },
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } }, tr('ui.toolStrip.section')),
-        React.createElement('select', {
-          value: sectionAxis,
-          onChange: (e: any) => setSectionAxis(e.target.value),
-          'aria-label': t('ui.section.axis'),
-          title: t('ui.section.axisTitle'),
-          style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: `1px solid ${T.line}`, borderRadius: 4 },
-        }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a))),
+        // U20: one button switches the cut between an axis and an arbitrary plane.
+        // Kept as a toggle rather than a third tab because the two share the same
+        // slider and the same flip — the plane is the axis, aimed.
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => setSectionMode((m) => (m === 'axis' ? 'plane' : 'axis')),
+          'data-section-mode': sectionMode,
+          title: tr(sectionMode === 'axis' ? 'ui.section.modeAxisTitle' : 'ui.section.modePlaneTitle'),
+          'aria-label': tr('ui.section.mode'),
+          style: {
+            ...S.smallBtn, flex: 'none',
+            color: sectionMode === 'plane' ? T.accentSolid : undefined,
+            borderColor: sectionMode === 'plane' ? T.accentSolid : undefined,
+          },
+        }, tr(sectionMode === 'axis' ? 'ui.section.modeAxis' : 'ui.section.modePlane')),
+        sectionMode === 'axis'
+          ? React.createElement('select', {
+            value: sectionAxis,
+            onChange: (e: any) => setSectionAxis(e.target.value),
+            'aria-label': t('ui.section.axis'),
+            title: t('ui.section.axisTitle'),
+            style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: `1px solid ${T.line}`, borderRadius: 4 },
+          }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a)))
+          : React.createElement(React.Fragment, null,
+            React.createElement('input', {
+              type: 'range', min: 0, max: 360, step: 5, value: sectionAzimuth,
+              'data-section-azimuth': sectionAzimuth,
+              'aria-label': t('ui.section.azimuth'),
+              title: tr('ui.section.azimuthTitle', { value: sectionAzimuth }),
+              onChange: (e: any) => setSectionAzimuth(Number(e.target.value)),
+              style: { flex: '1 1 40px', minWidth: 30, height: 18 },
+            }),
+            React.createElement('input', {
+              type: 'range', min: -90, max: 90, step: 5, value: sectionElevation,
+              'data-section-elevation': sectionElevation,
+              'aria-label': t('ui.section.elevation'),
+              title: tr('ui.section.elevationTitle', { value: sectionElevation }),
+              onChange: (e: any) => setSectionElevation(Number(e.target.value)),
+              style: { flex: '1 1 40px', minWidth: 30, height: 18 },
+            })),
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } },
-          `${(clipRef.current.pos * 100).toFixed(0)}%`),
+          sectionMode === 'axis'
+            ? `${(sectionPos * 100).toFixed(0)}%`
+            : `${sectionAzimuth}°/${sectionElevation}°`),
         React.createElement('input', {
           type: 'range', min: 0, max: 1, step: 0.01, value: sectionPos,
           'aria-label': t('ui.section.position'),
@@ -4136,6 +4363,17 @@ export function CadPanel(): React.ReactElement {
           onChange: (e: any) => setSectionPos(Number(e.target.value)),
           style: { flex: '1 1 auto', minWidth: 40, height: 18 },
         }),
+        // Keep/cut swap. In axis mode this is the historical "keep the low half";
+        // in plane mode it is the difference between looking into the part and
+        // looking at its back.
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => setSectionKeepNegative((value) => !value),
+          'data-section-flip': sectionKeepNegative ? 'keep' : 'cut',
+          title: tr('ui.section.flipTitle'),
+          'aria-label': tr('ui.section.flip'),
+          style: { ...S.smallBtn, flex: 'none' },
+        }, tr(sectionKeepNegative ? 'ui.section.flipKeep' : 'ui.section.flipCut')),
       ),
       // THE QUEUE OWNS THIS LINE when something is waiting. It sits directly
       // under the viewport — the second thing the eye lands on after the model —
