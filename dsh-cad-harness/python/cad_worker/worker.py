@@ -5135,6 +5135,22 @@ def op_mpm_destroy(params: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _read_fluid_void(path: str):
+    """Void-component labels for the F1b constraint (written by fluid.ts).
+
+    Layout: `CADFVOID`, int32 nx/ny/nz, then nx*ny*nz int32, index (x*ny + y)*nz + z.
+    """
+    import numpy as np
+
+    with open(path, "rb") as handle:
+        magic = handle.read(8)
+        if magic != b"CADFVOID":
+            raise ValueError(f"bad void file magic: {magic!r}")
+        nx, ny, nz = np.fromfile(handle, dtype="<i4", count=3)
+        labels = np.fromfile(handle, dtype="<i4", count=int(nx) * int(ny) * int(nz))
+    return {"cells": (int(nx), int(ny), int(nz)), "labels": labels}
+
+
 def _read_fluid_sdf(path: str) -> dict:
     import numpy as np
 
@@ -5232,6 +5248,74 @@ def _sdf_at_many(field: dict, points):
     return (v00 + (v10 - v00) * fy) + ((v01 + (v11 - v01) * fy) - (v00 + (v10 - v00) * fy)) * fz
 
 
+def _constrain_fluid_particles(world, sdf, void, component, tol_mm, dx_mm, origin, last_inside, flags):
+    """F1b: keep particles inside the fluid domain — a WALL, not a deletion.
+
+    Returns (events_outside_domain, events_in_metal) as DISTINCT particles (the flags
+    array remembers who has already been counted), mirroring the TS oracle. A
+    particle that leaves the component or sits deep in metal is put back to its last
+    known-good position and the velocity that carried it out is zeroed; nothing is
+    removed, so `escaped + active == count0` still holds exactly.
+    """
+    import numpy as np
+
+    active = int(world["activeN"])
+    if active == 0:
+        return (0, 0)
+    nx, ny, nz = void["cells"]
+    pos = world["pos"][:active]
+    vel = world["vel"][:active]
+    ix = np.clip(pos[:, 0].astype(np.int64), 0, nx - 1)
+    iy = np.clip(pos[:, 1].astype(np.int64), 0, ny - 1)
+    iz = np.clip(pos[:, 2].astype(np.int64), 0, nz - 1)
+    cell_of = (ix * ny + iy) * nz + iz
+    label = void["labels"][cell_of]
+    depth = sdf["sdf"][cell_of]
+    # Same threshold as the TS oracle: touching the surface is still fluid, the
+    # projection handles that every step; 0.75 cells in is "inside the wall".
+    deep_tol = max(tol_mm, 0.75 * dx_mm)
+    left_domain = (label != 0) & (label != component)
+    in_metal = (label == 0) & (depth < -deep_tol)
+    invalid = left_domain | in_metal
+    good = ~invalid
+    # Remember where the good ones are before moving anybody.
+    last_inside[:active][good] = pos[good]
+    if invalid.any():
+        pos[invalid] = last_inside[:active][invalid]
+        vel[invalid] = 0.0
+    fresh = invalid & ~flags[:active]
+    flags[:active] |= invalid
+    return (int((fresh & left_domain).sum()), int((fresh & in_metal).sum()))
+
+
+def _clamp_inlet(world, config, dx_mm):
+    """F1b: hold the inlet plane — a particle pushed behind it hits a wall.
+
+    Not removed: it is still inside the fluid. Clamped to one cell before the band
+    start with its axial velocity zeroed, and counted so the report can say the
+    inlet was hit.
+    """
+    import numpy as np
+
+    inlet = config.get("inlet")
+    if not inlet:
+        return 0
+    axis = int(inlet["axis"])
+    floor = float(inlet["band"][0]) - 1.0
+    active = int(world["activeN"])
+    if active == 0:
+        return 0
+    pos = world["pos"][:active]
+    below = pos[:, axis] < floor
+    count = int(below.sum())
+    if count:
+        pos[below, axis] = floor
+        vel = world["vel"][:active]
+        back = below & (vel[:, axis] < 0)
+        vel[back, axis] = 0.0
+    return count
+
+
 def op_fluid_run(params: dict) -> dict:
     """Drive the MPM world through the scenario and audit the result.
 
@@ -5243,6 +5327,8 @@ def op_fluid_run(params: dict) -> dict:
 
     sdf = _read_fluid_sdf(params["sdfPath"])
     seeds = _read_fluid_seeds(params["seedsPath"])
+    void = _read_fluid_void(params["voidPath"]) if params.get("voidPath") else None
+    component = int(params.get("component") or 0)
     config = params["config"]
     steps = int(params.get("steps") or 1200)
     snapshot_count = int(params.get("snapshotCount") or 4)
@@ -5382,6 +5468,13 @@ def op_fluid_run(params: dict) -> dict:
     snapshot_steps = []
 
     skip_project = bool(params.get("skipProject"))
+    leak = {"outside": 0, "inWall": 0, "inletBackflow": 0}
+    # F1b state: where each particle was last inside the domain, and who has already
+    # been counted (the counters are per particle, not per step).
+    import numpy as _np
+    _last_inside = _np.array(world["pos"][: int(world["activeN"])], dtype=float)
+    _last_inside = _np.resize(_last_inside, (int(config["particleCount"]), 3))
+    _leak_flags = _np.zeros(int(config["particleCount"]), dtype=bool)
     debug_enabled = bool(params.get("debugPenetration"))
     block_checksums = []
     # Every ~5% of the run, never more often than every 10 steps: a frame per step
@@ -5393,6 +5486,14 @@ def op_fluid_run(params: dict) -> dict:
         _mpm_step_once(world)
         if not skip_project:
             project_particles(is_last=(debug_enabled and step == steps))
+            if void is not None and component > 0:
+                absorbed = _constrain_fluid_particles(
+                    world, sdf, void, component, penetration_tol, dx_mm, origin, _last_inside, _leak_flags
+                )
+                leak["outside"] += absorbed[0]
+                leak["inWall"] += absorbed[1]
+                back = _clamp_inlet(world, config, dx_mm)
+                leak["inletBackflow"] += back
         if debug_enabled and step == steps:
             block_checksums.append(("afterProject", float(world["pos"][: world["activeN"]].sum())))
         if time_to_outlet is None and world["escaped"] > escaped_before:
@@ -5536,6 +5637,11 @@ def op_fluid_run(params: dict) -> dict:
         "diverged": bool(world["nonFinite"] > 0),
         "stepsRun": steps,
         "snapshotSteps": snapshot_steps,
+        # F1b: absorbed / clamped particles. They are gone by snapshot time, so
+        # `outsideSnapshotMax` reads 0 — these are where the leak is still visible.
+        "leakedOutside": leak["outside"],
+        "absorbedInWall": leak["inWall"],
+        "inletBackflowCount": leak["inletBackflow"],
         **({"debugPenetration": debug_penetration} if debug_penetration is not None else {}),
     }
     op_mpm_destroy({"worldId": created["worldId"]})

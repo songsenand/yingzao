@@ -419,6 +419,13 @@ interface PhysicsResult {
 
 > **v2.10 回填**：原文的「WebGPU 跑 MLS-MPM、Three.js 粒子渲染、实时 >30FPS」为 M1 期规划。实作改为 **Host 侧 CPU MLS-MPM**（纯 TS typed arrays，离线跑几十万粒子），WebGPU 移交后续交互面板；分析解读按 v2.4 交还 LLM（§6.7）。
 
+**粒子级约束（F1b，2026-11-27）**：每步投影后，离开流体连通域或深于 `max(0.3mm, 0.75×dx)` 在壁内
+的粒子被**放回上次合法位置**并把带它出去的速度分量清零——是**墙不是删除**，因此
+`escaped + active = count0` 仍然精确。按**粒子**（不是按步）计数 `absorbedInWall`/`leakedOutside`：
+第一版按步计数在 28,364 粒子的跑上报了 65,157 次（一个没人能读的数）。Ø34@dx1 实测穿透
+7,098 → 0、到达率 0.031 → 0.385。Python 侧同构实现，但本环境无 numpy、worker scratch 只读，
+parity 断言在此 SKIP（有 runtime 的机器会跑）。
+
 **百万面实测（U21，2026-11-27）**：sandbox 用 `/api/cad/stl?big=1&tri=1000000` 现生成 UV 球
 （不往仓库塞 50 MB 夹具）；面板同一条读取路径实测 999,698 tri / 47.7 MB：传输 188 ms
 （211 个进度 tick）、STL 解析+bounds 82 ms、首帧 74 ms、稳态 63.9 ms/帧（733×547，软件 GL，

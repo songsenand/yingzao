@@ -87,6 +87,16 @@ export interface FluidReport {
      * flowing along the outside still read as a clean pass.
      */
     outsideSnapshotMax: number;
+    /**
+     * F1b: particles ABSORBED because they left the fluid component (thin-wall leak)
+     * or sat deeper than the penetration tolerance in metal. They are removed from
+     * the run, so `outsideSnapshotMax` reads 0; this is the number that proves the
+     * constraint did something rather than the leak disappearing on its own.
+     */
+    leakedOutside: number;
+    absorbedInWall: number;
+    /** F1b: particles clamped at the inlet plane (they hit the inlet wall, not left). */
+    inletBackflowCount: number;
     outletArrivalRatio: number;
     timeToOutletSteps: number | null;
     sectionAvgVelocity: { positionMm: number; velocityMmPerSec: number }[];
@@ -386,6 +396,21 @@ function writeSeedFile(path: string, seeds: [number, number, number][]): void {
   writeFileSync(path, Buffer.concat([header, body]));
 }
 
+/**
+ * Write the void-component labels the worker needs for the F1b constraint.
+ *
+ * Layout: magic `CADFVOID`, int32 nx, ny, nz, then nx*ny*nz int32 labels
+ * ((x*ny + y)*nz + z), little-endian — the same index order as the SDF file.
+ */
+function writeVoidFile(path: string, labels: Int32Array, cells: [number, number, number]): void {
+  const header = Buffer.alloc(8 + 12);
+  header.write('CADFVOID', 0, 'latin1');
+  header.writeInt32LE(cells[0], 8);
+  header.writeInt32LE(cells[1], 12);
+  header.writeInt32LE(cells[2], 16);
+  writeFileSync(path, Buffer.concat([header, Buffer.from(labels.buffer, labels.byteOffset, labels.byteLength)]));
+}
+
 /** Read the snapshot file the worker wrote: step, time, positions (mm), speeds. */
 function readSnapshotFile(path: string): FluidSnapshot[] {
   const data = readFileSync(path);
@@ -492,6 +517,11 @@ export async function runFluid(
 
   const scratch = await workerScratchDir();
   const sdfPath = join(scratch, `fluid-sdf-${randomUUID()}.bin`);
+  // F1b: the worker needs to know WHICH void is the bore (the seeded component) to
+  // absorb a particle that left it. That is a per-cell label array — a file, like
+  // the SDF, because it is the same order of magnitude.
+  const voidPath = join(scratch, `fluid-void-${randomUUID()}.bin`);
+  writeVoidFile(voidPath, seeded.labels, scenario.gridCells);
   const seedsPath = join(scratch, `fluid-seeds-${randomUUID()}.bin`);
   const snapshotsPath = join(scratch, `fluid-snap-${randomUUID()}.bin`);
   writeSdfFile(sdfPath, sdf);
@@ -506,6 +536,7 @@ export async function runFluid(
     penetrationCount: number; outletArrivalRatio: number; timeToOutletSteps: number | null;
     sectionAvgVelocity: { positionMm: number; velocityMmPerSec: number }[];
     maxVelocityMmPerSec: number; avgVelocityMmPerSec: number; diverged: boolean; stepsRun: number;
+    leakedOutside?: number; absorbedInWall?: number; inletBackflowCount?: number;
     debugPenetration?: Record<string, number>;
   };
   try {
@@ -534,6 +565,8 @@ export async function runFluid(
       sectionLoMm: lo,
       sectionHiMm: hi,
       penetrationTolMm: PENETRATION_TOL_MM,
+      voidPath,
+      component: seeded.component,
       stiffness0: K0,
       viscosity0: MU0,
       restDensity0: RD0,
@@ -542,7 +575,7 @@ export async function runFluid(
       debugPenetration: process.env.CAD_FLUID_DEBUG_PENETRATION === '1',
     }, { timeoutMs: 1_800_000, ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}) });
   } finally {
-    for (const path of [sdfPath, seedsPath]) rmSync(path, { force: true });
+    for (const path of [sdfPath, seedsPath, voidPath]) rmSync(path, { force: true });
   }
   const snapshots = readSnapshotFile(snapshotsPath);
   rmSync(snapshotsPath, { force: true });
@@ -603,6 +636,9 @@ export async function runFluid(
       massConservationError: solved.massConservationError,
       penetrationCount: solved.penetrationCount,
       outsideSnapshotMax,
+      leakedOutside: solved.leakedOutside ?? 0,
+      absorbedInWall: solved.absorbedInWall ?? 0,
+      inletBackflowCount: solved.inletBackflowCount ?? 0,
       outletArrivalRatio: solved.outletArrivalRatio,
       timeToOutletSteps: solved.timeToOutletSteps,
       sectionAvgVelocity: solved.sectionAvgVelocity,
@@ -740,6 +776,81 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
     }
   };
 
+  /**
+   * F1b: the PARTICLE-LEVEL constraint. The projection above pushes a particle out
+   * of metal; it cannot stop one that has already crossed a thin wall into the air
+   * outside the part, and it cannot hold the inlet plane. Those particles used to
+   * wander outside the bore for the rest of the run, which is exactly what the
+   * `outsideSnapshotMax` audit was counting after the fact.
+   *
+   * Now they are ABSORBED the moment they leave the fluid component (or sit deeper
+   * than the penetration tolerance in metal), and the count is reported as
+   * `leakedOutside` — the evidence moves from "a wandering particle at snapshot
+   * time" to "N particles left the bore", which is a number a person can act on.
+   */
+  // Per-PARTICLE flags, not per-event counts: a particle that keeps pressing against
+  // a wall is corrected every step, and counting events would report 65,157 "hits" on
+  // a 28,364-particle run (measured) — a number nobody can read.
+  const leak = { outside: 0, inWall: 0, inletBackflow: 0 };
+  const leakFlag = new Uint8Array(count);
+  const cellOfParticle = (p: number): number => {
+    const cx = Math.max(0, Math.min(gnx - 1, world.pos[p * 3]! | 0));
+    const cy = Math.max(0, Math.min(gny - 1, world.pos[p * 3 + 1]! | 0));
+    const cz = Math.max(0, Math.min(gnz - 1, world.pos[p * 3 + 2]! | 0));
+    return cx * gnyz + cy * gnz + cz;
+  };
+  /**
+   * The last position each particle held INSIDE the fluid domain. A particle that
+   * leaves the component (through a thin wall) is put back here — the constraint is
+   * a wall, not a deletion: removing it would silently change the mass balance and
+   * the arrival ratio, which is the number the run is for.
+   */
+  const lastInside = new Float32Array(count * 3);
+  for (let p = 0; p < count; p++) {
+    lastInside[p * 3] = world.pos[p * 3]!;
+    lastInside[p * 3 + 1] = world.pos[p * 3 + 1]!;
+    lastInside[p * 3 + 2] = world.pos[p * 3 + 2]!;
+  }
+  const constrainParticles = () => {
+    // Only a particle DEEP in metal is past saving; the projection handles the
+    // surface case every step. 0.75 cells is where "touching" becomes "inside".
+    const deepTol = Math.max(PENETRATION_TOL_MM, 0.75 * scenario.dxMm);
+    for (let p = 0; p < world.activeN; p++) {
+      const cell = cellOfParticle(p);
+      const label = seeded.labels[cell]!;
+      const depth = sdf.sdf[cell]!;
+      const leftDomain = label !== 0 && label !== seeded.component;
+      const inMetal = label === 0 && depth < -deepTol;
+      if (!leftDomain && !inMetal) {
+        lastInside[p * 3] = world.pos[p * 3]!;
+        lastInside[p * 3 + 1] = world.pos[p * 3 + 1]!;
+        lastInside[p * 3 + 2] = world.pos[p * 3 + 2]!;
+        continue;
+      }
+      if (!leakFlag[p]) {
+        leakFlag[p] = 1;
+        if (leftDomain) leak.outside++; else leak.inWall++;
+      }
+      // Back to the last known-good cell, and stop the velocity that carried it out.
+      for (let a = 0; a < 3; a++) {
+        const moved = world.pos[p * 3 + a]! - lastInside[p * 3 + a]!;
+        world.pos[p * 3 + a] = lastInside[p * 3 + a]!;
+        if (moved * world.vel[p * 3 + a]! > 0) world.vel[p * 3 + a] = 0;
+      }
+    }
+    // Inlet plane: a particle pushed back behind the inlet hits a wall, not a portal.
+    if (bandCells) {
+      const axis = scenario.inlet!.axis;
+      const floor = bandCells[0] - 1;
+      for (let p = 0; p < world.activeN; p++) {
+        if (world.pos[p * 3 + axis]! >= floor) continue;
+        world.pos[p * 3 + axis] = floor;
+        if (world.vel[p * 3 + axis]! < 0) world.vel[p * 3 + axis] = 0;
+        leak.inletBackflow++;
+      }
+    }
+  };
+
   let divergedLogged = false;
   // time-averaged axial velocity per axial section (M5 consumes these)
   const hasSections = scenario.outletPlaneMm !== undefined;
@@ -755,6 +866,7 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
   for (let step = 1; step <= steps; step++) {
     world.step();
     if (!skipProject) projectParticles();
+    if (!skipProject) constrainParticles();
     if (process.env.CAD_FLUID_DEBUG && world.nonFinite > 0 && !divergedLogged) {
       divergedLogged = true;
       let bad = 0, sample = '';
@@ -878,6 +990,9 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
       massConservationError: +massConservationError.toFixed(6),
       penetrationCount,
       outsideSnapshotMax,
+      leakedOutside: leak.outside,
+      absorbedInWall: leak.inWall,
+      inletBackflowCount: leak.inletBackflow,
       outletArrivalRatio: +outletArrivalRatio.toFixed(4),
       timeToOutletSteps,
       sectionAvgVelocity,

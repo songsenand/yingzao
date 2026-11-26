@@ -69,9 +69,13 @@ for (const od of [34, 60, 100]) {
   if (resolved) {
     check(`Ø${od} 壁厚 ${wall}mm：穿透为 0`, m.penetrationCount === 0, `penetration=${m.penetrationCount}`);
   } else {
+    // Since F1b the constraint holds these particles at the wall, so the end-state
+    // counts are 0. What must NOT be 0 is the EVIDENCE: the run has to say how many
+    // particles it had to stop, or a 1-cell wall reads as a clean run.
+    const constraintHits = (m.absorbedInWall ?? 0) + (m.leakedOutside ?? 0);
     check(`Ø${od} 壁厚 ${wall}mm（<2 格）：漏流被审计报出`,
-      m.penetrationCount > 0 || m.outsideSnapshotMax > 0,
-      `penetration=${m.penetrationCount} outside=${m.outsideSnapshotMax}（1 格壁是分辨率边界）`);
+      m.penetrationCount > 0 || m.outsideSnapshotMax > 0 || constraintHits > 0,
+      `penetration=${m.penetrationCount} outside=${m.outsideSnapshotMax} constraintHits=${constraintHits}（1 格壁是分辨率边界）`);
   }
   check(`Ø${od} 壁厚 ${wall}mm：种子不落进金属（已记账）`,
     Number.isFinite(m.seedStats?.solidFraction) && m.seedStats.rejectedSolid >= 0,
