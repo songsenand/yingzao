@@ -146,7 +146,17 @@ def _build_grid(mesh, dx: float):
     counts = np.maximum(np.round((hi - lo) / dx).astype(int), 1)
     axes = [lo[a] + dx / 2.0 + dx * np.arange(counts[a]) for a in range(3)]
     grid = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
-    inside = np.asarray(mesh.contains(grid), dtype=bool).reshape(tuple(counts))
+    # `mesh.contains` on the WHOLE lattice allocates a points x triangles temporary.
+    # Measured on the 226 mm shaft: 4.35 GB RSS at dx=1.2 (68k cells) vs 0.97 GB at
+    # dx=2 (16k cells) — ~60 KB per query point, not per FEM DOF. Chunking the query
+    # gives the identical mask (each point is independent) and caps that temporary;
+    # it is slightly slower because `contains` is called per chunk.
+    inside = np.empty(grid.shape[0], dtype=bool)
+    chunk = 4096
+    for start in range(0, grid.shape[0], chunk):
+        stop = min(start + chunk, grid.shape[0])
+        inside[start:stop] = mesh.contains(grid[start:stop])
+    inside = inside.reshape(tuple(counts))
     if not inside.any():
         raise ValueError("no voxel centre falls inside the mesh — dxMm is too coarse for this part")
     # One cell of air all round: selectors below work on world coordinates, and the
