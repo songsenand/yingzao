@@ -65,6 +65,9 @@ const SCENARIOS = [
   // U11: standard views, axis snap, projection toggle and 复原 — asserted as
   // camera pose facts (direction dot products), not from a picture.
   { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
+  // U21 (measurable half): a million-triangle mesh through the panel's own reader and
+  // STL parser, with transport/parse/frame numbers.
+  { name: 'big-mesh', query: 'w=760&h=1000&subject=p005&assert=big-mesh&tri=1000000&debug=0', timeoutMs: 180000 },
   // U14: the re-run row mirrors the host's classification — 2 direct, 3 refused with
   // their missing inputs, and a click produces a run id.
   { name: 'rerun-check', query: 'w=760&h=1000&subject=p005&open=证据&assert=rerun-check&debug=0' },

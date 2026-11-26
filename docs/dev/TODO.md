@@ -44,7 +44,7 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
 | U20 | P1 | partial | 任意剖切 + 剖切面封盖 | **已落**：`SectionPlane`（点+法向）推广，轴切成为特例（逐字节等价）；catalog/封盖/拾取/切片全走同一平面；面板加「轴切/任意平面」切换 + 方位/仰角 + 保留·切除互换；`accept-section-free`（45° 立方体 565.685mm²、圆环 45° 椭圆 333.2mm²、孔被减掉、翻面同一刀、双体各自封盖）+ `accept-ui section-free`（12 项：封盖面积、孔占比 0.305、材质带 1 个裁剪面、裁剪生效使画面像素变化 9.4%→13.5%）。**余**：① 真机面板过一眼「斜切管道看到内腔」；② sandbox 冻结帧与画布重建的先后（截图抓到旧帧）并入 U21 | 2–3d |
-| U21 | P1 | partial | 大网格加载进度 + WebGL 上下文恢复 | **已落**：`stream-progress.ts`（Content-Length 缺失/一致/空体/中途断流共 16 条断言）+ 面板进度胶囊；`webglcontextlost` → 卡片 + 自动重建（`glEpoch` 重跑构建）、手动重建按钮、丢上下文时不再发 draw；被取代的构建会 **abort** 自己的下载（原先重复下载）。`accept-ui webgl-recover` 9 项 PASS（真丢上下文→卡片→新 renderer→模型重绘）。**余**：① 真机切标签页手测一次；②「百万面」未实测（最大 1.2MB/整机）；③ 进度胶囊的自动化断言不稳（Firefox 把限速响应合并成 1–2 次 read），只留手动命令 + 模块级确定性测试 | 2d |
+| U21 | P1 | partial | 大网格加载进度 + WebGL 上下文恢复 | **已落**：`stream-progress.ts`（16 项断言）+ 面板进度 pill + `glLost`/`glEpoch` 自动重建（`accept-ui webgl-recover`）。**百万面实测（2026-11-27，sandbox 的软件 GL）**：999,698 三角形 / 47.7 MB，传输 **188 ms（254 MB/s，211 个进度 tick）**，STL 解析+bounds **82 ms（12.5M tri/s）**，首帧 **74 ms**，稳态 **63.9 ms/帧**（733×547，`gl.finish()` 同步后；`renderer.info` 证明确实画了 999,698 tri）。`accept-ui big-mesh` 8 项断言。**余**：真机切标签页手测（需你） | — |
 
 ## 2. P0 / P1 排队
 

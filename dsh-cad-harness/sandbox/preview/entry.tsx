@@ -11,6 +11,8 @@ import { CadPanel, setClientServices } from '../../src/client/panel';
 import { setProjectServices, setProjectOverride } from '../../src/client/project';
 import { ViewportOverlay } from '../../src/client/overlay';
 import { installCadTheme } from '../../src/client/theme.ts';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { readBodyWithProgress } from '../../src/client/stream-progress';
 
 const q = new URLSearchParams(location.search);
 
@@ -2633,6 +2635,92 @@ if (q.get('assert') === 'rerun-check') {
       lines.push(`${stillRow ? 'PASS' : 'FAIL'}  the row survives the refresh (it is not a one-shot banner)`);
     } catch (error) {
       lines.push(`FAIL  the re-run row threw: ${String((error as Error)?.message ?? error)}`);
+    }
+    show();
+  })();
+}
+
+// ?assert=big-mesh — U21's measurable half: a million-triangle mesh through the
+// PANEL's own path (the same reader and the same STL parser), with numbers a
+// person can argue with. The mesh is generated on demand by the sandbox server, so
+// no 50 MB fixture lives in the repo. What this cannot measure is the user's real
+// machine and a real tab switch — that half of U21 needs a human.
+if (q.get('assert') === 'big-mesh') {
+  void (async () => {
+    const lines: string[] = ['million-triangle load (panel path)'];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    try {
+      const target = Number(q.get('tri') ?? '1000000');
+      const res = await fetch(`/api/cad/stl?big=1&tri=${target}`);
+      const declared = Number(res.headers.get('content-length') ?? '0');
+      let ticks = 0;
+      const t0 = performance.now();
+      const buf = await readBodyWithProgress(res, () => { ticks += 1; });
+      const transportMs = performance.now() - t0;
+      const mb = buf.byteLength / 1024 / 1024;
+      const count = new DataView(buf).getUint32(80, true);
+      lines.push(`INFO  ${count.toLocaleString('en-US')} triangles · ${mb.toFixed(1)} MB · ${transportMs.toFixed(0)} ms`
+        + ` (${(mb / (transportMs / 1000)).toFixed(1)} MB/s) · ${ticks} progress tick(s)`);
+      lines.push(`${count >= target * 0.9 ? 'PASS' : 'FAIL'}  the payload really is ~${target.toLocaleString('en-US')} triangles`);
+      lines.push(`${declared === buf.byteLength ? 'PASS' : 'FAIL'}  content-length matches the bytes received (progress can be a fraction)`);
+      lines.push(`${ticks >= 2 ? 'PASS' : 'FAIL'}  the reader ticked more than once on a multi-MB body (a bar can move)`);
+
+      const t1 = performance.now();
+      const geometry = new STLLoader().parse(buf);
+      geometry.computeBoundingSphere();
+      geometry.computeBoundingBox();
+      const parseMs = performance.now() - t1;
+      const verts = geometry.getAttribute('position').count;
+      lines.push(`INFO  parse + bounds: ${parseMs.toFixed(0)} ms (${(count / (parseMs / 1000) / 1000).toFixed(0)}k tri/s)`);
+      lines.push(`${verts === count * 3 ? 'PASS' : 'FAIL'}  every triangle reached the geometry (${verts} vertices)`);
+
+      // The GPU half: uploading a 1M-triangle buffer to a live context. The panel's
+      // renderer is the one on screen; a throwaway scene keeps the loaded part intact.
+      const renderer = (document.querySelector('#root canvas')?.parentElement as any)?.__renderer;
+      if (renderer) {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+        camera.position.set(0, 0, 120);
+        const material = new THREE.MeshBasicMaterial({ color: 0x3366cc });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+        const t2 = performance.now();
+        renderer.render(scene, camera);
+        const firstFrameMs = performance.now() - t2;
+        const drawn = (renderer.info?.render?.triangles ?? 0);
+        const size = renderer.getSize(new THREE.Vector2());
+        // `renderer.render` only SUBMITS commands: without a sync, 1M triangles read
+        // as "0.1 ms/frame" because the GPU has not been waited for. `gl.finish()`
+        // turns it into a number about the frame rather than about the command queue.
+        const gl = renderer.getContext();
+        gl.finish();
+        const t3 = performance.now();
+        for (let i = 0; i < 10; i++) { renderer.render(scene, camera); }
+        gl.finish();
+        const steadyMs = (performance.now() - t3) / 10;
+        // `info.render.triangles` is the only honest witness that the 1M triangles
+        // were actually drawn: a degenerate canvas renders in ~0.1 ms and would
+        // otherwise read as "10000 fps".
+        lines.push(`INFO  first frame ${firstFrameMs.toFixed(0)} ms · steady ${steadyMs.toFixed(1)} ms/frame · canvas ${size.x}×${size.y} · drawn ${drawn.toLocaleString('en-US')} tri`);
+        lines.push(`${firstFrameMs < 5000 ? 'PASS' : 'FAIL'}  the first frame with the whole mesh lands under 5 s`);
+        // A software rasteriser (the sandbox's llvmpipe) is the slow end of the range;
+        // a real GPU is faster. The ceiling catches a pathological path (no culling,
+        // per-frame re-upload), not a frame-rate claim about the user's machine.
+        lines.push(`${steadyMs < 200 ? 'PASS' : 'FAIL'}  a steady frame stays under 200 ms even in software rasterisation`);
+        lines.push(`${drawn >= count * 0.9 ? 'PASS' : 'FAIL'}  the draw call really rasterised the mesh (not a culled/empty scene)`);
+        mesh.geometry.dispose();
+        material.dispose();
+      } else {
+        lines.push('SKIP  no live renderer — GPU upload measured only by the real-machine test');
+      }
+    } catch (error) {
+      lines.push(`FAIL  big-mesh threw: ${String((error as Error)?.message ?? error)}`);
     }
     show();
   })();

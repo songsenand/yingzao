@@ -237,6 +237,22 @@ async function api(req, url) {
     return json({ versionId: v, params: parseParams(scad.toString('utf8')) });
   }
 
+  // U21 measurement: a synthetic million-triangle mesh, generated on demand so the
+  // repo holds no 50 MB fixture. A UV sphere at `tri` triangles is enough to test
+  // transport + parse + first paint at the scale a real part reaches.
+  if (p === '/api/cad/stl' && url.searchParams.get('big') === '1') {
+    const triangles = Math.max(1, Math.min(4_000_000, Number(url.searchParams.get('tri') ?? '1000000') | 0));
+    const bytes = buildSphereStl(triangles);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        'content-type': 'model/stl',
+        'content-length': String(bytes.byteLength),
+        'cache-control': 'no-store',
+      },
+    });
+  }
+
   if (p === '/api/cad/stl') {
     const stl = await readMaybe(join(DATA, 'versions', v ?? '', 'model.stl'));
     if (!stl) return notFound('stl');
@@ -409,3 +425,50 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[cad-ui-sandbox] http://127.0.0.1:${PORT}/`);
 });
+
+/**
+ * A binary STL UV sphere with at least `triangles` facets (a multiple of 2×(rings)).
+ * Deterministic: same request, same bytes — a measurement that varies per call would
+ * be measuring the generator.
+ */
+function buildSphereStl(triangles) {
+  const rings = Math.max(4, Math.round(Math.sqrt(triangles / 2)));
+  const segments = Math.max(4, Math.round(triangles / (2 * rings)));
+  const count = 2 * rings * segments;
+  const buffer = new ArrayBuffer(84 + count * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, count, true);
+  const R = 30;
+  const at = (ring, seg) => {
+    const phi = (ring / rings) * Math.PI;
+    const theta = (seg / segments) * Math.PI * 2;
+    return [R * Math.sin(phi) * Math.cos(theta), R * Math.sin(phi) * Math.sin(theta), R * Math.cos(phi)];
+  };
+  let offset = 84;
+  const writeTri = (a, b, c) => {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const len = Math.hypot(...n) || 1;
+    n = n.map((x) => x / len);
+    view.setFloat32(offset, n[0], true); view.setFloat32(offset + 4, n[1], true); view.setFloat32(offset + 8, n[2], true);
+    for (const [i, P] of [[12, a], [24, b], [36, c]]) {
+      view.setFloat32(offset + i, P[0], true);
+      view.setFloat32(offset + i + 4, P[1], true);
+      view.setFloat32(offset + i + 8, P[2], true);
+    }
+    view.setUint16(offset + 48, 0, true);
+    offset += 50;
+  };
+  for (let ring = 0; ring < rings; ring++) {
+    for (let seg = 0; seg < segments; seg++) {
+      const a = at(ring, seg);
+      const b = at(ring + 1, seg);
+      const c = at(ring + 1, seg + 1);
+      const d = at(ring, seg + 1);
+      writeTri(a, b, c);
+      writeTri(a, c, d);
+    }
+  }
+  return new Uint8Array(buffer);
+}

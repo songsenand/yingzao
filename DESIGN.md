@@ -419,6 +419,12 @@ interface PhysicsResult {
 
 > **v2.10 回填**：原文的「WebGPU 跑 MLS-MPM、Three.js 粒子渲染、实时 >30FPS」为 M1 期规划。实作改为 **Host 侧 CPU MLS-MPM**（纯 TS typed arrays，离线跑几十万粒子），WebGPU 移交后续交互面板；分析解读按 v2.4 交还 LLM（§6.7）。
 
+**百万面实测（U21，2026-11-27）**：sandbox 用 `/api/cad/stl?big=1&tri=1000000` 现生成 UV 球
+（不往仓库塞 50 MB 夹具）；面板同一条读取路径实测 999,698 tri / 47.7 MB：传输 188 ms
+（211 个进度 tick）、STL 解析+bounds 82 ms、首帧 74 ms、稳态 63.9 ms/帧（733×547，软件 GL，
+`gl.finish()` 同步后）。`renderer.info.render.triangles` 作为"确实画了"的证人——否则驱动的
+命令队列会让 1M 三角形读成 0.1 ms/帧。断言在 `accept-ui big-mesh`（8 项）。
+
 **检查重跑（U14，2026-11-27）**：`src/host/check-rerun.ts` 按「语料能否重建输入」给五种检查
 分类——制造/装配 `direct`（一键重跑，run 钉住当前版本），应力/运动/物理 `needs-args`
 （`run.json` 只存答案不存问题，路由返回 409 + `needs` 且**不建 run**）。面板「重跑检查」行
