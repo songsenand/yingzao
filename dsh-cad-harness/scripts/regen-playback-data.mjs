@@ -46,7 +46,7 @@ if (process.argv.includes('--clean')) {
 {
   const pipe = await compileStlOnly(
     'difference() { translate([0,0,0]) cube([200,48,48]); translate([-1,8,8]) cube([202,32,32]); }');
-  const preset = deriveFluidPreset(pipe.stl, 2, 100);
+  const preset = await deriveFluidPreset(pipe.stl, 2, 100);
   const { report } = await runFluid({
     pipeStl: pipe.stl,
     gridCells: preset.gridCells,

@@ -45,7 +45,7 @@ const check = (name, ok, detail = '') => {
     'difference() { cube([200,48,48], center=false); translate([-1,8,8]) cube([202,32,32]); }');
   const stlPath = join(dir, 'pipe.stl');
   writeFileSync(stlPath, pipe.stl);
-  const preset = deriveFluidPreset(new Uint8Array(readFileSync(stlPath)), 2, 100);
+  const preset = await deriveFluidPreset(new Uint8Array(readFileSync(stlPath)), 2, 100);
   const { report } = await runFluid({
     pipeStl: pipe.stl,
     gridCells: preset.gridCells,

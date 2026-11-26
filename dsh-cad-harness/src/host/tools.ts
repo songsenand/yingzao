@@ -3526,7 +3526,7 @@ export function registerCadTools(
     const sourceVersionIds = a.versionId ? [a.versionId] : [];
     const geometryHash = createHash('sha256').update(pipeStl).digest('hex').slice(0, 12);
 
-    const preset = deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100);
+    const preset = await deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100);
     const steps = a.steps ?? preset.steps;
     const { report, sdf } = await runFluid({
       pipeStl,

@@ -60,6 +60,14 @@ export interface FluidReport {
       accepted: number;
       rejectedWall: number;
       rejectedSolid: number;
+      /**
+       * Lattice points that are neither solid nor near a wall but sit OUTSIDE
+       * the bore (the seed box's corners around a round pipe). They used to be
+       * seeded as fluid — measured 3,648/13,243 (27.5%) on Ø60/Ø30 — so the run
+       * visibly flowed along the outside of the part. They are now rejected;
+       * this count is the witness.
+       */
+      rejectedOutside: number;
       solidFraction: number;
       /** Particle count actually placed (explicit `particleCount`, else the lattice size). */
       requested: number;
@@ -71,6 +79,14 @@ export interface FluidReport {
     /** Audit: |count0 − escaped − active| / count0 (≈0 by construction; guards kernel bugs). */
     massConservationError: number;
     penetrationCount: number;
+    /**
+     * Particles that are well clear of the metal (SDF > half a cell) but NOT in
+     * the bore, in any captured frame. This is the "fluid ran outside the pipe"
+     * audit: penetration counts fluid in the wall, this counts fluid in the air
+     * beside it. The old runs had no such number, so a quarter of the seeds
+     * flowing along the outside still read as a clean pass.
+     */
+    outsideSnapshotMax: number;
     outletArrivalRatio: number;
     timeToOutletSteps: number | null;
     sectionAvgVelocity: { positionMm: number; velocityMmPerSec: number }[];
@@ -124,29 +140,143 @@ export function deriveGridFromStl(pipeStl: Uint8Array, dxMm: number): {
 }
 
 /**
- * Seed a deterministic lattice over the region (cell units), rejecting points
- * inside the walls or closer than WALL_CLEARANCE_MM to them.
+ * Connected components of the void, restricted to the part's own bounding box.
  *
- * BOTH tests are required. The SDF stores the distance to the nearest surface,
- * so it is positive on both sides of a wall: a distance threshold alone cannot
- * tell "0.75mm of clearance inside the cavity" from "6.75mm deep inside the
- * wall", and the latter used to be seeded as fluid (measured 2026-10-08 on a
- * Ø60/Ø30 annulus). `solidMaskAt` supplies the missing sign.
+ * A seed REGION is a box; a bore is not. On a Ø60/Ø30 tube the preset's
+ * cross-section is 54 mm square, so its four corners sit ~8 mm outside the Ø60
+ * outer wall — far from any surface and not solid, which both of the old tests
+ * accept. Measured 2026-11-26: 3,648 of 13,243 seeds (27.5%) were outside the
+ * pipe, i.e. a quarter of the fluid started and stayed outside the part.
+ *
+ * Inside the solid's bbox, the bore and the air around the part are SEPARATE
+ * void components: they are divided by the wall everywhere except at the open
+ * ends, and those ends are the bbox faces, where the flood fill stops. (That is
+ * why the bbox is essential — without it the bore is simply connected to the
+ * surrounding air through its openings and no labelling can tell them apart.)
+ * Components are axis-agnostic, so a short/fat tube or an elbow works even when
+ * `deriveFluidPreset`'s bbox-longest flow-axis guess is wrong.
+ *
+ * Labels: 0 = solid or outside the part's bbox, 1..count = void components.
+ */
+export function buildVoidComponents(sdf: SdfField): { labels: Int32Array; count: number } {
+  const [nx, ny, nz] = sdf.cells;
+  const solid = sdf.solidMask;
+  const labels = new Int32Array(nx * ny * nz);
+  const cellOf = (x: number, y: number, z: number): number => (x * ny + y) * nz + z;
+
+  // The part's end faces sit exactly on the bbox planes, where a cell centre can
+  // read sdf = 0 (on the surface) and `solidMask` calls it void. Flooding that
+  // layer connects the bore to the air around the end face — measured: the bore
+  // centre and the box corner shared label 1 — which is the leak this mask
+  // exists to stop. For CONNECTIVITY only, a cell on or inside the surface
+  // (sdf <= half a cell) counts as blocked. The mouth itself is far from any
+  // surface, so it stays part of the bore.
+  const blocked = (c: number): boolean => solid[c] === 1 || sdf.sdf[c]! <= 0.5 * sdf.dxMm;
+
+  // The part's own bbox, in cell indices. No solid at all → use the whole grid
+  // (nothing to separate, and the caller will get a "no seeds" warning anyway).
+  let x0 = nx, y0 = ny, z0 = nz, x1 = -1, y1 = -1, z1 = -1;
+  for (let x = 0; x < nx; x++) {
+    for (let y = 0; y < ny; y++) {
+      for (let z = 0; z < nz; z++) {
+        if (!blocked(cellOf(x, y, z))) continue;
+        if (x < x0) x0 = x;
+        if (y < y0) y0 = y;
+        if (z < z0) z0 = z;
+        if (x > x1) x1 = x;
+        if (y > y1) y1 = y;
+        if (z > z1) z1 = z;
+      }
+    }
+  }
+  if (x1 < 0) { x0 = 0; y0 = 0; z0 = 0; x1 = nx - 1; y1 = ny - 1; z1 = nz - 1; }
+  const queue = new Int32Array((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1));
+  let count = 0;
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        const start = cellOf(x, y, z);
+        if (blocked(start) || labels[start]) continue;
+        count++;
+        let head = 0, tail = 0;
+        labels[start] = count;
+        queue[tail++] = start;
+        while (head < tail) {
+          const c = queue[head++]!;
+          const cz = c % nz;
+          const cy = ((c - cz) / nz) % ny;
+          const cx = (c - cz - cy * nz) / (ny * nz);
+          const visit = (n: number): void => {
+            if (blocked(n) || labels[n]) return;
+            labels[n] = count;
+            queue[tail++] = n;
+          };
+          if (cx > x0) visit(c - ny * nz);
+          if (cx < x1) visit(c + ny * nz);
+          if (cy > y0) visit(c - nz);
+          if (cy < y1) visit(c + nz);
+          if (cz > z0) visit(c - 1);
+          if (cz < z1) visit(c + 1);
+        }
+      }
+    }
+  }
+  return { labels, count };
+}
+
+/** Grid cell containing a world point (mm), clamped to the grid. */
+function cellAtMm(sdf: SdfField, wm: readonly number[]): number {
+  const [nx, ny, nz] = sdf.cells;
+  const [ox, oy, oz] = sdf.originMm;
+  const dx = sdf.dxMm;
+  const cx = Math.min(nx - 1, Math.max(0, Math.floor((wm[0]! - ox) / dx)));
+  const cy = Math.min(ny - 1, Math.max(0, Math.floor((wm[1]! - oy) / dx)));
+  const cz = Math.min(nz - 1, Math.max(0, Math.floor((wm[2]! - oz) / dx)));
+  return cx * ny * nz + cy * nz + cz;
+}
+
+/**
+ * Seed a deterministic lattice over the region, rejecting points inside the
+ * walls, closer than WALL_CLEARANCE_MM to them, or in a DIFFERENT void
+ * component than the region's centre (the air around the part).
+ *
+ * The first two tests are not enough on their own. The SDF stores the distance
+ * to the nearest surface, so it is positive on both sides of a wall: a distance
+ * threshold alone cannot tell "0.75 mm of clearance inside the cavity" from
+ * "6.75 mm deep inside the wall" (measured 2026-10-08 on a Ø60/Ø30 annulus);
+ * `solidMaskAt` supplies the missing sign. Nor can they tell the cavity from the
+ * air around the part — both are void and both are far from metal at the box's
+ * corners — so the component label supplies the third test.
+ *
+ * The region's centre picks the component. For the preset that is the bore
+ * centre; a user region that is wholly outside the part therefore seeds the
+ * outside (and the outside audit then says so) rather than silently mixing both.
  */
 function seedPositions(
   sdf: SdfField,
   region: { min: [number, number, number]; max: [number, number, number] },
   ppc: number,
-): { seeds: [number, number, number][]; rejectedWall: number; rejectedSolid: number } {
+): {
+  seeds: [number, number, number][];
+  rejectedWall: number;
+  rejectedSolid: number;
+  rejectedOutside: number;
+  labels: Int32Array;
+  component: number;
+} {
   const s = Math.pow(ppc, -1 / 3); // lattice spacing in cells for `ppc` particles/cell
   const out: [number, number, number][] = [];
-  let rejectedWall = 0, rejectedSolid = 0;
+  const { labels } = buildVoidComponents(sdf);
+  let rejectedWall = 0, rejectedSolid = 0, rejectedOutside = 0;
   const perAxis = [0, 1, 2].map((a) => {
     const lo = (region.min[a]! - sdf.originMm[a]!) / sdf.dxMm;
     const hi = (region.max[a]! - sdf.originMm[a]!) / sdf.dxMm;
     const n = Math.max(1, Math.floor((hi - lo) / s));
     return { lo, step: (hi - lo) / n, n };
   });
+  // Pass 1: classify every lattice point. Candidates are non-solid, clear of
+  // the wall, and store their cell so the component vote is read from `labels`.
+  const candidates: { p: [number, number, number]; cell: number }[] = [];
   for (let ix = 0; ix < perAxis[0].n; ix++) {
     for (let iy = 0; iy < perAxis[1].n; iy++) {
       for (let iz = 0; iz < perAxis[2].n; iz++) {
@@ -158,11 +288,67 @@ function seedPositions(
         // clearance test below would wave it through
         if (solidMaskAt(sdf, wm[0]!, wm[1]!, wm[2]!)) { rejectedSolid++; continue; }
         if (sdfAt(sdf, wm[0]!, wm[1]!, wm[2]!) < WALL_CLEARANCE_MM) { rejectedWall++; continue; }
-        out.push([cx, cy, cz]);
+        candidates.push({ p: [cx, cy, cz], cell: cellAtMm(sdf, wm) });
       }
     }
   }
-  return { seeds: out, rejectedWall, rejectedSolid };
+  // Pass 2: which component is the fluid domain? The region centre when it is
+  // itself in a void component, else the component holding most candidates.
+  const centre = [0, 1, 2].map((a) => (region.min[a]! + region.max[a]!) / 2);
+  const centreLabel = labels[cellAtMm(sdf, centre)]!;
+  let component = centreLabel;
+  if (!component) {
+    const counts = new Map<number, number>();
+    for (const c of candidates) counts.set(labels[c.cell]!, (counts.get(labels[c.cell]!) ?? 0) + 1);
+    let best = 0, bestCount = -1;
+    for (const [label, n] of counts) if (label > 0 && n > bestCount) { best = label; bestCount = n; }
+    component = best;
+  }
+  for (const c of candidates) {
+    if (labels[c.cell] !== component) { rejectedOutside++; continue; }
+    out.push(c.p);
+  }
+  return { seeds: out, rejectedWall, rejectedSolid, rejectedOutside, labels, component };
+}
+
+/** Count captured particles that are clear of metal but outside the bore. */
+function countOutsideSnapshots(
+  sdf: SdfField,
+  labels: Int32Array,
+  component: number,
+  snapshots: FluidSnapshot[],
+): number {
+  if (!component) return 0;
+  const dx = sdf.dxMm;
+  let worst = 0;
+  for (const snap of snapshots) {
+    let n = 0;
+    for (let p = 0; p < snap.posMm.length / 3; p++) {
+      const wm = [snap.posMm[p * 3]!, snap.posMm[p * 3 + 1]!, snap.posMm[p * 3 + 2]!];
+      if (labels[cellAtMm(sdf, wm)] === component) continue;
+      // A particle hugging the wall can sit in a solid-labelled cell whose SDF
+      // is still positive (the projection parks it just outside the surface).
+      // Only a particle clear of metal is a candidate...
+      if (sdfAt(sdf, wm[0]!, wm[1]!, wm[2]!) <= 0.5 * dx) continue;
+      // ...and the cell label is nearest-cell, so a particle 1-2 mm off the bore
+      // wall can still land in a solid-labelled cell. Step 1.5 cells along the
+      // SDF gradient (away from the metal on BOTH sides of a wall) and ask
+      // again: inside the bore this reaches the seeded component, outside the
+      // part it stays in a different one.
+      const gx = sdfAt(sdf, wm[0]! + dx, wm[1]!, wm[2]!) - sdfAt(sdf, wm[0]! - dx, wm[1]!, wm[2]!);
+      const gy = sdfAt(sdf, wm[0]!, wm[1]! + dx, wm[2]!) - sdfAt(sdf, wm[0]!, wm[1]! - dx, wm[2]!);
+      const gz = sdfAt(sdf, wm[0]!, wm[1]!, wm[2]! + dx) - sdfAt(sdf, wm[0]!, wm[1]!, wm[2]! - dx);
+      const gl = Math.hypot(gx, gy, gz) || 1;
+      const step = 1.5 * dx;
+      const stepped = cellAtMm(sdf, [
+        wm[0]! + (gx / gl) * step, wm[1]! + (gy / gl) * step, wm[2]! + (gz / gl) * step,
+      ]);
+      if (labels[stepped] === component) continue;
+      n++;
+    }
+    if (n > worst) worst = n;
+  }
+  return worst;
 }
 
 /** Write the grid SDF + mask + normal as one binary file (see worker.py's header). */
@@ -357,6 +543,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
   }
   const snapshots = readSnapshotFile(snapshotsPath);
   rmSync(snapshotsPath, { force: true });
+  const outsideSnapshotMax = countOutsideSnapshots(sdf, seeded.labels, seeded.component, snapshots);
 
   // Seed-lattice accounting and its warnings are the CALLER's business: they are
   // about the seeds this side chose, not about the run.
@@ -384,8 +571,15 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
     );
   }
   const hasEscape = scenario.outletPlaneMm !== undefined;
+  if (outsideSnapshotMax > 0) {
+    warnings.push(
+      `${outsideSnapshotMax} captured particle(s) are OUTSIDE the pipe bore — the run is not a closed-bore ` +
+      `flow. Check that fluidRegionMm lies inside the cavity and that the wall is thick enough for the ` +
+      `timestep (v*dt must stay below the wall thickness).`,
+    );
+  }
   const clean = !solved.diverged && solved.penetrationCount === 0 && solved.massConservationError < 1e-6
-    && (!hasEscape || solved.outletArrivalRatio >= 0.5);
+    && outsideSnapshotMax === 0 && (!hasEscape || solved.outletArrivalRatio >= 0.5);
 
   const report: FluidReport = {
     overallStatus: clean ? 'pass' : 'check',
@@ -396,7 +590,8 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
         accepted: seeds.length,
         rejectedWall: seeded.rejectedWall,
         rejectedSolid: seeded.rejectedSolid,
-        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid)).toFixed(4),
+        rejectedOutside: seeded.rejectedOutside,
+        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid + seeded.rejectedOutside)).toFixed(4),
         requested: count,
         stacksPerSeed,
       },
@@ -404,6 +599,7 @@ export async function runFluid(scenario: FluidScenario): Promise<{ report: Fluid
       active: solved.active,
       massConservationError: solved.massConservationError,
       penetrationCount: solved.penetrationCount,
+      outsideSnapshotMax,
       outletArrivalRatio: solved.outletArrivalRatio,
       timeToOutletSteps: solved.timeToOutletSteps,
       sectionAvgVelocity: solved.sectionAvgVelocity,
@@ -619,8 +815,9 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
   const massConservationError = Math.abs(count0 - world.escaped - active) / count0;
   const outletArrivalRatio = world.escaped / count0;
   const hasEscape = scenario.outletPlaneMm !== undefined;
+  const outsideSnapshotMax = countOutsideSnapshots(sdf, seeded.labels, seeded.component, snapshots);
   const clean = !divergedOf(world) && penetrationCount === 0 && massConservationError < 1e-6
-    && (!hasEscape || outletArrivalRatio >= 0.5);
+    && outsideSnapshotMax === 0 && (!hasEscape || outletArrivalRatio >= 0.5);
 
   // Non-fatal problems the caller must know about. The stacking case matters:
   // the placer cycles `seeds[idx++ % seeds.length]`, so asking for more
@@ -651,6 +848,13 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
       `region much larger than its cavity. Those points are rejected, but the lattice is coarse where it counts.`,
     );
   }
+  if (outsideSnapshotMax > 0) {
+    warnings.push(
+      `${outsideSnapshotMax} captured particle(s) are OUTSIDE the pipe bore — the run is not a closed-bore ` +
+      `flow. Check that fluidRegionMm lies inside the cavity and that the wall is thick enough for the ` +
+      `timestep (v*dt must stay below the wall thickness).`,
+    );
+  }
 
   const report: FluidReport = {
     overallStatus: clean ? 'pass' : 'check',
@@ -661,7 +865,8 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
         accepted: seeds.length,
         rejectedWall: seeded.rejectedWall,
         rejectedSolid: seeded.rejectedSolid,
-        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid)).toFixed(4),
+        rejectedOutside: seeded.rejectedOutside,
+        solidFraction: +(seeded.rejectedSolid / Math.max(1, seeds.length + seeded.rejectedWall + seeded.rejectedSolid + seeded.rejectedOutside)).toFixed(4),
         requested: count,
         stacksPerSeed,
       },
@@ -669,6 +874,7 @@ export async function runFluidInTs(scenario: FluidScenario): Promise<{
       active,
       massConservationError: +massConservationError.toFixed(6),
       penetrationCount,
+      outsideSnapshotMax,
       outletArrivalRatio: +outletArrivalRatio.toFixed(4),
       timeToOutletSteps,
       sectionAvgVelocity,
@@ -695,11 +901,111 @@ function divergedOf(world: MpmWorld): boolean {
 
 // ---------- preset derivation (tool + panel button + manual route) ----------
 
+/**
+ * The flow axis implied by the VOID, not by the bounding box.
+ *
+ * `deriveFluidPreset` used the longest bbox span. That is right for a long pipe
+ * and wrong for a short fat one: Ø44 × 30 tall has its longest span ACROSS the
+ * cross-section, so the flow was driven sideways through the wall — a
+ * deterministic error on every stubby part (F2).
+ *
+ * The void is what the fluid actually travels through, so its extent is the
+ * honest axis. The largest void COMPONENT is used (a bore, an elbow gallery),
+ * not "all void": the air outside the part is void too, and it surrounds the
+ * bounding box on every axis.
+ */
+export function flowAxisFromVoid(sdf: SdfField): { axis: 0 | 1 | 2; extentMm: [number, number, number]; cells: number } | null {
+  const { labels, count } = buildVoidComponents(sdf);
+  if (count === 0) return null;
+  const [nx, ny, nz] = sdf.cells;
+  const cellAt = (x: number, y: number, z: number) => (x * ny + y) * nz + z;
+  const inside = (x: number, y: number, z: number) => x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz;
+
+  // A FLOW CHANNEL is walled ACROSS its section (two axes) and open along its
+  // length. That is what separates a bore from "the air around the part": the
+  // corner air outside a tube is walled on at most one side, and the one-cell
+  // layer hugging a solid's surface (measured on a 60×40×20 block: extents
+  // [2,42,22]) is not walled on any axis at all. Both used to be picked as
+  // "cavities" by a plain largest-component rule.
+  const perLabel = new Map<number, {
+    cells: number;
+    min: [number, number, number];
+    max: [number, number, number];
+    sample: [number, number, number];
+  }>();
+  for (let x = 0; x < nx; x++) {
+    for (let y = 0; y < ny; y++) {
+      for (let z = 0; z < nz; z++) {
+        const label = labels[cellAt(x, y, z)]!;
+        if (label === 0) continue;
+        let entry = perLabel.get(label);
+        if (!entry) {
+          entry = { cells: 0, min: [x, y, z], max: [x, y, z], sample: [x, y, z] };
+          perLabel.set(label, entry);
+        }
+        entry.cells += 1;
+        // The sample is the cell closest to the running centre: walking from a rim
+        // cell can hit a wall on both sides of a channel and hide the open axis.
+        const centre = [
+          (entry.min[0]! + entry.max[0]!) / 2,
+          (entry.min[1]! + entry.max[1]!) / 2,
+          (entry.min[2]! + entry.max[2]!) / 2,
+        ];
+        const here = [x, y, z];
+        const away = Math.hypot(here[0]! - centre[0]!, here[1]! - centre[1]!, here[2]! - centre[2]!);
+        const best = Math.hypot(entry.sample[0]! - centre[0]!, entry.sample[1]! - centre[1]!, entry.sample[2]! - centre[2]!);
+        if (away < best) entry.sample = [x, y, z];
+        if (x < entry.min[0]!) entry.min[0] = x; if (x > entry.max[0]!) entry.max[0] = x;
+        if (y < entry.min[1]!) entry.min[1] = y; if (y > entry.max[1]!) entry.max[1] = y;
+        if (z < entry.min[2]!) entry.min[2] = z; if (z > entry.max[2]!) entry.max[2] = z;
+      }
+    }
+  }
+
+  const hitsSolid = (from: [number, number, number], axis: number, step: 1 | -1): boolean => {
+    const p = [from[0]!, from[1]!, from[2]!];
+    for (;;) {
+      p[axis] += step;
+      if (!inside(p[0]!, p[1]!, p[2]!)) return false;      // ran out of grid: open
+      if (sdf.solidMask[cellAt(p[0]!, p[1]!, p[2]!)] === 1) return true;
+    }
+  };
+
+  let best: { axis: 0 | 1 | 2; extentMm: [number, number, number]; cells: number } | null = null;
+  for (const entry of perLabel.values()) {
+    if (entry.cells < 8) continue;                          // a speck is not a channel
+    const walled = [0, 1, 2].map((axis) => hitsSolid(entry.sample, axis, 1) && hitsSolid(entry.sample, axis, -1));
+    if (walled.filter(Boolean).length < 2) continue;        // not a channel: open on all/most sides
+    const extentMm: [number, number, number] = [
+      (entry.max[0]! - entry.min[0]! + 1) * sdf.dxMm,
+      (entry.max[1]! - entry.min[1]! + 1) * sdf.dxMm,
+      (entry.max[2]! - entry.min[2]! + 1) * sdf.dxMm,
+    ];
+    // The flow runs along an UNWALLED axis; a sealed pocket (all three walled),
+    // which is the case for a bore between closed end caps, falls back to its
+    // longest extent.
+    const open = [0, 1, 2].filter((axis) => !walled[axis]);
+    const candidates = open.length > 0 ? open : [0, 1, 2];
+    const axis = candidates.reduce((pick, current) => (
+      extentMm[current as 0 | 1 | 2]! > extentMm[pick as 0 | 1 | 2]! ? current : pick
+    ), candidates[0]!) as 0 | 1 | 2;
+    if (!best || entry.cells > best.cells) best = { axis, extentMm, cells: entry.cells };
+  }
+  return best;
+}
+
+
 export interface FluidPreset {
   gridCells: [number, number, number];
   gridOriginMm: [number, number, number];
   dxMm: number;
   axis: 0 | 1 | 2;
+  /** Which rule chose `axis`: the cavity's own extent, or the bbox fallback. */
+  axisSource: 'void' | 'bbox';
+  /** The largest void component's extents (mm), when one was found. */
+  voidExtentMm: [number, number, number] | null;
+  /** The bbox spans that the old rule used — kept so a report can show both. */
+  bboxSpansMm: [number, number, number];
   fluidRegionMm: { min: [number, number, number]; max: [number, number, number] };
   inletBandMm: [number, number];
   inletVelocityMmPerSec: number;
@@ -708,16 +1014,31 @@ export interface FluidPreset {
 }
 
 /**
- * Derive a full fluid scenario from the pipe mesh alone: flow along the
- * longest bbox axis, seed block at the inlet end (30% of the length, 3mm
- * wall clearance), escape plane just before the far opening.
+ * Derive a full fluid scenario from the pipe mesh alone: flow along the axis the
+ * CAVITY runs, seed block at the inlet end (30% of the length, 3mm wall
+ * clearance), escape plane just before the far opening.
+ *
+ * `axisSource` records which rule decided: `void` (the largest void component's
+ * longest extent) or `bbox` (no cavity found → the old bounding-box rule, which
+ * is the only honest fallback for a part you cannot flow through anyway).
  */
-export function deriveFluidPreset(pipeStl: Uint8Array, dxMm = 2, inletVelocityMmPerSec = 100): FluidPreset {
+export async function deriveFluidPreset(pipeStl: Uint8Array, dxMm = 2, inletVelocityMmPerSec = 100): Promise<FluidPreset> {
   const parsed = parseBinaryStl(pipeStl);
   const bb = boundingBox(parsed);
   const spans = [bb.max[0]! - bb.min[0]!, bb.max[1]! - bb.min[1]!, bb.max[2]! - bb.min[2]!];
-  const axis = (spans[0]! >= spans[1]! && spans[0]! >= spans[2]! ? 0 : spans[1]! >= spans[2]! ? 1 : 2) as 0 | 1 | 2;
+  const bboxAxis = (spans[0]! >= spans[1]! && spans[0]! >= spans[2]! ? 0 : spans[1]! >= spans[2]! ? 1 : 2) as 0 | 1 | 2;
   const { cells, originMm } = deriveGridFromStl(pipeStl, dxMm);
+  // The cavity decides, when there is one. Building the SDF costs one voxelisation
+  // — the same one `runFluid` does next anyway — and it is what stops a stubby tube
+  // from being driven across its own wall.
+  let axis = bboxAxis;
+  let axisSource: 'void' | 'bbox' = 'bbox';
+  let voidExtentMm: [number, number, number] | null = null;
+  try {
+    const sdf = await buildSdfFromStl(pipeStl, { cells, dxMm, originMm });
+    const fromVoid = flowAxisFromVoid(sdf);
+    if (fromVoid) { axis = fromVoid.axis; axisSource = 'void'; voidExtentMm = fromVoid.extentMm; }
+  } catch { /* a mesh that cannot be voxelised falls back to the bbox rule */ }
 
   const lo = bb.min[axis]!;
   const span = spans[axis]!;
@@ -745,6 +1066,9 @@ export function deriveFluidPreset(pipeStl: Uint8Array, dxMm = 2, inletVelocityMm
     gridOriginMm: originMm,
     dxMm,
     axis,
+    axisSource,
+    voidExtentMm,
+    bboxSpansMm: [spans[0]!, spans[1]!, spans[2]!],
     fluidRegionMm: region,
     inletBandMm: bandMm,
     inletVelocityMmPerSec,
