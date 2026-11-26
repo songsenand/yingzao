@@ -8,7 +8,15 @@ import ts from 'typescript';
 
 const root = path.resolve(import.meta.dirname, '..');
 const dir = path.join(root, 'src/client');
-const ALLOW = new Set(['角度', '预紧力', '弹簧力', '插入力']); // report data vocabulary, not UI
+// Data vocabulary, not UI: these are values and column names that a report or a
+// file carries VERBATIM. The BOM columns are the CSV contract a workshop reads —
+// translating them per UI language would produce two different file formats, so
+// they stay Chinese everywhere and are allowed here on purpose.
+const ALLOW = new Set([
+  '角度', '预紧力', '弹簧力', '插入力',
+  '零件名', '版本', '数量', '材料', '工艺', '来源', '库存编号',
+  '（未确认）',
+]);
 let failed = 0;
 
 for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && f !== 'i18n.ts')) {
