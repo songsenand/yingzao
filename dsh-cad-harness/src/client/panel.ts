@@ -734,6 +734,16 @@ export function CadPanel(): React.ReactElement {
    * solve used to be a disabled button; now it is a percentage and a cancel.
    */
   const [fluidJob, setFluidJob] = useState<{ id: string; done: number; total: number; status: string } | null>(null);
+  /**
+   * U14: what can be re-run on the CURRENT version, and what cannot. Fetched from
+   * the host's own classification (`/api/cad/check/rerun`), never guessed here —
+   * the panel must not offer a button the host would refuse.
+   */
+  const [rerunPlans, setRerunPlans] = useState<{
+    kind: string; mode: 'direct' | 'needs-args' | 'unavailable';
+    needs?: string[]; note: string; currentVersionId?: string;
+  }[] | null>(null);
+  const [rerunBusy, setRerunBusy] = useState(false);
   /** 本地 STL 对话框：预览（不登记）或按路径导入为版本。 */
   const [fileOpen, setFileOpen] = useState(false);
   /**
@@ -2641,6 +2651,53 @@ export function CadPanel(): React.ReactElement {
     setAnnotations((a) => [...a, { x0: nx0, y0: ny0, x1: nx1, y1: ny1, color }]);
   };
 
+  const loadRerunPlans = async () => {
+    try {
+      const res = await fetch(withProject('/api/cad/check/rerun'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) return;
+      const body = await res.json() as { plans?: typeof rerunPlans };
+      setRerunPlans(body.plans ?? []);
+    } catch { /* the row simply does not appear */ }
+  };
+
+  // U14: ask the host what can be re-run whenever the reader moves to another part
+  // or version. Cheap (a classification, no run) and it keeps the row honest.
+  useEffect(() => {
+    if (!versionId) { setRerunPlans(null); return; }
+    void loadRerunPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjectId, versionId]);
+
+  const rerunCheck = async (kind: string) => {
+    if (rerunBusy) return;
+    setRerunBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(withProject('/api/cad/check/rerun'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        // The host refused: show its words, not a generic failure.
+        setHint(tr('ui.rerun.refused', { kind, needs: (body.needs ?? []).join(', ') }));
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${JSON.stringify(body)}`);
+      setHint(tr('ui.rerun.done', { kind, run: String(body.runId ?? '—') }));
+      await refresh();
+    } catch (e: any) {
+      setError(tr('ui.fluid.failed', { error: String(e?.message ?? e) }));
+    } finally {
+      setRerunBusy(false);
+    }
+  };
+
   const runFluid = async () => {
     if (!versionId || fluidBusy) return;
     setFluidBusy(true);
@@ -3354,6 +3411,36 @@ export function CadPanel(): React.ReactElement {
           style: { ...S.smallBtn, flex: 'none' },
         }, tr('ui.fluid.cancel')),
         React.createElement('span', { style: S.hint }, tr('ui.fluid.hint')),
+      ),
+      // U14: re-run a check on the CURRENT version. A kind the corpus cannot rebuild
+      // is shown DISABLED with its missing inputs in the tooltip — the panel must not
+      // offer what the host refuses.
+      scope === 'part' && version && rerunPlans && rerunPlans.length > 0 && React.createElement(
+        'div',
+        {
+          'data-rerun-row': '1',
+          style: { borderTop: `1px solid ${T.border}`, paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' },
+        },
+        React.createElement('span', { style: { ...S.hint, flex: 'none' } }, tr('ui.rerun.title')),
+        ...rerunPlans.map((plan) => React.createElement('button', {
+          key: `rerun-${plan.kind}`,
+          type: 'button',
+          'data-rerun-kind': plan.kind,
+          'data-rerun-mode': plan.mode,
+          disabled: plan.mode !== 'direct' || rerunBusy,
+          title: plan.mode === 'direct'
+            ? plan.note
+            : `${plan.note}${plan.needs?.length ? ` · ${t('ui.rerun.needs')} ${plan.needs.join('、')}` : ''}`,
+          onClick: () => { void rerunCheck(plan.kind); },
+          style: {
+            ...S.smallBtn, flex: 'none',
+            opacity: plan.mode === 'direct' ? (rerunBusy ? 0.55 : 1) : 0.45,
+          },
+        }, plan.kind === 'printability' ? t('ui.rerun.kind.printability')
+          : plan.kind === 'assembly-check' ? t('ui.rerun.kind.assembly-check')
+            : plan.kind === 'stress' ? t('ui.rerun.kind.stress')
+              : plan.kind === 'motion' ? t('ui.rerun.kind.motion')
+                : t('ui.rerun.kind.physics'))),
       ),
     );
   };

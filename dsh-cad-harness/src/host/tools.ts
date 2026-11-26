@@ -55,6 +55,7 @@ import { assertAssembledAtStart, rebasedBodyPosition, runMotion, type MotionJoin
 import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { FluidJobRegistry } from './fluid-jobs.ts';
+import { canExecute, planCheckRerun, type CheckKind } from './check-rerun.ts';
 import { checkManifestFeatures } from './features.ts';
 import { affectedChecks, auditDelivery } from './delivery-audit.ts';
 import { deliveryAuditValue } from './deliver-audit-value.ts';
@@ -632,6 +633,15 @@ export function registerCadTools(
       : withLimit;
     return register(withOutputContract(scoped));
   };
+
+  /** Does this project declare an assembly manifest? (U14's assembly-check precondition.) */
+  async function projectStoresHasManifest(project: ProjectStores): Promise<boolean> {
+    try {
+      const { access } = await import('node:fs/promises');
+      await access(join(project.store.root, '..', 'assembly', 'assembly.json'));
+      return true;
+    } catch { return false; }
+  }
 
   // Stores are resolved PER CALL, never captured here: the plugin is applied
   // once for the whole profile, while every tool call and every browser request
@@ -10966,6 +10976,57 @@ export function registerCadTools(
         const id = typeof body?.id === 'string' ? body.id : '';
         const cancelled = fluidJobs.cancel(id);
         return new Response(JSON.stringify({ cancelled }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+
+    // U14: re-run a CHECK from the panel, on the CURRENT version.
+    //
+    // The run store keeps the answer, not the question, so only the kinds whose
+    // inputs the corpus can rebuild are executed (printability, assembly-check);
+    // stress/motion/physics come back as 409 with the exact missing inputs rather
+    // than a run of invented defaults. `check-rerun.ts` owns that classification.
+    void connection.fetch.register({
+      path: '/api/cad/check/rerun',
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        try {
+          const body = await request.json().catch(() => ({})) as { kind?: string; partId?: string };
+          const project = requestStores(request);
+          const versions = (await listVersions(project.store))
+            .map((entry) => ({ id: entry.id, partId: entry.partId ?? '' }));
+          const runs = (await listRuns(project.runStore))
+            .map((entry) => ({ id: entry.id, kind: entry.kind, sourceVersionIds: entry.sourceVersionIds ?? [] }));
+          const manifest = await projectStoresHasManifest(project);
+          const plans = planCheckRerun({ versions, runs, hasManifest: manifest });
+          const wanted = typeof body.kind === 'string' ? body.kind as CheckKind : null;
+          if (!wanted) {
+            return new Response(JSON.stringify({ plans }), { status: 200, headers: { 'content-type': 'application/json' } });
+          }
+          const plan = plans.find((entry) => entry.kind === wanted);
+          if (!plan) return new Response(`unknown check kind ${wanted}`, { status: 400 });
+          const allowed = canExecute(plan);
+          if (!allowed.ok) {
+            return new Response(JSON.stringify({ refused: true, kind: wanted, needs: allowed.needs, reason: allowed.reason }),
+              { status: 409, headers: { 'content-type': 'application/json' } });
+          }
+          if (plan.mode !== 'direct') return new Response('unreachable', { status: 500 });
+          // Pin the run to the CURRENT version — that is what "re-run on the current
+          // version" means; a run citing an older version would answer a stale question.
+          if (plan.kind === 'printability') {
+            const result = await screenVersionJob({ versionId: plan.currentVersionId }, project) as { runId?: string };
+            return new Response(JSON.stringify({ kind: plan.kind, runId: result?.runId ?? null, versionId: plan.currentVersionId }),
+              { status: 200, headers: { 'content-type': 'application/json' } });
+          }
+          await runAssemblyCheckJob(new URL(request.url).searchParams.get('manifestPath') ?? undefined, project);
+          // The assembly check records its own run; read the newest one back rather
+          // than guessing at a field the report type does not carry.
+          const newest = (await listRuns(project.runStore)).filter((entry) => entry.kind === 'assembly-check').at(-1) ?? null;
+          return new Response(JSON.stringify({ kind: plan.kind, runId: newest?.id ?? null }),
+            { status: 200, headers: { 'content-type': 'application/json' } });
+        } catch (e: any) {
+          return new Response(`check rerun failed: ${String(e?.message ?? e)}`, { status: 500 });
+        }
       },
     });
 

@@ -2575,3 +2575,65 @@ if (q.get('assert') === 'fluid-job') {
     show();
   })();
 }
+
+// ?assert=rerun-check — U14: the panel's re-run row must mirror the HOST's
+// classification: the kinds the corpus can rebuild are clickable, the ones whose
+// inputs were never persisted are disabled WITH the missing list, and clicking a
+// direct kind produces a run id. A panel that offered all five would be inviting
+// the exact default-argument run the host refuses.
+if (q.get('assert') === 'rerun-check') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`check re-run row (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    try {
+      // Open the evidence section on a part page: it holds the re-run row.
+      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
+      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+      const node = await waitFor(() => Boolean(document.querySelector('[data-nav-id]')), 12000);
+      const firstPart = document.querySelector('[data-nav-id^="part:"]') as HTMLElement | null
+        ?? document.querySelector('[data-nav-id]') as HTMLElement | null;
+      lines.push(`${node && firstPart ? 'PASS' : 'FAIL'}  the products navigator lists a part to open`);
+      firstPart?.click();
+      const opened = await waitFor(() => Boolean(document.querySelector('[data-rerun-row]')), 15000);
+      lines.push(`${opened ? 'PASS' : 'FAIL'}  the evidence panel shows a re-run row`);
+      if (!opened) { show(); return; }
+      const buttons = Array.from(document.querySelectorAll('[data-rerun-kind]')) as HTMLElement[];
+      lines.push(`${buttons.length === 5 ? 'PASS' : 'FAIL'}  all five kinds are listed (${buttons.length})`);
+      const direct = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'direct');
+      const blocked = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'needs-args');
+      lines.push(`${direct.length === 2 ? 'PASS' : 'FAIL'}  two are directly re-runnable (${direct.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
+      lines.push(`${blocked.length === 3 ? 'PASS' : 'FAIL'}  three are refused (${blocked.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
+      lines.push(`${blocked.every((b) => (b as HTMLButtonElement).disabled) ? 'PASS' : 'FAIL'}  the refused ones are DISABLED`);
+      const stress = blocked.find((b) => b.getAttribute('data-rerun-kind') === 'stress');
+      const title = stress?.getAttribute('title') ?? '';
+      lines.push(`${title.includes('material') && title.includes('loads') ? 'PASS' : 'FAIL'}  the tooltip names the missing inputs — ${title.slice(0, 80)}`);
+      // Click a direct one: it must post and report the new run.
+      (direct[0] as HTMLButtonElement).click();
+      const reported = await waitFor(() => {
+        const text = document.querySelector('#root')?.textContent ?? '';
+        return text.includes('r099');
+      }, 10000);
+      lines.push(`${reported ? 'PASS' : 'FAIL'}  clicking it reports the new run id`);
+      const stillRow = Boolean(document.querySelector('[data-rerun-row]'));
+      lines.push(`${stillRow ? 'PASS' : 'FAIL'}  the row survives the refresh (it is not a one-shot banner)`);
+    } catch (error) {
+      lines.push(`FAIL  the re-run row threw: ${String((error as Error)?.message ?? error)}`);
+    }
+    show();
+  })();
+}

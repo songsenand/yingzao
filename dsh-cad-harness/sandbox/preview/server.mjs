@@ -126,6 +126,24 @@ async function api(req, url) {
     return json({ ...wire, seq }, 200, { etag });
   }
 
+  // --- check re-run (U14): the host's classification, mocked at the boundary ---
+  // The panel must render what the host says, so the mock reproduces the real shape:
+  // printability/assembly-check direct, the other three needs-args with their list.
+  if (p === '/api/cad/check/rerun') {
+    const body = JSON.parse((await readBody(req)) || '{}');
+    const plans = [
+      { kind: 'printability', mode: 'direct', currentVersionId: 'v083', note: 'screen v083 with the project process profiles' },
+      { kind: 'assembly-check', mode: 'direct', currentVersionId: 'v083', note: 're-check every interface contract' },
+      { kind: 'stress', mode: 'needs-args', needs: ['material', 'loads', 'constraints'], note: 'the run store keeps the answer, not the question' },
+      { kind: 'motion', mode: 'needs-args', needs: ['joints', 'drive'], note: 'the run store keeps the answer, not the question' },
+      { kind: 'physics', mode: 'needs-args', needs: ['joints', 'bodyType'], note: 'the run store keeps the answer, not the question' },
+    ];
+    if (!body.kind) return json({ plans });
+    const plan = plans.find((entry) => entry.kind === body.kind);
+    if (plan && plan.mode === 'direct') return json({ kind: body.kind, runId: 'r099', versionId: plan.currentVersionId });
+    return json({ refused: true, kind: body.kind, needs: plan?.needs ?? [], reason: plan?.note ?? '' }, 409);
+  }
+
   // --- fluid job (N15): progress + cancel, mocked at the HTTP boundary -------
   // A real solve is 161 s; the panel's job is to SHOW progress and to stop when
   // told, so the mock advances the counter per poll and records a cancel.

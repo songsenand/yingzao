@@ -65,6 +65,9 @@ const SCENARIOS = [
   // U11: standard views, axis snap, projection toggle and 复原 — asserted as
   // camera pose facts (direction dot products), not from a picture.
   { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
+  // U14: the re-run row mirrors the host's classification — 2 direct, 3 refused with
+  // their missing inputs, and a click produces a run id.
+  { name: 'rerun-check', query: 'w=760&h=1000&subject=p005&open=证据&assert=rerun-check&debug=0' },
   // N15: the fluid run as a JOB — percentage while it runs, cancel that stops the
   // poll and the busy state (the mock advances 10% per poll at the HTTP boundary).
   { name: 'fluid-job', query: 'w=760&h=1000&subject=p005&open=证据&assert=fluid-job&debug=0' },

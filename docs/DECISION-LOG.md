@@ -7166,3 +7166,36 @@ simulate 5≠6、deliver 4≠6）→ 改后全 PASS；反向验证：手工往 l
 **影响：** `docs/dev/TODO.md` F1/F2 行；`DESIGN.md` §6.6；任何跨 dx 比较到达率的下游
 （`accept-fluid-sign` 已改为同 dx 比较）；后续 F1b（粒子级约束 / 入口回流）仍待做，
 F1 仍是 partial，不进 preview.1 的"已收口"名单。
+
+## 2026-11-27：检查重跑只重跑「语料能重建」的两种，其余如实拒绝
+
+**触发条件：** 第 1 条（U14 是用户定的 preview.1 门禁）+ 第 2 条（对 run 存储做了取证）。
+
+**要解决的问题：** U14 要求"从当前版本重跑制造/应力/装配/运动/物理任一检查"。取证结论：
+`runs/rNNN/run.json` 存的是 **kind + sourceVersionIds + summary subject**，**不存请求参数**；
+`report.json` 只存结果。所以应力（material/loads/constraints）、运动（joints/drive）、物理
+（joints/bodyType）的输入**已经不存在了**。用默认参数重跑会产出一个"回答另一个问题、却归档在
+同名 kind 下"的运行——正是交付审计要拦的那类伪造证据。
+
+**决策内容：**
+1. 新增 `src/host/check-rerun.ts`：把五种检查分类为 `direct`（语料可重建：printability、
+   assembly-check）、`needs-args`（缺输入，附 `needs` 清单与上次 run id）、`unavailable`。
+2. 路由 `POST /api/cad/check/rerun`：不带 kind 返回分类；带 kind 时只执行 `direct`，
+   `needs-args` 一律 **409 + `needs`**，且**不创建任何 run**。`direct` 运行把
+   `sourceVersionIds` 钉在**当前版本**上。
+3. 面板「重跑检查」行：可点的 2 个、禁用的 3 个（tooltip 写明缺什么）。
+
+**理由：** "拒绝"必须是一种可见的结果，而不是按钮消失。把 `needs` 做成机器可读字段，面板和
+agent 都能说清"缺 loads，不是坏了"，也把 0.2.0 的一步（持久化请求参数）指向了明确的做法。
+
+**依据：** 取证于 `examples/microscope5`：22 个 assembly-check / 19 assembly / 15 motion / 13 physics 的
+`run.json` 均无请求字段；`run.json` 键集实测为
+`id,kind,timestamp,title,status,summary,sourceVersionIds,hasGeometry,parts,subject,...`。
+`accept-check-rerun` 26 项：分类（current 按 append 序、per-part 取最新）、拒绝返回 needs、
+**拒绝时 run 数仍为 0**、直接重跑经路由真跑出 r001 且 `sourceVersionIds=["v001"]`、
+一次点击只产生一个 run。`accept-ui rerun-check` 9 项：5 个按钮、2 可点 3 禁用、tooltip 带
+material/loads、点击后报出新 run id、行在刷新后仍在。
+
+**影响：** `docs/dev/TODO.md` U14 行（partial，余项=请求持久化）；`RELEASE-0.2.0.md` 门禁表；
+0.2.0 若要"五个都能一键"，须给 run.json 增加 `request` 字段（additive），并在写运行的地方
+同时写入——这是一次 schema 变更，不在 preview.1 内。
