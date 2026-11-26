@@ -8265,6 +8265,7 @@ export function registerCadTools(
           workspace: cwd,
           dataRoot: store.root,
           radiusHintMm: Math.max(2, Math.min(12, thinnest / 3)),
+          dxMm,
         });
         supports = derived.supports.map((s) => ({ atMm: s.atMm, radiusMm: s.radiusMm, source: s.source }));
         supportWarnings = derived.warnings;

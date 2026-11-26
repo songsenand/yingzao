@@ -74,6 +74,8 @@ export interface DeriveSupportsOptions {
   dataRoot: string;
   /** Local cross-section radius hint from the caller (mm). */
   radiusHintMm: number;
+  /** The scan's voxel size, used to refuse a bore ring thinner than 2 cells. */
+  dxMm: number;
 }
 
 const STRUCTURAL = new Set(['转动副', '固定副', '销孔', '贴合']);
@@ -250,18 +252,46 @@ function insideMesh(point: Vec3, mesh: ParsedMesh): boolean {
   return hits % 2 === 1;
 }
 
-/** Smallest positive distance from the axis line to the local surface in a slab. */
-function minRadialAround(mesh: ParsedMesh, at: Vec3, axis: Vec3, slab: number): number {
+/** Smallest/largest positive distance from the axis line to the local surface in a slab. */
+function radialRange(mesh: ParsedMesh, at: Vec3, axis: Vec3, slab: number): { min: number; max: number } {
   const vp = mesh.vertProperties;
   let min = Number.POSITIVE_INFINITY;
+  let max = 0;
   for (let i = 0; i < vp.length; i += 3) {
     const d: Vec3 = [vp[i]! - at[0], vp[i + 1]! - at[1], vp[i + 2]! - at[2]];
     const along = d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
     if (Math.abs(along) > slab) continue;
     const radial = Math.hypot(d[0] - axis[0] * along, d[1] - axis[1] * along, d[2] - axis[2] * along);
-    if (radial > 0.3 && radial < min) min = radial;
+    if (radial > 0.3) {
+      if (radial < min) min = radial;
+      if (radial > max) max = radial;
+    }
   }
-  return min;
+  return { min, max };
+}
+
+/**
+ * Thickness of the FIRST material shell around the axis (bore wall -> hub OD),
+ * not max-min: the handwheel's rim sits at the same x as its hub, so max-min
+ * would report the whole wheel (18.8 mm) and miss the 0.8 mm hub wall.
+ */
+function firstWallThickness(mesh: ParsedMesh, at: Vec3, axis: Vec3, slab: number): number {
+  const vp = mesh.vertProperties;
+  const radials: number[] = [];
+  for (let i = 0; i < vp.length; i += 3) {
+    const d: Vec3 = [vp[i]! - at[0], vp[i + 1]! - at[1], vp[i + 2]! - at[2]];
+    const along = d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
+    if (Math.abs(along) > slab) continue;
+    const radial = Math.hypot(d[0] - axis[0] * along, d[1] - axis[1] * along, d[2] - axis[2] * along);
+    if (radial > 0.3) radials.push(radial);
+  }
+  if (radials.length === 0) return Number.POSITIVE_INFINITY;
+  radials.sort((a, b) => a - b);
+  const clusters: number[] = [];
+  for (const r of radials) {
+    if (clusters.length === 0 || r - clusters[clusters.length - 1]! > 0.25) clusters.push(r);
+  }
+  return clusters.length >= 2 ? clusters[1]! - clusters[0]! : Number.POSITIVE_INFINITY;
 }
 
 function perpendicular(axis: Vec3): Vec3 {
@@ -291,6 +321,69 @@ function ringPoints(at: Vec3, axis: Vec3, radius: number, n: number): Vec3[] {
       at[2] + radius * (u[2] * Math.cos(a) + v[2] * Math.sin(a)),
     ] as Vec3;
   });
+}
+
+function lineDistance(point: number[], anchorPoint: number[], dir: number[]): number {
+  const u = unit(dir);
+  const v = [point[0]! - anchorPoint[0]!, point[1]! - anchorPoint[1]!, point[2]! - anchorPoint[2]!];
+  const t = dot(v, u);
+  return Math.hypot(v[0] - u[0] * t, v[1] - u[1] * t, v[2] - u[2] * t);
+}
+
+/** A part axis/cylinder whose line passes near the contact point (world coords). */
+function nearbyAxis(part: PartWorld | undefined, atWorld: number[], tolerance: number): { name: string; dir: number[] } | null {
+  if (!part) return null;
+  let best: { name: string; dir: number[] } | null = null;
+  let bestD = tolerance;
+  for (const a of part.datums.axes ?? []) {
+    const d = lineDistance(atWorld, a.point, a.dir);
+    if (d <= bestD) { bestD = d; best = { name: a.name, dir: a.dir }; }
+  }
+  for (const c of part.datums.cylinders ?? []) {
+    const d = lineDistance(atWorld, c.point, c.dir);
+    if (d <= bestD) { bestD = d; best = { name: c.name, dir: c.dir }; }
+  }
+  return best;
+}
+
+/** Ring on the OD (solid) or the bore wall (hollow); a centre sphere would miss both. */
+function contactRing(
+  store: VersionStore,
+  version: string | undefined,
+  atLocal: Vec3,
+  axisLocal: Vec3,
+  radiusHint: number,
+  dxMm: number,
+): { ring: Vec3[]; pointRadius: number; radial: number } {
+  const mesh = meshFor(store, version);
+  let radial = radiusHint;
+  if (mesh) {
+    if (insideMesh(atLocal, mesh)) {
+      radial = radiusHint;
+    } else {
+      const range = radialRange(mesh, atLocal, axisLocal, Math.max(2, 2 * dxMm));
+      if (Number.isFinite(range.min)) {
+        const wall = firstWallThickness(mesh, atLocal, axisLocal, Math.max(2, 2 * dxMm));
+        // A fixed ring on a wall thinner than 2 voxels is a constraint
+        // singularity, not a stress. The handwheel's 0.8 mm hub at dx=2 read
+        // 16,497 MPa this way; refusing is the honest answer.
+        if (Number.isFinite(wall) && wall < 2 * dxMm) {
+          throw new Error(
+            `support seat at [${atLocal.map((v) => v.toFixed(2)).join(', ')}] has a ${wall.toFixed(2)} mm wall ` +
+            `(< 2*dx = ${(2 * dxMm).toFixed(2)} mm); a fixed bore ring would be a constraint artefact, not a stress. ` +
+            'Pass supports explicitly, use a finer dx (<= wall/2), or scan a submodel of the hub.',
+          );
+        }
+        radial = Math.min(radiusHint, range.min + 0.5);
+      }
+    }
+  }
+  radial = Math.max(1.5, radial);
+  return {
+    ring: ringPoints(atLocal, axisLocal, radial, 6),
+    pointRadius: Math.max(1.5, Math.min(3, radial * 0.3)),
+    radial,
+  };
 }
 
 function localToWorld(point: Vec3, transform: ReturnType<typeof flattenParts>[number]['transform']): Vec3 {
@@ -519,8 +612,33 @@ export async function deriveAssemblySupports(store: VersionStore, opts: DeriveSu
     }
     const atLocal = worldToLocal(at, targetFlat?.transform) as Vec3;
     if (!hasAxis) {
-      // A 贴合 seat (handwheel hub back face, wall base) has no axis to ring
-      // around. One patch of the local contact radius is the honest model.
+      // A 贴合 seat (handwheel hub back face, wall base) has no joint axis. If the
+      // part (or its mate) carries an axis/cylinder datum through the contact, use
+      // it: the handwheel's 手轮轴 lets us ring the bore wall instead of clamping a
+      // solid 7.7 mm sphere over the hub, whose patch edge read 757 MPa (an
+      // artefact, but an alarming one).
+      const near = nearbyAxis(parts.get(target.id), at, Math.max(2, opts.radiusHintMm))
+        ?? nearbyAxis(parts.get(other), at, Math.max(2, opts.radiusHintMm));
+      if (near) {
+        const axisLocal = worldDirToLocal(unit(near.dir), targetFlat?.transform) as Vec3;
+        const { ring, pointRadius } = contactRing(store, target.node.version, atLocal, axisLocal, opts.radiusHintMm, opts.dxMm);
+        for (const p of ring) {
+          if (supports.some((s) => distance(s.atMm, p) < pointRadius * 0.8)) continue;
+          supports.push({
+            atMm: p.map((v) => +v.toFixed(3)),
+            atWorldMm: localToWorld(p, targetFlat?.transform).map((v) => +v.toFixed(3)),
+            radiusMm: +pointRadius.toFixed(2),
+            source: `${iface.id} ${iface.type} → ${other} (axis ${near.name})`,
+            interfaceId: iface.id,
+            neighbor: other,
+            neighborDegree: degree.get(other) ?? 0,
+          });
+          if (supports.length >= 12) break;
+        }
+        continue;
+      }
+      // No axis through the seat: one patch of the local contact radius is the
+      // honest model (a broad wall base is the case this is for).
       const patchRadius = Math.max(2, Math.min(8, opts.radiusHintMm));
       if (!supports.some((s) => distance(s.atMm, atLocal) < patchRadius * 0.8)) {
         supports.push({
@@ -536,22 +654,7 @@ export async function deriveAssemblySupports(store: VersionStore, opts: DeriveSu
       continue;
     }
     const axisLocal = worldDirToLocal(axis, targetFlat?.transform) as Vec3;
-    const mesh = meshFor(store, target.node.version);
-    // A solid shaft is constrained at its OD; a hollow spool/handwheel at its bore.
-    // `insideMesh` tells them apart: the axis point of a bore is in air, and the
-    // thinnest surface there is the bore wall. A centre sphere would miss both.
-    let radial = opts.radiusHintMm;
-    if (mesh) {
-      if (insideMesh(atLocal, mesh)) {
-        radial = opts.radiusHintMm;
-      } else {
-        const minR = minRadialAround(mesh, atLocal, axisLocal, Math.max(2, opts.radiusHintMm));
-        if (Number.isFinite(minR)) radial = Math.min(opts.radiusHintMm, minR + 0.5);
-      }
-    }
-    radial = Math.max(1.5, radial);
-    const pointRadius = Math.max(1.5, Math.min(3, radial * 0.3));
-    const ring = ringPoints(atLocal, axisLocal, radial, 6);
+    const { ring, pointRadius } = contactRing(store, target.node.version, atLocal, axisLocal, opts.radiusHintMm, opts.dxMm);
     for (const p of ring) {
       if (supports.some((s) => distance(s.atMm, p) < pointRadius * 0.8)) continue;
       supports.push({
