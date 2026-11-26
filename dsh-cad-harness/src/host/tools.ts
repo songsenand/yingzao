@@ -56,6 +56,7 @@ import { eulerMatrix } from './assembly-check.ts';
 import { runFluid, deriveFluidPreset } from './fluid.ts';
 import { checkManifestFeatures } from './features.ts';
 import { affectedChecks, auditDelivery } from './delivery-audit.ts';
+import { deliveryAuditValue } from './deliver-audit-value.ts';
 import { selectAttachedViews } from './render-attachments.ts';
 import { recordVisualReview, REQUIRED_REVIEW_VIEWS, type VisualReviewImage } from './visual-review.ts';
 import { asJudgement } from '../shared/judgement.ts';
@@ -3596,7 +3597,8 @@ export function registerCadTools(
       sourceVersionIds,
       status: report.overallStatus === 'pass' ? 'pass' : 'check',
       summary: `到达率 ${m.outletArrivalRatio ?? '—'} · 穿透 ${m.penetrationCount ?? '—'} · 粒子 ${m.particleCount0 ?? '—'}`
-        + ((m.seedStats?.stacksPerSeed ?? 1) > 1.5 ? ` · ⚠ 粒子堆叠 ×${m.seedStats!.stacksPerSeed}` : ''),
+        + ((m.seedStats?.stacksPerSeed ?? 1) > 1.5 ? ` · ⚠ 粒子堆叠 ×${m.seedStats!.stacksPerSeed}` : '')
+        + ((m.outsideSnapshotMax ?? 0) > 0 ? ` · ⚠ 管外粒子 ${m.outsideSnapshotMax}` : ''),
       // Same geometry + same numerical question (dx/steps/inlet) is a re-run of
       // the same run, not a new experiment: committing it supersedes the older
       // one instead of leaving two equally-current fluid runs in the corpus.
@@ -3919,6 +3921,8 @@ export function registerCadTools(
     name: 'simulate_fluid',
     description:
       'MPM (CPU) flow through a pipe or part cavity: arrival, section velocities, conservation, snapshots. The solid boundary stays fixed for the whole run. ' +
+      'Seeds are restricted to the bore (a bbox-corner seed box is rejected, and the count is reported), and `metrics.outsideSnapshotMax` reports captured fluid that is outside the bore. ' +
+      'A wall thinner than ~2 cells leaks by resolution — the run says so instead of hiding it. ' +
       'Pass pipeScad for inline geometry or versionId for a saved version; versionId records provenance and wins when both are given.',
     parameters: {
       pipeScad: {
@@ -8386,30 +8390,7 @@ export function registerCadTools(
         visualReview?: 'required' | 'off';
       };
       const project = await allStores(exec);
-      const report = await auditDelivery(project, {
-        manifestPath: a.manifestPath,
-        claims: a.claims,
-        scanPaths: a.scanPaths,
-        exempt: a.exempt,
-        visualReview: a.visualReview,
-      });
-      const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
-      const warn = report.findings.filter((f) => f.severity === 'warn').length;
-      const info = report.findings.filter((f) => f.severity === 'info').length;
-      const currentFailing = report.runs.failing.filter((r) => r.current).length;
-      const value = {
-        ...report,
-        // The single key management and the delivery audit read (DESIGN §25.7). `verdict` is
-        // kept because the panel and the skills display it; `judgement` is the canonical one.
-        judgement: asJudgement(report.verdict),
-        // Lead with the verdict, not with "0 blocked": the latter is true but reads as
-        // green while `difficult` is the actual answer.
-        summary: `${report.verdict.toUpperCase()} · ${blocked} blocked · ${warn} warn · ${info} info · ` +
-          `${currentFailing} current failing · ${report.versions.currentUncited.length} current uncited · ` +
-          `${report.versions.total} versions / ${report.parts.total} parts / ${report.runs.total} runs · ` +
-          `stale runs ${report.runs.stale.length}` +
-          (report.unregistered.files.length ? ` · unregistered files ${report.unregistered.files.length}` : ''),
-      };
+      const value = await deliveryAuditValue(project, a);
       // Persist the audit as the deliver pearl's evidence. The observer reads this
       // exact artifact; a report that only lives in the tool reply is unobserved.
       await persistDeliveryAudit(project, value, a.claims ?? []);
@@ -10575,6 +10556,30 @@ export function registerCadTools(
           });
         } catch {
           return new Response('no assembly manifest yet', { status: 404 });
+        }
+      },
+    });
+
+    // The panel's audit view (U19): the SAME judgement the delivery_audit tool
+    // returns, served read-only. A panel that recomputed the audit from the index
+    // would be a second implementation, and the two would disagree the first time
+    // one of them learned a new finding.
+    void connection.fetch.register({
+      path: '/api/cad/deliver/audit',
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async (request: Request) => {
+        const project = requestStores(request);
+        try {
+          // No claims are passed: a claim is a CALLER's declaration, and the panel
+          // has none. It sees the audit of the corpus as it stands.
+          const value = await deliveryAuditValue(project, {});
+          return new Response(JSON.stringify(value, null, 2), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        } catch (error) {
+          return new Response(`audit failed: ${String((error as Error)?.message ?? error)}`, { status: 500 });
         }
       },
     });

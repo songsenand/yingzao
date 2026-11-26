@@ -1,4 +1,5 @@
 /** React panel: product browser (versions + runs) with a preview-first Three.js viewport. */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { browseCategories } from './browse';
 import { downloadExport } from './export-gate';
@@ -16,6 +17,7 @@ import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, PartsPreview, R
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { downloadName } from '../shared/download-name';
 import { bomFileName, bomGaps, buildBomCsv } from './bom-csv';
+import { auditGaps, resolveAuditJump, type AuditValue } from './audit-gaps';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
@@ -913,6 +915,14 @@ export function CadPanel(): React.ReactElement {
   // winder has 12 assembly-CHECK runs and zero geometry runs) still has a
   // model preview. Explode lives inside PartsPreview.
   const [machinePreview, setMachinePreview] = useState(false);
+  /**
+   * U19: the delivery audit, fetched from the SAME host judgement the tool
+   * returns. The panel does not recompute it — a second implementation would
+   * disagree with `cad_deliver audit` the first time either learned a finding.
+   */
+  const [audit, setAudit] = useState<AuditValue | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [fileSubject, setFileSubject] = useState<string>('');
   const [fileMeta, setFileMeta] = useState<FileMeta | null>(null);
   // The 未登记 import form (inline, not a modal): the file is already chosen, so
@@ -3161,6 +3171,34 @@ export function CadPanel(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [machinePreview]);
 
+  // i18n keys are a literal union; `audit-gaps.ts` takes plain strings so it can be
+  // tested without the dictionary. This adapter is the one place the typing narrows.
+  const trKey = tr as unknown as (key: string, vars?: Record<string, string | number>) => string;
+
+  const refreshAudit = async () => {
+    try {
+      const res = await fetch(withProject('/api/cad/deliver/audit'));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAudit(await res.json() as AuditValue);
+      setAuditError(null);
+    } catch (error) {
+      setAuditError(String((error as Error)?.message ?? error));
+    }
+  };
+
+  /** A row's target, resolved against the corpus (a stale audit must not mislead). */
+  const jumpToAuditTarget = (jump: string) => {
+    const target = resolveAuditJump(jump, allRuns, parts);
+    if (!target) return;
+    if (target.kind === 'run') {
+      const run = allRuns.find((r) => r.id === target.runId);
+      if (run) { navPickRun(run); setAuditOpen(false); }
+      return;
+    }
+    navPickVersion(target.partId, target.versionId);
+    setAuditOpen(false);
+  };
+
   /**
    * U22: the BOM as a spreadsheet row set. The gaps are stated next to the button
    * because "12 of 16 rows declare a quantity" is the difference between a quote
@@ -3191,6 +3229,13 @@ export function CadPanel(): React.ReactElement {
     React.createElement('div', { style: S.hint },
       tr('ui.machine.note')),
     React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      machine && React.createElement('button', {
+        type: 'button',
+        onClick: () => { setAuditOpen(true); void refreshAudit(); },
+        style: S.smallBtn,
+        title: tr('ui.audit.openTitle'),
+        'data-audit-open': '1',
+      }, t('ui.audit.open')),
       machine && React.createElement('button', {
         type: 'button',
         onClick: exportBom,
@@ -4185,6 +4230,81 @@ export function CadPanel(): React.ReactElement {
         machineUnpinned > 0 && React.createElement('div', {
           style: { padding: '4px 10px', fontSize: 10, color: T.warn, borderTop: `1px solid ${T.divider}` },
         }, tr('ui.machine.previewUnpinned', { count: machineUnpinned })),
+      ),
+    ),
+
+    // ── U19: delivery audit (audit + "what has not been run") ────────────────
+    auditOpen && React.createElement('div', {
+      'data-audit-overlay': '1',
+      style: {
+        position: 'fixed', inset: 0, background: T.scrimStrong, zIndex: 72,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
+      },
+      onClick: (e: any) => { if (e.target === e.currentTarget) setAuditOpen(false); },
+    },
+      React.createElement('div', {
+        style: {
+          width: 'min(860px, 94vw)', height: 'min(720px, 88vh)', background: T.plate,
+          borderRadius: 10, boxShadow: T.shadowXl, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        },
+      },
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: `1px solid ${T.divider}` },
+        },
+          React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink, flex: 'none' } }, t('ui.audit.title')),
+          audit && React.createElement('span', {
+            'data-audit-verdict': audit.verdict,
+            style: {
+              fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999,
+              color: audit.verdict === 'excluded' ? T.dangerInk : audit.verdict === 'difficult' ? T.warnInk : T.infoInk,
+              background: audit.verdict === 'excluded' ? T.dangerSoft : audit.verdict === 'difficult' ? T.warnSoft : T.accentSoft,
+            },
+          }, audit.judgement ?? audit.verdict),
+          React.createElement('span', { style: { flex: 1, minWidth: 0, fontSize: 11, color: T.soft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            audit?.summary ?? (auditError ? tr('ui.audit.error', { error: auditError }) : tr('ui.audit.loading'))),
+          React.createElement('button', {
+            type: 'button', onClick: () => setAuditOpen(false), style: S.smallBtn, title: tr('ui.audit.close'),
+            'data-audit-close': '1',
+          }, '✕'),
+        ),
+        React.createElement('div', { style: { flex: 1, overflowY: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 2 } },
+          audit && React.createElement('div', { style: { fontSize: 10, fontWeight: 700, color: T.muted, marginTop: 2 } }, t('ui.audit.gaps')),
+          ...auditGaps(audit, trKey).map((row, index) => React.createElement('div', {
+            key: `gap-${index}`,
+            'data-audit-row': row.jump ?? '',
+            'data-audit-tone': row.tone,
+            onClick: row.jump ? () => jumpToAuditTarget(row.jump!) : undefined,
+            style: {
+              display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 4px', borderRadius: 4,
+              cursor: row.jump ? 'pointer' : 'default', fontSize: 11, lineHeight: '16px',
+              color: T.ink, background: row.tone === 'blocked' ? T.dangerSoft : row.tone === 'warn' ? T.warnSoft : 'transparent',
+            },
+          },
+            React.createElement('span', {
+              style: { flex: 'none', fontWeight: 700, color: row.tone === 'blocked' ? T.dangerInk : row.tone === 'warn' ? T.warnInk : T.soft },
+            }, row.tone === 'blocked' ? tr('ui.audit.blocked') : row.tone === 'warn' ? tr('ui.audit.warn') : tr('ui.audit.info')),
+            React.createElement('span', { style: { flex: 1, minWidth: 0 } }, row.text),
+            row.jump && React.createElement('span', { style: { flex: 'none', color: T.accent, fontSize: 10 } }, tr('ui.audit.jump')),
+          )),
+          audit && React.createElement('div', { style: { fontSize: 10, fontWeight: 700, color: T.muted, marginTop: 8 } }, t('ui.audit.findings')),
+          ...(audit?.findings ?? []).map((finding, index) => React.createElement('div', {
+            key: `finding-${index}`,
+            'data-audit-finding': finding.code,
+            'data-audit-tone': finding.severity,
+            style: {
+              display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 4px', borderRadius: 4,
+              fontSize: 11, lineHeight: '16px',
+              background: finding.severity === 'blocked' ? T.dangerSoft : finding.severity === 'warn' ? T.warnSoft : 'transparent',
+            },
+          },
+            React.createElement('span', {
+              style: { flex: 'none', fontWeight: 700, color: finding.severity === 'blocked' ? T.dangerInk : finding.severity === 'warn' ? T.warnInk : T.soft },
+            }, finding.severity),
+            React.createElement('span', { style: { flex: 'none', fontFamily: 'ui-monospace, monospace', color: T.soft } }, finding.code),
+            React.createElement('span', { style: { flex: 1, minWidth: 0 } }, finding.detail),
+          )),
+          audit && auditGaps(audit, trKey).length === 0 && React.createElement('div', { style: { fontSize: 11, color: T.soft, padding: 4 } }, tr('ui.audit.nothingPending')),
+        ),
       ),
     ),
 

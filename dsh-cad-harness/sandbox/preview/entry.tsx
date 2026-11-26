@@ -2333,3 +2333,70 @@ if (q.get('assert') === 'bom-csv') {
     show();
   })();
 }
+
+// ?assert=audit-view — U19: the panel must ANSWER "what is blocked / what has not
+// been run", from the host's own audit (not a second judgement), and a row must
+// lead to the run it names. The assertion reads the overlay's rows and follows one.
+if (q.get('assert') === 'audit-view') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`delivery audit view (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    try {
+      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
+      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+      await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
+      (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
+      const button = await waitFor(() => Boolean(document.querySelector('[data-audit-open]')), 15000);
+      lines.push(`${button ? 'PASS' : 'FAIL'}  the machine page offers the audit view`);
+      if (!button) { show(); return; }
+      const crumbBefore = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+      (document.querySelector('[data-audit-open]') as HTMLElement).click();
+      const opened = await waitFor(() => Boolean(document.querySelector('[data-audit-overlay] [data-audit-verdict]')), 15000);
+      lines.push(`${opened ? 'PASS' : 'FAIL'}  the overlay opens with a verdict`);
+      if (!opened) { show(); return; }
+      const verdict = document.querySelector('[data-audit-verdict]')?.getAttribute('data-audit-verdict');
+      lines.push(`INFO  verdict: ${verdict}`);
+      lines.push(`${['excluded', 'difficult', 'not-excluded'].includes(String(verdict)) ? 'PASS' : 'FAIL'}  the verdict is the canonical vocabulary`);
+      const rows = Array.from(document.querySelectorAll('[data-audit-row]')) as HTMLElement[];
+      const findings = Array.from(document.querySelectorAll('[data-audit-finding]')) as HTMLElement[];
+      lines.push(`${rows.length + findings.length > 0 ? 'PASS' : 'FAIL'}  it lists ${rows.length} pending step(s) and ${findings.length} finding(s)`);
+      lines.push(`INFO  first pending: ${(rows[0]?.textContent ?? '(none)').replace(/\s+/g, ' ').slice(0, 100)}`);
+      lines.push(`INFO  first finding: ${(findings[0]?.textContent ?? '(none)').replace(/\s+/g, ' ').slice(0, 100)}`);
+      const jumpRow = rows.find((row) => (row.getAttribute('data-audit-row') ?? '').startsWith('run:'));
+      if (jumpRow) {
+        const target = jumpRow.getAttribute('data-audit-row')!.slice(4);
+        jumpRow.click();
+        const jumped = await waitFor(() => !document.querySelector('[data-audit-overlay]')
+          && /r0\d+|r\d+/.test((document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '')), 8000);
+        const crumbAfter = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+        lines.push(`${jumped ? 'PASS' : 'FAIL'}  clicking a run row opens ${target} (${crumbBefore} → ${crumbAfter})`);
+      } else {
+        lines.push('PASS  no jumpable run row in this corpus (nothing to follow)');
+      }
+      // The close control still works after following a row.
+      (document.querySelector('[data-audit-open]') as HTMLElement | null)?.click();
+      await waitFor(() => Boolean(document.querySelector('[data-audit-overlay]')), 8000);
+      (document.querySelector('[data-audit-close]') as HTMLElement | null)?.click();
+      const closed = await waitFor(() => !document.querySelector('[data-audit-overlay]'), 5000);
+      lines.push(`${closed ? 'PASS' : 'FAIL'}  ✕ closes the audit view`);
+    } catch (error) {
+      lines.push(`FAIL  the audit view threw: ${String((error as Error)?.message ?? error)}`);
+    }
+    show();
+  })();
+}

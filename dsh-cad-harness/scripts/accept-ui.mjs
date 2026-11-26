@@ -65,6 +65,9 @@ const SCENARIOS = [
   // U11: standard views, axis snap, projection toggle and 复原 — asserted as
   // camera pose facts (direction dot products), not from a picture.
   { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
+  // U19: the audit view answers "what is blocked / what has not been run" from the
+  // host's own judgement, and a row leads to the run it names.
+  { name: 'audit-view', query: 'w=860&h=1000&assert=audit-view&debug=0' },
   // U22: the BOM download is intercepted and read as bytes — a toast that says
   // "exported" is not evidence that a workshop could open the file.
   { name: 'bom-csv', query: 'w=760&h=1000&assert=bom-csv&debug=0' },

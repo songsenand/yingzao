@@ -124,6 +124,20 @@ async function api(req, url) {
     return json({ ...wire, seq }, 200, { etag });
   }
 
+  // --- deliver audit (U19): the SAME value the tool returns -----------------
+  // Imported, not mocked: the panel's audit view must be the tool's judgement. A
+  // hand-written mock here would let the sandbox pass while the host disagrees.
+  if (p === '/api/cad/deliver/audit') {
+    try {
+      const { projectStores } = await import('../../src/host/project.ts');
+      const { deliveryAuditValue } = await import('../../src/host/deliver-audit-value.ts');
+      const value = await deliveryAuditValue(projectStores(DATA), {});
+      return json(value);
+    } catch (error) {
+      return json({ error: String(error?.message ?? error) }, 500);
+    }
+  }
+
   // --- assert results (machine-readable, for accept-ui.mjs) ------------------
   if (p === '/api/cad/assert-result') {
     if (req.method === 'POST') {
