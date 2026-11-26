@@ -441,6 +441,16 @@ interface PhysicsResult {
 - 单位制：毫米/s，重力 `[0,0,-9810]`；**dt 固定 4ms**——不暴露配置，但诊断开关
   `CAD_FLUID_DT` 可覆盖（§32.4，只用于定位"离散化 vs 舍入"）
 - 粒子数：按 4-8 粒/格 × 流体域体积自动计算（典型 5 万-30 万），显式覆盖上限 1,000,000；**精度旋钮是 dx 不是粒子数**（基准见 docs/archive/M4-PREP.md 附录 A）
+- **薄壁政策（F1，2026-11-27）**：`deriveFluidPreset` 先用 `measureThinWallMm`（SDF 中值脊线，×2）
+  量最薄壁，再决定 dx——壁厚 < 2 格时**自动减半细化**，网格超过 4M 格则**拒绝并说明**
+  （`wallPolicy.action = ok|refined|refused`，写进 preset、`report.json` 与 run summary）。
+  调用方**显式给 dx** 时不细化，只在报告里标注"壁厚不足 2 格，穿透数描述的是网格而非零件"
+- **流轴由内腔决定（F2，2026-11-27）**：`flowAxisFromVoid` 取"两条轴有壁、第三条敞开"的连通域，
+  开放轴即流向；无内腔回退包围盒并在 `axisSource` 标明。Ø44×30 这类短粗件不再被驱动着横穿管壁
+- **到达率不可跨 dx 比较（F1，2026-11-27，实测）**：Ø22/Ø14×40、100mm/s、600 步下
+  dx 4/2/1 的到达率是 0.90 / 0.82 / 0.32；dx=1 加 4 倍步数只回到 0.40。因此
+  **到达率只在同一 dx 内比较**，跨 dx 的差异主要是离散化；`accept-fluid-convergence` 把这个
+  结论写成断言（谁要是让它"收敛"了，测试会红并要求解释）
 - 边界：粒子-壁面 = SDF 投影回推（近壁掩膜 O(1) 预筛）；自由滑移 = G2P 排除固体格 + 流体权重重归一化（阈值 0.5）
 - 出口：escape 移除 + 守恒审计（到达率 = escaped/count0 可断言）；recycle 环绕续流为另一模式
 - 快照与数据：8 帧 PNG 进会话 + `frames.json` + 每帧 `.bin`（Float32 pos[3N]+speed[N]，16B/粒子）+ `wall.stl`；路由 `GET /api/cad/fluid[/manifest|/frame?i=|/wall]`

@@ -43,7 +43,10 @@ const arrivals = [];
 for (const od of [34, 60, 100]) {
   const wall = (od - 30) / 2;
   const stl = (await compileStlOnly(tube(od))).stl;
-  const p = await deriveFluidPreset(stl, 2, 100);
+  // dx is PINNED here: this suite studies one variable (wall thickness vs arrival),
+  // so the thin-wall policy must not move the grid under it. The policy's own
+  // behaviour is asserted in `accept-fluid-wall-policy`.
+  const p = await deriveFluidPreset(stl, 2, 100, { explicitDxMm: true });
   const { report, sdf } = await runFluid({
     pipeStl: stl, gridCells: p.gridCells, gridOriginMm: p.gridOriginMm, dxMm: p.dxMm,
     fluidRegionMm: p.fluidRegionMm,
@@ -91,7 +94,10 @@ for (const od of [34, 60, 100]) {
 //    逃逸**比例**不变（副本同命），但报告看起来比实际采样密得多。
 {
   const stl = (await compileStlOnly(tube(44, 30, 30))).stl;
-  const p = await deriveFluidPreset(stl, 2, 100);
+  // dx is PINNED here: this suite studies one variable (wall thickness vs arrival),
+  // so the thin-wall policy must not move the grid under it. The policy's own
+  // behaviour is asserted in `accept-fluid-wall-policy`.
+  const p = await deriveFluidPreset(stl, 2, 100, { explicitDxMm: true });
   const run = (particleCount) => runFluid({
     pipeStl: stl, gridCells: p.gridCells, gridOriginMm: p.gridOriginMm, dxMm: p.dxMm,
     fluidRegionMm: p.fluidRegionMm,

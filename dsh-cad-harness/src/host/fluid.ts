@@ -902,6 +902,158 @@ function divergedOf(world: MpmWorld): boolean {
   return world.nonFinite > 0 || !Number.isFinite(world.activeN);
 }
 
+// ---------- thin-wall policy (F1) ----------
+
+/**
+ * The thinnest wall the solver grid can see, in mm.
+ *
+ * A wall thinner than two cells has no interior cell: every cell in it is a
+ * surface cell, so the SDF never reaches its half-thickness and the MPM never
+ * "sees" a wall to collide with. The measured symptom before this existed was a
+ * tube whose 1.2 mm wall at dx = 2 produced a penetration count in the hundreds
+ * and an arrival ratio that looked fine anyway.
+ *
+ * Method: walk the SOLID cells and keep the local maxima of the SDF (the medial
+ * ridge). At a ridge point the SDF is half the thickness, so `2 * sdf` is the wall
+ * there — the standard inscribed-sphere estimate.
+ *
+ * The MEDIAN of those ridge thicknesses, not the minimum: individual ridge cells
+ * sit at corners and end faces, where the distance to the nearest surface is the
+ * EDGE (1-2 cells), not the wall. The first version took the minimum and measured
+ * a 2 mm wall as 1.0 mm, which made the policy halve dx until it refused a part it
+ * could actually resolve (caught by `accept-fluid-sign`, which uses Ø34/Ø30).
+ * Measured on that tube: min 1.11/median 1.68 at dx 2, min 1.38/median 1.69 at
+ * dx 1 — the median is stable across dx, the minimum is not.
+ */
+/**
+ * Wall thickness as a sentence: a ridge value under one cell is the grid's floor,
+ * not the part's wall, and must not be quoted as if it were a measurement.
+ */
+export function describeWallMm(wallMm: number | null, dxMm: number): string {
+  if (wallMm === null) return 'no resolvable wall (no solid cells)';
+  if (wallMm < dxMm) return `wall under 2 cells at dx ${dxMm} mm (thickness < ${(2 * dxMm).toFixed(2)} mm)`;
+  return `thinnest wall ${wallMm.toFixed(2)} mm`;
+}
+
+export function measureThinWallMm(sdf: SdfField): number | null {
+  const [nx, ny, nz] = sdf.cells;
+  const cellAt = (x: number, y: number, z: number) => (x * ny + y) * nz + z;
+  const ridgeThicknesses: number[] = [];
+  for (let x = 1; x < nx - 1; x++) {
+    for (let y = 1; y < ny - 1; y++) {
+      for (let z = 1; z < nz - 1; z++) {
+        const i = cellAt(x, y, z);
+        if (sdf.solidMask[i] !== 1) continue;
+        // SIGN: this SDF is NEGATIVE inside metal (min -3.47 measured on a Ø44/Ø30
+        // tube at dx 2), not positive. Depth into the wall is `-sdf`, and the ridge
+        // is the most negative cell — the first version of this function tested
+        // `> 0` and quietly found no solid at all on every part.
+        const depth = -sdf.sdf[i]!;
+        if (depth <= 0) continue;
+        let isRidge = true;
+        for (let d = 0; d < 3 && isRidge; d++) {
+          for (const step of [-1, 1]) {
+            const p = [x, y, z];
+            p[d] += step;
+            if (-sdf.sdf[cellAt(p[0]!, p[1]!, p[2]!)]! > depth) { isRidge = false; break; }
+          }
+        }
+        if (!isRidge) continue;
+        ridgeThicknesses.push(2 * depth);
+      }
+    }
+  }
+  if (ridgeThicknesses.length === 0) return null;
+  ridgeThicknesses.sort((a, b) => a - b);
+  return ridgeThicknesses[Math.floor(ridgeThicknesses.length / 2)]!;
+}
+
+export interface WallPolicy {
+  /** The thinnest wall measured, mm (null when the part has no solid). */
+  measuredMm: number | null;
+  /** The dx the run will actually use. */
+  dxMm: number;
+  /** The dx the caller asked for. */
+  requestedDxMm: number;
+  /** Grid cells at the chosen dx. */
+  cells: number;
+  /** `ok` = wall resolvable; `refined` = dx reduced to resolve it; `refused` = cannot. */
+  action: 'ok' | 'refined' | 'refused';
+  /** Why, in one sentence, for the report. */
+  reason: string;
+}
+
+/** A grid above this many cells is not a fluid run, it is a memory test. */
+const MAX_GRID_CELLS = 4_000_000;
+/** Two cells per wall: one to be a surface, one to be an interior. */
+const MIN_CELLS_PER_WALL = 2;
+
+/**
+ * Decide the dx for a part with thin walls: refine while it is affordable, refuse
+ * with a reason when it is not.
+ *
+ * REFUSING IS A RESULT. A run at a dx that cannot see the wall produces numbers
+ * that look like physics and are not; the caller needs to hear "your 1.2 mm wall
+ * needs dx ≤ 0.6 and that is a 27M-cell grid" rather than a plausible 0.6 arrival
+ * ratio. Refining silently would also hide the cost from the person paying it.
+ */
+export function chooseDxForWalls(
+  pipeStl: Uint8Array,
+  requestedDxMm: number,
+  buildSdf: (dxMm: number) => Promise<SdfField>,
+): Promise<{ policy: WallPolicy; sdf: SdfField | null }> {
+  return (async () => {
+    const tried: { dxMm: number; cells: number; wall: number | null }[] = [];
+    let dxMm = requestedDxMm;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      const { cells } = deriveGridFromStl(pipeStl, dxMm);
+      const cellCount = cells[0] * cells[1] * cells[2];
+      const sdf = await buildSdf(dxMm);
+      let wall: number | null = null;
+      try { wall = measureThinWallMm(sdf); } catch { wall = null; }
+      tried.push({ dxMm, cells: cellCount, wall });
+      // Half-cell tolerance: the ridge estimate cannot resolve better than that, so
+      // a wall sitting exactly on the 2-cell line must not flip on rounding.
+      if (wall === null || wall >= MIN_CELLS_PER_WALL * dxMm - 0.5 * dxMm) {
+        return { sdf, policy: {
+          measuredMm: wall,
+          dxMm,
+          requestedDxMm,
+          cells: cellCount,
+          action: attempt === 0 ? 'ok' : 'refined',
+          reason: wall === null
+            ? 'no solid found — nothing thin to resolve'
+            : `${describeWallMm(wall, dxMm)} spans ${(wall / dxMm).toFixed(1)} cells at dx ${dxMm} mm`,
+        } };
+      }
+      const nextDx = dxMm / 2;
+      const nextCells = deriveGridFromStl(pipeStl, nextDx).cells;
+      const nextCount = nextCells[0] * nextCells[1] * nextCells[2];
+      if (nextCount > MAX_GRID_CELLS) {
+        return { sdf, policy: {
+          measuredMm: wall,
+          dxMm,
+          requestedDxMm,
+          cells: cellCount,
+          action: 'refused',
+          reason: `${describeWallMm(wall, dxMm)} needs dx ${nextDx.toFixed(2)} mm, which is a ${nextCount.toLocaleString('en-US')}-cell grid`
+            + ` (limit ${MAX_GRID_CELLS.toLocaleString('en-US')}); thicken the wall or raise the limit deliberately`,
+        } };
+      }
+      dxMm = nextDx;
+    }
+    const last = tried[tried.length - 1]!;
+    return { sdf: null, policy: {
+      measuredMm: last.wall,
+      dxMm: last.dxMm,
+      requestedDxMm,
+      cells: last.cells,
+      action: 'refused',
+      reason: `${describeWallMm(last.wall, last.dxMm)} is still under ${MIN_CELLS_PER_WALL} cells at dx ${last.dxMm} mm`,
+    } };
+  })();
+}
+
 // ---------- preset derivation (tool + panel button + manual route) ----------
 
 /**
@@ -1009,6 +1161,8 @@ export interface FluidPreset {
   voidExtentMm: [number, number, number] | null;
   /** The bbox spans that the old rule used — kept so a report can show both. */
   bboxSpansMm: [number, number, number];
+  /** F1: what the thin-wall policy decided about dx (ok / refined / refused). */
+  wallPolicy: WallPolicy;
   fluidRegionMm: { min: [number, number, number]; max: [number, number, number] };
   inletBandMm: [number, number];
   inletVelocityMmPerSec: number;
@@ -1025,21 +1179,77 @@ export interface FluidPreset {
  * longest extent) or `bbox` (no cavity found → the old bounding-box rule, which
  * is the only honest fallback for a part you cannot flow through anyway).
  */
-export async function deriveFluidPreset(pipeStl: Uint8Array, dxMm = 2, inletVelocityMmPerSec = 100): Promise<FluidPreset> {
+export async function deriveFluidPreset(
+  pipeStl: Uint8Array,
+  dxMm = 2,
+  inletVelocityMmPerSec = 100,
+  options: { explicitDxMm?: boolean } = {},
+): Promise<FluidPreset> {
   const parsed = parseBinaryStl(pipeStl);
   const bb = boundingBox(parsed);
   const spans = [bb.max[0]! - bb.min[0]!, bb.max[1]! - bb.min[1]!, bb.max[2]! - bb.min[2]!];
   const bboxAxis = (spans[0]! >= spans[1]! && spans[0]! >= spans[2]! ? 0 : spans[1]! >= spans[2]! ? 1 : 2) as 0 | 1 | 2;
+  // F1: the walls decide the resolution. A dx that cannot see a thin wall produces
+  // numbers that look like physics; the policy refines when it can and refuses with
+  // a reason when the grid would explode.
+  let wallPolicy: WallPolicy = {
+    measuredMm: null, dxMm, requestedDxMm: dxMm, cells: 0, action: 'ok', reason: 'policy not run',
+  };
+  let sdf: SdfField | null = null;
+  try {
+    const decided = options.explicitDxMm
+      // An explicit dx is a decision, not a default: measure the wall for the
+      // report, but do not silently replace the resolution the caller asked for.
+      ? await (async () => {
+        const grid = deriveGridFromStl(pipeStl, dxMm);
+        const field = await buildSdfFromStl(pipeStl, { cells: grid.cells, dxMm, originMm: grid.originMm });
+        const wall = measureThinWallMm(field);
+        const spans = wall === null ? null : wall / dxMm;
+        return {
+          sdf: field,
+          policy: {
+            measuredMm: wall,
+            dxMm,
+            requestedDxMm: dxMm,
+            cells: grid.cells[0] * grid.cells[1] * grid.cells[2],
+            action: 'ok' as const,
+            reason: wall === null
+              ? 'no solid found — nothing thin to resolve'
+              : `explicit dx ${dxMm} mm: ${describeWallMm(wall, dxMm)} spans ${spans!.toFixed(1)} cells`
+                + (spans! < MIN_CELLS_PER_WALL - 0.5
+                  ? ' — UNDER 2 CELLS: penetration counts describe the grid, not the part'
+                  : ''),
+          },
+        };
+      })()
+      : await chooseDxForWalls(pipeStl, dxMm, (candidate) => {
+        const grid = deriveGridFromStl(pipeStl, candidate);
+        return buildSdfFromStl(pipeStl, { cells: grid.cells, dxMm: candidate, originMm: grid.originMm });
+      });
+
+    wallPolicy = decided.policy;
+    sdf = decided.sdf;
+    dxMm = wallPolicy.dxMm;
+  } catch (error) {
+    wallPolicy = {
+      measuredMm: null, dxMm, requestedDxMm: dxMm, cells: 0, action: 'ok',
+      reason: `wall policy skipped: ${String((error as Error)?.message ?? error)}`,
+    };
+  }
+  if (wallPolicy.action === 'refused') {
+    // Refusing here is the point: a run at this dx would report a penetration count
+    // and an arrival ratio that describe the grid, not the part.
+    throw new Error(`fluid: thin-wall policy refused — ${wallPolicy.reason}`);
+  }
   const { cells, originMm } = deriveGridFromStl(pipeStl, dxMm);
-  // The cavity decides, when there is one. Building the SDF costs one voxelisation
-  // — the same one `runFluid` does next anyway — and it is what stops a stubby tube
-  // from being driven across its own wall.
+
+  // The cavity decides the axis, when there is one (F2).
   let axis = bboxAxis;
   let axisSource: 'void' | 'bbox' = 'bbox';
   let voidExtentMm: [number, number, number] | null = null;
   try {
-    const sdf = await buildSdfFromStl(pipeStl, { cells, dxMm, originMm });
-    const fromVoid = flowAxisFromVoid(sdf);
+    const field = sdf ?? await buildSdfFromStl(pipeStl, { cells, dxMm, originMm });
+    const fromVoid = flowAxisFromVoid(field);
     if (fromVoid) { axis = fromVoid.axis; axisSource = 'void'; voidExtentMm = fromVoid.extentMm; }
   } catch { /* a mesh that cannot be voxelised falls back to the bbox rule */ }
 
@@ -1072,6 +1282,7 @@ export async function deriveFluidPreset(pipeStl: Uint8Array, dxMm = 2, inletVelo
     axisSource,
     voidExtentMm,
     bboxSpansMm: [spans[0]!, spans[1]!, spans[2]!],
+    wallPolicy,
     fluidRegionMm: region,
     inletBandMm: bandMm,
     inletVelocityMmPerSec,

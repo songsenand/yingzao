@@ -3531,7 +3531,11 @@ export function registerCadTools(
     const sourceVersionIds = a.versionId ? [a.versionId] : [];
     const geometryHash = createHash('sha256').update(pipeStl).digest('hex').slice(0, 12);
 
-    const preset = await deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100);
+    const preset = await deriveFluidPreset(pipeStl, a.dxMm ?? 2, a.inletVelocityMmPerSec ?? 100, {
+      // An explicit dx is the caller's decision: the policy then measures and warns,
+      // it does not quietly substitute a finer (much more expensive) grid.
+      explicitDxMm: a.dxMm !== undefined,
+    });
     const steps = a.steps ?? preset.steps;
     // Report the total BEFORE the solve starts: a bar that only learns its range at
     // the end is a spinner with extra steps.
@@ -3597,7 +3601,15 @@ export function registerCadTools(
 
     const { snapshots, ...reportSlim } = report;
     void snapshots;
-    await run.json('report.json', { ...reportSlim, frames: frames.map((f) => f.path) });
+    await run.json('report.json', {
+      ...reportSlim,
+      frames: frames.map((f) => f.path),
+      // F1: the resolution decision is part of the evidence. A run that was refined
+      // (or that went ahead with a wall under 2 cells because dx was explicit) must
+      // be readable from its own report, not from the console of whoever launched it.
+      wallPolicy: preset.wallPolicy,
+      flowAxis: { axis: preset.axis, source: preset.axisSource, voidExtentMm: preset.voidExtentMm, bboxSpansMm: preset.bboxSpansMm },
+    });
 
     const m = report.metrics;
     await run.commit({
@@ -3606,7 +3618,11 @@ export function registerCadTools(
       status: report.overallStatus === 'pass' ? 'pass' : 'check',
       summary: `到达率 ${m.outletArrivalRatio ?? '—'} · 穿透 ${m.penetrationCount ?? '—'} · 粒子 ${m.particleCount0 ?? '—'}`
         + ((m.seedStats?.stacksPerSeed ?? 1) > 1.5 ? ` · ⚠ 粒子堆叠 ×${m.seedStats!.stacksPerSeed}` : '')
-        + ((m.outsideSnapshotMax ?? 0) > 0 ? ` · ⚠ 管外粒子 ${m.outsideSnapshotMax}` : ''),
+        + ((m.outsideSnapshotMax ?? 0) > 0 ? ` · ⚠ 管外粒子 ${m.outsideSnapshotMax}` : '')
+        // F1: dx and the wall decision, in the one line a person reads first.
+        + ` · dx ${preset.wallPolicy.dxMm}mm`
+        + (preset.wallPolicy.action === 'refined' ? `（已细化，最薄壁 ${preset.wallPolicy.measuredMm?.toFixed(2) ?? '?'}mm）` : '')
+        + (/UNDER 2 CELLS/.test(preset.wallPolicy.reason) ? ' · ⚠ 壁厚不足 2 格' : ''),
       // Same geometry + same numerical question (dx/steps/inlet) is a re-run of
       // the same run, not a new experiment: committing it supersedes the older
       // one instead of leaving two equally-current fluid runs in the corpus.

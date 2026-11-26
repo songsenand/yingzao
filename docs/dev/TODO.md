@@ -55,7 +55,7 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | Q4 | P0 | planned | 干净安装 / 升级 E2E + 问题收口 | 干净机器按 README 在 Linux/mac/Win 装 + 从 0.1.2 升级；doctor 修复路径、离线/代理、首跑耗时记录；发布前 open P0/P1 = 0；R3/R6 矩阵回填 | 3d |
 | Q5 | P1 | planned | 用户文档 0.2.0 覆盖 + 中英对照 | 覆盖矩阵（安装/首件/验证/视口/剖切/装配/测量/导出/交付/升级/排障）无空缺；中英同文件集、同标题、版本号一致；截图更新；`accept-docs-parity` 进 CI | 4–5d |
 | Q6 | P0 | planned | 0.2.0 发布工程 | 版本号、release notes、迁移指南、CI 全绿、tag、npm staged（手机批准提示）、发布后 `doctor`/`verify`/安装冒烟、回滚包 | 1–2d |
-| F1 | P0 | partial | 流体域闭合与「管外」审计 | 已修种子与 `outsideSnapshotMax`（`accept-fluid-sign` 21/21、`accept-m4` 全过）。**余**：壁厚 <2 格的政策（拒绝或自动细化）；穿壁后的粒子级约束/入口回流；dx 减半的收敛曲线 | 2–3d |
+| F1 | P0 | partial | 流体域闭合与「管外」审计 | 已修种子与 `outsideSnapshotMax`（`accept-fluid-sign` 21/21）。**已落**：薄壁政策（`measureThinWallMm` 中值脊线 + 自动 dx 减半/拒绝/显式 dx 标注，`accept-fluid-wall-policy` 19 项）；dx 减半收敛曲线（`accept-fluid-convergence` 9 项：到达率 0.90/0.82/0.32，**不收敛**，只可同 dx 比较）。**余**：粒子级约束/入口回流（细网格仍可能外泄：Ø34@dx1 曾报 outside 608） | 1–2d |
 | U14 | P1 | planned | 任一检查一键重跑 | 从当前版本重跑制造/应力/装配/运动/物理任一检查；来源版本 = 当前版本；新 run 可取消 | 2d |
 | U16 | P1 | planned | 结构化请求 + 几何标注 | 标注携带 `(versionId, 面/点, 相机)`，切视角仍回原位；请求草稿含版本 + 区域 bbox + 实测 + 目标值，一键发进会话 | 3d |
 | U17 | P1 | planned | 接口 / datum 可视化（9a） | 点契约表一行 → 高亮两个零件、datum 点之间画线、显示实测间隙 vs 容差；不预生成接口图 | 3–4d |
