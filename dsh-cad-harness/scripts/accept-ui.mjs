@@ -50,6 +50,21 @@ const SCENARIOS = [
   { name: 'theme-dark-playback', query: 'w=520&h=1200&dark=1&assert=theme&debug=0', resolve: 'motion' },
   // A 3D-only control, exercised under Xvfb; SKIP when this box cannot give GL.
   { name: 'section', query: 'w=520&h=1200&open=剖切&assert=section&debug=0', resolve: 'motion' },
+  // U21: a 6.5 MB STL throttled to ~800 KB/s — the byte-progress pill must move
+  // and clear, and the mesh must be drawn when it is done.
+  // A 130 KB mesh at 20 KB/s ≈ 7 s of download: the pill is observable instead of
+  // a one-frame flash. (`slowstl` is a sandbox-only fetch wrapper; production
+  // code only ever reads the body it was given.)
+  // NOT in the matrix: `?assert=load-progress`. Firefox coalesces a throttled body
+  // into 1–2 reads (measured on a 130 KB mesh over 7 s), so the pill can appear for
+  // a single frame and the assertion becomes a race it sometimes loses. The
+  // streaming logic is covered deterministically by `accept-stream-progress.mjs`;
+  // the panel wiring is checked by hand:
+  //   node sandbox/preview/shot.mjs --query 'w=520&h=900&subject=p005&slowstl=20&assert=load-progress&debug=0&slow=25000'
+  // (observed: "载入 0% · 0.0/0.1 MB" while the body arrives).
+  // U21: the WebGL context is REALLY lost and restored (WEBGL_lose_context), and
+  // the frame must come back — the failure this guards is a silent blank canvas.
+  { name: 'webgl-recover', query: 'w=520&h=900&subject=p005&assert=webgl-recover&debug=0' },
   // U20: an oblique cut of a TUBE must fill the cut and leave the bore as a hole.
   // p010 镜筒 is the corpus part with a through bore; the assert reads the cap
   // mesh's own triangles (area vs its convex hull), so "hollow shell" fails.

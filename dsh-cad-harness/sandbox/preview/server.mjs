@@ -181,6 +181,31 @@ async function api(req, url) {
   if (p === '/api/cad/stl') {
     const stl = await readMaybe(join(DATA, 'versions', v ?? '', 'model.stl'));
     if (!stl) return notFound('stl');
+    // `&throttle=<KBps>` (sandbox only): a real multi-MB mesh takes seconds, and
+    // a progress bar that is only testable on a 200 KB file is not tested at all.
+    // The chunk size is what the reader sees, so this exercises the same path a
+    // slow network does — without changing how the panel reads the body.
+    const throttle = Number(url.searchParams.get('throttle') ?? '0');
+    if (throttle > 0) {
+      const chunk = 16 * 1024;
+      const delayMs = Math.max(1, Math.round((chunk / 1024 / throttle) * 1000));
+      const bytes = new Uint8Array(stl);
+      const body = new ReadableStream({
+        async start(controller) {
+          for (let at = 0; at < bytes.byteLength; at += chunk) {
+            controller.enqueue(bytes.slice(at, Math.min(at + chunk, bytes.byteLength)));
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+          controller.close();
+        },
+      });
+      return new Response(body, {
+        headers: {
+          'content-type': MIME['.stl'],
+          'content-length': String(bytes.byteLength),
+        },
+      });
+    }
     return new Response(stl, { headers: { 'content-type': MIME['.stl'] } });
   }
 

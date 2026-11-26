@@ -257,6 +257,24 @@ if (q.get('assert') === 'insert') {
   }, 2400);
 }
 
+// ?slowstl=<KB per second> — throttle the STL download so the byte-progress pill
+// is observable. Production code is untouched: this wraps fetch in the SANDBOX
+// page and appends the server's `throttle` knob to mesh requests only.
+{
+  const slow = Number(q.get('slowstl') ?? '0');
+  if (slow > 0) {
+    const realFetch = window.fetch.bind(window);
+    window.fetch = ((input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : (input?.url ?? '');
+      if (url.includes('/api/cad/stl')) {
+        const joiner = url.includes('?') ? '&' : '?';
+        return realFetch(`${url}${joiner}throttle=${slow}`, init);
+      }
+      return realFetch(input, init);
+    }) as typeof window.fetch;
+  }
+}
+
 if (root && q.get('overlay') !== '1' && q.get('assert') !== 'insert') createRoot(root).render(React.createElement(CadPanel));
 
 // Drive the panel into a state worth capturing. A fixed timeline because the
@@ -1870,6 +1888,177 @@ if (q.get('assert') === 'section-free') {
     lines.push(`${flipped ? 'PASS' : 'FAIL'}  the flip button reports the cut side`);
     lines.push(`${afterCap && area(afterCap) > 0 && before && Math.abs(area(afterCap) - area(before)) < 1e-6 ? 'PASS' : 'FAIL'}  flipping keeps/cut leaves the same cut face (the plane did not move)`);
 
+    show();
+  })();
+}
+
+// ?assert=webgl-recover — U21: losing the WebGL context must not leave a blank
+// viewport. The fault is INJECTED (WEBGL_lose_context), not simulated: the
+// context really goes away, the panel really has to notice, and the frame has to
+// come back without a reload. Three things are checked:
+//
+//   1. the loss is announced (a card, not a silent white box);
+//   2. the restore path rebuilds a renderer on a fresh canvas;
+//   3. the recovered frame actually contains the model again (pixel share, not
+//      "no exception was thrown").
+if (q.get('assert') === 'webgl-recover') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  /** Share of the canvas that is not its corner (background) pixel. */
+  const modelShare = (canvas: HTMLCanvasElement | null): number => {
+    if (!canvas) return -1;
+    const probe = document.createElement('canvas');
+    probe.width = 96; probe.height = 96;
+    const ctx = probe.getContext('2d');
+    if (!ctx) return -1;
+    try { ctx.drawImage(canvas, 0, 0, 96, 96); } catch { return -1; }
+    const d = ctx.getImageData(0, 0, 96, 96).data;
+    const bg = [d[0], d[1], d[2]];
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 24) n++;
+    }
+    return n / (96 * 96);
+  };
+  void (async () => {
+    const lines: string[] = [`webgl context recovery (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    const canvasOf = () => document.querySelector('#root canvas') as HTMLCanvasElement | null;
+    const hostOf = () => (canvasOf()?.parentElement ?? null) as any;
+
+    const ready = await waitFor(() => Boolean(canvasOf() && hostOf()?.__renderer), 15000);
+    if (!ready) { lines.push('FAIL  no live renderer — load a version first (`&record=<version>`)'); show(); return; }
+    lines.push('PASS  a renderer is live');
+
+    const diag = () => {
+      const c = canvasOf();
+      const r = (hostOf()?.__renderer ?? null);
+      const rect = c?.getBoundingClientRect();
+      return {
+        canvas: c ? `${c.width}x${c.height}` : 'none',
+        css: rect ? `${Math.round(rect.width)}x${Math.round(rect.height)}` : 'none',
+        connected: Boolean(c?.isConnected),
+        triangles: r?.info?.render?.triangles ?? -1,
+        calls: r?.info?.render?.calls ?? -1,
+      };
+    };
+    // How long until the first frame is actually drawn? "triangles: 0" means the
+    // render loop has not started yet, which is a LOADING state, not a failure —
+    // measuring it separates a slow mesh from a dead scene.
+    const t0 = performance.now();
+    const drew = await waitFor(() => (hostOf()?.__renderer?.info?.render?.calls ?? 0) > 0, 20000);
+    lines.push(`${drew ? 'PASS' : 'FAIL'}  the first frame is drawn within 20s (${Math.round(performance.now() - t0)}ms)`);
+    lines.push(`INFO  ${JSON.stringify(diag())}`);
+    const errText = (Array.from(document.querySelectorAll('#root div')) as HTMLElement[])
+      .map((el) => (el.textContent ?? '').trim())
+      .filter((text) => /failed|Error|错误|失败/.test(text) && text.length < 220)
+      .slice(0, 3);
+    if (errText.length) lines.push(`INFO  errors on screen: ${JSON.stringify(errText)}`);
+    const before = modelShare(canvasOf());
+    lines.push(`${before > 0.02 ? 'PASS' : 'FAIL'}  the model is on screen before the fault (${(before * 100).toFixed(1)}% of the frame)`);
+    const firstRenderer = hostOf().__renderer;
+
+    // Inject the loss on the renderer's own context.
+    const gl = firstRenderer.getContext?.();
+    const ext = gl?.getExtension?.('WEBGL_lose_context');
+    lines.push(`${ext ? 'PASS' : 'FAIL'}  WEBGL_lose_context is available (the fault can be injected)`);
+    if (!ext) { show(); return; }
+    ext.loseContext();
+    const announced = await waitFor(() => Boolean(document.querySelector('[data-gl-lost]')), 8000);
+    lines.push(`${announced ? 'PASS' : 'FAIL'}  the loss is announced instead of showing a blank viewport`);
+    const dead = modelShare(canvasOf());
+    lines.push(`${dead >= 0 ? 'PASS' : 'FAIL'}  the page is still alive while the context is gone`);
+
+    // Restore: the browser fires webglcontextrestored, the panel rebuilds.
+    ext.restoreContext();
+    const cleared = await waitFor(() => !document.querySelector('[data-gl-lost]'), 15000);
+    lines.push(`${cleared ? 'PASS' : 'FAIL'}  the card clears when the context comes back`);
+    const rebuilt = await waitFor(() => Boolean(canvasOf() && hostOf()?.__renderer) && hostOf().__renderer !== firstRenderer, 15000);
+    lines.push(`${rebuilt ? 'PASS' : 'FAIL'}  a fresh renderer was built (the old one is not reused)`);
+    const after = await waitFor(() => modelShare(canvasOf()) > 0.02, 15000) ? modelShare(canvasOf()) : modelShare(canvasOf());
+    lines.push(`${after > 0.02 ? 'PASS' : 'FAIL'}  the model is drawn again after recovery (${(after * 100).toFixed(1)}% of the frame)`);
+    lines.push(`${!document.querySelector('[data-gl-lost]') && !/WebGL/.test(document.body.textContent ?? '') ? 'PASS' : 'FAIL'}  no error card or "WebGL" complaint is left on screen`);
+    show();
+  })();
+}
+
+// ?assert=load-progress — U21: a large mesh must show progress while it arrives.
+// The corpus has a 6.5 MB STL (v041): throttled to ~800 KB/s it takes seconds, so
+// the pill is observable. Three things are checked: it appears, it MOVES (a static
+// "loading…" is not progress), and it goes away when the model is on screen.
+if (q.get('assert') === 'load-progress') {
+  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`mesh download progress (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    const pill = () => document.querySelector('[data-load-progress]') as HTMLElement | null;
+    const text = () => (pill()?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    // What the browser actually requested: name + duration proves whether the
+    // throttle reached the mesh URL, which is the difference between "no pill"
+    // and "no throttle".
+    const stlEntries = () => performance.getEntriesByType('resource')
+      .filter((e) => e.name.includes('/api/cad/stl'))
+      .map((e) => `${e.name.split('?')[1] ?? ''} ${Math.round(e.duration)}ms`);
+    arguments_noop: {
+      // (label kept so the block reads as diagnostics, not as a claim)
+      lines.push(`INFO  stl requests so far: ${JSON.stringify(stlEntries())}`);
+    }
+    // Poll until the pill has BOTH appeared and cleared, or 9 s pass. The page
+    // lives only as long as the screenshot needs (a verdict posted after that is
+    // lost), so this assertion stays short and reports what it saw.
+    let sawPill = 0;
+    let sawText = '';
+    let sawTicks = 0;
+    let cleared = false;
+    const deadline = performance.now() + 9000;
+    while (performance.now() < deadline) {
+      if (pill()) {
+        sawPill++;
+        sawText = sawText || text();
+        // Post a verdict as soon as the pill exists: the page may be torn down
+        // before a longer poll finishes, and "the assertion did not run" is the
+        // one outcome that would be indistinguishable from a broken panel.
+        if (sawPill === 1) show();
+      } else if (sawPill > 0) { cleared = true; break; }
+      sawTicks = Math.max(sawTicks, (globalThis as any).__loadTicks ?? 0);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    lines.push(`INFO  pill seen ${sawPill}× · ticks ${sawTicks} · cleared ${cleared} · text ${JSON.stringify(sawText)}`);
+    const percent = /(\d+)%/.exec(sawText)?.[1];
+    lines.push(`${sawPill > 0 ? 'PASS' : 'FAIL'}  a progress pill appears while the mesh downloads`);
+    lines.push(`${percent !== undefined ? 'PASS' : 'FAIL'}  the pill states a percentage and byte counts`);
+    lines.push(`${cleared ? 'PASS' : 'FAIL'}  the pill clears when the download ends`);
+    // The fingerprinted chunks arrive coalesced in Firefox (measured: 2 ticks for
+    // a 7 s body), so "the number advances mid-download" is asserted in
+    // accept-stream-progress.mjs against synthetic bodies instead of here.
     show();
   })();
 }

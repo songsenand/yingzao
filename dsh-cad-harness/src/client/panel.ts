@@ -10,6 +10,7 @@ import {
 } from './project';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { fraction, readBodyWithProgress, type Progress } from './stream-progress';
 import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, PartsPreview, RunKeyframeStrip, type PartSpec } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
@@ -735,6 +736,16 @@ export function CadPanel(): React.ReactElement {
   const heatLayersRef = useRef<HeatLayer[]>([]);
   /** Set when this environment cannot give us a WebGL context at all. */
   const [glError, setGlError] = useState<string | null>(null);
+  /**
+   * U21: loss of the WebGL context (a tab switched away, a GPU reset, a driver
+   * crash). three.js cannot rebuild anything by itself — the canvas keeps its
+   * last pixels and every draw is dropped — so the panel says so and rebuilds.
+   */
+  const [glLost, setGlLost] = useState(false);
+  /** Bumped to re-run the scene build after the context comes back. */
+  const [glEpoch, setGlEpoch] = useState(0);
+  /** Bytes downloaded for the mesh being loaded (null = nothing loading). */
+  const [loadProgress, setLoadProgress] = useState<Progress | null>(null);
   const [measureMode, setMeasureMode] = useState(false);
   const [thickMode, setThickMode] = useState(false);
   const [thick, setThick] = useState<{
@@ -790,6 +801,8 @@ export function CadPanel(): React.ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
   /** Live section state, read by the async scene builder and the pickers. */
+  /** Mirror of `glLost` for the render loop, which closes over a stale render. */
+  const glLostRef = useRef(false);
   const clipRef = useRef<ClipState>({
     on: false, mode: 'axis', pos: 0.5, axis: 'z', normal: [0, 0, 1], keepNegative: true,
   });
@@ -1290,6 +1303,24 @@ export function CadPanel(): React.ReactElement {
     mount.appendChild(renderer.domElement);
     (mount as unknown as { __renderer?: THREE.WebGLRenderer }).__renderer = renderer;
 
+    // U21: a lost context is not the panel's error to hide — preventDefault()
+    // tells the browser we intend to restore, and the rebuilt scene comes from
+    // `glEpoch` re-running this effect. Without this the viewport is a dead
+    // canvas showing its last frame ("白屏/黑屏" after switching tabs).
+    const glSurface = renderer.domElement;
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      glLostRef.current = true;
+      setGlLost(true);
+    };
+    const onContextRestored = () => {
+      glLostRef.current = false;
+      setGlLost(false);
+      setGlEpoch((epoch) => epoch + 1);
+    };
+    glSurface.addEventListener('webglcontextlost', onContextLost as EventListener, false);
+    glSurface.addEventListener('webglcontextrestored', onContextRestored, false);
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(bgRef.current.hex);
     bgSceneRef.current = scene;
@@ -1299,13 +1330,19 @@ export function CadPanel(): React.ReactElement {
     attachStudioLights(scene, camera);
 
     let disposed = false;
+    // Every build owns an AbortController: when the effect re-runs (a version
+    // switch, a context rebuild), the previous build's mesh download must STOP.
+    // Without this the superseded build kept pulling a multi-MB body that nobody
+    // would ever see — measured while chasing the progress pill: the live build
+    // hit the HTTP cache and the visible progress belonged to a dead one.
+    const life = new AbortController();
     let cleanupResize: (() => void) | undefined;
     // Owned by the async load below, disposed by the cleanup that follows.
     let insetOtherGeo: THREE.BufferGeometry | null = null;
     let insetSceneLocal: THREE.Scene | null = null;
     (async () => {
       try {
-        const res = await fetch(meshSource.url);
+        const res = await fetch(meshSource.url, { signal: life.signal });
         if (!res.ok) throw new Error(`STL fetch failed: HTTP ${res.status}`);
         if (meshSource.kind === 'file') {
           // The route states the facts a file has no version to carry.
@@ -1317,7 +1354,24 @@ export function CadPanel(): React.ReactElement {
             warnings: decodeURIComponent(res.headers.get('x-cad-warnings') ?? '').split(' | ').filter(Boolean),
           });
         }
-        const buf = await res.arrayBuffer();
+        // A million-triangle STL is tens of MB: without byte progress the panel
+        // looks frozen for the whole download (U21). The reader is a tested pure
+        // module, and it falls back to one tick when the body is not streamable.
+        let buf: ArrayBuffer;
+        (globalThis as unknown as { __loadBodies?: unknown[] }).__loadBodies = [
+          ...((globalThis as any).__loadBodies ?? []),
+          { url: res.url.split('?')[0], v: new URL(res.url, location.origin).searchParams.get('v'), body: Boolean(res.body), reader: typeof (res.body as any)?.getReader },
+        ];
+        try {
+          buf = await readBodyWithProgress(res, (p) => {
+            // Debug hook for `?assert=load-progress`: distinguishes "the stream
+            // never ticked" from "it ticked but the pill did not render".
+            (globalThis as unknown as { __loadTicks?: number }).__loadTicks = ((globalThis as any).__loadTicks ?? 0) + 1;
+            setLoadProgress(p);
+          });
+        } finally {
+          setLoadProgress(null);
+        }
         const geometry = new STLLoader().parse(buf);
         geometry.computeBoundingSphere();
         geometry.computeBoundingBox();
@@ -1495,6 +1549,10 @@ export function CadPanel(): React.ReactElement {
         let raf = 0;
         const loop = () => {
           if (disposed) return;
+          // A lost context silently drops every draw; keep the loop alive (the
+          // restore handler bumps `glEpoch` and rebuilds) but stop issuing calls
+          // that only log GL errors.
+          if (glLostRef.current) { raf = requestAnimationFrame(loop); return; }
           controls.update();
           // Probe dots keep a fixed pixel size: zooming must not inflate them.
           scaleScreenDots(measureDotsRef.current, camera, mount.clientHeight || 420);
@@ -1539,7 +1597,10 @@ export function CadPanel(): React.ReactElement {
       versionResetRef.current = null;
       pickMeshRef.current = null;
       tintRef.current = null;
+      life.abort();
       cleanupResize?.();
+      glSurface.removeEventListener('webglcontextlost', onContextLost as EventListener, false);
+      glSurface.removeEventListener('webglcontextrestored', onContextRestored, false);
       insetRef.current = null;
       if (insetSceneLocal) {
         insetSceneLocal.traverse((o) => {
@@ -1557,7 +1618,7 @@ export function CadPanel(): React.ReactElement {
     };
     // Keyed on the SOURCE, not the version: an unregistered file renders through
     // the same builder, and switching version→file must rebuild the scene.
-  }, [meshSource?.key]);
+  }, [meshSource?.key, glEpoch]);
 
   // The comparison lives in its own scene (drawn as a picture-in-picture by the
   // main render loop). This effect only decides whether it is SHOWN — the meshes
@@ -4113,6 +4174,53 @@ export function CadPanel(): React.ReactElement {
           cursor: annotateMode || measureMode || thickMode ? 'crosshair' : 'default',
         },
       }),
+      // U21: the download is visible while it runs. A pill at the bottom of the
+      // viewport, not a full-screen spinner: the previous model is still there
+      // and still usable while the next one arrives.
+      loadProgress && React.createElement('div', {
+        'data-load-progress': fraction(loadProgress) === null ? 'bytes' : 'fraction',
+        style: {
+          position: 'absolute', left: 8, bottom: 8, zIndex: 5,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '3px 8px', borderRadius: 999,
+          background: T.white, border: `1px solid ${T.line}`,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          fontSize: 11, fontWeight: 600, color: T.infoInk,
+        },
+      },
+        (() => {
+          const share = fraction(loadProgress);
+          const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
+          return tr(share === null ? 'ui.load.progressUnknown' : 'ui.load.progress', {
+            pct: share === null ? '' : String(Math.round(share * 100)),
+            done: mb(loadProgress.done),
+            total: loadProgress.total === null ? '?' : mb(loadProgress.total),
+          });
+        })(),
+      ),
+      // U21: a lost context. The card explains the blank viewport and offers the
+      // manual rebuild, because auto-restore depends on the driver: the browser
+      // fires `webglcontextrestored` for us when it can, and this is the way out
+      // when it does not.
+      glLost && React.createElement('div', {
+        'data-gl-lost': '',
+        style: {
+          position: 'absolute', inset: 0, zIndex: 6,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 6, padding: 16, textAlign: 'center',
+          background: 'rgba(255,255,255,0.92)',
+        },
+      },
+        React.createElement('div', { style: { fontSize: 22 } }, '♻️'),
+        React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, t('ui.glLost.title')),
+        React.createElement('div', { style: { fontSize: 11, color: T.muted, lineHeight: 1.5 } }, t('ui.glLost.body')),
+        React.createElement('button', {
+          type: 'button',
+          'data-gl-rebuild': '',
+          onClick: () => setGlEpoch((epoch) => epoch + 1),
+          style: { ...S.smallBtn, marginTop: 2 },
+        }, t('ui.glLost.rebuild')),
+      ),
       meshSource && glError && React.createElement('div', {
         style: {
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
