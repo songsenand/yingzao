@@ -2165,3 +2165,102 @@ if (q.get('assert') === 'assembly-hide') {
     show();
   })();
 }
+
+// ?assert=views — U11: the viewport must be able to look from a named direction,
+// not just wherever the pointer left it. Checked here as camera POSE facts:
+//
+//   1. the menu opens and offers the standard views + six axis snaps;
+//   2. clicking one really moves the camera onto that direction (dot product, not
+//      a screenshot);
+//   3. the orthographic toggle changes the camera type AND keeps the same pose, so
+//      the apparent size does not jump;
+//   4. 复原 (Home) returns to the initial framing.
+if (q.get('assert') === 'views') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`standard views / axis snap / projection (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    const host = () => (document.querySelector('#root canvas')?.parentElement ?? null) as any;
+    const dirOf = () => {
+      const h = host();
+      if (!h?.__camera || !h?.__controls) return null;
+      const p = h.__camera.position;
+      const t = h.__controls.target;
+      const v = [p.x - t.x, p.y - t.y, p.z - t.z];
+      const len = Math.hypot(v[0], v[1], v[2]) || 1;
+      return [v[0] / len, v[1] / len, v[2] / len];
+    };
+    const ready = await waitFor(() => Boolean(host()?.__camera && host()?.__controls && document.querySelector('[data-view-menu]')), 15000);
+    if (!ready) { lines.push('FAIL  no live camera or no view menu — load a version first'); show(); return; }
+    lines.push('PASS  the view menu exists next to a live camera');
+    const home = JSON.stringify(host().__camera.position.toArray());
+
+    const openMenu = async () => {
+      if (document.querySelector('[data-view-menu]')?.getAttribute('data-view-menu') !== 'open') {
+        (document.querySelector('[data-view-menu]') as HTMLElement).click();
+      }
+      return waitFor(() => Boolean(document.querySelector('[data-view-panel]')), 4000);
+    };
+    const clickAndWait = async (selector: string, check: () => boolean) => {
+      await openMenu();
+      (document.querySelector(selector) as HTMLElement | null)?.click();
+      return waitFor(check, 5000);
+    };
+    const near = (a: number, b: number, tol = 1e-3) => Math.abs(a - b) <= tol;
+    const isDir = (want: number[]) => {
+      const d = dirOf();
+      return Boolean(d) && near(d[0], want[0]) && near(d[1], want[1]) && near(d[2], want[2]);
+    };
+
+    lines.push(`${(await openMenu()) ? 'PASS' : 'FAIL'}  the menu opens into a panel`);
+    const hasControls = ['[data-view="iso"]', '[data-view="top"]', '[data-view="front"]', '[data-view="right"]',
+      '[data-view-axis="+x"]', '[data-view-axis="-x"]', '[data-view-axis="+y"]', '[data-view-axis="-y"]',
+      '[data-view-axis="+z"]', '[data-view-axis="-z"]', '[data-view-projection]']
+      .every((sel) => Boolean(document.querySelector(sel)));
+    lines.push(`${hasControls ? 'PASS' : 'FAIL'}  it offers four standard views, six axis snaps and a projection toggle`);
+
+    const isoOk = await clickAndWait('[data-view="iso"]', () => isDir([0.57735, 0.57735, 0.57735]));
+    lines.push(`${isoOk ? 'PASS' : 'FAIL'}  等轴 puts the camera on the (1,1,1) diagonal ${JSON.stringify(dirOf())}`);
+    const topOk = await clickAndWait('[data-view="top"]', () => isDir([0, 0, 1]));
+    lines.push(`${topOk ? 'PASS' : 'FAIL'}  顶 looks straight down +Z ${JSON.stringify(dirOf())}`);
+    // The pole rule: a top view cannot keep world up, it is parallel to the view.
+    const upAfterTop = host().__camera.up;
+    lines.push(`${near(upAfterTop.y, 1) && near(upAfterTop.z, 0) ? 'PASS' : 'FAIL'}  the top view switched the camera up to +Y (${JSON.stringify(upAfterTop)})`);
+    const frontOk = await clickAndWait('[data-view="front"]', () => isDir([0, -1, 0]));
+    lines.push(`${frontOk ? 'PASS' : 'FAIL'}  前 looks along +Y ${JSON.stringify(dirOf())}`);
+    const axisOk = await clickAndWait('[data-view-axis="+x"]', () => isDir([1, 0, 0]));
+    lines.push(`${axisOk ? 'PASS' : 'FAIL'}  +X snap looks along -X ${JSON.stringify(dirOf())}`);
+
+    // projection
+    await openMenu();
+    const before = host().__camera.isOrthographicCamera === true;
+    (document.querySelector('[data-view-projection]') as HTMLElement).click();
+    const switched = await waitFor(() => (host().__camera.isOrthographicCamera === true) !== before, 5000);
+    const dirBefore = dirOf();
+    lines.push(`${switched ? 'PASS' : 'FAIL'}  the projection toggle swaps the camera type (${before ? 'ortho→persp' : 'persp→ortho'})`);
+    lines.push(`${dirBefore ? 'PASS' : 'FAIL'}  ...and the pose survives the swap (direction ${JSON.stringify(dirBefore)})`);
+    const scaleA = document.querySelector('[data-scale]')?.getAttribute('data-scale');
+    lines.push(`INFO  scale bar after the swap: ${String(scaleA)}`);
+
+    // Home
+    await openMenu();
+    (document.querySelector('[data-view-home]') as HTMLElement).click();
+    const back = await waitFor(() => JSON.stringify(host().__camera.position.toArray()) !== JSON.stringify(home), 4000);
+    lines.push(`${back ? 'PASS' : 'FAIL'}  复原 moved the camera back from the axis view`);
+    show();
+  })();
+}

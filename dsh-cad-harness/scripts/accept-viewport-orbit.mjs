@@ -8,6 +8,11 @@
 // adapter really constructs OrbitControls, and the camera it leaves behind keeps
 // world up (the condition that makes the screen-right axis stable).
 //
+// U11 added the other half of the viewport's orientation arithmetic: standard
+// views, axis snaps and the orthographic frustum. Those live in
+// `src/client/view-orientation.ts` and are asserted here, because "顶视图真的是
+// 从 +Z 看下去、且 up 换成了 +Y" is a fact about numbers, not about pixels.
+//
 //   node scripts/accept-viewport-orbit.mjs
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -94,5 +99,43 @@ check(camera.up.distanceTo(upBefore) < 1e-9,
   'a full vertical sweep plus horizontal turns never rotates camera.up', camera.up.toArray().join(','));
 
 dispose();
+// --- U11: standard views, axis snaps, orthographic frustum ------------------
+{
+  const { cameraUpFor, orthoBounds, orthoHalfHeight, orthoMmPerPixel, viewDirection } =
+    await import('../src/client/view-orientation.ts');
+  const near = (a, b, tol = 1e-9) => Math.abs(a - b) <= tol;
+  const iso = viewDirection('iso');
+  check(near(iso[0], Math.SQRT1_2 / Math.SQRT1_2 / Math.sqrt(3)) || near(Math.hypot(iso[0], iso[1], iso[2]), 1),
+    'iso is a unit diagonal', JSON.stringify(iso));
+  check(near(iso[0], iso[1]) && near(iso[1], iso[2]) && iso[0] > 0, 'iso looks from +X+Y+Z');
+  const top = viewDirection('top');
+  check(JSON.stringify(top) === JSON.stringify([0, 0, 1]), 'top looks down +Z', JSON.stringify(top));
+  check(JSON.stringify(viewDirection('front')) === JSON.stringify([0, -1, 0]), 'front looks along +Y from -Y');
+  check(JSON.stringify(viewDirection('right')) === JSON.stringify([1, 0, 0]), 'right looks along -X from +X');
+  check(JSON.stringify(viewDirection('+x')) === JSON.stringify(viewDirection('right')),
+    'the axis snap and the standard view agree (+x === right)');
+  check(JSON.stringify(viewDirection('-z')) === JSON.stringify([0, 0, -1]), 'the -z snap looks up from below');
+
+  check(JSON.stringify(cameraUpFor([0, 0, 1])) === JSON.stringify([0, 1, 0]),
+    'a pole view switches up to +Y (lookAt would be undefined otherwise)');
+  check(JSON.stringify(cameraUpFor([0, 0, -1])) === JSON.stringify([0, 1, 0]),
+    'looking up from below also uses +Y up');
+  check(JSON.stringify(cameraUpFor(viewDirection('front'))) === JSON.stringify([0, 0, 1])
+    && JSON.stringify(cameraUpFor(viewDirection('iso'))) === JSON.stringify([0, 0, 1]),
+    'side and iso views keep world up (+Z)');
+
+  const half = orthoHalfHeight(100, 45);
+  check(near(half, 100 * Math.tan((45 * Math.PI) / 360), 1e-9), 'ortho half-height matches the fov at that distance', String(half));
+  const bounds = orthoBounds(100, 45, 4 / 3);
+  check(near(bounds.top, half) && near(bounds.bottom, -half), 'the ortho height is centred on the target');
+  check(near(Math.abs(bounds.right - bounds.left) / Math.abs(bounds.top - bounds.bottom), 4 / 3, 1e-9),
+    'the ortho frustum carries the viewport aspect');
+  check(near(orthoMmPerPixel(bounds, 400), (2 * half) / 400, 1e-12),
+    'mm per pixel is the frustum height over the viewport height');
+  check(orthoBounds(0, 45, 0).left < orthoBounds(0, 45, 0).right,
+    'a degenerate distance/aspect does not produce NaN bounds');
+  check(orthoHalfHeight(0, 45) > 0, 'a zero distance still yields a usable frustum');
+}
+
 console.log(failures ? `\n${failures} FAIL` : '\nall PASS');
 process.exit(failures ? 1 : 0);

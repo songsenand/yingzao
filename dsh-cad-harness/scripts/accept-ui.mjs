@@ -62,6 +62,9 @@ const SCENARIOS = [
   // the panel wiring is checked by hand:
   //   node sandbox/preview/shot.mjs --query 'w=520&h=900&subject=p005&slowstl=20&assert=load-progress&debug=0&slow=25000'
   // (observed: "载入 0% · 0.0/0.1 MB" while the body arrives).
+  // U11: standard views, axis snap, projection toggle and 复原 — asserted as
+  // camera pose facts (direction dot products), not from a picture.
+  { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
   // U12: per-part hide / isolate / highlight in the whole-machine preview. The
   // part list is read from the live scene, so a legend that lies cannot pass.
   { name: 'assembly-hide', query: 'w=1100&h=900&assert=assembly-hide&debug=0' },

@@ -43,7 +43,9 @@ export interface FreeOrbit {
  * follows the cursor" expectation rely on.
  */
 export function createFreeOrbit(
-  camera: THREE.PerspectiveCamera,
+  // Any camera: the viewport switches between a perspective and an
+  // orthographic camera, and OrbitControls does not care which it drives.
+  camera: THREE.Camera,
   domElement: HTMLElement,
   opts: FreeOrbitOptions,
 ): FreeOrbit {

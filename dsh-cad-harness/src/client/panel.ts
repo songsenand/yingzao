@@ -19,6 +19,7 @@ import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overla
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
+import { cameraUpFor, orthoBounds, viewDirection, type AxisSnap, type StandardView } from './view-orientation';
 import { ANN_PALETTE, SCENE as SCENE_COLOR, T } from './tokens.ts';
 import { resolveCssColor } from './theme.ts';
 import { runFacts, type RunFact, type RunTone } from './run-facts';
@@ -800,6 +801,15 @@ export function CadPanel(): React.ReactElement {
   const [stageAvail, setStageAvail] = useState(600);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
+  /** U11: perspective or orthographic projection (a toggle, not a rebuild). */
+  const [projection, setProjection] = useState<'persp' | 'ortho'>('persp');
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  /** Scene-side commands the UI calls: projection switch and standard views. */
+  const viewToolsRef = useRef<{
+    setProjection: (mode: 'persp' | 'ortho') => void;
+    look: (direction: readonly [number, number, number], label: string) => void;
+    projection: () => 'persp' | 'ortho';
+  } | null>(null);
   /** Live section state, read by the async scene builder and the pickers. */
   /** Mirror of `glLost` for the render loop, which closes over a stale render. */
   const glLostRef = useRef(false);
@@ -1514,15 +1524,64 @@ export function CadPanel(): React.ReactElement {
           maxDistance: radius * 10,
         });
 
+        // U11: an orthographic twin. Both cameras sit at the same place looking
+        // the same way; only the projection differs, so switching does not move
+        // the view, it changes how it is projected.
+        const aspect = () => mount.clientWidth / (mount.clientHeight || 420);
+        const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 5000);
+        const syncOrtho = () => {
+          const distance = camera.position.distanceTo(controls.target);
+          // Same field of view as the perspective camera at this distance, so the
+          // toggle does not resize the part (see view-orientation.ts).
+          const bounds = orthoBounds(distance, 45, aspect());
+          ortho.left = bounds.left;
+          ortho.right = bounds.right;
+          ortho.top = bounds.top;
+          ortho.bottom = bounds.bottom;
+          ortho.position.copy(camera.position);
+          ortho.up.copy(camera.up);
+          ortho.lookAt(controls.target);
+          ortho.updateProjectionMatrix();
+        };
+        syncOrtho();
+        // `active` is the camera a frame is drawn with; the ortho twin copies the
+        // perspective one's pose every frame it is used.
+        let active: THREE.Camera = camera;
+
         // Debug hooks for the sandbox's `?assert=orbit` probes (same shape as
         // `__renderer`): a runner reads the live camera to prove the default
         // mapping holds (up stays world up, no mirror flip).
-        (mount as unknown as { __camera?: THREE.PerspectiveCamera }).__camera = camera;
+        (mount as unknown as { __camera?: THREE.Camera }).__camera = camera;
         (mount as unknown as { __controls?: FreeOrbitControls }).__controls = controls;
 
-        // Corner overlays read this live camera; 复原 returns to this framing
-        // (recomputed, so it also repairs the frame after a dock resize).
+        // ── U11: projection switch + standard views + axis snap ──────────────
+        // The perspective camera stays the one OrbitControls drives (its
+        // distance is the zoom), and the orthographic twin copies its pose. That
+        // avoids tearing down the controls on every projection toggle — the
+        // interaction model does not change, only how the scene is projected.
         versionSceneRef.current = { camera, focus: center.clone() };
+        const applyProjection = (mode: 'persp' | 'ortho') => {
+          active = mode === 'ortho' ? ortho : camera;
+          syncOrtho();
+          cameraRef.current = active;
+          (mount as unknown as { __camera?: THREE.Camera }).__camera = active;
+          if (versionSceneRef.current) versionSceneRef.current.camera = active;
+        };
+        const look = (direction: readonly [number, number, number]) => {
+          const distance = Math.max(camera.position.distanceTo(controls.target), 1e-3);
+          const dir = new THREE.Vector3(direction[0], direction[1], direction[2]).normalize();
+          const up = cameraUpFor([dir.x, dir.y, dir.z]);
+          camera.up.set(up[0], up[1], up[2]);
+          camera.position.copy(controls.target).addScaledVector(dir, distance);
+          camera.lookAt(controls.target);
+          controls.update();
+          syncOrtho();
+        };
+        viewToolsRef.current = {
+          setProjection: applyProjection,
+          look,
+          projection: () => (active === ortho ? 'ortho' : 'persp'),
+        };
         versionResetRef.current = () => {
           controls.target.copy(center);
           applyFit();
@@ -1538,6 +1597,7 @@ export function CadPanel(): React.ReactElement {
           renderer.setSize(w, h);
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
+          syncOrtho();
           // A disclosure opening shrinks the viewport too; re-fitting under the
           // user's hands would be rude, so only do it while the camera is ours.
           if (!userMoved) applyFit();
@@ -1555,8 +1615,13 @@ export function CadPanel(): React.ReactElement {
           if (glLostRef.current) { raf = requestAnimationFrame(loop); return; }
           controls.update();
           // Probe dots keep a fixed pixel size: zooming must not inflate them.
-          scaleScreenDots(measureDotsRef.current, camera, mount.clientHeight || 420);
-          renderer.render(scene, camera);
+          // The ortho twin mirrors the perspective pose; syncing per frame is
+          // cheap and keeps pan/zoom/drag identical in both projections.
+          if (active === ortho) syncOrtho();
+          else syncOrtho();
+          const shotCamera = active === ortho ? ortho : camera;
+          scaleScreenDots(measureDotsRef.current, shotCamera as THREE.PerspectiveCamera, mount.clientHeight || 420);
+          renderer.render(scene, shotCamera);
           // The comparison inset: same view DIRECTION as the main camera (that is
           // the "axes stay in sync" the user asked for), its own fit distance, so
           // both revisions are always fully in frame.
@@ -2078,6 +2143,12 @@ export function CadPanel(): React.ReactElement {
     line.renderOrder = 997;
     group.add(line);
   }, [section, sectionMode, sectionPos, sectionAxis, sectionAzimuth, sectionElevation, sectionKeepNegative, versionId, spec]);
+
+  // U11: projection is React state, the camera swap is a scene command. The
+  // scene is NOT rebuilt (that would cost a WebGL context).
+  useEffect(() => {
+    viewToolsRef.current?.setProjection(projection);
+  }, [projection, spec]);
 
   // Section toggle / slider / plane angles: update the live material, never
   // rebuild the scene.
@@ -3068,6 +3139,20 @@ export function CadPanel(): React.ReactElement {
     }));
   const machineUnpinned = (machine?.nodes ?? []).length - machineSpecs.length;
 
+  // U11: Home restores the initial framing, the way every CAD viewport does.
+  // Not stolen from a field the user is typing in.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Home') return;
+      const tag = (event.target as HTMLElement | null)?.tagName ?? '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement | null)?.isContentEditable) return;
+      event.preventDefault();
+      versionResetRef.current?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     if (!machinePreview) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMachinePreview(false); };
@@ -3383,6 +3468,74 @@ export function CadPanel(): React.ReactElement {
 
   // The comparison toggle sits under 背景: same corner, same pill. It names the
   // version it compares against, because "对比" alone does not say WHAT with.
+  /**
+   * U11 view menu. Six axis snaps and four standard views are the same three
+   * directions in two spellings — one control, because a person asked "轴固定不好",
+   * not "give me two camera APIs".
+   */
+  // Anchored to the top-right corner, LEFT of 复原 (which overlay.ts places at
+  // right:8): the chrome children are absolutely positioned one by one, so a
+  // relative span in flow would land under the bottom-left plate and be invisible.
+  const viewMenu = !glError && React.createElement('span', {
+    style: { position: 'absolute', right: 92, top: 8, pointerEvents: 'auto', zIndex: 5 },
+  },
+    React.createElement('button', {
+      type: 'button',
+      'data-view-menu': viewMenuOpen ? 'open' : 'closed',
+      onClick: () => setViewMenuOpen((open) => !open),
+      title: tr('ui.view.title'),
+      style: { ...S.smallBtn, flex: 'none' },
+    }, tr('ui.view.label')),
+    viewMenuOpen && React.createElement('div', {
+      'data-view-panel': '1',
+      style: {
+        position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 9,
+        background: T.plate, border: `1px solid ${T.line}`, borderRadius: 6,
+        boxShadow: T.shadowLg, padding: 6, width: 196,
+        display: 'flex', flexDirection: 'column', gap: 4,
+      },
+    },
+      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600 } }, tr('ui.view.standard')),
+      React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
+        ...([['iso', 'ui.view.iso'], ['top', 'ui.view.top'], ['front', 'ui.view.front'], ['right', 'ui.view.right']] as const)
+          .map(([key, label]) => React.createElement('button', {
+            key, type: 'button', 'data-view': key,
+            onClick: () => {
+              viewToolsRef.current?.look(viewDirection(key as StandardView), 'view');
+              setViewMenuOpen(false);
+            },
+            style: { ...S.smallBtn, flex: 1 },
+          }, tr(label))),
+      ),
+      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600, marginTop: 2 } }, tr('ui.view.axes')),
+      React.createElement('div', { style: { display: 'flex', gap: 3, flexWrap: 'wrap' } },
+        ...([['+x', [1, 0, 0]], ['-x', [-1, 0, 0]], ['+y', [0, 1, 0]], ['-y', [0, -1, 0]], ['+z', [0, 0, 1]], ['-z', [0, 0, -1]]] as const)
+          .map(([label, dir]) => React.createElement('button', {
+            key: label, type: 'button', 'data-view-axis': label,
+            onClick: () => {
+              viewToolsRef.current?.look(viewDirection(label as AxisSnap), 'axis');
+              setViewMenuOpen(false);
+            },
+            style: { ...S.smallBtn, minWidth: 26, flex: 'none' },
+          }, label.toUpperCase())),
+      ),
+      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600, marginTop: 2 } }, tr('ui.view.projection')),
+      React.createElement('div', { style: { display: 'flex', gap: 4 } },
+        React.createElement('button', {
+          type: 'button', 'data-view-projection': projection,
+          onClick: () => setProjection((mode) => (mode === 'persp' ? 'ortho' : 'persp')),
+          style: { ...S.smallBtn, flex: 1, fontWeight: projection === 'ortho' ? 700 : 400 },
+        }, projection === 'ortho' ? tr('ui.view.ortho') : tr('ui.view.persp')),
+        React.createElement('button', {
+          type: 'button', 'data-view-home': '1',
+          onClick: () => { versionResetRef.current?.(); setViewMenuOpen(false); },
+          title: tr('ui.view.homeTitle'),
+          style: { ...S.smallBtn, flex: 'none' },
+        }, tr('ui.view.home')),
+      ),
+    ),
+  );
+
   const ghostToggle = version && ghostVersionId && !glError
     ? React.createElement('button', {
       type: 'button',
@@ -4237,7 +4390,7 @@ export function CadPanel(): React.ReactElement {
       meshSource && !glError && React.createElement(ViewportOverlay, {
         getScene: () => versionSceneRef.current,
         ink: overlayInk(bg),
-        chrome: React.createElement(React.Fragment, null, ghostToggle, bgPicker),
+        chrome: React.createElement(React.Fragment, null, viewMenu, ghostToggle, bgPicker),
         // 复原 = back to the initial framing AND a clean slate for the markup:
         // annotations, measurements, the thickness probe AND the section all
         // belong to the view you were inspecting, so they go with it.

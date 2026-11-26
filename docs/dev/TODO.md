@@ -26,8 +26,8 @@
 门禁共 **17 项**，每项必须有可复跑的证据；缺一项不发：
 
 - **工具面 / token（先行，可与 U20 并行）**：Q1（Q2 已收口，见下）
-- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）
-- **主线**：U20、U21、U11、U19、U15、F1、F2、N15、U14、U22
+- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）
+- **主线**：U20、U21、U19、U15、F1、F2、N15、U14、U22
 - **收口**：Q3、Q4（含 R3/R6）、Q5、Q6
 
 **`0.2.0-preview.1` 范围（2026-11-26 用户定）：M1 + M2 = 13 项**（Q2、Q1、U20、U21、U12、U11、
@@ -59,7 +59,6 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | F2 | P1 | planned | 流体预设流轴与短粗件 | `deriveFluidPreset` 取包围盒最长轴，Ø44×30 的管会沿横截面驱动。出口：长径比 <1 的管选对轴且 `outsideSnapshotMax`=0；加验收 | 1d |
 | N15 | P1 | partial | 流体长任务的进度 / 取消（A） | 只做流体：进度 = 已跑步数/总步数；取消 = 终止 worker 并标 `cancelled`，不留孤儿。出口：161s 的跑能看到百分比，取消后 1s 内回空闲 | 2d |
 | U19 | P1 | planned | 面板审计视图（audit + preflight 合并） | 机器页列出 blocked/warn/pass 行 + “哪一步没跑”；点行跳对应 run；与 `cad_deliver audit` 同一实现，不写第二套判定 | 2–3d |
-| U11 | P1 | planned | 视口导航：正交/透视、六标准视图、轴吸附 | 点 +X/−X/+Y/−Y/+Z/−Z 吸附、顶/前/侧/等轴一键、Home 复原、透视/正交切换；`accept-viewport-orbit` 扩断言 + 截图 | 2d |
 | U14 | P1 | planned | 任一检查一键重跑 | 从当前版本重跑制造/应力/装配/运动/物理任一检查；来源版本 = 当前版本；新 run 可取消 | 2d |
 | U15 | P1 | planned | 测量家族 + 测量历史 | 角度/间隙/剖面面积/孔特征能在视口完成；测量列表可命名/删除并随截图带走 | 2–3d |
 | U16 | P1 | planned | 结构化请求 + 几何标注 | 标注携带 `(versionId, 面/点, 相机)`，切视角仍回原位；请求草稿含版本 + 区域 bbox + 实测 + 目标值，一键发进会话 | 3d |
