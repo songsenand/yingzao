@@ -18,6 +18,7 @@ import { fitDistance } from './fit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { withProject } from './project';
 import { placementEuler } from './placement';
+import { planExplosion } from './explode';
 import type { ShotFrame } from './shot-caption';
 import { ANN_PALETTE, PART_PALETTE, SCENE, T } from './tokens.ts';
 import { resolveCssColor } from './theme.ts';
@@ -35,6 +36,8 @@ interface SceneHandle {
   fit: (center: THREE.Vector3, radius: number) => void;
   /** Re-apply the last fit (the "复原视图" control). */
   refit: () => void;
+  /** Re-frame to a box, optionally keeping the user's current view direction. */
+  frame: (center: THREE.Vector3, radius: number, keepDirection?: boolean) => void;
   /** Scene bounds captured after the meshes were built (world mm). */
   bounds: THREE.Box3 | null;
   setBounds: (box: THREE.Box3) => void;
@@ -118,16 +121,21 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
   // Viewing direction is fixed; the distance follows the viewport shape, which
   // is no longer a forced square (see fitDistance).
   const VIEW_DIR = new THREE.Vector3(1.6, 1.2, 1.8).normalize();
-  const fit = (center: THREE.Vector3, radius: number) => {
+  const frame = (center: THREE.Vector3, radius: number, keepDirection = false) => {
     const r = Math.max(radius, 1);
     lastFit = { center: center.clone(), radius: r };
+    const dir = keepDirection
+      ? camera.position.clone().sub(controls.target).normalize()
+      : VIEW_DIR.clone();
+    if (!Number.isFinite(dir.x) || dir.lengthSq() < 1e-9) dir.copy(VIEW_DIR);
     controls.target.copy(center);
     camera.up.set(0, 1, 0);
-    camera.position.copy(center).addScaledVector(VIEW_DIR, fitDistance(camera, r));
+    camera.position.copy(center).addScaledVector(dir, fitDistance(camera, r));
     controls.minDistance = r * 0.2;
     controls.maxDistance = r * 12;
     controls.update();
   };
+  const fit = (center: THREE.Vector3, radius: number) => frame(center, radius, false);
 
   const setClip = (plane: THREE.Plane | null) => {
     scene.traverse((o) => {
@@ -149,6 +157,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     camera,
     controls,
     fit,
+    frame,
     get bounds() { return bounds; },
     setBounds: (box: THREE.Box3) => { bounds = box.clone(); },
     setClip,
@@ -1463,6 +1472,330 @@ export function FluidPlaybackView(props: {
 
 // ------------------------------------------------------- static assembly view
 
+/** One part as the static preview needs it: URL + authored placement. */
+export interface PartSpec {
+  name: string;
+  /** Absolute URL (already `withProject`-wrapped by the caller). */
+  url: string;
+  translate?: number[];
+  rotate?: number[];
+  /** Identity colour from the assembly manifest; absent falls back to the palette. */
+  color?: string;
+}
+
+/**
+ * The shared static assembly preview: load each part's STL, place it, fit, and
+ * offer the exploded view.
+ *
+ * `StaticPartsView` feeds it a RUN's parts; the panel's whole-machine preview
+ * feeds it an assembly manifest's part@version nodes. Keeping one loader means
+ * the two paths cannot drift on placement order, colour, or explode maths.
+ */
+export function PartsPreview(props: {
+  parts: PartSpec[];
+  /** Ground colour (hex); the caller owns the choice — see lighting.ts. */
+  background?: string;
+  /** Left side of the transport row (part count / machine name). */
+  label?: React.ReactNode;
+  /** Caption prefix for screenshots; the exploded variant appends the percent. */
+  shotLabel?: string;
+  /** Filename stem for "save shot". */
+  fileBase?: string;
+  /** Extra transport buttons (e.g. a close button). */
+  extraControls?: React.ReactNode[];
+  onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
+}): React.ReactElement {
+  const [err, setErr] = useState<string | null>(null);
+  const [ready, setReady] = useState(0);
+  const [explode, setExplode] = useState(false);
+  const [explodePct, setExplodePct] = useState(60);
+  // U12: per-part visibility. An assembly is a set of fits, and "look at THIS
+  // pair" needs the option to take the other 40 parts out of the picture without
+  // losing the explode — the explode moves parts, hiding only decides whether
+  // they are drawn, so the two compose.
+  const [hiddenParts, setHiddenParts] = useState<Set<number>>(() => new Set());
+  const [isolated, setIsolated] = useState<number | null>(null);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  // Progress while the (possibly 40+) part files are fetched one by one; a
+  // blank viewport for ten seconds reads as a hang.
+  const [load, setLoad] = useState<{ done: number; total: number } | null>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<SceneHandle | null>(null);
+  // One record per loaded part: its mesh, the authored position, and the
+  // direction/span the exploded view moves it along. The direction is radial
+  // from the assembly centre — coaxial stacks still separate because their
+  // centres differ along the axis; perfectly coincident parts fall back to an
+  // axis cycle so they do not sit on top of each other.
+  const partsRef = useRef<{ mesh: THREE.Mesh; base: THREE.Vector3; dir: THREE.Vector3; span: number }[]>([]);
+  const baseViewRef = useRef<{ center: THREE.Vector3; radius: number } | null>(null);
+  const fullViewRef = useRef<{ center: THREE.Vector3; radius: number } | null>(null);
+  useGround(sceneRef, props.background);
+  // Geometry is shared by every instance of the same part@version (the winder
+  // has 43 nodes over 20 versions); the cache lives for one load pass.
+  const urlsKey = props.parts.map((p) => p.url).join('|');
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const handle = createScene(mount, props.background);
+    if (!handle) { setErr(tr('playback.webgl')); return; }
+    sceneRef.current = handle;
+    // A new part set means the old indices are meaningless.
+    setHiddenParts(new Set());
+    setIsolated(null);
+    setHighlight(null);
+    partsRef.current = [];
+    baseViewRef.current = null;
+    fullViewRef.current = null;
+    let dead = false;
+
+    void (async () => {
+      const box = new THREE.Box3();
+      const geoCache = new Map<string, THREE.BufferGeometry>();
+      setLoad({ done: 0, total: props.parts.length });
+      let loaded = 0;
+      const loadedMeshes: { mesh: THREE.Mesh; name: string }[] = [];
+      for (let i = 0; i < props.parts.length; i++) {
+        const part = props.parts[i]!;
+        try {
+          let geo = geoCache.get(part.url);
+          if (!geo) {
+            const res = await fetch(part.url);
+            if (!res.ok) continue;
+            geo = new STLLoader().parse(await res.arrayBuffer());
+            geoCache.set(part.url, geo);
+          }
+          if (dead) return;
+          const material = new THREE.MeshStandardMaterial({
+            color: part.color ?? partColor(part.name, i, false),
+            metalness: 0.1, roughness: 0.6,
+            transparent: true, opacity: 0.92,
+          });
+          const mesh = new THREE.Mesh(geo, material);
+          // Same convention as the host's Manifold path (R = Rz·Ry·Rx), then
+          // translate. NOT three's default Euler order — see placement.ts.
+          if (part.rotate) mesh.rotation.copy(placementEuler(part.rotate));
+          if (part.translate) {
+            mesh.position.set(part.translate[0] ?? 0, part.translate[1] ?? 0, part.translate[2] ?? 0);
+          }
+          mesh.updateMatrixWorld(true);
+          handle.scene.add(mesh);
+          box.expandByObject(mesh);
+          loadedMeshes.push({ mesh, name: part.name });
+          loaded++;
+        } catch { /* skip a part that failed to load */ }
+        if (dead) return;
+        setLoad({ done: i + 1, total: props.parts.length });
+      }
+      if (dead) return;
+      setLoad(null);
+      if (loaded === 0) setErr(tr('playback.fluidLoadFailed'));
+      else {
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        const radius = box.getSize(new THREE.Vector3()).length() / 2;
+        // Build the explode vectors once, against the authored placement, so a
+        // slider drag never accumulates error (base position, not last position).
+        const partCentres = loadedMeshes.map(({ mesh }) =>
+          new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()));
+        const steps = planExplosion(center, radius, partCentres);
+        const records = loadedMeshes.map(({ mesh }, i) => ({
+          mesh, base: mesh.position.clone(), dir: steps[i]!.dir, span: steps[i]!.span,
+        }));
+        partsRef.current = records;
+        baseViewRef.current = { center: center.clone(), radius };
+        // At 100% every part has moved ≤ span away from the authored box, so
+        // framing the box grown by span keeps the whole slider range visible.
+        fullViewRef.current = { center: center.clone(), radius: radius + Math.max(radius * 1.15, 10) };
+        handle.fit(center, radius);
+      }
+      setReady((v) => v + 1);
+    })();
+
+    return () => {
+      dead = true;
+      handle.dispose();
+      sceneRef.current = null;
+    };
+  }, [urlsKey]);
+
+  // Positions first, framing second (effects run in declaration order).
+  useEffect(() => {
+    const f = explode ? explodePct / 100 : 0;
+    for (const rec of partsRef.current) {
+      rec.mesh.position.copy(rec.base).addScaledVector(rec.dir, rec.span * f);
+    }
+  }, [explode, explodePct, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const view = explode ? fullViewRef.current : baseViewRef.current;
+    if (view) sceneRef.current?.frame(view.center, view.radius, true);
+  }, [explode, ready]);
+
+  // Visibility + highlight are separate from POSITION on purpose: hiding a part
+  // must not disturb the explode of the ones left, and it must not refit the
+  // camera (the user is inspecting a fit, not navigating).
+  useEffect(() => {
+    partsRef.current.forEach((rec, index) => {
+      const visible = !hiddenParts.has(index) && (isolated === null || isolated === index);
+      rec.mesh.visible = visible;
+      const material = rec.mesh.material as THREE.MeshStandardMaterial;
+      const isHighlight = highlight === index;
+      material.emissive.setHex(isHighlight ? 0x1b4b8f : 0x000000);
+      material.emissiveIntensity = isHighlight ? 0.6 : 0;
+      // An isolated view leaves the OTHER parts loaded but out of the way; the
+      // transparency is what makes "isolate" reversible without a reload.
+      material.opacity = visible ? 0.92 : 0.2;
+      material.transparent = true;
+      material.needsUpdate = true;
+    });
+  }, [hiddenParts, isolated, highlight, ready]);
+
+  // Debug handle for the sandbox (`?assert=assembly-hide`): what is drawn, where
+  // the camera is, and where each part sits — the three things the exit names.
+  useEffect(() => {
+    if (!ready) return;
+    const mount = mountRef.current as (HTMLDivElement & { __parts?: unknown }) | null;
+    if (!mount) return;
+    mount.__parts = {
+      count: () => partsRef.current.length,
+      visible: () => partsRef.current.filter((rec) => rec.mesh.visible).length,
+      camera: () => (sceneRef.current ? sceneRef.current.camera.position.toArray() : null),
+      positions: () => partsRef.current.map((rec) => rec.mesh.position.toArray()),
+      hidden: () => [...hiddenParts],
+      isolated,
+      highlight,
+    };
+  }, [ready, hiddenParts, isolated, highlight]);
+
+  // ── U12 legend: per-part eye / isolate / highlight ────────────────────────
+  // A list, not a dropdown per part: the point is to SEE which parts exist while
+  // you take them out, and 42 rows scroll. Names come from the manifest, so the
+  // row says what the machine calls the part.
+  const legend = ready > 0 && React.createElement('div', {
+    'data-parts-legend': '1',
+    style: {
+      position: 'absolute', top: 6, right: 6, zIndex: 4,
+      maxHeight: '62%', width: 168, overflowY: 'auto',
+      background: T.plate, border: `1px solid ${T.line}`, borderRadius: 6,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.10)', fontSize: 10, lineHeight: '15px',
+    },
+  },
+    React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderBottom: `1px solid ${T.divider}`, color: T.muted },
+    },
+      React.createElement('span', { style: { flex: 1, fontWeight: 600 } }, tr('ui.parts.title', { count: partsRef.current.length })),
+      isolated !== null && React.createElement('button', {
+        type: 'button', 'data-parts-clear': '1',
+        onClick: () => setIsolated(null),
+        style: { ...btn(true), padding: '0 4px', fontSize: 10 },
+      }, tr('ui.parts.clearIsolate')),
+    ),
+    props.parts.map((part, index) => {
+      const isHidden = hiddenParts.has(index);
+      const isIsolated = isolated === index;
+      const isHighlighted = highlight === index;
+      return React.createElement('div', {
+        key: `${part.name}-${index}`,
+        'data-part-row': index,
+        onClick: () => setHighlight(isHighlighted ? null : index),
+        title: tr('ui.parts.rowTitle'),
+        style: {
+          display: 'flex', alignItems: 'center', gap: 3, padding: '1px 4px', cursor: 'pointer',
+          background: isHighlighted ? T.accentSoft : 'transparent',
+          color: isHidden ? T.muted : T.ink,
+        },
+      },
+        React.createElement('button', {
+          type: 'button',
+          'data-part-hide': index,
+          'data-part-hidden': isHidden ? '1' : '0',
+          title: isHidden ? tr('ui.parts.show') : tr('ui.parts.hide'),
+          onClick: (e: any) => {
+            e.stopPropagation();
+            setHiddenParts((current) => {
+              const next = new Set(current);
+              if (next.has(index)) next.delete(index); else next.add(index);
+              return next;
+            });
+            if (isolated === index) setIsolated(null);
+          },
+          style: { ...btn(isHidden), padding: '0 3px', fontSize: 10, minWidth: 16 },
+        }, isHidden ? '◌' : '●'),
+        React.createElement('span', {
+          style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        }, part.name),
+        React.createElement('button', {
+          type: 'button',
+          'data-part-isolate': index,
+          'data-part-isolated': isIsolated ? '1' : '0',
+          title: tr('ui.parts.isolateTitle'),
+          onClick: (e: any) => {
+            e.stopPropagation();
+            setIsolated(isIsolated ? null : index);
+            setHiddenParts(new Set());
+          },
+          style: { ...btn(isIsolated), padding: '0 3px', fontSize: 10, minWidth: 16 },
+        }, '◎'),
+      );
+    }),
+  );
+
+  return React.createElement(PlaybackFrame, {
+    mountRef,
+    overlay: legend,
+    getScene: () => (sceneRef.current
+      ? { camera: sceneRef.current.camera, focus: sceneRef.current.controls.target }
+      : null),
+    onReset: () => {
+      setExplode(false);
+      setExplodePct(60);
+      setHiddenParts(new Set());
+      setIsolated(null);
+      setHighlight(null);
+      const view = baseViewRef.current;
+      if (view) sceneRef.current?.frame(view.center, view.radius, false);
+      else sceneRef.current?.refit();
+    },
+    controls: [
+      props.label && React.createElement('span', { key: 'label', style: { fontSize: 11, color: T.soft } }, props.label),
+      ...(props.extraControls ?? []),
+      load && React.createElement('span', { key: 'load', style: { fontSize: 11, color: T.muted } },
+        tr('playback.loadingParts', { done: load.done, total: load.total })),
+      React.createElement('button', {
+        key: 'explode', type: 'button', title: tr('playback.explodeTitle'),
+        onClick: () => setExplode((v) => !v),
+        style: btn(explode),
+      }, tr('playback.explode')),
+      explode && React.createElement('input', {
+        key: 'explode-pct', type: 'range', min: 0, max: 100, value: explodePct,
+        'aria-label': tr('playback.explodeTitle'),
+        onChange: (e: any) => setExplodePct(Number(e.target.value)),
+        style: { width: 90 },
+      }),
+      explode && React.createElement('span', { key: 'explode-val', style: { fontSize: 11, color: T.soft, minWidth: 32 } },
+        `${explodePct}%`),
+      err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: T.danger } }, err),
+      props.onScreenshot && sceneRef.current
+        ? React.createElement('button', {
+            key: 'shot',
+            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement,
+              explode ? tr('playback.explodeShot', { pct: explodePct }) : (props.shotLabel ?? tr('playback.staticShot'))),
+            style: btn(false),
+          }, tr('playback.shot'))
+        : null,
+      props.onScreenshot && sceneRef.current
+        ? React.createElement('button', {
+            key: 'save-shot', title: tr('playback.saveShotTitle'),
+            onClick: () => downloadCanvasPng(sceneRef.current!.renderer.domElement, props.fileBase ?? 'assembly'),
+            style: btn(false),
+          }, tr('playback.saveShot'))
+        : null,
+    ],
+  });
+}
+
 /**
  * An assembly run's parts, placed exactly as `validate_assembly` saw them.
  * No timeline: an assembly gap check is a still product.
@@ -1477,91 +1810,22 @@ export function StaticPartsView(props: {
   partColors?: Record<string, string>;
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
-  const [err, setErr] = useState<string | null>(null);
-  const [ready, setReady] = useState(0);
-  const mountRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<SceneHandle | null>(null);
-  useGround(sceneRef, props.background);
-
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
-    const handle = createScene(mount, props.background);
-    if (!handle) { setErr(tr('playback.webgl')); return; }
-    sceneRef.current = handle;
-    let dead = false;
-
-    void (async () => {
-      const box = new THREE.Box3();
-      let loaded = 0;
-      for (let i = 0; i < props.parts.length; i++) {
-        const name = props.parts[i]!;
-        try {
-          const res = await fetch(withProject(`/api/cad/run/stl?id=${encodeURIComponent(props.runId)}&part=${encodeURIComponent(name)}`));
-          if (!res.ok) continue;
-          const geo = new STLLoader().parse(await res.arrayBuffer());
-          if (dead) return;
-          const material = new THREE.MeshStandardMaterial({
-            color: partColor(name, i, false, props.partColors),
-            metalness: 0.1, roughness: 0.6,
-            transparent: true, opacity: 0.92,
-          });
-          const mesh = new THREE.Mesh(geo, material);
-          // Same convention as the host's Manifold path (R = Rz·Ry·Rx), then
-          // translate. NOT three's default Euler order — see placement.ts.
-          const place = props.placements?.[name];
-          if (place?.rotate) mesh.rotation.copy(placementEuler(place.rotate));
-          if (place?.translate) {
-            mesh.position.set(place.translate[0] ?? 0, place.translate[1] ?? 0, place.translate[2] ?? 0);
-          }
-          mesh.updateMatrixWorld(true);
-          handle.scene.add(mesh);
-          box.expandByObject(mesh);
-          loaded++;
-        } catch { /* skip a part that failed to load */ }
-      }
-      if (dead) return;
-      if (loaded === 0) setErr(tr('playback.fluidLoadFailed'));
-      else {
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        const radius = box.getSize(new THREE.Vector3()).length() / 2;
-        handle.fit(center, radius);
-      }
-      setReady((v) => v + 1);
-    })();
-
-    return () => {
-      dead = true;
-      handle.dispose();
-      sceneRef.current = null;
+  const specs: PartSpec[] = props.parts.map((name, i) => {
+    const place = props.placements?.[name];
+    return {
+      name,
+      url: withProject(`/api/cad/run/stl?id=${encodeURIComponent(props.runId)}&part=${encodeURIComponent(name)}`),
+      translate: place?.translate,
+      rotate: place?.rotate,
+      color: props.partColors?.[name],
     };
-  }, [props.runId, props.parts.join(','), ready === 0 ? 0 : 1]);
-
-  return React.createElement(PlaybackFrame, {
-    mountRef,
-    getScene: () => (sceneRef.current
-      ? { camera: sceneRef.current.camera, focus: sceneRef.current.controls.target }
-      : null),
-    onReset: () => sceneRef.current?.refit(),
-    controls: [
-      React.createElement('span', { key: 'label', style: { fontSize: 11, color: T.soft } },
-        tr('playback.staticAssembly', { count: props.parts.length })),
-      err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: T.danger } }, err),
-      props.onScreenshot && sceneRef.current
-        ? React.createElement('button', {
-            key: 'shot',
-            onClick: () => props.onScreenshot?.(sceneRef.current!.renderer.domElement, tr('playback.staticShot')),
-            style: btn(false),
-          }, tr('playback.shot'))
-        : null,
-      props.onScreenshot && sceneRef.current
-        ? React.createElement('button', {
-            key: 'save-shot', title: tr('playback.saveShotTitle'),
-            onClick: () => downloadCanvasPng(sceneRef.current!.renderer.domElement, `${props.runId}_assembly`),
-            style: btn(false),
-          }, tr('playback.saveShot'))
-        : null,
-    ],
+  });
+  return React.createElement(PartsPreview, {
+    parts: specs,
+    background: props.background,
+    label: tr('playback.staticAssembly', { count: props.parts.length }),
+    shotLabel: tr('playback.staticShot'),
+    fileBase: `${props.runId}_assembly`,
+    onScreenshot: props.onScreenshot,
   });
 }

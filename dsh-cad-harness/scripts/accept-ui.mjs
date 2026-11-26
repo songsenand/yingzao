@@ -62,6 +62,9 @@ const SCENARIOS = [
   // the panel wiring is checked by hand:
   //   node sandbox/preview/shot.mjs --query 'w=520&h=900&subject=p005&slowstl=20&assert=load-progress&debug=0&slow=25000'
   // (observed: "载入 0% · 0.0/0.1 MB" while the body arrives).
+  // U12: per-part hide / isolate / highlight in the whole-machine preview. The
+  // part list is read from the live scene, so a legend that lies cannot pass.
+  { name: 'assembly-hide', query: 'w=1100&h=900&assert=assembly-hide&debug=0' },
   // U21: the WebGL context is REALLY lost and restored (WEBGL_lose_context), and
   // the frame must come back — the failure this guards is a silent blank canvas.
   { name: 'webgl-recover', query: 'w=520&h=900&subject=p005&assert=webgl-recover&debug=0' },

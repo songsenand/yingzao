@@ -2062,3 +2062,106 @@ if (q.get('assert') === 'load-progress') {
     show();
   })();
 }
+
+// ?assert=assembly-hide — U12: in the whole-machine preview, take one part out of
+// the picture and keep inspecting. Four things must hold together:
+//
+//   1. hide removes exactly that part from the draw;
+//   2. the camera does NOT move (inspecting a fit is not navigating);
+//   3. explode still moves the parts that are left (visibility and position are
+//      independent — "其余件仍可爆炸");
+//   4. isolate leaves one part, and clearing it brings the rest back.
+//
+// The part list is read from the live scene (`__parts`), not from the DOM text: a
+// legend row that says "hidden" while the mesh is still drawn is the failure.
+if (q.get('assert') === 'assembly-hide') {
+  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  void (async () => {
+    const lines: string[] = [`assembly per-part visibility (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    // The machine page is reached through the navigator, like a person does: the
+    // preview button lives on THAT page, not on the part page.
+    // Wait for each element before clicking: this assert starts at page load,
+    // when the navigator button does not exist yet (a silent `.click()` on null
+    // is how the first version "ran" without ever leaving the part page).
+    const navBtn = await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 15000);
+    (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+    const machineRow = await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
+    lines.push(`${navBtn && machineRow ? 'PASS' : 'FAIL'}  the navigator offers the 机器 row`);
+    (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
+    await pause(1200);
+    const open = await waitFor(() => Boolean(document.querySelector('[data-machine-preview]')), 20000);
+    lines.push(`${open ? 'PASS' : 'FAIL'}  the machine page offers a whole-machine preview`);
+    if (!open) { show(); return; }
+    (document.querySelector('[data-machine-preview]') as HTMLElement).click();
+    const legend = await waitFor(() => Boolean(document.querySelector('[data-parts-legend]')), 25000);
+    const handle = () => {
+      for (const node of Array.from(document.querySelectorAll('[data-machine-preview-overlay] div'))) {
+        const parts = (node as any).__parts;
+        if (parts) return parts;
+      }
+      return null;
+    };
+    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 30000);
+    lines.push(`${legend ? 'PASS' : 'FAIL'}  the preview lists its parts`);
+    if (!ready) { lines.push('FAIL  the part scene never became ready'); show(); return; }
+    const parts = handle();
+    const count = parts.count();
+    const visible = parts.visible();
+    const cam0 = parts.camera();
+    lines.push(`${count > 1 ? 'PASS' : 'FAIL'}  ${count} parts loaded, ${visible} drawn`);
+    lines.push(`${visible === count ? 'PASS' : 'FAIL'}  every part is drawn before any gesture`);
+
+    // 1. hide one
+    (document.querySelector('[data-part-hide="0"]') as HTMLElement | null)?.click();
+    const hid = await waitFor(() => handle().visible() === count - 1, 5000);
+    lines.push(`${hid ? 'PASS' : 'FAIL'}  hiding one part draws one part fewer (${handle().visible()}/${count})`);
+    const cam1 = handle().camera();
+    const moved = cam0 && cam1 && Math.hypot(cam1[0] - cam0[0], cam1[1] - cam0[1], cam1[2] - cam0[2]) > 1e-6;
+    lines.push(`${!moved ? 'PASS' : 'FAIL'}  hiding does not move the camera`);
+
+    // 2. explode the remainder
+    const posBefore = JSON.stringify(handle().positions());
+    const explodeBtn = Array.from(document.querySelectorAll('[data-machine-preview-overlay] button'))
+      .find((b) => /爆炸|Explode/i.test(b.textContent ?? '')) as HTMLElement | undefined;
+    explodeBtn?.click();
+    const exploded = await waitFor(() => JSON.stringify(handle().positions()) !== posBefore, 5000);
+    lines.push(`${exploded ? 'PASS' : 'FAIL'}  the remaining parts still explode (visibility did not freeze the layout)`);
+
+    // 3. isolate. The camera is sampled AFTER the explode on purpose: exploding
+    // reframes by design, so comparing against the pre-explode camera would
+    // blame the explode on the isolate.
+    const camExploded = handle().camera();
+    (document.querySelector('[data-part-isolate="1"]') as HTMLElement | null)?.click();
+    const isolated = await waitFor(() => handle().visible() === 1, 5000);
+    lines.push(`${isolated ? 'PASS' : 'FAIL'}  isolate leaves exactly one part (${handle().visible()}/${count})`);
+    const cam2 = handle().camera();
+    const moved2 = camExploded && cam2
+      && Math.hypot(cam2[0] - camExploded[0], cam2[1] - camExploded[1], cam2[2] - camExploded[2]) > 1e-6;
+    lines.push(`${!moved2 ? 'PASS' : 'FAIL'}  isolating does not move the camera either`);
+
+    // 4. highlight + clear
+    (document.querySelector('[data-part-row="1"]') as HTMLElement | null)?.click();
+    const highlighted = await waitFor(() => handle().highlight === 1, 5000);
+    lines.push(`${highlighted ? 'PASS' : 'FAIL'}  clicking a row highlights that part`);
+    (document.querySelector('[data-parts-clear]') as HTMLElement | null)?.click();
+    const cleared = await waitFor(() => handle().visible() === count, 5000);
+    lines.push(`${cleared ? 'PASS' : 'FAIL'}  看全部 brings every part back (${handle().visible()}/${count})`);
+    show();
+  })();
+}
