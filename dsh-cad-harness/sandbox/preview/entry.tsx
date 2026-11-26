@@ -2264,3 +2264,72 @@ if (q.get('assert') === 'views') {
     show();
   })();
 }
+
+// ?assert=bom-csv — U22: the machine page can hand its BOM to a workshop. The
+// download is INTERCEPTED (createObjectURL + anchor.click) so the assertion reads
+// the bytes that would have landed on disk, not a toast that says "exported".
+if (q.get('assert') === 'bom-csv') {
+  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`BOM export (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    let captured: Blob | null = null;
+    let capturedName = '';
+    const realCreate = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = ((blob: Blob) => { captured = blob; return realCreate(blob); }) as typeof URL.createObjectURL;
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function patched(this: HTMLAnchorElement) {
+      capturedName = this.download || '';
+      // Do not actually navigate: the bytes are already captured.
+    };
+    try {
+      // Wait for the navigator before clicking it: the assert starts at page
+      // load, when the button does not exist yet (a null click is a no-op and the
+      // assertion then waits forever on a page it never left).
+      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
+      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
+      await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
+      (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
+      const button = await waitFor(() => Boolean(document.querySelector('[data-bom-csv]')), 15000);
+      lines.push(`${button ? 'PASS' : 'FAIL'}  the machine page offers a BOM export`);
+      if (!button) { show(); return; }
+      lines.push(`INFO  button title: ${(document.querySelector('[data-bom-csv]') as HTMLElement).title.slice(0, 90)}`);
+      (document.querySelector('[data-bom-csv]') as HTMLElement).click();
+      const got = await waitFor(() => captured !== null, 5000);
+      lines.push(`${got ? 'PASS' : 'FAIL'}  clicking it produces a file`);
+      const text = captured ? await (captured as Blob).text() : '';
+      const rows = text.replace(/^\uFEFF/, '').trimEnd().split('\n');
+      lines.push(`${/^零件名,版本,数量,材料,工艺,来源,库存编号$/.test(rows[0] ?? '') ? 'PASS' : 'FAIL'}  the header is the seven workshop columns`);
+      lines.push(`${rows.length > 1 ? 'PASS' : 'FAIL'}  the sheet has ${rows.length - 1} part rows`);
+      lines.push(`${rows.slice(1).every((row) => row.split(',').length >= 7) ? 'PASS' : 'FAIL'}  every row has at least seven cells`);
+      lines.push(`${/\.csv$/.test(capturedName) ? 'PASS' : 'FAIL'}  the download is named ${capturedName || '(nothing)'}`);
+      lines.push(`INFO  first row: ${rows[1] ?? '(none)'}`);
+      // The UTF-8 BOM is what keeps Chinese headers intact in Excel. It must be
+      // checked on the BYTES: `Blob.text()` runs the UTF-8 decode algorithm, which
+      // strips a leading BOM — a text-level check can never see it.
+      const head = new Uint8Array(captured ? await (captured as Blob).arrayBuffer() : new ArrayBuffer(0)).slice(0, 3);
+      const hasBom = head[0] === 0xEF && head[1] === 0xBB && head[2] === 0xBF;
+      lines.push(`${hasBom ? 'PASS' : 'FAIL'}  the file starts with a UTF-8 BOM (${[...head].map((b) => b.toString(16)).join(' ')})`);
+    } catch (error) {
+      lines.push(`FAIL  the export threw: ${String((error as Error)?.message ?? error)}`);
+    } finally {
+      URL.createObjectURL = realCreate;
+      HTMLAnchorElement.prototype.click = realClick;
+    }
+    show();
+  })();
+}

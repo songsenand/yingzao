@@ -33,6 +33,21 @@ export interface MachineNode {
   material?: string;
   source?: string;
   stockRef?: string;
+  /**
+   * Manufacturing process for this node (schema: `process.id` + who decided it).
+   * The BOM export prints the id and marks an unconfirmed agent recommendation —
+   * a recommendation is not a settled process, and a CSV reaches a quote.
+   */
+  process?: { id: string; source?: string; confirmedBy?: string };
+  /**
+   * Authored placement, the same convention the host's Manifold path uses
+   * (R = Rz·Ry·Rx, then translate). `pose` is not read here: the 3D preview
+   * needs a rigid transform, and a pose is a rotation about a datum that only
+   * the host can resolve; a node carrying only `pose` stays untransformed and
+   * the preview says so by not pretending.
+   */
+  translate?: [number, number, number];
+  rotate?: [number, number, number];
 }
 
 export interface Machine {
@@ -84,6 +99,23 @@ export function parseMachine(raw: unknown): Machine | null {
       if (typeof with0.material === 'string' && with0.material) node.material = with0.material;
       if (typeof with0.source === 'string' && with0.source) node.source = with0.source;
       if (typeof with0.stockRef === 'string' && with0.stockRef) node.stockRef = with0.stockRef;
+      const withProcess = n as { process?: { id?: unknown; source?: unknown; confirmedBy?: unknown } };
+      if (typeof withProcess.process?.id === 'string' && withProcess.process.id) {
+        node.process = {
+          id: withProcess.process.id,
+          source: typeof withProcess.process.source === 'string' ? withProcess.process.source : undefined,
+          confirmedBy: typeof withProcess.process.confirmedBy === 'string' ? withProcess.process.confirmedBy : undefined,
+        };
+      }
+      const tf = (n as { transform?: { translate?: unknown; rotate?: unknown } }).transform;
+      const triple = (v: unknown): [number, number, number] | undefined =>
+        Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === 'number' && Number.isFinite(x))
+          ? [v[0] as number, v[1] as number, v[2] as number]
+          : undefined;
+      const translate = triple(tf?.translate);
+      const rotate = triple(tf?.rotate);
+      if (translate) node.translate = translate;
+      if (rotate) node.rotate = rotate;
       nodes.push(node);
     }
     if (Array.isArray(n.children)) for (const child of n.children) walk(child as typeof n);

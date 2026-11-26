@@ -15,6 +15,7 @@ import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
 import { MotionPlaybackView, FluidPlaybackView, StaticPartsView, PartsPreview, RunKeyframeStrip, type PartSpec } from './playback';
 import { partShotCaption, runShotCaption, type ShotFrame } from './shot-caption';
 import { downloadName } from '../shared/download-name';
+import { bomFileName, bomGaps, buildBomCsv } from './bom-csv';
 import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overlay';
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
@@ -3160,6 +3161,28 @@ export function CadPanel(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [machinePreview]);
 
+  /**
+   * U22: the BOM as a spreadsheet row set. The gaps are stated next to the button
+   * because "12 of 16 rows declare a quantity" is the difference between a quote
+   * that is right and one that assumed 1.
+   */
+  const exportBom = () => {
+    if (!machine) return;
+    const csv = buildBomCsv(machine.nodes);
+    // UTF-8 BOM for Excel: without it, Chinese headers arrive as mojibake on a
+    // Chinese Windows install. It is prepended HERE, not in the pure builder, so
+    // scripts and tests see plain UTF-8.
+    const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = bomFileName(machine.name);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   /** What the machine physically is, and where its evidence went. */
   const machineOverview = () => React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
     React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink } }, machine?.name ?? tr('ui.machine.title')),
@@ -3168,6 +3191,13 @@ export function CadPanel(): React.ReactElement {
     React.createElement('div', { style: S.hint },
       tr('ui.machine.note')),
     React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      machine && React.createElement('button', {
+        type: 'button',
+        onClick: exportBom,
+        style: S.smallBtn,
+        title: tr('ui.machine.bomTitle', bomGaps(machine.nodes)),
+        'data-bom-csv': '1',
+      }, t('ui.machine.bom')),
       machine && React.createElement('button', {
         type: 'button', onClick: () => setMachinePreview(true), style: S.smallBtn,
         title: tr('ui.machine.previewTitle'), 'data-machine-preview': '1',
@@ -4337,7 +4367,7 @@ export function CadPanel(): React.ReactElement {
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '3px 8px', borderRadius: 999,
           background: T.white, border: `1px solid ${T.line}`,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          boxShadow: T.shadowSm,
           fontSize: 11, fontWeight: 600, color: T.infoInk,
         },
       },
@@ -4361,7 +4391,7 @@ export function CadPanel(): React.ReactElement {
           position: 'absolute', inset: 0, zIndex: 6,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 6, padding: 16, textAlign: 'center',
-          background: 'rgba(255,255,255,0.92)',
+          background: T.scrimSoft,
         },
       },
         React.createElement('div', { style: { fontSize: 22 } }, '♻️'),
