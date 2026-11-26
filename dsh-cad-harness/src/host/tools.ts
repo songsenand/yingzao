@@ -1121,6 +1121,8 @@ export function registerCadTools(
       // leaving two equally-current motion runs (r002/r019 was exactly that).
       subject: `motion:${[...new Set(geometries.map((g) => g.name))].sort().join('+')}:` +
         `${sourceVersionIds.slice().sort().join('+')}:cycles${a.cycles ?? 2}`,
+      // U14: enough to re-ask the same question (parts/joints/drive), not just the answer.
+      request: { ...a },
       // Interference is a witness (the solid overlaps in a real pose) -> excluded.
       // Anchor drift / constraint violations mean the numbers are not trustworthy
       // -> difficult, never a clean bill. Insufficient sampling is the same kind
@@ -2976,6 +2978,7 @@ export function registerCadTools(
         // Same part set = same question re-asked; the newest answer is the one
         // that counts, so older runs about this exact set become history.
         subject: `parts:${a.parts.map((p) => p.name).slice().sort().join('+')}`,
+        request: { ...a },
       });
 
       assemblyRefsForFinalize = { refs, views: pngs.length, runId: run.id, thresholdMm: report.thresholdMm };
@@ -3457,7 +3460,7 @@ export function registerCadTools(
     },
     timeoutMs: 300_000,
     async execute(args: unknown, exec: unknown) {
-      return runPhysicsJob(args as PhysicsToolArgs, await allStores(exec));
+      return runPhysicsJob(args as unknown as PhysicsToolArgs, await allStores(exec));
     },
     finalizeContent(_exec, result) {
       const value = (result as {
@@ -3508,6 +3511,24 @@ export function registerCadTools(
   }), { id: 'cad_simulate', action: 'physics' });
 
   /** Shared by the simulate_fluid tool, the panel preset button and POST /api/cad/fluid/run. */
+  interface StressToolArgs {
+    versionId: string;
+    mode?: 'judge' | 'scan' | 'both';
+    loads?: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
+    supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
+    excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
+    materialIds?: string[];
+    materialJson?: string;
+    directions?: number[][];
+    dxMm?: number;
+    includeSelfWeight?: boolean;
+    gravityMmPerS2?: number[];
+    criticalDistanceMm?: number;
+    probeAtMm?: number[];
+    resultants?: { axis: string; atMm: number }[];
+    runConvergence?: boolean;
+  }
+
   interface FluidToolArgs {
     pipeScad?: string;
     versionId?: string;
@@ -7602,6 +7623,288 @@ export function registerCadTools(
   // 因为 2026-10-08 的探针测出这条车道的两半极不对称：积分量精确、热点位置可用，
   // 而"取最大单元应力"在加密下发散（圆孔 1.002→1.184，①填充比加权也救不了）。
   // 求解器在 python/cad_worker/stress_fem.py；本工具的产出里**没有**那个字段。
+  /** The stress job, extracted so a RE-RUN executes the same body (U14). */
+  async function runStressJob(a: StressToolArgs, project: ProjectStores) {
+      const { store, runStore } = project;
+      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
+      if (!existsSync(modelPath)) {
+        throw new Error(await versionNotFound(store, a.versionId));
+      }
+      const material = resolveStressMaterial(a.materialJson, a.materialIds);
+      const includeSelfWeight = a.includeSelfWeight ?? true;
+      if (includeSelfWeight && !(material.densityKgPerM3 && material.densityKgPerM3 > 0)) {
+        throw new Error(
+          'simulate_stress: material densityKgPerM3 is required when includeSelfWeight is true ' +
+          '(shipped fdm-pla has 1240; materialJson must declare it, or pass includeSelfWeight:false)',
+        );
+      }
+      const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
+      const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
+
+      // PREFLIGHT, before a 30–60 s solve: a load case with no support is a
+      // rigid-body mode, and the worker only says "no constrained node" after it
+      // has built the voxel grid. Say it now, with the fix.
+      const supportCount = (a.supports ?? []).filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
+      if (supportCount === 0) {
+        throw argError('simulate_stress', 'supports',
+          'is empty — the solve would be a rigid-body mode',
+          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}',
+          { received: a.supports ?? [] });
+      }
+      // Mesh-size preflight. The OOM message from the worker was a bare SIGKILL;
+      // the caller had no way to know that dx 0.7/0.5 were beyond this machine.
+      const dxGuess = a.dxMm ?? 0.6;
+      const cells = [0, 1, 2].map((i) => Math.ceil((bbox[1]![i]! - bbox[0]![i]!) / dxGuess) + 2);
+      const estimatedGridCells = cells[0]! * cells[1]! * cells[2]!;
+      if (estimatedGridCells > 12_000_000) {
+        const suggested = Math.max(0.9, Math.cbrt((bbox[1]![0]! - bbox[0]![0]!) * (bbox[1]![1]! - bbox[0]![1]!) * (bbox[1]![2]! - bbox[0]![2]!) / 6_000_000));
+        throw argError('simulate_stress', 'dxMm',
+          'dx ' + dxGuess + 'mm would need about ' + estimatedGridCells.toExponential(2) + ' voxel cells; this worker OOMs before that',
+          'use dx >= ' + suggested.toFixed(2) + 'mm (the strength claim is directional either way), or thicken the thin member so a coarser grid still resolves it',
+          { received: { dxMm: a.dxMm ?? null, estimatedGridCells, suggestedDxMm: +suggested.toFixed(2) } });
+      }
+
+      // The field is an artifact of ONE run, so it lives IN that run (2026-10-23 audit,
+      // FIX-E4). Previously the filename was `<version>-<material>-<dx>`, which says
+      // nothing about the LOAD CASE: two different loads on the same version overwrote
+      // each other, and the report handed the model a path whose contents might belong to
+      // a different question. The run id makes it addressable and immutable.
+      const run = await beginRun(runStore, {
+        kind: 'stress',
+        title: `应力分析 · ${a.versionId}`,   // final title (with verdict) is set at commit
+      });
+      await mkdir(run.dir, { recursive: true });
+      const fieldPath = join(run.dir, 'stress-field.f32');
+
+      let result: Awaited<ReturnType<typeof solveStress>>;
+      try {
+        result = await solveStress({
+        path: modelPath,
+        material,
+        dxMm: a.dxMm,
+        loads: (a.loads ?? []).map((l) => ({
+          forceN: l.forceN,
+          face: l.face
+            ? { axis: l.face.axis as 'x' | 'y' | 'z', side: (l.face.side as 'min' | 'max') ?? 'min' }
+            : undefined,
+          atMm: l.atMm,
+          radiusMm: l.radiusMm,
+        })),
+        includeSelfWeight,
+        gravityMmPerS2: a.gravityMmPerS2,
+        fixedFaces: [
+          ...(a.supports ?? [])
+            .filter((s) => s.face)
+            .map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
+          ...(a.supports ?? [])
+            .filter((s) => s.ground)
+            .map(() => ({ axis: 'z' as const, side: 'min' as const })),
+        ],
+        fixedPoints: (a.supports ?? [])
+          .filter((s) => s.atMm)
+          .map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
+        excludeFromReport: a.excludeFromReport ?? [],
+        probeAtMm: a.probeAtMm,
+        resultants: a.resultants?.map((r) => ({ axis: r.axis as 'x' | 'y' | 'z', atMm: r.atMm })),
+        criticalDistanceMm: a.criticalDistanceMm,
+        runConvergence: a.runConvergence,
+        fieldPath,
+        });
+      } catch (error) {
+        const message = String((error as Error)?.message ?? error);
+        if (/SIGKILL|worker exited|out of memory|Killed/i.test(message)) {
+          throw new Error(
+            `simulate_stress OOM at dx ${a.dxMm ?? 'default'}mm on ${a.versionId}: the worker was killed, no field was produced. ` +
+            `Retry with a coarser dx (>= 0.9 mm on this machine), thicken the thin member, or run it on a worker with more memory. ` +
+            `This is an ENVIRONMENT limit, not a pass and not a geometry failure. Original: ${message}`,
+          );
+        }
+        throw error;
+      }
+      if (result.refused) throw new Error(`simulate_stress refused ${a.versionId}: ${result.refused}`);
+      const field = await readStressField(fieldPath);
+
+      // The tiers. These factors are the colour scale's premise and NOT a safety
+      // factor: the peak method under-reads at the declared distance, and the model
+      // is isotropic while an FDM part's weakness is between layers.
+      // Declared heuristics, not calibrated: `badFactor` is the divisor that produces the
+      // allowable stress, so it is a DESIGN decision, not a colour knob. Named here and
+      // echoed in the report's `method` block so a reader can see the premise
+      // (2026-10-23 audit, FIX-B6).
+      const warnFactor = 2.5;
+      const badFactor = 1.5;
+      const FACTOR_SOURCE = 'declared heuristic (strength/warn, strength/bad) — not calibrated; DESIGN §27.1';
+      const attention = stressAttention({
+        versionId: a.versionId,
+        material,
+        result,
+        bbox,
+        warnFactor,
+        badFactor,
+      });
+      // HARNESS §11.14: a tool may not go silent. When the stress half certifies nothing
+      // (sub-voxel members — the usual answer for the toy-balance parts), an empty field
+      // reads as "all fine", which is the attention failure the principle forbids. The
+      // geometry scan already knows the suspects, so hand them over instead.
+      if (result.regionsTrustworthy === 0) {
+        try {
+          const scan = await (await ensurePythonWorker()).request<{ suspects?: GeometrySuspect[] }>(
+            'scan_attention',
+            { path: modelPath },
+          );
+          const suspects = scan.suspects ?? [];
+          if (suspects.length > 0) {
+            attention.layers.push(geometrySuspectLayer(a.versionId, bbox, suspects));
+          }
+        } catch {
+          // A courtesy scan must never turn a stress run into a failure.
+        }
+      }
+      const bad = result.regions.filter((r) => r.tier === 'bad' && r.trustworthy);
+      const warn = result.regions.filter((r) => r.tier === 'warn' && r.trustworthy);
+      const drifting = result.meshIndependence.verdict === 'drifting';
+      // "ok" is impossible for an assumed material, an unchecked mesh, or a part whose
+      // members are thinner than the voxel: the verdict may not be greener than its
+      // premises (the rule check_printability follows for its built-in profile).
+      const verdict =
+        bad.length > 0
+          ? 'overstressed'
+          : drifting || warn.length > 0 || material.assumed || result.regionsTrustworthy === 0
+            ? 'check'
+            : 'ok';
+
+      // The field is a PRODUCT, not just a reply: the panel draws it as a heatmap and
+      // needs the per-sample values that would be noise in the model's context. They
+      // travel in the run, in the same `attention.json` shape check_printability
+      // writes, so the panel needs no second format and the picture cannot drift from
+      // the digest (DECISION-LOG 2026-10-19).
+      const delivery = stressDelivery({ material, result, warnFactor, badFactor });
+      await run.json('report.json', {
+        versionId: a.versionId,
+        verdict,
+        delivery,
+        material,
+        loadCase: result.loadCase,
+        selfWeight: result.selfWeight,
+        method: {
+          dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm,
+          // The factors decide the allowable stress; a reader must be able to see that they
+          // are a declared heuristic, not a calibration (DESIGN §27.1).
+          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
+        },
+        checks: {
+          equilibriumErrorPct: result.equilibriumErrorPct,
+          energyBalancePct: result.energyBalancePct,
+          meshIndependence: result.meshIndependence,
+        },
+        resultants: result.resultants,
+        attention,
+      });
+      await run.json('attention.json', {
+        id: attention.id,
+        versionId: a.versionId,
+        normalization: field.normalization,
+        samples: field.samples,
+      });
+      await run.commit({
+        status: verdict === 'ok' ? 'pass' : verdict === 'overstressed' ? 'fail' : 'check',
+        // The DELIVERY half, not the display word: a stress run with no trustworthy
+        // region is `difficult`, which `ok` could never express. `verdicts` is a list
+        // (one per question), so the run carries the WORST of them.
+        judgement: delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
+          : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
+            : 'not-excluded',
+        summary: `${material.id} · ${result.loadCase} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
+        title: `应力分析 · ${a.versionId} · ${verdict}`,
+        sourceVersionIds: [a.versionId],
+        subject: `stress:${a.versionId}`,
+        // U14: the request is what a re-run needs; the run store used to keep only the
+        // answer. Additive field — old readers ignore it.
+        request: { ...a },
+      });
+
+      const out: Record<string, unknown> = {
+        versionId: a.versionId,
+        verdict,
+        // It was written to the run report but never to the REPLY, so "deliver against
+        // `delivery`" was impossible: judge mode returned a verdict with no judgement.
+        delivery: delivery as unknown as { [key: string]: Json },
+        material: material as unknown as { [key: string]: Json },
+        loadCase: result.loadCase,
+        selfWeight: result.selfWeight as unknown as { [key: string]: Json },
+        method: {
+          solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
+          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
+          dxMm: result.dxMm,
+          gridCells: result.gridCells,
+          solidCells: result.solidCells,
+          freeDof: result.freeDof,
+          cgIterations: result.cgIterations,
+          cgResidualRel: result.cgResidualRel,
+          criticalDistanceMm: result.criticalDistanceMm,
+          effectiveSampleDistanceMm: result.effectiveDistanceMm,
+          excludedCells: result.excludedCells,
+          fieldPath,
+        },
+        // The schema declares these objects free-form, which infers `Record<string, JsonValue>`;
+        // `meshIndependence` carries optional members (`Json | undefined`) and the resultants are
+        // a typed interface, so both need the index signature. What reaches the model is the
+        // JSON-serialised form, where an absent member is simply absent.
+        checks: {
+          equilibriumErrorPct: result.equilibriumErrorPct,
+          energyBalancePct: result.energyBalancePct,
+          reactionN: result.reactionN,
+          appliedN: result.appliedN,
+          meshIndependence: result.meshIndependence,
+          displacementAtProbeMm: result.probeDisplacementMm,
+        } as unknown as { [key: string]: Json },
+        resultants: result.resultants as unknown as { [key: string]: Json }[],
+        capability: {
+          canReport: [
+            'integrals: reaction, section force/moment/area/second moment, strain energy (equilibrium and energy balance are built-in self-checks)',
+            'hot-spot locations with their extent and local wall thickness in cells (feature >= ~8 cells)',
+            'surface stress per trustworthy region, extrapolated from the depth profile',
+          ],
+          cannotReport: [
+            'the largest element stress (not convergent on a curved or notched boundary: 1.002 -> 1.184 under refinement)',
+            'a safety factor (the peak method under-reads at the declared distance; the model is isotropic)',
+            'layer-direction failure of a printed part, fatigue, creep, buckling, contact/Hertz, dynamics',
+            'anything about a member thinner than the voxel: it is smeared into a thicker one, which reads stiff and safe',
+          ],
+          tiers: `warn above ${(material.strengthMPa / warnFactor).toFixed(2)} MPa, bad above ${(material.strengthMPa / badFactor).toFixed(2)} MPa (strength ${material.strengthMPa} MPa / ${warnFactor}, / ${badFactor}) — a colour scale, not a safety factor`,
+        },
+        attention,
+      };
+      // The two channels are separated STRUCTURALLY, not by convention: scan mode has no
+      // verdict at all, so a risk map cannot be misread as a gate; judge mode has no
+      // attention field, so a verdict cannot be mistaken for a fingerprint of where it
+      // looked. Default = judge (the stricter half, DESIGN §25.7).
+      const mode = a.mode ?? 'judge';
+      if (mode === 'scan') {
+        delete out.verdict;
+        delete out.delivery;
+      }
+      if (mode === 'judge') {
+        delete out.attention;
+        // Same obligation as check_printability: judge mode trims the field, so it must
+        // point somewhere runnable (HARNESS §11.14; 2026-10-23 audit, FIX-B3).
+        out.nextLook = nextLookFor({
+          source: 'stress',
+          versionId: a.versionId,
+          judgement: (delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
+            : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
+              : 'not-excluded'),
+        });
+      }
+      // `out` is assembled in a MODE-DEPENDENT shape (scan mode carries no verdict, judge
+      // mode no field), so its static type is a record even though every key it can emit
+      // is declared in `output.schema` and validated there at the boundary. The cast
+      // bridges exactly that gap; it does not loosen what the caller receives.
+      // `jsonSafe` normalises numpy's -0 (JSON cannot represent it losslessly) — without
+      // it the whole tool call fails as "value is not lossless JSON".
+      return jsonSafe(out) as any;
+  }
+
   registerTool(defineTool({
     name: 'simulate_stress',
     description:
@@ -7795,298 +8098,7 @@ export function registerCadTools(
     },
     timeoutMs: 600_000,
     async execute(args: unknown, exec: unknown) {
-      const a = args as {
-        versionId: string;
-        mode?: 'judge' | 'scan' | 'both';
-        loads?: { forceN: number[]; face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number }[];
-        supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
-        excludeFromReport?: { atMm: number[]; radiusMm?: number }[];
-        materialIds?: string[];
-        materialJson?: string;
-        directions?: number[][];
-        dxMm?: number;
-        includeSelfWeight?: boolean;
-        gravityMmPerS2?: number[];
-        criticalDistanceMm?: number;
-        probeAtMm?: number[];
-        resultants?: { axis: string; atMm: number }[];
-        runConvergence?: boolean;
-      };
-      const { store, runStore } = await allStores(exec);
-      const modelPath = join(store.root, 'versions', a.versionId, 'model.stl');
-      if (!existsSync(modelPath)) {
-        throw new Error(await versionNotFound(store, a.versionId));
-      }
-      const material = resolveStressMaterial(a.materialJson, a.materialIds);
-      const includeSelfWeight = a.includeSelfWeight ?? true;
-      if (includeSelfWeight && !(material.densityKgPerM3 && material.densityKgPerM3 > 0)) {
-        throw new Error(
-          'simulate_stress: material densityKgPerM3 is required when includeSelfWeight is true ' +
-          '(shipped fdm-pla has 1240; materialJson must declare it, or pass includeSelfWeight:false)',
-        );
-      }
-      const bb = boundingBoxOf(parseBinaryStl(await readFile(modelPath)));
-      const bbox = [bb.min.map(Number), bb.max.map(Number)] as [number[], number[]];
-
-      // PREFLIGHT, before a 30–60 s solve: a load case with no support is a
-      // rigid-body mode, and the worker only says "no constrained node" after it
-      // has built the voxel grid. Say it now, with the fix.
-      const supportCount = (a.supports ?? []).filter((s) => s.face || s.ground || Array.isArray(s.atMm)).length;
-      if (supportCount === 0) {
-        throw argError('simulate_stress', 'supports',
-          'is empty — the solve would be a rigid-body mode',
-          'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}',
-          { received: a.supports ?? [] });
-      }
-      // Mesh-size preflight. The OOM message from the worker was a bare SIGKILL;
-      // the caller had no way to know that dx 0.7/0.5 were beyond this machine.
-      const dxGuess = a.dxMm ?? 0.6;
-      const cells = [0, 1, 2].map((i) => Math.ceil((bbox[1]![i]! - bbox[0]![i]!) / dxGuess) + 2);
-      const estimatedGridCells = cells[0]! * cells[1]! * cells[2]!;
-      if (estimatedGridCells > 12_000_000) {
-        const suggested = Math.max(0.9, Math.cbrt((bbox[1]![0]! - bbox[0]![0]!) * (bbox[1]![1]! - bbox[0]![1]!) * (bbox[1]![2]! - bbox[0]![2]!) / 6_000_000));
-        throw argError('simulate_stress', 'dxMm',
-          'dx ' + dxGuess + 'mm would need about ' + estimatedGridCells.toExponential(2) + ' voxel cells; this worker OOMs before that',
-          'use dx >= ' + suggested.toFixed(2) + 'mm (the strength claim is directional either way), or thicken the thin member so a coarser grid still resolves it',
-          { received: { dxMm: a.dxMm ?? null, estimatedGridCells, suggestedDxMm: +suggested.toFixed(2) } });
-      }
-
-      // The field is an artifact of ONE run, so it lives IN that run (2026-10-23 audit,
-      // FIX-E4). Previously the filename was `<version>-<material>-<dx>`, which says
-      // nothing about the LOAD CASE: two different loads on the same version overwrote
-      // each other, and the report handed the model a path whose contents might belong to
-      // a different question. The run id makes it addressable and immutable.
-      const run = await beginRun(runStore, {
-        kind: 'stress',
-        title: `应力分析 · ${a.versionId}`,   // final title (with verdict) is set at commit
-      });
-      await mkdir(run.dir, { recursive: true });
-      const fieldPath = join(run.dir, 'stress-field.f32');
-
-      let result: Awaited<ReturnType<typeof solveStress>>;
-      try {
-        result = await solveStress({
-        path: modelPath,
-        material,
-        dxMm: a.dxMm,
-        loads: (a.loads ?? []).map((l) => ({
-          forceN: l.forceN,
-          face: l.face
-            ? { axis: l.face.axis as 'x' | 'y' | 'z', side: (l.face.side as 'min' | 'max') ?? 'min' }
-            : undefined,
-          atMm: l.atMm,
-          radiusMm: l.radiusMm,
-        })),
-        includeSelfWeight,
-        gravityMmPerS2: a.gravityMmPerS2,
-        fixedFaces: [
-          ...(a.supports ?? [])
-            .filter((s) => s.face)
-            .map((s) => ({ axis: s.face!.axis as 'x' | 'y' | 'z', side: (s.face!.side as 'min' | 'max') ?? 'min' })),
-          ...(a.supports ?? [])
-            .filter((s) => s.ground)
-            .map(() => ({ axis: 'z' as const, side: 'min' as const })),
-        ],
-        fixedPoints: (a.supports ?? [])
-          .filter((s) => s.atMm)
-          .map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
-        excludeFromReport: a.excludeFromReport ?? [],
-        probeAtMm: a.probeAtMm,
-        resultants: a.resultants?.map((r) => ({ axis: r.axis as 'x' | 'y' | 'z', atMm: r.atMm })),
-        criticalDistanceMm: a.criticalDistanceMm,
-        runConvergence: a.runConvergence,
-        fieldPath,
-        });
-      } catch (error) {
-        const message = String((error as Error)?.message ?? error);
-        if (/SIGKILL|worker exited|out of memory|Killed/i.test(message)) {
-          throw new Error(
-            `simulate_stress OOM at dx ${a.dxMm ?? 'default'}mm on ${a.versionId}: the worker was killed, no field was produced. ` +
-            `Retry with a coarser dx (>= 0.9 mm on this machine), thicken the thin member, or run it on a worker with more memory. ` +
-            `This is an ENVIRONMENT limit, not a pass and not a geometry failure. Original: ${message}`,
-          );
-        }
-        throw error;
-      }
-      if (result.refused) throw new Error(`simulate_stress refused ${a.versionId}: ${result.refused}`);
-      const field = await readStressField(fieldPath);
-
-      // The tiers. These factors are the colour scale's premise and NOT a safety
-      // factor: the peak method under-reads at the declared distance, and the model
-      // is isotropic while an FDM part's weakness is between layers.
-      // Declared heuristics, not calibrated: `badFactor` is the divisor that produces the
-      // allowable stress, so it is a DESIGN decision, not a colour knob. Named here and
-      // echoed in the report's `method` block so a reader can see the premise
-      // (2026-10-23 audit, FIX-B6).
-      const warnFactor = 2.5;
-      const badFactor = 1.5;
-      const FACTOR_SOURCE = 'declared heuristic (strength/warn, strength/bad) — not calibrated; DESIGN §27.1';
-      const attention = stressAttention({
-        versionId: a.versionId,
-        material,
-        result,
-        bbox,
-        warnFactor,
-        badFactor,
-      });
-      // HARNESS §11.14: a tool may not go silent. When the stress half certifies nothing
-      // (sub-voxel members — the usual answer for the toy-balance parts), an empty field
-      // reads as "all fine", which is the attention failure the principle forbids. The
-      // geometry scan already knows the suspects, so hand them over instead.
-      if (result.regionsTrustworthy === 0) {
-        try {
-          const scan = await (await ensurePythonWorker()).request<{ suspects?: GeometrySuspect[] }>(
-            'scan_attention',
-            { path: modelPath },
-          );
-          const suspects = scan.suspects ?? [];
-          if (suspects.length > 0) {
-            attention.layers.push(geometrySuspectLayer(a.versionId, bbox, suspects));
-          }
-        } catch {
-          // A courtesy scan must never turn a stress run into a failure.
-        }
-      }
-      const bad = result.regions.filter((r) => r.tier === 'bad' && r.trustworthy);
-      const warn = result.regions.filter((r) => r.tier === 'warn' && r.trustworthy);
-      const drifting = result.meshIndependence.verdict === 'drifting';
-      // "ok" is impossible for an assumed material, an unchecked mesh, or a part whose
-      // members are thinner than the voxel: the verdict may not be greener than its
-      // premises (the rule check_printability follows for its built-in profile).
-      const verdict =
-        bad.length > 0
-          ? 'overstressed'
-          : drifting || warn.length > 0 || material.assumed || result.regionsTrustworthy === 0
-            ? 'check'
-            : 'ok';
-
-      // The field is a PRODUCT, not just a reply: the panel draws it as a heatmap and
-      // needs the per-sample values that would be noise in the model's context. They
-      // travel in the run, in the same `attention.json` shape check_printability
-      // writes, so the panel needs no second format and the picture cannot drift from
-      // the digest (DECISION-LOG 2026-10-19).
-      const delivery = stressDelivery({ material, result, warnFactor, badFactor });
-      await run.json('report.json', {
-        versionId: a.versionId,
-        verdict,
-        delivery,
-        material,
-        loadCase: result.loadCase,
-        selfWeight: result.selfWeight,
-        method: {
-          dxMm: result.dxMm, criticalDistanceMm: result.criticalDistanceMm,
-          // The factors decide the allowable stress; a reader must be able to see that they
-          // are a declared heuristic, not a calibration (DESIGN §27.1).
-          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
-        },
-        checks: {
-          equilibriumErrorPct: result.equilibriumErrorPct,
-          energyBalancePct: result.energyBalancePct,
-          meshIndependence: result.meshIndependence,
-        },
-        resultants: result.resultants,
-        attention,
-      });
-      await run.json('attention.json', {
-        id: attention.id,
-        versionId: a.versionId,
-        normalization: field.normalization,
-        samples: field.samples,
-      });
-      await run.commit({
-        status: verdict === 'ok' ? 'pass' : verdict === 'overstressed' ? 'fail' : 'check',
-        // The DELIVERY half, not the display word: a stress run with no trustworthy
-        // region is `difficult`, which `ok` could never express. `verdicts` is a list
-        // (one per question), so the run carries the WORST of them.
-        judgement: delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
-          : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
-            : 'not-excluded',
-        summary: `${material.id} · ${result.loadCase} · dx ${result.dxMm}mm · 峰值(声明深度) ${result.peakDeclaredDepthMPa}MPa · 可信热点 ${result.regionsTrustworthy}`,
-        title: `应力分析 · ${a.versionId} · ${verdict}`,
-        sourceVersionIds: [a.versionId],
-        subject: `stress:${a.versionId}`,
-      });
-
-      const out: Record<string, unknown> = {
-        versionId: a.versionId,
-        verdict,
-        // It was written to the run report but never to the REPLY, so "deliver against
-        // `delivery`" was impossible: judge mode returned a verdict with no judgement.
-        delivery: delivery as unknown as { [key: string]: Json },
-        material: material as unknown as { [key: string]: Json },
-        loadCase: result.loadCase,
-        selfWeight: result.selfWeight as unknown as { [key: string]: Json },
-        method: {
-          solver: 'voxel-hex8-linear-elastic (numpy matrix-free CG, python/cad_worker/stress_fem.py)',
-          warnFactor, badFactor, factorSource: FACTOR_SOURCE,
-          dxMm: result.dxMm,
-          gridCells: result.gridCells,
-          solidCells: result.solidCells,
-          freeDof: result.freeDof,
-          cgIterations: result.cgIterations,
-          cgResidualRel: result.cgResidualRel,
-          criticalDistanceMm: result.criticalDistanceMm,
-          effectiveSampleDistanceMm: result.effectiveDistanceMm,
-          excludedCells: result.excludedCells,
-          fieldPath,
-        },
-        // The schema declares these objects free-form, which infers `Record<string, JsonValue>`;
-        // `meshIndependence` carries optional members (`Json | undefined`) and the resultants are
-        // a typed interface, so both need the index signature. What reaches the model is the
-        // JSON-serialised form, where an absent member is simply absent.
-        checks: {
-          equilibriumErrorPct: result.equilibriumErrorPct,
-          energyBalancePct: result.energyBalancePct,
-          reactionN: result.reactionN,
-          appliedN: result.appliedN,
-          meshIndependence: result.meshIndependence,
-          displacementAtProbeMm: result.probeDisplacementMm,
-        } as unknown as { [key: string]: Json },
-        resultants: result.resultants as unknown as { [key: string]: Json }[],
-        capability: {
-          canReport: [
-            'integrals: reaction, section force/moment/area/second moment, strain energy (equilibrium and energy balance are built-in self-checks)',
-            'hot-spot locations with their extent and local wall thickness in cells (feature >= ~8 cells)',
-            'surface stress per trustworthy region, extrapolated from the depth profile',
-          ],
-          cannotReport: [
-            'the largest element stress (not convergent on a curved or notched boundary: 1.002 -> 1.184 under refinement)',
-            'a safety factor (the peak method under-reads at the declared distance; the model is isotropic)',
-            'layer-direction failure of a printed part, fatigue, creep, buckling, contact/Hertz, dynamics',
-            'anything about a member thinner than the voxel: it is smeared into a thicker one, which reads stiff and safe',
-          ],
-          tiers: `warn above ${(material.strengthMPa / warnFactor).toFixed(2)} MPa, bad above ${(material.strengthMPa / badFactor).toFixed(2)} MPa (strength ${material.strengthMPa} MPa / ${warnFactor}, / ${badFactor}) — a colour scale, not a safety factor`,
-        },
-        attention,
-      };
-      // The two channels are separated STRUCTURALLY, not by convention: scan mode has no
-      // verdict at all, so a risk map cannot be misread as a gate; judge mode has no
-      // attention field, so a verdict cannot be mistaken for a fingerprint of where it
-      // looked. Default = judge (the stricter half, DESIGN §25.7).
-      const mode = a.mode ?? 'judge';
-      if (mode === 'scan') {
-        delete out.verdict;
-        delete out.delivery;
-      }
-      if (mode === 'judge') {
-        delete out.attention;
-        // Same obligation as check_printability: judge mode trims the field, so it must
-        // point somewhere runnable (HARNESS §11.14; 2026-10-23 audit, FIX-B3).
-        out.nextLook = nextLookFor({
-          source: 'stress',
-          versionId: a.versionId,
-          judgement: (delivery.verdicts.some((v) => v.verdict === 'excluded') ? 'excluded'
-            : delivery.verdicts.some((v) => v.verdict === 'difficult') ? 'difficult'
-              : 'not-excluded'),
-        });
-      }
-      // `out` is assembled in a MODE-DEPENDENT shape (scan mode carries no verdict, judge
-      // mode no field), so its static type is a record even though every key it can emit
-      // is declared in `output.schema` and validated there at the boundary. The cast
-      // bridges exactly that gap; it does not loosen what the caller receives.
-      // `jsonSafe` normalises numpy's -0 (JSON cannot represent it losslessly) — without
-      // it the whole tool call fails as "value is not lossless JSON".
-      return jsonSafe(out) as any;
+      return runStressJob(args as StressToolArgs, await allStores(exec));
     },
   }), { id: 'cad_simulate', action: 'stress' });
 
@@ -11009,6 +11021,26 @@ export function registerCadTools(
           if (!allowed.ok) {
             return new Response(JSON.stringify({ refused: true, kind: wanted, needs: allowed.needs, reason: allowed.reason }),
               { status: 409, headers: { 'content-type': 'application/json' } });
+          }
+          if (plan.mode === 'replay') {
+            // Same question, current geometry: the saved request is re-pinned by
+            // `repinRequest`, and the job runs through the SAME body the tool uses.
+            const args = plan.args as Record<string, unknown>;
+            if (plan.kind === 'stress') {
+              const result = await runStressJob(args as unknown as StressToolArgs, project) as { runId?: string } | undefined;
+              return new Response(JSON.stringify({ kind: plan.kind, runId: (result as any)?.runId ?? null, mode: 'replay', from: plan.lastRunId }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+            }
+            if (plan.kind === 'motion') {
+              const result = await runMotionJob(args as Parameters<typeof runMotionJob>[0], project) as { runId?: string } | undefined;
+              return new Response(JSON.stringify({ kind: plan.kind, runId: (result as any)?.runId ?? null, mode: 'replay', from: plan.lastRunId }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+            }
+            if (plan.kind === 'physics') {
+              const result = await runPhysicsJob(args as unknown as PhysicsToolArgs, project) as { runId?: string } | undefined;
+              return new Response(JSON.stringify({ kind: plan.kind, runId: (result as any)?.runId ?? null, mode: 'replay', from: plan.lastRunId }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+            }
           }
           if (plan.mode !== 'direct') return new Response('unreachable', { status: 500 });
           // Pin the run to the CURRENT version — that is what "re-run on the current

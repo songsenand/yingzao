@@ -134,7 +134,7 @@ async function api(req, url) {
     const plans = [
       { kind: 'printability', mode: 'direct', currentVersionId: 'v083', note: 'screen v083 with the project process profiles' },
       { kind: 'assembly-check', mode: 'direct', currentVersionId: 'v083', note: 're-check every interface contract' },
-      { kind: 'stress', mode: 'needs-args', needs: ['material', 'loads', 'constraints'], note: 'the run store keeps the answer, not the question' },
+      { kind: 'stress', mode: 'replay', from: 'r099', note: 'replays the request saved by r099, with the version re-pinned to the current one' },
       { kind: 'motion', mode: 'needs-args', needs: ['joints', 'drive'], note: 'the run store keeps the answer, not the question' },
       { kind: 'physics', mode: 'needs-args', needs: ['joints', 'bodyType'], note: 'the run store keeps the answer, not the question' },
     ];

@@ -292,6 +292,8 @@ export interface RunWriter {
      * run of the same kind marks that older one `supersededBy` this id.
      */
     subject?: string;
+    /** U14: the caller's inputs, persisted so the same question can be re-asked. */
+    request?: Record<string, unknown>;
   }): Promise<RunEntry>;
 }
 
@@ -398,6 +400,9 @@ export async function beginRun(
           hasGeometry: parts.length > 0,
           parts: parts.slice().sort(),
           ...(final.subject ? { subject: final.subject } : {}),
+          // U14: the question, so a re-run is a re-run. Absent stays absent — a run
+          // written before this field is NOT replayable, and the planner says so.
+          ...(final.request ? { request: final.request } : {}),
           ...(superseded.length ? { supersedes: superseded } : {}),
           ...(Object.keys(placements).length ? { placements } : {}),
           // The user overlay is part of the environment a number came out of, and

@@ -25,13 +25,15 @@ export interface RerunSource {
   /** Version ids of the part, newest last. */
   versions: { id: string; partId: string }[];
   /** Existing runs, newest last, with their kind and cited versions. */
-  runs: { id: string; kind: string; sourceVersionIds: string[] }[];
+  runs: { id: string; kind: string; sourceVersionIds: string[]; request?: Record<string, unknown> }[];
   /** Whether `assembly/assembly.json` exists (the manifest path). */
   hasManifest: boolean;
 }
 
 export type RerunPlan =
   | { kind: CheckKind; mode: 'direct'; currentVersionId: string; note: string }
+  /** A later run saved its request: the same question can be re-asked, version re-pinned. */
+  | { kind: CheckKind; mode: 'replay'; args: Record<string, unknown>; lastRunId: string; note: string }
   | { kind: CheckKind; mode: 'needs-args'; needs: string[]; lastRunId: string | null; note: string }
   | { kind: CheckKind; mode: 'unavailable'; note: string };
 
@@ -72,13 +74,27 @@ export function planCheckRerun(
     const last = [...source.runs].reverse().find((run) => run.kind === kind) ?? null;
     const missing = MISSING_INPUTS[kind];
     if (missing.length > 0) {
+      // A run that PERSISTED its request can be replayed: same question, geometry
+      // re-pinned to the current version. Runs written before the field existed
+      // cannot — their inputs are gone, and pretending otherwise is the bug this
+      // planner exists to prevent.
+      if (last?.request) {
+        const args = repinRequest(last.request, source.versions, last.sourceVersionIds, partId);
+        return {
+          kind,
+          mode: 'replay',
+          args,
+          lastRunId: last.id,
+          note: `replays the request saved by ${last.id}, with the version re-pinned to the current one`,
+        };
+      }
       return {
         kind,
         mode: 'needs-args',
         needs: missing,
         lastRunId: last?.id ?? null,
         note: `${kind} needs ${missing.join(', ')}: the run store keeps the answer, not the question`
-          + (last ? ` (last ${kind} run: ${last.id})` : ''),
+          + (last ? ` (last ${kind} run: ${last.id}, written before requests were saved)` : ''),
       };
     }
     if (kind === 'printability') {
@@ -102,6 +118,40 @@ export function planCheckRerun(
 }
 
 /**
+ * Re-pin a saved request to the CURRENT versions, without touching anything else.
+ *
+ * Every version reference the tools use is covered: `versionId` (stress,
+ * printability) and `parts[].versionId` (motion, physics). A reference whose part
+ * cannot be identified is LEFT AS IT WAS — silently dropping a body would turn a
+ * re-run of a mechanism into a different mechanism.
+ */
+export function repinRequest(
+  request: Record<string, unknown>,
+  versions: { id: string; partId: string }[],
+  citedVersionIds: string[],
+  partId?: string,
+): Record<string, unknown> {
+  const newestOf = (versionId: unknown): unknown => {
+    if (typeof versionId !== 'string') return versionId;
+    const owner = versions.find((version) => version.id === versionId);
+    if (!owner) return versionId;
+    return currentVersionOf(versions, partId ?? owner.partId) ?? versionId;
+  };
+  const out: Record<string, unknown> = { ...request };
+  if (typeof out.versionId === 'string') out.versionId = newestOf(out.versionId);
+  if (Array.isArray(out.parts)) {
+    out.parts = (out.parts as Record<string, unknown>[]).map((part) => (
+      part && typeof part === 'object' && typeof part.versionId === 'string'
+        ? { ...part, versionId: newestOf(part.versionId) }
+        : part
+    ));
+  }
+  // The run's own citation should follow too, so a report can say what it replaced.
+  out.replayedFrom = citedVersionIds;
+  return out;
+}
+
+/**
  * The verdict for a plan the caller asked to execute.
  *
  * A route that runs `needs-args` kinds anyway is the failure mode this function
@@ -110,6 +160,7 @@ export function planCheckRerun(
  */
 export function canExecute(plan: RerunPlan): { ok: true } | { ok: false; reason: string; needs: string[] } {
   if (plan.mode === 'direct') return { ok: true };
+  if (plan.mode === 'replay') return { ok: true };
   if (plan.mode === 'needs-args') {
     return { ok: false, reason: plan.note, needs: plan.needs };
   }

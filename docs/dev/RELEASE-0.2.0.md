@@ -31,7 +31,8 @@
 - 五项检查（制造/应力/装配/运动/物理）任一可从面板重跑；BOM CSV 可直接给加工/报价。
 
 > **现状（2026-11-27）**：BOM CSV 已收口（U22）；重跑 **2/5**——制造与装配可一键（钉当前版本），
-> 应力/运动/物理被**如实拒绝**并列出缺失输入（`needs`），因为 `run.json` 只存答案不存问题。
+> 应力/运动/物理在旧运行上被**如实拒绝**并列出缺失输入（`needs`）；**2026-11-27 起新运行会记 `request`**，
+> 于是它们可以 replay（版本重新钉住、joints 原样）。
 > 要满足本条原文，需要把请求参数持久化进 run.json（additive，0.2.0）。
 > 同理"流体不再有已知管外粒子"：F2 已修流轴、薄壁政策已立，但细网格仍可能外泄（F1b 未做）。
 
@@ -95,7 +96,7 @@
 | F1 | 流体域闭合余项 | 已知穿壁/薄壁泄漏会直接破坏"五层验证"的可信度；必须给出政策与数字。**已落 2026-11-27**：薄壁政策（`measureThinWallMm` 中值脊线 + 自动 dx 减半/拒绝/显式 dx 标注，`accept-fluid-wall-policy` 19 项）；dx 收敛曲线（`accept-fluid-convergence` 9 项：0.90/0.82/0.32 **不收敛**，只可同 dx 比较）。**余**：粒子级约束/入口回流（细网格仍可能外泄 Ø34@dx1=608）| 1–2d |
 | F2 | 流体预设流轴与短粗件 | Ø44×30 的管沿横截面驱动是确定性错误，1d 能修，没有理由带着发版。**已收口 2026-11-27**：`flowAxisFromVoid`（两条轴有壁、第三条敞开者即通道）+ `axisSource` 溯源；Ø44×30 由 X 改为 Z，实体件回退 bbox；`accept-fluid-axis` 17 项（含旧规则反证）| 1d |
 | N15 | 流体进度 / 取消（A：只做流体） | 161s 无进度无取消 = 看起来卡死；这是"问题少"的直接项。**已收口 2026-11-27**：worker 进度帧 + `FluidJobRegistry` + 路由 + 面板百分比/取消（取消=杀求解器进程）；`accept-fluid-jobs` 19 项（真子进程，kill 后 0ms settle、无孤儿）+ `accept-ui fluid-job` 7 项 | 2d |
-| U14 | 任一检查一键重跑 | 现在只有流体能重跑；迭代闭环靠回会话就不叫准生产。**partial 2026-11-27**：`check-rerun.ts` 分类——制造/装配 `direct`（一键、钉当前版本），应力/运动/物理 `needs-args`（run 只存答案不存问题）→ 409 + `needs` 且**不建 run**；面板 2 可点 / 3 禁用并写明缺什么；`accept-check-rerun` 26 项 + `accept-ui rerun-check` 9 项。**余**：五分之三要请求参数持久化（0.2.0，additive schema）| 2d |
+| U14 | 任一检查一键重跑 | 现在只有流体能重跑；迭代闭环靠回会话就不叫准生产。**已落 2026-11-27**：`run.json` 记 `request`（应力/运动/物理），`check-rerun.ts` 三分类 direct / replay / needs-args——有 request 的近期运行可重放（versionId 与 parts[].versionId 钉到当前版本，joints 原样），没有的仍 409 + `needs` 且**不建 run**；面板 2 direct / 1 replay / 2 refused。`accept-check-rerun` 30 项 + `accept-ui rerun-check` 11 项。**余**：stress 提取后的 job 路径待真跑回归（本环境无 numpy）| 2d |
 
 ### D. 交付
 

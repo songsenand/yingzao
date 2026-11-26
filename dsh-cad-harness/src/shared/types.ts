@@ -79,6 +79,13 @@ export interface RunProduct {
    */
   subject?: string;
   /**
+   * The REQUEST that produced this run, when it came from a caller whose inputs
+   * cannot be rebuilt from the corpus (stress loads, motion joints, physics bodies).
+   * Additive: runs written before this field simply lack it, and every reader must
+   * treat its absence as "not replayable" rather than "no inputs" (U14).
+   */
+  request?: Record<string, unknown>;
+  /**
    * Id of the newer run of the same kind about the same subject that replaced
    * this one. The run is still readable — this is a lifecycle pointer, not a
    * deletion — and it is the one field that may be written after commit.

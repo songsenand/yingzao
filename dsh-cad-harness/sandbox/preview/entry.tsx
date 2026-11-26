@@ -2617,13 +2617,17 @@ if (q.get('assert') === 'rerun-check') {
       const buttons = Array.from(document.querySelectorAll('[data-rerun-kind]')) as HTMLElement[];
       lines.push(`${buttons.length === 5 ? 'PASS' : 'FAIL'}  all five kinds are listed (${buttons.length})`);
       const direct = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'direct');
+      const replay = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'replay');
       const blocked = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'needs-args');
       lines.push(`${direct.length === 2 ? 'PASS' : 'FAIL'}  two are directly re-runnable (${direct.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
-      lines.push(`${blocked.length === 3 ? 'PASS' : 'FAIL'}  three are refused (${blocked.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
+      lines.push(`${replay.length === 1 ? 'PASS' : 'FAIL'}  one is replayable from a saved request (${replay.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
+      lines.push(`${blocked.length === 2 ? 'PASS' : 'FAIL'}  two are refused (${blocked.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
+      lines.push(`${replay.every((b) => !(b as HTMLButtonElement).disabled) ? 'PASS' : 'FAIL'}  the replay one is CLICKABLE (its inputs were persisted)`);
       lines.push(`${blocked.every((b) => (b as HTMLButtonElement).disabled) ? 'PASS' : 'FAIL'}  the refused ones are DISABLED`);
-      const stress = blocked.find((b) => b.getAttribute('data-rerun-kind') === 'stress');
-      const title = stress?.getAttribute('title') ?? '';
-      lines.push(`${title.includes('material') && title.includes('loads') ? 'PASS' : 'FAIL'}  the tooltip names the missing inputs — ${title.slice(0, 80)}`);
+      const motion = blocked.find((b) => b.getAttribute('data-rerun-kind') === 'motion');
+      const title = motion?.getAttribute('title') ?? '';
+      const needsNamed = ['joints', 'drive'].every((need) => title.includes(need));
+      lines.push(`${needsNamed ? 'PASS' : 'FAIL'}  the tooltip names THAT kind's missing inputs (joints, drive) — ${title.slice(0, 80)}`);
       // Click a direct one: it must post and report the new run.
       (direct[0] as HTMLButtonElement).click();
       const reported = await waitFor(() => {

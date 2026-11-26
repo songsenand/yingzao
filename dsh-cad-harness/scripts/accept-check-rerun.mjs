@@ -19,7 +19,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, copyFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canExecute, currentVersionOf, planCheckRerun } from '../src/host/check-rerun.ts';
+import { canExecute, currentVersionOf, planCheckRerun, repinRequest } from '../src/host/check-rerun.ts';
 import { openVersionStore, listVersions } from '../src/host/version.ts';
 import { openRunStore, listRuns } from '../src/host/runs.ts';
 import { apply } from '../src/host/index.ts';
@@ -85,6 +85,38 @@ console.log('check re-run acceptance\n');
   const noVersions = planCheckRerun({ versions: [], runs: [], hasManifest: true });
   check(noVersions.find((plan) => plan.kind === 'printability')?.mode === 'unavailable',
     'with no versions, printability is unavailable');
+
+  // A run that SAVED its request can be replayed even though the corpus cannot
+  // rebuild the inputs — that is what persistence buys.
+  const withRequest = planCheckRerun({
+    ...source,
+    runs: [
+      { id: 'r001', kind: 'printability', sourceVersionIds: ['v001'] },
+      { id: 'r007', kind: 'stress', sourceVersionIds: ['v001'], request: { versionId: 'v001', loads: [{ forceN: [0, 0, -10] }], supports: [{ ground: true }], materialIds: ['fdm-pla'] } },
+    ],
+  }).find((plan) => plan.kind === 'stress');
+  check(withRequest?.mode === 'replay', 'a stress run that persisted its request is REPLAYABLE', withRequest?.mode);
+  check(withRequest?.mode === 'replay' && withRequest.args.versionId === 'v002',
+    'and the request is carried with the version re-pinned to the CURRENT one (v001 → v002)',
+    JSON.stringify(withRequest?.args?.versionId));
+  check(canExecute(withRequest).ok === true, 'canExecute allows a replay');
+  const before = planCheckRerun(source).find((plan) => plan.kind === 'stress');
+  check(before?.mode === 'needs-args' && /written before requests were saved/.test(before.note),
+    'a run WITHOUT a saved request still says why it cannot be replayed', before?.note);
+
+  // Version re-pinning inside a mechanism's parts[].
+  const repinned = repinRequest(
+    { parts: [{ name: 'base', versionId: 'v001' }, { name: 'arm', versionId: 'v002' }], joints: [{ type: 'revolute' }] },
+    [{ id: 'v001', partId: 'p001' }, { id: 'v002', partId: 'p001' }, { id: 'v003', partId: 'p001' }],
+    ['v001', 'v002'],
+  );
+  check((repinned.parts[0].versionId === 'v003') && (repinned.parts[1].versionId === 'v003'),
+    'every part reference moves to the current version of its part',
+    JSON.stringify(repinned.parts));
+  check(JSON.stringify(repinned.joints) === JSON.stringify([{ type: 'revolute' }]),
+    'joints are carried untouched (re-pinning must not change the mechanism)');
+  check(JSON.stringify(repinned.replayedFrom) === JSON.stringify(['v001', 'v002']),
+    'and the citation it replayed from is recorded');
 
   // canExecute is the gate the route uses.
   const stress = by('stress');

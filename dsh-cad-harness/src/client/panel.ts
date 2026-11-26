@@ -740,8 +740,8 @@ export function CadPanel(): React.ReactElement {
    * the panel must not offer a button the host would refuse.
    */
   const [rerunPlans, setRerunPlans] = useState<{
-    kind: string; mode: 'direct' | 'needs-args' | 'unavailable';
-    needs?: string[]; note: string; currentVersionId?: string;
+    kind: string; mode: 'direct' | 'replay' | 'needs-args' | 'unavailable';
+    needs?: string[]; note: string; currentVersionId?: string; from?: string;
   }[] | null>(null);
   const [rerunBusy, setRerunBusy] = useState(false);
   /** 本地 STL 对话框：预览（不登记）或按路径导入为版本。 */
@@ -3427,14 +3427,16 @@ export function CadPanel(): React.ReactElement {
           type: 'button',
           'data-rerun-kind': plan.kind,
           'data-rerun-mode': plan.mode,
-          disabled: plan.mode !== 'direct' || rerunBusy,
+          disabled: (plan.mode !== 'direct' && plan.mode !== 'replay') || rerunBusy,
           title: plan.mode === 'direct'
             ? plan.note
-            : `${plan.note}${plan.needs?.length ? ` · ${t('ui.rerun.needs')} ${plan.needs.join('、')}` : ''}`,
+            : plan.mode === 'replay'
+              ? `${plan.note}${plan.from ? ` (${plan.from})` : ''}`
+              : `${plan.note}${plan.needs?.length ? ` · ${t('ui.rerun.needs')} ${plan.needs.join('、')}` : ''}`,
           onClick: () => { void rerunCheck(plan.kind); },
           style: {
             ...S.smallBtn, flex: 'none',
-            opacity: plan.mode === 'direct' ? (rerunBusy ? 0.55 : 1) : 0.45,
+            opacity: (plan.mode === 'direct' || plan.mode === 'replay') ? (rerunBusy ? 0.55 : 1) : 0.45,
           },
         }, plan.kind === 'printability' ? t('ui.rerun.kind.printability')
           : plan.kind === 'assembly-check' ? t('ui.rerun.kind.assembly-check')
