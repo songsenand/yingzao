@@ -108,9 +108,14 @@ check(c.fieldLayer.length === 1 && c.fieldLayer[0] === 'von-mises',
 const fieldHasMax = JSON.stringify(c.fieldNormalization).includes('max');
 check(!fieldHasMax, 'the field normalization declares no "max" quantity');
 const toolSrc = readFileSync(join(ROOT, 'src/host/tools.ts'), 'utf8');
-const start = toolSrc.indexOf("name: 'simulate_stress'");
-const end = toolSrc.indexOf('registerTool(defineTool({', start);
-const block = toolSrc.slice(start, end > 0 ? end : undefined);
+// Since U14 the body lives in `runStressJob` (extracted so a re-run executes the SAME
+// code) and the tool registration only calls it. The face under test is therefore the
+// job function PLUS the registration that exposes it — slicing from the tool name
+// alone would now miss everything the body does.
+const jobStart = toolSrc.lastIndexOf('async function runStressJob(', toolSrc.indexOf("name: 'simulate_stress'"));
+const faceStart = jobStart >= 0 ? jobStart : toolSrc.indexOf("name: 'simulate_stress'");
+const end = toolSrc.indexOf('registerTool(defineTool({', toolSrc.indexOf("name: 'simulate_stress'"));
+const block = toolSrc.slice(faceStart, end > 0 ? end : undefined);
 check(!/maxVonMises/.test(block), 'the tool face never forwards the debug boundary maximum');
 check(/DO NOT ASK IT FOR "the largest element stress"/.test(block),
   'the tool description states the boundary at call time');

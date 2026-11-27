@@ -21,6 +21,22 @@ if (runtime.state !== 'ready') {
   console.log(`SKIP  Python runtime is ${runtime.state}; STEP read-back needs it`);
   process.exit(0);
 }
+// The worker writes the welded mesh (and cascadio its intermediate GLB) into the
+// runtime's scratch directory. When that directory is read-only, cascadio fails
+// SILENTLY and the worker reports "OpenCASCADE produced no geometry" — four real-
+// looking failures that are really one environment fact. Probe it and say so.
+try {
+  const { workerScratchDir } = await import('../src/host/python-worker.ts');
+  const { writeFileSync, rmSync } = await import('node:fs');
+  const dir = await workerScratchDir();
+  const probe = join(dir, '.step-accept-probe');
+  writeFileSync(probe, 'ok');
+  rmSync(probe, { force: true });
+} catch (error) {
+  console.log(`SKIP  the worker scratch directory is not writable (${String(error?.message ?? error).split('\n')[0]});`
+    + ' STEP read-back needs it (cascadio writes its GLB there)');
+  process.exit(0);
+}
 
 const fixture = (rel) => fileURLToPath(new URL(`../library/parts/${rel}`, import.meta.url));
 const stl = new Uint8Array(await readFile(fixture('iso4762.M5x16/fit/model.stl')));

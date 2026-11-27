@@ -21,13 +21,13 @@
 | **U11** 视口导航 | ✅ 收口 | `accept-ui views`（13 项）+ `accept-viewport-orbit`（视图数学 +14） |
 | **U19** 面板审计视图 | ✅ 收口 | `accept-audit-gaps`（19 项）+ `accept-ui audit-view`（8 项） |
 | **U15** 测量四族 + 历史 | ✅ 收口 | `accept-measure-families`（26 项）+ `accept-ui measure-families`（8 项） |
-| **F1** 流体域闭合 | 🟡 partial | `accept-fluid-wall-policy`（19）+ `accept-fluid-convergence`（9，结论：到达率**不跨 dx 收敛**）+ `accept-fluid-constraint`（9：Ø34@dx1 穿透 7,098→0）；**缺 Python 引擎 parity**（本环境无 worker scratch，SKIP） |
+| **F1** 流体域闭合 | ✅ 收口 | `accept-fluid-wall-policy`（19）+ `accept-fluid-convergence`（9，结论：到达率**不跨 dx 收敛**）+ `accept-fluid-constraint`（11：Ø34@dx1 穿透 7,098→0、到达率 0.031→0.385、`escaped+active=count0` 精确、关掉约束复现 7,098）+ **两引擎 parity 已跑**（py 0.3989 vs ts 0.3852，py 穿透 0） |
 | **F2** 流轴与短粗件 | ✅ 收口 | `accept-fluid-axis`（17 项，含旧规则反证） |
 | **N15** 流体进度/取消 | ✅ 收口 | `accept-fluid-jobs`（19 项，真子进程 kill 后 0 ms settle、无孤儿）+ `accept-ui fluid-job`（7 项） |
-| **U14** 检查一键重跑 | ✅ 收口（4/5 真跑） | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（30 项）+ `accept-ui rerun-check`（11 项）；**stress 的 `runStressJob` 待真跑回归** |
+| **U14** 检查一键重跑 | ✅ 收口 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（30）+ `accept-ui rerun-check`（11）+ **`accept-stress` 37/37**（提取后的 `runStressJob` 真跑） |
 | **U22** BOM CSV | ✅ 收口 | `accept-bom-csv`（22 项）+ `accept-ui bom-csv`（8 项，下载字节被截获校验） |
 
-**汇总：9 项收口、4 项 partial**（Q1、U20、U21、F1）。
+**汇总：11 项收口、3 项 partial**（Q1、U20、U21——三项都只等人签收，机器侧证据齐全）。
 
 ---
 
@@ -72,8 +72,9 @@
 
 1. **流体到达率不可跨 dx 比较**：Ø22/Ø14×40、100 mm/s、600 步下 dx 4/2/1 = 0.90/0.82/0.32；
    dx=1 加 4 倍步数只回到 0.40。同一 dx 内比较是安全的。
-2. **Python 引擎的 F1b 镜像未在本环境执行**（无 worker scratch、STEP/cascadio 也不可用）；
-   `accept-fluid-constraint` 会探测并在不满足时 SKIP 并打印原因。
+2. **Python 引擎已在可写 runtime 下验证**（py 0.3989 vs ts 0.3852、`accept-release` PASS）。受限环境
+   （`~/.dsh` 只读）可用 `DSH_CAD_PYTHON_ROOT=<工作区内一个指向真实 runtime 的 symlink 目录>`
+   让 scratch 可写；不设时相关脚本会 SKIP 并打印原因，不会假绿。
 3. **Q1 的 3 任务 A/B 未做**：固定前缀 5,930 chars（≈1,483 tok）已比 45 个 legacy 工具的
    104,675 chars 降 94.3%，但"端到端 token 降 20%"还缺实测。
 4. **U20/U21 需要真机签收**：斜切管道目视、切标签页（WebGL 真实丢失）。
@@ -107,7 +108,11 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 [CHECKLIST-preview.1-signoff.md](CHECKLIST-preview.1-signoff.md)；三项通过后把本文件 §1 的
 partial 改成已收口，再打 tag。
 
-**本环境不能跑、必须换机器的检查**：
-`node scripts/accept-release.mjs` 里的 `accept:step-validation`（需要能读 STEP 的 cascadio；
-本沙箱报 "OpenCASCADE produced no geometry"，与本次改动无关）与 `accept-fluid-constraint` 的
-Python parity 段。
+**运行 `accept:release` 的前置**：`~/.dsh`（runtime scratch）必须可写。受限沙箱里 cascadio 无法
+写出中间 GLB，会报成 "OpenCASCADE produced no geometry" —— 那是**环境**，不是夹具坏。可把它指到
+工作区：
+
+```bash
+mkdir -p .tmp-pyroot && ln -sfn ~/.dsh/cad/runtime/{venv,python,state.json,user-site,requirements.lock} .tmp-pyroot/
+DSH_CAD_PYTHON_ROOT=$PWD/.tmp-pyroot npm run accept:release     # PASS（含 STEP 回读与流体 parity）
+```
