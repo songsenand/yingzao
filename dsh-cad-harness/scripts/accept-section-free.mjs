@@ -18,9 +18,10 @@
 
 import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Vector3 } from 'three';
 import {
-  axisPlane, capTriangles, capTrianglesOnPlane, clippingPlane, normalizePlane, planeBasis,
-  planeBasisFor, planeDistance, planeToWorld, projectToCutPlane, projectToPlane,
-  sectionLoops, sectionLoopsOnPlane, sectionSegments, sectionSegmentsOnPlane,
+  axisPlane, capTriangles, capTrianglesOnPlane, clippingPlane, frameToWorld, loopCentroids,
+  normalizePlane, planeBasis, planeBasisFor, planeDistance, planeFrame, planeToWorld,
+  projectToCutPlane, projectToPlane, sectionLoops, sectionLoopsOnPlane, sectionSegments,
+  sectionSegmentsOnPlane,
 } from '../src/client/section.ts';
 
 let failures = 0;
@@ -201,6 +202,56 @@ for (let i = 0; i < obCap.length; i += 3) {
   if (Math.abs(planeDistance(obliqueTube, [obCap[i], obCap[i + 1], obCap[i + 2]])) > 1e-9) obOffPlane++;
 }
 check(obOffPlane === 0, 'every oblique cap vertex lies on its plane', `${obOffPlane} off-plane`);
+
+// ── 5b. the same oblique cut, 150 mm off the origin ────────────────────────
+//
+// Loops are documented as living in the plane's OWN frame. Projecting the raw
+// world coordinate instead is a translation of (point·u, point·v): the cap keeps
+// the right AREA and the right plane distance, but lands somewhere else entirely —
+// measured 44 mm away on the probe knuckle and tens of mm on the corpus parts
+// (2026-11-27, the user's "shredded" section). Area, hull and plane-distance
+// assertions are all translation-invariant, so this needs a POSITION assertion.
+const movedAway = tube({ N }).translate(120, -80, 60);
+const movedPlane = { pointMm: [120, -80, 60], normal: [0, -Math.SQRT1_2, Math.SQRT1_2] };
+const movedFrame = planeFrame(movedPlane);
+const movedLoops = sectionLoopsOnPlane(movedAway, movedPlane);
+const movedCentres = loopCentroids(movedLoops).map((point) => frameToWorld(movedFrame, point));
+check(movedLoops.length === 2
+  && movedCentres.every((point) => Math.hypot(point[0] - 120, point[1] + 80, point[2] - 60) < 0.5),
+  'a translated oblique cut keeps its loops ON the plane point (not at the world origin)',
+  JSON.stringify(movedCentres.map((point) => point.map((value) => +value.toFixed(2)))));
+const movedCap = capTrianglesOnPlane(movedAway, movedPlane);
+let movedCapCentre = [0, 0, 0];
+let movedCapArea = 0;
+for (let i = 0; i + 8 < movedCap.length; i += 9) {
+  const corners = [0, 1, 2].map((k) => [movedCap[i + k * 3], movedCap[i + k * 3 + 1], movedCap[i + k * 3 + 2]]);
+  const [a, b, c] = corners;
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const faceArea = Math.hypot(
+    ab[1] * ac[2] - ab[2] * ac[1],
+    ab[2] * ac[0] - ab[0] * ac[2],
+    ab[0] * ac[1] - ab[1] * ac[0],
+  ) / 2;
+  movedCapArea += faceArea;
+  movedCapCentre = movedCapCentre.map((value, k) => value + ((a[k] + b[k] + c[k]) / 3) * faceArea);
+}
+movedCapCentre = movedCapCentre.map((value) => value / Math.max(movedCapArea, 1e-12));
+check(Math.hypot(movedCapCentre[0] - 120, movedCapCentre[1] + 80, movedCapCentre[2] - 60) < 0.5,
+  'a translated cap is drawn AT the part, not floating (centroid on the plane point)',
+  JSON.stringify(movedCapCentre.map((value) => +value.toFixed(2))));
+const movedBox = movedAway.boundingBox ?? (movedAway.computeBoundingBox(), movedAway.boundingBox);
+const outsideBox = (() => {
+  let count = 0;
+  for (let i = 0; i < movedCap.length; i += 3) {
+    const [x, y, z] = [movedCap[i], movedCap[i + 1], movedCap[i + 2]];
+    if (x < movedBox.min.x - 1e-3 || x > movedBox.max.x + 1e-3
+      || y < movedBox.min.y - 1e-3 || y > movedBox.max.y + 1e-3
+      || z < movedBox.min.z - 1e-3 || z > movedBox.max.z + 1e-3) count++;
+  }
+  return count;
+})();
+check(outsideBox === 0, 'every translated cap vertex stays inside the part\'s box', `${outsideBox} outside`);
 
 // A plane at 90° to the axis (through the ends) misses the walls' interior: no cap.
 check(capTrianglesOnPlane(h, axisPlane('z', 50)).length === 0, 'a plane above the tube has no cap');

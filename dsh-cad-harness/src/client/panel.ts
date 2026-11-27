@@ -823,13 +823,22 @@ export function CadPanel(): React.ReactElement {
   // person means by "切一刀看看". Axis mode is the shortcut in the same strip.
   const [sectionMode, setSectionMode] = useState<'axis' | 'view'>('view');
   /**
-   * The camera direction FROZEN when the user pressed "沿视角剖". It deliberately does
-   * not follow the camera afterwards: a cut that re-aims while you orbit is a clipping
-   * volume, not a section. Press the button again to re-align.
+   * The camera direction the cut is aimed along, CAPTURED when the cut is switched
+   * on and frozen afterwards: rotating the camera while the cut is active must not
+   * move it (user's rule, 2026-11-27: "在剖切状态下旋转，状态不变"). Switching the
+   * cut off and on again re-captures the CURRENT view; the 「沿视角剖」 button
+   * re-aims it on demand. The old bug was that a normal captured in an earlier
+   * session survived a later activation, so the plane looked like a random fixed
+   * oblique cut.
    */
   const [sectionViewNormal, setSectionViewNormal] = useState<[number, number, number]>([0, 0, -1]);
-  const [sectionViewFrozen, setSectionViewFrozen] = useState(false);
-  const [sectionKeepNegative, setSectionKeepNegative] = useState(true);
+  /**
+   * Which half stays. `true` = the side OPPOSITE the plane normal (the axis habit:
+   * a +z cut keeps z ≤ cut). A view cut's normal points away from the viewer, so
+   * `true` would keep the near half and hide the cut behind the part's own outer
+   * surface — the section face must face the user, so view mode starts `false`.
+   */
+  const [sectionKeepNegative, setSectionKeepNegative] = useState(false);
   /** Inline section (the strip's selection) and the one expanded into the sheet. */
   const [tab, setTab] = useState<string>('overview');
   const [sheet, setSheet] = useState<string | null>(null);
@@ -1833,12 +1842,12 @@ export function CadPanel(): React.ReactElement {
     measurePicksRef.current = [];
     setMeasurePicks([]);
     setSectionMode('view');
-    // A frozen view normal belongs to the camera that produced it, not to the next
-    // part: forget it, so enabling the cut freezes the CURRENT camera instead of
+    // The view normal belongs to the camera that produced it, not to the next
+    // part: forget it, so enabling the cut aims at the CURRENT camera instead of
     // reusing the previous part's direction.
     setSectionViewNormal([0, 0, -1]);
-    setSectionViewFrozen(false);
-    setSectionKeepNegative(true);
+    // Default mode is 'view', whose section must face the user (keep the far half).
+    setSectionKeepNegative(false);
     setHeat(null);
     // The bbox is a fact of the mesh being left, not of the panel. A run view
     // has no version mesh, so the scene builder returns before its own
@@ -4924,8 +4933,7 @@ export function CadPanel(): React.ReactElement {
           setSectionPos(0.5);
           setSectionMode('view');
           setSectionViewNormal([0, 0, -1]);
-          setSectionViewFrozen(false);
-          setSectionKeepNegative(true);
+          setSectionKeepNegative(false);
           setHint(t('ui.restore.hint'));
         },
       }),
@@ -5038,14 +5046,16 @@ export function CadPanel(): React.ReactElement {
         onClick: () => {
           const next = !section;
           setSection(next);
-          // Turning the cut ON in view mode freezes the CURRENT camera direction —
-          // a mode whose normal was never set would cut through the middle of nowhere.
-          if (next && sectionMode === 'view' && !sectionViewFrozen) {
+          // Turning the cut ON always captures the CURRENT view: re-activating
+          // after an orbit must cut along the new view (a normal left over from
+          // the previous activation is the "oblique cut somewhere else" report).
+          // From then on the normal is FROZEN for as long as the cut stays on.
+          // The kept half follows the mode: a view cut removes the half between
+          // the camera and the plane so the section FACES the user.
+          setSectionKeepNegative(sectionMode === 'axis');
+          if (next && sectionMode === 'view') {
             const camera = cameraRef.current;
-            if (camera) {
-              setSectionViewNormal(viewNormalFromCamera(camera));
-              setSectionViewFrozen(true);
-            }
+            if (camera) setSectionViewNormal(viewNormalFromCamera(camera));
           }
         },
         'data-section-toggle': '',
@@ -5112,14 +5122,16 @@ export function CadPanel(): React.ReactElement {
           type: 'button',
           onClick: () => {
             if (sectionMode === 'axis') {
-              // Switch to view mode AND freeze the camera direction in one gesture:
-              // a mode with an unset normal would cut through the middle of nowhere.
+              // Switch to view mode AND aim at the camera in one gesture: a mode
+              // whose normal was never set would cut through the middle of nowhere.
               setSectionMode('view');
+              setSectionKeepNegative(false);
               const camera = cameraRef.current;
               if (camera) setSectionViewNormal(viewNormalFromCamera(camera));
-              setSectionViewFrozen(true);
             } else {
               setSectionMode('axis');
+              // The axis cut's historical habit is "keep the low half".
+              setSectionKeepNegative(true);
             }
           },
           'data-section-mode': sectionMode,

@@ -307,10 +307,23 @@ export function sectionLoopsOnPlane(geometry: BufferGeometry, plane: SectionPlan
   const flat = sectionSegmentsOnPlane(geometry, plane);
   if (flat.length === 0) return [];
   const points2: [number, number][] = [];
+  // Relative to the plane's own ORIGIN (`frame.point`), not to the world origin.
+  // The two are the same for a principal-axis plane — its point has no component
+  // along u or v — which is why projecting the raw world coordinate was correct
+  // for years. They differ for any oblique plane whose point is not the origin,
+  // and the error is a TRANSLATION inside the plane of `(point·u, point·v)`:
+  // the loop/cap landed tens of mm away from the cut, floating over the part as
+  // loose ribbons (2026-11-27, the user's screenshot). Area, signed area and
+  // plane distance are all translation-invariant, so every existing assertion
+  // stayed green; only the POSITION was wrong.
+  const [ox, oy, oz] = frame.point;
   for (let i = 0; i < flat.length; i += 3) {
+    const x = flat[i]! - ox;
+    const y = flat[i + 1]! - oy;
+    const z = flat[i + 2]! - oz;
     points2.push([
-      flat[i]! * frame.u[0] + flat[i + 1]! * frame.u[1] + flat[i + 2]! * frame.u[2],
-      flat[i]! * frame.v[0] + flat[i + 1]! * frame.v[1] + flat[i + 2]! * frame.v[2],
+      x * frame.u[0] + y * frame.u[1] + z * frame.u[2],
+      x * frame.v[0] + y * frame.v[1] + z * frame.v[2],
     ]);
   }
   return chainLoops(points2);

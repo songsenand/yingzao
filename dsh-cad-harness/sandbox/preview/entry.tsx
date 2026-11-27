@@ -1902,6 +1902,55 @@ if (q.get('assert') === 'section-free') {
     lines.push(`${planeCount === 1 ? 'PASS' : 'FAIL'}  the part material carries one clipping plane (${planeCount})`);
     lines.push(`${renderer?.localClippingEnabled === true ? 'PASS' : 'FAIL'}  local clipping is enabled on the renderer`);
 
+    // WHICH half, and is it aimed at the screen? three keeps the POSITIVE side of
+    // a clipping plane, so "remove the near half" means the camera's signed
+    // distance is NEGATIVE. Keeping the near half hides the cut face behind the
+    // part's own outer surface — the 2026-11-27 report "it cuts the back half and
+    // you cannot see the section". The second check is the other half of the same
+    // report: the plane must be PARALLEL to the screen, not frozen somewhere.
+    // `cam` / `orbit` are the live camera and controls already captured above.
+    const readPlane = () => (partMesh?.material?.clippingPlanes?.[0] ?? null);
+    const camDistance = cam && readPlane() ? readPlane().distanceToPoint(cam.position) : null;
+    lines.push(`${camDistance !== null && camDistance < -1e-6 ? 'PASS' : 'FAIL'}  the cut removes the NEAR half (camera on the cut side: ${camDistance === null ? 'n/a' : camDistance.toFixed(2)} mm < 0)`);
+    const viewDirNow = () => (orbit?.target && cam
+      ? new THREE.Vector3().subVectors(orbit.target, cam.position).normalize()
+      : null);
+    const alignment = () => {
+      const plane = readPlane();
+      const dir = viewDirNow();
+      return plane && dir ? Math.abs(plane.normal.dot(dir)) : 0;
+    };
+    lines.push(`${alignment() > 0.9999 ? 'PASS' : 'FAIL'}  the cut plane is PARALLEL to the screen (|n·view| = ${alignment().toFixed(5)})`);
+    // The cap and the clip must name the SAME plane: a cap one plane behind the
+    // clip is exactly what "loose ribbons" looked like.
+    const capOnPlane = () => {
+      const plane = readPlane();
+      const cap = capPositions();
+      if (!plane || !cap || cap.length === 0) return false;
+      for (let i = 0; i + 2 < cap.length; i += 3) {
+        if (Math.abs(plane.distanceToPoint(new THREE.Vector3(cap[i]!, cap[i + 1]!, cap[i + 2]!))) > 5e-2) return false;
+      }
+      return true;
+    };
+    lines.push(`${capOnPlane() ? 'PASS' : 'FAIL'}  the cap and the clip name the same plane`);
+
+    // WHERE is the cap, not just how big? The 2026-11-27 bug translated the whole
+    // cap by (plane point · u, plane point · v) inside the plane: the area, the
+    // plane distance and the hull ratio all stayed correct while the cut face
+    // floated 33 mm off the tube (measured) and read as loose ribbons. A cap
+    // vertex outside the part's own bounding box cannot be on the cut.
+    const partBox = partMesh?.geometry?.boundingBox ?? null;
+    let outsideCap = 0;
+    if (partBox && capNow) {
+      const pad = Math.max(partBox.getSize(new THREE.Vector3()).length() * 2e-3, 1e-3);
+      for (let i = 0; i + 2 < capNow.length; i += 3) {
+        if (capNow[i]! < partBox.min.x - pad || capNow[i]! > partBox.max.x + pad
+          || capNow[i + 1]! < partBox.min.y - pad || capNow[i + 1]! > partBox.max.y + pad
+          || capNow[i + 2]! < partBox.min.z - pad || capNow[i + 2]! > partBox.max.z + pad) outsideCap++;
+      }
+    }
+    lines.push(`${partBox && outsideCap === 0 ? 'PASS' : 'FAIL'}  the cut face is ON the part, not floating (${outsideCap} of ${Math.floor((capNow?.length ?? 0) / 3)} cap vertices outside its box)`);
+
     // Carry the FRAME into the verdict page. The live canvas can stop painting
     // after the initial settle (headless GL), and a verdict with no picture is
     // the thing this whole scenario exists to prevent — so the assert takes the
@@ -1941,6 +1990,41 @@ if (q.get('assert') === 'section-free') {
       frame.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;`
         + `width:${rect.width}px;height:${rect.height}px;z-index:2147483647;pointer-events:none;`;
       document.body.appendChild(frame);
+    }
+
+    // FROZEN WHILE ACTIVE (the user's rule, 2026-11-27): the plane is captured when
+    // the cut is switched on; rotating the camera must NOT re-aim it. Only a fresh
+    // activation (or the explicit 「沿视角剖」 button) takes the new view. A script
+    // setting the pose by hand does not fire OrbitControls' own pointer events, so
+    // dispatch the one a real drag would produce.
+    if (orbit && cam) {
+      const t = orbit.target;
+      const planeBefore = readPlane()?.clone() ?? null;
+      const camBefore = cam.position.clone();
+      cam.position.set(t.x - 45, t.y + 65, t.z + 35);
+      cam.updateMatrixWorld?.(true);
+      orbit.update?.();
+      orbit.dispatchEvent?.({ type: 'end' });
+      await new Promise((r) => setTimeout(r, 400));
+      const planeAfter = readPlane();
+      const cameraMoved = cam.position.distanceTo(camBefore) > 1e-6;
+      const planeFixed = Boolean(planeBefore && planeAfter
+        && planeBefore.normal.dot(planeAfter.normal) > 1 - 1e-9
+        && Math.abs(planeBefore.constant - planeAfter.constant) < 1e-6);
+      lines.push(`${cameraMoved && planeFixed ? 'PASS' : 'FAIL'}  rotating WITH the cut on leaves the plane FIXED (camera moved: ${cameraMoved}, same plane: ${planeFixed})`);
+
+      // OFF → orbit somewhere else → ON: the new activation must cut along the NEW
+      // view, not replay the previous plane.
+      (document.querySelector('[data-section-toggle]') as HTMLElement | null)?.click();
+      const wentOff = await waitFor(() => !capPositions(), 5000);
+      cam.position.set(t.x + 25, t.y - 70, t.z + 40);
+      cam.updateMatrixWorld?.(true);
+      orbit.update?.();
+      (document.querySelector('[data-section-toggle]') as HTMLElement | null)?.click();
+      const reaimed = await waitFor(() => alignment() > 0.9999 && Boolean(capPositions()), 9000);
+      const capOnIt = await waitFor(capOnPlane, 6000);
+      lines.push(`${wentOff && reaimed ? 'PASS' : 'FAIL'}  re-activating after an orbit cuts along the NEW view (|n·view| = ${alignment().toFixed(5)})`);
+      lines.push(`${capOnIt ? 'PASS' : 'FAIL'}  the new activation's cap is filled on the new plane`);
     }
 
     // Flip: swapping the kept half must keep the SAME cut face on screen.
