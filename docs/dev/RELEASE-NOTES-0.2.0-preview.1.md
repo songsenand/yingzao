@@ -16,15 +16,15 @@
 | **Q2** 工具面 v1 冻结 | ✅ 收口 | `TOOL-SURFACE-V1.json`（9 面 × 45 action）+ `accept-tool-surface` + `accept-cad-all-surfaces`（元数据派生，非字面量） |
 | **Q1** token 预算 | 🟡 partial | `accept-token-budget`（固定前缀 5,930 chars ≈ 1,483 tok）+ `experiments/20261127_0.2.0_token.md`；**缺 3 任务 A/B**（需真会话） |
 | **U20** 任意剖切 + 封盖 | 🟡 partial | `accept-section-free`（任意平面剖切/封盖，565.685 mm² 45° 立方体截面）+ `accept-ui section`；**缺斜切管道的目视签收** |
-| **U21** 大网格进度 + WebGL 恢复 | 🟡 partial | `accept-stream-progress`（16 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
+| **U21** 大网格进度 + WebGL 恢复 | 🟡 partial | `accept-stream-progress`（17 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
 | **U12** 装配逐件显隐/隔离/高亮 | ✅ 收口 | `accept-ui assembly-hide`（11 项） |
 | **U11** 视口导航 | ✅ 收口 | `accept-ui views`（13 项）+ `accept-viewport-orbit`（视图数学 +14） |
 | **U19** 面板审计视图 | ✅ 收口 | `accept-audit-gaps`（19 项）+ `accept-ui audit-view`（8 项） |
-| **U15** 测量四族 + 历史 | ✅ 收口 | `accept-measure-families`（26 项）+ `accept-ui measure-families`（8 项） |
+| **U15** 测量四族 + 历史 | ✅ 收口 | `accept-measure-families`（33 项）+ `accept-ui measure-families`（8 项） |
 | **F1** 流体域闭合 | ✅ 收口 | `accept-fluid-wall-policy`（19）+ `accept-fluid-convergence`（9，结论：到达率**不跨 dx 收敛**）+ `accept-fluid-constraint`（11：Ø34@dx1 穿透 7,098→0、到达率 0.031→0.385、`escaped+active=count0` 精确、关掉约束复现 7,098）+ **两引擎 parity 已跑**（py 0.3989 vs ts 0.3852，py 穿透 0） |
-| **F2** 流轴与短粗件 | ✅ 收口 | `accept-fluid-axis`（17 项，含旧规则反证） |
-| **N15** 流体进度/取消 | ✅ 收口 | `accept-fluid-jobs`（19 项，真子进程 kill 后 0 ms settle、无孤儿）+ `accept-ui fluid-job`（7 项） |
-| **U14** 检查一键重跑 | ✅ 收口 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（30）+ `accept-ui rerun-check`（11）+ **`accept-stress` 37/37**（提取后的 `runStressJob` 真跑） |
+| **F2** 流轴与短粗件 | ✅ 收口 | `accept-fluid-axis`（15 项，含旧规则反证） |
+| **N15** 流体进度/取消 | ✅ 收口 | `accept-fluid-jobs`（22 项，真子进程 kill 后 0 ms settle、无孤儿）+ `accept-ui fluid-job`（7 项） |
+| **U14** 检查一键重跑 | ✅ 收口 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（37）+ `accept-ui rerun-check`（11）+ **`accept-stress` 37/37**（提取后的 `runStressJob` 真跑） |
 | **U22** BOM CSV | ✅ 收口 | `accept-bom-csv`（22 项）+ `accept-ui bom-csv`（8 项，下载字节被截获校验） |
 
 **汇总：10 项收口、3 项 partial**（Q1、U20、U21——三项都只等人签收，机器侧证据齐全）。
@@ -96,6 +96,10 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 
 `release:preflight` 只负责**顺序**与**汇总**，每一步都调用已有脚本（不会出现"文档写的命令"
 与"实际跑的检查"两份）。跳过的一步显示 `SKIP` 并打印 WARNING，不算通过。
+
+**断言计数自检**：`npm run verify:notes-counts`（约 2 分钟）**真的去跑**本文件点名的套件，把它们
+自己报出的 PASS 数与文中写的数字比对。它上线当天就抓出 5 处漂移（16→17、26→33、17→15、19→22、30→37）——
+都是"当时数过、后来加了断言"的典型。文中数字此后以它为准。
 
 **证据自检**：`npm run audit:release-evidence` 把本文件的每条 claim 对着仓库核一遍——
 命名的 `accept-*` 脚本是否存在、是否**在发布链上**（`accept:preview` / `accept:release` /

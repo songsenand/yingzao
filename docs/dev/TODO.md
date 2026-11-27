@@ -26,7 +26,7 @@
 门禁共 **17 项**，每项必须有可复跑的证据；缺一项不发：
 
 - **工具面 / token（先行，可与 U20 并行）**：Q1（Q2 已收口，见下）
-- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 26 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 17 项，含旧规则反证）；**N15**（2026-11-27，流体长跑进度=已跑/总步数、取消=杀求解器进程；worker 进度帧 + `FluidJobRegistry` + 面板百分比/取消；`accept-fluid-jobs` 19 项 + `accept-ui fluid-job` 7 项）
+- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 33 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 15 项，含旧规则反证）；**N15**（2026-11-27，流体长跑进度=已跑/总步数、取消=杀求解器进程；worker 进度帧 + `FluidJobRegistry` + 面板百分比/取消；`accept-fluid-jobs` 22 项 + `accept-ui fluid-job` 7 项）
 - **主线**：U20、U21、F1、U14
 - **收口**：Q3、Q4（含 R3/R6）、Q5、Q6
 
@@ -44,7 +44,7 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
 | U20 | P1 | partial | 任意剖切 + 剖切面封盖 | **已落**：`SectionPlane`（点+法向）推广，轴切成为特例（逐字节等价）；catalog/封盖/拾取/切片全走同一平面；面板加「轴切/任意平面」切换 + 方位/仰角 + 保留·切除互换；`accept-section-free`（45° 立方体 565.685mm²、圆环 45° 椭圆 333.2mm²、孔被减掉、翻面同一刀、双体各自封盖）+ `accept-ui section-free`（12 项：封盖面积、孔占比 0.305、材质带 1 个裁剪面、裁剪生效使画面像素变化 9.4%→13.5%）。**余**：① 真机面板过一眼「斜切管道看到内腔」；② sandbox 冻结帧与画布重建的先后（截图抓到旧帧）并入 U21 | 2–3d |
-| U21 | P1 | partial | 大网格加载进度 + WebGL 上下文恢复 | **已落**：`stream-progress.ts`（16 项断言）+ 面板进度 pill + `glLost`/`glEpoch` 自动重建（`accept-ui webgl-recover`）。**百万面实测（2026-11-27，sandbox 的软件 GL）**：999,698 三角形 / 47.7 MB，传输 **188 ms（254 MB/s，211 个进度 tick）**，STL 解析+bounds **82 ms（12.5M tri/s）**，首帧 **74 ms**，稳态 **63.9 ms/帧**（733×547，`gl.finish()` 同步后；`renderer.info` 证明确实画了 999,698 tri）。`accept-ui big-mesh` 8 项断言。**余**：真机切标签页手测（需你） | — |
+| U21 | P1 | partial | 大网格加载进度 + WebGL 上下文恢复 | **已落**：`stream-progress.ts`（17 项断言）+ 面板进度 pill + `glLost`/`glEpoch` 自动重建（`accept-ui webgl-recover`）。**百万面实测（2026-11-27，sandbox 的软件 GL）**：999,698 三角形 / 47.7 MB，传输 **188 ms（254 MB/s，211 个进度 tick）**，STL 解析+bounds **82 ms（12.5M tri/s）**，首帧 **74 ms**，稳态 **63.9 ms/帧**（733×547，`gl.finish()` 同步后；`renderer.info` 证明确实画了 999,698 tri）。`accept-ui big-mesh` 8 项断言。**余**：真机切标签页手测（需你） | — |
 
 ## 2. P0 / P1 排队
 
@@ -56,7 +56,7 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 | Q5 | P1 | planned | 用户文档 0.2.0 覆盖 + 中英对照 | 覆盖矩阵（安装/首件/验证/视口/剖切/装配/测量/导出/交付/升级/排障）无空缺；中英同文件集、同标题、版本号一致；截图更新；`accept-docs-parity` 进 CI | 4–5d |
 | Q6 | P0 | planned | 0.2.0 发布工程 | 版本号、release notes、迁移指南、CI 全绿、tag、npm staged（手机批准提示）、发布后 `doctor`/`verify`/安装冒烟、回滚包 | 1–2d |
 | F1 | P0 | **已收口** | 流体域闭合与「管外」审计 | 薄壁政策（`accept-fluid-wall-policy` 19）+ dx 收敛曲线（`accept-fluid-convergence` 9：0.90/0.82/0.32，**不收敛**，只可同 dx 比较）+ **粒子级约束**（`accept-fluid-constraint` 11：Ø34@dx1 穿透 7,098→0、到达率 0.031→0.385、`escaped+active=count0` 精确、关掉约束复现 7,098）+ **两引擎 parity 已跑**（py 0.3989 vs ts 0.3852，py 穿透 0）。环境注记：受限沙箱的 `~/.dsh` 只读，用 `DSH_CAD_PYTHON_ROOT=<工作区 symlink 目录>` 让 scratch 可写后 parity 真跑 | — |
-| U14 | P1 | **已收口** | 任一检查一键重跑 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`repinRequest` 把版本钉到当前（joints 原样）；`simulate_stress` 的体已提取为 `runStressJob`（与工具同一实现）。证据：`accept-check-rerun` 30 项 + `accept-ui rerun-check` 11 项 + **`accept-stress` 37/37**（提取后的 job 真跑，`accept:release` 在可写 runtime 下 PASS） | — |
+| U14 | P1 | **已收口** | 任一检查一键重跑 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`repinRequest` 把版本钉到当前（joints 原样）；`simulate_stress` 的体已提取为 `runStressJob`（与工具同一实现）。证据：`accept-check-rerun` 37 项 + `accept-ui rerun-check` 11 项 + **`accept-stress` 37/37**（提取后的 job 真跑，`accept:release` 在可写 runtime 下 PASS） | — |
 | U16 | P1 | planned | 结构化请求 + 几何标注 | 标注携带 `(versionId, 面/点, 相机)`，切视角仍回原位；请求草稿含版本 + 区域 bbox + 实测 + 目标值，一键发进会话 | 3d |
 | U17 | P1 | planned | 接口 / datum 可视化（9a） | 点契约表一行 → 高亮两个零件、datum 点之间画线、显示实测间隙 vs 容差；不预生成接口图 | 3–4d |
 | U10 | P1 | planned | 大装配视口布局：图例收纳 | 42 件回放的图例默认单行摘要 + 展开限高 2 排/搜索/「只看运动件」；视口高度占比 ≥ 基线 +20%，DOM 断言图例 ≤2 排 | 2d |
