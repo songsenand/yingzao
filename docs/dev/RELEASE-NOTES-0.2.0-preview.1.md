@@ -97,6 +97,11 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 `release:preflight` 只负责**顺序**与**汇总**，每一步都调用已有脚本（不会出现"文档写的命令"
 与"实际跑的检查"两份）。跳过的一步显示 `SKIP` 并打印 WARNING，不算通过。
 
+**制品检查（2026-11-27 实测）**：`npm pack --dry-run` → `dsh-cad-harness-0.2.0-preview.1.tgz`，
+666 个文件、10.3 MB（解包 34.7 MB），**不含** `.tmp-*` / `sandbox/shots` / `node_modules`；
+`lib/index.js` 1.8 MB，入口 `main`/`types`/`exports` 指向它，`import()` 后拿到
+`{name: 'cad-harness', inject: [...], apply: fn}`。
+
 > **上一版的经验**：现有 token 只有 `package:write`，`stage approve` 会 404，直发 E409；
 > **遇到 staged 阻塞，先提示"可以用手机 npmjs.com → Staged Packages 批准"，不要先改版本号。**
 
