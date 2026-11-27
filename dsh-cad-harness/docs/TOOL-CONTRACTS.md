@@ -617,7 +617,7 @@ One image of a saved version with explicit camera control: preset view, custom r
 | `rotate` | array | — | Custom camera rotation [rx,ry,rz] degrees — overrides view. |
 | `zoom` | number | — | Zoom over auto-fit: 2 = twice as close, 0.5 = further out. Default 1. |
 | `imgSize` | integer | — | Image size in px (default 512). |
-| `section` | object | — | Optional cross-section cut. |
+| `section` | object | — | Optional cross-section cut. Give fraction (0..1 of the bbox) or atMm (absolute mm along the axis); atMm wins. |
 
 ```js
 cad_see({ action: "render", args: { versionId: "…" } })
@@ -673,7 +673,7 @@ MANDATORY before delivering a printed part: render the version from top and iso 
 |---|---|---|---|
 | `items` | array | **required** | Versions to review, 1–8 per call. Each needs its own note: a batch shares the views, not the judgment. |
 | `views` | array | — | Views to render/attach. Default and minimum ["top","iso"]; both are required for the delivery gate. You may add front/side. |
-| `section` | object | — | Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show. |
+| `section` | object | — | Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show. Give fraction (0..1) or atMm (mm); atMm wins. |
 | `imgSize` | integer | — | Image size in px (default 512). |
 
 ```js

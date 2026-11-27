@@ -342,6 +342,36 @@ const VIEW_ROTATIONS: Record<ViewName, [number, number, number]> = {
   top: [0, 0, 0], front: [90, 0, 0], side: [0, 90, 0], iso: [65, 0, 25],
 };
 
+/**
+ * A section cut, in the two coordinate systems a caller actually has.
+ *
+ * `fraction` is portable across models but not something a user says; `atMm` is
+ * what a drawing or a measurement gives ("cut at y=18"). Accepting both (and
+ * letting `atMm` win) keeps `render` consistent with `cad_inspect measure`,
+ * which already takes `atMm` for the same cut.
+ */
+export interface SectionCut {
+  axis: 'x' | 'y' | 'z';
+  /** 0..1 of the bounding box along the axis; optional when atMm is given. */
+  fraction?: number;
+  /** Absolute mm along the axis; wins over fraction. */
+  atMm?: number;
+}
+
+/** Resolve a cut to the 0..1 fraction the renderer needs (clamped to the box). */
+export function sectionFraction(
+  bb: { min: readonly number[]; max: readonly number[] },
+  section: SectionCut,
+): number {
+  const i = { x: 0, y: 1, z: 2 }[section.axis];
+  const min = bb.min[i]!;
+  const span = bb.max[i]! - min;
+  const raw = section.atMm !== undefined
+    ? (span > 0 ? (section.atMm - min) / span : 0.5)
+    : (section.fraction ?? 0.5);
+  return Math.min(1, Math.max(0, raw));
+}
+
 export interface StlFrameOptions {
   view?: 'front' | 'side' | 'top' | 'iso';
   /** Custom camera rotation; overrides view preset. */
@@ -349,8 +379,8 @@ export interface StlFrameOptions {
   /** 1 = auto-fit; 2 = twice as close; 0.5 = half as close. */
   zoom?: number;
   imgSize?: number;
-  /** Cut the model: keep the part beyond `fraction` along axis (0..1 of bbox). */
-  section?: { axis: 'x' | 'y' | 'z'; fraction: number };
+  /** Cut the model along an axis: `fraction` (0..1 of bbox) or `atMm` (absolute). */
+  section?: SectionCut;
 }
 
 export interface RenderPartRequest extends StlFrameOptions {
@@ -382,10 +412,17 @@ export async function renderStlFramePng(
   const dir = await mkdtemp(join(tmpdir(), 'cad-frame-'));
   try {
     const lines = [`import("${stlPath}");`];
+    let resolvedSection: { axis: 'x' | 'y' | 'z'; fraction: number } | undefined;
     if (opts.section) {
       const axisIdx = { x: 0, y: 1, z: 2 }[opts.section.axis];
-      // The cut plane sits at a fraction of the model's own bounding box.
-      const cut = bb.min[axisIdx]! + (bb.max[axisIdx]! - bb.min[axisIdx]!) * Math.min(1, Math.max(0, opts.section.fraction));
+      if (opts.section.fraction === undefined && opts.section.atMm === undefined) {
+        throw new Error('section needs fraction (0..1) or atMm (mm)');
+      }
+      // The cut plane is resolved against the model's own bounding box so an
+      // absolute coordinate and a fraction describe the same plane.
+      const frac = sectionFraction(bb, opts.section);
+      resolvedSection = { axis: opts.section.axis, fraction: +frac.toFixed(6) };
+      const cut = bb.min[axisIdx]! + (bb.max[axisIdx]! - bb.min[axisIdx]!) * frac;
       const BIG = Math.max(...bb.max.map((v, i) => Math.abs(v - bb.min[i]!))) * 10 + 100;
       const center = [0, 1, 2].map((i) => (i === axisIdx ? cut + BIG / 2 : 0));
       const sizes = [0, 1, 2].map(() => BIG);
@@ -405,9 +442,11 @@ export async function renderStlFramePng(
       modelDiagonal: diagonal,
     });
     if (!ok) throw new Error(`render failed for ${stlPath}`);
-    const sectionLabel = opts.section ? ` section:${opts.section.axis}@${opts.section.fraction}` : '';
+    const sectionLabel = resolvedSection
+      ? ` section:${resolvedSection.axis}@${opts.section?.atMm !== undefined ? `${opts.section.atMm}mm` : resolvedSection.fraction}`
+      : '';
     const label = `${opts.rotate ? `rot(${opts.rotate.join(',')})` : (opts.view ?? 'iso')}${opts.zoom && opts.zoom !== 1 ? ` zoom×${opts.zoom}` : ''}${sectionLabel}`;
-    return { png: await readFile(pngPath), label };
+    return { png: await readFile(pngPath), label, ...(resolvedSection ? { section: resolvedSection } : {}) };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -435,7 +474,7 @@ export async function renderVersionFrame(
   store: VersionStore,
   req: RenderPartRequest,
   outName: string,
-): Promise<{ png: Uint8Array; label: string }> {
+): Promise<{ png: Uint8Array; label: string; section?: { axis: 'x' | 'y' | 'z'; fraction: number } }> {
   const stlPath = join(store.root, 'versions', req.versionId, 'model.stl');
   return renderStlFramePng(stlPath, req, `inspect_${outName}`);
 }

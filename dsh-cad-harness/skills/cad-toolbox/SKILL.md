@@ -105,7 +105,7 @@ add symlinks. A copied corpus is still a fork even if it has its own `project.js
 | "how strong is it", "where does it break", "stress at this section" | `cad_simulate` (`action: "stress"`) | anything else — it is the only tool that reports a force |
 | **"where should I even look", "any sharp internal corner", "is this mesh clean"** | **`cad_inspect` (`action: "attention"`)** | waiting for a render to reveal it |
 | "the whole set looks crude", "where are the razor edges / blunt ends", "is it the right proportion", "do the parts match / line up" | `cad_check` (`action: "appearance"`) (assembly manifest; add `budgetPath` for the declared envelope, symmetry and near-plane checks) | per-part renders, or calling a part "ugly" with no location |
-| "I need to deliver this printed part", "is the D hole really a D hole" | `cad_see` (`action: "review"`) (top+iso, section when internal; writes the per-version record) | `cad_part` (`action: "generate"`) with `{views:[]}`, or claiming "looks good" without an image |
+| "I need to deliver this printed part", "is the D hole really a D hole" | `cad_see` (`action: "review"`) (top+iso, section when internal — `{ axis: "y", atMm: 18 }` or `{ axis: "y", fraction: 0.68 }`; writes the per-version record) | `cad_part` (`action: "generate"`) with `{views:[]}`, or claiming "looks good" without an image |
 | "does liquid fill it", "where are the dead zones", "does it drain" | `cad_simulate` (`action: "fluid"`) | anything rigid |
 | "channel/duct flow numbers", "velocity profile vs Poiseuille at this Re" | `cad_simulate` (`action: "lbm"`) | embedded solids (box walls only) |
 | "how big / how many holes / is it watertight", whole-part numbers | `cad_inspect` (`action: "measure"`) `kind="part"` | renders |

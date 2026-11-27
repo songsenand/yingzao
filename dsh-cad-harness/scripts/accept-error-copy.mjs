@@ -174,6 +174,24 @@ console.log('--- surface wrapping: one prefix, callable stage ---');
   check(!/set_datums/.test(msg), 'the dead op name is gone from the cause', msg);
 }
 
+{
+  // B: a rejected nested argument names the call that lists the accepted fields.
+  const inner = withOutputContract({
+    name: 'render_part',
+    output: { schema: { type: 'object' } },
+    execute: async () => { throw new Error('invalid arguments: missing required property "section.fraction"'); },
+  });
+  const outer = withOutputContract({
+    name: 'cad_see',
+    output: { schema: { type: 'object' } },
+    execute: async (args, exec) => inner.execute(args, exec),
+  });
+  const msg = await messageOf(() => outer.execute({ action: 'render', args: { section: { axis: 'y', position: 18 } } }, {}));
+  check(msg.includes('[invalid-input] cad_see action=render:'), 'the rejected nested argument keeps the callable stage', msg.slice(0, 120));
+  check(msg.includes('cad_see({ action: "help", args: { op: "render" } })'), 'the hint names the help call to run', msg);
+  check((msg.match(/action: "help"/g) ?? []).length === 1, 'the help hint appears once', msg);
+}
+
 console.log('--- registered descriptions: no dead tool names ---');
 {
   const collected = new Map();

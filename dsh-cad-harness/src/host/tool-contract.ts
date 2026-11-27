@@ -52,12 +52,29 @@ function stripLegacyPrefix(cause: string, legacyStage: string): string {
  * supplied. Legacy op names (`run_python`, `bind_project`) are NOT callable after the
  * facade cutover, so an error that leads with one sends the model to a dead end.
  */
-function stageFor(name: string, args: unknown): string {
+function actionOf(args: unknown): string | undefined {
   const action = (args as { action?: unknown } | null | undefined)?.action;
-  if (typeof action === 'string' && action && action !== 'catalog' && action !== 'help') {
-    return `${name} action=${action}`;
-  }
-  return name;
+  return typeof action === 'string' && action && action !== 'catalog' && action !== 'help'
+    ? action
+    : undefined;
+}
+
+function stageFor(name: string, action: string | undefined): string {
+  return action ? `${name} action=${action}` : name;
+}
+
+/**
+ * Point a rejected nested-argument call at the command that lists the accepted
+ * fields.
+ *
+ * WHY: a surface's `args` is opaque JSON. The model cannot see the legacy op's
+ * nested schema until it calls `help`, so a guessed field (`section.position`)
+ * costs one round trip and teaches it nothing. Appending the help call turns the
+ * rejection into the discovery step instead of leaving it to a second guess.
+ */
+function helpHint(name: string, action: string | undefined): string | null {
+  if (!action || !name.startsWith('cad_')) return null;
+  return `call ${name}({ action: "help", args: { op: ${JSON.stringify(action)} } }) lists the accepted fields`;
 }
 
 /**
@@ -91,7 +108,8 @@ export function withOutputContract<T extends ContractDefinition>(definition: T):
       // A surface delegates to an already-wrapped legacy tool: re-envelope from the
       // inner CAUSE instead of re-classifying the inner TEXT, so the prefix appears
       // once and the stage is the callable surface, not the legacy op.
-      const stage = stageFor(definition.name, args);
+      const action = actionOf(args);
+      const stage = stageFor(definition.name, action);
       const inner = envelopeOf(error);
       // A surface delegates to a legacy tool whose body may still prefix its message
       // with the op name (`set_datums: no usable anchors`). Drop only that prefix:
@@ -101,6 +119,10 @@ export function withOutputContract<T extends ContractDefinition>(definition: T):
       const envelope: ErrorEnvelope = inner
         ? { ...inner, stage, cause, message: cause }
         : classifyError(error, stage);
+      if (envelope.code === 'invalid-input' && !envelope.hint.includes('action: "help"')) {
+        const hint = helpHint(definition.name, action);
+        if (hint) envelope.hint = `${envelope.hint}\n  ${hint}`;
+      }
       const wrapped = withEnvelope(new Error(envelopeText(envelope)), envelope);
       throw wrapped;
     }

@@ -29,8 +29,10 @@ export const ALLOWLIST = [
   // The message is BUILT by thinWallBlockMessage() (design-exceptions.ts), which
   // names `designException` in its last line; this lint only scans the literal at
   // the throw site, so it cannot see through the helper call.
-  // keep it short: an argument error should name its field.
-  'src/host/tools.ts:8326',
+  // `file#snippet` (not file:line) so an unrelated edit above cannot rotate the
+  // exemption onto a different guard. Keep this list short: an argument error
+  // should name its field.
+  'src/host/tools.ts#thinWallBlockMessage',
 ];
 
 const NEGATIVE = /(!\s*a\??\.|a\??\.\w+\s*===\s*undefined|!Array\.isArray\(a\??\.|a\??\.\w+\s*<\s*0|a\??\.\w+\s*<=\s*0)/;
@@ -153,7 +155,8 @@ for (const f of files) {
   const result = scan(f, await readFile(join(ROOT, f), 'utf8'));
   checked += result.checked;
   for (const o of result.offenders) {
-    if (ALLOWLIST.some((x) => x.startsWith(o.key))) continue;
+    if (ALLOWLIST.some((x) => x.startsWith(o.key)
+      || (x.includes('#') && o.line.includes(x.slice(x.indexOf('#') + 1))))) continue;
     offenders++;
     if (list) console.log(`${o.key}  ${o.why}\n    ${o.line}`);
   }

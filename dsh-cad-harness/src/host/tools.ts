@@ -37,7 +37,7 @@ import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, setProjectKernel, type ProjectStores } from './project.ts';
 import { discoverWorkspaces, workspaceRootOf } from './workspaces.ts';
-import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest } from './inspect.ts';
+import { checkPrintability, measureVersion, renderStlViews, renderVersionFrame, scanAttention, type AttentionFieldSamples, type RenderPartRequest, type SectionCut } from './inspect.ts';
 import { analyzeSheet2d, type SheetSection } from './sheet2d.ts';
 import { analyzeTurning, maxRadiusAboutCentre } from './turning.ts';
 import { analyzeCncAccess } from './cnc-access.ts';
@@ -4372,11 +4372,12 @@ export function registerCadTools(
       imgSize: { type: 'integer', description: 'Image size in px (default 512).' },
       section: {
         type: 'object',
-        description: 'Optional cross-section cut.',
+        description: 'Optional cross-section cut. Give fraction (0..1 of the bbox) or atMm (absolute mm along the axis); atMm wins.',
         additionalProperties: false,
         properties: {
           axis: { type: 'string', required: true, description: 'x | y | z' },
-          fraction: { type: 'number', required: true, description: 'Cut plane position as 0..1 fraction of the bounding box along the axis.' },
+          fraction: { type: 'number', description: 'Cut plane position as 0..1 fraction of the bounding box along the axis. Optional when atMm is given.' },
+          atMm: { type: 'number', description: 'Cut plane position as an absolute mm coordinate along the axis (e.g. 18 for y=18mm); wins over fraction.' },
         },
       },
     },
@@ -4390,6 +4391,11 @@ export function registerCadTools(
     timeoutMs: 60_000,
     async execute(args: unknown, exec: unknown) {
       const a = args as RenderPartRequest & { versionId: string };
+      if (a.section && a.section.fraction === undefined && a.section.atMm === undefined) {
+        throw argError('render_part', 'section', 'needs fraction (0..1) or atMm (mm)',
+          'a section object with axis plus one of fraction / atMm',
+          { example: 'render_part({ versionId: "v001", section: { axis: "y", atMm: 18 } })', received: a.section });
+      }
       const { store } = await allStores(exec);
       const { png, label } = await renderVersionFrame(store, a, `${Date.now()}`);
       // A bounded cache, not a growing pile in the version directory: each call used to
@@ -4459,11 +4465,12 @@ export function registerCadTools(
       },
       section: {
         type: 'object',
-        description: 'Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show.',
+        description: 'Optional section cut applied to every item (adds one more image). Use it for an internal feature the outside views cannot show. Give fraction (0..1) or atMm (mm); atMm wins.',
         additionalProperties: false,
         properties: {
           axis: { type: 'string', required: true, description: 'x | y | z' },
-          fraction: { type: 'number', required: true, description: '0..1 of the bounding box along the axis.' },
+          fraction: { type: 'number', description: '0..1 of the bounding box along the axis. Optional when atMm is given.' },
+          atMm: { type: 'number', description: 'Absolute mm along the axis (e.g. 18 for y=18mm); wins over fraction.' },
         },
       },
       imgSize: { type: 'integer', description: 'Image size in px (default 512).' },
@@ -4494,7 +4501,7 @@ export function registerCadTools(
       const a = args as {
         items?: { versionId?: string; note?: string }[];
         views?: string[];
-        section?: { axis: 'x' | 'y' | 'z'; fraction: number };
+        section?: SectionCut;
         imgSize?: number;
       };
       const items = (a.items ?? []).filter((it) => it?.versionId?.trim());
@@ -4516,6 +4523,11 @@ export function registerCadTools(
         if (!requested.includes(v)) throw new Error(`a delivery visual review must include "${v}"; got [${requested.join(', ')}]`);
       }
       if (a.section && !['x', 'y', 'z'].includes(a.section.axis)) throw new Error('section.axis must be x, y or z');
+      if (a.section && a.section.fraction === undefined && a.section.atMm === undefined) {
+        throw argError('review_visual', 'section', 'needs fraction (0..1) or atMm (mm)',
+          'a section object with axis plus one of fraction / atMm',
+          { example: 'review_visual({ items: [...], section: { axis: "y", atMm: 18 } })', received: a.section });
+      }
       const project = await allStores(exec);
       const { store } = project;
       const reviewId = randomUUID();
@@ -4528,18 +4540,24 @@ export function registerCadTools(
         if (!(await versionExists(store, versionId))) throw new Error(`unknown version "${versionId}"`);
         const images: VisualReviewImage[] = [];
         const views: string[] = [];
-        const toRender: { view?: string; section?: { axis: 'x' | 'y' | 'z'; fraction: number }; label: string }[] = [];
+        const reviewedSections: { axis: 'x' | 'y' | 'z'; fraction: number }[] = [];
+        const toRender: { view?: string; section?: SectionCut; label: string }[] = [];
         for (const v of requested) toRender.push({ view: v, label: v });
         // The section is an EXTRA look, not a replacement: the gate still needs the
         // full top/iso, and a section-only record is not a delivery review.
         if (a.section) toRender.push({ section: a.section, label: `section-${a.section.axis}` });
         for (const spec of toRender) {
-          const { png, label } = await renderVersionFrame(store, {
+          const frame = await renderVersionFrame(store, {
             versionId,
             ...(spec.view ? { view: spec.view as 'top' | 'front' | 'side' | 'iso' } : {}),
             ...(spec.section ? { section: spec.section } : {}),
             ...(a.imgSize ? { imgSize: a.imgSize } : {}),
           }, `${Date.now()}-${reviewId.slice(0, 8)}-${spec.label}`);
+          const { png, label } = frame;
+          // The review record stores the RESOLVED fraction: an atMm cut depends on the
+          // version's bbox, and a record that stored mm could not be compared across
+          // versions or checked against a later render.
+          if (frame.section) reviewedSections.push(frame.section);
           const fileName = `${versionId}-review-${safeArtifactName(spec.label) ?? spec.label}.png`;
           const filePath = join(renderDir, fileName);
           await writeFile(filePath, png);
@@ -4564,7 +4582,7 @@ export function registerCadTools(
           store,
           versionId,
           views,
-          ...(a.section ? { sections: [a.section] } : {}),
+          ...(reviewedSections.length ? { sections: reviewedSections } : {}),
           note: it.note!.trim(),
           images,
           source: 'review_visual',
