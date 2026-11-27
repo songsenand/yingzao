@@ -94,6 +94,7 @@
     "token:ab": "node scripts/token-ab-report.mjs",
     "token:ab-toggle": "node scripts/token-ab-toggle.mjs",
     "release:preflight": "node scripts/release-preflight.mjs",
+    "release:report": "node scripts/release-report.mjs",
     "audit:release-evidence": "node scripts/audit-release-evidence.mjs",
     "verify:notes-counts": "node scripts/verify-notes-counts.mjs",
     "accept:explode": "node scripts/accept-explode.mjs",
