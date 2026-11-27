@@ -16,7 +16,7 @@ export const CAD_TOOL_GROUPS: Record<CadToolGroup, readonly string[]> = {
   // gates: must run and must pass (only where no load case is needed to decide)
   deliver: ['preflight', 'deliver', 'pearl_run', 'check_assembly', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'check_parts', 'review_visual', 'delivery_audit'],
   // pointers: where to look next; never gate, never silent
-  detect: ['analyze', 'scan_attention', 'check_sweep', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'check_appearance', 'review_visual', 'simulate_stress', 'scan_stress_hotspots', 'simulate_motion', 'request_review'],
+  detect: ['analyze', 'scan_attention', 'check_sweep', 'check_printability', 'check_sheet2d', 'check_turning', 'check_cnc_access', 'check_edm_access', 'check_appearance', 'review_visual', 'simulate_stress', 'scan_stress_hotspots', 'simulate_motion', 'request_review', 'suggest_interfaces', 'affected_checks'],
   // scenario-driven: meaningless without a declared case; produces EVIDENCE
   simulate: ['simulate_physics', 'simulate_motion', 'simulate_fluid', 'simulate_lbm', 'simulate_stress'],
   // truth: numbers + coordinates, neither gates nor points
@@ -24,7 +24,7 @@ export const CAD_TOOL_GROUPS: Record<CadToolGroup, readonly string[]> = {
     'generate_part', 'create_part', 'import_part', 'merge_parts', 'set_datums', 'write_assembly', 'validate_assembly',
     'render_part', 'measure', 'measure_part', 'measure_gap', 'measure_thickness', 'list_features',
     'measure_section', 'measure_angle', 'check_parts', 'recall_reference_image', 'attach_appearance', 'cad_inspect',
-    'set_part_role', 'check_appearance', 'project_info', 'init_project', 'bind_project', 'run_python', 'python_runtime',
+    'set_part_role', 'check_appearance', 'project_info', 'init_project', 'bind_project', 'run_python', 'python_runtime', 'set_project_kernel', 'retire_run',
   ],
 };
 
