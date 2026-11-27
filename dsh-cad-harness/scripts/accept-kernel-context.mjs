@@ -58,7 +58,7 @@ try {
   check(cad.defs.length === 1 && cad.defs[0].name === 'cad-kernel', 'CAD session gets one kernel context', JSON.stringify(cad.defs.map((d) => d.name)));
   check(cad.defs[0]?.required === true, 'kernel context is required (not suppressible)');
   const text = cad.defs[0]?.text();
-  check(typeof text === 'string' && text.includes('cadquery') && text.includes('generate_part({code})'), 'project marker wins and names the CQ call', text);
+  check(typeof text === 'string' && text.includes('cadquery') && text.includes('cad_part({ action: "generate", args: { code } })'), 'project marker wins and names the CQ call', text);
   check(text.includes('Do not use scadCode') && !text.includes('generate_part({scadCode'), 'CQ text forbids scadCode rather than recommending it', text);
   check(!text.includes('BOSL2'), 'CQ text does not mention BOSL2 at all', text);
   const scadText = kernelPromptText({ kernel: 'openscad', source: 'global', root: workspace });

@@ -123,8 +123,12 @@ function toAsciiStl(mesh) {
   const lines = ['solid flange'];
   for (let t = 0; t < mesh.triVerts.length; t += 3) {
     lines.push('  facet normal 0 0 0', '    outer loop');
+    // `String(-0)` is "0", so a -0 coordinate would silently flip to +0 on the
+    // ASCII round-trip and break the byte-identity check below. Preserve the sign:
+    // it is the same point, but the stored float bits are what 2b compares.
+    const fmt = (n) => (Object.is(n, -0) ? '-0' : String(n));
     for (const i of [mesh.triVerts[t] * 3, mesh.triVerts[t + 1] * 3, mesh.triVerts[t + 2] * 3]) {
-      lines.push(`      vertex ${v[i]} ${v[i + 1]} ${v[i + 2]}`);
+      lines.push(`      vertex ${fmt(v[i])} ${fmt(v[i + 1])} ${fmt(v[i + 2])}`);
     }
     lines.push('    endloop', '  endfacet');
   }

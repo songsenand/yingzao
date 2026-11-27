@@ -107,6 +107,8 @@ interface GeneratePartArgs {
   userIntent: string;
   parentVersion?: string;
   part?: string;
+  /** Alias for `part` (create_part calls its field `name`); prefer `part`. */
+  name?: string;
   /** Subset of ["top","front","side","iso"] to attach; default all four. */
   views?: string[];
   /** CadQuery only: also write model.step and record its BRepCheck provenance. */
@@ -682,7 +684,7 @@ export function registerCadTools(
    * answer regardless of where the geometry came from.
    */
   async function resolvePartForWrite(
-    a: { part?: string; parentVersion?: string; fallbackName: string },
+    a: { part?: string; parentVersion?: string; fallbackName: string; reuseFallback?: boolean },
     project: ProjectStores,
   ): Promise<PartEntry> {
     const { store, partStore } = project;
@@ -707,13 +709,21 @@ export function registerCadTools(
       const owner = await findPartById(partStore, parent.partId);
       if (owner) return owner;
     }
+    // An import WITHOUT `part`/`name` is an iteration of the file it came from,
+    // not a new subject: reuse the part whose name equals the file-derived name
+    // instead of forking `x 2`, `x 3` on every corrected export. Generation keeps
+    // createUniquePart (an intent name may legitimately repeat for another part).
+    if (a.reuseFallback) {
+      const existing = await findPartByName(partStore, a.fallbackName);
+      if (existing) return existing;
+    }
     return createUniquePart(partStore, a.fallbackName, 'intent');
   }
 
   /** generate_part's view of the shared rule: the intent names a new part. */
   const resolvePartForGeneration = (a: GeneratePartArgs, project: ProjectStores): Promise<PartEntry> =>
     resolvePartForWrite(
-      { part: a.part, parentVersion: a.parentVersion, fallbackName: derivePartName(a.userIntent) },
+      { part: a.part ?? a.name, parentVersion: a.parentVersion, fallbackName: derivePartName(a.userIntent) },
       project,
     );
 
@@ -1237,6 +1247,10 @@ export function registerCadTools(
           'ALWAYS pass this when iterating: it is what groups versions into one part in the panel. ' +
           'Omit only for a brand-new part with no parentVersion (a name is then derived from userIntent), ' +
           'or to inherit the parentVersion\'s part.',
+      },
+      name: {
+        type: 'string',
+        description: 'Alias for `part` (create_part calls its field `name`); prefer `part`.',
       },
       views: {
         type: 'array',
@@ -1818,6 +1832,8 @@ export function registerCadTools(
   interface ImportPartArgs {
     file: string;
     part?: string;
+    /** Alias for `part` (create_part calls its field `name`); prefer `part`. */
+    name?: string;
     parentVersion?: string;
     userIntent?: string;
     unit?: Unit;
@@ -1830,11 +1846,15 @@ export function registerCadTools(
     datums?: DatumInput[];
     allowNonSolid?: boolean;
     render?: boolean;
+    /** Opt-in FDM wall screen; default false because import is process-neutral. */
+    wallScreen?: boolean;
   }
 
   interface ImportPartResult {
     versionId: string;
     part: string;
+    /** True when this import started a NEW part (no part/name match). */
+    partCreated: boolean;
     format: string;
     solid: boolean;
     watertight: boolean;
@@ -1852,6 +1872,9 @@ export function registerCadTools(
     warnings: string[];
     durationMs: number;
     views: string[];
+    /** First-import wall screen (600 samples); absent when unavailable/opted out. */
+    minWallMm?: number;
+    minWallAtMm?: number[];
   }
 
   /** Shared by the tool and POST /api/cad/import — one implementation, two doors. */
@@ -1861,11 +1884,16 @@ export function registerCadTools(
     if (!a?.file?.trim()) throw argError('import_part', 'file', 'is required', 'a path to an STL/3MF/STEP/DXF inside the session workspace (absolute, or relative to it)',
           { example: 'import_part({ file: "models/pan.stl" })', received: a?.file });
 
+    const declaredPart = a.part?.trim() || a.name?.trim();
+    const fallbackName = deriveNameFromFile(a.file);
+    const existingPart = await findPartByName(partStore, declaredPart || fallbackName);
     const part = await resolvePartForWrite({
-      part: a.part,
+      part: declaredPart,
       parentVersion: a.parentVersion,
-      fallbackName: deriveNameFromFile(a.file),
+      fallbackName,
+      reuseFallback: true,
     }, project);
+    const partCreated = !existingPart && !a.parentVersion;
 
     const g = await importGeometry({
       file: a.file,
@@ -1918,6 +1946,41 @@ export function registerCadTools(
     });
     await attachVersion(partStore, part.id, versionId);
 
+    // The wall screen is computed HERE for the same reason generate's is: an
+    // imported mesh is a candidate deliverable, and the caller should not have to
+    // remember a second tool call to learn its thinnest wall. A failure (e.g. no
+    // Python runtime) is a warning, never a silent pass.
+    let minWallMm: number | undefined;
+    let minWallAtMm: number[] | undefined;
+    // OPT-IN on purpose: the 1.2 mm threshold and the ray screen are FDM's ruler.
+    // Import is process-neutral — a CNC/laser/moulded part must not be judged by an
+    // FDM screen it never declared. Process-specific checks live in cad_check
+    // (printability / cnc / turning / sheet2d / edm), driven by the BOM process.
+    if (a.wallScreen === true) {
+      try {
+        const screen = await checkPrintability(store, {
+          versionId, wallMinMm: 1.2, overhangDeg: 45, samples: 600,
+        });
+        minWallMm = screen.minWallMm;
+        minWallAtMm = screen.minWallAtMm;
+        if (minWallMm !== undefined) {
+          const where = minWallAtMm ? ` @ [${minWallAtMm.map((n) => +n.toFixed(2)).join(', ')}]` : '';
+          warnings.push(
+            minWallMm < 1.2
+              ? `FDM wall screen (opt-in): thinnest ${minWallMm}mm${where} < 1.2mm`
+              : `FDM wall screen (opt-in): thinnest ${minWallMm}mm${where}`,
+          );
+        }
+      } catch (e) {
+        warnings.push(`FDM wall screen unavailable: ${String((e as Error).message ?? e)}`);
+      }
+    }
+    if (partCreated && !declaredPart) {
+      warnings.push(
+        `created a new part "${part.name}" from the file name — pass part (or name) to add this revision to an existing part`,
+      );
+    }
+
     // Persist renders as durable model-visible attachments (same channel as
     // generate_part: the model must SEE an imported part, not just read about it).
     const refs: { view: string; ref: unknown }[] = [];
@@ -1942,6 +2005,7 @@ export function registerCadTools(
     return {
       versionId,
       part: part.name,
+      partCreated,
       format: g.format,
       solid: g.solid,
       watertight: g.watertight,
@@ -1959,6 +2023,8 @@ export function registerCadTools(
       warnings,
       durationMs: Date.now() - started,
       views: renders.map((r) => r.view),
+      ...(minWallMm !== undefined ? { minWallMm } : {}),
+      ...(minWallAtMm ? { minWallAtMm } : {}),
     };
   }
 
@@ -1983,7 +2049,11 @@ export function registerCadTools(
       },
       part: {
         type: 'string',
-        description: 'Which part to file it under (defaults to the file name). Re-importing a corrected export under the same part is how you iterate an imported part.',
+        description: 'Which part to file it under (defaults to the file name; a repeated file name reuses that part). Re-importing a corrected export under the same part is how you iterate an imported part.',
+      },
+      name: {
+        type: 'string',
+        description: 'Alias for `part` (create_part calls its field `name`); prefer `part`.',
       },
       parentVersion: {
         type: 'string',
@@ -2037,6 +2107,10 @@ export function registerCadTools(
         type: 'boolean',
         description: 'Render four views into the conversation (default true, same views as generate_part).',
       },
+      wallScreen: {
+        type: 'boolean',
+        description: 'Opt-in FDM wall screen (600 samples). Default FALSE: import is process-neutral. Pass true only when this part is FDM; for CNC / turning / laser / EDM the process check is cad_check action=cnc|turning|sheet2d|edm.',
+      },
     },
     output: {
       schema: {
@@ -2045,6 +2119,7 @@ export function registerCadTools(
         properties: {
           versionId: { type: 'string', required: true },
           part: { type: 'string', required: true },
+          partCreated: { type: 'boolean', required: true, description: 'True when this import started a NEW part.' },
           format: { type: 'string', required: true, description: 'stl-binary, stl-ascii, step-cascadio, dxf-ezdxf-extrude or dxf-ezdxf-mesh.' },
           solid: { type: 'boolean', required: true },
           watertight: { type: 'boolean', required: true },
@@ -2062,6 +2137,8 @@ export function registerCadTools(
           warnings: { type: 'array', required: true, items: { type: 'string' } },
           durationMs: { type: 'integer', required: true },
           views: { type: 'array', required: true, items: { type: 'string' } },
+          minWallMm: { type: 'number', description: 'FDM opt-in only: sampled thinnest wall (600 samples); absent by default.' },
+          minWallAtMm: { type: 'array', items: { type: 'number' }, description: 'Where the thinnest wall was found.' },
         },
       },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) }],
