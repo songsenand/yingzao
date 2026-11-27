@@ -219,6 +219,39 @@ export function chainLoops(points2: readonly [number, number][], toleranceMm = 1
 }
 
 /**
+ * Drop consecutive duplicates and collinear points from a loop.
+ *
+ * The chaining tolerance is 1e-6 mm, so a loop can legitimately contain points that
+ * are (to earcut) the same point twice; earcut then produces zero-area faces, and a
+ * mesh with a coplanar seam produces collinear runs along the cut.
+ */
+export function simplifyLoop(loop: readonly (readonly [number, number])[], epsilon = 1e-6): [number, number][] {
+  const out: [number, number][] = [];
+  for (const point of loop) {
+    const last = out[out.length - 1];
+    if (last && Math.hypot(point[0] - last[0], point[1] - last[1]) <= epsilon) continue;
+    out.push([point[0], point[1]]);
+  }
+  if (out.length > 1) {
+    const first = out[0]!;
+    const last = out[out.length - 1]!;
+    if (Math.hypot(first[0] - last[0], first[1] - last[1]) <= epsilon) out.pop();
+  }
+  if (out.length < 3) return out;
+  // Collinear runs: keep a point only when it turns.
+  const kept: [number, number][] = [];
+  for (let i = 0; i < out.length; i++) {
+    const a = out[(i + out.length - 1) % out.length]!;
+    const b = out[i]!;
+    const c = out[(i + 1) % out.length]!;
+    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    const scale = Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]) * Math.hypot(c[0] - b[0], c[1] - b[1]));
+    if (Math.abs(cross) / scale > 1e-6) kept.push(b);
+  }
+  return kept.length >= 3 ? kept : out;
+}
+
+/**
  * Area centroid of each closed loop, in the plane's frame.
  *
  * This is what makes a section's HOLES snappable: the centre of a bore that the cut
@@ -305,7 +338,13 @@ export function sectionLoops(geometry: BufferGeometry, axis: SectionAxis, cut: n
  */
 export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlane): number[] {
   const frame = planeFrame(plane);
-  const loops = sectionLoopsOnPlane(geometry, plane);
+  const loops = sectionLoopsOnPlane(geometry, plane)
+    // Slivers are not caps. A plane that grazes a triangle leaves a loop whose area
+    // is ~0; earcut turns that into spikes that read as "artifacts" (2026-11-27,
+    // user report on a free-plane cut). Drop them BEFORE nesting, so they cannot
+    // masquerade as a hole either.
+    .map(simplifyLoop)
+    .filter((loop) => loop.length >= 3 && Math.abs(signedArea2(loop)) > 1e-3);
   if (loops.length === 0) return [];
 
   const depths = loops.map((loop, index) => loops.reduce((depth, other, otherIndex) => (
@@ -340,7 +379,25 @@ export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlan
       return ring;
     });
     const vertices = contour.concat(...holes);
-    for (const face of ShapeUtils.triangulateShape(contour, holes)) {
+    const faces = ShapeUtils.triangulateShape(contour, holes);
+    if (faces.length === 0) {
+      // earcut gave up (a self-touching loop). A fan is wrong for a concave outline
+      // but it is visible and finite; returning nothing would leave the cut looking
+      // hollow — the exact failure this whole function exists to prevent.
+      for (let i = 1; i + 1 < contour.length; i++) {
+        for (const corner of [0, i, i + 1]) {
+          triangles.push(...frameToWorld(frame, [contour[corner]!.x, contour[corner]!.y]));
+        }
+      }
+      continue;
+    }
+    for (const face of faces) {
+      // A degenerate face (three collinear points) draws as a hairline at best and as
+      // z-fighting at worst: drop it, and count it in the returned area only if real.
+      const [a, b, c] = face.map((corner) => [vertices[corner]!.x, vertices[corner]!.y] as [number, number]);
+      if (!a || !b || !c) continue;
+      const area2 = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]));
+      if (area2 < 1e-9) continue;
       for (const corner of face) {
         triangles.push(...frameToWorld(frame, [vertices[corner]!.x, vertices[corner]!.y]));
       }
@@ -458,6 +515,25 @@ export function sectionSegmentsOnPlane(geometry: BufferGeometry, plane: SectionP
   for (let t = 0; t < triangles; t++) {
     const corners = [0, 1, 2].map((offsetIndex) => (index ? index.getX(t * 3 + offsetIndex) : t * 3 + offsetIndex));
     const distances = corners.map(distance);
+
+    // A triangle that LIES IN the plane (all three distances exactly 0) emits no
+    // crossing, so its outline never reaches the loop builder and the cap gets a gap
+    // exactly where the part has a flat face flush with the cut — the "hole" the user
+    // saw. Its three edges are boundary by definition; emit them and let the dedupe
+    // collapse the copies the neighbouring triangles contribute.
+    if (distances.every((d) => d === 0)) {
+      for (let edge = 0; edge < 3; edge++) {
+        const a = vertex(corners[edge]!);
+        const b = vertex(corners[(edge + 1) % 3]!);
+        const key = [a, b].map((point) => `${Math.round(point[0] * 1e6)},${Math.round(point[1] * 1e6)},${Math.round(point[2] * 1e6)}`);
+        key.sort();
+        const id = `${key[0]}|${key[1]}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push(...a, ...b);
+      }
+      continue;
+    }
 
     const hits: [number, number, number][] = [];
     for (let edge = 0; edge < 3; edge++) {

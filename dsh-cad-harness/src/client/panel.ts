@@ -187,19 +187,52 @@ function scaleScreenDots(dots: THREE.Object3D[], camera: THREE.PerspectiveCamera
 
 export interface ClipState {
   on: boolean;
-  mode: 'axis' | 'plane';
-  /** Axis mode: slider fraction 0..1 along `axis`. Plane mode: 0..1 along the normal. */
+  /**
+   * `axis` = the X/Y/Z shortcut; `view` = the plane the user froze from the camera.
+   *
+   * There is deliberately NO free plane any more: aiming a plane with azimuth and
+   * elevation produced cuts nobody could aim on purpose, and the cap showed slivers
+   * where the plane grazed triangles. "Cut parallel to what I am looking at" plus a
+   * depth slider is the gesture a person actually has.
+   */
+  mode: 'axis' | 'view';
+  /** Slider fraction 0..1: along `axis`, or along the frozen view normal. */
   pos: number;
   axis: 'x' | 'y' | 'z';
-  /** Plane mode: unit surface normal, world. */
+  /** `view` mode: the camera direction frozen when the user pressed "cut along view". */
   normal: [number, number, number];
   /** true = keep the side opposite the normal (the axis habit: keep z ≤ cut). */
   keepNegative: boolean;
 }
 
-/** Plane mode's position: the 0..1 slider mapped onto ±half-diagonal along the normal. */
+/** `view` mode's position: the 0..1 slider mapped onto ±half-diagonal along the normal. */
 export function planeOffsetOf(pos: number): number {
   return pos * 2 - 1;
+}
+
+/**
+ * The unit vector the camera looks along (from the camera into the scene).
+ *
+ * Reads the world matrix directly instead of calling `getWorldDirection(target)`: that
+ * method needs a real Vector3 (`target.set(...).normalize()`), so handing it a plain
+ * object throws — and the caller's click handler died silently, leaving the cut on the
+ * previous normal (measured: the "along view" cut kept the z axis, i.e. the same cap
+ * area as the axis cut, which is how the sandbox assertion noticed).
+ */
+export function viewNormalFromCamera(camera: { position: { x: number; y: number; z: number }; matrixWorld?: { elements: ArrayLike<number> }; updateWorldMatrix?: (parents: boolean, children: boolean) => void }): [number, number, number] {
+  camera.updateWorldMatrix?.(true, false);
+  const elements = camera.matrixWorld?.elements;
+  if (elements && elements.length >= 11) {
+    // three stores "forward" as the NEGATED third column of the rotation.
+    const nx = -Number(elements[8]);
+    const ny = -Number(elements[9]);
+    const nz = -Number(elements[10]);
+    const length = Math.hypot(nx, ny, nz);
+    if (length > 1e-9) return [nx / length, ny / length, nz / length];
+  }
+  // Fallback: look at the origin. Used only by a camera stub with no matrix.
+  const length = Math.hypot(camera.position.x, camera.position.y, camera.position.z) || 1;
+  return [-camera.position.x / length, -camera.position.y / length, -camera.position.z / length];
 }
 
 /** The one place a clip state becomes a plane; null when the section is off. */
@@ -211,7 +244,11 @@ export function clipPlaneOf(clip: ClipState, box: THREE.Box3 | null | undefined)
   return { pointMm: planePointFor(box, clip.normal, planeOffsetOf(clip.pos)), normal: clip.normal };
 }
 
-/** A unit normal from two angles in degrees (azimuth about z, elevation from the xy-plane). */
+/**
+ * A unit normal from two angles in degrees (azimuth about z, elevation from the
+ * xy-plane). Kept because tests and the previous caption used it; the UI no longer
+ * aims a plane by angles (U20 revision 2026-11-27).
+ */
 export function normalFromAngles(azimuthDeg: number, elevationDeg: number): [number, number, number] {
   const az = (azimuthDeg * Math.PI) / 180;
   const el = (elevationDeg * Math.PI) / 180;
@@ -782,9 +819,16 @@ export function CadPanel(): React.ReactElement {
   // U20: an arbitrary plane. The axis slider stays the default (one drag is still
   // the fastest cut); switching to 'plane' unlocks two angles + a flip. The angles
   // are in degrees because that is what the UI shows and what a person thinks in.
-  const [sectionMode, setSectionMode] = useState<'axis' | 'plane'>('axis');
-  const [sectionAzimuth, setSectionAzimuth] = useState(35);
-  const [sectionElevation, setSectionElevation] = useState(30);
+  // Default = the plane parallel to what the reader is looking at: that is the cut a
+  // person means by "切一刀看看". Axis mode is the shortcut in the same strip.
+  const [sectionMode, setSectionMode] = useState<'axis' | 'view'>('view');
+  /**
+   * The camera direction FROZEN when the user pressed "沿视角剖". It deliberately does
+   * not follow the camera afterwards: a cut that re-aims while you orbit is a clipping
+   * volume, not a section. Press the button again to re-align.
+   */
+  const [sectionViewNormal, setSectionViewNormal] = useState<[number, number, number]>([0, 0, -1]);
+  const [sectionViewFrozen, setSectionViewFrozen] = useState(false);
   const [sectionKeepNegative, setSectionKeepNegative] = useState(true);
   /** Inline section (the strip's selection) and the one expanded into the sheet. */
   const [tab, setTab] = useState<string>('overview');
@@ -1788,9 +1832,12 @@ export function CadPanel(): React.ReactElement {
     setMeasurements([]);
     measurePicksRef.current = [];
     setMeasurePicks([]);
-    setSectionMode('axis');
-    setSectionAzimuth(35);
-    setSectionElevation(30);
+    setSectionMode('view');
+    // A frozen view normal belongs to the camera that produced it, not to the next
+    // part: forget it, so enabling the cut freezes the CURRENT camera instead of
+    // reusing the previous part's direction.
+    setSectionViewNormal([0, 0, -1]);
+    setSectionViewFrozen(false);
     setSectionKeepNegative(true);
     setHeat(null);
     // The bbox is a fact of the mesh being left, not of the panel. A run view
@@ -1810,7 +1857,7 @@ export function CadPanel(): React.ReactElement {
   clipRef.current.pos = sectionPos;
   clipRef.current.axis = sectionAxis;
   clipRef.current.mode = sectionMode;
-  clipRef.current.normal = normalFromAngles(sectionAzimuth, sectionElevation);
+  clipRef.current.normal = sectionViewNormal;
   clipRef.current.keepNegative = sectionKeepNegative;
 
   /** Ray under the pointer, or null if this gesture was an orbit drag. */
@@ -2253,9 +2300,17 @@ export function CadPanel(): React.ReactElement {
     if (cap.length > 0) {
       const capGeometry = new THREE.BufferGeometry();
       capGeometry.setAttribute('position', new THREE.Float32BufferAttribute(cap, 3));
+      // The cap is coplanar with the clip plane BY CONSTRUCTION, so wherever the part
+      // has a flat face flush with the cut the two surfaces z-fight — that is the
+      // striping the user reported, not missing geometry. polygonOffset pushes the cap
+      // a hair towards the camera in DEPTH only (no visual scale change).
       const capMesh = new THREE.Mesh(capGeometry, new THREE.MeshBasicMaterial({
         color: CAP_COLOR,
         side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+        depthWrite: true,
       }));
       capMesh.renderOrder = 996;
       group.add(capMesh);
@@ -2267,7 +2322,7 @@ export function CadPanel(): React.ReactElement {
     const line = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({ color: SECTION_COLOR }));
     line.renderOrder = 997;
     group.add(line);
-  }, [section, sectionMode, sectionPos, sectionAxis, sectionAzimuth, sectionElevation, sectionKeepNegative, versionId, spec]);
+  }, [section, sectionMode, sectionPos, sectionAxis, sectionViewNormal, sectionKeepNegative, versionId, spec]);
 
   // U11: projection is React state, the camera swap is a scene command. The
   // scene is NOT rebuilt (that would cost a WebGL context).
@@ -2280,7 +2335,7 @@ export function CadPanel(): React.ReactElement {
   useEffect(() => {
     const mesh = meshRef.current as THREE.Mesh | null;
     if (mesh?.material) applyClip(mesh, clipRef.current, tintRef.current);
-  }, [section, sectionMode, sectionPos, sectionAxis, sectionAzimuth, sectionElevation, sectionKeepNegative, versionId]);
+  }, [section, sectionMode, sectionPos, sectionAxis, sectionViewNormal, sectionKeepNegative, versionId]);
 
   const clearMeasure = () => { setMeasure(null); };
   const measureNote = measure?.b
@@ -2395,10 +2450,12 @@ export function CadPanel(): React.ReactElement {
           // An oblique cut has no axis name: record the plane itself, or the
           // caption is a picture nobody can reproduce.
           : {
-            axis: 'free',
+            axis: 'view',
             keepPct: sectionPos,
+            mode: 'view' as const,
             plane: {
               normal: clipRef.current.normal,
+              depthPct: sectionPos,
               pointMm: planePointFor(
                 (meshRef.current?.geometry as THREE.BufferGeometry | undefined)?.boundingBox,
                 clipRef.current.normal,
@@ -4865,9 +4922,9 @@ export function CadPanel(): React.ReactElement {
           setThickMode(false);
           setSection(false);
           setSectionPos(0.5);
-          setSectionMode('axis');
-          setSectionAzimuth(35);
-          setSectionElevation(30);
+          setSectionMode('view');
+          setSectionViewNormal([0, 0, -1]);
+          setSectionViewFrozen(false);
           setSectionKeepNegative(true);
           setHint(t('ui.restore.hint'));
         },
@@ -4978,7 +5035,19 @@ export function CadPanel(): React.ReactElement {
       }, t('ui.tool.thickness')),
       React.createElement('button', {
         type: 'button', title: section ? t('ui.tool.sectionOnTitle') : t('ui.tool.sectionTitle'),
-        onClick: () => setSection((v) => !v),
+        onClick: () => {
+          const next = !section;
+          setSection(next);
+          // Turning the cut ON in view mode freezes the CURRENT camera direction —
+          // a mode whose normal was never set would cut through the middle of nowhere.
+          if (next && sectionMode === 'view' && !sectionViewFrozen) {
+            const camera = cameraRef.current;
+            if (camera) {
+              setSectionViewNormal(viewNormalFromCamera(camera));
+              setSectionViewFrozen(true);
+            }
+          }
+        },
         'data-section-toggle': '',
         style: viewToolStyle(section, T.clip),
       }, t('ui.tool.section')),
@@ -5035,21 +5104,33 @@ export function CadPanel(): React.ReactElement {
           style: { display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 170px', minWidth: 80, height: 20 },
         },
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } }, tr('ui.toolStrip.section')),
-        // U20: one button switches the cut between an axis and an arbitrary plane.
-        // Kept as a toggle rather than a third tab because the two share the same
-        // slider and the same flip — the plane is the axis, aimed.
+        // U20 (2026-11-27 revision): the cut is EITHER a principal axis OR the plane
+        // the user froze from the camera. The azimuth/elevation sliders are gone —
+        // aiming a plane by two angles produced cuts nobody could aim on purpose, and
+        // the cap picked up slivers where the plane grazed triangles.
         React.createElement('button', {
           type: 'button',
-          onClick: () => setSectionMode((m) => (m === 'axis' ? 'plane' : 'axis')),
+          onClick: () => {
+            if (sectionMode === 'axis') {
+              // Switch to view mode AND freeze the camera direction in one gesture:
+              // a mode with an unset normal would cut through the middle of nowhere.
+              setSectionMode('view');
+              const camera = cameraRef.current;
+              if (camera) setSectionViewNormal(viewNormalFromCamera(camera));
+              setSectionViewFrozen(true);
+            } else {
+              setSectionMode('axis');
+            }
+          },
           'data-section-mode': sectionMode,
-          title: tr(sectionMode === 'axis' ? 'ui.section.modeAxisTitle' : 'ui.section.modePlaneTitle'),
+          title: tr(sectionMode === 'axis' ? 'ui.section.modeAxisTitle' : 'ui.section.modeViewTitle'),
           'aria-label': tr('ui.section.mode'),
           style: {
             ...S.smallBtn, flex: 'none',
-            color: sectionMode === 'plane' ? T.accentSolid : undefined,
-            borderColor: sectionMode === 'plane' ? T.accentSolid : undefined,
+            color: sectionMode === 'view' ? T.accentSolid : undefined,
+            borderColor: sectionMode === 'view' ? T.accentSolid : undefined,
           },
-        }, tr(sectionMode === 'axis' ? 'ui.section.modeAxis' : 'ui.section.modePlane')),
+        }, tr(sectionMode === 'axis' ? 'ui.section.modeAxis' : 'ui.section.modeView')),
         sectionMode === 'axis'
           ? React.createElement('select', {
             value: sectionAxis,
@@ -5058,27 +5139,21 @@ export function CadPanel(): React.ReactElement {
             title: t('ui.section.axisTitle'),
             style: { fontSize: 11, height: 20, flex: 'none', padding: '0 2px', border: `1px solid ${T.line}`, borderRadius: 4 },
           }, ...(['x', 'y', 'z'] as const).map((a) => React.createElement('option', { key: a, value: a }, a)))
-          : React.createElement(React.Fragment, null,
-            React.createElement('input', {
-              type: 'range', min: 0, max: 360, step: 5, value: sectionAzimuth,
-              'data-section-azimuth': sectionAzimuth,
-              'aria-label': t('ui.section.azimuth'),
-              title: tr('ui.section.azimuthTitle', { value: sectionAzimuth }),
-              onChange: (e: any) => setSectionAzimuth(Number(e.target.value)),
-              style: { flex: '1 1 40px', minWidth: 30, height: 18 },
-            }),
-            React.createElement('input', {
-              type: 'range', min: -90, max: 90, step: 5, value: sectionElevation,
-              'data-section-elevation': sectionElevation,
-              'aria-label': t('ui.section.elevation'),
-              title: tr('ui.section.elevationTitle', { value: sectionElevation }),
-              onChange: (e: any) => setSectionElevation(Number(e.target.value)),
-              style: { flex: '1 1 40px', minWidth: 30, height: 18 },
-            })),
+          // Re-align to the CURRENT camera. Orbiting does not move the cut; pressing
+          // this does, which is what "cut parallel to what I see" has to mean.
+          : React.createElement('button', {
+            type: 'button',
+            'data-section-realign': '1',
+            title: tr('ui.section.realignTitle'),
+            onClick: () => {
+              const camera = cameraRef.current;
+              if (camera) setSectionViewNormal(viewNormalFromCamera(camera));
+              setHint(tr('ui.section.realigned'));
+            },
+            style: { ...S.smallBtn, flex: 'none', fontSize: 10 },
+          }, tr('ui.section.realign')),
         React.createElement('span', { style: { fontSize: 11, color: T.clip, flex: 'none' } },
-          sectionMode === 'axis'
-            ? `${(sectionPos * 100).toFixed(0)}%`
-            : `${sectionAzimuth}°/${sectionElevation}°`),
+          `${(sectionPos * 100).toFixed(0)}%`),
         React.createElement('input', {
           type: 'range', min: 0, max: 1, step: 0.01, value: sectionPos,
           'aria-label': t('ui.section.position'),

@@ -107,7 +107,17 @@ export interface PartShotFacts {
    * cannot be described by an axis name and "the picture" alone does not say which
    * half was removed.
    */
-  section?: { axis: string; keepPct: number; plane?: { normal: readonly number[]; pointMm: readonly number[]; keep: 'negative' | 'positive' } };
+  /**
+   * `view` (U20 revision): the cut is parallel to the camera at the moment it was
+   * frozen, and only its depth is a user choice — so the caption names the mode and
+   * the depth, not an azimuth/elevation a reader could never reproduce.
+   */
+  section?: {
+    axis: string;
+    keepPct: number;
+    mode?: 'axis' | 'view';
+    plane?: { normal: readonly number[]; pointMm: readonly number[]; keep: 'negative' | 'positive'; depthPct?: number };
+  };
   measureMm?: { dist: number; a: readonly number[]; b: readonly number[] };
   /** U15: named measurements (one line per entry) — they travel with the picture. */
   measurementLines?: readonly string[];
@@ -141,11 +151,12 @@ export function partShotCaption(f: PartShotFacts): string {
   const facts: string[] = [];
   if (f.bboxMm) facts.push(tr('ui.caption.bbox', { values: f.bboxMm.map(round3).join(' × ') }));
   if (f.section) {
-    if (f.section.plane) {
-      facts.push(tr('ui.caption.sectionPlane', {
-        normal: f.section.plane.normal.map(round3).join(', '),
-        point: f.section.plane.pointMm.map(round3).join(', '),
-        side: f.section.plane.keep,
+    if (f.section.mode === 'view' || f.section.plane) {
+      const plane = f.section.plane;
+      facts.push(tr('ui.caption.sectionView', {
+        depth: Math.round((plane?.depthPct ?? f.section.keepPct) * 100),
+        normal: plane ? plane.normal.map(round3).join(', ') : '—',
+        side: plane?.keep ?? 'negative',
       }));
     } else {
       facts.push(tr('ui.caption.section', { axis: f.section.axis, keep: Math.round(f.section.keepPct * 100) }));

@@ -1780,26 +1780,55 @@ if (q.get('assert') === 'section-free') {
       pre.textContent = lines.join('\n');
     };
 
+    try {
     const toggle = await waitFor(() => Boolean(document.querySelector('[data-section-toggle]')), 12000);
     lines.push(`${toggle ? 'PASS' : 'FAIL'}  the section toggle exists`);
     if (!toggle) { lines.push('FAIL  no panel — load a version first (`&record=<version>`)'); show(); return; }
 
-    // The panel starts with the section OFF: turn it on, then read the axis cap.
+    // The panel starts with the section OFF. Since 2026-11-27 the DEFAULT mode is the
+    // plane parallel to the view, so the first cap is a view cut; the axis cut is one
+    // click away in the same strip and is measured second.
     (document.querySelector('[data-section-toggle]') as HTMLElement).click();
-    const gotAxis = await waitFor(() => {
+    const defaultView = await waitFor(() => {
       const cap = capPositions();
       return Boolean(cap && area(cap) > 0);
     }, 12000);
+    const defaultMode = document.querySelector('[data-section-mode]')?.getAttribute('data-section-mode');
+    lines.push(`${defaultView && defaultMode === 'view' ? 'PASS' : 'FAIL'}  the default cut is "along view" (${defaultMode})`);
+    lines.push(`${defaultView ? 'PASS' : 'FAIL'}  the default cut is filled with real geometry (${(capPositions() ? area(capPositions()!) : 0).toFixed(2)}mm²)`);
+
+    // Then the axis shortcut, for the comparison the cap-area checks below need.
+    (document.querySelector('[data-section-mode]') as HTMLElement).click();
+    const gotAxis = await waitFor(() => document.querySelector('[data-section-mode]')?.getAttribute('data-section-mode') === 'axis', 6000);
+    lines.push(`${gotAxis ? 'PASS' : 'FAIL'}  the mode button switches to the axis shortcut`);
     const axisCap = capPositions();
     const axisArea = axisCap ? area(axisCap) : 0;
-    lines.push(`${gotAxis ? 'PASS' : 'FAIL'}  the axis cut is filled with real geometry (${axisArea.toFixed(2)}mm²)`);
     const axisShare = modelShare(partCanvas());
 
-    // The gesture: mode button, then the two angle sliders (input events, the
-    // same thing a person's drag produces).
+    // Orbit to an oblique view FIRST, so the frozen direction is genuinely oblique:
+    // freezing from the default view would just reproduce the axis cut and the
+    // "different cross-section" claim would be vacuous.
+    const orbit = (document.querySelector('#root canvas')?.parentElement as any)?.__controls;
+    const cam = (document.querySelector('#root canvas')?.parentElement as any)?.__camera;
+    if (orbit && cam) {
+      const t = orbit.target;
+      cam.position.set(t.x + 60, t.y + 50, t.z + 55);
+      // getWorldDirection reads matrixWorld, which only exists after an update: the
+      // panel's render loop does this every frame for a real user, but a script has
+      // to ask. Without it the frozen normal is the view from BEFORE the orbit.
+      cam.updateMatrixWorld?.(true);
+      cam.updateProjectionMatrix?.();
+      orbit.update?.();
+      await new Promise((r) => setTimeout(r, 400));
+    }
+
+    // The gesture (U20 revision): switch to "along view", which freezes the camera
+    // direction — there are no angle sliders any more, only depth.
     (document.querySelector('[data-section-mode]') as HTMLElement | null)?.click();
-    const mode = await waitFor(() => document.querySelector('[data-section-mode]')?.getAttribute('data-section-mode') === 'plane', 6000);
-    lines.push(`${mode ? 'PASS' : 'FAIL'}  the mode button switched the cut to a free plane`);
+    const mode = await waitFor(() => document.querySelector('[data-section-mode]')?.getAttribute('data-section-mode') === 'view', 6000);
+    lines.push(`${mode ? 'PASS' : 'FAIL'}  the mode button switched the cut to "along view"`);
+    lines.push(`${document.querySelector('[data-section-realign]') ? 'PASS' : 'FAIL'}  a re-align control exists (orbit, then re-aim)`);
+    lines.push(`${!document.querySelector('[data-section-azimuth]') && !document.querySelector('[data-section-elevation]') ? 'PASS' : 'FAIL'}  the angle sliders are GONE (depth is the only control)`);
 
     const setRange = (selector: string, value: number) => {
       const input = document.querySelector(selector) as HTMLInputElement | null;
@@ -1809,21 +1838,53 @@ if (q.get('assert') === 'section-free') {
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     };
-    const aimed = mode && setRange('[data-section-azimuth]', 90) && setRange('[data-section-elevation]', 45);
-    lines.push(`${aimed ? 'PASS' : 'FAIL'}  two range inputs aim the normal (az 90°, el 45°)`);
 
     const oblique = await waitFor(() => {
       const now = capPositions();
-      return Boolean(now && area(now) > 0 && Math.abs(area(now) - axisArea) > 1e-3);
+      return Boolean(now && area(now) > 0);
     }, 12000);
     const cap = capPositions();
     const capArea = cap ? area(cap) : 0;
-    const aimedNormal: [number, number, number] = [
-      Math.cos((45 * Math.PI) / 180) * Math.cos((90 * Math.PI) / 180),
-      Math.cos((45 * Math.PI) / 180) * Math.sin((90 * Math.PI) / 180),
-      Math.sin((45 * Math.PI) / 180),
-    ];
+    // The frozen normal IS the camera direction of the sandbox's default view.
+    const camera = (document.querySelector('#root canvas')?.parentElement as any)?.__camera;
+    const viewDir: [number, number, number] = camera
+      ? [
+          -(camera.position.x - 0) / Math.max(1e-6, Math.hypot(camera.position.x, camera.position.y, camera.position.z)),
+          -(camera.position.y - 0) / Math.max(1e-6, Math.hypot(camera.position.x, camera.position.y, camera.position.z)),
+          -(camera.position.z - 0) / Math.max(1e-6, Math.hypot(camera.position.x, camera.position.y, camera.position.z)),
+        ]
+      : [0, 0, -1];
+    const aimedNormal = viewDir;
     const hull = cap ? hullArea(cap, aimedNormal) : 0;
+    // Depth is the remaining control: move it and the cut must move.
+    const strip = document.querySelector('[data-section-mode]')?.parentElement ?? null;
+    const depthInput = strip?.querySelector('input[type="range"]') as HTMLInputElement | null;
+    const movedDepth = Boolean(depthInput) && setRange(`[aria-label="${depthInput!.getAttribute('aria-label')}"]`, 0.3);
+    // A different plane must give a different cross-section: that is the difference
+    // between "the slider does something" and "the slider is wired to nothing".
+    const depthChanged = movedDepth ? await waitFor(() => {
+      const now = capPositions();
+      return Boolean(now && Math.abs(area(now) - capArea) > 1e-3);
+    }, 8000) : false;
+    lines.push(`${movedDepth ? 'PASS' : 'FAIL'}  the depth slider is present`);
+    lines.push(`${depthChanged ? 'PASS' : 'FAIL'}  moving the depth changes the cut (cap ${capArea.toFixed(1)} → ${(capPositions() ? area(capPositions()!) : 0).toFixed(1)} mm²)`);
+
+    // ARTIFACT GUARD (2026-11-27, user report): the cap must contain no degenerate
+    // triangle. A zero-area face is what a sliver looks like on screen — a hairline
+    // that reads as a crack in the cut.
+    const capNow = capPositions();
+    let degenerate = 0;
+    if (capNow) {
+      for (let i = 0; i + 8 < capNow.length; i += 9) {
+        const a = new THREE.Vector3(capNow[i]!, capNow[i + 1]!, capNow[i + 2]!);
+        const b = new THREE.Vector3(capNow[i + 3]!, capNow[i + 4]!, capNow[i + 5]!);
+        const c = new THREE.Vector3(capNow[i + 6]!, capNow[i + 7]!, capNow[i + 8]!);
+        const area2 = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).length() / 2;
+        if (!(area2 > 0)) degenerate++;
+      }
+    }
+    lines.push(`${degenerate === 0 ? 'PASS' : 'FAIL'}  no degenerate triangle in the cut face (${degenerate} of ${Math.floor((capNow?.length ?? 0) / 9)})`);
+
     lines.push(`${oblique ? 'PASS' : 'FAIL'}  the oblique cut is filled (cap ${capArea.toFixed(2)}mm² vs axis ${axisArea.toFixed(2)}mm²)`);
     // The bore: a filled disc makes cap ≈ hull. 0.95 leaves room for tessellation;
     // a part with no internal void fails on purpose — this scenario needs a tube
@@ -1889,843 +1950,12 @@ if (q.get('assert') === 'section-free') {
     const afterCap = capPositions();
     lines.push(`${flipped ? 'PASS' : 'FAIL'}  the flip button reports the cut side`);
     lines.push(`${afterCap && area(afterCap) > 0 && before && Math.abs(area(afterCap) - area(before)) < 1e-6 ? 'PASS' : 'FAIL'}  flipping keeps/cut leaves the same cut face (the plane did not move)`);
-
-    show();
-  })();
-}
-
-// ?assert=webgl-recover — U21: losing the WebGL context must not leave a blank
-// viewport. The fault is INJECTED (WEBGL_lose_context), not simulated: the
-// context really goes away, the panel really has to notice, and the frame has to
-// come back without a reload. Three things are checked:
-//
-//   1. the loss is announced (a card, not a silent white box);
-//   2. the restore path rebuilds a renderer on a fresh canvas;
-//   3. the recovered frame actually contains the model again (pixel share, not
-//      "no exception was thrown").
-if (q.get('assert') === 'webgl-recover') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  /** Share of the canvas that is not its corner (background) pixel. */
-  const modelShare = (canvas: HTMLCanvasElement | null): number => {
-    if (!canvas) return -1;
-    const probe = document.createElement('canvas');
-    probe.width = 96; probe.height = 96;
-    const ctx = probe.getContext('2d');
-    if (!ctx) return -1;
-    try { ctx.drawImage(canvas, 0, 0, 96, 96); } catch { return -1; }
-    const d = ctx.getImageData(0, 0, 96, 96).data;
-    const bg = [d[0], d[1], d[2]];
-    let n = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 24) n++;
-    }
-    return n / (96 * 96);
-  };
-  void (async () => {
-    const lines: string[] = [`webgl context recovery (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    const canvasOf = () => document.querySelector('#root canvas') as HTMLCanvasElement | null;
-    const hostOf = () => (canvasOf()?.parentElement ?? null) as any;
-
-    const ready = await waitFor(() => Boolean(canvasOf() && hostOf()?.__renderer), 15000);
-    if (!ready) { lines.push('FAIL  no live renderer — load a version first (`&record=<version>`)'); show(); return; }
-    lines.push('PASS  a renderer is live');
-
-    const diag = () => {
-      const c = canvasOf();
-      const r = (hostOf()?.__renderer ?? null);
-      const rect = c?.getBoundingClientRect();
-      return {
-        canvas: c ? `${c.width}x${c.height}` : 'none',
-        css: rect ? `${Math.round(rect.width)}x${Math.round(rect.height)}` : 'none',
-        connected: Boolean(c?.isConnected),
-        triangles: r?.info?.render?.triangles ?? -1,
-        calls: r?.info?.render?.calls ?? -1,
-      };
-    };
-    // How long until the first frame is actually drawn? "triangles: 0" means the
-    // render loop has not started yet, which is a LOADING state, not a failure —
-    // measuring it separates a slow mesh from a dead scene.
-    const t0 = performance.now();
-    const drew = await waitFor(() => (hostOf()?.__renderer?.info?.render?.calls ?? 0) > 0, 20000);
-    lines.push(`${drew ? 'PASS' : 'FAIL'}  the first frame is drawn within 20s (${Math.round(performance.now() - t0)}ms)`);
-    lines.push(`INFO  ${JSON.stringify(diag())}`);
-    const errText = (Array.from(document.querySelectorAll('#root div')) as HTMLElement[])
-      .map((el) => (el.textContent ?? '').trim())
-      .filter((text) => /failed|Error|错误|失败/.test(text) && text.length < 220)
-      .slice(0, 3);
-    if (errText.length) lines.push(`INFO  errors on screen: ${JSON.stringify(errText)}`);
-    const before = modelShare(canvasOf());
-    lines.push(`${before > 0.02 ? 'PASS' : 'FAIL'}  the model is on screen before the fault (${(before * 100).toFixed(1)}% of the frame)`);
-    const firstRenderer = hostOf().__renderer;
-
-    // Inject the loss on the renderer's own context.
-    const gl = firstRenderer.getContext?.();
-    const ext = gl?.getExtension?.('WEBGL_lose_context');
-    lines.push(`${ext ? 'PASS' : 'FAIL'}  WEBGL_lose_context is available (the fault can be injected)`);
-    if (!ext) { show(); return; }
-    ext.loseContext();
-    const announced = await waitFor(() => Boolean(document.querySelector('[data-gl-lost]')), 8000);
-    lines.push(`${announced ? 'PASS' : 'FAIL'}  the loss is announced instead of showing a blank viewport`);
-    const dead = modelShare(canvasOf());
-    lines.push(`${dead >= 0 ? 'PASS' : 'FAIL'}  the page is still alive while the context is gone`);
-
-    // Restore: the browser fires webglcontextrestored, the panel rebuilds.
-    ext.restoreContext();
-    const cleared = await waitFor(() => !document.querySelector('[data-gl-lost]'), 15000);
-    lines.push(`${cleared ? 'PASS' : 'FAIL'}  the card clears when the context comes back`);
-    const rebuilt = await waitFor(() => Boolean(canvasOf() && hostOf()?.__renderer) && hostOf().__renderer !== firstRenderer, 15000);
-    lines.push(`${rebuilt ? 'PASS' : 'FAIL'}  a fresh renderer was built (the old one is not reused)`);
-    const after = await waitFor(() => modelShare(canvasOf()) > 0.02, 15000) ? modelShare(canvasOf()) : modelShare(canvasOf());
-    lines.push(`${after > 0.02 ? 'PASS' : 'FAIL'}  the model is drawn again after recovery (${(after * 100).toFixed(1)}% of the frame)`);
-    lines.push(`${!document.querySelector('[data-gl-lost]') && !/WebGL/.test(document.body.textContent ?? '') ? 'PASS' : 'FAIL'}  no error card or "WebGL" complaint is left on screen`);
-    show();
-  })();
-}
-
-// ?assert=load-progress — U21: a large mesh must show progress while it arrives.
-// The corpus has a 6.5 MB STL (v041): throttled to ~800 KB/s it takes seconds, so
-// the pill is observable. Three things are checked: it appears, it MOVES (a static
-// "loading…" is not progress), and it goes away when the model is on screen.
-if (q.get('assert') === 'load-progress') {
-  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 50);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`mesh download progress (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    const pill = () => document.querySelector('[data-load-progress]') as HTMLElement | null;
-    const text = () => (pill()?.textContent ?? '').replace(/\s+/g, ' ').trim();
-
-    // What the browser actually requested: name + duration proves whether the
-    // throttle reached the mesh URL, which is the difference between "no pill"
-    // and "no throttle".
-    const stlEntries = () => performance.getEntriesByType('resource')
-      .filter((e) => e.name.includes('/api/cad/stl'))
-      .map((e) => `${e.name.split('?')[1] ?? ''} ${Math.round(e.duration)}ms`);
-    arguments_noop: {
-      // (label kept so the block reads as diagnostics, not as a claim)
-      lines.push(`INFO  stl requests so far: ${JSON.stringify(stlEntries())}`);
-    }
-    // Poll until the pill has BOTH appeared and cleared, or 9 s pass. The page
-    // lives only as long as the screenshot needs (a verdict posted after that is
-    // lost), so this assertion stays short and reports what it saw.
-    let sawPill = 0;
-    let sawText = '';
-    let sawTicks = 0;
-    let cleared = false;
-    const deadline = performance.now() + 9000;
-    while (performance.now() < deadline) {
-      if (pill()) {
-        sawPill++;
-        sawText = sawText || text();
-        // Post a verdict as soon as the pill exists: the page may be torn down
-        // before a longer poll finishes, and "the assertion did not run" is the
-        // one outcome that would be indistinguishable from a broken panel.
-        if (sawPill === 1) show();
-      } else if (sawPill > 0) { cleared = true; break; }
-      sawTicks = Math.max(sawTicks, (globalThis as any).__loadTicks ?? 0);
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    lines.push(`INFO  pill seen ${sawPill}× · ticks ${sawTicks} · cleared ${cleared} · text ${JSON.stringify(sawText)}`);
-    const percent = /(\d+)%/.exec(sawText)?.[1];
-    lines.push(`${sawPill > 0 ? 'PASS' : 'FAIL'}  a progress pill appears while the mesh downloads`);
-    lines.push(`${percent !== undefined ? 'PASS' : 'FAIL'}  the pill states a percentage and byte counts`);
-    lines.push(`${cleared ? 'PASS' : 'FAIL'}  the pill clears when the download ends`);
-    // The fingerprinted chunks arrive coalesced in Firefox (measured: 2 ticks for
-    // a 7 s body), so "the number advances mid-download" is asserted in
-    // accept-stream-progress.mjs against synthetic bodies instead of here.
-    show();
-  })();
-}
-
-// ?assert=assembly-hide — U12: in the whole-machine preview, take one part out of
-// the picture and keep inspecting. Four things must hold together:
-//
-//   1. hide removes exactly that part from the draw;
-//   2. the camera does NOT move (inspecting a fit is not navigating);
-//   3. explode still moves the parts that are left (visibility and position are
-//      independent — "其余件仍可爆炸");
-//   4. isolate leaves one part, and clearing it brings the rest back.
-//
-// The part list is read from the live scene (`__parts`), not from the DOM text: a
-// legend row that says "hidden" while the mesh is still drawn is the failure.
-if (q.get('assert') === 'assembly-hide') {
-  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  void (async () => {
-    const lines: string[] = [`assembly per-part visibility (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    // The machine page is reached through the navigator, like a person does: the
-    // preview button lives on THAT page, not on the part page.
-    // Wait for each element before clicking: this assert starts at page load,
-    // when the navigator button does not exist yet (a silent `.click()` on null
-    // is how the first version "ran" without ever leaving the part page).
-    const navBtn = await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 15000);
-    (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
-    const machineRow = await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
-    lines.push(`${navBtn && machineRow ? 'PASS' : 'FAIL'}  the navigator offers the 机器 row`);
-    (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
-    await pause(1200);
-    const open = await waitFor(() => Boolean(document.querySelector('[data-machine-preview]')), 20000);
-    lines.push(`${open ? 'PASS' : 'FAIL'}  the machine page offers a whole-machine preview`);
-    if (!open) { show(); return; }
-    (document.querySelector('[data-machine-preview]') as HTMLElement).click();
-    const legend = await waitFor(() => Boolean(document.querySelector('[data-parts-legend]')), 25000);
-    const handle = () => {
-      for (const node of Array.from(document.querySelectorAll('[data-machine-preview-overlay] div'))) {
-        const parts = (node as any).__parts;
-        if (parts) return parts;
-      }
-      return null;
-    };
-    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 30000);
-    lines.push(`${legend ? 'PASS' : 'FAIL'}  the preview lists its parts`);
-    if (!ready) { lines.push('FAIL  the part scene never became ready'); show(); return; }
-    const parts = handle();
-    const count = parts.count();
-    const visible = parts.visible();
-    const cam0 = parts.camera();
-    lines.push(`${count > 1 ? 'PASS' : 'FAIL'}  ${count} parts loaded, ${visible} drawn`);
-    lines.push(`${visible === count ? 'PASS' : 'FAIL'}  every part is drawn before any gesture`);
-
-    // 1. hide one
-    (document.querySelector('[data-part-hide="0"]') as HTMLElement | null)?.click();
-    const hid = await waitFor(() => handle().visible() === count - 1, 5000);
-    lines.push(`${hid ? 'PASS' : 'FAIL'}  hiding one part draws one part fewer (${handle().visible()}/${count})`);
-    const cam1 = handle().camera();
-    const moved = cam0 && cam1 && Math.hypot(cam1[0] - cam0[0], cam1[1] - cam0[1], cam1[2] - cam0[2]) > 1e-6;
-    lines.push(`${!moved ? 'PASS' : 'FAIL'}  hiding does not move the camera`);
-
-    // 2. explode the remainder
-    const posBefore = JSON.stringify(handle().positions());
-    const explodeBtn = Array.from(document.querySelectorAll('[data-machine-preview-overlay] button'))
-      .find((b) => /爆炸|Explode/i.test(b.textContent ?? '')) as HTMLElement | undefined;
-    explodeBtn?.click();
-    const exploded = await waitFor(() => JSON.stringify(handle().positions()) !== posBefore, 5000);
-    lines.push(`${exploded ? 'PASS' : 'FAIL'}  the remaining parts still explode (visibility did not freeze the layout)`);
-
-    // 3. isolate. The camera is sampled AFTER the explode on purpose: exploding
-    // reframes by design, so comparing against the pre-explode camera would
-    // blame the explode on the isolate.
-    const camExploded = handle().camera();
-    (document.querySelector('[data-part-isolate="1"]') as HTMLElement | null)?.click();
-    const isolated = await waitFor(() => handle().visible() === 1, 5000);
-    lines.push(`${isolated ? 'PASS' : 'FAIL'}  isolate leaves exactly one part (${handle().visible()}/${count})`);
-    const cam2 = handle().camera();
-    const moved2 = camExploded && cam2
-      && Math.hypot(cam2[0] - camExploded[0], cam2[1] - camExploded[1], cam2[2] - camExploded[2]) > 1e-6;
-    lines.push(`${!moved2 ? 'PASS' : 'FAIL'}  isolating does not move the camera either`);
-
-    // 4. highlight + clear
-    (document.querySelector('[data-part-row="1"]') as HTMLElement | null)?.click();
-    const highlighted = await waitFor(() => handle().highlight === 1, 5000);
-    lines.push(`${highlighted ? 'PASS' : 'FAIL'}  clicking a row highlights that part`);
-    (document.querySelector('[data-parts-clear]') as HTMLElement | null)?.click();
-    const cleared = await waitFor(() => handle().visible() === count, 5000);
-    lines.push(`${cleared ? 'PASS' : 'FAIL'}  看全部 brings every part back (${handle().visible()}/${count})`);
-    show();
-  })();
-}
-
-// ?assert=views — U11: the viewport must be able to look from a named direction,
-// not just wherever the pointer left it. Checked here as camera POSE facts:
-//
-//   1. the menu opens and offers the standard views + six axis snaps;
-//   2. clicking one really moves the camera onto that direction (dot product, not
-//      a screenshot);
-//   3. the orthographic toggle changes the camera type AND keeps the same pose, so
-//      the apparent size does not jump;
-//   4. 复原 (Home) returns to the initial framing.
-if (q.get('assert') === 'views') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`standard views / axis snap / projection (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    const host = () => (document.querySelector('#root canvas')?.parentElement ?? null) as any;
-    const dirOf = () => {
-      const h = host();
-      if (!h?.__camera || !h?.__controls) return null;
-      const p = h.__camera.position;
-      const t = h.__controls.target;
-      const v = [p.x - t.x, p.y - t.y, p.z - t.z];
-      const len = Math.hypot(v[0], v[1], v[2]) || 1;
-      return [v[0] / len, v[1] / len, v[2] / len];
-    };
-    const ready = await waitFor(() => Boolean(host()?.__camera && host()?.__controls && document.querySelector('[data-view-menu]')), 15000);
-    if (!ready) { lines.push('FAIL  no live camera or no view menu — load a version first'); show(); return; }
-    lines.push('PASS  the view menu exists next to a live camera');
-    const home = JSON.stringify(host().__camera.position.toArray());
-
-    const openMenu = async () => {
-      if (document.querySelector('[data-view-menu]')?.getAttribute('data-view-menu') !== 'open') {
-        (document.querySelector('[data-view-menu]') as HTMLElement).click();
-      }
-      return waitFor(() => Boolean(document.querySelector('[data-view-panel]')), 4000);
-    };
-    const clickAndWait = async (selector: string, check: () => boolean) => {
-      await openMenu();
-      (document.querySelector(selector) as HTMLElement | null)?.click();
-      return waitFor(check, 5000);
-    };
-    const near = (a: number, b: number, tol = 1e-3) => Math.abs(a - b) <= tol;
-    const isDir = (want: number[]) => {
-      const d = dirOf();
-      return Boolean(d) && near(d[0], want[0]) && near(d[1], want[1]) && near(d[2], want[2]);
-    };
-
-    lines.push(`${(await openMenu()) ? 'PASS' : 'FAIL'}  the menu opens into a panel`);
-    const hasControls = ['[data-view="iso"]', '[data-view="top"]', '[data-view="front"]', '[data-view="right"]',
-      '[data-view-axis="+x"]', '[data-view-axis="-x"]', '[data-view-axis="+y"]', '[data-view-axis="-y"]',
-      '[data-view-axis="+z"]', '[data-view-axis="-z"]', '[data-view-projection]']
-      .every((sel) => Boolean(document.querySelector(sel)));
-    lines.push(`${hasControls ? 'PASS' : 'FAIL'}  it offers four standard views, six axis snaps and a projection toggle`);
-
-    const isoOk = await clickAndWait('[data-view="iso"]', () => isDir([0.57735, 0.57735, 0.57735]));
-    lines.push(`${isoOk ? 'PASS' : 'FAIL'}  等轴 puts the camera on the (1,1,1) diagonal ${JSON.stringify(dirOf())}`);
-    const topOk = await clickAndWait('[data-view="top"]', () => isDir([0, 0, 1]));
-    lines.push(`${topOk ? 'PASS' : 'FAIL'}  顶 looks straight down +Z ${JSON.stringify(dirOf())}`);
-    // The pole rule: a top view cannot keep world up, it is parallel to the view.
-    const upAfterTop = host().__camera.up;
-    lines.push(`${near(upAfterTop.y, 1) && near(upAfterTop.z, 0) ? 'PASS' : 'FAIL'}  the top view switched the camera up to +Y (${JSON.stringify(upAfterTop)})`);
-    const frontOk = await clickAndWait('[data-view="front"]', () => isDir([0, -1, 0]));
-    lines.push(`${frontOk ? 'PASS' : 'FAIL'}  前 looks along +Y ${JSON.stringify(dirOf())}`);
-    const axisOk = await clickAndWait('[data-view-axis="+x"]', () => isDir([1, 0, 0]));
-    lines.push(`${axisOk ? 'PASS' : 'FAIL'}  +X snap looks along -X ${JSON.stringify(dirOf())}`);
-
-    // projection
-    await openMenu();
-    const before = host().__camera.isOrthographicCamera === true;
-    (document.querySelector('[data-view-projection]') as HTMLElement).click();
-    const switched = await waitFor(() => (host().__camera.isOrthographicCamera === true) !== before, 5000);
-    const dirBefore = dirOf();
-    lines.push(`${switched ? 'PASS' : 'FAIL'}  the projection toggle swaps the camera type (${before ? 'ortho→persp' : 'persp→ortho'})`);
-    lines.push(`${dirBefore ? 'PASS' : 'FAIL'}  ...and the pose survives the swap (direction ${JSON.stringify(dirBefore)})`);
-    const scaleA = document.querySelector('[data-scale]')?.getAttribute('data-scale');
-    lines.push(`INFO  scale bar after the swap: ${String(scaleA)}`);
-
-    // Home
-    await openMenu();
-    (document.querySelector('[data-view-home]') as HTMLElement).click();
-    const back = await waitFor(() => JSON.stringify(host().__camera.position.toArray()) !== JSON.stringify(home), 4000);
-    lines.push(`${back ? 'PASS' : 'FAIL'}  复原 moved the camera back from the axis view`);
-    show();
-  })();
-}
-
-// ?assert=bom-csv — U22: the machine page can hand its BOM to a workshop. The
-// download is INTERCEPTED (createObjectURL + anchor.click) so the assertion reads
-// the bytes that would have landed on disk, not a toast that says "exported".
-if (q.get('assert') === 'bom-csv') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`BOM export (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    let captured: Blob | null = null;
-    let capturedName = '';
-    const realCreate = URL.createObjectURL.bind(URL);
-    URL.createObjectURL = ((blob: Blob) => { captured = blob; return realCreate(blob); }) as typeof URL.createObjectURL;
-    const realClick = HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click = function patched(this: HTMLAnchorElement) {
-      capturedName = this.download || '';
-      // Do not actually navigate: the bytes are already captured.
-    };
-    try {
-      // Wait for the navigator before clicking it: the assert starts at page
-      // load, when the button does not exist yet (a null click is a no-op and the
-      // assertion then waits forever on a page it never left).
-      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
-      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
-      await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
-      (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
-      const button = await waitFor(() => Boolean(document.querySelector('[data-bom-csv]')), 15000);
-      lines.push(`${button ? 'PASS' : 'FAIL'}  the machine page offers a BOM export`);
-      if (!button) { show(); return; }
-      lines.push(`INFO  button title: ${(document.querySelector('[data-bom-csv]') as HTMLElement).title.slice(0, 90)}`);
-      (document.querySelector('[data-bom-csv]') as HTMLElement).click();
-      const got = await waitFor(() => captured !== null, 5000);
-      lines.push(`${got ? 'PASS' : 'FAIL'}  clicking it produces a file`);
-      const text = captured ? await (captured as Blob).text() : '';
-      const rows = text.replace(/^\uFEFF/, '').trimEnd().split('\n');
-      lines.push(`${/^零件名,版本,数量,材料,工艺,来源,库存编号$/.test(rows[0] ?? '') ? 'PASS' : 'FAIL'}  the header is the seven workshop columns`);
-      lines.push(`${rows.length > 1 ? 'PASS' : 'FAIL'}  the sheet has ${rows.length - 1} part rows`);
-      lines.push(`${rows.slice(1).every((row) => row.split(',').length >= 7) ? 'PASS' : 'FAIL'}  every row has at least seven cells`);
-      lines.push(`${/\.csv$/.test(capturedName) ? 'PASS' : 'FAIL'}  the download is named ${capturedName || '(nothing)'}`);
-      lines.push(`INFO  first row: ${rows[1] ?? '(none)'}`);
-      // The UTF-8 BOM is what keeps Chinese headers intact in Excel. It must be
-      // checked on the BYTES: `Blob.text()` runs the UTF-8 decode algorithm, which
-      // strips a leading BOM — a text-level check can never see it.
-      const head = new Uint8Array(captured ? await (captured as Blob).arrayBuffer() : new ArrayBuffer(0)).slice(0, 3);
-      const hasBom = head[0] === 0xEF && head[1] === 0xBB && head[2] === 0xBF;
-      lines.push(`${hasBom ? 'PASS' : 'FAIL'}  the file starts with a UTF-8 BOM (${[...head].map((b) => b.toString(16)).join(' ')})`);
     } catch (error) {
-      lines.push(`FAIL  the export threw: ${String((error as Error)?.message ?? error)}`);
-    } finally {
-      URL.createObjectURL = realCreate;
-      HTMLAnchorElement.prototype.click = realClick;
+      // An assertion that throws must still POST a verdict: a silent abort reads as
+      // "the harness did not run", not "this line is wrong".
+      lines.push(`FAIL  the section assertion threw: ${String((error as Error)?.message ?? error)}`);
     }
-    show();
-  })();
-}
 
-// ?assert=audit-view — U19: the panel must ANSWER "what is blocked / what has not
-// been run", from the host's own audit (not a second judgement), and a row must
-// lead to the run it names. The assertion reads the overlay's rows and follows one.
-if (q.get('assert') === 'audit-view') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`delivery audit view (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    try {
-      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
-      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
-      await waitFor(() => Boolean(document.querySelector('[data-nav-id="machine"]')), 12000);
-      (document.querySelector('[data-nav-id="machine"]') as HTMLElement | null)?.click();
-      const button = await waitFor(() => Boolean(document.querySelector('[data-audit-open]')), 15000);
-      lines.push(`${button ? 'PASS' : 'FAIL'}  the machine page offers the audit view`);
-      if (!button) { show(); return; }
-      const crumbBefore = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-      (document.querySelector('[data-audit-open]') as HTMLElement).click();
-      const opened = await waitFor(() => Boolean(document.querySelector('[data-audit-overlay] [data-audit-verdict]')), 15000);
-      lines.push(`${opened ? 'PASS' : 'FAIL'}  the overlay opens with a verdict`);
-      if (!opened) { show(); return; }
-      const verdict = document.querySelector('[data-audit-verdict]')?.getAttribute('data-audit-verdict');
-      lines.push(`INFO  verdict: ${verdict}`);
-      lines.push(`${['excluded', 'difficult', 'not-excluded'].includes(String(verdict)) ? 'PASS' : 'FAIL'}  the verdict is the canonical vocabulary`);
-      const rows = Array.from(document.querySelectorAll('[data-audit-row]')) as HTMLElement[];
-      const findings = Array.from(document.querySelectorAll('[data-audit-finding]')) as HTMLElement[];
-      lines.push(`${rows.length + findings.length > 0 ? 'PASS' : 'FAIL'}  it lists ${rows.length} pending step(s) and ${findings.length} finding(s)`);
-      lines.push(`INFO  first pending: ${(rows[0]?.textContent ?? '(none)').replace(/\s+/g, ' ').slice(0, 100)}`);
-      lines.push(`INFO  first finding: ${(findings[0]?.textContent ?? '(none)').replace(/\s+/g, ' ').slice(0, 100)}`);
-      const jumpRow = rows.find((row) => (row.getAttribute('data-audit-row') ?? '').startsWith('run:'));
-      if (jumpRow) {
-        const target = jumpRow.getAttribute('data-audit-row')!.slice(4);
-        jumpRow.click();
-        const jumped = await waitFor(() => !document.querySelector('[data-audit-overlay]')
-          && /r0\d+|r\d+/.test((document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '')), 8000);
-        const crumbAfter = (document.querySelector('[aria-label="打开产物导航"]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-        lines.push(`${jumped ? 'PASS' : 'FAIL'}  clicking a run row opens ${target} (${crumbBefore} → ${crumbAfter})`);
-      } else {
-        lines.push('PASS  no jumpable run row in this corpus (nothing to follow)');
-      }
-      // The close control still works after following a row.
-      (document.querySelector('[data-audit-open]') as HTMLElement | null)?.click();
-      await waitFor(() => Boolean(document.querySelector('[data-audit-overlay]')), 8000);
-      (document.querySelector('[data-audit-close]') as HTMLElement | null)?.click();
-      const closed = await waitFor(() => !document.querySelector('[data-audit-overlay]'), 5000);
-      lines.push(`${closed ? 'PASS' : 'FAIL'}  ✕ closes the audit view`);
-    } catch (error) {
-      lines.push(`FAIL  the audit view threw: ${String((error as Error)?.message ?? error)}`);
-    }
-    show();
-  })();
-}
-
-// ?assert=measure-families — U15: the viewport answers more than "distance between
-// two clicks". Each family is driven through the SAME completion path the pointer
-// handler calls, and the result must land in the named history list:
-//
-//   * angle — three points, the angle AT the middle one;
-//   * hole  — a click inside the bore of the cut plane reports Ø, a click on
-//             material refuses with a hint instead of quoting the outer face;
-//   * the list renames and deletes, and the caption carries the entries.
-if (q.get('assert') === 'measure-families') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  void (async () => {
-    const lines: string[] = [`measurement families (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    try {
-      const host = () => document.querySelector('#root canvas')?.parentElement as any;
-      const ready = await waitFor(() => Boolean(host()?.__camera && host()?.__controls && (window as any).__cadMeasureComplete), 15000);
-      if (!ready) { lines.push('FAIL  no live scene — load a version first'); show(); return; }
-      const complete = () => (window as any).__cadMeasureComplete as (p: [number, number, number]) => void;
-      // The tool chips carry an icon: the text is "📏测量", not "测量".
-      const chip = (text: string) => Array.from(document.querySelectorAll('#root button'))
-        .find((b) => (b.textContent ?? '').includes(text)) as HTMLElement | undefined;
-      const family = (name: string) => document.querySelector(`[data-measure-family="${name}"]`) as HTMLElement | null;
-
-      // 1. enter measure mode
-      chip('测量')?.click();
-      const chips = await waitFor(() => Boolean(family('distance')), 6000);
-      if (!chips) {
-        lines.push(`INFO  family chips in DOM: ${document.querySelectorAll('[data-measure-family]').length}`);
-      }
-      lines.push(`${chips ? 'PASS' : 'FAIL'}  entering 测量 offers four families`);
-      if (!chips) { show(); return; }
-
-      // 2. angle: three points, 90° at the middle
-      (family('angle') as HTMLElement).click();
-      await pause(100);
-      const t = host().__controls.target;
-      complete()([t.x + 10, t.y, t.z]);
-      complete()([t.x, t.y, t.z]);
-      complete()([t.x, t.y, t.z + 10]);
-      const angleRow = await waitFor(() => Boolean(document.querySelector('[data-measure-row]')), 5000);
-      const angleText = angleRow ? (document.querySelector('[data-measure-name]')?.textContent ?? '') : '';
-      lines.push(`${angleRow ? 'PASS' : 'FAIL'}  three picks produce an angle (${angleText})`);
-      const rightAngle = angleText.includes('90.0');
-      lines.push(`${rightAngle ? 'PASS' : 'FAIL'}  the angle is measured AT the middle point (expected 90.0°)`);
-
-      // 3. hole: needs the cut plane. The click must land INSIDE the bore, and the
-      // bore is not the bbox centre on a part with an offset boss — so the aim comes
-      // from the cut's own loops, not from a guess.
-      chip('剖切')?.click();
-      await pause(400);
-      const loops = await waitFor(() => ((window as any).__cadMeasureLoops?.() ?? []).length > 0, 6000)
-        ? (window as any).__cadMeasureLoops() as { areaMm2: number; centroid: [number, number]; isHole: boolean }[]
-        : [];
-      const holeLoop = loops.filter((loop) => loop.isHole).sort((a, b) => a.areaMm2 - b.areaMm2)[0];
-      lines.push(`${loops.length > 0 ? 'PASS' : 'FAIL'}  the cut exposes ${loops.length} loop(s), ${loops.filter((l) => l.isHole).length} of them holes`);
-      chip('测量')?.click();
-      await waitFor(() => Boolean(family('hole')), 4000);
-      (family('hole') as HTMLElement).click();
-      await pause(100);
-      // Aim at the bore: lift the loop's 2D centroid back onto the plane.
-      const frame = { point: [0, 0, 0] as number[], u: [1, 0, 0], v: [0, 1, 0] };
-      const inPlane = host().__controls.target;
-      const aim = holeLoop
-        ? [inPlane.x + holeLoop.centroid[0], inPlane.y + holeLoop.centroid[1], inPlane.z] as [number, number, number]
-        : [t.x, t.y, t.z] as [number, number, number];
-      lines.push(`INFO  bore area ${holeLoop ? holeLoop.areaMm2.toFixed(1) : '?'}mm² → aiming at ${JSON.stringify(aim.map((n) => +n.toFixed(1)))}`);
-      complete()(aim);
-      const holeRow = await waitFor(() => document.querySelectorAll('[data-measure-row]').length >= 2, 6000);
-
-      const holeText = holeRow
-        ? (document.querySelectorAll('[data-measure-name]')[1]?.textContent ?? '')
-        : '';
-      lines.push(`${holeRow ? 'PASS' : 'FAIL'}  a click inside the bore reports a hole (${holeText})`);
-      const diameter = holeText.includes('Ø');
-      lines.push(`${diameter ? 'PASS' : 'FAIL'}  the hole row carries a diameter`);
-
-      // 4. rename + delete via the list itself
-      const nameBtn = document.querySelector('[data-measure-name]') as HTMLElement | null;
-      nameBtn?.click();
-      const input = await waitFor(() => Boolean(document.querySelector('[data-measure-rename]')), 3000);
-      const field = document.querySelector('[data-measure-rename]') as HTMLInputElement | null;
-      if (field) {
-        // React listens to `focusout`, not to a synthetic `blur` Event; and a
-        // `blur()` on an element that is not focused fires nothing. Focus first.
-        field.focus();
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-        setter?.call(field, '配合间隙');
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      }
-      const renamed = await waitFor(() => (document.querySelector('[data-measure-name]')?.textContent ?? '').includes('配合间隙'), 4000);
-      lines.push(`${input && renamed ? 'PASS' : 'FAIL'}  a measurement can be renamed in place`);
-      const before = document.querySelectorAll('[data-measure-row]').length;
-      (document.querySelector('[data-measure-delete]') as HTMLElement | null)?.click();
-      const deleted = await waitFor(() => document.querySelectorAll('[data-measure-row]').length === before - 1, 4000);
-      lines.push(`${deleted ? 'PASS' : 'FAIL'}  ✕ deletes exactly one row (${before} → ${document.querySelectorAll('[data-measure-row]').length})`);
-    } catch (error) {
-      lines.push(`FAIL  the family pipeline threw: ${String((error as Error)?.message ?? error)}`);
-    }
-    show();
-  })();
-}
-
-// ?assert=fluid-job — N15: a long fluid run must show a percentage and stop when
-// cancelled. The host's job routes are mocked at the HTTP boundary (a real solve
-// is 161 s), so what is under test is the PANEL's contract: start → poll → show →
-// cancel → leave the busy state. A percentage that never moves, or a cancel that
-// leaves the button disabled forever, fails here.
-if (q.get('assert') === 'fluid-job') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`fluid job progress + cancel (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    try {
-      const ready = await waitFor(() => Boolean(document.querySelector('[data-fluid-run]')), 15000);
-      lines.push(`${ready ? 'PASS' : 'FAIL'}  the evidence panel offers a fluid run`);
-      if (!ready) { show(); return; }
-      (document.querySelector('[data-fluid-run]') as HTMLElement).click();
-      const pill = () => document.querySelector('[data-fluid-progress]') as HTMLElement | null;
-      const started = await waitFor(() => Boolean(pill()), 8000);
-      lines.push(`${started ? 'PASS' : 'FAIL'}  starting it shows a progress readout`);
-      const first = pill()?.getAttribute('data-fluid-progress') ?? '';
-      const advanced = await waitFor(() => {
-        const now = pill()?.getAttribute('data-fluid-progress');
-        return Boolean(now && now !== first);
-      }, 8000);
-      lines.push(`${advanced ? 'PASS' : 'FAIL'}  the percentage ADVANCES (${first}% → ${pill()?.getAttribute('data-fluid-progress')}%)`);
-      const cancel = document.querySelector('[data-fluid-cancel]') as HTMLElement | null;
-      lines.push(`${cancel ? 'PASS' : 'FAIL'}  a cancel control appears next to it`);
-      cancel?.click();
-      const cleared = await waitFor(() => !document.querySelector('[data-fluid-progress]'), 8000);
-      lines.push(`${cleared ? 'PASS' : 'FAIL'}  cancelling stops the poll and clears the readout`);
-      const idle = await waitFor(() => {
-        const run = document.querySelector('[data-fluid-run]') as HTMLButtonElement | null;
-        return Boolean(run && !run.disabled);
-      }, 8000);
-      lines.push(`${idle ? 'PASS' : 'FAIL'}  the run button goes back to enabled (no stuck busy state)`);
-      const text = (document.querySelector('#root')?.textContent ?? '');
-      lines.push(`${/取消|cancel/i.test(text) ? 'PASS' : 'FAIL'}  the panel says the run was cancelled`);
-    } catch (error) {
-      lines.push(`FAIL  the fluid job flow threw: ${String((error as Error)?.message ?? error)}`);
-    }
-    show();
-  })();
-}
-
-// ?assert=rerun-check — U14: the panel's re-run row must mirror the HOST's
-// classification: the kinds the corpus can rebuild are clickable, the ones whose
-// inputs were never persisted are disabled WITH the missing list, and clicking a
-// direct kind produces a run id. A panel that offered all five would be inviting
-// the exact default-argument run the host refuses.
-if (q.get('assert') === 'rerun-check') {
-  const waitFor = (fn: () => boolean, ms = 15000) => new Promise<boolean>((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      if (fn()) return resolve(true);
-      if (performance.now() - t0 > ms) return resolve(false);
-      setTimeout(tick, 100);
-    };
-    tick();
-  });
-  void (async () => {
-    const lines: string[] = [`check re-run row (dock ${w}×${h})`];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    try {
-      // Open the evidence section on a part page: it holds the re-run row.
-      await waitFor(() => Boolean(document.querySelector('[aria-label="打开产物导航"]')), 12000);
-      (document.querySelector('[aria-label="打开产物导航"]') as HTMLElement | null)?.click();
-      const node = await waitFor(() => Boolean(document.querySelector('[data-nav-id]')), 12000);
-      const firstPart = document.querySelector('[data-nav-id^="part:"]') as HTMLElement | null
-        ?? document.querySelector('[data-nav-id]') as HTMLElement | null;
-      lines.push(`${node && firstPart ? 'PASS' : 'FAIL'}  the products navigator lists a part to open`);
-      firstPart?.click();
-      const opened = await waitFor(() => Boolean(document.querySelector('[data-rerun-row]')), 15000);
-      lines.push(`${opened ? 'PASS' : 'FAIL'}  the evidence panel shows a re-run row`);
-      if (!opened) { show(); return; }
-      const buttons = Array.from(document.querySelectorAll('[data-rerun-kind]')) as HTMLElement[];
-      lines.push(`${buttons.length === 5 ? 'PASS' : 'FAIL'}  all five kinds are listed (${buttons.length})`);
-      const direct = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'direct');
-      const replay = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'replay');
-      const blocked = buttons.filter((b) => b.getAttribute('data-rerun-mode') === 'needs-args');
-      lines.push(`${direct.length === 2 ? 'PASS' : 'FAIL'}  two are directly re-runnable (${direct.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
-      lines.push(`${replay.length === 1 ? 'PASS' : 'FAIL'}  one is replayable from a saved request (${replay.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
-      lines.push(`${blocked.length === 2 ? 'PASS' : 'FAIL'}  two are refused (${blocked.map((b) => b.getAttribute('data-rerun-kind')).join(',')})`);
-      lines.push(`${replay.every((b) => !(b as HTMLButtonElement).disabled) ? 'PASS' : 'FAIL'}  the replay one is CLICKABLE (its inputs were persisted)`);
-      lines.push(`${blocked.every((b) => (b as HTMLButtonElement).disabled) ? 'PASS' : 'FAIL'}  the refused ones are DISABLED`);
-      const motion = blocked.find((b) => b.getAttribute('data-rerun-kind') === 'motion');
-      const title = motion?.getAttribute('title') ?? '';
-      const needsNamed = ['joints', 'drive'].every((need) => title.includes(need));
-      lines.push(`${needsNamed ? 'PASS' : 'FAIL'}  the tooltip names THAT kind's missing inputs (joints, drive) — ${title.slice(0, 80)}`);
-      // Click a direct one: it must post and report the new run.
-      (direct[0] as HTMLButtonElement).click();
-      const reported = await waitFor(() => {
-        const text = document.querySelector('#root')?.textContent ?? '';
-        return text.includes('r099');
-      }, 10000);
-      lines.push(`${reported ? 'PASS' : 'FAIL'}  clicking it reports the new run id`);
-      const stillRow = Boolean(document.querySelector('[data-rerun-row]'));
-      lines.push(`${stillRow ? 'PASS' : 'FAIL'}  the row survives the refresh (it is not a one-shot banner)`);
-    } catch (error) {
-      lines.push(`FAIL  the re-run row threw: ${String((error as Error)?.message ?? error)}`);
-    }
-    show();
-  })();
-}
-
-// ?assert=big-mesh — U21's measurable half: a million-triangle mesh through the
-// PANEL's own path (the same reader and the same STL parser), with numbers a
-// person can argue with. The mesh is generated on demand by the sandbox server, so
-// no 50 MB fixture lives in the repo. What this cannot measure is the user's real
-// machine and a real tab switch — that half of U21 needs a human.
-if (q.get('assert') === 'big-mesh') {
-  void (async () => {
-    const lines: string[] = ['million-triangle load (panel path)'];
-    const show = () => {
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
-      const stage = document.getElementById('stage');
-      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
-      pre.textContent = lines.join('\n');
-    };
-    try {
-      const target = Number(q.get('tri') ?? '1000000');
-      const res = await fetch(`/api/cad/stl?big=1&tri=${target}`);
-      const declared = Number(res.headers.get('content-length') ?? '0');
-      let ticks = 0;
-      const t0 = performance.now();
-      const buf = await readBodyWithProgress(res, () => { ticks += 1; });
-      const transportMs = performance.now() - t0;
-      const mb = buf.byteLength / 1024 / 1024;
-      const count = new DataView(buf).getUint32(80, true);
-      lines.push(`INFO  ${count.toLocaleString('en-US')} triangles · ${mb.toFixed(1)} MB · ${transportMs.toFixed(0)} ms`
-        + ` (${(mb / (transportMs / 1000)).toFixed(1)} MB/s) · ${ticks} progress tick(s)`);
-      lines.push(`${count >= target * 0.9 ? 'PASS' : 'FAIL'}  the payload really is ~${target.toLocaleString('en-US')} triangles`);
-      lines.push(`${declared === buf.byteLength ? 'PASS' : 'FAIL'}  content-length matches the bytes received (progress can be a fraction)`);
-      lines.push(`${ticks >= 2 ? 'PASS' : 'FAIL'}  the reader ticked more than once on a multi-MB body (a bar can move)`);
-
-      const t1 = performance.now();
-      const geometry = new STLLoader().parse(buf);
-      geometry.computeBoundingSphere();
-      geometry.computeBoundingBox();
-      const parseMs = performance.now() - t1;
-      const verts = geometry.getAttribute('position').count;
-      lines.push(`INFO  parse + bounds: ${parseMs.toFixed(0)} ms (${(count / (parseMs / 1000) / 1000).toFixed(0)}k tri/s)`);
-      lines.push(`${verts === count * 3 ? 'PASS' : 'FAIL'}  every triangle reached the geometry (${verts} vertices)`);
-
-      // The GPU half: uploading a 1M-triangle buffer to a live context. The panel's
-      // renderer is the one on screen; a throwaway scene keeps the loaded part intact.
-      const renderer = (document.querySelector('#root canvas')?.parentElement as any)?.__renderer;
-      if (renderer) {
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-        camera.position.set(0, 0, 120);
-        const material = new THREE.MeshBasicMaterial({ color: 0x3366cc });
-        const mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-        const t2 = performance.now();
-        renderer.render(scene, camera);
-        const firstFrameMs = performance.now() - t2;
-        const drawn = (renderer.info?.render?.triangles ?? 0);
-        const size = renderer.getSize(new THREE.Vector2());
-        // `renderer.render` only SUBMITS commands: without a sync, 1M triangles read
-        // as "0.1 ms/frame" because the GPU has not been waited for. `gl.finish()`
-        // turns it into a number about the frame rather than about the command queue.
-        const gl = renderer.getContext();
-        gl.finish();
-        const t3 = performance.now();
-        for (let i = 0; i < 10; i++) { renderer.render(scene, camera); }
-        gl.finish();
-        const steadyMs = (performance.now() - t3) / 10;
-        // `info.render.triangles` is the only honest witness that the 1M triangles
-        // were actually drawn: a degenerate canvas renders in ~0.1 ms and would
-        // otherwise read as "10000 fps".
-        lines.push(`INFO  first frame ${firstFrameMs.toFixed(0)} ms · steady ${steadyMs.toFixed(1)} ms/frame · canvas ${size.x}×${size.y} · drawn ${drawn.toLocaleString('en-US')} tri`);
-        lines.push(`${firstFrameMs < 5000 ? 'PASS' : 'FAIL'}  the first frame with the whole mesh lands under 5 s`);
-        // A software rasteriser (the sandbox's llvmpipe) is the slow end of the range;
-        // a real GPU is faster. The ceiling catches a pathological path (no culling,
-        // per-frame re-upload), not a frame-rate claim about the user's machine.
-        lines.push(`${steadyMs < 200 ? 'PASS' : 'FAIL'}  a steady frame stays under 200 ms even in software rasterisation`);
-        lines.push(`${drawn >= count * 0.9 ? 'PASS' : 'FAIL'}  the draw call really rasterised the mesh (not a culled/empty scene)`);
-        mesh.geometry.dispose();
-        material.dispose();
-      } else {
-        lines.push('SKIP  no live renderer — GPU upload measured only by the real-machine test');
-      }
-    } catch (error) {
-      lines.push(`FAIL  big-mesh threw: ${String((error as Error)?.message ?? error)}`);
-    }
     show();
   })();
 }
