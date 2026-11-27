@@ -8328,6 +8328,13 @@ export function registerCadTools(
           }));
         }
         const issues = validateDesignException(a.designException, a.versionId);
+        const claimed = Number((a.designException as { measuredMm?: number }).measuredMm);
+        if (Number.isFinite(claimed) && Math.abs(claimed - error.wallMm) > Math.max(0.2, 0.25 * error.wallMm)) {
+          issues.push(
+            `measuredMm ${claimed} does not match the measured wall ${error.wallMm.toFixed(2)} mm ` +
+            `(tolerance ${Math.max(0.2, 0.25 * error.wallMm).toFixed(2)} mm)`,
+          );
+        }
         if (issues.length > 0) {
           throw new Error(
             `designException invalid:\n- ${issues.join('\n- ')}\n\n` +
