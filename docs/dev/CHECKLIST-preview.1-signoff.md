@@ -66,21 +66,18 @@
 | **A 组（基线，45 工具）** | 把 `dsh-cad-harness/cordis.patch.yml` 里 `hideLegacy: all` 改成注释掉（或整段 `toolSurfaces` 注掉），再 `npx dsh-cad-setup` + 重启 dsh | 见下 |
 
 ```bash
-# 切到 A 组
 cd /home/songsenand/Project/ToyMarker/dsh-cad-harness
-cp cordis.patch.yml /tmp/cordis.patch.yml.bak
-python3 - <<'PY'
-import re,io
-p='cordis.patch.yml'; s=open(p).read()
-s=s.replace('        hideLegacy: all', '        # hideLegacy: all   # A/B: legacy 45 tools')
-open(p,'w').write(s)
-PY
-npx dsh-cad-setup      # 重新生成预设
-# 重启 dsh 后，新开一个空白会话（toolScope 是会话创建时决定的）
 
-# 跑完 A 组后切回 B 组
-cp /tmp/cordis.patch.yml.bak cordis.patch.yml && npx dsh-cad-setup
+node scripts/token-ab-toggle.mjs --status     # 现在在哪一组
+node scripts/token-ab-toggle.mjs --legacy     # 切到 A 组（45 个 legacy 工具）+ 重新生成预设
+# 重启 dsh，然后【新开一个空白会话】——toolScope 是会话创建时的事实
+
+node scripts/token-ab-toggle.mjs --surfaces   # 跑完切回 B 组（从备份逐字节恢复）
 ```
+
+脚本会：改 `cordis.patch.yml` 前先存备份到 `.tmp-ab/`、改完调用 `sync-cad-preset`（只重写预设，
+不装 OpenSCAD），并**核对生成的预设确实变了**——"说切了但预设没变"会直接报错，不会静默。
+`--surfaces` 从备份恢复，切换后 `cordis.patch.yml` 的 md5 与切换前一致。
 
 > **注意**：`toolScope` 是会话创建时的事实，**已存在的会话不会变**；A/B 都要**新开会话**。
 
