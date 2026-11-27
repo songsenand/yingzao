@@ -27,7 +27,7 @@
 | **U14** 检查一键重跑 | ✅ 收口 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（30）+ `accept-ui rerun-check`（11）+ **`accept-stress` 37/37**（提取后的 `runStressJob` 真跑） |
 | **U22** BOM CSV | ✅ 收口 | `accept-bom-csv`（22 项）+ `accept-ui bom-csv`（8 项，下载字节被截获校验） |
 
-**汇总：11 项收口、3 项 partial**（Q1、U20、U21——三项都只等人签收，机器侧证据齐全）。
+**汇总：10 项收口、3 项 partial**（Q1、U20、U21——三项都只等人签收，机器侧证据齐全）。
 
 ---
 
@@ -96,6 +96,12 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 
 `release:preflight` 只负责**顺序**与**汇总**，每一步都调用已有脚本（不会出现"文档写的命令"
 与"实际跑的检查"两份）。跳过的一步显示 `SKIP` 并打印 WARNING，不算通过。
+
+**证据自检**：`npm run audit:release-evidence` 把本文件的每条 claim 对着仓库核一遍——
+命名的 `accept-*` 脚本是否存在、是否**在发布链上**（`accept:preview` / `accept:release` /
+`release:preflight` 的传递闭包）、13 行是否齐全、汇总数字是否等于"收口"行数。
+它抓出过两处真问题：`accept-stress` 只在文件里被提到、从没进过任何链；以及汇总写"11 收口"
+而表里只有 10 行收口（11+3>13，算术上不可能）。
 
 **制品检查（2026-11-27 实测）**：`npm pack --dry-run` → `dsh-cad-harness-0.2.0-preview.1.tgz`，
 666 个文件、10.3 MB（解包 34.7 MB），**不含** `.tmp-*` / `sandbox/shots` / `node_modules`；
