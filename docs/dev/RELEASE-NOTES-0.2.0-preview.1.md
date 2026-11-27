@@ -84,22 +84,18 @@
 ## 5. 发布清单（需要维护者批准的操作）
 
 ```bash
-# 1) 版本与同步（本版已做：0.2.0-preview.1，root shim 同步）
-cd dsh-cad-harness && node scripts/sync-root-version.mjs --check
+# 一条命令跑完顺序与汇总（版本同步 → 预设 → 构建 → accept:release → UI 矩阵 → 文档链接）
+cd dsh-cad-harness
+DSH_CAD_PYTHON_ROOT=$PWD/../.tmp-pyroot npm run release:preflight
 
-# 2) 全量验收（本环境可跑的部分）
-npm run accept:preview          # 退出码 0
-node scripts/accept-ui.mjs      # 28/28
-
-# 3) 发布前检查
-node scripts/check-release-preset.mjs
-npm run build                   # typecheck + esbuild + types
-
-# 4) 打标签与发布（需要批准）
+# 打标签与发布（需要批准）
 git tag -s v0.2.0-preview.1 -m "0.2.0-preview.1"
 git push origin v0.2.0-preview.1
 npm stage publish               # staged 之后用手机 npmjs.com → Staged Packages 批准
 ```
+
+`release:preflight` 只负责**顺序**与**汇总**，每一步都调用已有脚本（不会出现"文档写的命令"
+与"实际跑的检查"两份）。跳过的一步显示 `SKIP` 并打印 WARNING，不算通过。
 
 > **上一版的经验**：现有 token 只有 `package:write`，`stage approve` 会 404，直发 E409；
 > **遇到 staged 阻塞，先提示"可以用手机 npmjs.com → Staged Packages 批准"，不要先改版本号。**
