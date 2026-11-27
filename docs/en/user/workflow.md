@@ -38,7 +38,11 @@ You see:
 Look at the model in the right-hand **panel**. Ask three questions in order:
 
 1. **Is the shape right?** Orbit around it; compare with the function you described; is anything extra or missing?
-2. **Are the fits right?** Measure hole spacing, wall thickness, clearance; box the areas you doubt.
+2. **Are the fits right?** Measure the key dimensions; box the areas you doubt. The panel has four
+   measurement families: **distance** (two points), **angle** (three points, measured AT the middle one),
+   **section area** (turn on the section cut, click the cut face) and **hole** (click inside a bore on the
+   cut face — it reports the equivalent diameter). Measurements line up below the viewport; **click a name
+   to rename it**, **✕ to delete it**, and they travel with the screenshot caption.
 3. **Does it move right?** For a mechanism, replay the trajectory; pause on a suspicious frame and point at it.
 
 The more specific the feedback, the better:
@@ -66,6 +70,20 @@ Run checks when needed. Four families, chosen by your question:
 | Is the assembly right? | assembly check | per-interface results, clearance, **undeclared** neighbours |
 | Does the mechanism move / collide? | motion | trajectory, interference timeline, stroke |
 | Does fluid flow? | fluid | particle replay, trend numbers |
+
+### Three more panel entries
+
+- **Audit** (top right of the machine page): "which step has not been run". It lists, worst first, current
+  failures, versions no run cites, superseded history, nodes pinning an older version, a contract older than
+  the geometry, missing/stale visual reviews, and unregistered files. **A row jumps** to the run or version
+  it names, so you can look at the evidence directly.
+- **Re-run checks** (evidence section): manufacturing and assembly **re-run in one click**; stress can be
+  **replayed** when a recent run saved its request (the version is re-pinned to the one you are looking at,
+  joints unchanged). Runs written before requests were saved are **refused with the missing list**
+  (e.g. `material, loads, constraints`) instead of being re-run on defaults.
+- **Fluid progress and cancel**: a long run shows "Fluid 40% (400/1000 steps)" and **Cancel** stops the
+  solver process. **BOM CSV export** (machine page) has seven columns — part, version, qty, material,
+  process, source, stock id — with unconfirmed processes marked.
 
 How to read a report (excluded / difficult / not excluded / not evaluated): [Verification](verification.md#reading-a-report). Every “excluded” names a location and “measured vs required”; go look at that point in the panel.
 

@@ -1,4 +1,4 @@
-# 0.1.2-preview.1 preview notes
+# 0.2.0-preview.1 preview notes
 
 [中文](../../user/preview.md) | English
 
@@ -19,6 +19,12 @@
 - **Sweep screen and fit envelopes**: `cad_check` `sweep` finds suspects over a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`, and motion supports a `gear` ratio;
 - **Overhang is a support cost**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`;
 - **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host;
+- **Four measurement families + history**: distance / three-point angle / section area / bore diameter; entries can be renamed, deleted, and travel with the screenshot caption;
+- **Viewport navigation**: iso/top/front/right plus six-way axis snapping, perspective↔orthographic, Home; per-part hide / isolate / highlight in the assembly preview;
+- **Audit view**: the machine page answers "which step has not been run", and a row jumps to the run or version it names;
+- **Checks can be re-run**: manufacturing/assembly in one click, stress replayed (version re-pinned); a run that never saved its request is refused with the missing list;
+- **Fluid progress and cancel**: a long run shows steps done / total and Cancel stops the solver process; the flow axis of a stubby part now comes from its cavity;
+- **BOM CSV**: seven columns (part / version / qty / material / process / source / stock id), unconfirmed processes marked;
 - **Examples**: sewing rotary hook and 3-speed derailleur, each with a CadQuery variant; per "new in, old out", 3 older examples moved to the history table while keeping their directories and corpora;
 - Assembly contract (BOM + executable ICD), delivery audit, evidence CLI;
 - Risk-annotated export: a blocked delivery can still be exported, but the panel asks for confirmation, the filename carries `_UNVERIFIED`, and the project `exports/<id>/` keeps a manifest and the findings;
