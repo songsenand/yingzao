@@ -50,7 +50,7 @@ U17/U16/U10 等争取项**不进 preview.1**，U17 起于 0.2.1 开头。
 
 | ID | P | 状态 | 事项 | 出口（可证伪） | 估时 |
 |---|---|---|---|---|---|
-| Q1 | P0 | partial | 上下文 / 工具面 token 预算（节约 token） | **已落** `accept-token-budget.mjs`（进 `accept:preview`）+ `docs/TOKEN-BASELINE.json`：9 面 4,065 ≤6,144 chars，固定前缀 **5,930 chars ≈1,483 tok**（旧 45 工具 104,675 chars，−94.3%）；skill 目录 1,865、正文 49,831 按需不计。**余**：3 任务 A/B（同 brief、pass 不变、端到端 token −20%）——固定前缀降幅不能冒充端到端降幅，报告见 `experiments/20261127_0.2.0_token.md` | 3–5d |
+| Q1 | P0 | **partial（只差 A/B 数据）** | 上下文 / 工具面 token 预算（节约 token） | **已落**：`accept-token-budget.mjs`（进 `accept:preview`）+ `TOKEN-BASELINE.json`（固定前缀 5,930 chars ≈1,483 tok；对照 45 旧工具 104,675 → **降 94.3%**，9 面在 6144 预算内）；`accept-skill-tools`/`token-budget` 守不回归。**已备**：`scripts/token-ab-report.mjs`（判定规则写死：两臂都通过且 ≥2/3 任务降 ≥20%，`--append` 写进实验报告）。**余**：跑三个任务的 A/B 并读数（需真会话，步骤见 `CHECKLIST-preview.1-signoff.md` §3） | 0.5d |
 | Q3 | P0 | planned | 前向兼容契约 + 回归 | 写 `docs/dev/COMPATIBILITY.md`：0.2.0 起 surface/action 只增不删、项目 schema 读旧拒新、弃用至少跨 1 个 minor、CLI/env 稳定；`accept-compat`：0.1.2 golden 项目可开、工具契约快照只允许新增、未知 schemaVersion 拒绝 | 2d |
 | Q4 | P0 | planned | 干净安装 / 升级 E2E + 问题收口 | 干净机器按 README 在 Linux/mac/Win 装 + 从 0.1.2 升级；doctor 修复路径、离线/代理、首跑耗时记录；发布前 open P0/P1 = 0；R3/R6 矩阵回填 | 3d |
 | Q5 | P1 | planned | 用户文档 0.2.0 覆盖 + 中英对照 | 覆盖矩阵（安装/首件/验证/视口/剖切/装配/测量/导出/交付/升级/排障）无空缺；中英同文件集、同标题、版本号一致；截图更新；`accept-docs-parity` 进 CI | 4–5d |
