@@ -14,9 +14,9 @@
 | 项 | 状态 | 证据（可复跑） |
 |---|---|---|
 | **Q2** 工具面 v1 冻结 | ✅ 收口 | `TOOL-SURFACE-V1.json`（9 面 × 45 action）+ `accept-tool-surface` + `accept-cad-all-surfaces`（元数据派生，非字面量） |
-| **Q1** token 预算 | 🟡 partial | `accept-token-budget`（固定前缀 5,930 chars ≈ 1,483 tok）+ `experiments/20261127_0.2.0_token.md`；**缺 3 任务 A/B**（需真会话） |
+| **Q1** token 预算 | ⬜ 已实现·未签收 | `accept-token-budget`（固定前缀 5,930 chars ≈ 1,483 tok）+ `experiments/20261127_0.2.0_token.md`；**缺 3 任务 A/B**（需真会话） |
 | **U20** 剖切（沿视角 + 深度）+ 封盖 | ✅ 收口 | 模式＝轴切 / **沿视角**（点「剖切」时按当前屏幕取面，剖切中旋转切面固定，关掉再开按新视角重取；默认切掉近侧一半，剖面正对用户；角度滑块已删）；`accept:section-cap-area`（独立面积判据 + 立方体自测 + **质心**）对探针 2 件 + 语料 4 件 × 4 法向 × 9 深度**全 0.00%**；封盖平移缺陷已修（镜筒 33mm 偏移，新增质心/包围盒判据）；`accept-ui section-free`（24 项）；**缺你的目视签收** |
-| **U21** 大网格进度 + WebGL 恢复 | 🟡 partial | `accept-stream-progress`（17 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
+| **U21** 大网格进度 + WebGL 恢复 | ⬜ 已实现·未签收 | `accept-stream-progress`（17 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
 | **U12** 装配逐件显隐/隔离/高亮 | ✅ 收口 | `accept-ui assembly-hide`（11 项） |
 | **U11** 视口导航 | ✅ 收口 | `accept-ui views`（13 项）+ `accept-viewport-orbit`（视图数学 +14） |
 | **U19** 面板审计视图 | ✅ 收口 | `accept-audit-gaps`（19 项）+ `accept-ui audit-view`（8 项） |
@@ -27,7 +27,7 @@
 | **U14** 检查一键重跑 | ✅ 收口 | `run.json` 记 `request`；`check-rerun` 三态 direct/replay/needs-args；`accept-check-rerun`（37）+ `accept-ui rerun-check`（11）+ **`accept-stress` 37/37**（提取后的 `runStressJob` 真跑） |
 | **U22** BOM CSV | ✅ 收口 | `accept-bom-csv`（22 项）+ `accept-ui bom-csv`（8 项，下载字节被截获校验） |
 
-**汇总：11 项收口、2 项 partial**（Q1、U21——都只等人签收，机器侧证据齐全）。
+**汇总：11 项收口、2 项「已实现·未签收」**（Q1、U21）。这 2 项的机器侧证据齐全且可复跑，但**缺人工签收**（Q1 需真会话 A/B 数据、U21 需真机切标签页）；维护者 2026-11-28 决定本版不做这两项签收，因此本版按 **11/13** 发布，并在发布说明中如实标注——不把未签收写成通过。
 
 ---
 
