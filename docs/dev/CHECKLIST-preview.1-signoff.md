@@ -105,6 +105,27 @@ cp /tmp/cordis.patch.yml.bak cordis.patch.yml && npx dsh-cad-setup
 - **验收线**：三个任务里**至少两个** B 组 token 比 A 组低 **≥20%**；若达不到，Q1 记为"前缀已降、端到端未达标"，
   不硬凑数字。
 
+把六个数丢给脚本，判定和记录它来做（不靠记忆）：
+
+```bash
+cd dsh-cad-harness
+cat > /tmp/ab.json <<'JSON'
+{ "date": "2026-11-28", "configA": "legacy 45 tools", "configB": "9 surfaces",
+  "tasks": [
+    { "name": "bracket",  "passA": true, "passB": true, "tokensA": 0, "tokensB": 0 },
+    { "name": "assembly", "passA": true, "passB": true, "tokensA": 0, "tokensB": 0 },
+    { "name": "fluid",    "passA": true, "passB": true, "tokensA": 0, "tokensB": 0 }
+  ] }
+JSON
+# 把 0 换成你记到的 token 数，然后：
+node scripts/token-ab-report.mjs --input /tmp/ab.json \
+  --append ../experiments/20261127_0.2.0_token.md
+```
+
+- 判定规则写死在脚本里：**两臂任务都通过**，且 **≥2/3 任务降幅 ≥20%**（比较用表格显示的精度，
+  避免"显示 20.0% 却判否"）。
+- `--append` 会把表格追加到实验报告，**append-only**，不改历史。
+
 ---
 
 ## 4. 结论登记（你填）
