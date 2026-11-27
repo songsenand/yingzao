@@ -103,6 +103,10 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 > **上一版的经验**：现有 token 只有 `package:write`，`stage approve` 会 404，直发 E409；
 > **遇到 staged 阻塞，先提示"可以用手机 npmjs.com → Staged Packages 批准"，不要先改版本号。**
 
+**发布前三项签收**：U20 目视、U21 真机、Q1 的 A/B 只能由人做，步骤与判定标准见
+[CHECKLIST-preview.1-signoff.md](CHECKLIST-preview.1-signoff.md)；三项通过后把本文件 §1 的
+partial 改成已收口，再打 tag。
+
 **本环境不能跑、必须换机器的检查**：
 `node scripts/accept-release.mjs` 里的 `accept:step-validation`（需要能读 STEP 的 cascadio；
 本沙箱报 "OpenCASCADE produced no geometry"，与本次改动无关）与 `accept-fluid-constraint` 的
