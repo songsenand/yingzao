@@ -41,7 +41,9 @@ Look at the model in the right-hand **panel**. Ask three questions in order:
 2. **Are the fits right?** Measure the key dimensions; box the areas you doubt. The panel has four
    measurement families: **distance** (two points), **angle** (three points, measured AT the middle one),
    **section area** (turn on the section cut, click the cut face) and **hole** (click inside a bore on the
-   cut face — it reports the equivalent diameter). Measurements line up below the viewport; **click a name
+   cut face — it reports the equivalent diameter). The **section** cuts along your view by default (the plane
+   is parallel to the screen); the only slider is **depth**. Orbit, then press "cut along view" to re-aim;
+   the axis cut still does X/Y/Z. Measurements line up below the viewport; **click a name
    to rename it**, **✕ to delete it**, and they travel with the screenshot caption.
 3. **Does it move right?** For a mechanism, replay the trajectory; pause on a suspicious frame and point at it.
 

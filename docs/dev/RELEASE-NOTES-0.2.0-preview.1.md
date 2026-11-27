@@ -15,7 +15,7 @@
 |---|---|---|
 | **Q2** 工具面 v1 冻结 | ✅ 收口 | `TOOL-SURFACE-V1.json`（9 面 × 45 action）+ `accept-tool-surface` + `accept-cad-all-surfaces`（元数据派生，非字面量） |
 | **Q1** token 预算 | 🟡 partial | `accept-token-budget`（固定前缀 5,930 chars ≈ 1,483 tok）+ `experiments/20261127_0.2.0_token.md`；**缺 3 任务 A/B**（需真会话） |
-| **U20** 任意剖切 + 封盖 | 🟡 partial | `accept-section-free`（任意平面剖切/封盖，565.685 mm² 45° 立方体截面）+ `accept-ui section`；**缺斜切管道的目视签收** |
+| **U20** 剖切（沿视角 + 深度）+ 封盖 | 🟡 partial | 模式＝轴切 / **沿视角**（冻结当前视线，只调深度；角度滑块已删，默认沿视角）；`accept:section-cap-area`（独立面积判据 + 立方体自测）对探针 2 件 + 语料 4 件 × 4 法向 × 9 深度**全 0.00%**；`accept-ui section-free`（13 项）；**缺你的目视签收** |
 | **U21** 大网格进度 + WebGL 恢复 | 🟡 partial | `accept-stream-progress`（17 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
 | **U12** 装配逐件显隐/隔离/高亮 | ✅ 收口 | `accept-ui assembly-hide`（11 项） |
 | **U11** 视口导航 | ✅ 收口 | `accept-ui views`（13 项）+ `accept-viewport-orbit`（视图数学 +14） |
@@ -39,7 +39,7 @@
   可删除、随截图说明带走；
 - **视口导航**（U11）：等轴/顶/前/右 + 六向轴吸附、透视↔正交、Home；
 - **装配逐件显隐/隔离/高亮**（U12）；
-- **任意平面剖切 + 封盖**（U20，partial：差目视签收）；
+- **剖切（沿视角 + 深度）+ 封盖**（U20，partial：差目视签收）；
 - **审计视图**（U19）：机器页一问"哪一步没跑"，按判定分序列出，点行跳到对应的 run/version。
 
 ### 2.2 长任务不再"看起来卡死"
