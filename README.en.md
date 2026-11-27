@@ -319,7 +319,7 @@ by CI.
 - **BOM CSV export**: seven columns (part, version, qty, material, process, source, stock id), with unconfirmed processes marked.
 - Full details, evidence and known issues: [0.2.0-preview.1 release notes](docs/dev/RELEASE-NOTES-0.2.0-preview.1.md).
 
-> This is a **preview**: 9 of the 13 gate items are closed and 4 are partial (Q1's A/B, U20 visual sign-off, U21 on a real machine, F1's Python parity). The reasons are in the release notes §1/§4 and are not counted as done.
+> This is a **preview**: **11 of the 13 gate items are closed**; the remaining 3 await a human sign-off (Q1's three-task A/B, U20 oblique-cut visual check, U21 tab switch on a real machine). The machine-side evidence is complete; the sign-off steps are in the release notes §1/§4 and the checklist.
 
 ## Known limits
 

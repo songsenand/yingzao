@@ -323,8 +323,8 @@ curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
 - **BOM CSV 导出**：七列（零件名/版本/数量/材料/工艺/来源/库存编号），未确认的工艺会标出来。
 - 完整说明、证据与已知问题见 [0.2.0-preview.1 发布说明](docs/dev/RELEASE-NOTES-0.2.0-preview.1.md)。
 
-> 本版是 **preview**：13 项门禁中 9 项收口、4 项 partial（Q1 的 A/B、U20 目视签收、U21 真机、
-> F1 的 Python parity）。partial 的原因写在发布说明 §1/§4，不当作"已完成"。
+> 本版是 **preview**：13 项门禁中 **11 项收口**，3 项只等人签收（Q1 的三任务 A/B、U20 斜切目视、
+> U21 真机切标签页）。机器侧证据齐全，签收步骤见发布说明 §1/§4 与签收清单，不当作"已完成"。
 
 ## 已知边界
 
