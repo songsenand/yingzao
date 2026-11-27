@@ -51,7 +51,7 @@ export interface ExportManifest {
 
 const NEXT_LOOK: Record<ExportVerdict, string[]> = {
   blocked: [
-    'run delivery_audit / preflight and read the blocked findings',
+    'run cad_deliver({ action: "audit" }) or cad_deliver({ action: "preflight" }) and read the blocked findings',
     'fix the blocked finding, or confirm the export and record the reason',
     're-export after the fix so the file name no longer says _UNVERIFIED',
   ],

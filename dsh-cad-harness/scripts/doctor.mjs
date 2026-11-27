@@ -345,7 +345,7 @@ if (project) {
   const marker = join(project, 'cad-data', 'project.json');
   add('project-marker', existsSync(marker) ? 'pass' : 'warn',
     existsSync(marker) ? `project marker at ${marker}` : `no cad-data/project.json under ${project}`,
-    existsSync(marker) ? undefined : 'run init_project or bind_project in a CAD session');
+    existsSync(marker) ? undefined : 'select a project in a CAD session: cad_session action=init (new) or action=bind (existing)');
   try {
     const probe = mkdtempSync(join(project, '.cad-doctor-'));
     writeFileSync(join(probe, 'probe'), 'ok');

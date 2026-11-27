@@ -28,7 +28,7 @@
 // registered tool (a silently-not-applied wrapper would reproduce the original bug).
 
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
-import { classifyError, envelopeText } from '../shared/error-envelope.ts';
+import { classifyError, envelopeOf, envelopeText, withEnvelope, type ErrorEnvelope } from '../shared/error-envelope.ts';
 
 /** Attached to a wrapped execute so `accept-tool-output.mjs` can see the guard is live. */
 export const OUTPUT_CHECKED = Symbol.for('dsh-cad-harness.outputChecked');
@@ -37,6 +37,27 @@ interface ContractDefinition {
   name: string;
   execute?: unknown;
   output?: { schema?: unknown };
+}
+
+
+/** Remove a leading `<legacy op>: ` from a delegated message (surface layer only). */
+function stripLegacyPrefix(cause: string, legacyStage: string): string {
+  const name = legacyStage.split(' action=')[0];
+  const prefix = `${name}: `;
+  return cause.startsWith(prefix) ? cause.slice(prefix.length) : cause;
+}
+
+/**
+ * The stage a caller can recognize: the surface name, plus the action when one was
+ * supplied. Legacy op names (`run_python`, `bind_project`) are NOT callable after the
+ * facade cutover, so an error that leads with one sends the model to a dead end.
+ */
+function stageFor(name: string, args: unknown): string {
+  const action = (args as { action?: unknown } | null | undefined)?.action;
+  if (typeof action === 'string' && action && action !== 'catalog' && action !== 'help') {
+    return `${name} action=${action}`;
+  }
+  return name;
 }
 
 /**
@@ -66,11 +87,21 @@ export function withOutputContract<T extends ContractDefinition>(definition: T):
       // The tool runtime serializes only `error.message` (dsh-tools
       // toolErrorResult), so the envelope MUST be in the text. Custom Error
       // properties are kept for direct callers, but they are not the channel.
-      const envelope = classifyError(error, definition.name);
-      const wrapped = new Error(envelopeText(envelope));
-      Object.assign(wrapped, {
-        code: envelope.code, stage: envelope.stage, hint: envelope.hint, cause: envelope.cause,
-      });
+      //
+      // A surface delegates to an already-wrapped legacy tool: re-envelope from the
+      // inner CAUSE instead of re-classifying the inner TEXT, so the prefix appears
+      // once and the stage is the callable surface, not the legacy op.
+      const stage = stageFor(definition.name, args);
+      const inner = envelopeOf(error);
+      // A surface delegates to a legacy tool whose body may still prefix its message
+      // with the op name (`set_datums: no usable anchors`). Drop only that prefix:
+      // the stage already says what to call, and repeating the dead name is the exact
+      // defect this wrapper exists to remove.
+      const cause = inner ? stripLegacyPrefix(inner.cause, inner.stage) : '';
+      const envelope: ErrorEnvelope = inner
+        ? { ...inner, stage, cause, message: cause }
+        : classifyError(error, stage);
+      const wrapped = withEnvelope(new Error(envelopeText(envelope)), envelope);
       throw wrapped;
     }
   };

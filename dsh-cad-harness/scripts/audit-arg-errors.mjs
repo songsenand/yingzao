@@ -26,7 +26,11 @@ const files = ['src/host/tools.ts', 'src/host/inspect.ts', 'src/host/stress.ts',
 
 /** Known exceptions, each with a reason. Adding a line here is a decision, not a bypass. */
 export const ALLOWLIST = [
-  // (empty) — keep it that way if you can: an argument error should name its field.
+  // The message is BUILT by thinWallBlockMessage() (design-exceptions.ts), which
+  // names `designException` in its last line; this lint only scans the literal at
+  // the throw site, so it cannot see through the helper call.
+  // keep it short: an argument error should name its field.
+  'src/host/tools.ts:8326',
 ];
 
 const NEGATIVE = /(!\s*a\??\.|a\??\.\w+\s*===\s*undefined|!Array\.isArray\(a\??\.|a\??\.\w+\s*<\s*0|a\??\.\w+\s*<=\s*0)/;

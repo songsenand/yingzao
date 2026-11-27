@@ -318,18 +318,72 @@ export interface ResolveProjectOptions {
    * that is how the wind-up-frog corpus landed at the repo root and had to be
    * copied/moved later. The caller must choose explicitly:
    *   - `init_project({dir})` to make the cwd a project, or
-   *   - `bind_project({dir: ancestor})` to declare the ancestor as the target.
+   *   - `cad_session({ action: "bind", args: { dir: ancestor } })` to declare the ancestor as the target.
    * Reads (`projectCwdOf`) stay permissive.
    */
   requireExplicit?: boolean;
   /**
    * Write/read tools: a CAD project must have been SELECTED explicitly.
    * There is no default from cwd/root. Unbound callers get an error telling
-   * them to call bind_project({dir}) or init_project({dir}).
+   * them to call `cad_session` action=bind (existing) or action=init (new).
    */
   requireSelection?: boolean;
   /** Read-only resolution: compute the path but do NOT write a session binding. */
   bind?: boolean;
+}
+
+/**
+ * The ONE callable spelling of the project-selection tool.
+ *
+ * The model surface is the `cad_session` facade; `bind_project` / `init_project`
+ * are internal op names that stopped being callable in the 2026-11-16 cutover.
+ * Error text is the model's only guide here, so it must name a call the model can
+ * actually make — a name absent from its catalog is a dead end, not a hint.
+ */
+export function cadSessionCall(action: 'bind' | 'init', dir: string): string {
+  return `cad_session({ action: ${JSON.stringify(action)}, args: { dir: ${JSON.stringify(dir)} } })`;
+}
+
+/**
+ * State + the exact call(s) that resolve "no project selected".
+ *
+ * The previous message offered two branches without saying which one applied, so
+ * a caller had to guess (a session in a marker-less subdirectory guessed `bind`
+ * and failed). This inspects the cwd it already has and names the consequence of
+ * each branch; only the ambiguous case legitimately keeps two intents.
+ */
+export function projectChoiceHint(start: string | null): string {
+  if (!start) {
+    return `Select an existing project with ${cadSessionCall('bind', '<existing-project>')}, ` +
+      `or create one with ${cadSessionCall('init', '<new-project>')}.`;
+  }
+  const cwd = resolve(start);
+  const own = markerAt(cwd);
+  if (own === 'project' || own === 'legacy') {
+    return `The cwd ${cwd} is itself a CAD project: select it with ${cadSessionCall('bind', cwd)}.`;
+  }
+  if (own === 'workspace') {
+    return `The cwd ${cwd} is a CAD WORKSPACE (a container, never a write target). ` +
+      `Create a project inside it with ${cadSessionCall('init', join(cwd, 'my-part'))}, ` +
+      'or select an existing member project by path.';
+  }
+  const resolved = resolveProjectRoot(cwd);
+  if (resolved.root !== cwd) {
+    if (resolved.marker === 'workspace') {
+      return `The cwd ${cwd} is inside the workspace ${resolved.root} (a container, never a write target): ` +
+        `create a project here with ${cadSessionCall('init', cwd)}.`;
+    }
+    return `The cwd ${cwd} is inside the project ${resolved.root} but is not itself a project.\n` +
+      `  - to work in ${cwd}: ${cadSessionCall('init', cwd)}\n` +
+      `  - to work in the existing project: ${cadSessionCall('bind', resolved.root)}`;
+  }
+  return `Nothing here or above ${cwd} is a project: ${cadSessionCall('init', cwd)} creates and selects one.`;
+}
+
+/** The refusal used by read/write tools before the session has selected a project. */
+export function projectSelectionMessage(start: string | null): string {
+  return 'No CAD project is selected for this session, and there is no default cwd/root. '
+    + projectChoiceHint(start);
 }
 
 /** Async resolver: binding → live working directory → session header → server cwd. */
@@ -342,10 +396,7 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
   if (opts.requireSelection && sessionId) {
     const selected = readSessionBinding(sessionId);
     if (!selected) {
-      throw new Error(
-        'No CAD project is selected. There is no default cwd/root: pass an explicit path with ' +
-        'bind_project({dir:"..."}) (existing project marker) or init_project({dir:"..."}) (new project), then retry.',
-      );
+      throw new Error(projectSelectionMessage(await liveCwdOf(exec)));
     }
     return { cwd: selected, newlyBound: false };
   }
@@ -381,7 +432,7 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
     throw new Error(
       `CAD write target is a WORKSPACE, not a project: ${resolved.root}. ` +
       'A workspace holds projects and is never written to. Choose a member project, ' +
-      `or create one with init_project({dir:${JSON.stringify(join(startDir, 'project-name'))}}) / bind_project.`,
+      `or create one with ${cadSessionCall('init', join(startDir, 'project-name'))}.`,
     );
   }
   if (opts.requireExplicit && root !== startDir && markerAt(startDir) === null) {
@@ -389,8 +440,8 @@ export async function resolveProjectCwd(exec: unknown, opts: ResolveProjectOptio
       `CAD write target is ambiguous: the session cwd ${startDir} is inside project ${root} but is not itself a project. ` +
       `Writing here would put versions in ${root}, and moving them later is exactly what this guard prevents. ` +
       `Choose explicitly: ` +
-      `init_project({dir:${JSON.stringify(startDir)}}) to make this directory a project, ` +
-      `or bind_project({dir:${JSON.stringify(root)}}) if you really mean to write to ${root}; ` +
+      `${cadSessionCall('init', startDir)} to make this directory a project, ` +
+      `or ${cadSessionCall('bind', root)} if you really mean to write to ${root}; ` +
       `or cd to a project root before the first CAD call.`,
     );
   }
@@ -456,7 +507,7 @@ export interface ProjectInfo {
   /** True when the live cwd resolves to a different corpus than the binding. */
   mismatch: boolean;
   /** True when an UNBOUND session's cwd is inside a project but is not one:
-   *  the first write is refused until init_project/bind_project. */
+   *  the first write is refused until the session selects one. */
   ambiguous: boolean;
   /** True when the resolved root is a workspace (a container, never a write target). */
   workspace: boolean;
@@ -487,13 +538,7 @@ export async function projectInfoFor(exec: unknown): Promise<ProjectInfo> {
   );
   const workspaceRoot = !boundRoot && resolved.marker === 'workspace' ? resolved.root : null;
   const note = !boundRoot
-    ? `NO CAD project is selected for this session. There is no default cwd/root. ` +
-      `Call bind_project({dir:"..."}) for an existing project, or init_project({dir:"..."}) for a new one. ` +
-      (workspaceRoot
-        ? `${workspaceRoot} is a WORKSPACE (container), not a project.`
-        : ambiguous
-          ? `The live cwd ${liveCwd} is inside project ${resolved.root} but is not itself a project.`
-          : `The live cwd is ${liveCwd}.`)
+    ? `NO CAD project is selected for this session. There is no default cwd/root. ${projectChoiceHint(liveCwd)}`
     : `this session is BOUND to ${boundRoot}${mismatch ? `; its live cwd ${liveCwd} resolves elsewhere (${resolved.root}), but a bound session does not switch` : ''}`;
   return {
     sessionId,
@@ -534,7 +579,9 @@ export async function setProjectKernel(
 ): Promise<{ root: string; key: string; previous: string | null; kernel: string }> {
   const root = resolve(dir);
   const markerPath = join(root, 'cad-data', 'project.json');
-  if (!existsSync(markerPath)) throw new Error(`no project marker at ${markerPath}; init_project first`);
+  if (!existsSync(markerPath)) {
+    throw new Error(`no project marker at ${markerPath}; create or select the project first: ${cadSessionCall('init', root)}`);
+  }
   const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as Record<string, unknown>;
   const previous = typeof marker.defaultKernel === 'string' ? marker.defaultKernel : null;
   marker.defaultKernel = kernel;
@@ -556,7 +603,7 @@ export async function createProjectMarker(
   if (inherited.root === root && inherited.marker === 'workspace') {
     throw new Error(
       `${root} is a CAD workspace, not a project. Create the project in a subdirectory, ` +
-      'e.g. init_project({dir:"examples/my-part"}), so the workspace stays a container.',
+      'e.g. cad_session({ action: "init", args: { dir: "examples/my-part" } }), so the workspace stays a container.',
     );
   }
   const inheritedFrom = inherited.root !== root && inherited.marker !== 'new' ? inherited.root : null;
@@ -632,12 +679,12 @@ export async function bindSessionToProject(
 ): Promise<{ root: string; marker: ProjectRootMarker; boundAt: string }> {
   const sessionId = (exec as { agent?: { session?: { header?: { id?: unknown } } } })?.agent?.session?.header?.id;
   if (typeof sessionId !== 'string' || !sessionId.trim()) {
-    throw new Error('bind_project needs a live session id; this caller cannot bind a project');
+    throw new Error('selecting a project needs a live session id; this caller has none to bind');
   }
   const existing = readSessionBinding(sessionId);
   if (existing) {
     throw new Error(
-      `this session is already bound to ${existing}; bind_project does not rebind. ` +
+      `this session is already selected on ${existing}; a bound session does not switch. ` +
       'Start a new session with the target cwd and run the first CAD call there.',
     );
   }
@@ -645,14 +692,14 @@ export async function bindSessionToProject(
   const marker = markerAt(root);
   if (marker === null) {
     throw new Error(
-      `${root} has no cad-data/project.json marker. ` +
-      `Create it with init_project({dir:${JSON.stringify(root)}}), then bind, or start a session there.`,
+      `${root} has no cad-data/project.json marker. Make it a project first with ${cadSessionCall('init', root)}, ` +
+      'then select it, or start a session there.',
     );
   }
   if (marker === 'workspace') {
     throw new Error(
-      `${root} is a CAD workspace, not a project; bind_project needs a member project. ` +
-      'Create one with init_project in a subdirectory, then start a session there.',
+      `${root} is a CAD workspace, not a project; a workspace cannot be selected. ` +
+      `Create a project in a subdirectory first: ${cadSessionCall('init', join(root, 'my-part'))}.`,
     );
   }
   const boundAt = new Date().toISOString();

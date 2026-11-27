@@ -131,10 +131,10 @@ function skipSummary(status: PythonRuntimeStatus): string | null {
 
 function renderRunResult(value: RunPythonValue): unknown[] {
   const head = value.ok
-    ? `run_python: ok in ${(value.durationMs / 1000).toFixed(2)}s`
+    ? `cad_python run: ok in ${(value.durationMs / 1000).toFixed(2)}s`
     : value.timedOut
-      ? `run_python: TIMED OUT after ${(value.durationMs / 1000).toFixed(1)}s (the process was killed)`
-      : `run_python: failed (exit ${value.exitCode ?? value.signal ?? 'unknown'})`;
+      ? `cad_python run: TIMED OUT after ${(value.durationMs / 1000).toFixed(1)}s (the process was killed)`
+      : `cad_python run: failed (exit ${value.exitCode ?? value.signal ?? 'unknown'})`;
   const lines = [`${head} · script ${value.scriptPath} · python ${value.python}`];
   if (value.provisionLog?.length) {
     lines.push(`runtime provisioning: ${value.provisionLog.join(' | ')}`);
@@ -156,7 +156,7 @@ function renderRuntimeStatus(status: PythonRuntimeStatus): string {
           ? `Python runtime: unsupported on ${process.platform}/${process.arch}`
           : status.state === 'failed'
             ? 'Python runtime: FAILED on the last attempt'
-            : 'Python runtime: not installed yet (it installs on the first run_python call)';
+            : 'Python runtime: not installed yet (it installs on the first cad_python run)';
   const lines = [head];
   lines.push(`root: ${status.root}`);
   lines.push(`target: ${status.target ?? 'none'} · python ${status.pythonVersion} · mode ${status.mode}`);
@@ -170,7 +170,7 @@ function renderRuntimeStatus(status: PythonRuntimeStatus): string {
   const add = status.overlay.packages.filter((p) => !p.override);
   const forced = status.overlay.overrides;
   lines.push(add.length === 0
-    ? `user overlay: empty (${status.overlay.dir}) — python_runtime action=install adds packages here`
+    ? `user overlay: empty (${status.overlay.dir}) — cad_python({ action: "runtime", args: { action: "install" } }) adds packages here`
     : `user overlay: ${add.length} added package(s) in ${status.overlay.dir} — ` +
       `${add.map((p) => `${p.name}==${p.version}`).join(', ')} ` +
       `(digest ${status.overlay.digest.slice(0, 12)}); the locked venv wins on duplicates`);
@@ -207,14 +207,14 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
   register(defineTool({
     name: 'run_python',
     description:
-      'Run Python in the plugin\'s own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host\'s system interpreter. ' +
+      'Run Python in the plugin\'s own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; cad_python({ action: "runtime" }) reports what this machine has) — not the host\'s system interpreter. ' +
       'Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). ' +
       'Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. ' +
-      'It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user\'s own machine, not an exception — ' +
+      'It also sees the USER OVERLAY (cad_python({ action: "runtime", args: { action: "install" } })): installing a library is a normal act on the user\'s own machine, not an exception — ' +
       'the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. ' +
       'The process runs with your user\'s full filesystem access (no sandbox), in the project directory, and is killed at the timeout. ' +
       'On failure the complete Python traceback comes back. ' +
-      'The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.',
+      'The first call on a machine installs the runtime once (hundreds of MB, progress reported); cad_python({ action: "runtime" }) shows or repairs it.',
     parameters: {
       code: {
         type: 'string',
@@ -264,8 +264,8 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
     timeoutMs: 900_000,
     async execute(args: unknown, exec: unknown) {
       const a = (args ?? {}) as RunPythonArgs;
-      if (!a.code && !a.script) throw new Error('run_python needs either `code` or `script`');
-      if (a.code && a.script) throw new Error('run_python takes `code` or `script`, not both');
+      if (!a.code && !a.script) throw new Error('cad_python({ action: "run" }) needs either `code` or `script`');
+      if (a.code && a.script) throw new Error('cad_python({ action: "run" }) takes `code` or `script`, not both');
       const project = await projectStoresFor(exec);
       const cwd = a.cwd
         ? (isAbsolute(a.cwd) ? a.cwd : resolve(project.cwd, a.cwd))
@@ -308,9 +308,9 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
         const message = await recordRuntimeFailure(error, { onProgress: progressLogger });
         const tail = progress.slice(-4).join(' | ');
         throw new Error(
-          `run_python could not prepare the Python runtime: ${message}` +
+          `cad_python run could not prepare the Python runtime: ${message}` +
             (tail ? `\nprovisioning log: ${tail}` : '') +
-            '\nCall python_runtime with action "provision" to retry, or set DSH_CAD_PYTHON=off to silence this.',
+            '\nRetry with cad_python({ action: "runtime", args: { action: "provision" } }), or set DSH_CAD_PYTHON=off to silence this.',
         );
       }
     },
@@ -326,13 +326,13 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
     description:
       'Status, repair and EXTENSION for the plugin\'s bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). ' +
       'action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; ' +
-      '"provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; ' +
+      '"provision" installs it now instead of waiting for the first cad_python run; "repair" rebuilds the dependency environment; ' +
       '"install" adds packages to the user overlay — the runtime is the user\'s machine, so installing is a normal act, not a favour: ' +
-      'the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). ' +
+      'the packages land in a directory provisioning never deletes, the worker and cad_python both see them, and the overlay is recorded (status + run provenance). ' +
       'DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). ' +
       'EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; ' +
       'agree it with the human first and expect runs to carry it in pythonOverlay.overrides. ' +
-      'Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.',
+      'Use it when cad_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.',
     parameters: {
       action: {
         type: 'string',
@@ -446,7 +446,7 @@ export function registerPythonTools(registerTool: RegisterTool, logger?: LoggerL
             ...(result.shadowed.length
               ? [`note: the lock also provides ${result.shadowed.map((p) => p.name).join(', ')} — the LOCKED version wins (add override:true + reason to replace it)`]
               : []),
-            `visible to the worker and to run_python; recorded in run provenance (digest ${status.overlay.digest.slice(0, 12) || '—'})`,
+            `visible to the worker and to cad_python; recorded in run provenance (digest ${status.overlay.digest.slice(0, 12) || '—'})`,
           ].join('\n');
           return {
             action,

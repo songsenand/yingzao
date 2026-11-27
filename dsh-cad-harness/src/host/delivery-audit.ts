@@ -513,7 +513,7 @@ export async function auditDelivery(
       `${visualMissing.length} delivered fabricated part(s) have NO visual review: ` +
       `${visualMissing.slice(0, 8).map((x) => `${x.name} ${x.version}`).join(', ')}` +
       `${visualMissing.length > 8 ? ` … (+${visualMissing.length - 8})` : ''} — ` +
-      'call review_visual (top+iso, with a note) on the exact version before claiming delivery');
+      'call cad_see({ action: "review" }) (top+iso, with a note) on the exact version before claiming delivery');
   }
   if (visualRequired && visualStale.length > 0) {
     push('blocked', 'visual-review-stale',

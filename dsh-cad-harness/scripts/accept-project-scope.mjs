@@ -341,7 +341,9 @@ section('static invariants');
 
   // Every route registration resolves a project (the two globals excepted).
   const region = tools.slice(tools.indexOf('const registerWhenReady'));
-  const globals = new Set(['/api/cad/usage', '/api/cad/scope']);
+  // Cancel addresses a job id, not a corpus: it can only cancel a job that some
+  // project's run already started, so it has no project argument to resolve.
+  const globals = new Set(['/api/cad/usage', '/api/cad/scope', '/api/cad/fluid/job/cancel']);
   let routesChecked = 0;
   for (const chunk of region.split('connection.fetch.register({').slice(1)) {
     const path = /path: '([^']+)'/.exec(chunk)?.[1];

@@ -263,7 +263,7 @@ export async function validateVersionGeometry(
       issues.push({
         code: 'datums_invalid',
         message: `version ${versionId} has an invalid datums.json: ${String((error as Error)?.message ?? error)}`,
-        fix: 're-run set_datums or regenerate the version; names must be non-empty/unique, directions non-zero, cylinder radii positive',
+        fix: 're-run cad_assembly({ action: "datums" }) or regenerate the version; names must be non-empty/unique, directions non-zero, cylinder radii positive',
         severity: 'blocked',
       });
     }

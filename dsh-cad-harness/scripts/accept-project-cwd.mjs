@@ -148,7 +148,7 @@ try {
     try {
       await resolveProjectCwd(execOf({ id: 'strict-refused', cwd: parent }), { requireExplicit: true });
     } catch (e) { refused = String(e); }
-    check(/write target is ambiguous/.test(refused) && /init_project/.test(refused) && /bind_project/.test(refused),
+    check(/write target is ambiguous/.test(refused) && /cad_session\(\{ action: "init"/.test(refused) && /cad_session\(\{ action: "bind"/.test(refused),
       'an unbound session in a subdirectory of an ancestor project is REFUSED (not silently bound)',
       refused.slice(0, 120));
     check(!existsSync(join(home, 'cad', 'sessions', 'strict-refused.json')),
@@ -182,7 +182,7 @@ try {
     let rebind = '';
     try { await bindSessionToProject(execOf({ id: 'strict-bind', cwd: parent }), ambiguous); }
     catch (e) { rebind = String(e); }
-    check(/already bound/.test(rebind),
+    check(/already (bound|selected)/.test(rebind),
       'bind_project refuses to rebind an already-bound session (no move after writes)',
       rebind.slice(0, 120));
   }

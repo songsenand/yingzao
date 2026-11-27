@@ -316,7 +316,7 @@ export async function buildDeliveryPlan(projectRoot: string, options: PlanOption
           why: `no process assigned; the approved policy allows ${allowedIds.join(', ')}`,
           status: 'unobserved',
           evidence: { versionIds: [version] },
-          next: 'assign a process from the approved set (agent), then run check_printability',
+          next: 'assign a process from the approved set (agent), then run cad_check({ action: "printability" })',
         });
       }
     } else if (!processConfirmed(decl, manufacturing)) {
@@ -773,7 +773,7 @@ export async function buildDeliveryPlan(projectRoot: string, options: PlanOption
       code: 'contract-stale',
       what: `the assembly manifest changed after ${asmCheck.id}; the interface check is stale`,
       why: 'a BOM/ICD edit invalidates the check that audited the old manifest',
-      next: 're-run check_assembly on the current manifest',
+      next: 're-run cad_assembly({ action: "check" }) on the current manifest',
     });
   }
   if (asmRun) {

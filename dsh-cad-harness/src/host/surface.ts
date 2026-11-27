@@ -9,6 +9,7 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { argError } from './arg-error.ts';
+import { callableProse } from './legacy-route.ts';
 
 export interface SurfaceMeta {
   /** Future surface id, e.g. "cad_inspect". */
@@ -81,6 +82,9 @@ export interface SurfaceSpec {
 }
 
 const RESERVED = new Set(['catalog', 'help']);
+
+/** Op → legacy-tool wiring, attached for tests (never serialized to the model). */
+export const SURFACE_OPS = Symbol.for('dsh-cad-harness.surface-ops');
 
 /** Convert either the original flat declaration or defineTool's JSON schema. */
 export function paramRows(parameters: Record<string, unknown> | undefined) {
@@ -188,7 +192,7 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
   // surface is actually built from, so the text cannot drift again.
   const described = spec.description.replaceAll('{n}', String(spec.ops.length));
 
-  return defineTool({
+  const definition = defineTool({
     name: spec.name,
     description: described,
     parameters: {
@@ -220,7 +224,7 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
           count: spec.ops.length,
           ops: spec.ops.map((entry) => ({
             op: entry.op,
-            summary: entry.summary,
+            summary: callableProse(entry.summary),
             required: paramRows(tools.get(entry.tool)?.parameters)
               .filter((row) => row.required)
               .map((row) => row.name),
@@ -245,10 +249,9 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
         const tool = tools.get(entry.tool) as LegacyTool;
         return {
           op: entry.op,
-          tool: entry.tool,
-          summary: entry.summary,
-          description: tool.description ?? '',
-          parameters: paramRows(tool.parameters),
+          summary: callableProse(entry.summary),
+          description: callableProse(tool.description ?? ''),
+          parameters: paramRows(tool.parameters).map((row) => ({ ...row, description: callableProse(row.description) })),
           example: exampleCall(spec.name, entry.op, tool),
         } as never;
       }
@@ -271,4 +274,9 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
       return tool.execute(inner ?? {}, exec) as never;
     },
   });
+  // Wiring metadata for acceptance: the model must not see the legacy op names
+  // (they are not callable), but the surface→legacy mapping still has to be
+  // auditable. A symbol keeps it off the JSON the model receives.
+  Object.defineProperty(definition, SURFACE_OPS, { value: spec.ops, enumerable: true });
+  return definition;
 }

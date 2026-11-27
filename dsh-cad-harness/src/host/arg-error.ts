@@ -9,9 +9,16 @@
 //     accepts:  <type / units / allowed values / the ids that DO exist>
 //     example:  <one runnable call>          (when the shape is unambiguous)
 //
+// The tool name in the message is translated to the CALLABLE surface action
+// (`merge_parts` → `cad_part action=merge`) when the model-facing catalog hides
+// the legacy name; a paste-ready `example:` is wrapped the same way. See
+// `legacy-route.ts` for why a dead tool name is a defect, not jargon.
+
 // This is the sibling of `versionNotFound()` (which lists the ids that exist) and of the
 // generated docs/TOOL-CONTRACTS.md (the full parameter reference). Never invent an example
 // for a shape you have not verified — point at the contract sheet instead.
+
+import { callableExample, callableToolLabel } from './legacy-route.ts';
 
 function render(received: unknown): string {
   if (received === undefined) return 'undefined';
@@ -31,9 +38,9 @@ export function argError(
   accepts: string,
   opts: { example?: string; received?: unknown } = {},
 ): Error {
-  const lines = [`${tool}: ${field} ${problem}`];
+  const lines = [`${callableToolLabel(tool)}: ${field} ${problem}`];
   if (opts.received !== undefined) lines.push(`  received: ${render(opts.received)}`);
   lines.push(`  accepts:  ${accepts}`);
-  if (opts.example) lines.push(`  example:  ${opts.example}`);
+  if (opts.example) lines.push(`  example:  ${callableExample(tool, opts.example)}`);
   return new Error(lines.join('\n'));
 }

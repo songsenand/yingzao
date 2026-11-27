@@ -69,7 +69,7 @@ returns: `versionId`, `file`, `sha256`, `bytes`, `materials`, `meshes`, `replace
 
 Model-facing call: `cad_session` action `bind` (this section documents the internal op).
 
-Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-selected session — a wrong target is fixed by a new session, not by moving data after the fact.
+Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. It never creates a marker (use cad_session({ action: "init", args: { dir } }) for that), never copies/moves a corpus, and refuses to rebind an already-selected session — a wrong target is fixed by a new session, not by moving data after the fact.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -334,6 +334,7 @@ Audit the corpus before delivering: failing runs that are still the newest of th
 | `scanPaths` | array | — | Workspace-relative roots scanned for mesh files no version accounts for. Default ["."] (whole workspace, skipping the corpus, nested projects and common build dirs); pass [] to disable. A found file NEWER than the newest version is blocked — register it with import_part or declare it exempt. |
 | `exempt` | array | — | Declared exceptions for files intentionally left as files (e.g. bought/reference geometry): {path, reason}. Reported as info, never blocked, and the reason is echoed. Use it instead of narrowing scanPaths when the file is a legitimate non-version. |
 | `visualReview` | string (required \| off) | — | Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info. |
+| `designExceptions` | array | — | Self-signed design decisions for load-bearing thin walls. Each is validated: empty/boilerplate fields, whyNotLarger:"none", reportedToUser:false, or measured>=required -> blocked. A complete one is echoed as info with its userSummary; it records the decision, it does not clear the thin wall. |
 
 ```js
 cad_deliver({ action: "audit", args: { manifestPath: "…" } })
@@ -399,7 +400,7 @@ returns: `versionId`, `part`, `format`, `solid`, `watertight`, `repaired`, `tria
 
 Model-facing call: `cad_session` action `init` (this section documents the internal op).
 
-Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. Use bind_project({dir}) instead for an existing marker. A directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.
+Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. Use cad_session({ action: "bind", args: { dir } }) instead for an existing marker. A directory with an existing marker is reported as created:false. A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -552,7 +553,7 @@ returns: `judgement`, `steps`, `ran`, `notRun`, `unevaluable`, `coverage`, `summ
 
 Model-facing call: `cad_session` action `info` (this section documents the internal op).
 
-Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch. Reports the effective authoring kernel (`kernel`/`kernelSource`); the session prompt already states it, so this is a confirmation, not a prerequisite.
+Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must select one with cad_session({ action: "bind", args: { dir } }) (existing) or cad_session({ action: "init", args: { dir } }) (new). Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch. Reports the effective authoring kernel (`kernel`/`kernelSource`); the session prompt already states it, so this is a confirmation, not a prerequisite.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -568,7 +569,7 @@ returns: `sessionId`, `boundRoot`, `boundAt`, `marker`, `liveCwd`, `selected`, `
 
 Model-facing call: `cad_python` action `runtime` (this section documents the internal op).
 
-Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; "provision" installs it now instead of waiting for the first run_python call; "repair" rebuilds the dependency environment; "install" adds packages to the user overlay — the runtime is the user's machine, so installing is a normal act, not a favour: the packages land in a directory provisioning never deletes, the worker and run_python both see them, and the overlay is recorded (status + run provenance). DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; agree it with the human first and expect runs to carry it in pythonOverlay.overrides. Use it when run_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.
+Status, repair and EXTENSION for the plugin's bundled Python runtime (CPython 3.13 + pinned numpy/scipy/trimesh/manifold3d/networkx/scikit-fem/rtree/rapier3d). action "status" (default) reports where it is, whether it is usable, its size, the last error and the USER OVERLAY; "provision" installs it now instead of waiting for the first cad_python run; "repair" rebuilds the dependency environment; "install" adds packages to the user overlay — the runtime is the user's machine, so installing is a normal act, not a favour: the packages land in a directory provisioning never deletes, the worker and cad_python both see them, and the overlay is recorded (status + run provenance). DEFAULT: adding is not overriding — a package the lock also provides keeps the LOCKED version (reported as shadowed). EXPLICIT: override:true + reason:"…" installs into a separate directory placed at the FRONT of sys.path, so the new version really replaces the locked one; agree it with the human first and expect runs to carry it in pythonOverlay.overrides. Use it when cad_python reports a runtime problem, to warm the runtime before a long batch, or when a task needs a library we do not ship.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -686,7 +687,7 @@ returns: `reviewId`, `reviewed`
 
 Model-facing call: `cad_python` action `run` (this section documents the internal op).
 
-Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; python_runtime reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. It also sees the USER OVERLAY (python_runtime action=install): installing a library is a normal act on the user's own machine, not an exception — the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); python_runtime shows or repairs it.
+Run Python in the plugin's own pinned runtime — CPython 3.13 with numpy, scipy, trimesh, manifold3d, networkx, scikit-fem and rapier3d (rapier3d only where a wheel exists for this platform; cad_python({ action: "runtime" }) reports what this machine has) — not the host's system interpreter. Pass `code` for a one-off program, or `script` to run an existing .py file (relative to the project directory). Use it for numerical analysis, mesh measurement on an exported STL, FEM/optimisation probes, or any check the CAD tools do not cover. It also sees the USER OVERLAY (cad_python({ action: "runtime", args: { action: "install" } })): installing a library is a normal act on the user's own machine, not an exception — the overlay survives runtime updates and is recorded in run provenance, so add one when the task needs what we do not ship. The process runs with your user's full filesystem access (no sandbox), in the project directory, and is killed at the timeout. On failure the complete Python traceback comes back. The first call on a machine installs the runtime once (hundreds of MB, progress reported); cad_python({ action: "runtime" }) shows or repairs it.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
@@ -726,13 +727,14 @@ returns: `versionId`, `stats`, `suspects`
 
 Model-facing call: `cad_simulate` action `hotspots` (this section documents the internal op).
 
-Gravity hot-spot scan of a saved version: six unit-gravity directions (±X/±Y/±Z), one linear-elastic solve each, then cluster the peaks that recur. This is DETECTION, not a verdict — the output has no verdict/delivery field, because "where to look" is not "is it strong enough". 1g is enough: the field is linear in the load, so the LOCATION of a hot spot does not move with magnitude; high-g would only scale the number. The default dxMm is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); a thin feature (a 0.8 mm hub ring, a D-flat edge) needs a finer dxMm explicitly. It does NOT model contact/Hertz, preload, fatigue/creep or layer-direction failure, and gravity is a BODY force: a pure torque path needs an explicit service load and simulate_stress. Use it to pick the coordinates, then run simulate_stress with a declared case before judging.
+Gravity hot-spot scan of a saved version: six unit-gravity directions (±X/±Y/±Z), one linear-elastic solve each, then cluster the peaks that recur. This is DETECTION, not a verdict — the output has no verdict/delivery field, because "where to look" is not "is it strong enough". 1g is enough: the field is linear in the load, so the LOCATION of a hot spot does not move with magnitude; high-g would only scale the number. The default dxMm is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); a thin feature (a 0.8 mm hub ring, a D-flat edge) needs a finer dxMm explicitly. It does NOT model contact/Hertz, preload, fatigue/creep or layer-direction failure, and gravity is a BODY force: a pure torque path needs an explicit service load and simulate_stress. Use it to pick the coordinates, then run cad_simulate({ action: "stress" }) with a declared case before judging.
 
 | parameter | type | default | meaning |
 |---|---|---|---|
 | `versionId` | string | **required** | Saved version id, e.g. "v061". |
 | `supportsFrom` | string | — | "explicit" (default) uses `supports`; "assembly" derives them from the structural joints in assembly/assembly.json (revolute/fixed/pin, then contact seats). With "assembly", do not pass `supports`; pass `part` when the version is placed more than once. |
 | `part` | string | — | Assembly instance id (e.g. "spool3"). Required for supportsFrom:"assembly" when the version has several placements. |
+| `designException` | object | — | Self-signed design decision for a load-bearing thin wall: featureId, versionId, measuredMm, requiredMm, loadCase, whyThisDimension, whyNotLarger (a concrete conflict; "none" is invalid), residualRisk, inspection, userSummary, reportedToUser:true, signedBy:"agent"\|"user". The userSummary MUST appear in your reply. A finer mesh/submodel does NOT replace this. |
 | `supports` | array | — | Where the part is held; the same support forms simulate_stress accepts. Required for supportsFrom:"explicit" (default); omitted when supportsFrom:"assembly". |
 | `materialIds` | array | — | Shipped materials, e.g. ["fdm-pla"]. Default fdm-pla. |
 | `materialJson` | string | — | Inline material; densityKgPerM3 is required for self-weight. |
@@ -747,7 +749,7 @@ Gravity hot-spot scan of a saved version: six unit-gravity directions (±X/±Y/�
 cad_simulate({ action: "hotspots", args: { versionId: "…" } })
 ```
 
-returns: `versionId`, `supportSource`, `supports`, `supportWarnings`, `hotspots`, `cases`, `method`, `capability`
+returns: `versionId`, `supportSource`, `supports`, `supportWarnings`, `blocked`, `blockedReason`, `designException`, `userSummary`, `hotspots`, `cases`, `method`, `capability`
 
 
 ## `set_datums`

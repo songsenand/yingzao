@@ -29,9 +29,37 @@ const HINTS: Record<ErrorCode, string> = {
   network: 'check network/proxy or the configured mirror, then retry',
   'backend-not-available': 'run npx dsh-cad-backend --show and select an available kernel',
   'invalid-input': 'read the parameter name/type in the error; the tool did not run',
-  'export-blocked': 'run delivery_audit/preflight, or confirm the export with a reason',
+  'export-blocked': 'run cad_deliver({ action: "audit" }) or cad_deliver({ action: "preflight" }), or confirm the export with a reason',
   'tool-failed': 'read cause; if it repeats, include dsh-cad-doctor --json in the report',
 };
+
+/**
+ * Marks an Error that already carries an envelope.
+ *
+ * WHY: a surface tool delegates to its legacy implementation, and BOTH layers are
+ * wrapped by the output contract. Without this marker the inner text was reclassified
+ * and re-prefixed ("[tool-failed] cad_python: [tool-failed] run_python: ..."), which
+ * doubles the prefix and names an op the model cannot call.
+ */
+export const ENVELOPE = Symbol.for('dsh-cad-harness.error-envelope');
+
+interface EnvelopeCarrier {
+  [ENVELOPE]?: ErrorEnvelope;
+}
+
+/** The envelope an error already carries, when a wrapper produced it. */
+export function envelopeOf(error: unknown): ErrorEnvelope | undefined {
+  return (error as EnvelopeCarrier | null | undefined)?.[ENVELOPE];
+}
+
+/** Attach the envelope to its Error (the text still carries it; tests read the fields). */
+export function withEnvelope(error: Error, envelope: ErrorEnvelope): Error {
+  Object.assign(error, {
+    [ENVELOPE]: envelope,
+    code: envelope.code, stage: envelope.stage, hint: envelope.hint, cause: envelope.cause,
+  });
+  return error;
+}
 
 /** Classify an error without hiding the original message. */
 export function classifyError(error: unknown, stage: string): ErrorEnvelope {

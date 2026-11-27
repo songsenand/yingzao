@@ -6,8 +6,8 @@
 
 会话提示里会直接给出 `CAD authoring kernel: cadquery|openscad`（来自项目 marker 或全局 `backend.json`）；`cad_session` action `info` 可再次确认。不要靠猜。
 
-- OpenSCAD：`generate_part({ scadCode })`。
-- CadQuery：`generate_part({ code })`。
+- OpenSCAD：`cad_part({ action: "generate", args: { scadCode } })`。
+- CadQuery：`cad_part({ action: "generate", args: { code } })`。
 - 两者只能给一个；同时给或都不给都会被拒绝。
 - 版本会记录 `sourceFile: model.py` 与 `backend: {kernel:"cadquery"}`；切内核不会重写旧版本。
 - `cad_session` action `info` 报告当前 kernel：项目 `cad-data/project.json` 的 `defaultKernel` 优先，其次全局 `backend.json`。

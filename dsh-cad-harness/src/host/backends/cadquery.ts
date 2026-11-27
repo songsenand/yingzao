@@ -69,7 +69,7 @@ async function compileCadQuery(source: string, opts: EngineCompileOptions = {}):
     return failure(
       'cadquery_python_not_ready',
       `the bundled Python runtime is ${runtime.state}; CadQuery needs it as the pack host`,
-      'run python_runtime action=provision (or repair) first',
+      'run cad_python({ action: "runtime", args: { action: "provision" } }) (or action "repair") first',
       Date.now() - started,
     );
   }

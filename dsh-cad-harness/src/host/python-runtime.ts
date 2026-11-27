@@ -375,7 +375,7 @@ export async function pythonRuntimeStatus(): Promise<PythonRuntimeStatus> {
         ...base,
         state: 'failed',
         missingPackages: missing,
-        error: `the venv cannot import ${missing.join(', ')} (present on disk, not importable) — run python_runtime action=repair`,
+        error: `the venv cannot import ${missing.join(', ')} (present on disk, not importable) — run cad_python({ action: "runtime", args: { action: "repair" } })`,
       };
     }
     return { ...base, state: 'ready', error: null };
@@ -988,7 +988,7 @@ export function classifyProvisionFailure(error: unknown): { code: string; messag
   if (/\b404\b|\b403\b|not found|forbidden/i.test(message)) {
     return { code: 'mirror', message, hint: 'the mirror has no artifact for this platform; try the default mirror or DSH_CAD_PYTHON=system' };
   }
-  return { code: 'provision-failed', message, hint: 'run python_runtime action=repair; if it repeats, include this message and `doctor --json` in the report' };
+  return { code: 'provision-failed', message, hint: 'run cad_python({ action: "runtime", args: { action: "repair" } }); if it repeats, include this message and `doctor --json` in the report' };
 }
 
 /** Record a provisioning failure so the next status call can explain it. */

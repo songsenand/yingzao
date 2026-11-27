@@ -79,6 +79,7 @@ import { analyzeVersion, withPeakActions, type BandNorm, type SuspectLike } from
 import { renderFluidSnapshot, gridBounds } from './fluid-render.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { registerPythonTools } from './python-tools.ts';
+import { rememberLegacyRoute } from './legacy-route.ts';
 import { pythonRuntimeStatus } from './python-runtime.ts';
 import { readBackendConfig } from './backend.ts';
 import { effectiveKernelForSession } from './kernel-context.ts';
@@ -613,6 +614,9 @@ export function registerCadTools(
     definition: { name: string; execute?: unknown; output?: { schema?: unknown }; timeoutMs?: number },
     surface?: SurfaceMeta,
   ) => {
+    // The route table argError uses to render callable labels/examples. Filled from
+    // the same `surface` metadata the facade is built from, so it cannot drift.
+    if (surface) rememberLegacyRoute(definition.name, { surface: surface.id, action: surface.action });
     registered.push(definition.name);
     const hidden = scope?.hideLegacy === 'all'
       || (Array.isArray(scope?.hideLegacy) && scope.hideLegacy.includes(definition.name));
@@ -1444,7 +1448,7 @@ export function registerCadTools(
       if (drift) {
         result.warnings.push(
           `anchors missing: ${drift.missing.join(', ')} — last declared on ${drift.versionId}. ` +
-          'Interfaces naming them will stop resolving; add datum(...) to the source or call set_datums afterwards.',
+          'Interfaces naming them will stop resolving; add datum(...) to the source or call cad_assembly({ action: "datums" }) afterwards.',
         );
       }
       // Persist the measured solidity, not an assumption: absent `solid` means
@@ -1502,7 +1506,7 @@ export function registerCadTools(
       if (requestedNoViews) {
         result.warnings.push(
           'views: [] was overridden — a version registered with no image is a shape nobody looked at. ' +
-          'Attached top+iso; call review_visual with a note before delivery (delivery_audit blocks an unreviewed newest part).',
+          'Attached top+iso; call cad_see({ action: "review" }) with a note before delivery (cad_deliver({ action: "audit" }) blocks an unreviewed newest part).',
         );
       }
       const selection = selectAttachedViews(result.renders, requestedViews);
@@ -4154,7 +4158,7 @@ export function registerCadTools(
     name: 'project_info',
     description:
       'Read-only: which CAD project THIS session has explicitly SELECTED (boundRoot/boundAt), or `selected:false` with no default. ' +
-      'There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must call bind_project({dir}) or init_project({dir}). ' +
+      'There is no implicit cwd/root: if nothing is selected, CAD tools refuse and you must select one with cad_session({ action: "bind", args: { dir } }) (existing) or cad_session({ action: "init", args: { dir } }) (new). ' +
       'Also reports `mismatch: true` when the live cwd resolves to a different corpus than the selection — a selected session does not switch. ' +
       'Reports the effective authoring kernel (`kernel`/`kernelSource`); the session prompt already states it, so this is a confirmation, not a prerequisite.',
     parameters: {},
@@ -4173,20 +4177,20 @@ export function registerCadTools(
           wouldBindTo: { type: 'string', description: 'The selected project root; absent when nothing is selected.' },
           wouldBindMarker: { type: 'string', description: 'Marker kind at the selected root; absent when nothing is selected.' },
           mismatch: { type: 'boolean', required: true, description: 'True when liveCwd resolves to a different corpus than boundRoot.' },
-          ambiguous: { type: 'boolean', required: true, description: 'True when an UNBOUND session is inside a project but not itself one — the first write is refused until init_project/bind_project.' },
+          ambiguous: { type: 'boolean', required: true, description: 'True when an UNBOUND session is inside a project but not itself one — the first write is refused until cad_session action=init or action=bind selects a project.' },
           workspace: { type: 'boolean', required: true, description: 'True when the resolved root is a workspace (a container, never a write target).' },
           note: { type: 'string', required: true },
         },
       },
       render: (_args: unknown, value: any) => [{
         type: 'text',
-        text: `project_info — ${value.note}` +
+        text: `cad_session info — ${value.note}` +
           `\n  kernel: ${value.kernel ?? '(unset)'}${value.kernelSource ? ` (${value.kernelSource})` : ''}` +
           `\n  selected: ${value.selected ? value.boundRoot : '(none)'}${value.boundAt ? ` @ ${value.boundAt}` : ''}` +
           (value.selected ? `\n  live cwd: ${value.liveCwd ?? '(none)'} (selected project does not switch)` : '') +
           (value.mismatch ? '\n  MISMATCH: live cwd is a different corpus; a bound session will NOT switch.' : '') +
-          (value.workspace ? '\n  WORKSPACE: this root is a container, not a project; writes are REFUSED. Choose a member project or init_project a subdirectory.' : '') +
-          (value.ambiguous ? '\n  AMBIGUOUS: live cwd is inside a project but is not a project; writes are REFUSED. init_project or bind_project.' : ''),
+          (value.workspace ? '\n  WORKSPACE: this root is a container, not a project; writes are REFUSED. Choose a member project or create one in a subdirectory with cad_session({ action: "init", args: { dir } }).' : '') +
+          (value.ambiguous ? '\n  AMBIGUOUS: live cwd is inside a project but is not a project; writes are REFUSED. Choose cad_session action=init (make the cwd a project) or action=bind (use the ancestor).' : ''),
       }],
     },
     timeoutMs: 15_000,
@@ -4220,7 +4224,7 @@ export function registerCadTools(
     description:
       'Create a CAD project marker (`cad-data/project.json`) in an EXPLICIT directory, WITHOUT writing any version/part/run. ' +
       'If this session is unbound, it also SELECTS the new project (the path is the explicit choice); if already bound, it does not rebind. ' +
-      'Use bind_project({dir}) instead for an existing marker. A directory with an existing marker is reported as created:false. ' +
+      'Use cad_session({ action: "bind", args: { dir } }) instead for an existing marker. A directory with an existing marker is reported as created:false. ' +
       'A marker inside an ancestor project is reported with inheritedFrom — it shadows that ancestor for new sessions.',
     parameters: {
       dir: { type: 'string', required: true, description: 'Directory to make a project (absolute, or relative to the session workspace). Created if missing.' },
@@ -4239,7 +4243,7 @@ export function registerCadTools(
           note: { type: 'string', required: true },
         },
       },
-      render: (_args: unknown, value: any) => [{ type: 'text', text: `init_project — ${value.note}` }],
+      render: (_args: unknown, value: any) => [{ type: 'text', text: `cad_session init — ${value.note}` }],
     },
     timeoutMs: 15_000,
     async execute(args: unknown, exec: unknown) {
@@ -4299,12 +4303,12 @@ export function registerCadTools(
     async execute(args: unknown, exec: unknown) {
       const a = args as { kernel?: 'openscad' | 'cadquery'; dir?: string };
       if (a.kernel !== 'openscad' && a.kernel !== 'cadquery') {
-        throw argError('set_project_kernel', 'kernel', 'must be openscad or cadquery', 'the authoring language for NEW versions', { received: a.kernel });
+        throw argError('cad_session({ action: "kernel" })', 'kernel', 'must be openscad or cadquery', 'the authoring language for NEW versions', { received: a.kernel });
       }
       const info = await projectInfoFor(exec);
       const live = await liveCwdOf(exec);
       const dir = a.dir?.trim() || info.boundRoot || live;
-      if (!dir) throw new Error('set_project_kernel: no project is selected; pass dir');
+      if (!dir) throw new Error('cad_session({ action: "kernel" }): no project is selected; pass dir');
       const result = await setProjectKernel(dir, a.kernel);
       // A null `previous` MUST NOT become an own property (null fails the output
       // schema; an explicit undefined key fails the lossless-JSON check). Both
@@ -4323,7 +4327,7 @@ export function registerCadTools(
     name: 'bind_project',
     description:
       'Explicitly select an EXISTING project by path before any CAD tool. There is NO default cwd/root: if no project is selected, CAD tools refuse and ask for this call. ' +
-      'It never creates a marker (use init_project for that), never copies/moves a corpus, and refuses to rebind an already-selected session — ' +
+      'It never creates a marker (use cad_session({ action: "init", args: { dir } }) for that), never copies/moves a corpus, and refuses to rebind an already-selected session — ' +
       'a wrong target is fixed by a new session, not by moving data after the fact.',
     parameters: {
       dir: { type: 'string', required: true, description: 'Existing project root (absolute, or relative to the live cwd). Required: there is no default.' },
@@ -4338,7 +4342,7 @@ export function registerCadTools(
           note: { type: 'string', required: true },
         },
       },
-      render: (_args: unknown, value: any) => [{ type: 'text', text: `bind_project — ${value.note}` }],
+      render: (_args: unknown, value: any) => [{ type: 'text', text: `cad_session bind — ${value.note}` }],
     },
     timeoutMs: 15_000,
     async execute(args: unknown, exec: unknown) {
@@ -8118,7 +8122,7 @@ export function registerCadTools(
       '1g is enough: the field is linear in the load, so the LOCATION of a hot spot does not move with magnitude; high-g would only scale the number. ' +
       'The default dxMm is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); a thin feature (a 0.8 mm hub ring, a D-flat edge) needs a finer dxMm explicitly. ' +
       'It does NOT model contact/Hertz, preload, fatigue/creep or layer-direction failure, and gravity is a BODY force: a pure torque path needs an explicit service load and simulate_stress. ' +
-      'Use it to pick the coordinates, then run simulate_stress with a declared case before judging.',
+      'Use it to pick the coordinates, then run cad_simulate({ action: "stress" }) with a declared case before judging.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id, e.g. "v061".' },
       supportsFrom: {
@@ -10239,7 +10243,7 @@ export function registerCadTools(
         {
           type: 'text',
           text: `Recalled reference image "${label}" — this is the newest image in context now. ` +
-            'If it is pruned again later, call recall_reference_image once more with the same path/id.',
+            'If it is pruned again later, call cad_see({ action: "reference" }) once more with the same path/id.',
         },
         { type: 'image', attachment: ref },
       ] as never;

@@ -43,6 +43,7 @@ mkdirSync(workspace, { recursive: true });
 
 const { registerCadTools } = await import('../src/host/tools.ts');
 const { registerCadToolsWithSurfaces } = await import('../src/host/register-with-surfaces.ts');
+const { SURFACE_OPS } = await import('../src/host/surface.ts');
 const { OUTPUT_CHECKED } = await import('../src/host/tool-contract.ts');
 
 let failures = 0;
@@ -147,8 +148,14 @@ for (const [name, def] of surfaceTools) {
   for (const op of catalog.value.ops) {
     opCount++;
     const help = await attemptSurface(name, { action: 'help', args: { op: op.op } });
-    check(help.ok && help.value?.tool, `${name}.${op.op}: help names its legacy tool`,
-      help.ok ? String(help.value?.tool) : (help.error ?? '').split('\n')[0].slice(0, 90));
+    check(help.ok && help.value?.op === op.op
+      && typeof help.value?.example === 'string' && help.value.example.startsWith(`${name}(`),
+      `${name}.${op.op}: help returns a callable example (no internal op name in the reply)`,
+      help.ok ? JSON.stringify(help.value).slice(0, 90) : (help.error ?? '').split('\n')[0].slice(0, 90));
+    // Wiring stays auditable through the symbol, NOT through the reply: the model
+    // must not see `tool: "run_python"` (a call it cannot make) in help output.
+    const route = (surfaceTools.get(name)?.[SURFACE_OPS] ?? []).find((entry) => entry.op === op.op);
+    check(Boolean(route && tools.has(route.tool)), `${name}.${op.op}: routed to a registered legacy tool`, route?.tool);
     const required = Array.isArray(op.required) ? op.required : [];
     if (!required.length) continue;
     const refused = await attemptSurface(name, { action: op.op, args: {} });

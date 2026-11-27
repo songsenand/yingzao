@@ -151,7 +151,7 @@ export async function runPython(request: RunPythonRequest, onProgress?: (message
   } else if (request.code !== undefined) {
     scriptPath = await writeScratchScript(runtime.root, request.code);
   } else {
-    throw new Error('run_python needs either `code` or `script`');
+    throw new Error('cad_python({ action: "run" }) needs either `code` or `script`');
   }
 
   const started = Date.now();
@@ -420,7 +420,7 @@ export async function ensurePythonWorker(options: PythonWorkerOptions = {}): Pro
   const status = await pythonRuntimeStatus();
   if (status.state !== 'ready') {
     throw new Error(
-      `the bundled Python runtime is not ready (state: ${status.state}) — run the python_runtime tool with action "provision" ` +
+      `the bundled Python runtime is not ready (state: ${status.state}) — run cad_python({ action: "runtime", args: { action: "provision" } }) ` +
         '(it reports progress and is not bound by this tool\'s timeout), then call this tool again',
     );
   }

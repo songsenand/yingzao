@@ -6,7 +6,7 @@ whenToUse: "Authoring or importing a part, measuring geometry you did not create
 
 # Modeling and measurement: the short rules
 
-> **Kernel check first.** The session prompt states the effective kernel (`CAD authoring kernel: …`); `cad_session` (`action: "info"`) confirms it. If it is `cadquery`, author with `generate_part({code})` and read `docs/llm/cadquery.md`; the OpenSCAD-specific traps below apply only when the kernel is `openscad`. Do not load SCAD workarounds for a CQ part.
+> **Kernel check first.** The session prompt states the effective kernel (`CAD authoring kernel: …`); `cad_session` (`action: "info"`) confirms it. If it is `cadquery`, author with `cad_part({ action: "generate", args: { code } })` and read `docs/llm/cadquery.md`; the OpenSCAD-specific traps below apply only when the kernel is `openscad`. Do not load SCAD workarounds for a CQ part.
 
 Router: `skills/cad-toolbox/SKILL.md` — this file assumes you loaded it.
 

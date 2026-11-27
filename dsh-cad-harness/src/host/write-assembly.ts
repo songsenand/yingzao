@@ -337,7 +337,7 @@ export async function prepareAssemblyWrite(project: ProjectStores, input: WriteA
   if (existing && (mode === 'merge' || mode === 'replace') && !input.expectedHash) {
     // The sealed writer checks expectedRevision instead; the plain writer keeps
     // the old "read it first" contract.
-    throw new Error(`${mode} requires expectedHash (read it with check_assembly first)`);
+    throw new Error(`${mode} requires expectedHash (read it with cad_assembly({ action: "check" }) first)`);
   }
 
   const warnings: string[] = [];

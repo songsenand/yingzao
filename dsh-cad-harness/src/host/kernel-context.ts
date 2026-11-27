@@ -56,14 +56,14 @@ export function kernelPromptText(kernel: EffectiveKernel): string {
   if (kernel.kernel === 'cadquery') {
     return (
       `CAD authoring kernel: cadquery (${kernel.source}). ` +
-      'Write CadQuery Python and call generate_part({code}); leave a Workplane/Shape in `result` or call show_object(...). ' +
+      'Write CadQuery Python and call cad_part({ action: "generate", args: { code } }); leave a Workplane/Shape in `result` or call show_object(...). ' +
       'Do not use scadCode in this session; the version source is model.py. ' +
       'Datums use (name, point, direction) point-first. Rendering is STL→OpenSCAD; STEP is optional.'
     );
   }
   return (
     `CAD authoring kernel: openscad (${kernel.source}). ` +
-    'Write OpenSCAD source and call generate_part({scadCode}); do not pass CadQuery `code` in this session. ' +
+    'Write OpenSCAD source and call cad_part({ action: "generate", args: { scadCode } }); do not pass CadQuery `code` in this session. ' +
     'BOSL2 (OpenSCAD-only, installed separately) covers gears/threads/fillets via include <BOSL2/...>. ' +
     'The OpenSCAD unit and datum traps apply.'
   );
