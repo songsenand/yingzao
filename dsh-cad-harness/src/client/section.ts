@@ -384,7 +384,15 @@ export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlan
       // earcut gave up (a self-touching loop). A fan is wrong for a concave outline
       // but it is visible and finite; returning nothing would leave the cut looking
       // hollow — the exact failure this whole function exists to prevent.
+      // The fan has no area filter of its own: a collinear corner would emit a
+      // zero-area face, which the UI assertion counts as a defect (measured 6 of 957
+      // on the microscope tube). Filter here exactly like the earcut branch.
       for (let i = 1; i + 1 < contour.length; i++) {
+        const a = contour[0]!;
+        const b = contour[i]!;
+        const c = contour[i + 1]!;
+        const area2 = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y));
+        if (area2 < 1e-6) continue;
         for (const corner of [0, i, i + 1]) {
           triangles.push(...frameToWorld(frame, [contour[corner]!.x, contour[corner]!.y]));
         }
@@ -397,7 +405,9 @@ export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlan
       const [a, b, c] = face.map((corner) => [vertices[corner]!.x, vertices[corner]!.y] as [number, number]);
       if (!a || !b || !c) continue;
       const area2 = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]));
-      if (area2 < 1e-9) continue;
+      // 1e-6 mm², not 1e-9: the cap is stored as float32, where a triangle this
+      // small rounds its three corners onto a line and draws as a zero-area face.
+      if (area2 < 1e-6) continue;
       for (const corner of face) {
         triangles.push(...frameToWorld(frame, [vertices[corner]!.x, vertices[corner]!.y]));
       }
