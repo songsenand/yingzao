@@ -237,18 +237,13 @@ export function simplifyLoop(loop: readonly (readonly [number, number])[], epsil
     const last = out[out.length - 1]!;
     if (Math.hypot(first[0] - last[0], first[1] - last[1]) <= epsilon) out.pop();
   }
-  if (out.length < 3) return out;
-  // Collinear runs: keep a point only when it turns.
-  const kept: [number, number][] = [];
-  for (let i = 0; i < out.length; i++) {
-    const a = out[(i + out.length - 1) % out.length]!;
-    const b = out[i]!;
-    const c = out[(i + 1) % out.length]!;
-    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-    const scale = Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]) * Math.hypot(c[0] - b[0], c[1] - b[1]));
-    if (Math.abs(cross) / scale > 1e-6) kept.push(b);
-  }
-  return kept.length >= 3 ? kept : out;
+  // Collinear points are NOT removed by a tolerance. An earlier version pruned any
+  // point whose turn was below 1e-6 relative — and on a real tessellated cut that
+  // shaved the chords of gently curving edges: measured on the probe knuckle at a
+  // grazing plane, the five loops summed to 319.08 mm² while the true cross-section is
+  // 353.32 mm² (9.7 % of the cap silently missing — the "black crack" the user saw).
+  // Earcut tolerates collinear points, so they are left alone.
+  return out;
 }
 
 /**
@@ -343,7 +338,12 @@ export function capTrianglesOnPlane(geometry: BufferGeometry, plane: SectionPlan
     // is ~0; earcut turns that into spikes that read as "artifacts" (2026-11-27,
     // user report on a free-plane cut). Drop them BEFORE nesting, so they cannot
     // masquerade as a hole either.
-    .map(simplifyLoop)
+    // NOT `.map(simplifyLoop)`: map passes the INDEX as the second argument, which is
+    // `epsilon` — loop 0 got a 0 mm radius, loop 2 got 2 mm, loop 4 got 4 mm, and every
+    // later loop had its corners collapsed into chords. Measured on the probe knuckle
+    // (grazing plane): loop 2 went from 24.15 mm² to 11.91 mm², total cap 319.08 instead
+    // of 353.32 — 9.7 % of the cut face silently missing.
+    .map((loop) => simplifyLoop(loop))
     .filter((loop) => loop.length >= 3 && Math.abs(signedArea2(loop)) > 1e-3);
   if (loops.length === 0) return [];
 
