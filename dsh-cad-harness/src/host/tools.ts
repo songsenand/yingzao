@@ -11088,12 +11088,25 @@ export function registerCadTools(
     // N15: the same fluid run, as a JOB — progress while it runs, cancel that kills
     // the worker. The synchronous route below stays for scripts; the panel uses
     // this one because 161 s with no percentage is what "looks dead" meant.
+    //
+    // POST (start) and GET (poll) share ONE registration: DSH keys exact Fetch
+    // routes by PATH alone — `fetchRoutes` is a Map<path, {methods}>, and
+    // registerFetchRoute throws when the path is already present, even for a
+    // disjoint method set. Two registrations therefore killed the whole host at
+    // boot with "exact Fetch route ... is already registered" (2026-11-27), which
+    // is why the method is dispatched inside the handler instead.
     const fluidJobs = new FluidJobRegistry();
     void connection.fetch.register({
       path: '/api/cad/fluid/job',
-      methods: ['POST'],
+      methods: ['POST', 'GET'],
       requestBody: 'buffered',
       fetch: async (request: Request) => {
+        if (request.method === 'GET') {
+          const id = new URL(request.url).searchParams.get('id') ?? '';
+          const record = fluidJobs.get(id);
+          if (!record) return new Response('no such fluid job', { status: 404 });
+          return new Response(JSON.stringify(record), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
         try {
           const body = await request.json() as FluidToolArgs;
           if (!body?.pipeScad && !body?.versionId) return new Response('bad request: pipeScad or versionId required', { status: 400 });
@@ -11110,17 +11123,6 @@ export function registerCadTools(
         } catch (e: any) {
           return new Response(`fluid job failed to start: ${String(e?.message ?? e)}`, { status: 500 });
         }
-      },
-    });
-    void connection.fetch.register({
-      path: '/api/cad/fluid/job',
-      methods: ['GET'],
-      requestBody: 'buffered',
-      fetch: async (request: Request) => {
-        const id = new URL(request.url).searchParams.get('id') ?? '';
-        const record = fluidJobs.get(id);
-        if (!record) return new Response('no such fluid job', { status: 404 });
-        return new Response(JSON.stringify(record), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });
     void connection.fetch.register({
