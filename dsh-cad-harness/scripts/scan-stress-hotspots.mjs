@@ -4,13 +4,14 @@
 //   node scripts/scan-stress-hotspots.mjs <project-dir> <versionId> \
 //     [--from-assembly] [--part <instanceId>] \
 //     [--support x,y,z[,r]]... [--face x:min]... [--ground] \
-//     [--exclude x,y,z[,r]]... [--direction gx,gy,gz]... [--dx 1.2] [--cluster 4] [--max 12]
+//     [--exclude x,y,z[,r]]... [--direction gx,gy,gz]... [--design-exception file.json] [--dx 1.2] [--cluster 4] [--max 12]
 //
 // This is the manual companion to `cad_simulate action="hotspots"`: it prints the
 // clustered peaks and the per-direction cases as JSON, and writes NO run — the
 // scan is a pointer, not delivery evidence.
 
 import { mkdtemp } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -35,6 +36,7 @@ const directions = [];
 let fromAssembly = false;
 let part;
 let dxMm;
+let designException;
 let clusterRadiusMm;
 let maxHotspots;
 for (let i = 0; i < rest.length; i++) {
@@ -60,6 +62,11 @@ for (let i = 0; i < rest.length; i++) {
   } else if (arg === '--exclude') {
     const p = num3(next(), '--exclude');
     excludes.push({ atMm: p.slice(0, 3), ...(p.length > 3 ? { radiusMm: p[3] } : {}) });
+  } else if (arg === '--design-exception') {
+    const file = next();
+    if (!file) { console.error('--design-exception needs a JSON file'); process.exit(3); }
+    try { designException = JSON.parse(readFileSync(file, 'utf8')); }
+    catch (e) { console.error(`cannot read designException JSON ${file}: ${e.message}`); process.exit(3); }
   } else if (arg === '--dx') {
     dxMm = Number(next());
   } else if (arg === '--cluster') {
@@ -89,6 +96,7 @@ const args = {
   versionId,
   ...(fromAssembly ? { supportsFrom: 'assembly', ...(part ? { part } : {}) } : { supports }),
   ...(directions.length ? { directions } : {}),
+  ...(designException ? { designException } : {}),
   ...(excludes.length ? { excludeFromReport: excludes } : {}),
   ...(dxMm !== undefined ? { dxMm } : {}),
   ...(clusterRadiusMm !== undefined ? { clusterRadiusMm } : {}),

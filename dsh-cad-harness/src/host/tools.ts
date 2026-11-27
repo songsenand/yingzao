@@ -86,7 +86,8 @@ import { cancelJob, getJob, listJobs, openJobStore, startCompileJob } from './jo
 import { resetPythonWorker, ensurePythonWorker, workerScratchDir } from './python-worker.ts';
 import { geometrySuspectLayer, jsonSafe, readStressField, resolveStressMaterial, solveStress, stressAttention, stressDelivery, type GeometrySuspect } from './stress.ts';
 import { scanStressHotspots } from './stress-hotspots.ts';
-import { deriveAssemblySupports } from './support-seats.ts';
+import { deriveAssemblySupports, MIN_LOAD_BEARING_WALL_MM, ThinWallError } from './support-seats.ts';
+import { thinWallBlockMessage, validateDesignException } from './design-exceptions.ts';
 import { buildMeshBvh } from './measure.ts';
 import { Ray, Vector3, DoubleSide } from 'three';
 import {
@@ -8125,6 +8126,10 @@ export function registerCadTools(
         description: '"explicit" (default) uses `supports`; "assembly" derives them from the structural joints in assembly/assembly.json (revolute/fixed/pin, then contact seats). With "assembly", do not pass `supports`; pass `part` when the version is placed more than once.',
       },
       part: { type: 'string', description: 'Assembly instance id (e.g. "spool3"). Required for supportsFrom:"assembly" when the version has several placements.' },
+      designException: {
+        type: 'object', additionalProperties: true,
+        description: 'Self-signed design decision for a load-bearing thin wall: featureId, versionId, measuredMm, requiredMm, loadCase, whyThisDimension, whyNotLarger (a concrete conflict; "none" is invalid), residualRisk, inspection, userSummary, reportedToUser:true, signedBy:"agent"|"user". The userSummary MUST appear in your reply. A finer mesh/submodel does NOT replace this.',
+      },
       supports: {
         type: 'array',
         description: 'Where the part is held; the same support forms simulate_stress accepts. Required for supportsFrom:"explicit" (default); omitted when supportsFrom:"assembly".',
@@ -8177,6 +8182,10 @@ export function registerCadTools(
             },
           },
           supportWarnings: { type: 'array', items: { type: 'string' } },
+          blocked: { type: 'boolean', description: 'True when a load-bearing thin wall stopped the scan; no stress field was produced.' },
+          blockedReason: { type: 'string' },
+          designException: { type: 'object', additionalProperties: true, description: 'The signed design decision that allowed the block to be recorded (not cleared).' },
+          userSummary: { type: 'string', description: 'The sentence the agent MUST report to the user.' },
           hotspots: {
             type: 'array', required: true,
             items: {
@@ -8224,6 +8233,7 @@ export function registerCadTools(
         versionId: string;
         supportsFrom?: 'explicit' | 'assembly';
         part?: string;
+        designException?: Record<string, unknown>;
         supports?: { face?: { axis: string; side?: string }; atMm?: number[]; radiusMm?: number; ground?: boolean }[];
         materialIds?: string[];
         materialJson?: string;
@@ -8252,6 +8262,8 @@ export function registerCadTools(
       let supports = a.supports ?? [];
       const supportSource = supportsFrom === 'assembly' ? 'assembly' : 'explicit';
       let supportWarnings: string[] = [];
+      let value: Awaited<ReturnType<typeof scanStressHotspots>>;
+      try {
       if (supportsFrom === 'assembly') {
         if (supports.length > 0) {
           throw argError('scan_stress_hotspots', 'supports',
@@ -8279,7 +8291,7 @@ export function registerCadTools(
           'declare at least one support: {face:{axis:"z",side:"min"}}, {ground:true}, or {atMm:[x,y,z], radiusMm}, or pass supportsFrom:"assembly"',
           { received: supports });
       }
-      const value = await scanStressHotspots({
+      value = await scanStressHotspots({
         versionId: a.versionId,
         modelPath,
         material,
@@ -8297,6 +8309,63 @@ export function registerCadTools(
         ],
         fixedPoints: supports.filter((s) => s.atMm).map((s) => ({ atMm: s.atMm!, radiusMm: s.radiusMm })),
       });
+      } catch (error) {
+        if (!(error instanceof ThinWallError)) throw error;
+        if (error.kind === 'resolution') {
+          throw new Error(
+            `scan_stress_hotspots: ${error.featureId} at [${error.atMm.map((v) => v.toFixed(2)).join(', ')}] ` +
+            `has a ${error.wallMm.toFixed(2)} mm wall, below 2*dx (${error.requiredMm.toFixed(2)} mm). ` +
+            'This is a RESOLUTION limit, not a design decision: use dx <= wall/2 or a submodel; a designException does not apply.',
+          );
+        }
+        if (!a.designException) {
+          throw new Error(thinWallBlockMessage({
+            featureId: error.featureId,
+            atMm: error.atMm,
+            measuredMm: error.wallMm,
+            requiredMm: error.requiredMm,
+            policy: `policy minimum ${MIN_LOAD_BEARING_WALL_MM} mm`,
+          }));
+        }
+        const issues = validateDesignException(a.designException, a.versionId);
+        if (issues.length > 0) {
+          throw new Error(
+            `designException invalid:\n- ${issues.join('\n- ')}\n\n` +
+            thinWallBlockMessage({
+              featureId: error.featureId,
+              atMm: error.atMm,
+              measuredMm: error.wallMm,
+              requiredMm: error.requiredMm,
+              policy: `policy minimum ${MIN_LOAD_BEARING_WALL_MM} mm`,
+            }),
+          );
+        }
+        const ex = a.designException as { userSummary: string };
+        return jsonSafe({
+          versionId: a.versionId,
+          supportSource,
+          supports: [],
+          ...(supportWarnings.length ? { supportWarnings } : {}),
+          blocked: true,
+          blockedReason: `load-bearing thin wall ${error.wallMm.toFixed(2)} mm < ${error.requiredMm.toFixed(2)} mm at [${error.atMm.map((v) => v.toFixed(2)).join(', ')}]`,
+          designException: a.designException,
+          userSummary: ex.userSummary,
+          hotspots: [],
+          cases: [],
+          method: {
+            dxMm,
+            clusterRadiusMm: a.clusterRadiusMm ?? 0,
+            criticalDistanceMm: a.criticalDistanceMm ?? 1,
+            caseCount: 0,
+            totalDurationMs: 0,
+            note: 'no stress solve: the load-bearing wall is below the declared structural minimum; the designException records the decision, it does not certify the wall.',
+          },
+          capability: {
+            mayClaim: [],
+            mayNotClaim: ['the thin wall was not stress-solved; the exception is a design decision, not a strength result'],
+          },
+        }) as any;
+      }
       // jsonSafe: numpy's -0 is not lossless JSON; the same normalisation the stress tool uses.
       return jsonSafe({
         ...value,
@@ -8446,6 +8515,11 @@ export function registerCadTools(
         enum: ['required', 'off'],
         description: 'Per-version LLM visual review gate. "required" (default): every printed part in the assembly must have a fresh top+iso review of the EXACT version (review_visual), or delivery is blocked. "off" is a declared opt-out for legacy/bench corpora and is reported as info.',
       },
+      designExceptions: {
+        type: 'array',
+        description: 'Self-signed design decisions for load-bearing thin walls. Each is validated: empty/boilerplate fields, whyNotLarger:"none", reportedToUser:false, or measured>=required -> blocked. A complete one is echoed as info with its userSummary; it records the decision, it does not clear the thin wall.',
+        items: { type: 'object', additionalProperties: true },
+      },
     },
     output: {
       schema: {
@@ -8496,6 +8570,7 @@ export function registerCadTools(
         scanPaths?: string[];
         exempt?: { path: string; reason: string }[];
         visualReview?: 'required' | 'off';
+        designExceptions?: import('./design-exceptions.ts').DesignException[];
       };
       const project = await allStores(exec);
       const value = await deliveryAuditValue(project, a);

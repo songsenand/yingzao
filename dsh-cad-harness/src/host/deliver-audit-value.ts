@@ -9,6 +9,7 @@
 
 import { asJudgement } from '../shared/judgement.ts';
 import { auditDelivery, type DeliveryClaim } from './delivery-audit.ts';
+import type { DesignException } from './design-exceptions.ts';
 
 export interface AuditRequest {
   manifestPath?: string;
@@ -16,6 +17,7 @@ export interface AuditRequest {
   scanPaths?: string[];
   exempt?: { path: string; reason: string }[];
   visualReview?: 'required' | 'off';
+  designExceptions?: DesignException[];
 }
 
 /** Compute the audit and the values every caller displays. */
@@ -26,6 +28,7 @@ export async function deliveryAuditValue(project: Parameters<typeof auditDeliver
     scanPaths: args.scanPaths,
     exempt: args.exempt,
     visualReview: args.visualReview,
+    designExceptions: args.designExceptions,
   });
   const blocked = report.findings.filter((f) => f.severity === 'blocked').length;
   const warn = report.findings.filter((f) => f.severity === 'warn').length;

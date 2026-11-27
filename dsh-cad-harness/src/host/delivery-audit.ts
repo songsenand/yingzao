@@ -26,6 +26,7 @@ import { mergedInputVersionIds, newestVersionPerPart, supersededVersionIds } fro
 import { SCAN_BUDGET, scanUnregistered, type UnregisteredFile, type UnregisteredScan } from './unregistered.ts';
 import type { ProjectStores } from './project.ts';
 import { readVisualReview, reviewCoversRequiredViews, reviewIsFresh } from './visual-review.ts';
+import { validateDesignException, type DesignException } from './design-exceptions.ts';
 
 export type AuditSeverity = 'blocked' | 'warn' | 'info';
 
@@ -169,6 +170,8 @@ export async function auditDelivery(
      * it is a declared opt-out, never a silent pass.
      */
     visualReview?: 'required' | 'off';
+    /** Self-signed design decisions for load-bearing thin walls. */
+    designExceptions?: DesignException[];
   } = {},
 ): Promise<DeliveryAudit> {
   const [versions, parts, allRuns] = await Promise.all([
@@ -434,6 +437,19 @@ export async function auditDelivery(
 
   const findings: AuditFinding[] = [];
   const push = (severity: AuditSeverity, code: string, detail: string) => findings.push({ severity, code, detail });
+  // A designException is a signed decision, not a pass: it is echoed as info when
+  // complete and blocked when empty/boilerplate ("whyNotLarger: none"). It does not
+  // clear a thin-wall printability finding; it records who decided to keep it.
+  for (const ex of opts.designExceptions ?? []) {
+    const issues = validateDesignException(ex);
+    if (issues.length > 0) {
+      push('blocked', 'design-exception-invalid',
+        `${ex?.featureId ?? '?'} (${ex?.versionId ?? '?'}): ${issues.join('; ')}`);
+    } else {
+      push('info', 'design-exception',
+        `${ex.featureId} ${ex.measuredMm}mm < ${ex.requiredMm}mm, signed by ${ex.signedBy}: ${ex.userSummary}`);
+    }
+  }
 
   // Kickoff alignment findings: visible, never blocking (the user asked for a
   // record, not a gate — the gate is the human reading the list).

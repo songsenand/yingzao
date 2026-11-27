@@ -79,6 +79,37 @@ export interface DeriveSupportsOptions {
 }
 
 const STRUCTURAL = new Set(['转动副', '固定副', '销孔', '贴合']);
+/** Declared structural minimum for a load-bearing FDM/PLA wall (policy, not physics). */
+export const MIN_LOAD_BEARING_WALL_MM = 1.6;
+
+export class ThinWallError extends Error {
+  readonly kind: 'design' | 'resolution';
+  readonly wallMm: number;
+  readonly requiredMm: number;
+  readonly atMm: number[];
+  readonly featureId: string;
+
+  constructor(input: {
+    kind: 'design' | 'resolution';
+    wallMm: number;
+    requiredMm: number;
+    atMm: number[];
+    featureId: string;
+  }) {
+    super(
+      `${input.kind === 'design' ? 'load-bearing wall' : 'support wall below 2 voxels'}: ` +
+      `${input.wallMm.toFixed(2)} mm < ${input.requiredMm.toFixed(2)} mm at ` +
+      `[${input.atMm.map((v) => v.toFixed(2)).join(', ')}]`,
+    );
+    this.name = 'ThinWallError';
+    this.kind = input.kind;
+    this.wallMm = input.wallMm;
+    this.requiredMm = input.requiredMm;
+    this.atMm = input.atMm;
+    this.featureId = input.featureId;
+  }
+}
+
 
 function distance(a: number[], b: number[]): number {
   return Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
@@ -364,15 +395,27 @@ function contactRing(
       const range = radialRange(mesh, atLocal, axisLocal, Math.max(2, 2 * dxMm));
       if (Number.isFinite(range.min)) {
         const wall = firstWallThickness(mesh, atLocal, axisLocal, Math.max(2, 2 * dxMm));
-        // A fixed ring on a wall thinner than 2 voxels is a constraint
-        // singularity, not a stress. The handwheel's 0.8 mm hub at dx=2 read
-        // 16,497 MPa this way; refusing is the honest answer.
+        // Two different blocks, in order:
+        //   1. wall below the structural policy -> a DESIGN decision (designException);
+        //   2. wall above policy but below 2 voxels -> a RESOLUTION limit (finer dx/submodel).
+        // The handwheel's 0.8 mm hub at dx=2 hit both; the design block wins.
+        if (Number.isFinite(wall) && wall < MIN_LOAD_BEARING_WALL_MM) {
+          throw new ThinWallError({
+            kind: 'design',
+            wallMm: wall,
+            requiredMm: MIN_LOAD_BEARING_WALL_MM,
+            atMm: atLocal,
+            featureId: `${version ?? 'version'}:support-ring`,
+          });
+        }
         if (Number.isFinite(wall) && wall < 2 * dxMm) {
-          throw new Error(
-            `support seat at [${atLocal.map((v) => v.toFixed(2)).join(', ')}] has a ${wall.toFixed(2)} mm wall ` +
-            `(< 2*dx = ${(2 * dxMm).toFixed(2)} mm); a fixed bore ring would be a constraint artefact, not a stress. ` +
-            'Pass supports explicitly, use a finer dx (<= wall/2), or scan a submodel of the hub.',
-          );
+          throw new ThinWallError({
+            kind: 'resolution',
+            wallMm: wall,
+            requiredMm: 2 * dxMm,
+            atMm: atLocal,
+            featureId: `${version ?? 'version'}:support-ring`,
+          });
         }
         radial = Math.min(radiusHint, range.min + 0.5);
       }
