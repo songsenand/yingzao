@@ -46,8 +46,9 @@ Open `http://127.0.0.1:4173/?w=380&h=900` in a real browser to click around.
 | `navpick` | open the navigator and click one row by product id (`p005`, `v066`, `r013`, `machine`, a file path). This is how `subject`/`record` now select |
 | `navq` | type into the navigator's search box (native setter + input event), e.g. `navq=滑座` |
 | `open` | click something after mount — a tab (`参数`, `用法`), a toolbar chip (`剖切`, `壁厚`, `测量`, `截图`) or `⤢`/`⤡`. **Comma-separated for a sequence**: `open=参数,⤢` selects the tab then expands it into the overlay |
+| `viewmenu` | `1` = open the `视图` popover as soon as its button exists. The button renders only after a version mesh is selected, so a fixed-time click races the load (and a screenshot of the closed menu looks like "nothing happened") |
 | `wheel` | wheel-delta to push through OrbitControls (e.g. `-1400` zooms in) — lets a screenshot prove the scale bar re-ranges |
-| `reset` | click `复原` after the wheel, to prove the camera returns to its initial framing |
+| `reset` | open `视图` and click `复原视图` after the wheel, to prove the camera returns to its initial framing |
 | `freeze=0` | disable the WebGL→`<img>` freeze |
 | `freezeat` | delay the freeze (ms; default 2900) — lets a longer assertion finish before the canvas is replaced |
 | `assert=orbit` | drag with synthetic pointer events and assert the default OrbitControls contract: the polar clamp stops above the target, `camera.up` stays world up, no mirror flip (max quaternion step < 90°; `record=v105&freeze=1&freezeat=6000&slow=9000`); add `orbitreset=1` to also prove 复原 restores position and `camera.up` |

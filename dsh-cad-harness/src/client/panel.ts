@@ -22,7 +22,7 @@ import { ViewportOverlay, type OverlayScene, type ViewportLabel } from './overla
 import { LocalFileDialog } from './local-file';
 import { buildImportStlRequest, IMPORT_UNITS, partNameFromPath, type ImportUnit } from './local-file-request';
 import { fitDistance } from './fit';
-import { cameraUpFor, orthoBounds, viewDirection, type AxisSnap, type StandardView } from './view-orientation';
+import { cameraUpFor, orthoBounds, viewDirection, type StandardView } from './view-orientation';
 import {
   addMeasurement, angleDeg, describeLoops, equivalentDiameterMm, loopAt, measurementSummary, removeMeasurement, renameMeasurement,
   type MeasureKind, type Measurement,
@@ -879,6 +879,8 @@ export function CadPanel(): React.ReactElement {
   /** U11: perspective or orthographic projection (a toggle, not a rebuild). */
   const [projection, setProjection] = useState<'persp' | 'ortho'>('persp');
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  /** The popover's anchor: a click outside it (or Escape) closes the menu. */
+  const viewMenuRef = useRef<HTMLSpanElement>(null);
   /** Scene-side commands the UI calls: projection switch and standard views. */
   const viewToolsRef = useRef<{
     setProjection: (mode: 'persp' | 'ortho') => void;
@@ -3547,6 +3549,26 @@ export function CadPanel(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [machinePreview]);
 
+  // The view menu behaves like a popover, not like a latch: a click anywhere
+  // outside it, or Escape, closes it. The first cut only closed on selection and
+  // left a panel sitting over the model (and over 背景/对比, which now sit in the
+  // same corner column).
+  useEffect(() => {
+    if (!viewMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!viewMenuRef.current?.contains(event.target as Node)) setViewMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [viewMenuOpen]);
+
   // i18n keys are a literal union; `audit-gaps.ts` takes plain strings so it can be
   // tested without the dictionary. This adapter is the one place the typing narrows.
   const trKey = tr as unknown as (key: string, vars?: Record<string, string | number>) => string;
@@ -3904,7 +3926,7 @@ export function CadPanel(): React.ReactElement {
 
   // ── the viewport ground picker ──
   // Rendered THROUGH the overlay, so it lives in the viewport's own coordinate
-  // space directly under 复原 — the same corner, one control group — instead of
+  // space — the same corner as 视图 / 背景 / 对比, one control group — instead of
   // being positioned from the panel (whose top region is the browse row, which
   // is how a first attempt landed on the 零件/记录 selectors).
   // Deliberately NOT a sixth chip in `S.viewTools` either: that column already
@@ -3920,69 +3942,129 @@ export function CadPanel(): React.ReactElement {
   // The comparison toggle sits under 背景: same corner, same pill. It names the
   // version it compares against, because "对比" alone does not say WHAT with.
   /**
-   * U11 view menu. Six axis snaps and four standard views are the same three
-   * directions in two spellings — one control, because a person asked "轴固定不好",
-   * not "give me two camera APIs".
+   * U11 view menu — ONE corner button (2026-11-28, from user feedback).
+   *
+   * The first cut had 「视图」 and 「⤾ 复原」 side by side, then repeated 复原 INSIDE
+   * the menu (and only that copy forgot to clear the markup). It also spelled the
+   * same directions twice: 顶/前/右 above, +Z/−Y/+X below. The user's words:
+   * "这里好丑，而且功能也有重复，视图和复原能不能合并为一个按钮".
+   *
+   * So: one trigger; the six axis ends as NAMED views (后/左/底 included) plus 等轴;
+   * an explicit 透视|正交 pair instead of a toggle whose label named the CURRENT
+   * state; and 复原 as the menu's footer action. `Home` still resets the camera in
+   * one key, so the frequent action keeps a one-click path.
+   *
+   * The chrome children are absolutely positioned one by one, so this is a span in
+   * the overlay's `chrome` slot — a relative element in flow would land under the
+   * bottom-left plate and be invisible.
    */
-  // Anchored to the top-right corner, LEFT of 复原 (which overlay.ts places at
-  // right:8): the chrome children are absolutely positioned one by one, so a
-  // relative span in flow would land under the bottom-left plate and be invisible.
+  const viewDirs = [
+    ['front', 'ui.view.front'],
+    ['back', 'ui.view.back'],
+    ['left', 'ui.view.left'],
+    ['right', 'ui.view.right'],
+    ['top', 'ui.view.top'],
+    ['bottom', 'ui.view.bottom'],
+    ['iso', 'ui.view.iso'],
+  ] as const;
+
+  // The merged 复原: the old corner chip's behaviour — camera back to the initial
+  // framing AND a clean slate for the view-bound markup — now reached through the
+  // menu. One function, so the menu item cannot drift from what the chip did.
+  const resetView = () => {
+    versionResetRef.current?.();
+    setAnnotations([]);
+    setMeasure(null);
+    setThick(null);
+    setAnnotateMode(false);
+    setMeasureMode(false);
+    setThickMode(false);
+    setSection(false);
+    setSectionPos(0.5);
+    setSectionMode('view');
+    setSectionViewNormal([0, 0, -1]);
+    setSectionKeepNegative(false);
+    setHint(tr('ui.restore.hint'));
+  };
+
   const viewMenu = !glError && React.createElement('span', {
-    style: { position: 'absolute', right: 92, top: 8, pointerEvents: 'auto', zIndex: 5 },
+    ref: viewMenuRef,
+    style: { position: 'absolute', right: 8, top: 8, pointerEvents: 'auto', zIndex: 12 },
   },
     React.createElement('button', {
       type: 'button',
       'data-view-menu': viewMenuOpen ? 'open' : 'closed',
+      'aria-haspopup': 'dialog',
+      'aria-expanded': viewMenuOpen,
       onClick: () => setViewMenuOpen((open) => !open),
       title: tr('ui.view.title'),
-      style: { ...S.smallBtn, flex: 'none' },
-    }, tr('ui.view.label')),
+      style: {
+        ...S.smallBtn,
+        border: `1px solid ${viewMenuOpen ? T.accent : T.line}`,
+        background: T.chip,
+        ...(viewMenuOpen ? { boxShadow: T.ringAccent } : {}),
+      },
+    }, tr('ui.view.label'),
+    React.createElement('span', { style: { marginLeft: 3, fontSize: 9, color: T.soft } }, '▾')),
     viewMenuOpen && React.createElement('div', {
       'data-view-panel': '1',
+      role: 'dialog',
+      'aria-label': tr('ui.view.title'),
       style: {
-        position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 9,
-        background: T.plate, border: `1px solid ${T.line}`, borderRadius: 6,
-        boxShadow: T.shadowLg, padding: 6, width: 196,
-        display: 'flex', flexDirection: 'column', gap: 4,
+        position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 13,
+        background: T.plate, border: `1px solid ${T.line}`, borderRadius: 8,
+        boxShadow: T.shadowLg, padding: 8, width: 208,
+        display: 'flex', flexDirection: 'column', gap: 6,
       },
     },
-      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600 } }, tr('ui.view.standard')),
-      React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
-        ...([['iso', 'ui.view.iso'], ['top', 'ui.view.top'], ['front', 'ui.view.front'], ['right', 'ui.view.right']] as const)
-          .map(([key, label]) => React.createElement('button', {
-            key, type: 'button', 'data-view': key,
-            onClick: () => {
-              viewToolsRef.current?.look(viewDirection(key as StandardView), 'view');
-              setViewMenuOpen(false);
-            },
-            style: { ...S.smallBtn, flex: 1 },
-          }, tr(label))),
-      ),
-      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600, marginTop: 2 } }, tr('ui.view.axes')),
-      React.createElement('div', { style: { display: 'flex', gap: 3, flexWrap: 'wrap' } },
-        ...([['+x', [1, 0, 0]], ['-x', [-1, 0, 0]], ['+y', [0, 1, 0]], ['-y', [0, -1, 0]], ['+z', [0, 0, 1]], ['-z', [0, 0, -1]]] as const)
-          .map(([label, dir]) => React.createElement('button', {
-            key: label, type: 'button', 'data-view-axis': label,
-            onClick: () => {
-              viewToolsRef.current?.look(viewDirection(label as AxisSnap), 'axis');
-              setViewMenuOpen(false);
-            },
-            style: { ...S.smallBtn, minWidth: 26, flex: 'none' },
-          }, label.toUpperCase())),
+      React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600 } }, tr('ui.view.directions')),
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 } },
+        ...viewDirs.map(([key, label]) => React.createElement('button', {
+          key, type: 'button', 'data-view': key,
+          onClick: () => {
+            viewToolsRef.current?.look(viewDirection(key as StandardView), key);
+            setViewMenuOpen(false);
+          },
+          style: {
+            ...S.smallBtn, padding: '4px 6px', textAlign: 'center',
+            // 等轴 takes the last two cells, so six planes + iso make two full rows.
+            ...(key === 'iso' ? { gridColumn: 'span 2' } : {}),
+          },
+        }, tr(label))),
       ),
       React.createElement('div', { style: { fontSize: 10, color: T.muted, fontWeight: 600, marginTop: 2 } }, tr('ui.view.projection')),
-      React.createElement('div', { style: { display: 'flex', gap: 4 } },
-        React.createElement('button', {
-          type: 'button', 'data-view-projection': projection,
-          onClick: () => setProjection((mode) => (mode === 'persp' ? 'ortho' : 'persp')),
-          style: { ...S.smallBtn, flex: 1, fontWeight: projection === 'ortho' ? 700 : 400 },
-        }, projection === 'ortho' ? tr('ui.view.ortho') : tr('ui.view.persp')),
-        React.createElement('button', {
-          type: 'button', 'data-view-home': '1',
-          onClick: () => { versionResetRef.current?.(); setViewMenuOpen(false); },
-          title: tr('ui.view.homeTitle'),
-          style: { ...S.smallBtn, flex: 'none' },
-        }, tr('ui.view.home')),
+      React.createElement('div', {
+        'data-view-projection': projection,
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 },
+      },
+        ...([['persp', 'ui.view.persp'], ['ortho', 'ui.view.ortho']] as const).map(([mode, label]) => {
+          const active = projection === mode;
+          return React.createElement('button', {
+            key: mode, type: 'button', 'data-projection': mode, 'aria-pressed': active,
+            onClick: () => setProjection(mode),
+            style: {
+              ...S.smallBtn, padding: '4px 6px', textAlign: 'center',
+              // Constant border width: the active state is colour + fill (§6.9e).
+              fontWeight: active ? 600 : 400,
+              border: `1px solid ${active ? T.accent : T.line}`,
+              background: active ? T.accentSoft : T.plate,
+              color: active ? T.accentInk : T.ink,
+            },
+          }, tr(label));
+        }),
+      ),
+      React.createElement('div', { style: { height: 1, background: T.border, margin: '2px 0 0' } }),
+      React.createElement('button', {
+        type: 'button', 'data-view-home': '1',
+        onClick: () => { resetView(); setViewMenuOpen(false); },
+        title: tr('ui.view.homeTitle'),
+        style: {
+          ...S.smallBtn, padding: '4px 8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        },
+      },
+        React.createElement('span', null, `⤾ ${tr('ui.view.home')}`),
+        React.createElement('span', { style: { fontSize: 10, color: T.muted } }, 'Home'),
       ),
     ),
   );
@@ -4917,25 +4999,10 @@ export function CadPanel(): React.ReactElement {
         getScene: () => versionSceneRef.current,
         ink: overlayInk(bg),
         chrome: React.createElement(React.Fragment, null, viewMenu, ghostToggle, bgPicker),
-        // 复原 = back to the initial framing AND a clean slate for the markup:
-        // annotations, measurements, the thickness probe AND the section all
-        // belong to the view you were inspecting, so they go with it.
+        // No `onReset` here on purpose: 复原 is the view menu's footer item (the
+        // corner chip it used to be is gone). Playback keeps the overlay chip,
+        // because that viewport has no view menu.
         labels: probeLabels,
-        onReset: () => {
-          versionResetRef.current?.();
-          setAnnotations([]);
-          setMeasure(null);
-          setThick(null);
-          setAnnotateMode(false);
-          setMeasureMode(false);
-          setThickMode(false);
-          setSection(false);
-          setSectionPos(0.5);
-          setSectionMode('view');
-          setSectionViewNormal([0, 0, -1]);
-          setSectionKeepNegative(false);
-          setHint(t('ui.restore.hint'));
-        },
       }),
       run && (run.kind === 'motion' || run.kind === 'physics') && run.hasGeometry &&
         React.createElement(MotionPlaybackView, {

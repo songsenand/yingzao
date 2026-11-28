@@ -62,8 +62,9 @@ const SCENARIOS = [
   // the panel wiring is checked by hand:
   //   node sandbox/preview/shot.mjs --query 'w=520&h=900&subject=p005&slowstl=20&assert=load-progress&debug=0&slow=25000'
   // (observed: "载入 0% · 0.0/0.1 MB" while the body arrives).
-  // U11: standard views, axis snap, projection toggle and 复原 — asserted as
-  // camera pose facts (direction dot products), not from a picture.
+  // U11: ONE 视图 button, seven named directions (no ±axis duplicate), an explicit
+  // persp|ortho pair, and 复原 in the menu footer — asserted as DOM facts + camera
+  // pose facts (direction dot products), not from a picture.
   { name: 'views', query: 'w=520&h=900&subject=p005&assert=views&debug=0' },
   // U21 (measurable half): a million-triangle mesh through the panel's own reader and
   // STL parser, with transport/parse/frame numbers.

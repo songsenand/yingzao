@@ -55,7 +55,7 @@ export function ViewportOverlay(props: {
   ink?: { color: string; halo: string };
   /**
    * Extra viewport chrome the caller renders in this overlay's coordinate space
-   * (the ground picker sits directly under the 复原 button, so the two read as
+   * (the View button's column owns this corner, so the menu, 背景 and 对比 read as
    * one control group). Positioned by the caller; pointer events are its own.
    */
   chrome?: React.ReactNode;
