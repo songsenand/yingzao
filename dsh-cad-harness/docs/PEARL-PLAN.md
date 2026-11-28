@@ -312,7 +312,7 @@ examples/rulepacks/wood-furniture/
 
 实现：
 
-- [ledger.ts](src/host/pearls/ledger.ts)
+- [ledger.ts](../src/host/pearls/ledger.ts)
 - `node scripts/pearl-ledger.mjs examples/windup-frog`
 - `project-check` 现在同时输出 `model` / `fit` / `ledger`
 - `accept-project-standards` 增加六列断言
@@ -374,7 +374,7 @@ examples/rulepacks/wood-furniture/
 
 ## 16. P0 gate-level 落地与真实缺口
 
-新增 [run.ts](src/host/pearls/run.ts) / `pearl_run` 工具 / `npm run run:pearl`：
+新增 [run.ts](../src/host/pearls/run.ts) / `pearl_run` 工具 / `npm run run:pearl`：
 
 - 自动读 `pearl-profile.json`；
 - 用 **profile 的 budget** 规划（不再用 pearl 默认静默替代）；
@@ -535,7 +535,7 @@ brief
 
 ### `executeContractRound`
 
-[execute.ts](src/host/pearls/execute.ts)：
+[execute.ts](../src/host/pearls/execute.ts)：
 
 - 以 `CONTRACT_STAGES` 表达依赖；
 - 每轮 `buildNecklaceContract`（读证据）；

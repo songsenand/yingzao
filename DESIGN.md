@@ -8,7 +8,7 @@
 > 是按发生时的事实留档的，其中出现的 `DESGIGN.md` 一律指本文件，**不回改**。
 > 活文档与代码里的引用已全部更新。
 
-**版本**：v2.34（2026-11-13）
+**版本**：v2.34（2026-11-13；2026-11-28 回填 0.2.0-preview.1 现状，逐版变更看 git log）
 > **版本记录 = git log（用户拍板 2026-10-23）。** §11 的逐版清单冻结于 v2.15：它写多读少，且
 > 每轮都滞后。此后"这一版改了什么"看 `git log --oneline -- DESIGN.md`，取舍看 `DECISION-LOG.md`。
 **目标读者**：编码 Agent
@@ -20,7 +20,7 @@
 > 代码里的事实若已有提交/决策出处，就是文档滞后（改本文件）；若代码违背的是一条原则或契约
 > 且找不到推翻它的决策，就是实现违约（改代码）。**不允许用改文档的方式消解 HARNESS 层的矛盾。**
 
-> **模型可见工具面（2026-11-16 起）**：生产会话只暴露 **9 个 surface / 39 个 op**（§26.4）。
+> **模型可见工具面（2026-11-16 起）**：生产会话只暴露 **9 个 surface / 45 个 op**（§26.4）。
 > 本文件的历史章节仍用当时的内部 op 名（如 `generate_part`、`check_assembly`、`simulate_motion`）——
 > 它们是实现/委托名，不是模型可调用的名字；当前调用写法一律是
 > `cad_<surface>({ action: "<op>", args: { … } })`。`TOOL-CONTRACTS.md` 也按内部 op 名索引参数。
@@ -74,7 +74,7 @@
 - 多用户、权限、云部署
 - 移动端适配
 - 网格修复（依赖 Manifold 保证水密）
-- 公开发布到 npm / 社区插件市场
+- 社区插件市场（npm 包已发布，见 §7）
 
 ---
 
@@ -152,7 +152,7 @@
 - **几何编译在 Host，且是两轨**（原决策成立，细节补充）：**SCAD 求值与 STL/PNG 走 OpenSCAD snapshot CLI**（OpenSCAD 自身的 Manifold WASM 构建不稳定，本地 CLI 更可靠）；**几何布尔/体积/水密走 `manifold-3d` WASM 进程内**（M2 决策，§13.3——无子进程开销、无 X 依赖、比 CGAL 快 1-18×）
 - **渲染与全部物理仿真都在 Host headless**（⚠️ 推翻原文「渲染和物理在 Client」）：四视角渲染走 OpenSCAD CLI；rapier 刚体、机构约束、MPM 流体全在 Node 跑。理由：headless profile 可直接验收、无浏览器往返、CPU 浮点确定性使断言可重复；Client 侧只保留交互预览与按运行寻址的回放（v2.13）
 - **无插件侧 LLM 调用**（⚠️ 推翻原文「LLM 调用在 Host + 评审模型 DeepSeek v4.1 flash」）：M1 起视觉评审原生化——生成工具直接返回渲染图，**会话模型自己看**（§13.2）。API key 由 dsh 管理；图片经 `ctx.attachments` 走附件机制（**只能落 `user` role**，这是适配器约束）。插件对具体模型无绑定（沙箱实测跑过 glm-5.3-flash 与 deepseek 系适配器）
-- **Client 半走静态客户端插件**（成立，细节更正）：`dsh.client.platform = 'web'`，**无 `entry` 字段**（宿主按 `./client` 导出取 `lib/client.js`）；`external` 仅声明 `@deepseek-ai/dsh-api-session-controller/client`（React 由 ModuleLoader 平台模块表提供，无需声明）；three / rapier / three-mesh-bvh 打进插件 bundle，manifold-3d 在 Host 侧为 external
+- **Client 半走静态客户端插件**（成立，细节更正）：`dsh.client.platform = 'web'`，**无 `entry` 字段**（宿主按 `./client` 导出取 `lib/client.js`）；`external` 仅声明 `@deepseek-ai/dsh-api-session-controller/client`（React 由 ModuleLoader 平台模块表提供，无需声明）；three / three-mesh-bvh 打进插件 bundle，manifold-3d 在 Host 侧为 external
 - **Host↔Client 通信：业务不用 RPC**（⚠️ 推翻原文「Remote RPC」）：浏览器能力全部经 `connection.fetch.register` 精确路由（GET 二进制/报告，POST 运行与预览）；只剩 M0 遗留的 `cad/echo` RPC 探针（2026-10-23：该探针与 `/api/cad/test.stl` 已删除）。`connection` 用 `ctx.reflect.get` 轮询获取而非 inject——headless profile 无该服务，路由整段跳过
 - **UI 面板挂在右栏 Tab**（⚠️ 更正原文「layout `main` slot」）：`sidebarRightTabs.register` 声明 tab 类型 + `slots.register('sidebar.right.pane.tab')` 注册主体 + `sidebarRight.openTab` 自动打开（含 dock 挂载重试与会话切换重开）；会话保持中栏
 - **不引入 Vite**（成立）：Client 半用自带 esbuild 构建；dsh 不提供插件构建服务，`lib/client.js` 必须由插件仓库自己产出
@@ -195,23 +195,23 @@ node scripts/audit-tool-contracts.mjs      # 当前工具表（含参数与返�
 
 | 字段 | 形状 | 为什么 |
 |---|---|---|
-| `private` | `true` | 未决定公开分发（HARNESS §10）；**不要在未决策前改成 public 或改包名** |
-| `main` / `types` | `lib/index.js` / `lib/types/index.d.ts` | 宿主加载 Host 半；`tsc` 产出声明 |
+| `private` | 未设置（已公开发布） | npm 包 `dsh-cad-harness` 已发布；包名/技术 id 不随品牌改（HARNESS §1/§10）。根目录 `package.json` 另有一个 `private: true` 的扫描器声明，不是可安装包 |
+| `main` / `types` | `lib/index.js` / `lib/types/host/index.d.ts` | 宿主加载 Host 半；`tsc` 产出声明 |
 | `exports./client` | `./lib/client.js` | 宿主按约定的 `./client` 导出取客户端包（**没有 `entry` 字段**） |
-| `dsh.bundle.patch` | **数组**：`cordis.patch.yml` + `presets/cad/preset.patch.yml` | 先是宿主行（工具作用域、图像裁剪执行器），再是造物模式预设；顺序有意义 |
+| `dsh.bundle.patch` | **数组**：`cordis.patch.yml` + `presets/cad/preset.patch.yml` | 先是宿主行（工具作用域、图像裁剪执行器），再是营造模式预设；顺序有意义 |
 | `dsh.client.platform` | `'web'` | 静态客户端插件 |
 | `dsh.client.external` | `['@deepseek-ai/dsh-api-session-controller/client']` | 会话控制器基座由宿主提供；React 走 ModuleLoader 平台表，不必声明 |
-| `files` | `lib/ python/ skills/ presets/ cordis.patch.yml schemas/` | 发布白名单；`src/` 不进包（宿主只加载 `lib/`） |
+| `files` | 见 `package.json`（`lib/`、`python/`、`skills/`、`presets/`、`schemas/`、`library/`、`pearls/`、`mirror/`、`docs/` 等） | 发布白名单；`src/` 不进包（宿主只加载 `lib/`） |
 | `scripts.build` | `npm run typecheck && node esbuild.mjs` | **类型检查是构建的前置**：esbuild 不做类型检查（2026-10-23 审计 A2） |
 | `scripts.typecheck` | `tsc --noEmit` | 同上 |
-| `scripts.accept` | 串起 8 支离线验收 | 结构、词表、索引、契约、面板 |
+| `scripts.accept` | 串起全部离线验收（数量见 `package.json`） | 结构、词表、索引、契约、面板 |
 
-打包事实：three / rapier / three-mesh-bvh 打进客户端 bundle；`manifold-3d` 在 Host 侧为
-external；**不引入 Vite**（Client 用自带 esbuild）。
+打包事实：three / three-mesh-bvh 打进客户端 bundle；`manifold-3d` 在 Host 侧为
+external；**不引入 Vite**（Client 用自带 esbuild）。物理与运动已走 Python worker，`@dimforge/rapier3d-compat` 不再随包（§31.4）。
 
 ### 5.3 Host/Client 接线（当前实作）
 
-- **工具**：27 个（25 个 CAD + `run_python` / `python_runtime`）。名册与参数见
+- **工具**：45 个内部 op，经 9 个 surface 暴露为模型可见工具。名册与参数见
   `docs/TOOL-CONTRACTS.md`（由 `scripts/audit-tool-contracts.mjs --write` 生成，`--check` 比对全文）。
   分组（交付 / 检测 / 仿真 / 仪器）在 `src/host/tool-groups.ts`。
 - **精确路由**：`connection.fetch.register({ path: '/api/cad/...' })`，`connection` 经
@@ -405,7 +405,7 @@ interface PhysicsResult {
 - 关节：`revolute` 用 `revoluteWithAxes(anchor1, anchor2, axis1, axis2)`，`prismatic` 用单轴；两端局部轴由 `axisA`/`axisB` 给出（或 `axisWorld` 由工具换算），建关节前若两端世界方向相反则翻转 B，避免 180° 框架扭转。关节两端接触默认关闭（`contactsDisabled` 回报）；`jointContacts: true` 才让关节对互撞。
 - **`gear` 关节（2026-11-14）**：`joints[].type` 增加 `'gear'`，参数 `ratio`（B 每转一圈 A 转多少，带符号）。rapier 没有齿轮约束，所以它不是 rapier joint，而是**运动学投影**：每步把从动件的姿态与角速度按 `ratio` 投到主动件上（记录轨迹之前），比率因此精确且与 dt 无关；不传扭矩，且该对用 interaction groups 做接触隔离（≤16 件时按位分配）。裁决依据：把“比率”交给接触求解是错误分工——同一对齿轮用脉冲耦合实测 1/1000 差 0.9%、1/60 差 16%，因为外部耦合只能在下一次迭代纠正。**角度按步累加，不从 t=0 重算**：`2·atan2` 值域 (−π, π]，超过半圈就会翻边（64:1 齿轮箱在 6400 rpm 下每 2.8 ms 翻一次，输出“原地抖”）；`metrics.gears` 的角度取自累加器而不是采样位姿，因而 3 s/320 转也能给出精确比率。单步转角 ≥180° 时累加本身失效，报告会加一条 note 要求减小 `timestepSec`。语义边界写进文档与报告：比率是**规定**的；接触 run（去掉 gear）回答“咬不咬得动”，motion 的干涉时间线回答“会不会撞”。
 - **物理的三个输入（2026-11-14 补齐）**：`motor`（关节）、`friction`（每件，未声明时用 rapier 默认 0.5 并回读进 `metrics.frictions`）、`timestepSec`（顶层，默认 1/60）。后两个此前只存在于 domain（`PhysicsScenario`）而不在工具 schema 里：`timestepSec` 只传给 worker、从未从工具侧透传，于是所有 run 被钉死在 1/60——2 rad/s、4mm 节圆时每步走 0.133mm，正好等于被归咎的 0.03–0.15mm 侧隙量级；`friction` 根本不存在，所有“卡死/效率”结论都建立在没人声明的 μ=0.5 上。经验法则写进 schema：v·dt ≤ 间隙/10。
-- **关节电机（2026-11-14）**：revolute 关节可带 `motor: { targetVelocityRadPerSec, maxTorqueNm, damping? }`，落到 rapier 的 `configureMotorVelocity` + `setMotorMaxForce`（`ForceBased`）；N·m 与 mm/mN 世界差 1e6，`maxTorqueNm × 1e6` 才是 rapier 的力矩单位。`damping` 默认 `maxTorqueNm × 100`（0.01 rad/s 误差即饱和到上限；否则 target=0 的“刹车”退化成阻尼器——实测 22.6° 爬行）。`metrics.motors` 回报指令 vs 实测（末步相对角速度、累计转角、`reachedTarget`），未达标时附一条 STALL note。**没有电机时唯一的运动输入是 `initialAngularVelocity`（冲量不是驱动）**——减速器那次蜗杆 7.5° 走完 0.056mm 侧隙即停，六帧同一姿态。两份实现都要改：Python worker 是 canonical（`python/cad_worker/worker.py` `op_simulate_physics`），TS 是 oracle/ darwin-x64 fallback。
+- **关节电机（2026-11-14）**：revolute 关节可带 `motor: { targetVelocityRadPerSec, maxTorqueNm, damping? }`，落到 rapier 的 `configureMotorVelocity` + `setMotorMaxForce`（`ForceBased`）；N·m 与 mm/mN 世界差 1e6，`maxTorqueNm × 1e6` 才是 rapier 的力矩单位。`damping` 默认 `maxTorqueNm × 100`（0.01 rad/s 误差即饱和到上限；否则 target=0 的“刹车”退化成阻尼器——实测 22.6° 爬行）。`metrics.motors` 回报指令 vs 实测（末步相对角速度、累计转角、`reachedTarget`），未达标时附一条 STALL note。**没有电机时唯一的运动输入是 `initialAngularVelocity`（冲量不是驱动）**——减速器那次蜗杆 7.5° 走完 0.056mm 侧隙即停，六帧同一姿态。物理只有 Python worker 实现（`python/cad_worker/worker.py` `op_simulate_physics` 是 canonical）；TS/rapier3d-compat 实现已于 2026-11-16 退役，darwin-x64 也不再支持（§31.4）。
 - t=0 装配门禁：每个关节的 anchor 间隙先量后跑，>2mm 直接拒绝并列出两侧世界坐标；不靠调大容差绕过。
 - 闭环事实：关节图 union-find 得 `closedLoop` / `loopJoints`，随报告返回；它是事实，不改变 pass/fail（罗伯威尔 5 件 6 铰 = true / 2 条闭合边）。
 - 仿真循环：`world.step()`
@@ -445,7 +445,7 @@ parity 断言在此 SKIP（有 runtime 的机器会跑）。
 > 现为**双引擎**——`python/cad_worker/mpm_numba.py`（numba JIT：对 numpy 内核 5.1–8.7×、
 > 对 TS 1.3–2.0×，`experiments/20261014_numba_mpm_probe.md`）经 `worker._mpm_engine`
 > 自动选择（`CAD_MPM_ENGINE` 可强制；musl/darwin-x64 无 wheel 自动回落 numpy 内核），
-> 下表的 `mpm.ts` 保留为 TS oracle + darwin-x64 fallback 角色。两引擎共用同一套网格边界
+> 下表的 `mpm.ts` 只保留为 TS oracle / `DSH_CAD_FLUID_PYTHON=0` 时的对照路径；darwin-x64 已退役，不再是它的 fallback 理由。两引擎共用同一套网格边界
 > 与驱动/审计规则实现（尾部逐行同构），算法不变。
 
 | 文件 | 职责 |
@@ -1194,20 +1194,27 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 
 ## 7. 安装与共享
 
-> **当前实作（0.1.0-preview）**：首发为 GitHub Release tarball；也支持本地路径链接安装（虚拟 DSH 沙箱即此法）。**不上 npm**，`package.json` 仍 `private: true`；定位见 HARNESS.md §1/§10。
+> **当前实作（仓库 0.2.0-preview.1；npm 已发布线为 0.1.2-preview.1）**：npm 包 `dsh-cad-harness` 已发布，`dsh plugin add dsh-cad-harness` 是推荐路径；同时保留 GitHub Release tarball（离线/内网）与本地源码 `-w` 链接（虚拟 DSH 沙箱即此法）。定位见 HARNESS.md §1/§10。
 
-### 7.1 安装方式（0.1.0-preview）
+### 7.1 安装方式（0.2.0-preview.1）
 
-首发形态是 **GitHub Release tarball**（包内已含 `lib/`）；也支持本地源码路径。
-
-**tarball（推荐给用户）**：
+**npm（推荐）**：
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.0.tgz
-dsh plugin --profile <profile> add -w "$PWD/package"
-cd package && npx dsh-cad-setup     # 写入本机 skill 绝对路径
+dsh plugin --profile <profile> add dsh-cad-harness
+npx dsh-cad-setup --openscad=auto   # 写入本机 skill 绝对路径并准备 OpenSCAD
 npx dsh-cad-doctor                  # kind=ok / degraded / fail
 npx dsh-cad-backend --show          # kernel=openscad, compileBackend=auto
+```
+
+**tarball（离线 / 内网备选）**：
+
+```bash
+tar -xzf dsh-cad-harness-<version>.tgz   # 版本号以 release 页为准
+dsh plugin --profile <profile> add -w "$PWD/package"
+cd package && npx dsh-cad-setup --openscad=auto
+npx dsh-cad-doctor
+npx dsh-cad-backend --show
 ```
 
 **源码 checkout（开发）**：
@@ -1215,19 +1222,19 @@ npx dsh-cad-backend --show          # kernel=openscad, compileBackend=auto
 ```bash
 dsh plugin --profile <profile> add -w /path/to/dsh-cad-harness
 cd /path/to/dsh-cad-harness && pnpm install && pnpm run build
-npm run setup
+node scripts/setup.mjs --openscad=auto
 ```
 
-改动 Host 代码后必须重建 `lib/` 并**重启 dsh**（宿主 bundle 不热重载）；tarball 用户不需要 build。
+改动 Host 代码后必须重建 `lib/` 并**重启 dsh**（宿主 bundle 不热重载）；npm / tarball 用户不需要 build。
 
 `presets/cad/preset.patch.yml` 由 `scripts/setup.mjs` / `scripts/preset-lib.mjs` 生成，
 其中 `customSkillDirs` 是**安装机绝对路径**。`sync-cad-preset.mjs` 仍保留为手动/旧流程入口，
 用户路径统一走 `setup.mjs`；`--check` 在路径过期或缺 skill 时退出 1。
 
-### 7.2 版本约定（0.1.0-preview）
+### 7.2 版本约定（0.2.0-preview.1）
 
-- `package.json` version 为 `0.1.0`，仍是 `private: true`；**不上 npm**，首发 GitHub tarball。
-- 首次发布 tag 计划为 `v0.1.0-preview.1`；GitHub Actions workflow 已写，实际运行待网络。
+- `package.json` version 为 `0.2.0-preview.1`（仓库待发布版本；npm 最新已发布为 `0.1.2-preview.1`）；npm 公开发布，tarball 作为离线/内网备选。
+- 发布 tag 与 npm 版本一致；`0.1.0-preview.1` 起的发布记录见 git tag 与 npm registry time。
 - 版本可追溯性靠 git 提交（DCO）+ 插件自身版本库（`versions/vNNN` + manifest）+ 验收脚本。
 - 本地提交使用 `git commit -s`；发布前检查 `accept:preview` / `rehearse:preview`。
 
@@ -1368,7 +1375,7 @@ npm run setup
 7. **配置**：**无 `config.ts`、无 dsh Config schema**——可调参数是工具入参（见 §7.3）；若要集中配置需新建 Config schema（开放化待办）
 8. **文档**：每个模块顶部写 JSDoc，说明输入输出和边界条件（`mpm.ts`/`sdf.ts`/`manifest.ts` 等已成惯例）
 9. **dsh 插件约定**：Host/Client 分离；工具经 `ctx.tools.register(defineTool)`；浏览器能力经 `connection.fetch.register` 精确路由；不声明 `connection` inject 而是 `ctx.reflect.get` 轮询（headless 无该服务）
-10. **分发**：`package.json` 仍 `private: true`；定位已开放（HARNESS.md §1），但公开分发方式未定——**不要在未决策前改为 public 或改包名**
+10. **分发**：npm 包 `dsh-cad-harness` 已公开发布，tarball 为离线备选；包名/技术 id 不随品牌改（HARNESS §1/§10）。根目录 `package.json` 的 `private: true` 只是扫描器声明，不是可安装包
 11. **新增纪律（v2.10/2.11 教训）**：改动实现后**同轮回填 §5/§6 对应章节**，或至少在 §13 实施实录写明差异——本轮发现多处「实现推进、设计章节停留在 M1 规划」，以及一处「验收写了但没做」（§6.8 回滚/审批）
 
 ---
@@ -3192,19 +3199,22 @@ python-lock.ts（生成物）          解释器归档名 + sha256（七平台�
 > `check_connectivity` + `measure_extent` → **`measure_part`** 的一部分。
 > 2026-11-16 再合并：`measure_part` / `measure_gap` / `measure_thickness` / `measure_section` /
 > `measure_angle` → 单个 **`measure(kind=…)`**（43 → 39 个 op），并把生产工具面切到 9 个 surface。
+> 2026-11-25 再增 6 个 action（`cad_session kernel`、`cad_assembly suggest`、`cad_check sweep`、
+> `cad_simulate hotspots`、`cad_deliver affected/retire`），当前是 **9 个 surface / 45 个 op**；
+> 机器副本是 `dsh-cad-harness/docs/TOOL-SURFACE-V1.json`，迁移表是 `TOOL-SURFACE-MAP.md`。
 > 历史名字保留（它们说明了当时的边界），但**今天按 surface + action 调用**。
 >
 > | surface | actions |
 > |---|---|
-> | `cad_session` | `info` · `init` · `bind` · `review` |
+> | `cad_session` | `info` · `init` · `bind` · `review` · `kernel` |
 > | `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
-> | `cad_assembly` | `write` · `validate` · `check` · `datums` |
-> | `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
-> | `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+> | `cad_assembly` | `write` · `validate` · `check` · `datums` · `suggest` |
+> | `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` · `sweep` |
+> | `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` · `hotspots` |
 > | `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
 > | `cad_see` | `render` · `review` · `reference` |
 > | `cad_python` | `run` · `runtime` |
-> | `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） |
+> | `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） · `affected` · `retire` |
 >
 > 每个工具在注册处自带 `surface: { id, action }`；`buildSurfaceFromToolMeta` 据此生成 surface，
 > 删除手写 9×members 表。`hideLegacy: all` 后旧名不进入模型 catalog，但仍是内部委托目标；
@@ -3810,7 +3820,7 @@ PARAMS/Customizer 只改顶层标量，够不上。**待建**。
 
 ---
 
-## 31. 装配表示、运行时分工与引擎默认策略（承 HARNESS §8/§11/§12，2026-10-16 迁入）
+## 31. 装配表示、运行时分工与引擎默认策略（承 HARNESS §8/§11，2026-10-16 迁入）
 
 **31.1 装配表示：代码库类比**（立场 2026-09-27 修订）
 **工件的名字**：**BOM + 可执行 ICD 合并成一份 `assembly.json`**（职责见 §5.3；schema 与
@@ -3889,18 +3899,19 @@ sampling），另由 `accept-check-sweep` / `accept-motion-fit-tool` 覆盖早�
 - **导入**：STL（2026-10-01）、STEP/DXF（2026-10-15，`cascadio` + `ezdxf` 进锁）、3MF
   （2026-10-22，`lxml` 进锁，trimesh 的 3MF 读取器）已交付；**IGES 与 `.brep` 是可行动边界**
   （cascadio 0.1.1 对 IGES 静默失败已实测），OBJ/OFF 是 planned increment。
-- **仍未做的**：STEP 导出、从 B-rep 抽取精确孔/轴 datum（网格细分只给网格级的）。评估顺序
-  仍是 FreeCAD headless → cadquery-ocp → Replicad（~55MB wasm，留在 Node 栈）；引入与否仍未
-  决定。
+- **仍未做的**：STEP 导出（网格→B-rep）、从 B-rep 抽取精确孔/轴 datum（网格细分只给网格级的）。
+  B-rep 作者内核已以**可选 CadQuery pack** 落地（cadquery-ocp，显式安装，见 §37.3）；
+  Replicad / FreeCAD headless 仍是备选评估，不是当前依赖。
 
 ---
 
-## 32. 环境变量与诊断开关（运维附录，承 HARNESS §12.7，2026-10-16 迁入）
+## 32. 环境变量与诊断开关（运维附录，原 HARNESS §12.7，2026-10-16 迁入）
 
-> **性质**：本附录是**内部表面**。面向用户的只有 `CAD_OPENSCAD_BIN` 与
-> `DSH_CAD_PYTHON` 两种用法（见 README §1/§4），其余为运维与定位用；
-> **诊断类绝不可在生产设置**，它们只影响日志与对照路径，不改变工具 schema。
-> 依赖与默认值的**唯一权威**是 `src/host/python-lock.ts`。
+> **性质**：本附录是**内部表面**。用户日常会碰的是 `CAD_OPENSCAD_BIN` /
+> `CAD_OPENSCAD_MIRROR` / `CAD_OPENSCAD_ARCHIVE`、`DSH_CAD_PYTHON` 与 `DSH_CAD_IMAGE_WINDOW`（见
+> [README](README.md) 与 [docs/user/configuration.md](docs/user/configuration.md)），
+> 其余为运维与定位用；**诊断类绝不可在生产设置**，它们只影响日志与对照路径，
+> 不改变工具 schema。依赖与默认值的**唯一权威**是 `src/host/python-lock.ts`。
 
 ### 32.1 运行时供给
 
@@ -3918,15 +3929,16 @@ sampling），另由 `accept-check-sweep` / `accept-motion-fit-tool` 覆盖早�
 | 变量 | 作用 |
 |---|---|
 | `CAD_OPENSCAD_BIN` | 指定 OpenSCAD 可执行文件（优先于自带快照与 PATH 上的 `openscad`） |
+| `CAD_OPENSCAD_MIRROR` | 覆盖 OpenSCAD 下载镜像基址；仍按固定 sha256 校验 |
+| `CAD_OPENSCAD_ARCHIVE` | 本地离线归档，等同 `--from`；完全不走网络 |
 | `CAD_IMAGE_TOKEN_ESTIMATE` | 图片 token 估算值（默认 1000/图），用于遥测标定 |
 | `CAD_TELEMETRY_DISABLE=1` | 关闭 usage 遥测 |
-| `CAD_SKIP_CONTACTS` | 物理接触采样跳过（诊断用） |
 
 ### 32.3 Opt-in（默认关，标准会话行为不变）
 
 | 变量 | 作用 |
 |---|---|
-| `DSH_CAD_IMAGE_WINDOW=1` | 让**没有预设名**的会话也套用造物模式的 24 张图像保留窗口。需要它的场景：headless（`dsh --profile headless`）不 compose 预设注册表，于是窗口不生效，多轮渲染会话会把请求堆到 64 张以上被上游拒绝。带真预设的会话不受影响 |
+| `DSH_CAD_IMAGE_WINDOW=1` | 让**没有预设名**的会话也套用营造模式的 24 张图像保留窗口。需要它的场景：headless（`dsh --profile headless`）不 compose 预设注册表，于是窗口不生效，多轮渲染会话会把请求堆到 64 张以上被上游拒绝。带真预设的会话不受影响 |
 
 ### 32.4 诊断开关（**只用于定位，绝不可在生产设置**）
 
@@ -3943,8 +3955,8 @@ sampling），另由 `accept-check-sweep` / `accept-motion-fit-tool` 覆盖早�
 
 ### 32.5 平台裁剪与"就绪"的判据
 
-- 平台缺 wheel 的包由锁里的 `cad-exclude` 注释逐包声明（`rapier3d` 缺 darwin-x64 → 物理
-  留在 TS canonical；`numba` / `llvmlite` / `xlb` / `warp-lang` / `jax` 缺 musl 与 darwin-x64
+- 平台缺 wheel 的包由锁里的 `cad-exclude` 注释逐包声明（`rapier3d` 在受支持平台有 wheel，物理只有 Python 实现；
+  `numba` / `llvmlite` / `xlb` / `warp-lang` / `jax` 缺 musl 与 darwin-x64
   → MPM 回落 numpy 内核、LBM 车道不可用），安装期写进 `state.json.skipped` 并由
   `python_runtime` 状态如实披露——**缺包必须看起来像设计，而不是像坏包**。
 - **"就绪"必须可被证伪**：除标记匹配外，venv 必须**真的 import 一遍锁定包**才算 current；

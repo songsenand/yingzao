@@ -1,7 +1,7 @@
 # 0.2.0 版本目标：准生产基线
 
-> **状态**：实施中。**preview.1 的 13 项：8 项已收口**（Q2、U12、U11、U22、U19、U15、F2、N15），
-> **5 项 partial**（Q1 差 A/B、U20 差目视签收、U21 差真机手测、F1 差粒子约束、U14 差请求持久化）。
+> **状态**：实施中。**preview.1 的 13 项：11 项已收口**（Q2、U12、U11、U22、U19、U15、F2、N15、U20、F1、U14），
+> **2 项「已实现 · 未签收」**（Q1 差真会话 A/B、U21 差真机切标签页）；维护者 2026-11-28 决定本版不做这两项签收，按 11/13 发布。
 > 本文只写**目标、范围、验收、顺序**；逐项状态与排序以 [TODO.md](TODO.md) §0.1 为准。
 >
 > **基线**：`0.1.2-preview.1`（2026-11-26 发布）。
@@ -25,7 +25,7 @@
 - OpenSCAD 与 CadQuery 各跑一个 bracket（孔 + 圆角 + datum）和一个 ≥3 件装配：
   `generate → check → assembly → motion/fluid → deliver audit` 全链路有 run、有证据；
   `npm run accept:preview` 全绿。
-- 视口能完成：任意剖切 + 封盖、逐件显隐/隔离/高亮、正交/六标准视图/轴吸附、
+- 视口能完成：任意剖切 + 封盖、逐件显隐/隔离/高亮、正交/七命名视图/复原、
   角度/间隙/剖面面积/孔测量、审计视图点行跳到对应 run。
 - 流体不再有已知“管外粒子”：F1/F2 的出口数字成立；161s 量级的跑有进度、能取消。
 - 五项检查（制造/应力/装配/运动/物理）任一可从面板重跑；BOM CSV 可直接给加工/报价。
@@ -82,10 +82,10 @@
 
 | ID | 事项 | 为什么是门禁 | 估时 |
 |---|---|---|---|
-| U20 | 任意剖切 + 封盖 | 斜切管道只能看到空壳就谈不上“能检查内部”；这是准生产的最低要求 | 2–3d |
+| U20 | 任意剖切 + 封盖 | 斜切管道只能看到空壳就谈不上“能检查内部”；这是准生产的最低要求。**已收口 2026-11-27/28**：沿视角/轴切 + 封盖；`accept:section-cap-area` 全 0.00%、`accept-ui section-free` 24 项；维护者目视签收 | 2–3d |
 | U21 | 大网格加载进度 + WebGL 上下文恢复 | 百万面/切标签页白屏是"问题多"的典型；不修，真实项目第一眼就失败。**已落**：`stream-progress`（16 项）+ 进度 pill + `glLost/glEpoch` 自动重建（`accept-ui webgl-recover`）；**百万面实测**（软件 GL）：999,698 tri / 47.7 MB，传输 188 ms（211 ticks）、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧，`renderer.info` 证明确实画满（`accept-ui big-mesh` 8 项）。**余**：真机切标签页手测（需用户） | 2d |
-| U12 | 装配预览：逐件显隐 / 隔离 / 高亮 | 爆炸只能看整体，不能看“这一对配合”；装配是主功能 | 2–3d |
-| U11 | 视口导航：正交/透视、六标准视图、轴吸附 | 用户已明确说“轴固定不好”；没有标准视图，测量和评审都不稳定 | 2d |
+| U12 | 装配预览：逐件显隐 / 隔离 / 高亮 | 爆炸只能看整体，不能看“这一对配合”；装配是主功能。**已收口 2026-11-27**：`accept-ui assembly-hide` 11 项 | 2–3d |
+| U11 | 视口导航：正交/透视、七个命名视图、复原/Home | 用户已明确说“轴固定不好”；没有标准视图，测量和评审都不稳定。**已收口 2026-11-27/28**：`accept-ui views` 13 项 + `accept-viewport-orbit`；2026-11-28 合并为单一「视图」菜单 | 2d |
 | U15 | 测量家族 + 测量历史 | 角度/间隙/面积/孔都在宿主，面板只做了两种；测量是人的主要动作。**已收口 2026-11-27**：距离/角度/剖面面积/孔 + 可命名删除的测量历史（随截图 caption 带走）；`accept-measure-families` 26 项 + `accept-ui measure-families` 8 项 | 2–3d |
 | U19 | 面板审计视图（audit + preflight） | "哪一步没跑、为什么 blocked"必须能从面板回答；否则只能回会话猜。**已收口 2026-11-27**：`/api/cad/deliver/audit` 与工具同一实现 `deliveryAuditValue`；待办行按判定分序、携带 run/version 跳转（解析不到就不跳）；`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项 | 2–3d |
 
@@ -93,10 +93,10 @@
 
 | ID | 事项 | 为什么是门禁 | 估时 |
 |---|---|---|---|
-| F1 | 流体域闭合余项 | 已知穿壁/薄壁泄漏会直接破坏"五层验证"的可信度；必须给出政策与数字。**已落 2026-11-27**：薄壁政策（`measureThinWallMm` 中值脊线 + 自动 dx 减半/拒绝/显式 dx 标注，`accept-fluid-wall-policy` 19 项）；dx 收敛曲线（`accept-fluid-convergence` 9 项：0.90/0.82/0.32 **不收敛**，只可同 dx 比较）。**余**：粒子级约束/入口回流（细网格仍可能外泄 Ø34@dx1=608）| 1–2d |
+| F1 | 流体域闭合余项 | 已知穿壁/薄壁泄漏会直接破坏"五层验证"的可信度；必须给出政策与数字。**已落 2026-11-27**：薄壁政策（`measureThinWallMm` 中值脊线 + 自动 dx 减半/拒绝/显式 dx 标注，`accept-fluid-wall-policy` 19 项）；dx 收敛曲线（`accept-fluid-convergence` 9 项：0.90/0.82/0.32 **不收敛**，只可同 dx 比较）。**粒子级约束已收口 2026-11-28**：`accept-fluid-constraint` 11 项，穿透 7,098→0、`escaped+active=count0`；到达率仍不可跨 dx 比较 | 1–2d |
 | F2 | 流体预设流轴与短粗件 | Ø44×30 的管沿横截面驱动是确定性错误，1d 能修，没有理由带着发版。**已收口 2026-11-27**：`flowAxisFromVoid`（两条轴有壁、第三条敞开者即通道）+ `axisSource` 溯源；Ø44×30 由 X 改为 Z，实体件回退 bbox；`accept-fluid-axis` 17 项（含旧规则反证）| 1d |
 | N15 | 流体进度 / 取消（A：只做流体） | 161s 无进度无取消 = 看起来卡死；这是"问题少"的直接项。**已收口 2026-11-27**：worker 进度帧 + `FluidJobRegistry` + 路由 + 面板百分比/取消（取消=杀求解器进程）；`accept-fluid-jobs` 19 项（真子进程，kill 后 0ms settle、无孤儿）+ `accept-ui fluid-job` 7 项 | 2d |
-| U14 | 任一检查一键重跑 | 现在只有流体能重跑；迭代闭环靠回会话就不叫准生产。**已落 2026-11-27**：`run.json` 记 `request`（应力/运动/物理），`check-rerun.ts` 三分类 direct / replay / needs-args——有 request 的近期运行可重放（versionId 与 parts[].versionId 钉到当前版本，joints 原样），没有的仍 409 + `needs` 且**不建 run**；面板 2 direct / 1 replay / 2 refused。`accept-check-rerun` 30 项 + `accept-ui rerun-check` 11 项。**余**：stress 提取后的 job 路径待真跑回归（本环境无 numpy）| 2d |
+| U14 | 任一检查一键重跑 | 现在只有流体能重跑；迭代闭环靠回会话就不叫准生产。**已落 2026-11-27**：`run.json` 记 `request`（应力/运动/物理），`check-rerun.ts` 三分类 direct / replay / needs-args——有 request 的近期运行可重放（versionId 与 parts[].versionId 钉到当前版本，joints 原样），没有的仍 409 + `needs` 且**不建 run**；面板 2 direct / 1 replay / 2 refused。`accept-check-rerun` 30 项 + `accept-ui rerun-check` 11 项。**已收口**：`accept-stress` 37/37（提取后的 job 真跑；`accept:release` 在可写 runtime 下 PASS）| 2d |
 
 ### D. 交付
 
@@ -195,7 +195,7 @@
 | 兼容 | `accept-compat.mjs`（新增） | 0.1.2 golden 可开；契约快照只增；未知 schemaVersion 拒绝 |
 | 安装 | CI `preview.yml` 的 clean install + Windows smoke；`accept-install-e2e.mjs`（新增）；`DSH-MATRIX.md` | 3 OS 安装/升级通过；doctor 0 fail；13 版本回填 |
 | 文档 | `accept-docs-parity.mjs`（新增） | 中英文件集/标题/版本一致；覆盖矩阵无空缺 |
-| 视口 | sandbox `assert=*` + 截图 | 剖切封盖、显隐/隔离/高亮、六视图/轴吸附、测量、审计跳转 |
+| 视口 | sandbox `assert=*` + 截图 | 剖切封盖、显隐/隔离/高亮、七视图/复原、测量、审计跳转 |
 | 流体 | `accept-fluid-sign.mjs`、`accept-m4` | 21/21；`outsideSnapshotMax` 达标；短粗件轴正确 |
 | 发布 | `npm run rehearse:preview`、`check-release-preset`、tag、staged publish | 包内容/预设/版本一致；发布后 `doctor`/`verify`/安装冒烟通过 |
 

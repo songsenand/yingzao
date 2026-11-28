@@ -6,7 +6,7 @@ These are **known limits**, not bug reports waiting to be fixed. Knowing them is
 
 ## Accuracy and certification
 
-- **No industrial tolerances, engineering drawings or production BOM.** This is a design-verification tool, not a production release system.
+- **No industrial tolerances, engineering drawings or production quote BOM.** The assembly BOM and CSV export are covered in the README; this is a design-verification tool, not a production release system.
 - **No certified accuracy.** Numbers come from meshes and sampling. Reports state the measurement conditions; they are not a certificate.
 - **Millimetres, Z up.** There is no unit parameter; imported parts must declare their unit.
 

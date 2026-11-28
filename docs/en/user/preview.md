@@ -1,5 +1,7 @@
 # 0.2.0-preview.1 preview notes
 
+> **Unreleased**: the latest published npm version is 0.1.2-preview.1; this page describes the repository version 0.2.0-preview.1. Install the published version through the npm path; use the release page for the exact tarball name.
+
 [中文](../../user/preview.md) | English
 
 > **This is a preview, not a production release gate.** It installs, diagnoses itself, verifies and delivers, but it does not promise industrial tolerances, certified accuracy or long-term support. Treat it as a usable instrument, not a certificate.
@@ -7,7 +9,7 @@
 ## What is in this release
 
 - Natural language → OpenSCAD or CadQuery part → compile, render, version store;
-- The model-facing catalog is compressed from 39 tools to **9 job surfaces**
+- The model-facing catalog is compressed from 45 legacy tools to **9 job surfaces**
   (`cad_session`/`cad_part`/`cad_assembly`/`cad_check`/`cad_simulate`/`cad_inspect`/
   `cad_see`/`cad_python`/`cad_deliver`), with arguments under `action`;
 - Standard-parts catalogue v0: 99 catalogue items with pre-generated STEP/STL
@@ -20,7 +22,7 @@
 - **Overhang is a support cost**: reported as a finding by default; only a process profile with `overhangDeg.hard: true` lowers the verdict to `difficult`;
 - **Panel**: heat-map layers (fused risk / thickness / overhang / von Mises) and a light/dark theme that follows the host;
 - **Four measurement families + history**: distance / three-point angle / section area / bore diameter; entries can be renamed, deleted, and travel with the screenshot caption;
-- **Viewport navigation**: iso/top/front/right plus six-way axis snapping, perspective↔orthographic, Home; per-part hide / isolate / highlight in the assembly preview;
+- **Viewport navigation**: one 「View」 menu with front/back/left/right/top/bottom + iso, perspective↔orthographic, restore/Home; per-part hide / isolate / highlight in the assembly preview;
 - **Audit view**: the machine page answers "which step has not been run", and a row jumps to the run or version it names;
 - **Checks can be re-run**: manufacturing/assembly in one click, stress replayed (version re-pinned); a run that never saved its request is refused with the missing list;
 - **Fluid progress and cancel**: a long run shows steps done / total and Cancel stops the solver process; the flow axis of a stubby part now comes from its cavity;
@@ -37,10 +39,8 @@
 See [install](install.md). The minimum path:
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
-dsh plugin --profile <profile> add -w "$PWD/package"
-cd package
-npx dsh-cad-setup
+dsh plugin --profile <profile> add dsh-cad-harness   # npm; tarball is the offline fallback (see install)
+npx dsh-cad-setup --openscad=auto # write this machine's skill path and prepare OpenSCAD
 npx dsh-cad-backend --show
 npx dsh-cad-doctor
 npx dsh-cad-verify <project> --advisory
@@ -64,7 +64,7 @@ OpenSCAD is prepared by `setup --openscad=auto`: an existing 2025.06+ system ins
 - **Schema/migration**: old projects open; an unknown newer `schemaVersion` is refused by `doctor`; there is no automatic migrator, so back up before migrating.
 - **CI**: GitHub Actions now runs in tiers (fast / nightly full / tag release gate); a tag runs the Ubuntu + macOS full matrix, Windows smoke and the CadQuery pack. This machine runs Linux only.
 - **Example display**: current examples follow "new in, old out"; a moved example keeps its directory, corpus and evidence and is only no longer shown as current.
-- **Still open in the 0.1.2 line**: visual sign-off, recorded clean-environment example runs, the full STEP path, async render/simulation jobs and the catalogue tool entry; viewport picking is deferred.
+- **Carried over from the 0.1.2 line, not in this release**: visual sign-off, recorded clean-environment example runs, the full STEP path, async render/simulation jobs and the catalogue tool entry; viewport picking is deferred.
 
 ## Reporting a problem
 

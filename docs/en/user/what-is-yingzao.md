@@ -34,7 +34,7 @@ The tool provides truth; **judgement stays with you**. Three typical calls:
 
 - **Not a modelling UI.** You do not sketch or extrude; you describe, the agent writes code.
 - **Not an automatic certificate.** “Not excluded” means no geometric counterexample was found; it does not mean manufacturable or certifiable.
-- **Not industrial CAD/FEA/CFD.** No B-rep, no engineering drawings, no certified accuracy; stress and fluid are trends, not guarantees.
+- **Not industrial CAD/FEA/CFD.** The default kernel is mesh-based: no industrial B-rep accuracy, engineering drawings or certification. The optional CadQuery pack adds a B-rep authoring path, but design checks still use the STL mesh. Stress and fluid are trends, not guarantees.
 - **It does not repair bad meshes.** Bad geometry is rejected with the location of the problem, not turned into a confident wrong number.
 - **Not multi-user/cloud/mobile.** A local single-user tool.
 

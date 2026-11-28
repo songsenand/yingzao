@@ -6,13 +6,13 @@
 
 ## 阅读顺序
 
-0. [0.1.2-preview.1 预览版说明](preview.md) —— 这一版能做什么、有什么已知边界。
+0. [0.2.0-preview.1 预览版说明（未发布）](preview.md) —— 这一版能做什么、有什么已知边界。
 1. [安装与首次准备](install.md) —— 装好、开启「营造模式」、准备运行时。
 2. [它是什么，不是什么](what-is-yingzao.md) —— 先建立正确的预期。
 3. [从描述到交付](workflow.md) —— 一次完整的使用流程，以及每一步你要做的判断。
 4. [验证能力](verification.md) —— 五层检查各回答什么、报告怎么读。
 5. [边界](limits.md) —— 它现在做不到什么，以及为什么。
-6. [配置](configuration.md) —— 三个常用的环境变量。
+6. [配置](configuration.md) —— 常用环境变量。
 7. [故障排查](troubleshooting.md) —— 常见现象与处理。
 8. [进阶用法](advanced.md) —— 额外 Python 包、GLB 侧车、导入、多项目。
 

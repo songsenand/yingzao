@@ -2,13 +2,15 @@
 
 # 0.2.0-preview.1 预览版说明
 
+> **未发布**：npm 最新已发布版本是 0.1.2-preview.1；本文描述仓库里的 0.2.0-preview.1。装已发布版时按安装页的 npm 路径，tarball 文件名以发布页为准。
+
 > **这是预览版，不是生产放行系统。** 它已经能装、能自检、能验证、能交付，但不承诺工业级
 > 公差、认证精度或长期支持。请把它当"可用的实验仪器"，不是"合格证"。
 
 ## 这一版有什么
 
 - 自然语言 → OpenSCAD 或 CadQuery 零件 → 编译、渲染、版本库；
-- 模型调用面从 39 个工具收成 **9 个作业面**（`cad_session`/`cad_part`/`cad_assembly`/
+- 模型调用面从 45 个旧工具收成 **9 个作业面**（`cad_session`/`cad_part`/`cad_assembly`/
   `cad_check`/`cad_simulate`/`cad_inspect`/`cad_see`/`cad_python`/`cad_deliver`），
   参数按 `action` 展开；
 - 标准件目录 v0：99 个规范件，预生成 STEP/STL（fit / visual 两档），随包分发；**但本版还没有
@@ -19,7 +21,7 @@
 - **悬垂是支撑成本**：默认只报 finding，工艺档案显式 `overhangDeg.hard: true` 才降为 `difficult`；
 - **面板**：热力图可切换 融合风险 / 壁厚 / 悬垂 / von Mises；配色跟随宿主亮/暗主题；
 - **测量四族 + 历史**：距离 / 三点角度 / 剖面面积 / 孔径，条目可改名、可删除、随截图说明带走；
-- **视口导航**：等轴/顶/前/右 + 六向轴吸附、透视↔正交、Home；装配预览可逐件显隐/隔离/高亮；
+- **视口导航**：「视图」菜单给前/后/左/右/顶/底 + 等轴，透视↔正交，复原/Home；装配预览可逐件显隐/隔离/高亮；
 - **审计视图**：机器页直接回答"哪一步还没跑"，点一行跳到对应的运行或版本；
 - **检查可重跑**：制造/装配一键重跑，应力可重放（版本钉到当前版）；旧运行没存参数的会如实拒绝并写明缺什么；
 - **流体进度与取消**：长跑显示已跑/总步数，取消会终止求解进程；短粗件的流轴改由内腔决定；
@@ -37,12 +39,10 @@
 见 [安装与首次准备](install.md)。预览版的最小路径：
 
 ```bash
-tar -xzf dsh-cad-harness-0.1.2-preview.1.tgz
-dsh plugin --profile <profile> add -w "$PWD/package"
-cd package
-npx dsh-cad-setup          # 写入本机 skill 路径
-npx dsh-cad-backend --show # 查看当前内核/编译后端
-npx dsh-cad-doctor         # kind=ok，或有解释的 degraded
+dsh plugin --profile <profile> add dsh-cad-harness   # npm；离线可用 tarball，见安装页
+npx dsh-cad-setup --openscad=auto # 写入本机 skill 路径并准备 OpenSCAD
+npx dsh-cad-backend --show        # 查看当前内核/编译后端
+npx dsh-cad-doctor                # kind=ok，或有解释的 degraded
 npx dsh-cad-verify <project> --advisory  # 六行证据报告（只读）
 # 重启 dsh
 ```
@@ -66,7 +66,7 @@ FreeCAD 仍显示为 planned、不可选。
 - **schema/迁移**：旧项目可开；未知的新 schemaVersion 会被 `doctor` 拒绝；没有自动迁移器，迁移前必须备份。
 - **CI**：GitHub Actions 已按“快检 / 夜间全量 / tag 发布门”分档运行；tag 前会跑 Ubuntu+macOS 全量、Windows smoke 与 CadQuery pack。本机只实跑 Linux。
 - **示例展示**：当前示例按“进新退旧”维护；移到历史表的示例保留目录、语料与证据，只是不再作为当前示例展示。
-- **0.1.2 线剩余**：视觉签收、示例复现记录、STEP 完整路径、异步 render/sim、标准件目录工具入口尚未完成；视口点选已延后。
+- **0.1.2 线遗留下来、未进本版的项**：视觉签收、示例复现记录、STEP 完整路径、异步 render/sim、标准件目录工具入口尚未完成；视口点选已延后。
 
 ## 怎么报告问题
 

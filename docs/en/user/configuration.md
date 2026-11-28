@@ -5,13 +5,16 @@
 | Variable | Purpose | Default |
 |---|---|---|
 | `CAD_OPENSCAD_BIN` | Point at your own OpenSCAD executable | the plugin's candidate chain |
-| `DSH_CAD_PYTHON` | `auto` / `eager` / `system` — provisioning policy for the private Python runtime | `auto` |
+| `CAD_OPENSCAD_MIRROR` | Override the OpenSCAD download mirror (intranet / regional mirror) | official source first, OSS fallback |
+| `CAD_OPENSCAD_ARCHIVE` | Local offline archive; same as `--from`, no network at all | — |
+| `DSH_CAD_PYTHON` | `auto` / `eager` / `off` / `system` — provisioning policy for the private Python runtime | `auto` |
 | `DSH_CAD_IMAGE_WINDOW` | Retained image window in context (lower it when a long session is rejected upstream) | 24; `1` for headless sessions |
 
-All environment variables and diagnostic switches (including internal ones) are in [DESIGN.md §32](../../../DESIGN.md); only the three user-facing knobs are listed here.
+All environment variables and diagnostic switches (including internal ones) are in [DESIGN.md §32](../../../DESIGN.md); only the user-facing knobs are listed here.
 
 ## Common combinations
 
 - **Slow network / want a warm first run**: `DSH_CAD_PYTHON=eager` provisions in the background at startup.
 - **Machine already has Python 3.13**: `DSH_CAD_PYTHON=system` uses it, while locked dependencies are still installed from the lock.
 - **Long session rejected for too many images**: lower `DSH_CAD_IMAGE_WINDOW`; use `1` for headless sessions.
+- **Intranet / offline OpenSCAD install**: point `CAD_OPENSCAD_MIRROR` at an internal mirror, or `CAD_OPENSCAD_ARCHIVE` at a local archive; both are still checked against the pinned sha256.

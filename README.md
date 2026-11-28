@@ -34,7 +34,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 - [快速开始](#快速开始)
 - [用法](#用法)
 - [验证](#验证)
-- [本版变化](#本版变化)
+- [本版变化](#本版变化020-preview1)
 - [已知边界](#已知边界)
 - [文档](#文档)
 - [参与贡献](#参与贡献)
@@ -140,7 +140,7 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 | 层 | 使用 |
 |---|---|
 | 几何内核 | **OpenSCAD** + **Manifold** 后端；可选 **CadQuery**（B-rep，单独 pack）；BOSL2 是可选 **OpenSCAD 建模库**（螺纹/齿轮/螺丝），不是标准件目录 |
-| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；0.1.2-preview.1 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
+| 标准件目录 | **99 specs / 14 families** 随包分发，预生成 STEP/STL（fit/visual）；当前预览版 **尚无工具入口**，见 [library/README](dsh-cad-harness/library/README.md) |
 | 数值检查 | Python、trimesh、manifold3d、numpy、shapely |
 | 宿主 | **DeepSeek Harness** 插件；Node.js ≥ 20、TypeScript |
 | 面板 | React + WebGL 视口，随 DSH Web GUI 运行 |
@@ -266,7 +266,7 @@ node scripts/verify.mjs /path/to/project --advisory
 ### DSH 版本兼容（本地容器矩阵）
 
 支持的 DSH 范围写在 `dsh-cad-harness/package.json` 的 `engines.dsh`：
-`>=0.2.1-rc.2 <0.3.0`。范围内 13 个版本已逐个实测，可以直接照下表挑版本：
+`>=0.2.1-rc.2 <0.3.0`。范围内 13 个版本已逐个实测（矩阵证据对应 `0.1.1-preview.1`，`0.1.2` / `0.2.0` 尚未重跑，见 [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)），可以直接照下表挑版本：
 
 | 状态 | DSH 版本 |
 |---|---|
@@ -313,8 +313,10 @@ curl -fsSL https://raw.githubusercontent.com/getkern/kern/main/install.sh | sh
 
 ## 本版变化（0.2.0-preview.1）
 
+> 仓库当前版本是 0.2.0-preview.1（未发布）；npm 最新已发布版本是 0.1.2-preview.1。装已发布版时按 `dsh plugin add dsh-cad-harness` 即可，tarball 文件名以发布页为准。
+
 - **测量四族 + 测量历史**：距离、三点角度（量中间点）、剖面面积、孔径；量过的条目可改名、可删除，随截图说明带走。
-- **视口导航**：等轴/顶/前/右 + 六向轴吸附、透视↔正交、Home；**装配逐件显隐 / 隔离 / 高亮**。
+- **视口导航**：「视图」菜单给前/后/左/右/顶/底 + 等轴，透视↔正交，复原/Home；**装配逐件显隐 / 隔离 / 高亮**。
 - **审计视图**：机器页直接回答"哪一步还没跑"，按判定分序列出，点一行跳回对应的运行或版本。
 - **流体**：流轴由内腔决定（短粗件不再被驱动着横穿管壁）；长跑显示「已跑步数/总步数」并可取消
   （取消会终止求解进程）；薄壁 <2 格自动细化或拒绝；穿壁/出域粒子被挡回墙内（穿透 7,098→0）。

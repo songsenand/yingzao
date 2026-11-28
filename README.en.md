@@ -34,7 +34,7 @@ dsh plugin --profile <your-profile> add dsh-cad-harness
 - [Quick start](#quick-start)
 - [Usage](#usage)
 - [Verification](#verification)
-- [What's new](#whats-new)
+- [What's new](#whats-new-020-preview1)
 - [Known limits](#known-limits)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -140,7 +140,7 @@ The motion check answers whether it moves, collides or runs out of stroke; it do
 | Layer | Used |
 |---|---|
 | Geometry kernel | **OpenSCAD** + **Manifold** backend; optional **CadQuery** (B-rep, separate pack); BOSL2 is an optional **OpenSCAD modelling library** (threads/gears/screws), not the standard-parts catalogue |
-| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in 0.1.2-preview.1** — see [library/README](dsh-cad-harness/library/README.md) |
+| Standard-parts catalogue | **99 specs / 14 families** shipped, pre-generated STEP/STL (fit/visual); **no tool entry in the current preview** — see [library/README](dsh-cad-harness/library/README.md) |
 | Numerical checks | Python, trimesh, manifold3d, numpy, shapely |
 | Host | **DeepSeek Harness** plugin; Node.js ≥ 20, TypeScript |
 | Panel | React + WebGL viewport, running inside the DSH Web GUI |
@@ -255,7 +255,9 @@ node scripts/verify.mjs /path/to/project --advisory
 
 The supported DSH range is declared in `dsh-cad-harness/package.json` under
 `engines.dsh`: `>=0.2.1-rc.2 <0.3.0`. All 13 versions inside that range have been
-tested one by one, so you can pick from this table directly:
+tested one by one (the matrix evidence is from `0.1.1-preview.1`; `0.1.2` / `0.2.0`
+have not been re-run, see [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)), so you can pick
+from this table directly:
 
 | Status | DSH version |
 |---|---|
@@ -311,8 +313,10 @@ by CI.
 
 ## What's new (0.2.0-preview.1)
 
+> The repository is at 0.2.0-preview.1 (unreleased); the latest published npm version is 0.1.2-preview.1. `dsh plugin add dsh-cad-harness` installs the published version; use the release page for the exact tarball name.
+
 - **Four measurement families + history**: distance, three-point angle (measured AT the middle point), section area, and bore diameter; entries can be renamed, deleted, and travel with the screenshot caption.
-- **Viewport navigation**: iso/top/front/right plus six-way axis snapping, perspective↔orthographic, Home; **per-part hide / isolate / highlight** in the assembly preview.
+- **Viewport navigation**: one 「View」 menu with front/back/left/right/top/bottom + iso, perspective↔orthographic, restore/Home; **per-part hide / isolate / highlight** in the assembly preview.
 - **Audit view**: the machine page answers "which step has not been run", ordered by judgement, and a row jumps to the run or version it names.
 - **Fluid**: the flow axis comes from the cavity (a stubby part is no longer driven across its own wall); a long run shows "steps done / total" and can be cancelled (cancelling stops the solver process); a wall under two cells is refined or refused; particles that cross the wall are held at it (penetration 7,098 → 0).
 - **Checks can be re-run**: `run.json` now records the request, so manufacturing/assembly re-run in one click and stress can be replayed with the version re-pinned; runs that never saved their inputs are **refused with the missing list**, not re-run on defaults.

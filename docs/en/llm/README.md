@@ -6,21 +6,23 @@ This is the reference layer for **agents**. User docs live in `docs/user/`; do n
 
 ## Call surface (since 2026-11-16)
 
-A production session exposes **9 surfaces / 39 ops**. The call form is `cad_<surface>({ action: "<op>", args: { … } })`; this directory uses that form. Legacy tool names (`generate_part`, `check_assembly`, …) are internal op names; calling them directly fails with `unknown tool`.
+A production session exposes **9 surfaces / 45 ops**. The call form is `cad_<surface>({ action: "<op>", args: { … } })`; this directory uses that form. Legacy tool names (`generate_part`, `check_assembly`, …) are internal op names; calling them directly fails with `unknown tool`.
 
 | surface | actions |
 |---|---|
-| `cad_session` | `info` · `init` · `bind` · `review` |
+| `cad_session` | `info` · `init` · `bind` · `review` · `kernel` |
 | `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
-| `cad_assembly` | `write` · `validate` · `check` · `datums` |
-| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
-| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+| `cad_assembly` | `write` · `validate` · `check` · `datums` · `suggest` |
+| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` · `sweep` |
+| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` · `hotspots` |
 | `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
 | `cad_see` | `render` · `review` · `reference` |
 | `cad_python` | `run` · `runtime` |
-| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl` (deprecated) |
+| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl` (deprecated) · `affected` · `retire` |
 
 `catalog` / `help` are read-only actions on every surface: `catalog` lists the ops, `help` gives the legacy parameters.
+
+Six actions added on 2026-11-25: `cad_session kernel` (switch the project authoring kernel), `cad_assembly suggest` (interface suggestions), `cad_check sweep` (pre-motion sweep screen), `cad_simulate hotspots` (gravity-direction hot spots), `cad_deliver affected` (which checks a change invalidated) / `retire` (retire a run). Parameters and return shapes are in `TOOL-CONTRACTS.md`; `sweep` semantics are in `assembly.md`, and the remaining long-form notes follow.
 
 ## Reading order
 

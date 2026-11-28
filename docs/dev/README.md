@@ -14,7 +14,7 @@
 | [UI-EXECUTION.md](../UI-EXECUTION.md) | UI 的执行记录 | 查 UI 改动历史 |
 | [AUDIT-2026-10-23.md](../AUDIT-2026-10-23.md) | 一次全量审计的发现与修复 | 查已知缺陷/修复依据 |
 | [ASSESSMENT-2026-10-28.md](ASSESSMENT-2026-10-28.md) | 能力评估：玩具→准生产的证据、缺口与路线图 | 排优先级/看现状 |
-| [TEST-COVERAGE-2026-11-16.md](TEST-COVERAGE-2026-11-16.md) | 工具单元测试覆盖率实测：9 surface/39 op、172 个 accept 脚本、src 行 89.0% / 函数 83.0% | 补测试/判断工具面质量 |
+| [TEST-COVERAGE-2026-11-16.md](TEST-COVERAGE-2026-11-16.md) | 工具单元测试覆盖率实测：9 surface/39 op（当时口径；当前 45 op）、172 个 accept 脚本、src 行 89.0% / 函数 83.0% | 补测试/判断工具面质量 |
 | [DSH-MATRIX.md](DSH-MATRIX.md) | 本地 DSH 版本矩阵：13 个 in-range 0.2.x 的 rc/alpha 实测表、T0–T2 断言与复现 | 判断支持范围/加版本前 |
 | [PLAN-2026-11-26.md](../PLAN-2026-11-26.md) | 2026-11-26 新提三项（流体管外/视口/大项目规划）的证据、已修项与出口 | 做 F1/F2/U10/U11/G1/G2 前 |
 | [PLUGIN-GAP-2026-11-26.md](../PLUGIN-GAP-2026-11-26.md) | 插件能力快照：51 条（16 有/7 部分/28 无）、最该补的 10 条 | 排 UI/装配/人的动作优先级前 |

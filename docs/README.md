@@ -45,7 +45,7 @@
 | `docs/llm/` | Agent 参考：引擎边界、陷阱、交付纪律、约定（长解释） |
 | `docs/dev/` | 维护者入口：架构、设计、决策历史、UI 计划、审计 |
 | `skills/` | Agent 的任务入口（短规则 + 路由 + 指针） |
-| `dsh-cad-harness/docs/TOOL-CONTRACTS.md` | 39 个内部 op 的参数/字段权威（生成物，按 op 名索引；调用走 9 个 surface） |
+| `dsh-cad-harness/docs/TOOL-CONTRACTS.md` | 45 个内部 op 的参数/字段权威（生成物，按 op 名索引；调用走 9 个 surface） |
 | `README.md` | 项目门面：安装、快速开始、常见问题 |
 
 ## 迁移状态

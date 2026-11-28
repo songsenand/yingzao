@@ -13,7 +13,7 @@
 1. **U20** 任意剖切 + 封盖
 2. **Q1** 上下文 / 工具面 token 预算（可与 U20 并行）
 3. **U21** 大网格加载进度 + WebGL 上下文恢复
-4. **U11** 视口导航：正交/透视、六标准视图、轴吸附
+4. **U11** 视口导航：正交/透视、七个命名视图、复原/Home
 5. **U19** 面板审计视图（audit + preflight）
 6. **F1** 流体域闭合余项
 7. **N15** 流体进度 / 取消（A：只做流体）
@@ -26,8 +26,8 @@
 门禁共 **17 项**，每项必须有可复跑的证据；缺一项不发：
 
 - **工具面 / token（先行，可与 U20 并行）**：Q1（Q2 已收口，见下）
-- **已收口**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，等轴/顶/前/右 + 六向吸附 + 透视·正交 + Home，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 33 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 15 项，含旧规则反证）；**N15**（2026-11-27，流体长跑进度=已跑/总步数、取消=杀求解器进程；worker 进度帧 + `FluidJobRegistry` + 面板百分比/取消；`accept-fluid-jobs` 22 项 + `accept-ui fluid-job` 7 项）
-- **主线**：U20、U21、F1、U14
+- **已收口（8 项；另有 U20/F1/U14 见下条，共 11）**：**Q2**（2026-11-26，冻结 ledger + 计数派生 + example，`accept-cad-all-surfaces` 7 红转绿）；**U12**（2026-11-27，逐件显隐/隔离/高亮，`accept-ui assembly-hide` 11 项 PASS + 截图）；**U11**（2026-11-27，七命名视图 + 透视·正交 + 复原/Home；2026-11-28 合并为单一「视图」菜单，`accept-ui views` 13 项 + `accept-viewport-orbit` 视图数学断言）；**U22**（2026-11-27，BOM CSV 七列 + 转义 + 未确认工艺标记，`accept-bom-csv` 22 项 + `accept-ui bom-csv` 8 项，下载字节被截获校验）；**U19**（2026-11-27，审计视图 = 工具同一实现 `/api/cad/deliver/audit` → `deliveryAuditValue`，待办行携带 run/version 跳转，`accept-audit-gaps` 19 项 + `accept-ui audit-view` 8 项）；**U15**（2026-11-27，视口测量四族：距离/角度/剖面面积/孔 + 可命名删除的测量历史随截图；`accept-measure-families` 33 项 + `accept-ui measure-families` 8 项）；**F2**（2026-11-27，流体流轴改由**内腔**决定而非包围盒：Ø44×30 由 X 改为 Z，实体件回退并标注 `axisSource`；`accept-fluid-axis` 15 项，含旧规则反证）；**N15**（2026-11-27，流体长跑进度=已跑/总步数、取消=杀求解器进程；worker 进度帧 + `FluidJobRegistry` + 面板百分比/取消；`accept-fluid-jobs` 22 项 + `accept-ui fluid-job` 7 项）
+- **另外收口（2026-11-28 复核）**：U20、F1、U14；**已实现·未签收**：Q1、U21
 - **收口**：Q3、Q4（含 R3/R6）、Q5、Q6
 
 **`0.2.0-preview.1` 范围（2026-11-26 用户定）：M1 + M2 = 13 项**（Q2、Q1、U20、U21、U12、U11、

@@ -6,21 +6,23 @@
 
 ## 调用面（2026-11-16 起）
 
-生产会话只暴露 **9 个 surface / 39 个 op**。调用格式是 `cad_<surface>({ action: "<op>", args: { … } })`；本文档统一用这个写法。旧工具名（如 `generate_part`、`check_assembly`）只是内部 op 名，直接调用会报 `unknown tool`。
+生产会话只暴露 **9 个 surface / 45 个 op**。调用格式是 `cad_<surface>({ action: "<op>", args: { … } })`；本文档统一用这个写法。旧工具名（如 `generate_part`、`check_assembly`）只是内部 op 名，直接调用会报 `unknown tool`。
 
 | surface | actions |
 |---|---|
-| `cad_session` | `info` · `init` · `bind` · `review` |
+| `cad_session` | `info` · `init` · `bind` · `review` · `kernel` |
 | `cad_part` | `create` · `generate` · `import` · `merge` · `role` · `appearance` |
-| `cad_assembly` | `write` · `validate` · `check` · `datums` |
-| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` |
-| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` |
+| `cad_assembly` | `write` · `validate` · `check` · `datums` · `suggest` |
+| `cad_check` | `printability` · `sheet2d` · `turning` · `cnc` · `edm` · `parts` · `appearance` · `sweep` |
+| `cad_simulate` | `physics` · `motion` · `fluid` · `lbm` · `stress` · `hotspots` |
 | `cad_inspect` | `measure` · `features` · `attention` · `analyze` |
 | `cad_see` | `render` · `review` · `reference` |
 | `cad_python` | `run` · `runtime` |
-| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） |
+| `cad_deliver` | `plan` · `preflight` · `audit` · `pearl`（已弃用） · `affected` · `retire` |
 
 `catalog` / `help` 是每个 surface 自带的两个只读 action：`catalog` 列 op，`help` 给旧参数。
+
+2026-11-25 新增的 6 个 action：`cad_session kernel`（切换项目作者内核）、`cad_assembly suggest`（接口建议）、`cad_check sweep`（运动前扫掠筛查）、`cad_simulate hotspots`（重力方向热点）、`cad_deliver affected`（改版后该重跑哪些检查）/ `retire`（退役 run）。参数与返回形状见 `TOOL-CONTRACTS.md`；`sweep` 的语义见 `assembly.md`，其余长解释随后补。
 
 ## 阅读顺序
 

@@ -15,7 +15,7 @@
 |---|---|---|
 | **Q2** 工具面 v1 冻结 | ✅ 收口 | `TOOL-SURFACE-V1.json`（9 面 × 45 action）+ `accept-tool-surface` + `accept-cad-all-surfaces`（元数据派生，非字面量） |
 | **Q1** token 预算 | ⬜ 已实现·未签收 | `accept-token-budget`（固定前缀 5,930 chars ≈ 1,483 tok）+ `experiments/20261127_0.2.0_token.md`；**缺 3 任务 A/B**（需真会话） |
-| **U20** 剖切（沿视角 + 深度）+ 封盖 | ✅ 收口 | 模式＝轴切 / **沿视角**（点「剖切」时按当前屏幕取面，剖切中旋转切面固定，关掉再开按新视角重取；默认切掉近侧一半，剖面正对用户；角度滑块已删）；`accept:section-cap-area`（独立面积判据 + 立方体自测 + **质心**）对探针 2 件 + 语料 4 件 × 4 法向 × 9 深度**全 0.00%**；封盖平移缺陷已修（镜筒 33mm 偏移，新增质心/包围盒判据）；`accept-ui section-free`（24 项）；**缺你的目视签收** |
+| **U20** 剖切（沿视角 + 深度）+ 封盖 | ✅ 收口 | 模式＝轴切 / **沿视角**（点「剖切」时按当前屏幕取面，剖切中旋转切面固定，关掉再开按新视角重取；默认切掉近侧一半，剖面正对用户；角度滑块已删）；`accept:section-cap-area`（独立面积判据 + 立方体自测 + **质心**）对探针 2 件 + 语料 4 件 × 4 法向 × 9 深度**全 0.00%**；封盖平移缺陷已修（镜筒 33mm 偏移，新增质心/包围盒判据）；`accept-ui section-free`（24 项）；维护者 2026-11-27 目视确认 |
 | **U21** 大网格进度 + WebGL 恢复 | ⬜ 已实现·未签收 | `accept-stream-progress`（17 项）+ `accept-ui webgl-recover` + **百万面实测**：999,698 tri / 47.7 MB，传输 188 ms、解析 82 ms、首帧 74 ms、稳态 63.9 ms/帧（`accept-ui big-mesh`）；**缺真机切标签页** |
 | **U12** 装配逐件显隐/隔离/高亮 | ✅ 收口 | `accept-ui assembly-hide`（11 项） |
 | **U11** 视口导航 | ✅ 收口 | `accept-ui views`（13 项）+ `accept-viewport-orbit`（视图数学 +14） |
@@ -37,9 +37,9 @@
 
 - **测量四族**（U15）：距离 / 三点角度（量中间点）/ 剖面面积 / 孔径（Ø 等效直径），测量条目可改名、
   可删除、随截图说明带走；
-- **视口导航**（U11）：等轴/顶/前/右 + 六向轴吸附、透视↔正交、Home；
+- **视口导航**（U11）：「视图」菜单给前/后/左/右/顶/底 + 等轴，透视↔正交，复原/Home；
 - **装配逐件显隐/隔离/高亮**（U12）；
-- **剖切（沿视角 + 深度）+ 封盖**（U20，partial：差目视签收）；
+- **剖切（沿视角 + 深度）+ 封盖**（U20，已收口）；
 - **审计视图**（U19）：机器页一问"哪一步没跑"，按判定分序列出，点行跳到对应的 run/version。
 
 ### 2.2 长任务不再"看起来卡死"
@@ -77,7 +77,7 @@
    让 scratch 可写；不设时相关脚本会 SKIP 并打印原因，不会假绿。
 3. **Q1 的 3 任务 A/B 未做**：固定前缀 5,930 chars（≈1,483 tok）已比 45 个 legacy 工具的
    104,675 chars 降 94.3%，但"端到端 token 降 20%"还缺实测。
-4. **U20/U21 需要真机签收**：斜切管道目视、切标签页（WebGL 真实丢失）。
+4. **U21 需要真机签收**：切标签页（WebGL 真实丢失）。U20 的目视签收已于 2026-11-27 完成。
 
 ---
 
@@ -115,9 +115,9 @@ npm stage publish               # staged 之后用手机 npmjs.com → Staged Pa
 > **上一版的经验**：现有 token 只有 `package:write`，`stage approve` 会 404，直发 E409；
 > **遇到 staged 阻塞，先提示"可以用手机 npmjs.com → Staged Packages 批准"，不要先改版本号。**
 
-**发布前三项签收**：U20 目视、U21 真机、Q1 的 A/B 只能由人做，步骤与判定标准见
-[CHECKLIST-preview.1-signoff.md](CHECKLIST-preview.1-signoff.md)；三项通过后把本文件 §1 的
-partial 改成已收口，再打 tag。
+**发布前两项签收**：U21 真机、Q1 的 A/B 只能由人做，步骤与判定标准见
+[CHECKLIST-preview.1-signoff.md](CHECKLIST-preview.1-signoff.md)；两项通过后把本文件 §1 的
+对应行改成已收口，再打 tag。
 
 **运行 `accept:release` 的前置**：`~/.dsh`（runtime scratch）必须可写。受限沙箱里 cascadio 无法
 写出中间 GLB，会报成 "OpenCASCADE produced no geometry" —— 那是**环境**，不是夹具坏。可把它指到

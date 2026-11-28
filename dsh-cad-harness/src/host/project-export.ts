@@ -347,7 +347,7 @@ export function buildAssemblyStl(plan: ProjectExportPlan): Uint8Array {
 /** Human-readable cover sheet inside the ZIP: units, revision policy, omissions. */
 export function projectExportReadme(plan: ProjectExportPlan): string {
   const lines: string[] = [
-    'ToyMarker 项目导出',
+    '营造 项目导出',
     `项目：${plan.title}`,
     `目录：${plan.project}`,
     `导出时间：${new Date().toISOString()}`,

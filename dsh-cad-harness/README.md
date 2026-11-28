@@ -42,19 +42,20 @@ does not appear at all — no error, just a missing mode. `npx dsh-cad-doctor` r
 - BOSL2 optional, under `lib/BOSL2/` in the source checkout
 - Python runtime is provisioned on first use (about 400 MB)
 
-## What's new in 0.1.2-preview.1
+## What's new in 0.2.0-preview.1 (unreleased)
 
-- `generate` takes `dryRun` (compile + measure, save nothing) and `preflight` (save only watertight single-body meshes).
-- `cad_check` `sweep` screens a declared joint range before a motion run; revolute joints can declare `overlapEnvelope` / `fit`; motion supports a `gear` ratio.
-- Print overhang is a support cost reported as a finding; only a process profile with `overhangDeg.hard: true` lowers the verdict.
-- Heat-map layers (fused / thickness / overhang / von Mises) and a host-following light/dark theme.
-- New sewing-rotary-hook and 3-speed-derailleur examples (each with a CadQuery variant); older examples move to the history index without being deleted.
-- Full notes and known issues: `docs/dev/RELEASE-NOTES-0.1.2.md` in the source repository.
+- **Measurement**: distance, three-point angle, section area and hole diameter, with a renameable/deletable measurement history that travels with the screenshot.
+- **Viewport**: one 「View」 menu with front/back/left/right/top/bottom + iso, perspective↔orthographic, restore/Home; per-part hide/isolate/highlight.
+- **Checks**: `run.json` records the request, so manufacturing/assembly can re-run and stress can replay on the current version; missing inputs are refused by name.
+- **Fluid**: the flow axis follows the cavity; long runs show progress and can be cancelled; plaster/outside particles are pushed back (penetration 7,098→0).
+- **Delivery**: audit view in the panel, BOM CSV export, and the risk-annotated export gate.
+- `generate` still takes `dryRun` / `preflight`; `cad_check` `sweep` screens a joint range before a motion run; motion supports a `gear` ratio.
+- Full notes, evidence and known issues: `docs/dev/RELEASE-NOTES-0.2.0-preview.1.md` in the source repository.
 
 ## Documentation
 
 The user guide, Agent reference, and maintainer notes live in the source
-repository under `docs/` (`docs/user/`, `docs/llm/`, `docs/dev/`). This tarball
+repository under `docs/` (`docs/user/`, `docs/llm/`, `docs/dev/`). This package
 keeps the package-local `docs/` (tool contracts) so the bundle is inspectable.
 
 ## License
