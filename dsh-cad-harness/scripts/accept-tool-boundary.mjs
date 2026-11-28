@@ -38,6 +38,8 @@ process.env.DSH_HOME = HOME;
 if (!process.env.DSH_CAD_PYTHON_ROOT) {
   process.env.DSH_CAD_PYTHON_ROOT = join(ORIGINAL_DSH_HOME?.trim() || join(homedir(), '.dsh'), 'cad', 'runtime');
 }
+// This file tests surface wiring, not the pre-work gate; accept-brief-gate owns that.
+process.env.DSH_CAD_BRIEF_GATE = 'off';
 const workspace = join(HOME, 'workspace');
 mkdirSync(workspace, { recursive: true });
 

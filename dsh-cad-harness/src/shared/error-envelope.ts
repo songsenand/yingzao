@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'network'
   | 'backend-not-available'
   | 'invalid-input'
+  | 'brief-gate'
   | 'export-blocked'
   | 'tool-failed';
 
@@ -29,6 +30,7 @@ const HINTS: Record<ErrorCode, string> = {
   network: 'check network/proxy or the configured mirror, then retry',
   'backend-not-available': 'run npx dsh-cad-backend --show and select an available kernel',
   'invalid-input': 'read the parameter name/type in the error; the tool did not run',
+  'brief-gate': 'write the kickoff brief first (cad_assembly({ action: "write" })); the tool did not run',
   'export-blocked': 'run cad_deliver({ action: "audit" }) or cad_deliver({ action: "preflight" }), or confirm the export with a reason',
   'tool-failed': 'read cause; if it repeats, include dsh-cad-doctor --json in the report',
 };
@@ -71,6 +73,7 @@ export function classifyError(error: unknown, stage: string): ErrorEnvelope {
     : /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|network|TLS|SSL|certificate/i.test(cause) ? 'network'
     : /backend_not_available/i.test(cause) ? 'backend-not-available'
     : /export-blocked/i.test(cause) ? 'export-blocked'
+    : /BOM gate/i.test(cause) ? 'brief-gate'
     : /invalid|expected|unknown argument|missing .* required|bad request/i.test(cause) ? 'invalid-input'
     : 'tool-failed';
   return { code, stage, hint: HINTS[code], cause, message: cause };

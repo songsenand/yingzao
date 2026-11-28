@@ -98,6 +98,8 @@ from the inline list alone. When an endpoint resolves only against the version, 
 - **processes**：用户允许的工艺**集合**（可多选：FDM / 钣金 / CNC / 注塑）。用户给集合，**你**按零件选，并在每个零件的 `process` 里写明谁定的（沿用 `process.source`）；
 - **verify**：这个交付物“能用”指什么——装配 / 运动 / 强度。它决定交付必须带哪些 run。
 
+这条现在是**硬前置**（2026-11-28）：session 绑定的 `cad_part`、`cad_check`、`cad_simulate`、`cad_assembly`（`write`/`info` 除外）在 `brief` 缺 `processes` / `verify` / `buyVsMake` 时会报 `BOM gate` 并拒绝执行。创建 brief 的 `cad_assembly write`、只读的 `cad_inspect`/`cad_see`、`cad_session` 和 `cad_python` 放行；紧急开关 `DSH_CAD_BRIEF_GATE=off`。
+
 每条带 `by: "user"` 或 `by: "assumed"`。`cad_deliver` (`action: "audit"`) 会把 `assumed` 的逐条列出来（`info`）——**没问过的假设就是交付偏离 brief 的方式**。
 
 **零件颜色**：根节点每个 child 可以带 `color`（`#rrggbb`）。它是**沟通标签**，不是材料/表面/规格：

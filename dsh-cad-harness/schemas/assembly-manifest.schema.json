@@ -181,7 +181,7 @@
         "brief": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Kickoff alignment, recorded BEFORE modelling: what was decided with the user and what the agent assumed. `by=assumed` means nobody confirmed it — delivery_audit prints those entries so a human can see who decided what. Not a gate.",
+          "description": "Kickoff alignment, recorded BEFORE modelling: what was decided with the user and what the agent assumed. `by=assumed` means nobody confirmed it — delivery_audit prints those entries so a human can see who decided what. REQUIRED by the pre-work gate: a session-bound design/evidence tool is refused until processes (non-empty), verify (non-empty) and buyVsMake (array) are present. cad_assembly write/info, cad_inspect, cad_see and cad_session are exempt.",
           "properties": {
             "buyVsMake": {
               "type": "array",

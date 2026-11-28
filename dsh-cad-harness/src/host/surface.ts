@@ -10,6 +10,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { argError } from './arg-error.ts';
 import { callableProse } from './legacy-route.ts';
+import { assertBriefReady, briefGateApplies } from './brief-gate.ts';
 
 export interface SurfaceMeta {
   /** Future surface id, e.g. "cad_inspect". */
@@ -267,6 +268,11 @@ export function buildSurface(spec: SurfaceSpec, tools: ReadonlyMap<string, Legac
           { received: action, example: `${spec.name}({ action: "catalog" })` },
         );
       }
+      // Pre-work gate: design/evidence tools need a complete kickoff brief. The
+      // tools that CREATE the brief (cad_assembly write/info) and reads are exempt;
+      // see brief-gate.ts. An unbound session is skipped so the tool's own
+      // "select a project" message stays the first thing the caller sees.
+      if (briefGateApplies(spec.name, action)) await assertBriefReady(exec);
       const tool = tools.get(entry.tool);
       if (typeof tool?.execute !== 'function') {
         throw new Error(`${spec.name}: legacy tool "${entry.tool}" has no execute()`);
