@@ -15,7 +15,7 @@
 //
 //   node scripts/accept-check-rerun.mjs
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,8 +31,40 @@ const check = (ok, label, detail = '') => {
 };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..');
-const SAMPLE_STL = join(REPO, 'examples', 'microscope5', 'cad-data', 'versions', 'v005', 'model.stl');
+
+// A closed 10 mm cube as BINARY STL. Generated here on purpose: the old fixture
+// pointed at examples/microscope5/cad-data/, which is gitignored, so a clean CI
+// checkout has no file and the suite died before it could test the route.
+function cubeStl(size = 10) {
+  const v = [
+    [0, 0, 0], [size, 0, 0], [size, size, 0], [0, size, 0],
+    [0, 0, size], [size, 0, size], [size, size, size], [0, size, size],
+  ];
+  const faces = [
+    [0, 3, 2], [0, 2, 1], // z-
+    [4, 5, 6], [4, 6, 7], // z+
+    [0, 1, 5], [0, 5, 4], // y-
+    [3, 7, 6], [3, 6, 2], // y+
+    [0, 4, 7], [0, 7, 3], // x-
+    [1, 2, 6], [1, 6, 5], // x+
+  ];
+  const buf = Buffer.alloc(84 + faces.length * 50);
+  buf.write('cube', 0, 'ascii');
+  buf.writeUInt32LE(faces.length, 80);
+  faces.forEach((face, i) => {
+    const [a, b, c] = face.map((index) => v[index]);
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const off = 84 + i * 50;
+    for (let k = 0; k < 3; k++) buf.writeFloatLE(n[k], off + k * 4);
+    face.forEach((index, corner) => {
+      for (let k = 0; k < 3; k++) buf.writeFloatLE(v[index][k], off + 12 + corner * 12 + k * 4);
+    });
+    buf.writeUInt16LE(0, off + 48);
+  });
+  return buf;
+}
 
 console.log('check re-run acceptance\n');
 
@@ -132,7 +164,7 @@ console.log('check re-run acceptance\n');
   const root = mkdtempSync(join(tmpdir(), 'cad-rerun-'));
   const data = join(root, 'cad-data');
   mkdirSync(join(data, 'versions', 'v001'), { recursive: true });
-  copyFileSync(SAMPLE_STL, join(data, 'versions', 'v001', 'model.stl'));
+  writeFileSync(join(data, 'versions', 'v001', 'model.stl'), cubeStl());
   writeFileSync(join(data, 'versions', 'v001', 'meta.json'), JSON.stringify({
     schemaVersion: 1, id: 'v001', partId: 'p001', timestamp: new Date().toISOString(),
     backend: 'openscad', status: 'ok', userIntent: 'fixture for U14', artifacts: { stl: 'model.stl' },
