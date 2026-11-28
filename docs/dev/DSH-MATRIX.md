@@ -1,11 +1,11 @@
 # DSH 版本矩阵（本地）
 
-最后完整运行：**2026-11-25** · Linux x64 · `node:22-bookworm` · kern 0.56.0 · 插件 `0.1.1-preview.1`
+最后完整运行：**2026-11-28** · Linux x64 · `node:22-bookworm` · kern 0.56.0 · 插件 `0.2.0-preview.1`
 
-> **0.1.2-preview.1 的状态（2026-11-25）**：预设与 `doctor` 的 `preset-standard-drift` 已通过；
-> **13 版全矩阵尚未用 0.1.2-preview.1 重跑**——当前开发沙箱无法启动 kern（无 systemd 用户总线），
-> 需在普通终端重跑或等 tag CI。下表是 0.1.1-preview.1 的实测；引擎与预设机制未变，但
-> **不要把它当作 0.1.2-preview.1 的证据**。重跑后把首行的插件版本与下表一起更新。
+> **0.2.0-preview.1 的状态（2026-11-28）**：13 版全矩阵已用当前插件在 kern 里重跑；
+> **12 PASS + 1 BLOCKED，整体 exit 0**。唯一 BLOCKED 仍是 `0.2.3-alpha.1` 的上游启动失败，
+> 与插件无关。上次 `0.1.1-preview.1` 的运行保留在 git 历史与本机 `.tmp-matrix/sweep-all/`，
+> 本次原始结果在 `.tmp-matrix/sweep-current/2026-11-28T09-16-25-014Z.{json,md}`（均 gitignored）。
 
 支持范围以 `dsh-cad-harness/package.json` 的 `engines.dsh` 为准：`>=0.2.1-rc.2 <0.3.0`。
 DSH 的插件管理器用 `semver.satisfies(..., { includePrerelease: true })` 判定，因此 0.2.x 中满足该范围的共 **13 个版本**；本表覆盖全部 13 个。
@@ -78,7 +78,8 @@ node scripts/accept-dsh-matrix.mjs --versions \
 ```
 
 首次运行会把每个版本装进命名卷，单版约 1.2 GB；之后每版约 61–62 秒。完整 13 版约
-11 GB。结果写到 `verification/dsh-matrix/`（已 gitignore）。
+11 GB。默认结果写到 `verification/dsh-matrix/`（已 gitignore）；本次为便于对照写到
+`.tmp-matrix/sweep-current/`（同样 gitignore）。
 
 ## 结论
 

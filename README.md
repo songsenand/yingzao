@@ -268,7 +268,7 @@ node scripts/verify.mjs /path/to/project --advisory
 ### DSH 版本兼容（本地容器矩阵）
 
 支持的 DSH 范围写在 `dsh-cad-harness/package.json` 的 `engines.dsh`：
-`>=0.2.1-rc.2 <0.3.0`。范围内 13 个版本已逐个实测（矩阵证据对应 `0.1.1-preview.1`，`0.1.2` / `0.2.0` 尚未重跑，见 [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)），可以直接照下表挑版本：
+`>=0.2.1-rc.2 <0.3.0`。范围内 13 个版本已用 **0.2.0-preview.1** 在 kern 容器里逐个实测（2026-11-28，12 PASS + 1 上游阻塞，见 [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)），可以直接照下表挑版本：
 
 | 状态 | DSH 版本 |
 |---|---|

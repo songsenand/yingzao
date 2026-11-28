@@ -257,9 +257,9 @@ node scripts/verify.mjs /path/to/project --advisory
 
 The supported DSH range is declared in `dsh-cad-harness/package.json` under
 `engines.dsh`: `>=0.2.1-rc.2 <0.3.0`. All 13 versions inside that range have been
-tested one by one (the matrix evidence is from `0.1.1-preview.1`; `0.1.2` / `0.2.0`
-have not been re-run, see [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)), so you can pick
-from this table directly:
+tested one by one with **0.2.0-preview.1** in kern containers (2026-11-28: 12 PASS +
+1 upstream block, see [DSH-MATRIX.md](docs/dev/DSH-MATRIX.md)), so you can pick from
+this table directly:
 
 | Status | DSH version |
 |---|---|
