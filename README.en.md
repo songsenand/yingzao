@@ -209,7 +209,7 @@ The panel gives you:
 
 - **Version history**: `v001`, `v002`, … every generation/modification is an immutable version; open, compare, pin, revisit.
 - **3D viewport**: orbit, zoom and pan, with bounding-box numbers.
-- **Whole-machine preview**: assembles the manifest's part@version nodes directly (no run needed); an **exploded view** slider moves parts outward from the assembly centre.
+- **Whole-machine preview**: assembles the manifest's part@version nodes directly (no run needed), **in the same viewport** — no dialog; an **exploded view** slider moves parts outward from the assembly centre. The viewport's **Explode** chip opens it already exploded, and **← Part** returns.
 - **Measure and annotate**: two-point distance, wall thickness, section cuts, red-box annotations, and send the annotation back to the session.
 - **Run playback**: motion, rigid-body and fluid timelines; pause on a frame.
 - **Verification state**: assembly checks, printability and delivery audit results, including "needs review".

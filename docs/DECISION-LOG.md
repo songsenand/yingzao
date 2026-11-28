@@ -7374,3 +7374,53 @@ UI 需要大改，最好在放在 0.3 发布版里面"）；TODO §0 的 0.3 线
 **影响：** `docs/dev/TODO.md`（新增 0.3 线说明与 U25，P1/planned）；`docs/dev/RELEASE-0.2.0.md`
 的 0.3 候选（G1/G2/E1）今后与 U25 并列；0.2.x 的任何 UI 改动都要先回答"这是门禁/正确性必需，
 还是可以等 0.3"。DESIGN 暂无新方案，故不新增设计条目；方案落地时再进 DESIGN。
+
+## 2026-11-28：爆炸视图在视口里就地展开（不弹窗），入口一颗「整机爆炸」
+
+**触发条件：** 第 1 条（用户拍板）。
+
+**要解决的问题：** 爆炸视图 2026-11-26 已落地（装配运行视口 + 整机预览），但入口只挂在
+「整机」页的「整机预览」按钮上：人在零件页看模型时想拉爆炸，要先离开当前视口、进整机页、
+点预览、再点「爆炸」——三步里两步是找入口。用户原话："入口太深：要进『整机』页再点
+『整机预览』才看到"。同一轮用户先误报"一个开关 + 滑块，不是直接拖"也不喜欢，随即更正为
+"我要的就是开关 + 滑块的形式"，因此**控件形态不动**，只改入口与呈现方式。
+
+**决策内容：**
+1. **整机视图是视口的一个模式，不是弹窗。** 第一版按"入口"做成了模态浮层（1100px 居中），
+   用户当场否决："为啥不能直接在视口里面显示？而是单独搞一个弹窗？"。于是改成：整机视图
+   渲染在**同一个 stage 容器**里（`position:absolute; inset:0`，`data-machine-stage`），与
+   零件共用同一块视口、同一套底部 transport；关掉就是「← 零件」或 `Esc`。弹窗代码删除。
+2. **入口一颗胶囊。** 零件/运行视口右上控件列（视图/背景/对比 之下）的「整机爆炸」，仅当
+   项目有装配清单且至少一个节点钉了版本时出现；点它直接进入整机模式并**已经拉开**。
+   整机页的「整机预览」走同一个模式，以装配位姿进入。两条入口共用同一个 `PartsPreview`
+   （一个加载器、一套爆炸几何），`initialExplode` 只是初值。
+3. **进来以后零件页的 chrome 让位。** 视角/背景/对比/工具列（截图、标注、测量…）都作用于
+   零件相机或零件网格，整机模式下不渲染；整机自己的控件是底部 transport（爆炸开关 + 滑块、
+   截图、存图、← 零件）与可折叠的零件列表。
+4. **窄视口要能看清。** 380px 栏里 stage 只有约 355×264：零件列表改为可折叠（窄视口默认
+   收起，一行「零件（16）▸」）；爆炸取景改为按**当前百分比**的实际包围盒做锥体拟合
+   （`fitBoxDistance`：八个角点投影，不是球），并随滑块重取景——否则 60% 的爆炸图只占
+   视口三分之一，滑块再往上推还会被裁掉。
+
+**理由：** 用户要的是"在视口里看到爆炸的整机"，不是一个更大的窗口。模式化之后没有第二套
+坐标/尺寸/关闭语义，也不会盖住会话；顺带把整机页那颗按钮也收进同一块视口，两条路径不再
+是两个界面。控件形态（开关 + 滑块）按用户更正保持不变。
+
+**依据：** 用户 2026-11-28 两轮原话（上引）。证伪方式：
+`node scripts/accept-ui.mjs explode-entry`（零件页点胶囊 → `[data-machine-stage]` 必须
+`closest('[data-stage]')` 成立、`position!=='fixed'`、页面上没有模态；第一帧就有
+`[data-explode-range]`；关掉爆炸后零件位置变化且滑块消失；「← 零件」恢复零件视口）；
+`accept-ui machine`（整机页按钮同样进 stage、`← 零件` 收回）；`accept-ui assembly-hide`
+（U12 显隐/隔离/高亮在整机模式内仍成立）；`accept-explode` 9/9；`accept-ui-i18n`、
+`accept-tokens`、`npm run typecheck`、`npm run build` 通过。视觉证据
+`sandbox/shots/machine-inline-380.png`（380 栏：整机在视口内已拉开、底部 transport、
+可折叠零件列表）、`sandbox/shots/explode-chip-380.png`（胶囊位置）。
+
+**影响：** `src/client/panel.ts`（`machineStage*` 状态与 stage 内联渲染、删掉模态、gating、
+`data-stage`/`data-machine-stage`/`data-machine-stage-close`）、`src/client/playback.ts`
+（`initialExplode`、`frameBox` 取景、按百分比重取景、`data-explode-*`、可折叠图例、
+`fitBoxDistance`）、`src/client/fit.ts`（新增 `fitBoxDistance`）、`src/client/i18n.ts`
+（`ui.machine.explodeChip*`、`ui.machine.backToPart*`、`ui.parts.collapse/expandTitle`）、
+`sandbox/preview/entry.tsx`（`explode-entry`、`machine-capture`、machine/assembly-hide
+断言改到 stage；`machine=1` 截图参数）、`scripts/accept-ui.mjs`、`README(.en).md`、
+`DESIGN.md` §40 与 §12.2。控件形态与爆炸几何（`explode.ts`）不变。

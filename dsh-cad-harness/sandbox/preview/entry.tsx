@@ -346,6 +346,24 @@ if (q.get('viewmenu') === '1') {
   };
   setTimeout(tick, 1200);
 }
+// ?machine=1 — open the in-viewport machine view (the 整机爆炸 chip) as soon as it
+// exists. A fixed-time click races the part/mesh load, so wait for the chip the
+// same way viewmenu=1 waits for its button. Capture with `freezeat=` late enough
+// that the machine's canvas is the frozen one, not the part's.
+if (q.get('machine') === '1') {
+  const started = performance.now();
+  const tick = () => {
+    // Re-click while the view is closed: the panel may still be resolving the
+    // part the chip belongs to, and an early click must not be lost.
+    const open = Boolean(document.querySelector('[data-machine-stage]'));
+    const chip = document.querySelector('[data-machine-explode]') as HTMLElement | null;
+    if (!open && chip) chip.click();
+    // Keep polling even while open: a scripted subject switch may close it right
+    // after the first click, and the capture wants the settled state.
+    if (performance.now() - started < 20000) setTimeout(tick, 300);
+  };
+  setTimeout(tick, 1200);
+}
 // `open` accepts a comma-separated sequence: `open=参数,⤢` clicks the tab, then
 // expands it into the overlay.
 if (openParam) {
@@ -1508,29 +1526,34 @@ if (q.get('assert') === 'machine') {
     ];
     pre.textContent = lines.join('\n');
   }, 3000);
-  // The whole-machine 3D preview is a separate surface from the run viewer:
-  // click 整机预览, assert the overlay is up and its close button tears it down.
-  // (Headless may have no WebGL; the overlay still has to exist and be closable.)
+  // The whole-machine 3D view is a MODE of the stage, not a separate surface:
+  // click 整机预览, assert it fills THIS viewport (inside [data-stage], not a fixed
+  // dialog) and its 「← 零件」 button hands the stage back.
+  // (Headless may have no WebGL; the stage view still has to exist and be closable.)
   setTimeout(() => {
     (document.querySelector('[data-machine-preview]') as HTMLElement | null)?.click();
   }, 3400);
   setTimeout(() => {
-    const overlay = document.querySelector('[data-machine-preview-overlay]');
-    const close = document.querySelector('[data-machine-preview-close]') as HTMLElement | null;
-    const before = Boolean(overlay);
-    const header = (overlay?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const view = document.querySelector('[data-machine-stage]') as HTMLElement | null;
+    const close = document.querySelector('[data-machine-stage-close]') as HTMLElement | null;
+    const before = Boolean(view);
+    const inStage = Boolean(view && view.closest('[data-stage]'));
+    const fixed = view ? getComputedStyle(view).position === 'fixed' : false;
+    const header = (view?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
     close?.click();
     setTimeout(() => {
-      const gone = !document.querySelector('[data-machine-preview-overlay]');
+      const gone = !document.querySelector('[data-machine-stage]');
       const pre = document.querySelector('#stage pre');
       if (pre) {
         pre.textContent += '\n' + [
-          `${before ? 'PASS' : 'FAIL'}  machine preview overlay opens`,
-          `${gone ? 'PASS' : 'FAIL'}  machine preview overlay closes`,
-          `INFO  preview header: ${header || '(none)'}`,
+          `${before ? 'PASS' : 'FAIL'}  the machine view opens`,
+          `${inStage ? 'PASS' : 'FAIL'}  it renders inside the viewport box (not beside it)`,
+          `${!fixed ? 'PASS' : 'FAIL'}  it is not a fixed dialog`,
+          `${gone ? 'PASS' : 'FAIL'}  「← 零件」 hands the stage back`,
+          `INFO  machine view text: ${header || '(none)'}`,
         ].join('\n');
       }
-    }, 500);
+    }, 600);
   }, 3900);
 }
 
@@ -2280,13 +2303,13 @@ if (q.get('assert') === 'assembly-hide') {
     (document.querySelector('[data-machine-preview]') as HTMLElement).click();
     const legend = await waitFor(() => Boolean(document.querySelector('[data-parts-legend]')), 25000);
     const handle = () => {
-      for (const node of Array.from(document.querySelectorAll('[data-machine-preview-overlay] div'))) {
+      for (const node of Array.from(document.querySelectorAll('[data-machine-stage] div'))) {
         const parts = (node as any).__parts;
         if (parts) return parts;
       }
       return null;
     };
-    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 30000);
+    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 25000);
     lines.push(`${legend ? 'PASS' : 'FAIL'}  the preview lists its parts`);
     if (!ready) { lines.push('FAIL  the part scene never became ready'); show(); return; }
     const parts = handle();
@@ -2306,7 +2329,7 @@ if (q.get('assert') === 'assembly-hide') {
 
     // 2. explode the remainder
     const posBefore = JSON.stringify(handle().positions());
-    const explodeBtn = Array.from(document.querySelectorAll('[data-machine-preview-overlay] button'))
+    const explodeBtn = Array.from(document.querySelectorAll('[data-machine-stage] button'))
       .find((b) => /爆炸|Explode/i.test(b.textContent ?? '')) as HTMLElement | undefined;
     explodeBtn?.click();
     const exploded = await waitFor(() => JSON.stringify(handle().positions()) !== posBefore, 5000);
@@ -2331,6 +2354,129 @@ if (q.get('assert') === 'assembly-hide') {
     (document.querySelector('[data-parts-clear]') as HTMLElement | null)?.click();
     const cleared = await waitFor(() => handle().visible() === count, 5000);
     lines.push(`${cleared ? 'PASS' : 'FAIL'}  看全部 brings every part back (${handle().visible()}/${count})`);
+    show();
+  })();
+}
+
+// ?assert=explode-entry — the exploded view is ONE click from the viewport you
+// are already looking at. Two complaints shaped this:
+//
+//   1. it was reachable only through 整机 → 整机预览, two navigations away from
+//      the part you are inspecting;
+//   2. opening that preview left explode OFF, so "看爆炸" still needed a click
+//      in the overlay.
+//
+// So the entry chip lives on the part/run viewport, and it opens the shared
+// overlay ALREADY exploded. Asserted as DOM + scene facts, not a picture: the
+// chip is outside the machine page, the slider is present on the FIRST frame
+// after one click, and the toggle really moves parts back (the preset did not
+// latch the state).
+if (q.get('assert') === 'explode-entry') {
+  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`explode entry from the viewport (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    const view = () => document.querySelector('[data-machine-stage]') as HTMLElement | null;
+    const chip = await waitFor(() => Boolean(document.querySelector('[data-machine-explode]')), 12000);
+    lines.push(`${chip ? 'PASS' : 'FAIL'}  the part viewport carries a 整机爆炸 chip`);
+    // The old route started on 整机; this assert starts on a PART page (that is
+    // how the scenario is launched), so the chip existing here is the claim.
+    lines.push(`${!document.querySelector('[data-machine-preview]') ? 'PASS' : 'FAIL'}  the chip is not the machine page's 整机预览 button`);
+    if (!chip) { show(); return; }
+    (document.querySelector('[data-machine-explode]') as HTMLElement).click();
+    const opened = await waitFor(() => Boolean(view()), 8000);
+    lines.push(`${opened ? 'PASS' : 'FAIL'}  one click puts the machine in this viewport`);
+    // It must be the SAME box the part occupied — the complaint was the dialog,
+    // not the distance. A fixed-position element would be the dialog coming back.
+    const inStage = Boolean(view()?.closest('[data-stage]'));
+    const fixed = view() ? getComputedStyle(view()!).position === 'fixed' : false;
+    const dialog = Boolean(document.querySelector('[data-machine-preview-overlay]'));
+    lines.push(`${inStage ? 'PASS' : 'FAIL'}  it renders inside the viewport box`);
+    lines.push(`${!fixed && !dialog ? 'PASS' : 'FAIL'}  no dialog appears (fixed=${fixed}, modal=${dialog})`);
+    // No second click: the slider belongs to the exploded state, so its presence
+    // on the first frame after opening IS the preset.
+    const slider = await waitFor(() => Boolean(document.querySelector('[data-explode-range]')), 8000);
+    const pctText = document.querySelector('[data-explode-pct]')?.textContent ?? '';
+    lines.push(`${slider ? 'PASS' : 'FAIL'}  it opens ALREADY exploded (slider present, ${JSON.stringify(pctText)})`);
+    const handle = () => {
+      for (const node of Array.from(document.querySelectorAll('[data-machine-stage] div'))) {
+        const parts = (node as any).__parts;
+        if (parts) return parts;
+      }
+      return null;
+    };
+    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 25000);
+    if (!ready) { lines.push('FAIL  the part scene never became ready'); show(); return; }
+    const posExploded = JSON.stringify(handle().positions());
+    (document.querySelector('[data-explode-toggle]') as HTMLElement | null)?.click();
+    const back = await waitFor(() => JSON.stringify(handle().positions()) !== posExploded, 6000);
+    const sliderGone = await waitFor(() => !document.querySelector('[data-explode-range]'), 4000);
+    lines.push(`${back ? 'PASS' : 'FAIL'}  the view's own toggle moves the parts back (the preset did not latch)`);
+    lines.push(`${sliderGone ? 'PASS' : 'FAIL'}  turning explode off hides the slider`);
+    (document.querySelector('[data-machine-stage-close]') as HTMLElement | null)?.click();
+    const partBack = await waitFor(() => !document.querySelector('[data-machine-stage]'), 5000);
+    lines.push(`${partBack ? 'PASS' : 'FAIL'}  「← 零件」 hands the viewport back to the part`);
+    show();
+  })();
+}
+
+// ?assert=machine-capture — visual review of the INLINE machine view: open the
+// 整机爆炸 chip from a part page and STOP (no close), so the capture shows the
+// machine in the viewport instead of the part. Same click path a person uses.
+if (q.get('assert') === 'machine-capture') {
+  const waitFor = (fn: () => boolean, ms = 20000) => new Promise<boolean>((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      if (fn()) return resolve(true);
+      if (performance.now() - t0 > ms) return resolve(false);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+  void (async () => {
+    const lines: string[] = [`inline machine view (dock ${w}×${h})`];
+    const show = () => {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'font:12px/1.6 monospace;white-space:pre-wrap;color:#111;margin:12px;';
+      const stage = document.getElementById('stage');
+      if (stage) { stage.textContent = ''; stage.style.alignItems = 'flex-start'; stage.appendChild(pre); }
+      pre.textContent = lines.join('\n');
+    };
+    const chip = await waitFor(() => Boolean(document.querySelector('[data-machine-explode]')), 15000);
+    // Let the scripted part selection settle: clicking during that switch is a
+    // real navigation and the view would (correctly) close under us.
+    await new Promise((r) => setTimeout(r, 2500));
+    (document.querySelector('[data-machine-explode]') as HTMLElement | null)?.click();
+    const open = await waitFor(() => Boolean(document.querySelector('[data-machine-stage]')), 8000);
+    const handle = () => {
+      for (const node of Array.from(document.querySelectorAll('[data-machine-stage] div'))) {
+        const parts = (node as any).__parts;
+        if (parts) return parts;
+      }
+      return null;
+    };
+    const ready = await waitFor(() => Boolean(handle()?.count?.() > 0), 25000);
+    lines.push(`${chip ? 'PASS' : 'FAIL'}  the 整机爆炸 chip exists on the part page`);
+    lines.push(`${open ? 'PASS' : 'FAIL'}  the machine view opens in the stage (no dialog)`);
+    lines.push(`${ready ? 'PASS' : 'FAIL'}  its parts are loaded (${handle()?.count?.() ?? 0})`);
+    lines.push(`${handle()?.visible?.() === handle()?.count?.() ? 'PASS' : 'FAIL'}  every part is drawn`);
+    await new Promise((r) => setTimeout(r, 2500));
+    lines.push(`${document.querySelector('[data-machine-stage]') ? 'PASS' : 'FAIL'}  the view stays open (no late close)`);
+    lines.push(`INFO  chips visible: ${Array.from(document.querySelectorAll('[data-machine-explode]')).length}`);
     show();
   })();
 }

@@ -1570,7 +1570,7 @@ npm run setup
 | 装配清单 v2：介入分级 | `review: auto\|human` 字段（零件内变更自动、接口/端口变更必审），接版本 manifest status | 待办 |
 | 装配级版本图 | 装配 = 零件版本引用图（A@v3 + B@v7 → 装配 v12）；当前版本库仍是零件级。**拼接（按版本号布尔合成新件）依赖它** | 待办 |
 | 邻接/空间查询面 | 「谁碰到这个面」类查询 + 未声明接口发现已有雏形（`validate_assembly` 对账），需可查询化 | 部分 |
-| 装配视觉表达 | 部件显隐/高亮、剖切、爆炸视图、接口（datum）可视化标记；渲染图在复杂装配下判读退化，这是 LLM 与人共同的眼睛 | 待办 |
+| 装配视觉表达 | 部件显隐/高亮、剖切、爆炸视图、接口（datum）可视化标记；渲染图在复杂装配下判读退化，这是 LLM 与人共同的眼睛 | 部分完成：爆炸视图（视口一步入口，§40）、逐件显隐/隔离/高亮已落；datum 标记、任意剖切待办 |
 
 ### 12.3 待办（非主线）
 
@@ -4387,3 +4387,39 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
   "菜单页脚有 `data-view-home`"、方向点选后的相机方向、投影切换后位姿不变、复原把相机拉回。
   `sandbox/preview` 新增 `viewmenu=1`：等按钮出现再开菜单，给视觉复核用（`sandbox/shots/
   views-merged.png`、`views-corner.png`、`views-merged-380.png`）。
+
+## 40. 爆炸视图在视口里就地展开（不弹窗），入口一颗「整机爆炸」（2026-11-28）
+
+> 来源：用户在零件页找不到爆炸视图——入口只在「整机」页的「整机预览」里。第一版按"入口"
+> 补了一颗胶囊 + 模态浮层，用户当场否决："为啥不能直接在视口里面显示？而是单独搞一个弹窗？"
+> 取舍与证伪方式见 `docs/DECISION-LOG.md` 2026-11-28。
+
+**整机是视口的一个模式，不是弹窗。** `machineStage` 为真时，整机视图渲染在**同一个
+`S.stage` 容器**里（`position:absolute; inset:0; zIndex:6`，`data-machine-stage`），与零件
+共用同一块视口和底部 transport；`Esc` 或 transport 里的「← 零件」（`data-machine-stage-close`）
+回到零件。没有第二套窗口尺寸、没有遮罩、没有 zIndex 70 的 `position:fixed`。
+
+**入口。** 零件/运行视口**右上控件列**（视图 / 背景 / 对比 之下）一颗 `整机爆炸`
+（`data-machine-explode`）：仅当项目有 `assembly.json` 且至少一个节点钉了版本时出现——没有
+可解析的 part@version 就没有可爆炸的东西，不给死按钮。点它进入整机模式并**已经拉开**
+（默认 60%）；整机页的「整机预览」进入同一个模式、以装配位姿开始。两条入口共用同一个
+`PartsPreview`（一个加载器、一套爆炸几何），`initialExplode` 只是初值，transport 里的
+「爆炸」开关仍可关掉、滑块仍可拖。
+
+**进来后零件页让位。** 视角 / 背景 / 对比 / 整机爆炸胶囊、左上的工具列（截图、标注、测量、
+壁厚、剖切、热力图）、陈旧版本横幅、对比副视口都不渲染：它们作用于零件相机或零件网格，
+在整机视图上按了只会骗人。整机自己的控件只有底部 transport（爆炸 + 滑块、截图、存图、
+← 零件）和右上可折叠的零件列表。
+
+**窄视口。** 380px 栏里 stage 约 355×264。零件列表默认收起为一行「零件（16）▸」
+（`data-parts-toggle`），点开才是逐件显隐/隔离/高亮。爆炸取景不用球：`fitBoxDistance`
+把**当前百分比**下所有零件包围盒并集（`rec.box` 平移 `dir·span·f`）的八个角点投影到相机
+视锥，取所需距离 ×1.06；滑块每动一步就重取景。原先按"外端球拟合"取景，60% 的爆炸图只占
+视口三分之一，滑块再往上推还会被裁掉。
+
+**可测。** `node scripts/accept-ui.mjs explode-entry`：零件页存在胶囊；点它 → `[data-machine-stage]`
+必须 `.closest('[data-stage]')` 成立、`position !== 'fixed'`、页面上没有模态；第一帧就有
+`[data-explode-range]`（打开即拉开）；关掉爆炸后零件位置变化且滑块消失；「← 零件」恢复零件
+视口。`accept-ui machine` 验证整机页按钮同样进 stage、`← 零件` 收回；`accept-ui
+assembly-hide` 验证 U12 显隐/隔离/高亮在整机模式内仍成立。视觉证据
+`sandbox/shots/machine-inline-380.png`、`sandbox/shots/explode-chip-380.png`。

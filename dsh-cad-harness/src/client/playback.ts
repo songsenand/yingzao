@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { createFreeOrbit, type FreeOrbitControls } from './free-orbit';
 import { ViewportOverlay, type OverlayScene } from './overlay';
-import { fitDistance } from './fit';
+import { fitBoxDistance, fitDistance } from './fit';
 import { attachStudioLights, configureStudioRenderer } from './lighting';
 import { withProject } from './project';
 import { placementEuler } from './placement';
@@ -38,6 +38,8 @@ interface SceneHandle {
   refit: () => void;
   /** Re-frame to a box, optionally keeping the user's current view direction. */
   frame: (center: THREE.Vector3, radius: number, keepDirection?: boolean) => void;
+  /** Re-frame to a BOX (tight: corners, not a sphere), same direction rule. */
+  frameBox: (box: THREE.Box3, keepDirection?: boolean) => void;
   /** Scene bounds captured after the meshes were built (world mm). */
   bounds: THREE.Box3 | null;
   setBounds: (box: THREE.Box3) => void;
@@ -136,6 +138,24 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     controls.update();
   };
   const fit = (center: THREE.Vector3, radius: number) => frame(center, radius, false);
+  const frameBox = (box: THREE.Box3, keepDirection = false) => {
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+    lastFit = { center: center.clone(), radius: Math.max(radius, 1) };
+    const dir = keepDirection
+      ? camera.position.clone().sub(controls.target).normalize()
+      : VIEW_DIR.clone();
+    if (!Number.isFinite(dir.x) || dir.lengthSq() < 1e-9) dir.copy(VIEW_DIR);
+    // 6% margin: a corner exactly on the edge reads as a clipped part.
+    const distance = fitBoxDistance(camera, box, dir) * 1.06;
+    controls.target.copy(center);
+    camera.up.set(0, 1, 0);
+    camera.position.copy(center).addScaledVector(dir, Math.max(distance, 1));
+    controls.minDistance = Math.max(radius, 1) * 0.2;
+    controls.maxDistance = Math.max(radius, 1) * 12;
+    controls.update();
+  };
 
   const setClip = (plane: THREE.Plane | null) => {
     scene.traverse((o) => {
@@ -158,6 +178,7 @@ function createScene(mount: HTMLDivElement, background?: string): SceneHandle | 
     controls,
     fit,
     frame,
+    frameBox,
     get bounds() { return bounds; },
     setBounds: (box: THREE.Box3) => { bounds = box.clone(); },
     setClip,
@@ -1501,13 +1522,20 @@ export function PartsPreview(props: {
   shotLabel?: string;
   /** Filename stem for "save shot". */
   fileBase?: string;
+  /**
+   * Open with the explode already on. The panel's viewport chip uses this to
+   * make "看爆炸" one click from a part page instead of a trip through
+   * 整机 → 整机预览; the view is remounted per entry, so the initial state is
+   * read once and the toggle still owns it afterwards.
+   */
+  initialExplode?: boolean;
   /** Extra transport buttons (e.g. a close button). */
   extraControls?: React.ReactNode[];
   onScreenshot?: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) => void;
 }): React.ReactElement {
   const [err, setErr] = useState<string | null>(null);
   const [ready, setReady] = useState(0);
-  const [explode, setExplode] = useState(false);
+  const [explode, setExplode] = useState(!!props.initialExplode);
   const [explodePct, setExplodePct] = useState(60);
   // U12: per-part visibility. An assembly is a set of fits, and "look at THIS
   // pair" needs the option to take the other 40 parts out of the picture without
@@ -1516,6 +1544,10 @@ export function PartsPreview(props: {
   const [hiddenParts, setHiddenParts] = useState<Set<number>>(() => new Set());
   const [isolated, setIsolated] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
+  // The part list is the machine view's legend; in a narrow dock (the panel is
+  // 380px wide, so the stage is ~355px) an open 168px list covers half the model.
+  // It starts collapsed there and is one click away otherwise.
+  const [legendOpen, setLegendOpen] = useState(true);
   // Progress while the (possibly 40+) part files are fetched one by one; a
   // blank viewport for ten seconds reads as a hang.
   const [load, setLoad] = useState<{ done: number; total: number } | null>(null);
@@ -1526,10 +1558,15 @@ export function PartsPreview(props: {
   // from the assembly centre — coaxial stacks still separate because their
   // centres differ along the axis; perfectly coincident parts fall back to an
   // axis cycle so they do not sit on top of each other.
-  const partsRef = useRef<{ mesh: THREE.Mesh; base: THREE.Vector3; dir: THREE.Vector3; span: number }[]>([]);
+  const partsRef = useRef<{ mesh: THREE.Mesh; base: THREE.Vector3; dir: THREE.Vector3; span: number; box: THREE.Box3 }[]>([]);
   const baseViewRef = useRef<{ center: THREE.Vector3; radius: number } | null>(null);
-  const fullViewRef = useRef<{ center: THREE.Vector3; radius: number } | null>(null);
   useGround(sceneRef, props.background);
+  // A part set that lands in a narrow viewport keeps the list collapsed; a wide
+  // one opens it. Read once per load pass (the mount has its size by then).
+  useEffect(() => {
+    const w = mountRef.current?.clientWidth ?? 0;
+    if (w && w < 430) setLegendOpen(false);
+  }, [props.parts.map((p) => p.url).join('|')]);
   // Geometry is shared by every instance of the same part@version (the winder
   // has 43 nodes over 20 versions); the cache lives for one load pass.
   const urlsKey = props.parts.map((p) => p.url).join('|');
@@ -1546,7 +1583,6 @@ export function PartsPreview(props: {
     setHighlight(null);
     partsRef.current = [];
     baseViewRef.current = null;
-    fullViewRef.current = null;
     let dead = false;
 
     void (async () => {
@@ -1601,12 +1637,14 @@ export function PartsPreview(props: {
         const steps = planExplosion(center, radius, partCentres);
         const records = loadedMeshes.map(({ mesh }, i) => ({
           mesh, base: mesh.position.clone(), dir: steps[i]!.dir, span: steps[i]!.span,
+          // The part's authored world box, kept so the exploded framing can be
+          // the UNION of the moved boxes instead of a sphere guessed from the
+          // authored radius. The guess left a small dock's machine in a third of
+          // the viewport; a union fit fills it.
+          box: new THREE.Box3().setFromObject(mesh).clone(),
         }));
         partsRef.current = records;
         baseViewRef.current = { center: center.clone(), radius };
-        // At 100% every part has moved ≤ span away from the authored box, so
-        // framing the box grown by span keeps the whole slider range visible.
-        fullViewRef.current = { center: center.clone(), radius: radius + Math.max(radius * 1.15, 10) };
         handle.fit(center, radius);
       }
       setReady((v) => v + 1);
@@ -1619,19 +1657,30 @@ export function PartsPreview(props: {
     };
   }, [urlsKey]);
 
-  // Positions first, framing second (effects run in declaration order).
+  // Positions AND framing come from the same number: the box the parts actually
+  // occupy at this percentage. Framing the OUTWARD end instead left a 380px
+  // dock's machine at a third of the viewport (measured), and framing a sphere
+  // around it was the same mistake in another shape. Refitting per step means
+  // dragging the slider never pushes a part out of frame — the trade is that the
+  // camera pulls back as the parts spread, which reads as "the model stays put
+  // and opens up".
   useEffect(() => {
     const f = explode ? explodePct / 100 : 0;
     for (const rec of partsRef.current) {
       rec.mesh.position.copy(rec.base).addScaledVector(rec.dir, rec.span * f);
     }
-  }, [explode, explodePct, ready]);
-
-  useEffect(() => {
     if (!ready) return;
-    const view = explode ? fullViewRef.current : baseViewRef.current;
-    if (view) sceneRef.current?.frame(view.center, view.radius, true);
-  }, [explode, ready]);
+    if (!explode) {
+      const view = baseViewRef.current;
+      if (view) sceneRef.current?.frame(view.center, view.radius, true);
+      return;
+    }
+    const box = new THREE.Box3();
+    for (const rec of partsRef.current) {
+      box.union(rec.box.clone().translate(rec.dir.clone().multiplyScalar(rec.span * f)));
+    }
+    sceneRef.current?.frameBox(box, true);
+  }, [explode, explodePct, ready]);
 
   // Visibility + highlight are separate from POSITION on purpose: hiding a part
   // must not disturb the explode of the ones left, and it must not refit the
@@ -1677,22 +1726,37 @@ export function PartsPreview(props: {
     'data-parts-legend': '1',
     style: {
       position: 'absolute', top: 6, right: 6, zIndex: 4,
-      maxHeight: '62%', width: 168, overflowY: 'auto',
+      maxHeight: legendOpen ? '62%' : undefined,
+      width: legendOpen ? 168 : 116,
+      overflowY: legendOpen ? 'auto' : 'visible',
       background: T.plate, border: `1px solid ${T.line}`, borderRadius: 6,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.10)', fontSize: 10, lineHeight: '15px',
+      boxShadow: T.shadowSm, fontSize: 10, lineHeight: '15px',
     },
   },
     React.createElement('div', {
-      style: { display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderBottom: `1px solid ${T.divider}`, color: T.muted },
+      style: {
+        display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px',
+        borderBottom: legendOpen ? `1px solid ${T.divider}` : 'none', color: T.muted,
+      },
     },
-      React.createElement('span', { style: { flex: 1, fontWeight: 600 } }, tr('ui.parts.title', { count: partsRef.current.length })),
+      React.createElement('button', {
+        type: 'button', 'data-parts-toggle': legendOpen ? 'open' : 'closed',
+        'aria-expanded': legendOpen,
+        onClick: () => setLegendOpen((v) => !v),
+        title: tr(legendOpen ? 'ui.parts.collapseTitle' : 'ui.parts.expandTitle'),
+        style: {
+          flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer',
+          background: 'transparent', border: 'none', padding: 0,
+          font: 'inherit', color: T.muted, fontWeight: 600,
+        },
+      }, `${tr('ui.parts.title', { count: partsRef.current.length })} ${legendOpen ? '▾' : '▸'}`),
       isolated !== null && React.createElement('button', {
         type: 'button', 'data-parts-clear': '1',
         onClick: () => setIsolated(null),
         style: { ...btn(true), padding: '0 4px', fontSize: 10 },
       }, tr('ui.parts.clearIsolate')),
     ),
-    props.parts.map((part, index) => {
+    legendOpen && props.parts.map((part, index) => {
       const isHidden = hiddenParts.has(index);
       const isIsolated = isolated === index;
       const isHighlighted = highlight === index;
@@ -1765,17 +1829,21 @@ export function PartsPreview(props: {
         tr('playback.loadingParts', { done: load.done, total: load.total })),
       React.createElement('button', {
         key: 'explode', type: 'button', title: tr('playback.explodeTitle'),
+        'data-explode-toggle': explode ? 'on' : 'off',
         onClick: () => setExplode((v) => !v),
         style: btn(explode),
       }, tr('playback.explode')),
       explode && React.createElement('input', {
         key: 'explode-pct', type: 'range', min: 0, max: 100, value: explodePct,
         'aria-label': tr('playback.explodeTitle'),
+        'data-explode-range': '1',
         onChange: (e: any) => setExplodePct(Number(e.target.value)),
         style: { width: 90 },
       }),
-      explode && React.createElement('span', { key: 'explode-val', style: { fontSize: 11, color: T.soft, minWidth: 32 } },
-        `${explodePct}%`),
+      explode && React.createElement('span', {
+        key: 'explode-val', 'data-explode-pct': '1',
+        style: { fontSize: 11, color: T.soft, minWidth: 32 },
+      }, `${explodePct}%`),
       err && React.createElement('span', { key: 'err', style: { fontSize: 11, color: T.danger } }, err),
       props.onScreenshot && sceneRef.current
         ? React.createElement('button', {

@@ -1001,11 +1001,22 @@ export function CadPanel(): React.ReactElement {
   const [unregError, setUnregError] = useState<string | null>(null);
   // The machine the assembly manifest describes (null: no manifest).
   const [machine, setMachine] = useState<Machine | null>(null);
-  // Whole-machine 3D preview. This is NOT a run: it is assembled from the
+  // Whole-machine 3D view. This is NOT a run: it is assembled from the
   // contract's part@version nodes, so a project with no assembly run (the
   // winder has 12 assembly-CHECK runs and zero geometry runs) still has a
-  // model preview. Explode lives inside PartsPreview.
-  const [machinePreview, setMachinePreview] = useState(false);
+  // model view. It renders IN THE STAGE — the same viewport the part occupies —
+  // not in a dialog: the user asked "为啥不能直接在视口里面显示？" after the first
+  // cut opened a modal. Explode lives inside PartsPreview either way.
+  const [machineStage, setMachineStage] = useState(false);
+  // Whether that stage view opens already exploded. Two entry points share it:
+  // 整机页's 整机预览 opens at the authored pose, while the viewport's 整机爆炸
+  // chip opens exploded — the exploded view is what the chip promises, and the
+  // view's own toggle still turns it off.
+  const [machineStageExplode, setMachineStageExplode] = useState(false);
+  const openMachineStage = (explode: boolean) => {
+    setMachineStageExplode(explode);
+    setMachineStage(true);
+  };
   /**
    * U19: the delivery audit, fetched from the SAME host judgement the tool
    * returns. The panel does not recompute it — a second implementation would
@@ -3543,11 +3554,23 @@ export function CadPanel(): React.ReactElement {
   }, []);
 
   useEffect(() => {
-    if (!machinePreview) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMachinePreview(false); };
+    if (!machineStage) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMachineStage(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [machinePreview]);
+  }, [machineStage]);
+
+  // The machine view is a MODE of this viewport, so picking another VERSION
+  // leaves it: otherwise the thing the user just clicked would stay hidden
+  // behind the machine. The ''→v066 transition is the panel still resolving the
+  // part the chip was clicked on, not a navigation — closing then would make a
+  // legitimate click look ignored — so it is skipped.
+  const machineStageVersionRef = useRef(versionId);
+  useEffect(() => {
+    const before = machineStageVersionRef.current;
+    machineStageVersionRef.current = versionId;
+    if (machineStage && before && before !== versionId) setMachineStage(false);
+  }, [versionId, machineStage]);
 
   // The view menu behaves like a popover, not like a latch: a click anywhere
   // outside it, or Escape, closes it. The first cut only closed on selection and
@@ -3656,7 +3679,7 @@ export function CadPanel(): React.ReactElement {
         'data-bom-csv': '1',
       }, t('ui.machine.bom')),
       machine && React.createElement('button', {
-        type: 'button', onClick: () => setMachinePreview(true), style: S.smallBtn,
+        type: 'button', onClick: () => openMachineStage(false), style: S.smallBtn,
         title: tr('ui.machine.previewTitle'), 'data-machine-preview': '1',
       }, tr('ui.machine.preview')),
       React.createElement('button', {
@@ -4002,7 +4025,7 @@ export function CadPanel(): React.ReactElement {
     setHint(tr('ui.restore.hint'));
   };
 
-  const viewMenu = !glError && React.createElement('span', {
+  const viewMenu = !machineStage && !glError && React.createElement('span', {
     ref: viewMenuRef,
     style: { position: 'absolute', right: 8, top: 8, pointerEvents: 'auto', zIndex: 12 },
   },
@@ -4084,7 +4107,7 @@ export function CadPanel(): React.ReactElement {
     ),
   );
 
-  const ghostToggle = version && ghostVersionId && !glError
+  const ghostToggle = !machineStage && version && ghostVersionId && !glError
     ? React.createElement('button', {
       type: 'button',
       'data-compare-toggle': '',
@@ -4104,7 +4127,30 @@ export function CadPanel(): React.ReactElement {
     }, `${compareActive ? '◫' : '▢'} ${tr('ui.compare.label')} ${ghostVersionId}`)
     : null;
 
-  const bgPicker = version && !glError
+  // ── the exploded view's one-click entry ──
+  // It used to be reachable only through 整机 → 整机预览, two navigations away
+  // from the model you are looking at; the viewport therefore carries the chip,
+  // and it opens the shared overlay ALREADY exploded. It joins the right-hand
+  // control column (视角 / 背景 / 对比) instead of the top-left tool strip: that
+  // strip already covers the model's top-left, and this is a jump to another
+  // view, not a measurement tool.
+  const machineChip = !machineStage && machine && machineSpecs.length > 0 && !glError
+    ? React.createElement('button', {
+      type: 'button',
+      'data-machine-explode': '1',
+      'aria-label': tr('ui.machine.explodeChip'),
+      title: tr('ui.machine.explodeChipTitle'),
+      onClick: () => openMachineStage(true),
+      style: {
+        // 对比 only exists for a ghost version; with it the column grows by one.
+        position: 'absolute', right: 8, top: ghostToggle ? 96 : 66, zIndex: 8, pointerEvents: 'auto',
+        cursor: 'pointer', borderRadius: 6, padding: '2px 7px', fontSize: 11, lineHeight: '16px',
+        border: `1px solid ${T.line}`, background: T.chip, color: T.ink, whiteSpace: 'nowrap',
+      },
+    }, tr('ui.machine.explodeChip'))
+    : null;
+
+  const bgPicker = !machineStage && version && !glError
     ? React.createElement(
       'div',
       {
@@ -4662,50 +4708,6 @@ export function CadPanel(): React.ReactElement {
       ),
     ),
 
-    // ── whole-machine 3D preview (contract nodes, not a run) ──
-    machinePreview && machine && React.createElement('div', {
-      'data-machine-preview-overlay': '1',
-      style: {
-        position: 'fixed', inset: 0, background: T.scrimStrong, zIndex: 70,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
-      },
-      onClick: (e: any) => { if (e.target === e.currentTarget) setMachinePreview(false); },
-    },
-      React.createElement('div', {
-        style: {
-          width: 'min(1100px, 94vw)', height: 'min(760px, 88vh)', background: T.plate,
-          borderRadius: 10, boxShadow: T.shadowXl, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        },
-      },
-        React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: `1px solid ${T.divider}` },
-        },
-          React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: T.ink, flex: 1 } },
-            `${machine.name} · ${machineSpecs.length}/${machine.nodes.length}`),
-          React.createElement('button', {
-            type: 'button', onClick: () => setMachinePreview(false), style: S.smallBtn,
-            title: tr('ui.machine.close'), 'data-machine-preview-close': '1',
-          }, '✕'),
-        ),
-        machineSpecs.length === 0
-          ? React.createElement('div', { style: { padding: 16, fontSize: 12, color: T.muted } },
-              tr('ui.machine.previewEmpty'))
-          : React.createElement('div', { style: { flex: 1, position: 'relative', minHeight: 0 } },
-              React.createElement(PartsPreview, {
-                parts: machineSpecs,
-                background: bg.hex,
-                label: `${machine.name} · ${machineSpecs.length}/${machine.nodes.length}`,
-                shotLabel: tr('ui.machine.shot'),
-                fileBase: 'machine',
-                onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) =>
-                  openShotDraft(canvas, label, undefined, frame),
-              })),
-        machineUnpinned > 0 && React.createElement('div', {
-          style: { padding: '4px 10px', fontSize: 10, color: T.warn, borderTop: `1px solid ${T.divider}` },
-        }, tr('ui.machine.previewUnpinned', { count: machineUnpinned })),
-      ),
-    ),
-
     // ── U19: delivery audit (audit + "what has not been run") ────────────────
     auditOpen && React.createElement('div', {
       'data-audit-overlay': '1',
@@ -4898,9 +4900,9 @@ export function CadPanel(): React.ReactElement {
     // ── the viewport: filled by what the product *is* ──
     React.createElement(
       'div',
-      { style: S.stage },
+      { style: S.stage, 'data-stage': '1' },
       // Stale-version banner (DESIGN §20): the user demanded it be obvious.
-      kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
+      !machineStage && kind === 'part' && version && latestVersionId && versionId !== latestVersionId &&
         React.createElement('div', {
           title: tr('ui.stale.tooltip'),
           style: {
@@ -4922,7 +4924,7 @@ export function CadPanel(): React.ReactElement {
       // The inset's frame and colour key are DOM: the WebGL picture is drawn by
       // the renderer, but a border and a legend must stay crisp — and a canvas
       // has no DOM inside it.
-      compareActive && ghostVersionId && React.createElement('div', {
+      !machineStage && compareActive && ghostVersionId && React.createElement('div', {
         'data-compare-inset': '',
         style: {
           position: 'absolute', right: 6, bottom: 6, height: '54%', aspectRatio: '1 / 1',
@@ -4968,7 +4970,7 @@ export function CadPanel(): React.ReactElement {
       // U21: the download is visible while it runs. A pill at the bottom of the
       // viewport, not a full-screen spinner: the previous model is still there
       // and still usable while the next one arrives.
-      loadProgress && React.createElement('div', {
+      loadProgress && !machineStage && React.createElement('div', {
         'data-load-progress': fraction(loadProgress) === null ? 'bytes' : 'fraction',
         style: {
           position: 'absolute', left: 8, bottom: 8, zIndex: 5,
@@ -5028,7 +5030,7 @@ export function CadPanel(): React.ReactElement {
       meshSource && !glError && React.createElement(ViewportOverlay, {
         getScene: () => versionSceneRef.current,
         ink: overlayInk(bg),
-        chrome: React.createElement(React.Fragment, null, viewMenu, ghostToggle, bgPicker),
+        chrome: React.createElement(React.Fragment, null, viewMenu, ghostToggle, bgPicker, machineChip),
         // No `onReset` here on purpose: 复原 is the view menu's footer item (the
         // corner chip it used to be is gone). Playback keeps the overlay chip,
         // because that viewport has no view menu.
@@ -5088,7 +5090,7 @@ export function CadPanel(): React.ReactElement {
     // and point at a problem. 测量 / 壁厚 / 剖切 / 热力图 need a stored mesh whose
     // facts a version owns; offering them here would produce numbers nothing
     // could cite (DESIGN §30.18: preview is not evidence).
-    !version && meshSource && React.createElement(
+    !machineStage && !version && meshSource && React.createElement(
       'div',
       { style: toolStripStyle },
       React.createElement('button', {
@@ -5105,7 +5107,7 @@ export function CadPanel(): React.ReactElement {
     ),
     // ── markup tools, in the viewport (top-left): these only make sense on a
     // single part version ──
-    version && React.createElement(
+    !machineStage && version && React.createElement(
       'div',
       { style: toolStripStyle },
       React.createElement('button', {
@@ -5164,6 +5166,48 @@ export function CadPanel(): React.ReactElement {
         onClick: () => { void toggleHeat(); },
         style: viewToolStyle(Boolean(heat), T.danger),
       }, t('ui.tool.heat')),
+    ),
+
+    // ── the machine, IN this viewport (not a dialog) ──
+    // The first cut opened a modal; the user's answer was "为啥不能直接在视口里
+    // 面显示？而是单独搞一个弹窗？". So this is a MODE of the stage: same box, same
+    // transport, one control row at the bottom, and a 「← 零件」 button that
+    // returns. It sits last in the stage so it covers the part's canvas and tool
+    // strip; the part's own chrome (视图/背景/对比/整机爆炸) is gated off while
+    // this is on, because those controls act on the part camera.
+    machineStage && machine && React.createElement('div', {
+      'data-machine-stage': '1',
+      style: {
+        position: 'absolute', inset: 0, zIndex: 6, background: T.stage,
+        display: 'flex', flexDirection: 'column',
+      },
+    },
+      machineSpecs.length === 0
+        ? React.createElement('div', { style: { padding: 16, fontSize: 12, color: T.muted } },
+            tr('ui.machine.previewEmpty'))
+        : React.createElement(PartsPreview, {
+            parts: machineSpecs,
+            background: bg.hex,
+            label: `${machine.name} · ${machineSpecs.length}/${machine.nodes.length}`,
+            shotLabel: tr('ui.machine.shot'),
+            fileBase: 'machine',
+            initialExplode: machineStageExplode,
+            extraControls: [React.createElement('button', {
+              key: 'back', type: 'button', 'data-machine-stage-close': '1',
+              title: tr('ui.machine.backToPartTitle'),
+              onClick: () => setMachineStage(false),
+              style: { ...S.smallBtn, flex: 'none' },
+            }, tr('ui.machine.backToPart'))],
+            onScreenshot: (canvas: HTMLCanvasElement, label: string, frame?: ShotFrame) =>
+              openShotDraft(canvas, label, undefined, frame),
+          }),
+      machineUnpinned > 0 && React.createElement('div', {
+        style: {
+          position: 'absolute', left: 8, top: 8, zIndex: 3, pointerEvents: 'none',
+          fontSize: 10, color: T.warn, background: T.warnSoft,
+          border: `1px solid ${T.warnLine}`, borderRadius: 4, padding: '1px 5px',
+        },
+      }, tr('ui.machine.previewUnpinned', { count: machineUnpinned })),
     ),
   ),            // closes the panel's createElement (children resume below)
 

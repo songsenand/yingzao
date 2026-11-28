@@ -87,6 +87,9 @@ const SCENARIOS = [
   // U12: per-part hide / isolate / highlight in the whole-machine preview. The
   // part list is read from the live scene, so a legend that lies cannot pass.
   { name: 'assembly-hide', query: 'w=1100&h=900&assert=assembly-hide&debug=0' },
+  // 2026-11-28: the exploded view is one click from the part viewport, not a
+  // trip through 整机 → 整机预览, and the overlay opens already exploded.
+  { name: 'explode-entry', query: 'w=520&h=900&subject=p005&assert=explode-entry&debug=0&slow=22000', timeoutMs: 120000 },
   // U21: the WebGL context is REALLY lost and restored (WEBGL_lose_context), and
   // the frame must come back — the failure this guards is a silent blank canvas.
   { name: 'webgl-recover', query: 'w=520&h=900&subject=p005&assert=webgl-recover&debug=0' },
