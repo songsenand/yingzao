@@ -612,7 +612,7 @@ profile 层（不属于任何项目）：
 | 三点光（无 tone mapping） | 30.3 | 32.9 | 107.3 / 103.6 |
 | **三点光 + 胶片式** | **42.2** | **45.8** | **125.5 / 121.9** |
 
-零件的色调方差**翻了一倍以上**，动态范围从 ~95 拉到 ~125，而两端**没有像素被压死或削平**（crushed/hot 均为 0）。证据图：`sandbox/shots/lighting-{before,after}-{slide,knob}.png`。
+零件的色调方差**翻了一倍以上**，动态范围从 ~95 拉到 ~125，而两端**没有像素被压死或削平**（crushed/hot 均为 0）。证据图：`docs/images/design/lighting-{before,after}-{slide,knob}.png`。
 
 **顺带修好了沙箱出图这件事本身**：本机 `firefox --headless` **根本建不出 WebGL 上下文**（探针页直接报 `WEBGL UNAVAILABLE`，且没有 `/dev/dri`；强制软件 Mesa 也没用），面板只会渲染"此环境无法创建 WebGL 上下文"的卡片——也就是说**这个环境里"看图"这一步是断的，而之前没人发现**。真正的解法是给它一个 X 显示：`sandbox/preview/shot-gl.mjs` 起一个临时 Xvfb，Firefox 走 GLX + Mesa `swrast`/llvmpipe 软件光栅，WebGL 2.0 正常。以后所有视觉改动都用它出图。
 
@@ -637,7 +637,7 @@ profile 层（不属于任何项目）：
 
 #### v2.13a 版式：预览优先
 
-**改版前的病灶**（`sandbox/shots/baseline-380x900.png`，380×900 右栏）：标题 + 33 个版本 chips（9 行，≈306px）+ 导出 + 参数 + 意图 + 模式 Tab 之后，预览只剩 **335×300** 且底部溢出面板。**版本历史占用了第一屏，模型反而最不起眼**。
+**改版前的病灶**（`docs/images/design/baseline-380x900.png`，380×900 右栏）：标题 + 33 个版本 chips（9 行，≈306px）+ 导出 + 参数 + 意图 + 模式 Tab 之后，预览只剩 **335×300** 且底部溢出面板。**版本历史占用了第一屏，模型反而最不起眼**。
 
 **改版后（自上而下）**：
 
@@ -691,7 +691,7 @@ profile 层（不属于任何项目）：
 
 **实现选择（关键）**：三者都是**普通 DOM**，由每帧读取活相机驱动，**不是 WebGL 几何**。理由：① 不被模型裁切、不参与深度、缩放时保持清晰；② 换产物/换视图（几何视口、三条回放、装配静置）只需 `createScene` 暴露 `camera/controls.target/refit`，一套实现四处复用；③ **可验收**——无头 Firefox 不把 WebGL canvas 合成进 `--screenshot`，DOM 角标能直接出图，本次的缩放换档与复位断言就是靠它做的。
 
-**验收证据**（`sandbox/shots/`，同一次会话内实测）：
+**验收证据**（`docs/images/design/`，同一次会话内实测）：
 
 | 断言 | 证据 |
 |---|---|
@@ -751,7 +751,7 @@ profile 层（不属于任何项目）：
 - **测量/壁厚模式的说明文字从来没显示过**：反馈行的条件写的是 `(measure || annotateMode || hint)`——**漏了 `measureMode`**，于是"点击零件表面第一个点"这句只在已经点出第一个点之后才可能出现。现在模式本身进条件，进入模式即给指令。
 - **切剖切会重建整个场景**：`section` 在主 effect 依赖里，每切一次就重建 renderer/mesh、**耗掉一个 WebGL 上下文**（与 `forceContextLoss` 修的是同一类泄漏）。现在 `localClippingEnabled` 常开、clippingPlanes 就地更新（只在**面数**变化时 `needsUpdate`），切剖切不再重建。
 
-**验收证据**（`sandbox/shots/meas-*.png` + node 数值）：
+**验收证据**（`docs/images/design/meas-*.png` + node 数值）：
 
 | 断言 | 证据 |
 |---|---|
@@ -799,7 +799,7 @@ profile 层（不属于任何项目）：
 
 > **来源**：「本版本上的验证、参数、导出等等全部在非常窄的空间里面，使用滚动条才能翻看，这个体验感太差，有没有别的方法？」（采纳 ②+①）。同轮三问：「壁厚和剖切两个按钮如何使用？用法还不太直观」「测量能不能两次选择后自动退出」「参数的使用场景很小」。
 
-**病灶用数字说**（`sandbox/shots/details-scroll-params.png` 的探针）：详情盒 190px 里塞了 **497px** 内容 —— `client=190 scroll=497 (+307px hidden, 2.6x)`。更根本的是**目录比内容占地**：190px 里 ~120px 是意图说明 + 4 个折叠标题（4×26），真正给内容只剩 ~70px，所以连两个参数滑块都要滚。
+**病灶用数字说**（`docs/images/design/details-scroll-params.png` 的探针）：详情盒 190px 里塞了 **497px** 内容 —— `client=190 scroll=497 (+307px hidden, 2.6x)`。更根本的是**目录比内容占地**：190px 里 ~120px 是意图说明 + 4 个折叠标题（4×26），真正给内容只剩 ~70px，所以连两个参数滑块都要滚。
 
 **改法（②+①）**：
 
@@ -1089,7 +1089,7 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 
 两条都**没有**出现 `releaseDraftAttachments (leak!)`（成功路径压根不走兜底、失败路径草稿被正确接管）。版式回归 `layout-after-send.png` 11/11 PASS：六个常驻盒子仍是 `26 / VIEWPORT 355×264 / 25 / 26 / 451 / 23`，chips 66×5 不变，壁厚拖动不产生标注 (0→0)、标注仍能拉框 (0→2)、分隔条 ±32、`Home` 复原自动切分。
 
-图：`sandbox/shots/send-ctx-ok.png`、`send-ctx-fallback.png`、`layout-after-send.png`。
+图：`docs/images/design/send-ctx-ok.png`、`send-ctx-fallback.png`、`layout-after-send.png`。
 
 **遗留（必须说清）**：真机上 `sessions.sessionOf` / `sendSession` 是否存在、`list.get().current` 是不是 `SessionId`——**只有你的 GUI 能证**（沙箱是桩）。刷新页面点一次 📸截图：对话里应当立刻多出一条带图消息；若失败，提示行会写出原因、控制台有 `[cad-harness] 截图未能发送到会话:`，把那条发我即可。
 
@@ -1135,7 +1135,7 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
   的亮度方向、面板根对比度、测量到的元素数量（防止空页面假 PASS）。
   实测三个场景全 PASS：28–34 个文字元素、18–23 个控件，最低对比度 5.10。
 - `accept-tokens`：52 个令牌、暗色 52/52、表外颜色字面量 0。
-- 图：`sandbox/shots/ui-theme-light.png`、`ui-theme-dark.png`、`ui-theme-dark-playback.png`。
+- 图：`docs/images/design/ui-theme-light.png`、`ui-theme-dark.png`、`ui-theme-dark-playback.png`。
 
 **已知边界**：三维视口的**底色**不随主题翻转——它是「背景」里的场地预设（纸张/暖色/石墨/
 午夜），和零件颜色一起决定可读性；深色模式想要深底，在视口右上「背景」里选石墨或午夜。
@@ -1173,7 +1173,7 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 
 **待办（诚实标注）**：HEAD / 回滚 / 审批标签未做——目前"当前版本"由时间戳推得，面板的「跟随最新 / 已钉住」只是**视图偏好**（关掉页面即失），不是模型状态；零件也还不能删除/重命名（`renamePart` 已备但无入口）。
 
-**版式收口（同日追问：把零件、记录、跟随最新放一行）**：零件与记录的选择器合并成一行，去掉两个文字标签，跟随按钮缩成 `●`/`○` 图标（语义进 tooltip），零件选项只留 `名字 · N版`（验证次数与名字来源进 tooltip）。**两个下拉等宽**（`flex:1 1 0`）——零件与它的记录是同一层级的两种选择，不该由内容长度决定谁占宽；零件名短时空出的宽度归记录，320px 下两者各 ≈118px。理由：省下的竖向空间归视口（当时视口是 `aspect-ratio:1` 的方框、宽度定高，见下方 v2.14b 的修正——**"突出视图"靠减 chrome，不靠改方框**）。截断顺序也设计过：记录标签把可识别信息放前面（`v030 · 最新 · 09-28…`），窄到 320px 也只截掉描述，不会截成 `v030 · 版4` 这种歧义串。实测见 `sandbox/shots/row-{320,380,520}.png`。
+**版式收口（同日追问：把零件、记录、跟随最新放一行）**：零件与记录的选择器合并成一行，去掉两个文字标签，跟随按钮缩成 `●`/`○` 图标（语义进 tooltip），零件选项只留 `名字 · N版`（验证次数与名字来源进 tooltip）。**两个下拉等宽**（`flex:1 1 0`）——零件与它的记录是同一层级的两种选择，不该由内容长度决定谁占宽；零件名短时空出的宽度归记录，320px 下两者各 ≈118px。理由：省下的竖向空间归视口（当时视口是 `aspect-ratio:1` 的方框、宽度定高，见下方 v2.14b 的修正——**"突出视图"靠减 chrome，不靠改方框**）。截断顺序也设计过：记录标签把可识别信息放前面（`v030 · 最新 · 09-28…`），窄到 320px 也只截掉描述，不会截成 `v030 · 版4` 这种歧义串。实测见 `docs/images/design/row-{320,380,520}.png`。
 
 **版式再收口（同日第四轮：视口不必是正方形 + 底部要有状态位，v2.14b）**：
 
@@ -1185,7 +1185,7 @@ hint: 截图已发送到会话（排队）— Agent 下一回合就能看到这�
 - **详情区让路，视口不让**：`details: flex: 0 100 auto`（收缩因子 100，视口 1）。空间不足时先滚详情区、视口保持 ≥ 正方形：380×560 实测视口 355×352、详情区压到 41px 并滚动；380×400（极端）视口 355×233、详情区 0、**面板仍不溢出**（旧版这里会溢出被 `overflow:hidden` 吃掉）。
 - **底部状态带**（`S.status`，11px 单行、贴底、可省略）：`[✅/❌/⚠️ 结论词] 记录id · 类型 · 第 i/N 版 · 时间 — 摘要`，右侧冻结出处（`来源 4 版` / `本版无验证` / `内联 SCAD`）。**只写上面那行下拉写不下的东西**：零件名与记录 id 已经在下拉里，状态带补的是**结论词、版本序号、出处**；tooltip 里有全文（含来源版本号）。
   - **版本自己永远没有结论**（`status` 恒为 `draft`）：结论**由"关于它的运行"推导**——没有运行 = 未验证，有则取最严（fail > check > pass）。这是"诚实标注"落到像素上：没验过就写"未验证"，不冒充通过。
-- **验收证据**（`sandbox/shots/`）：`band-380x900` / `band-380x560` / `band-380x400` / `band-380x1200` / `band-520x900`（各尺寸竖向预算，探针逐子元素给出 y/h）、`band-run-fail`（r003 清单检查 → `❌ 失败`，出处 `来源 4 版`）、`band-scene`（⚙ 跨零件场景 → `⚠️ 待复核` / `内联 SCAD`）、`band-empty`（0 版零件 → 状态带只写"该零件还没有记录"，不显示结论位）、`band-open-run-560`（展开运行报告时视口仍不小于正方形）。空零件用例用 `CAD_SANDBOX_DATA` 指向一次性数据副本跑，不写真实 `data/`。
+- **验收证据**（`docs/images/design/`）：`band-380x900` / `band-380x560` / `band-380x400` / `band-380x1200` / `band-520x900`（各尺寸竖向预算，探针逐子元素给出 y/h）、`band-run-fail`（r003 清单检查 → `❌ 失败`，出处 `来源 4 版`）、`band-scene`（⚙ 跨零件场景 → `⚠️ 待复核` / `内联 SCAD`）、`band-empty`（0 版零件 → 状态带只写"该零件还没有记录"，不显示结论位）、`band-open-run-560`（展开运行报告时视口仍不小于正方形）。空零件用例用 `CAD_SANDBOX_DATA` 指向一次性数据副本跑，不写真实 `data/`。
 - **本次没能验证的**：会话内 `/dev/shm` 只读 → WebGL 不可用，**3D 像素与取景观感无法出图**；取景只有数值验证（球面投影 max|NDC|≤1）。版式、状态带、各元素尺寸均为 DOM 实测。
 
 **顺带修掉的真 bug**：WebGL 上下文创建失败时，整块面板会**崩成空白**（React 渲染抛错整树卸载）。现在面板与三条回放都降级为一张说明卡（"此环境无法创建 WebGL 上下文；版本、运行与报告仍可浏览"）。成因实测：Linux 上 `/dev/shm` 只读即触发（沙箱本次就撞上了）。同时补上 `renderer.forceContextLoss()`——`dispose()` 不释放上下文，之前每切一次版本泄漏一个，约 16 个后必然报 "Error creating WebGL context"。
@@ -2469,7 +2469,7 @@ accept-image-budget 新增断言：用户附件 41→25 的场景里裁剪恰为
 - `panel.ts`：`kind` 状态 + 三类 run 池（simRuns/assemblyRuns/contractRuns，
   从全部零件 runs + 跨零件场景拍平）；零件类 records 只含版本；旧版本选中时
   视口顶部橙色横幅「⚠ 正在查看旧版本 vX（最新为 vY）」+ 回到最新按钮。
-- 沙盒视觉验证：`sandbox/shots/browse3-380x900.png`（三栏默认最新）、
+- 沙盒视觉验证：`docs/images/design/browse3-380x900.png`（三栏默认最新）、
   `browse3-stale-banner.png`（选中 v001 时横幅出现），存档
   `verification/shots/`。沙盒入口新增 `?kind=` 参数，select 索引更新为
   种类/条目/版本三段。
@@ -4385,7 +4385,7 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 - **可测**：`accept-ui views` 断言"角标只有一个 `data-view-menu`"、"菜单外没有 `⤾` chip"、
   "方向按钮恰好 7 个且无 `data-view-axis`"、"投影是 persp/ortho 两个 `data-projection`"、
   "菜单页脚有 `data-view-home`"、方向点选后的相机方向、投影切换后位姿不变、复原把相机拉回。
-  `sandbox/preview` 新增 `viewmenu=1`：等按钮出现再开菜单，给视觉复核用（`sandbox/shots/
+  `sandbox/preview` 新增 `viewmenu=1`：等按钮出现再开菜单，给视觉复核用（`docs/images/design/
   views-merged.png`、`views-corner.png`、`views-merged-380.png`）。
 
 ## 40. 爆炸视图在视口里就地展开（不弹窗），入口一颗「整机爆炸」（2026-11-28）
@@ -4422,4 +4422,4 @@ blocked；`--unregister` 后注册，旧 hash 进 `history`；同一 hash 重注
 `[data-explode-range]`（打开即拉开）；关掉爆炸后零件位置变化且滑块消失；「← 零件」恢复零件
 视口。`accept-ui machine` 验证整机页按钮同样进 stage、`← 零件` 收回；`accept-ui
 assembly-hide` 验证 U12 显隐/隔离/高亮在整机模式内仍成立。视觉证据
-`sandbox/shots/machine-inline-380.png`、`sandbox/shots/explode-chip-380.png`。
+`docs/images/design/machine-inline-380.png`、`docs/images/design/explode-chip-380.png`。

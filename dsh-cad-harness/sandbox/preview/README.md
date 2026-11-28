@@ -105,7 +105,9 @@ hand-written fixtures, and the legacy "latest run" routes are deliberately
 
 ## Screenshots
 
-`../shots/` (captured at 380×900 unless noted):
+`../shots/` (captured at 380×900 unless noted). The shots that **DESIGN.md /
+DECISION-LOG.md cite** are copied to `docs/images/design/` and tracked, so a clone
+can see the evidence; the rest stays here (ignored, local only):
 
 | file | what |
 |---|---|

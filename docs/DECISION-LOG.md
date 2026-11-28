@@ -4687,7 +4687,7 @@ HARNESS §2 明确"查看是 commodity，闭环才是壁垒"——宽定义会�
 **依据：** `node scripts/accept-ui.mjs playback` 通过（数据条、判读、关键帧选择器、时间线、
 到关键帧停、曲线、缩略图条七项 DOM 断言）；`npm run accept` 全过；`npm run typecheck` 0 错误；
 `accept-ui` 10/11，唯一失败的 `compare` 在 **HEAD（去掉本轮改动后重建 preview）同样失败**，
-是既有问题，不是本轮引入。截图：`dsh-cad-harness/sandbox/shots/playback-r057-report-sheet2.png`
+是既有问题，不是本轮引入。截图：`dsh-cad-harness/docs/images/design/playback-r057-report-sheet2.png`
 （报告浮层：关键帧缩略图 + 行程曲线 + 干涉刻度；舞台数据条/关键帧/时间线见
 `playback-r057-final.png`。沙箱无 WebGL，3D 区为占位，剖切/测距因此无法在截图里驱动）。
 
@@ -6758,7 +6758,7 @@ Q2 达标，证明第二轮掉分的主因是查询有损；Q3 仍差 7.7，三�
 
 **理由：** 4 200 行内联样式不可能逐个改成函数或订阅主题重渲染；CSS 变量是唯一"写一次、按元素解析、不重渲染"的路径，`var(..., 亮色)` 的 fallback 保证样式表未安装时仍是原亮色。宿主只暴露十来个语义角色，面板自己的比较橙/测量红/壁厚青/剖切紫没有对应，照搬会丢语义，所以保留自有令牌、只借宿主的明暗开关。
 
-**依据：** 沙箱 `?dark=1`（与宿主相同的 `data-ds-dark-theme`）实测 `theme-light` / `theme-dark` / `theme-dark-playback` 全 PASS：对比度扫描 28–34 个文字元素、18–23 个控件，最低 5.10；`accept-tokens` 52 个令牌、暗色 52/52、表外颜色字面量 0（迁移前 237 处 hex/rgba；旧 lint 只数 `.ts` 和 hex，所以预算是 180）。截图 `sandbox/shots/ui-theme-{light,dark,dark-playback}.png`。亮色模式的令牌值取原值，`assert=layout` 等既有场景仍全绿。
+**依据：** 沙箱 `?dark=1`（与宿主相同的 `data-ds-dark-theme`）实测 `theme-light` / `theme-dark` / `theme-dark-playback` 全 PASS：对比度扫描 28–34 个文字元素、18–23 个控件，最低 5.10；`accept-tokens` 52 个令牌、暗色 52/52、表外颜色字面量 0（迁移前 237 处 hex/rgba；旧 lint 只数 `.ts` 和 hex，所以预算是 180）。截图 `docs/images/design/ui-theme-{light,dark,dark-playback}.png`。亮色模式的令牌值取原值，`assert=layout` 等既有场景仍全绿。
 
 **影响：** 所有 `src/client` 组件的颜色写法；新增颜色必须先加到 `tokens.ts`（否则 lint 失败）。三维视口底色仍由「背景」预设决定，不随主题翻转；深色模式想要深底需选石墨/午夜。`README.md` / `README.en.md` 的面板能力清单与 `DESIGN.md` §6.9 已同步。
 
@@ -7341,7 +7341,7 @@ PASS（同一场景内含以下断言：角标恰有一个 `data-view-menu`；�
 `data-view-home`；点外部关闭；`Esc` 关闭；选中方向后关闭；等轴 (0.577,0.577,0.577)、顶
 (0,0,1) 且 up 切 +Y、前 (0,−1,0)、后 (0,1,0)；投影切换后位姿不变；复原把相机拉回）。
 `npm run typecheck` 通过；`accept-ui-i18n`、`accept-tokens` PASS。视觉证据：
-`sandbox/shots/views-merged.png`（520 栏开菜单）、`views-corner.png`（520 栏关菜单）、
+`docs/images/design/views-merged.png`（520 栏开菜单）、`views-corner.png`（520 栏关菜单）、
 `views-merged-380.png`（380 栏）。
 
 **影响：** `src/client/panel.ts`（菜单重写、`resetView`、点外/Esc 关闭、角标位置）、
@@ -7413,8 +7413,8 @@ UI 需要大改，最好在放在 0.3 发布版里面"）；TODO §0 的 0.3 线
 `accept-ui machine`（整机页按钮同样进 stage、`← 零件` 收回）；`accept-ui assembly-hide`
 （U12 显隐/隔离/高亮在整机模式内仍成立）；`accept-explode` 9/9；`accept-ui-i18n`、
 `accept-tokens`、`npm run typecheck`、`npm run build` 通过。视觉证据
-`sandbox/shots/machine-inline-380.png`（380 栏：整机在视口内已拉开、底部 transport、
-可折叠零件列表）、`sandbox/shots/explode-chip-380.png`（胶囊位置）。
+`docs/images/design/machine-inline-380.png`（380 栏：整机在视口内已拉开、底部 transport、
+可折叠零件列表）、`docs/images/design/explode-chip-380.png`（胶囊位置）。
 
 **影响：** `src/client/panel.ts`（`machineStage*` 状态与 stage 内联渲染、删掉模态、gating、
 `data-stage`/`data-machine-stage`/`data-machine-stage-close`）、`src/client/playback.ts`
