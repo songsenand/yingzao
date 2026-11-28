@@ -8,6 +8,17 @@ A manufacturing screen answers "does this violate a declared rule". It never ans
 
 > **Terminology (2026-10-29).** In this document "overhang" always means **print-overhang**: an FDM surface that is not self-supporting, a support/printability question. It is **not** structural overhang / self-weight stress (internal stress under gravity), which belongs to the **strength** question of `cad_simulate` (`action: "stress"`). That load case now exists (`includeSelfWeight` defaults true; `supports:[{ground:true}]` holds the lowest z face), but it is not physically validated. Do not use unqualified "overhang" for the strength layer.
 
+## Two different thin walls (2026-11-28)
+
+Do not conflate them:
+
+| check | rule | tool | `designException` |
+|---|---|---|---|
+| **printability thin wall** | 1.2 mm / process profile, FDM/additive; overhang area | `cad_check` (`action: "printability"`) | **no** — a printability failure is not a structural decision |
+| **load-bearing thin wall** | structural policy 1.6 mm on a stress support ring | `cad_simulate` (`action: "stress"`) | yes; it records the design decision, and does **not** waive printability |
+
+A 0.8 mm hub on a torque path needs the structural decision **and** may still fail the print screen; passing 1.2 mm does not prove load capacity.
+
 ## Printability checklist (volunteer it with the design, don't wait to be asked)
 
 - **Overhangs (print-overhang)**: holes, racks, threaded cavities with the axis along Z print

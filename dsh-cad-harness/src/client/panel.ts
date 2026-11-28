@@ -3584,6 +3584,19 @@ export function CadPanel(): React.ReactElement {
     }
   };
 
+  /**
+   * One entry point for "can I deliver?": open the audit overlay, then export
+   * through the same HTTP gate from its footer. This is the button the user
+   * asked for; it does not invent a second judgement, it shows the host's.
+   */
+  const openDelivery = () => { setAuditOpen(true); void refreshAudit(); };
+  const deliveryButton = () => React.createElement('button', {
+    type: 'button', onClick: openDelivery,
+    style: { ...S.smallBtn, fontWeight: 600 },
+    title: tr('ui.deliver.openTitle'),
+    'data-deliver-open': '1',
+  }, t('ui.deliver.open'));
+
   /** A row's target, resolved against the corpus (a stale audit must not mislead). */
   const jumpToAuditTarget = (jump: string) => {
     const target = resolveAuditJump(jump, allRuns, parts);
@@ -3627,6 +3640,7 @@ export function CadPanel(): React.ReactElement {
     React.createElement('div', { style: S.hint },
       tr('ui.machine.note')),
     React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      machine && deliveryButton(),
       machine && React.createElement('button', {
         type: 'button',
         onClick: () => { setAuditOpen(true); void refreshAudit(); },
@@ -3687,6 +3701,7 @@ export function CadPanel(): React.ReactElement {
    * placements, multi-shell on purpose (no boolean union).
    */
   const projectExportButtons = () => [
+    deliveryButton(),
     React.createElement('button', {
       key: 'project-zip', type: 'button', style: S.smallBtn,
       title: t('panel.projectZipTitle'),
@@ -4762,6 +4777,21 @@ export function CadPanel(): React.ReactElement {
             React.createElement('span', { style: { flex: 1, minWidth: 0 } }, finding.detail),
           )),
           audit && auditGaps(audit, trKey).length === 0 && React.createElement('div', { style: { fontSize: 11, color: T.soft, padding: 4 } }, tr('ui.audit.nothingPending')),
+        ),
+        React.createElement('div', {
+          style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '8px 10px', borderTop: `1px solid ${T.divider}` },
+        },
+          React.createElement('button', {
+            type: 'button', 'data-deliver-export': 'zip', style: { ...S.smallBtn, fontWeight: 600 },
+            onClick: () => { void downloadExport(withProject('/api/cad/project/export?format=zip')); },
+          }, t('ui.deliver.exportZip')),
+          React.createElement('button', {
+            type: 'button', 'data-deliver-export': 'stl',
+            style: machine ? S.smallBtn : { ...S.smallBtn, opacity: 0.45, cursor: 'not-allowed' },
+            disabled: !machine,
+            onClick: () => { if (machine) void downloadExport(withProject('/api/cad/project/export?format=stl')); },
+          }, t('ui.deliver.exportStl')),
+          React.createElement('span', { style: S.hint }, t('ui.deliver.hint')),
         ),
       ),
     ),

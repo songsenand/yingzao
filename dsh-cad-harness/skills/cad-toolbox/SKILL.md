@@ -30,6 +30,27 @@ Nine job surfaces (45 ops), but **three jobs first**. Pick the group, not the to
 5. **仿真需要工况**：没有载荷/约束/材质（或驱动/倾角/流体）就没有应力、没有运动。读数一律是**方向性**的，不能当安全系数。
 6. **交付几何默认登记**：要给人看、由人判或要交付的几何，走 `cad_part` (`action: "generate"`) / `cad_part` (`action: "import"`) 成为版本。面板只读 `versions/`、不扫磁盘；直接写 STL 既不进面板也不进任何工具（它们都要 `versionId`）。批量/实验产物可只落盘，但要在回复里声明路径与原因；`cad_deliver` (`action: "audit"`) 的 `unregistered-geometry` 会点名，豁免用 `exempt: [{path, reason}]`。登记不必附图：`cad_part` (`action: "import"`) with `{render:false}` 或 `cad_part({ action: "generate", args: { views: [] } })`。
 
+## 交付前必须（2026-11-28：skill 标注，工具执行）
+
+这是**流程标注**：真正的拒绝在工具里（brief gate、导出闸门），不是靠这里的一句话。
+
+1. **brief 先于几何**：`brief.processes` / `verify` / `buyVsMake` 不完整时，`cad_part`/`cad_check`/`cad_simulate` 会被 `[brief-gate]` 拒绝。
+2. **每个制造件声明 process**：BOM 的 `manufacturing.allowed` + 零件 `process`；没声明，导出闸门会 block。
+3. **按 process 跑 evaluator**：FDM/增材 → printability；CNC → printability + cnc；车削 → turning；钣金/线切割 → sheet2d；EDM → edm。**不要拿 printability 冒充所有工艺。**
+4. **每个交付打印件最新版本做 top+iso 视觉复核**（`cad_see review` 带 note）；没有 fresh 记录 audit 直接 blocked。
+5. **声明 claims**（`strength`/`motion`/`assembly`/`manufacturability`/`appearance`/`review`），否则 `no-claims-declared`。
+6. **`cad_deliver plan` 逐行 `next` → `cad_deliver audit`**；最后从**交付按钮/导出**走同一个 HTTP 闸门。文件名带 `_UNVERIFIED` 就是还没过。
+7. **改过任何版本后重跑对应检查**；旧证据不是当前证据。
+
+### 承重薄壁 ≠ 打印薄壁（两个检查，两个阈值）
+
+| 检查 | 阈值/规则 | 谁用 | 能否用 `designException` |
+|---|---|---|---|
+| **打印薄壁** | 1.2mm / 工艺 profile（FDM/增材）；报 overhang | `cad_check` (`action: "printability"`) | **不能** |
+| **承重薄壁** | 结构政策 1.6mm；应力支撑环 | `cad_simulate` (`action: "stress"`) | 能；`designException` 记录设计决定，**不豁免打印性** |
+
+不要把 `designException` 当成打印薄壁的豁免；也不要把 1.2mm 的 printability 通过当成"承重够"。
+
 ## Evidence verification (V1; 2026-11-06)
 
 The pearl execution layer is **demoted**; `cad_deliver` (`action: "pearl"`) is deprecated/experimental and is no

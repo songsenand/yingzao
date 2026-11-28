@@ -7414,7 +7414,7 @@ export function registerCadTools(
       // the cad-manufacturing skill (loaded on demand). What stays HERE is what a caller
       // must know at call time — every token in a tool description is paid on EVERY
       // request, while the skill is not (DESIGN §31.4 / DESIGN 13.12).
-      'Manufacturability screen for a saved version: sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. PRINT overhang is a support COST, reported as a finding: it gates the verdict only when the process profile declares `overhangDeg.hard: true` (no supports / visible surface / trapped cavity); otherwise a supported FDM part can be not-excluded. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
+      'PRINTABILITY screen for a saved version (not a structural/load-bearing check): sampled wall thickness (ray to the opposite wall along the inward normal) plus exact print-overhang area (FDM support; NOT structural overhang/self-weight stress) steeper than the print-overhang angle. A load-bearing thin wall is a different check: simulate_stress applies the structural policy (1.6 mm) and a signed designException; that exception does NOT waive this printability screen. The wall half is SAMPLED (a thin feature between samples is missed); the print-overhang area is exact. PRINT overhang is a support COST, reported as a finding: it gates the verdict only when the process profile declares `overhangDeg.hard: true` (no supports / visible surface / trapped cavity); otherwise a supported FDM part can be not-excluded. If wallMeasured is false the ray half measured nothing, so the verdict is never "ok". Run it before delivering and after any wall/angle-changing edit. ' +
       'Judge against a DECLARED process via `profileIds` (e.g. ["fdm-pla-0.4"]) or `profilesJson`: each profile returns "excluded" (with a witness: rule, location, measured vs required) or "not-excluded" — NOT-EXCLUDED IS NOT "CAN BE MADE". It never ranks or recommends. With no profile it uses a named built-in fallback (all numbers `assumed`) and downgrades ok to check. Authoring a profile: cad-manufacturing skill. ' +
       'JUDGEMENT vs DETECTION: this tool produces both halves; pass `mode` to get one. A green verdict says nothing about where to look, and the attention field is not a verdict (DESIGN §25.7).',
     parameters: {
@@ -8140,6 +8140,7 @@ export function registerCadTools(
       'Deliver against `delivery` (excluded / difficult / not-excluded, with witnesses), NOT against `verdict`: a missing number is not a pass, and the geometry suspects in `attention` are DETECTION (where to look), never delivery evidence. ' +
       'THIS TOOL IS NEVER SILENT: when it cannot certify any region it still returns a `geometry-suspects` layer — the reentrant corners already known from the geometry scan, labelled as geometry and NOT as stress — so a run always says where to look next (HARNESS §11.14). ' +
       'A part whose members are thinner than the voxel cannot be certified at any affordable dxMm — the report then says so (verdict check, zero trustworthy regions) instead of drawing an authoritative-looking heatmap. ' +
+      'LOAD-BEARING THIN WALL is a structural-policy decision (1.6 mm here), separate from check_printability\'s FDM 1.2 mm screen; a designException records the structural decision and does NOT waive printability. ' +
       'Run it once per load case, and again after any change to the material, the supports or the geometry: comparing two versions under the SAME case is the re-check.',
     parameters: {
       versionId: { type: 'string', required: true, description: 'Saved version id to analyse, e.g. "v050".' },
@@ -8349,7 +8350,7 @@ export function registerCadTools(
       part: { type: 'string', description: 'Assembly instance id (e.g. "spool3"). Required for supportsFrom:"assembly" when the version has several placements.' },
       designException: {
         type: 'object', additionalProperties: true,
-        description: 'Self-signed design decision for a load-bearing thin wall: featureId, versionId, measuredMm, requiredMm, loadCase, whyThisDimension, whyNotLarger (a concrete conflict; "none" is invalid), residualRisk, inspection, userSummary, reportedToUser:true, signedBy:"agent"|"user". The userSummary MUST appear in your reply. A finer mesh/submodel does NOT replace this.',
+        description: 'Self-signed design decision for a load-bearing thin wall (STRUCTURAL policy, 1.6 mm — not the FDM printability 1.2 mm screen; it does not waive printability): featureId, versionId, measuredMm, requiredMm, loadCase, whyThisDimension, whyNotLarger (a concrete conflict; "none" is invalid), residualRisk, inspection, userSummary, reportedToUser:true, signedBy:"agent"|"user". The userSummary MUST appear in your reply. A finer mesh/submodel does NOT replace this.',
       },
       supports: {
         type: 'array',
@@ -8745,7 +8746,7 @@ export function registerCadTools(
       },
       designExceptions: {
         type: 'array',
-        description: 'Self-signed design decisions for load-bearing thin walls. Each is validated: empty/boilerplate fields, whyNotLarger:"none", reportedToUser:false, or measured>=required -> blocked. A complete one is echoed as info with its userSummary; it records the decision, it does not clear the thin wall.',
+        description: 'Self-signed design decisions for STRUCTURAL load-bearing thin walls (1.6 mm policy), not the FDM printability screen. Each is validated: empty/boilerplate fields, whyNotLarger:"none", reportedToUser:false, or measured>=required -> blocked. A complete one is echoed as info with its userSummary; it records the decision, it does not clear the thin wall or waive printability.',
         items: { type: 'object', additionalProperties: true },
       },
     },

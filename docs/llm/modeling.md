@@ -108,7 +108,10 @@ The hard part is almost never the arithmetic — it is naming the thing you want
   only when the mesh is watertight and one connected body, and renders the views from
   the STL it already compiled (no second compile).
 - **A thin wall is reported, not blocked.** Min wall below 1.2mm produces a warning
-  and `preflight.minWallMm`; it does not refuse the version. The sewing frame has a
+  and `preflight.minWallMm`; it does not refuse the version. This is the **printability**
+  screen (FDM/additive), not a structural/load-bearing check: a load-bearing wall is
+  `cad_simulate` (`action: "stress"`)'s 1.6mm policy + `designException`, which does not
+  waive printability. The sewing frame has a
   legitimate 0.9mm ear, and a gate that rejects it would force a worse geometry. A
   caller that needs a hard wall limit checks the number before the next call.
 - **A refusal is not a version.** `saved:false` + no `versionId` means the part's

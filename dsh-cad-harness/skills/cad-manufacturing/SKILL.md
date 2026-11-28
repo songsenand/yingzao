@@ -15,7 +15,8 @@ A screen answers "does this violate a declared rule". It never answers "which pr
 - **Overhangs**: holes/racks/threads along Z print support-free; a horizontal ceiling is a bridge — keep spans ≤30mm and say so.
 - **Overhang is a support cost, not a failure.** It is reported as a finding by default; a supported FDM part is not blocked. Only a process profile that declares `overhangDeg.hard: true` (no supports / visible surface / trapped cavity) may gate the verdict. Don't chase the 45° number as if it were a hard rule.
 - **Layer direction**: columns/tubes print standing; a spring must print with layers perpendicular to the bending neutral face.
-- **Threads**: no fine load-bearing printed threads; use a clearance hole + locknut/insert. Coarse (≥1.5mm pitch) is fine.
+- **Threads**: no fine load-bearing printed threads; use a clearance hole + locknut/insert.
+- **Print thin wall is not load-bearing thin wall.** `printability` measures a 1.2mm / profile wall (FDM/additive) and never certifies strength; a load-bearing wall is `cad_simulate` (`action: "stress"`)'s 1.6mm structural policy, and `designException` records that decision without waiving printability. Coarse (≥1.5mm pitch) is fine.
 - **Fits**: printed mating pairs ±0.15mm loose; "tight" means a fastener/insert, not a tight print.
 - **Bed/time**: check bbox against the bed and the time budget; a part that does not fit is split, and the joint becomes an interface.
 - **Color is not a geometric pass.** `cad_part` (`action: "appearance"`) stores a GLB sidecar; the panel still previews STL.

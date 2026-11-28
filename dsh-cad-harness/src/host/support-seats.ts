@@ -79,7 +79,7 @@ export interface DeriveSupportsOptions {
 }
 
 const STRUCTURAL = new Set(['转动副', '固定副', '销孔', '贴合']);
-/** Declared structural minimum for a load-bearing FDM/PLA wall (policy, not physics). */
+/** Declared STRUCTURAL minimum for a load-bearing FDM/PLA wall (policy, not physics) — 1.6 mm; deliberately separate from the 1.2 mm FDM printability screen. */
 export const MIN_LOAD_BEARING_WALL_MM = 1.6;
 
 export class ThinWallError extends Error {
