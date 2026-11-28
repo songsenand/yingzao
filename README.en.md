@@ -4,7 +4,7 @@
 
 **The agent generates. The plugin closes the loop.**
 
-A dsh plugin for mechanical CAD — fit, motion and manufacturability checked before you accept a model, and the final call left to you.
+A dsh plugin for mechanical CAD: the agent writes parametric code to design, the plugin runs a set of CAD tools over fit, motion and manufacturability, and the reports and version history show up in the CAD Preview panel in the DSH Web sidebar — the final call is still yours.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/en/user/install.md)

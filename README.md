@@ -4,7 +4,7 @@
 
 **Agent 负责生成，插件负责闭环。**
 
-dsh 的机械 CAD 插件：验收前替你把配合、运动与可制造性查一遍，最终判断留给你。
+dsh 的机械 CAD 插件：Agent 写参数化代码做设计，插件用一组 CAD 工具查配合、运动与可制造性，报告和版本历史在 DSH Web 侧边栏的「CAD 预览」里给你看——最终判断留给你。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](docs/user/install.md)
