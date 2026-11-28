@@ -468,7 +468,7 @@ export function checkFindingDrafts(run: CheckRun, options: { block?: boolean } =
       what: `${check.id} is not in checks/registry.json`,
       why: ['a check must be pre-registered before it can be evidence'],
       where: { kind: 'manifest', note: `checks/${check.id}` },
-      next: ['run node scripts/check-register.mjs <project> --id ' + check.id, 'or remove the check'],
+      next: ['run npx dsh-cad-check-register <project> --id ' + check.id, 'or remove the check'],
       checkId: check.id,
       witness: baseWitness,
     });
@@ -632,7 +632,7 @@ export function checkClaimByCheck(
     return { ok: false, code: 'claim-check-invalid', detail: `check ${claim.checkId} is not mountable: ${run.check.error ?? 'invalid'}` };
   }
   if (run.status === 'unregistered') {
-    return { ok: false, code: 'claim-check-unregistered', detail: `check ${claim.checkId} is not registered (run check-register)` };
+    return { ok: false, code: 'claim-check-unregistered', detail: `check ${claim.checkId} is not registered (run dsh-cad-check-register)` };
   }
   if (run.status === 'modified') {
     return { ok: false, code: 'claim-check-modified', detail: `check ${claim.checkId} changed after registration; re-register it` };

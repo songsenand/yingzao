@@ -72,10 +72,11 @@ reports `preset-standard-drift` and names this fix.
 ## Commands
 
 ```bash
-node scripts/doctor.mjs --json
-node scripts/backend.mjs --show
-node scripts/verify-cli.mjs <project> --advisory
-node scripts/clean.mjs            # dry-run; --apply to remove stale temp dirs
+npx dsh-cad-doctor --json
+npx dsh-cad-backend --show
+npx dsh-cad-verify <project> --advisory
+npx dsh-cad-check-register <project> --id <id>
+npx dsh-cad-clean                 # dry-run; --apply to remove stale temp dirs
 ```
 
 The `dsh-cad-*` binaries are declared in `package.json`; they are on `PATH` when

@@ -6,22 +6,22 @@
 contract, or judge the design. It answers: *what evidence is present, fresh, and
 witnessed for this project?*
 
-Run it from the harness root:
+Run it from the project (or any directory with the package installed):
 
 ```bash
-node scripts/verify.mjs /path/to/project --advisory
-node scripts/verify.mjs /path/to/project --block        # blocking mode
-node scripts/verify.mjs /path/to/project --json --out /tmp/evidence.json
-node scripts/verify.mjs /path/to/project --checks       # opt-in custom checks
-node scripts/verify.mjs /path/to/project --checks --mount-checks  # before drawing
+npx dsh-cad-verify /path/to/project --advisory
+npx dsh-cad-verify /path/to/project --block        # blocking mode
+npx dsh-cad-verify /path/to/project --json --out /tmp/evidence.json
+npx dsh-cad-verify /path/to/project --checks       # opt-in custom checks
+npx dsh-cad-verify /path/to/project --checks --mount-checks  # before drawing
 
 # register a check before drawing (the only writer of checks/registry.json)
-node scripts/check-register.mjs /path/to/project --id fit-clearance
-node scripts/check-register.mjs /path/to/project --all
-node scripts/check-register.mjs /path/to/project --unregister fit-clearance
+npx dsh-cad-check-register /path/to/project --id fit-clearance
+npx dsh-cad-check-register /path/to/project --all
+npx dsh-cad-check-register /path/to/project --unregister fit-clearance
 ```
 
-The command is also exposed as `npm run verify -- <project-dir> [flags]`.
+Both commands are also exposed as npm scripts: `npm run verify -- <project-dir> [flags]` and `npm run check-register -- <project-dir> ...`. In a source checkout, `node scripts/verify.mjs` and `node scripts/check-register.mjs` are the direct forms.
 
 ## Six rows
 
@@ -236,9 +236,9 @@ cannot express (a functional target, a project-specific threshold). A check is
 `checks/registry.json`. Registration is an explicit act, not a discovery:
 
 ```bash
-node scripts/check-register.mjs <project> --id <id>
-node scripts/check-register.mjs <project> --all
-node scripts/check-register.mjs <project> --unregister <id> [--reason <text>]
+npx dsh-cad-check-register <project> --id <id>
+npx dsh-cad-check-register <project> --all
+npx dsh-cad-check-register <project> --unregister <id> [--reason <text>]
 ```
 
 The command validates the manifest/permissions/entry, runs the negative sample,
@@ -330,10 +330,10 @@ but reads/network outside the project are not prevented. `registeredAt` is a
 declaration, not a notarised timestamp: the registry makes the normal path
 explicit and changes visible, but a determined editor can still forge it.
 `verify` trusts the registry entry: hand-editing `registry.json` bypasses the
-negative-sample gate. Always register with `check-register`; registration
+negative-sample gate. Always register with `dsh-cad-check-register`; registration
 executes the negative sample, so run it only on code you trust. Mounting a check
 means trusting its author. `examples/checks/fit-clearance/` is a working
-template; run `check-register` after copying it.
+template; run `dsh-cad-check-register` after copying it.
 
 ## Exit codes
 

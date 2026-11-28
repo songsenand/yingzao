@@ -44,6 +44,19 @@ const verifyCli = await esbuild.context({
   sourcemap: true,
 });
 
+// Packaged custom-check CLI: `dsh-cad-check-register` must work on a clean
+// install with no src/; scripts/check-register.mjs loads this bundle first.
+const checkRegisterCli = await esbuild.context({
+  entryPoints: ['src/host/verify/check-register.ts'],
+  outfile: 'lib/check-register.js',
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node20',
+  external: ['@deepseek-ai/*', '@deepseek-ai/cordis', 'schemastery', 'manifold-3d'],
+  sourcemap: true,
+});
+
 // Packaged contract CLI: `dsh-cad-contract` must work on a clean install with
 // no src/; scripts/contract.mjs loads this bundle first.
 const contractCli = await esbuild.context({
@@ -87,10 +100,10 @@ const client = await esbuild.context({
 });
 
 if (watch) {
-  await Promise.all([host.watch(), client.watch(), verifyCli.watch(), importRunCli.watch(), contractCli.watch()]);
+  await Promise.all([host.watch(), client.watch(), verifyCli.watch(), checkRegisterCli.watch(), importRunCli.watch(), contractCli.watch()]);
   console.log('[cad-harness] watching…');
 } else {
-  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild(), importRunCli.rebuild(), contractCli.rebuild()]);
-  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose(), importRunCli.dispose(), contractCli.dispose()]);
-  console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js + lib/contract-cli.js');
+  await Promise.all([host.rebuild(), client.rebuild(), verifyCli.rebuild(), checkRegisterCli.rebuild(), importRunCli.rebuild(), contractCli.rebuild()]);
+  await Promise.all([host.dispose(), client.dispose(), verifyCli.dispose(), checkRegisterCli.dispose(), importRunCli.dispose(), contractCli.dispose()]);
+  console.log('[cad-harness] built lib/index.js + lib/client.js + lib/verify.js + lib/check-register.js + lib/contract-cli.js');
 }

@@ -130,7 +130,7 @@ export function whyNext(code: string): WhyNext {
     case 'claim-check-unregistered':
       return {
         why: ['the claim cites a check that is not in checks/registry.json'],
-        next: ['run node scripts/check-register.mjs <project> --id <id>', 'or remove checkId from the claim'],
+        next: ['run npx dsh-cad-check-register <project> --id <id>', 'or remove checkId from the claim'],
       };
     case 'claim-check-modified':
       return {

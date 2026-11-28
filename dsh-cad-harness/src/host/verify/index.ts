@@ -111,7 +111,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
       what: issue,
       why: ['the checks registry could not be read; registered checks are treated as unregistered'],
       where: { kind: 'manifest', note: 'checks/registry.json' },
-      next: ['fix registry.json, or run check-register'],
+      next: ['fix registry.json, or run npx dsh-cad-check-register'],
     });
   }
 

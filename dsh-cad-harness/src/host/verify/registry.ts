@@ -230,7 +230,7 @@ export async function registerCheck(
         ...resultBase,
         errors: [
           `${check.id} is already registered as ${active.version} ${active.hash}; `
-          + 'run check-register --unregister first, or pass --supersede',
+          + 'run npx dsh-cad-check-register --unregister first, or pass --supersede',
         ],
       };
     }

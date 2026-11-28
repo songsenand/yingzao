@@ -260,7 +260,7 @@ node scripts/verify.mjs /path/to/project --advisory
 
 - 默认 advisory（exit 0）；`--block` 时 pass 0 / warn 1 / blocked|fail 2 / 用法错误 3；`--strict` 让 warn 也返回 2。
 - claims：`<project>/claims.json` 或 `--claims <file>`；policy：`<project>/evidence-policy.json` 或 `--policy <file>`；没有 policy 就是 advisory。
-- 项目特定判据放在 `<project>/checks/<id>/`：先 `check-register` 注册，再用 `--checks` 启用。注册时会跑负样本，负样本通过则拒收；每条判据都要有 finding 或 skipped；检查不得写项目。
+- 项目特定判据放在 `<project>/checks/<id>/`：先 `npx dsh-cad-check-register` 注册，再用 `--checks` 启用。注册时会跑负样本，负样本通过则拒收；每条判据都要有 finding 或 skipped；检查不得写项目。
 - 详见 [docs/llm/verify.md](docs/llm/verify.md)。
 
 ### DSH 版本兼容（本地容器矩阵）
