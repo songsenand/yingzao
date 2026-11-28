@@ -13,7 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   annotateDownloadName, auditExport, buildExportManifest, buildUnverifiedReadme, classifyExport,
-  newExportId, sha256, writeExportRecord,
+  newExportId, processGateFindings, sha256, writeExportRecord,
 } from '../src/host/export-gate.ts';
 import { projectStores } from '../src/host/project.ts';
 
@@ -32,6 +32,18 @@ check('excluded audit -> blocked', classifyExport([], 'excluded') === 'blocked')
 check('warn finding -> difficult', classifyExport([{ severity: 'warn', code: 'x', detail: '' }], 'not-excluded') === 'difficult');
 check('difficult audit -> difficult', classifyExport([], 'difficult') === 'difficult');
 check('clean -> pass', classifyExport([], 'not-excluded') === 'pass');
+
+const planGate = processGateFindings({
+  rows: [
+    { id: 'P:p1', target: 'a v1', status: 'unobserved', why: 'no process', next: 'assign one' },
+    { id: 'P:p2', target: 'b v1', status: 'pass', why: 'ok' },
+    { id: 'M:policy', target: 'policy', status: 'unobserved', why: 'no policy' },
+    { id: 'R:v1', target: 'review', status: 'unobserved', why: 'not a process row' },
+  ],
+});
+check('process gate blocks an unassigned part', planGate.some((f) => f.code === 'plan.P:p1' && f.severity === 'blocked'), JSON.stringify(planGate));
+check('process gate blocks a missing policy row', planGate.some((f) => f.code === 'plan.M:policy'), JSON.stringify(planGate));
+check('process gate ignores non-process rows', !planGate.some((f) => f.code.startsWith('plan.R:')), JSON.stringify(planGate));
 
 check('suffix before extension', annotateDownloadName('part_v012.stl') === 'part_v012_UNVERIFIED.stl');
 check('suffix is idempotent', annotateDownloadName('part_v012_UNVERIFIED.stl') === 'part_v012_UNVERIFIED.stl');

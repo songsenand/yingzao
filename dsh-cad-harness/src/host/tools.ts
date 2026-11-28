@@ -33,6 +33,7 @@ import { formatSnapFitChecks, rotateVec, type InterfaceCheckResult } from './ass
 // typed interface is not assignable and the tool fails to register. Authority: inspect.ts.
 import type { Json } from './inspect.ts';
 import { flattenParts, loadAssemblyManifest, resolveAssemblyManifestPath } from './manifest.ts';
+import { processCapability } from './process-catalog.ts';
 import { buildAssemblyStl, buildProjectZip, planProjectExport } from './project-export.ts';
 import { registerUsageObserver, usageReport } from './usage.ts';
 import { projectStoresFor, requestStores, ensureProjectDir, takeBindingNotice, projectInfoFor, createProjectMarker, bindSessionToProject, liveCwdOf, sessionIdOf, setProjectKernel, type ProjectStores } from './project.ts';
@@ -109,6 +110,8 @@ interface GeneratePartArgs {
   part?: string;
   /** Alias for `part` (create_part calls its field `name`); prefer `part`. */
   name?: string;
+  /** Force a NEW part even if a same-name part exists (default false: iterate). */
+  newPart?: boolean;
   /** Subset of ["top","front","side","iso"] to attach; default all four. */
   views?: string[];
   /** CadQuery only: also write model.step and record its BRepCheck provenance. */
@@ -720,12 +723,76 @@ export function registerCadTools(
     return createUniquePart(partStore, a.fallbackName, 'intent');
   }
 
-  /** generate_part's view of the shared rule: the intent names a new part. */
-  const resolvePartForGeneration = (a: GeneratePartArgs, project: ProjectStores): Promise<PartEntry> =>
-    resolvePartForWrite(
-      { part: a.part ?? a.name, parentVersion: a.parentVersion, fallbackName: derivePartName(a.userIntent) },
-      project,
-    );
+  /**
+   * generate_part's part choice. LAZY PATH: one part + no `part` means iterate
+   * it; several parts means the tool refuses and lists them instead of forking
+   * `x 2`, `x 3` from an intent. `newPart: true` is the explicit long path.
+   */
+  const resolvePartForGeneration = async (a: GeneratePartArgs, project: ProjectStores): Promise<PartEntry> => {
+    const declared = a.part?.trim() || a.name?.trim();
+    if (declared || a.newPart) {
+      return resolvePartForWrite({
+        part: a.newPart ? undefined : declared,
+        parentVersion: a.parentVersion,
+        fallbackName: declared || derivePartName(a.userIntent),
+        reuseFallback: false,
+      }, project);
+    }
+    const parts = await listParts(project.partStore);
+    if (parts.length === 1) return parts[0];
+    if (parts.length > 1) {
+      const choices = parts.map((p) => `"${p.name}" (${p.versionIds.at(-1) ?? 'no version'})`).join(', ');
+      throw new Error(
+        `generate_part: no part given and the project has ${parts.length} parts: ${choices}. ` +
+        'Pass part to iterate one, or newPart: true to create a new part.',
+      );
+    }
+    return resolvePartForWrite({ parentVersion: a.parentVersion, fallbackName: derivePartName(a.userIntent) }, project);
+  };
+
+  /**
+   * Push the delivery plan into the write reply. The plan is read-only and not a
+   * gate, but making the model call it separately is exactly the "remembered
+   * checklist" failure; carrying the top gaps in the tool that just wrote a
+   * version keeps the next step in front of it. Failures are silent: this is a
+   * hint, never a reason a write fails.
+   */
+  async function deliveryGapWarnings(project: ProjectStores, limit = 3): Promise<string[]> {
+    if (process.env.DSH_CAD_DELIVERY_PUSH === 'off') return [];
+    try {
+      const plan = await buildDeliveryPlan(project.cwd, { checks: false });
+      return plan.rows
+        .filter((r) => (r.status === 'unobserved' || r.status === 'fail') && r.next)
+        .slice(0, limit)
+        .map((r) => `delivery gap: ${r.target} — ${r.why} → ${r.next}`);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * The BOM's declared process family for a part, or null when nobody declared
+   * one. Design-time screens are process-specific: the 1.2 mm ray screen is
+   * additive's ruler, not CNC's or a laser cut's.
+   */
+  async function processFamilyForPart(project: ProjectStores, partName: string, versionId: string): Promise<string | null> {
+    for (const manifestPath of [
+      join(project.cwd, 'assembly', 'assembly.json'),
+      join(project.cwd, 'cad-data', 'assembly', 'assembly.json'),
+    ]) {
+      try {
+        const manifest = await loadAssemblyManifest(manifestPath);
+        const node = flattenParts(manifest.root).find(
+          (p) => p.node.kind === 'part' && (p.node.name === partName || p.node.version === versionId),
+        );
+        const process = node?.node.process ?? manifest.root.process;
+        return process?.id ? processCapability(process.id)?.family ?? 'unknown' : null;
+      } catch {
+        // try the next location; no manifest is a valid answer (null)
+      }
+    }
+    return null;
+  }
 
   /**
    * Resolve one part's geometry for a run. A part either names a saved version
@@ -1252,6 +1319,10 @@ export function registerCadTools(
         type: 'string',
         description: 'Alias for `part` (create_part calls its field `name`); prefer `part`.',
       },
+      newPart: {
+        type: 'boolean',
+        description: 'Force a NEW part (default false). With several existing parts, you MUST pass `part` or `newPart: true`; the tool refuses to guess.',
+      },
       views: {
         type: 'array',
         description:
@@ -1371,12 +1442,13 @@ export function registerCadTools(
         }
         // A failed round still lands on the part: the error is part of its history.
         const part = await resolvePartForGeneration(a, project);
+        const parentVersion = a.parentVersion ?? part.versionIds.at(-1);
         const versionId = await saveVersion(store, {
           ...(kernel === 'cadquery'
             ? { sourceCode: source, sourceFile: 'model.py', backend: { kernel, version: result.meta?.version ?? null } }
             : { scadCode: source }),
           userIntent: a.userIntent,
-          parentVersion: a.parentVersion ?? null,
+          parentVersion: parentVersion ?? null,
           partId: part.id,
           datums: result.datums,
           datumSet: result.datumSet,
@@ -1472,6 +1544,7 @@ export function registerCadTools(
       if (result.stl) {
         try { measuredSolid = (await weldToSolid(parseBinaryStl(result.stl))).ok; } catch { measuredSolid = false; }
       }
+      const parentVersion = a.parentVersion ?? part.versionIds.at(-1);
       const versionId = await saveVersion(store, {
         ...(kernel === 'cadquery'
           ? {
@@ -1485,7 +1558,7 @@ export function registerCadTools(
         ...(measuredSolid === false ? { solid: false } : {}),
         renders: result.renders,
         userIntent: a.userIntent,
-        parentVersion: a.parentVersion ?? null,
+        parentVersion: parentVersion ?? null,
         partId: part.id,
         datums: result.datums,
         datumSet: result.datumSet,
@@ -1586,26 +1659,39 @@ export function registerCadTools(
       let minWallMm: number | undefined;
       let minWallAtMm: number[] | undefined;
       if (!a.parentVersion) {
-        try {
-          const screen = await checkPrintability(store, {
-            versionId, wallMinMm: 1.2, overhangDeg: 45, samples: 600,
-          });
-          minWallMm = screen.minWallMm;
-          minWallAtMm = screen.minWallAtMm;
-          if (minWallMm !== undefined) {
-            const where = minWallAtMm ? ` @ [${minWallAtMm.map((n) => +n.toFixed(2)).join(', ')}]` : '';
-            result.warnings.push(
-              minWallMm < 1.2
-                ? `first-version wall screen: thinnest ${minWallMm}mm${where} < 1.2mm — ` +
-                  'fix this representative before generating parts that share the feature'
-                : `first-version wall screen: thinnest ${minWallMm}mm${where}`,
-            );
+        // PROCESS-AWARE: the 600-ray / 1.2 mm screen is additive's ruler. A CNC,
+        // turned or laser-cut part must not be judged by it. With no declared
+        // process the honest answer is to skip and say so — never assume FDM
+        // because the previous project happened to be FDM.
+        const family = await processFamilyForPart(project, part.name, versionId);
+        if (family === 'additive') {
+          try {
+            const screen = await checkPrintability(store, {
+              versionId, wallMinMm: 1.2, overhangDeg: 45, samples: 600,
+            });
+            minWallMm = screen.minWallMm;
+            minWallAtMm = screen.minWallAtMm;
+            if (minWallMm !== undefined) {
+              const where = minWallAtMm ? ` @ [${minWallAtMm.map((n) => +n.toFixed(2)).join(', ')}]` : '';
+              result.warnings.push(
+                minWallMm < 1.2
+                  ? `first-version additive wall screen: thinnest ${minWallMm}mm${where} < 1.2mm — ` +
+                    'fix this representative before generating parts that share the feature'
+                  : `first-version additive wall screen: thinnest ${minWallMm}mm${where}`,
+              );
+            }
+          } catch (e) {
+            result.warnings.push(`first-version additive wall screen unavailable: ${String((e as Error).message ?? e)}`);
           }
-        } catch (e) {
-          result.warnings.push(`first-version wall screen unavailable: ${String((e as Error).message ?? e)}`);
+        } else {
+          result.warnings.push(
+            `first-version wall screen skipped: process is ${family ?? 'not declared'} — the 1.2mm screen is additive-specific; ` +
+            'assign the process in the BOM and run the matching cad_check evaluator (cnc / turning / sheet2d / edm)',
+          );
         }
       }
 
+      result.warnings.push(...await deliveryGapWarnings(project));
       return {
         versionId, saved: true, success: true, kernel,
         ...(result.step ? { step: true } : {}),
@@ -1834,6 +1920,8 @@ export function registerCadTools(
     part?: string;
     /** Alias for `part` (create_part calls its field `name`); prefer `part`. */
     name?: string;
+    /** Force a NEW part even if a same-name part exists (default false: iterate). */
+    newPart?: boolean;
     parentVersion?: string;
     userIntent?: string;
     unit?: Unit;
@@ -1855,6 +1943,8 @@ export function registerCadTools(
     part: string;
     /** True when this import started a NEW part (no part/name match). */
     partCreated: boolean;
+    /** How the part was chosen: declared name, file-name match, the only part, or new. */
+    partSource: 'declared' | 'name' | 'only' | 'new';
     format: string;
     solid: boolean;
     watertight: boolean;
@@ -1886,14 +1976,34 @@ export function registerCadTools(
 
     const declaredPart = a.part?.trim() || a.name?.trim();
     const fallbackName = deriveNameFromFile(a.file);
-    const existingPart = await findPartByName(partStore, declaredPart || fallbackName);
+    const parts = await listParts(partStore);
+    const existingPart = a.newPart ? undefined : await findPartByName(partStore, declaredPart || fallbackName);
+    // LAZY PATH: a project with exactly one part and no `part` argument is an
+    // iteration of that part; with several parts, guessing would attach a
+    // corrected export to the wrong version chain (the 14-parts dog run), so
+    // refuse and list the candidates. `newPart: true` is the explicit long path.
+    let lazyPart: PartEntry | undefined;
+    let partSource: ImportPartResult['partSource'] = a.newPart ? 'new' : declaredPart ? 'declared' : existingPart ? 'name' : 'new';
+    if (!declaredPart && !a.newPart && !existingPart) {
+      if (parts.length === 1) {
+        lazyPart = parts[0];
+        partSource = 'only';
+      } else if (parts.length > 1) {
+        const choices = parts.map((p) => `"${p.name}" (${p.versionIds.at(-1) ?? 'no version'})`).join(', ');
+        throw new Error(
+          `import_part: no part given and the project has ${parts.length} parts: ${choices}. ` +
+          'Pass part to iterate one, or newPart: true to create a new part.',
+        );
+      }
+    }
     const part = await resolvePartForWrite({
-      part: declaredPart,
+      part: a.newPart ? undefined : declaredPart ?? lazyPart?.name,
       parentVersion: a.parentVersion,
-      fallbackName,
-      reuseFallback: true,
+      fallbackName: a.newPart && declaredPart ? declaredPart : fallbackName,
+      reuseFallback: !a.newPart,
     }, project);
-    const partCreated = !existingPart && !a.parentVersion;
+    const parentVersion = a.parentVersion ?? part.versionIds.at(-1);
+    const partCreated = !existingPart && !lazyPart;
 
     const g = await importGeometry({
       file: a.file,
@@ -1928,7 +2038,7 @@ export function registerCadTools(
       stl: g.stl,
       renders,
       userIntent: a.userIntent?.trim() || `导入自 ${basename(g.resolvedPath)}`,
-      parentVersion: a.parentVersion ?? null,
+      parentVersion: parentVersion ?? null,
       partId: part.id,
       ...(datumSet ? { datumSet } : {}),
       source: {
@@ -1980,6 +2090,12 @@ export function registerCadTools(
         `created a new part "${part.name}" from the file name — pass part (or name) to add this revision to an existing part`,
       );
     }
+    if (lazyPart) {
+      warnings.push(
+        `attached to the only part "${lazyPart.name}" (${part.versionIds.at(-1) ?? 'new'}); pass part to choose another`,
+      );
+    }
+    warnings.push(...await deliveryGapWarnings(project));
 
     // Persist renders as durable model-visible attachments (same channel as
     // generate_part: the model must SEE an imported part, not just read about it).
@@ -2006,6 +2122,7 @@ export function registerCadTools(
       versionId,
       part: part.name,
       partCreated,
+      partSource,
       format: g.format,
       solid: g.solid,
       watertight: g.watertight,
@@ -2055,9 +2172,13 @@ export function registerCadTools(
         type: 'string',
         description: 'Alias for `part` (create_part calls its field `name`); prefer `part`.',
       },
+      newPart: {
+        type: 'boolean',
+        description: 'Force a NEW part instead of iterating a same-name part (default false). With several existing parts, you MUST pass `part` or `newPart: true`; the tool refuses to guess.',
+      },
       parentVersion: {
         type: 'string',
-        description: 'Version id this import supersedes, e.g. "v003". Must belong to the same part.',
+        description: 'Version id this import supersedes, e.g. "v003". Must belong to the same part. Default: the newest version of the resolved part.',
       },
       userIntent: {
         type: 'string',
@@ -2120,6 +2241,7 @@ export function registerCadTools(
           versionId: { type: 'string', required: true },
           part: { type: 'string', required: true },
           partCreated: { type: 'boolean', required: true, description: 'True when this import started a NEW part.' },
+          partSource: { type: 'string', required: true, enum: ['declared', 'name', 'only', 'new'], description: 'How the part was chosen.' },
           format: { type: 'string', required: true, description: 'stl-binary, stl-ascii, step-cascadio, dxf-ezdxf-extrude or dxf-ezdxf-mesh.' },
           solid: { type: 'boolean', required: true },
           watertight: { type: 'boolean', required: true },

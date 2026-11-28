@@ -16,6 +16,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { auditDelivery, type AuditFinding, type DeliveryAudit, type DeliveryClaim } from './delivery-audit.ts';
 import { verify, type VerifyResult } from './verify/index.ts';
+import { buildDeliveryPlan, type DeliveryPlan } from './deliver-plan.ts';
 import type { ProjectStores } from './project.ts';
 
 export type ExportVerdict = 'pass' | 'difficult' | 'blocked';
@@ -101,6 +102,29 @@ export async function readProjectClaims(project: ProjectStores): Promise<{
  * itself already treats unobserved evidence as a finding, so this is a
  * classification, not a second opinion.
  */
+/**
+ * Process-aware delivery gate. The audit deliberately accepts "any manufacturing
+ * run" (a turned brass shaft must not be judged by printability), but that floor
+ * is not enough to ship: a part with no process, or with no run of the evaluator
+ * its process names, is an unverified claim. `deliver-plan` already derives the
+ * exact evaluator per process; this turns its unobserved P:/policy/mix rows into
+ * blocking export findings.
+ */
+export function processGateFindings(plan: DeliveryPlan): AuditFinding[] {
+  const findings: AuditFinding[] = [];
+  for (const row of plan.rows) {
+    const processRow = row.id.startsWith('P:') || row.id === 'M:policy' || row.id === 'M:mix';
+    if (!processRow) continue;
+    if (row.status !== 'unobserved' && row.status !== 'fail') continue;
+    findings.push({
+      severity: 'blocked',
+      code: `plan.${row.id}`,
+      detail: `${row.target}: ${row.why}${row.next ? ` — next: ${row.next}` : ''}`,
+    });
+  }
+  return findings;
+}
+
 /** Pure classification so the route, tests, and any future CLI agree. */
 export function classifyExport(
   findings: readonly AuditFinding[],
@@ -120,6 +144,14 @@ export async function auditExport(project: ProjectStores): Promise<ExportGate> {
   const findings: AuditFinding[] = verified.report.findings
     .filter((f) => f.severity !== 'info')
     .map((f) => ({ severity: f.severity, code: f.code, detail: `${f.what}${f.why?.length ? ` — ${f.why.join('; ')}` : ''}` }));
+  // Process assignment + the process's own evaluator are part of the gate, not
+  // just the read-only plan. A missing process is not "difficult": nobody has
+  // declared how this part is made, so no manufacturing claim can be checked.
+  try {
+    findings.push(...processGateFindings(await buildDeliveryPlan(project.cwd, { checks: false })));
+  } catch {
+    // A plan that cannot be built is already reported by verify/audit findings.
+  }
   const verdict = classifyExport(findings, verified.report.verdict);
   return {
     verdict,

@@ -70,14 +70,21 @@ const importOf = async (args) => importTool.execute({ ...args, render: false }, 
 console.log('--- same file, no part: one part, versions appended ---');
 const a1 = await importOf({ file: boxPath, userIntent: 'first' });
 const a2 = await importOf({ file: boxPath, userIntent: 'second' });
-check(a1.partCreated === true, 'the first import starts a part', JSON.stringify({ part: a1.part, created: a1.partCreated }));
+check(a1.partCreated === true && a1.partSource === 'new', 'the first import starts a part', JSON.stringify({ part: a1.part, created: a1.partCreated, source: a1.partSource }));
 check(a1.minWallMm === undefined && !(a1.warnings ?? []).some((w) => /wall screen/i.test(w)),
   'a default import stays process-neutral (no FDM screen)', JSON.stringify(a1.warnings));
-check(a2.partCreated === false, 'the second import does NOT create another part', JSON.stringify({ part: a2.part, created: a2.partCreated }));
+check(a2.partCreated === false && a2.partSource === 'name', 'the second import does NOT create another part', JSON.stringify({ part: a2.part, created: a2.partCreated, source: a2.partSource }));
 check(a1.part === a2.part, 'both land on the same part', `${a1.part} vs ${a2.part}`);
 const manifest1 = await readPartManifest(project.partStore);
 const boxPart = manifest1.parts.find((p) => p.name === a1.part);
 check(Boolean(boxPart) && boxPart.versionIds.length === 2, 'that part has both versions', JSON.stringify(boxPart?.versionIds));
+
+console.log('--- a different file in a one-part project still iterates it ---');
+const otherPath = join(PROJ, 'box-variant.stl');
+writeFileSync(otherPath, boxStl(22, 22, 22));
+const only = await importOf({ file: otherPath, userIntent: 'variant' });
+check(only.part === a1.part && only.partSource === 'only', 'a one-part project defaults to that part', JSON.stringify({ part: only.part, source: only.partSource }));
+check((only.warnings ?? []).some((w) => /attached to the only part/.test(String(w))), 'and says so in the reply');
 
 console.log('--- `name` is accepted as the alias the model actually sends ---');
 const lidPath = join(PROJ, 'lid.stl');
@@ -90,8 +97,14 @@ const manifest2 = await readPartManifest(project.partStore);
 const lidPart = manifest2.parts.find((p) => p.name === '底盖');
 check(Boolean(lidPart) && lidPart.versionIds.length === 2, 'the aliased part has both versions');
 
+console.log('--- several parts: the tool refuses to guess ---');
+let ambiguous = null;
+try { await importOf({ file: platePath, userIntent: 'thin plate' }); } catch (error) { ambiguous = String(error?.message ?? error); }
+check(Boolean(ambiguous) && /project has 2 parts/.test(ambiguous) && /newPart: true/.test(ambiguous),
+  'a new file in a multi-part project is refused with the candidates', ambiguous);
+
 console.log('--- import runs the wall screen (or says it could not) ---');
-const thin = await importOf({ file: platePath, userIntent: 'thin plate', wallScreen: true });
+const thin = await importOf({ file: platePath, userIntent: 'thin plate', newPart: true, wallScreen: true });
 const wallLine = (thin.warnings ?? []).find((w) => /wall screen/i.test(String(w)));
 check(Boolean(wallLine), 'an explicit FDM screen reports a line', JSON.stringify(thin.warnings));
 if (typeof thin.minWallMm === 'number') {

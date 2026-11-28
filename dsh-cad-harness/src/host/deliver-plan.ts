@@ -316,7 +316,7 @@ export async function buildDeliveryPlan(projectRoot: string, options: PlanOption
           why: `no process assigned; the approved policy allows ${allowedIds.join(', ')}`,
           status: 'unobserved',
           evidence: { versionIds: [version] },
-          next: 'assign a process from the approved set (agent), then run cad_check({ action: "printability" })',
+          next: 'assign a process from the approved set (agent), then run the matching cad_check evaluator (printability / cnc / turning / sheet2d / edm) — do not assume FDM',
         });
       }
     } else if (!processConfirmed(decl, manufacturing)) {

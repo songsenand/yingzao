@@ -357,6 +357,7 @@ Compile a part into a new version. Pass EITHER `scadCode` (OpenSCAD) OR `code` (
 | `parentVersion` | string | — | Version id this iteration derives from, e.g. "v003". Must belong to the same part. |
 | `part` | string | — | Which part this version belongs to — the name the user would call it, e.g. "调焦轴". ALWAYS pass this when iterating: it is what groups versions into one part in the panel. Omit only for a brand-new part with no parentVersion (a name is then derived from userIntent), or to inherit the parentVersion's part. |
 | `name` | string | — | Alias for `part` (create_part calls its field `name`); prefer `part`. |
+| `newPart` | boolean | — | Force a NEW part (default false). With several existing parts, you MUST pass `part` or `newPart: true`; the tool refuses to guess. |
 | `views` | array | — | Which render views to ATTACH (each attached image spends context image budget): subset of ["top","front","side","iso"]. Default: all four — right for a new shape or a shape change you need to SEE. For an iteration that only changes a number you will verify by measurement (a hole Ø, a length), pass ["iso"]. Pass [] to register the version with NO images attached — the panel still shows the geometry, so the human is not blinded. |
 | `step` | boolean | — | CadQuery only: also write model.step and record BRepCheck provenance (optional; adds ~tens of KB and a STEP/STL consistency check). |
 | `dryRun` | boolean | — | Compile + check WITHOUT saving: no version, no images, no part row. Reports watertight / bodies / bbox / min-wall (600 samples) and refuses to create anything. Use it when you want to probe geometry before spending a version. |
@@ -380,7 +381,8 @@ Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellati
 | `file` | string | **required** | Path to the file; a relative path resolves against the project directory. The bytes are copied into the version, never referenced. |
 | `part` | string | — | Which part to file it under (defaults to the file name; a repeated file name reuses that part). Re-importing a corrected export under the same part is how you iterate an imported part. |
 | `name` | string | — | Alias for `part` (create_part calls its field `name`); prefer `part`. |
-| `parentVersion` | string | — | Version id this import supersedes, e.g. "v003". Must belong to the same part. |
+| `newPart` | boolean | — | Force a NEW part instead of iterating a same-name part (default false). With several existing parts, you MUST pass `part` or `newPart: true`; the tool refuses to guess. |
+| `parentVersion` | string | — | Version id this import supersedes, e.g. "v003". Must belong to the same part. Default: the newest version of the resolved part. |
 | `userIntent` | string | — | One-line summary for the version history; defaults to "导入自 <file>". |
 | `unit` | string | — | The source file's unit as DECLARED by you: mm (default), cm, m or inch. STL carries no unit, so this is never inferred. STEP self-declares (mm only accepted); DXF $INSUNITS wins when set. |
 | `scale` | number | — | Extra multiplier applied on top of unit, e.g. 0.5 for a half-scale model. |
@@ -396,7 +398,7 @@ Import an external STL (binary/ASCII, mm z-up), STEP/STP (OpenCASCADE tessellati
 cad_part({ action: "import", args: { file: "…" } })
 ```
 
-returns: `versionId`, `part`, `partCreated`, `format`, `solid`, `watertight`, `repaired`, `triangles`, `shells`, `genus`, `volumeMm3`, `sizeMm`, `unit`, `scaleApplied`, `sha256`, `sourcePath`, `datums`, `warnings`, `durationMs`, `views`, `minWallMm`, `minWallAtMm`
+returns: `versionId`, `part`, `partCreated`, `partSource`, `format`, `solid`, `watertight`, `repaired`, `triangles`, `shells`, `genus`, `volumeMm3`, `sizeMm`, `unit`, `scaleApplied`, `sha256`, `sourcePath`, `datums`, `warnings`, `durationMs`, `views`, `minWallMm`, `minWallAtMm`
 
 
 ## `init_project`
