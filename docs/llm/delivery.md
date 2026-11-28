@@ -11,11 +11,13 @@
    is done, LOOK at the final state: the assembly renders (`cad_assembly` (`action: "validate"`)
    attaches them), the panel screenshots, or a fresh `cad_see` (`action: "render"`) of the risky
    part. microscope 系列两次"指标全绿、图上一眼假"的交付都是跳过了这一步.
-2. **Run `cad_check` (`action: "printability"`) on every part before declaring the design done**,
-   and again after any edit that changes a wall, a boss or an angle. A part can
-   be geometrically valid, watertight, interference-free — and still 0.5mm thin
-   in a place no number you checked looked at. `verdict: check` means the
-   findings get answered (fixed or argued), not ignored.
+2. **Run the evaluator the part's process declares on every fabricated part before
+   declaring the design done**, and again after any edit that changes a wall, a boss
+   or an angle: `cad_check` (`action: "printability"`) for FDM/additive, `cnc` for
+   milled parts, `turning` for turned parts, `sheet2d` for sheet/laser/waterjet,
+   `edm` for sinker EDM. A part can be geometrically valid, watertight,
+   interference-free — and still 0.5mm thin in a place no number you checked looked
+   at. `verdict: check` means the findings get answered (fixed or argued), not ignored.
 3. "It compiles / it assembles / the report passes" are three different claims.
    Delivery requires all three PLUS eyes on the shape and a printability pass.
 4. **A part version update invalidates every whole-machine result that names the

@@ -29,7 +29,7 @@ The hard part is naming the thing you want measured. `cad_inspect` (`action: "fe
 ## Preflight before spending a version
 
 - **`dryRun: true` compiles and checks without creating anything.** It returns watertight / bodies / bbox / min-wall and writes no version, no image, no part row. Use it when you want to probe a script before committing it.
-- **`preflight: true` saves only when the mesh is watertight AND one connected body.** A sub-1.2mm wall is a warning, not a refusal (printability, not structural strength; load-bearing thin walls are a separate 1.6mm stress/designException check) — legitimate thin ears exist. A refusal writes no version and no image, so the failed attempt does not pollute the part's history; the reply carries `preflight.ok / bodies / minWallMm`.
+- **`preflight: true` saves only when the mesh is watertight AND one connected body.** A sub-1.2mm wall is a warning, not a refusal — legitimate thin ears exist. A refusal writes no version and no image, so the failed attempt does not pollute the part's history; the reply carries `preflight.ok / bodies / minWallMm`.
 - **Do not batch design iterations.** The sewing session's 94 `parentVersion` generations were one-at-a-time feedback; preflight removes the bad ones, it does not make a batch of alternatives safe.
 
 ## Modeling

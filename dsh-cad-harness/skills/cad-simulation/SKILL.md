@@ -23,7 +23,7 @@ Motion is kinematics + an exact interference timeline; physics is rigid bodies u
 - No gravity. A rack is driven by `pitchRadiusMm`, never a sinusoid; `phaseRad` offsets by `r × phaseRad`.
 - **`drive` is kinematic: it prescribes a crank angle and resolves no contact force.** It answers "does the linkage collide / how far does it travel", never "can a motor carry this load" — that is `cad_simulate` (`action: "physics"`) with `motor`.
 - **A crank is not required.** `drive` is optional: when every mover is an `oscillator` (a guide/valve on a prescribed path) the time base is the oscillator period and the reply says `hasCrank: false`. Only "no drive AND no oscillator" is refused (nothing would move).
-- **Geometry sanity is a fact, not a verdict.** A part whose gap to the nearest part ÷ its own bbox diagonal > 5 is listed as 离群; ≤24 triangles is listed as 简单盒体. Neither changes pass/fail, but a non-empty `geometrySuspects` means "interference 0" may have proven nothing (two dummies parked 500mm away). The rule travels with the result as `geometrySuspectRule`.
+- **Geometry sanity is a fact, not a verdict.** A part whose gap to the nearest part ÷ its own bbox diagonal > 5 is listed as an outlier; ≤24 triangles is listed as a simple box. Neither changes pass/fail, but a non-empty `geometrySuspects` means "interference 0" may have proven nothing (two dummies parked 500mm away). The rule travels with the result as `geometrySuspectRule`.
 - **`closedLoop` is a fact, not a verdict.** `loopJoints` names the edges that close a cycle (union-find); a tree is false/[] and the Roberval balance is true/2. A closed loop can pass.
 
 ## Physics (`cad_simulate` action `physics`)
