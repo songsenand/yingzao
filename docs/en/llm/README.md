@@ -22,7 +22,7 @@ A production session exposes **9 surfaces / 45 ops**. The call form is `cad_<sur
 
 `catalog` / `help` are read-only actions on every surface: `catalog` lists the ops, `help` gives the legacy parameters.
 
-Six actions added on 2026-11-25: `cad_session kernel` (switch the project authoring kernel), `cad_assembly suggest` (interface suggestions), `cad_check sweep` (pre-motion sweep screen), `cad_simulate hotspots` (gravity-direction hot spots), `cad_deliver affected` (which checks a change invalidated) / `retire` (retire a run). Parameters and return shapes are in `TOOL-CONTRACTS.md`; `sweep` semantics are in `assembly.md`, and the remaining long-form notes follow.
+Six actions added on 2026-11-25: `cad_session kernel` (switch the project authoring kernel), `cad_assembly suggest` (interface suggestions), `cad_check sweep` (pre-motion sweep screen), `cad_simulate hotspots` (gravity-direction hot spots), `cad_deliver affected` (which checks a change invalidated) / `retire` (retire a run). Parameters and return shapes are in `TOOL-CONTRACTS.md`; long form: `kernel` in `cadquery.md`, `suggest` / `sweep` in `assembly.md`, `hotspots` in `engines.md`, `affected` / `retire` in `delivery.md`.
 
 ## Reading order
 

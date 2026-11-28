@@ -170,6 +170,8 @@ Network and offline (three switches; none of them changes how the package is dis
 dsh plugin --profile <your-profile> add dsh-cad-harness
 ```
 
+> For offline / intranet installs, use the GitHub Release tarball (`dsh plugin add -w`); see [install](docs/en/user/install.md).
+
 Then run the one-time setup so the preset and OpenSCAD are in place:
 
 ```bash

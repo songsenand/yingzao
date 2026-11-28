@@ -245,3 +245,12 @@ working, not an error.
 - **The declared range is the assumption.** If the real linkage swings less, the
   screen can be conservative; if it swings more, the screen proves nothing. State the
   range, then run `cad_simulate` (`action: "motion"`) for the pass/fail timeline.
+
+## 接口建议（`cad_assembly` action `suggest`，2026-11-25）
+
+装配检查会说“52 对未声明”，但不会说你该用哪个 datum，于是每个接触都要手写。`suggest` 跑同一套邻接扫描，读每个零件的 datum，给出**可直接编辑的接口模板**：distance 接口 + 实测间隙 + 对称容差。
+
+- 模板只是起点：它取每件的第一个 point datum（或第一个 axis/plane/cylinder），所以要复核选中的 datum。
+- 它**从不写契约**；写仍走 `cad_assembly` action `write`。
+- `skipped` 列的是无法模板化的 pair（缺 datum 等），不是通过。
+- 阈值默认 0.75 mm；`maxSuggestions` 默认 20、上限 60。

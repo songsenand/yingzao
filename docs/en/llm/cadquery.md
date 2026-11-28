@@ -14,6 +14,14 @@ The session prompt states `CAD authoring kernel: cadquery|openscad` (from the pr
 - `cad_session` action `info` reports the effective kernel: a project's
   `cad-data/project.json` `defaultKernel` wins over global `backend.json`.
 
+## Switching the kernel in place (`cad_session` action `kernel`)
+
+`cad_session({ action: "kernel", args: { kernel: "cadquery" } })` changes the **project default authoring kernel**; it does not create a new project:
+
+- Existing versions keep their own `backend.kernel` and `sourceFile`; only later `cad_part generate` calls follow the new kernel.
+- `dir` defaults to the session's bound project; returns `previous` / `kernel` / `note`.
+- The session prompt updates on the next turn. Do not create a second project just to switch engines — the design, versions and evidence would be split into two corpora, and merging them is more expensive than switching.
+
 ## Script contract
 
 ```python

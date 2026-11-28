@@ -45,3 +45,10 @@
 3. `docs/DECISION-LOG.md` 最近 10 条
 4. `AGENTS.md`（提交与文档纪律）
 5. 跑一次 `npm run accept`（在 `dsh-cad-harness/` 下）
+
+## 文档门禁
+
+`npm run accept:docs-consistency` 把文档和机器真值对齐：工具表逐项等于 `TOOL-SURFACE-V1.json`（9 surface / 45 op）、
+版本串等于 `package.json`、HARNESS 中英双语覆盖 §6.2/§11.18/§11.19、安装路径、环境变量、门禁数字、
+6 个 2026-11-25 新增 action 的长解释入口，以及本地 Markdown 链接。它已接入 `accept` 与 `accept:preview`；
+新增/删除 action 或改版本号时，先跑它。

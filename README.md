@@ -170,6 +170,8 @@ dsh plugin --profile <你的 profile> add dsh-cad-harness
 dsh plugin --profile <你的 profile> add dsh-cad-harness
 ```
 
+> 离线 / 内网安装用 GitHub Release tarball（`dsh plugin add -w`），步骤见 [安装与首次准备](docs/user/install.md)。
+
 装完后跑一次准备，把预设和 OpenSCAD 就位：
 
 ```bash

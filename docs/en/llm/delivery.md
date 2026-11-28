@@ -86,3 +86,19 @@
    failure, not a rigorous workflow. An unconfirmed policy/recommendation is
    `unobserved`, and the plan asks **once**. **A plan pass is not a claim:** run
    the named tools, then `verify` / `cad_deliver` (`action: "audit"`).
+
+## Incremental: which checks did this change invalidate? (`cad_deliver` action `affected`, 2026-11-25)
+
+`affected` is the incremental half of `audit`: per changed/newest version it lists the part-level checks that already cite it (fresh) and those that only cite an older version (stale), plus the atomic calls that would refresh them. Manifest-level checks (assembly / motion) stay in `plan` — their freshness depends on the contract, not on one version.
+
+- Omit `changed` to use the newest version of every part.
+- It answers “which evidence did this change actually invalidate”, not “is the corpus coherent” — the latter still belongs to `audit`.
+- Run it after a part update to avoid re-running the whole corpus; stale manifest-level checks still need a re-run.
+
+## Retiring a run (`cad_deliver` action `retire`, 2026-11-25)
+
+`retire` stops a run from counting as current evidence while keeping every artifact and its history; **it is not deletion**. Use it for a failure/screen whose geometry a later version replaced, or a declaration error that a re-run fixed.
+
+- `reason` is required; `undo: true` clears the retirement.
+- Retired runs are excluded from `audit`'s failing/latest/stale verdicts and still appear in `runs.retired`.
+- When the geometry is still current, prefer a fresh run with the same subject; retire only when the run can never become current evidence again.

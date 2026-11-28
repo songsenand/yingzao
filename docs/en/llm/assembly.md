@@ -241,3 +241,26 @@ working, not an error.
   silently and only surfaced as rework. A constraint you inferred has to name what it
   eliminates and hand the options back to the user; `brief.processes` records the SET
   the user allows, not one process.
+
+## Early sweep screen (2026-11-25)
+
+- **`cad_check` (`action: "sweep"`) is the pre-motion screen.** Give one moving
+  version, the static versions, and a declared joint range (`revolute` degrees or
+  `prismatic` mm). It computes a continuous swept AABB envelope, then closest-point
+  clearance samples, and refines only where clearance is below `2×minFeatureMm` until
+  the arc step is `<= minFeatureMm/2` or `maxSamples` is exhausted.
+- **It returns `collision` / `suspect` / `uncovered` / `clean`, not a delivery
+  verdict.** `uncovered` means the budget ran out before the target arc step; never
+  read it as clean. A positive clearance is not a pass.
+- **The declared range is the assumption.** If the real linkage swings less, the
+  screen can be conservative; if it swings more, the screen proves nothing. State the
+  range, then run `cad_simulate` (`action: "motion"`) for the pass/fail timeline.
+
+## Interface suggestions (`cad_assembly` action `suggest`, 2026-11-25)
+
+The assembly check reports “52 undeclared” but not which datums to use, so every contact had to be hand-written. `suggest` runs the same adjacency pass, reads each part's datums, and proposes **ready-to-edit interface templates**: a distance interface with the measured gap and a symmetric tolerance.
+
+- The template is a starting point: it uses the first point datum (or first axis/plane/cylinder) on each part, so review the chosen datums.
+- It **never writes the contract**; write through `cad_assembly` action `write`.
+- `skipped` names pairs it could not template (missing datums, etc.), not passes.
+- Threshold defaults to 0.75 mm; `maxSuggestions` defaults to 20 (max 60).

@@ -12,6 +12,14 @@
 - 版本会记录 `sourceFile: model.py` 与 `backend: {kernel:"cadquery"}`；切内核不会重写旧版本。
 - `cad_session` action `info` 报告当前 kernel：项目 `cad-data/project.json` 的 `defaultKernel` 优先，其次全局 `backend.json`。
 
+## 原地切换内核（`cad_session` action `kernel`）
+
+`cad_session({ action: "kernel", args: { kernel: "cadquery" } })` 改的是**项目默认作者内核**，不是新建项目：
+
+- 旧版本保留自己的 `backend.kernel` 与 `sourceFile`；只有之后的 `cad_part generate` 走新内核。
+- `dir` 省略时用会话已绑定的项目；返回 `previous` / `kernel` / `note`。
+- 会话提示在下一回合更新。不要为了换引擎建第二个项目——设计、版本和证据会被拆成两份，之后再合并比切换更贵。
+
 ## 脚本契约
 
 ```python

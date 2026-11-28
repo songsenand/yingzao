@@ -87,3 +87,19 @@
    `unobserved`, and the plan asks **once**. **A plan pass is not a claim:** run
    the named tools, then `verify` / `cad_deliver` (`action: "audit"`).
 
+
+## 增量：改了版本后该重跑哪些检查？（`cad_deliver` action `affected`，2026-11-25）
+
+`affected` 是 `audit` 的增量半边：按 changed/newest 版本列出已经引用它的 part-level 检查（fresh），以及只引用旧版本的检查（stale），并给出刷新它们的原子调用。manifest 级检查（assembly / motion）留在 `plan`，它们的新鲜度取决于契约，不是单个版本。
+
+- `changed` 省略时取每个零件的最新版本。
+- 它回答“这次改动实际让哪些证据失效”，不是“语料是否自洽”——后者仍归 `audit`。
+- 改完零件先跑它，能少跑一半检查；但 stale 的 manifest 级检查仍要重跑。
+
+## 退役一次运行（`cad_deliver` action `retire`，2026-11-25）
+
+`retire` 让一次运行不再算当前证据，但保留全部产物与历史；**不是删除**。用于：几何已被后续版本取代的失败 / 筛查运行，或声明错误已被重跑修正的运行。
+
+- `reason` 必填；`undo: true` 撤销退役。
+- 退役运行从 `audit` 的 failing / latest / stale 判定中排除，仍出现在 `runs.retired`。
+- 几何仍是最新时，优先重跑同 subject 的 fresh run；只有这次运行永远不可能再成为当前证据时才退役。

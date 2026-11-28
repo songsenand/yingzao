@@ -79,6 +79,15 @@ what is missing — do not build another one.
 - **Delivery looks at `delivery`, not `verdict`.** A missing number is not a pass; geometry-suspect points in `attention` are **probes** (where to look), not delivery evidence.
 - **Never silent**: when no region can be certified, still return the `geometry-suspects` layer (concave corners from the geometry scan), labelled geometry, not stress.
 
+## Gravity hot-spot scan (`cad_simulate` action `hotspots`, 2026-11-25)
+
+Run six linear-elastic solves in the ±axis 1g directions on a saved version, then cluster the peaks that recur. **This is detection, not a verdict**: the reply has no verdict/delivery field — “where to look” is not “is it strong enough”.
+
+- 1g is enough: the field is linear in the load, so a hot spot's **location** does not move with magnitude; high g only scales the number.
+- Default `dxMm` is coarse (thinnest bbox span / 8, clamped to 0.8–2.0 mm); thin features (a 0.8 mm hub ring, a D-flat edge) need an explicit finer `dxMm`.
+- It does not model contact/Hertz, preload, fatigue/creep or layer-direction failure; gravity is a **body force**, so a pure torque path needs an explicit service load + `stress`.
+- Use it to pick coordinates, then run `cad_simulate` action `stress` with a declared case before judging.
+
 ## What none of them can answer
 
 - Drive/output torque, power, lifetime (stress gives reactions and section forces, not a safety factor);

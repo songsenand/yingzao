@@ -22,7 +22,7 @@
 
 `catalog` / `help` 是每个 surface 自带的两个只读 action：`catalog` 列 op，`help` 给旧参数。
 
-2026-11-25 新增的 6 个 action：`cad_session kernel`（切换项目作者内核）、`cad_assembly suggest`（接口建议）、`cad_check sweep`（运动前扫掠筛查）、`cad_simulate hotspots`（重力方向热点）、`cad_deliver affected`（改版后该重跑哪些检查）/ `retire`（退役 run）。参数与返回形状见 `TOOL-CONTRACTS.md`；`sweep` 的语义见 `assembly.md`，其余长解释随后补。
+2026-11-25 新增的 6 个 action：`cad_session kernel`（切换项目作者内核）、`cad_assembly suggest`（接口建议）、`cad_check sweep`（运动前扫掠筛查）、`cad_simulate hotspots`（重力方向热点）、`cad_deliver affected`（改版后该重跑哪些检查）/ `retire`（退役 run）。参数与返回形状见 `TOOL-CONTRACTS.md`；长解释：`kernel` 见 `cadquery.md`，`suggest` / `sweep` 见 `assembly.md`，`hotspots` 见 `engines.md`，`affected` / `retire` 见 `delivery.md`。
 
 ## 阅读顺序
 
