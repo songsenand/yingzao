@@ -1,0 +1,19 @@
+SHOW_ALL=false;
+include </home/songsenand/Project/ToyMarker/examples/ice-castle-winder/scad/icecastle.scad>
+base_top;
+datum_plane("顶板上表面",[0,0,38],[0,0,1]);
+datum_plane("顶板下表面",[0,0,34],[0,0,1]);
+datum_axis("中轴",[0,0,0],[0,0,1]);
+datum("托座顶",[0,0,54]);
+datum("销孔1",[36.770,36.770,38]);
+datum("销孔2",[-36.770,36.770,38]);
+datum("销孔3",[-36.770,-36.770,38]);
+datum("销孔4",[36.770,-36.770,38]);
+datum_axis("角塔孔1",[77,77,38],[0,0,1]);
+datum_axis("角塔孔2",[-77,77,38],[0,0,1]);
+datum_axis("角塔孔3",[-77,-77,38],[0,0,1]);
+datum_axis("角塔孔4",[77,-77,38],[0,0,1]);
+datum("墙槽1",[77,0,38]);
+datum("墙槽2",[-77,0,38]);
+datum("墙槽3",[0,77,38]);
+datum("墙槽4",[0,-77,38]);

@@ -1,0 +1,1741 @@
+{
+  "schema": "assembly-change/v1",
+  "changeId": "chg_mwwtn8pc_8ad1d5c7",
+  "seq": 14,
+  "parent": "sha256:15a8c7e19d56b475a79dd8b12c4d227d63f665ac76dad8c67746488566014ba7",
+  "resulting": "sha256:f690c817972e4454045e5db6287b5c2df015540124e445761a479218a380e126",
+  "reason": "曲柄 D 榫 Ø10→Ø12（用户指出太细会断）：曲柄轴 v071、手轮 v073（D 孔 12.4）；motion-clearance 待新 run",
+  "actor": {
+    "sessionId": "session-369a8f0b-f94d-4e89-b8bf-82daf58a3473",
+    "source": "cad_assembly.write"
+  },
+  "at": "2026-11-26T00:35:55.728Z",
+  "diff": {
+    "root": [
+      {
+        "path": "claims",
+        "before": [
+          {
+            "kind": "assembly",
+            "statement": "43 件按契约装成整机，70 个接口机检（含 motion-clearance）、0 过盈"
+          },
+          {
+            "kind": "motion",
+            "statement": "42 个交付版本实例：摇柄 2 圈经 10:1 蜗杆驱动 Ø14 主轴与 8 线轮，0 干涉（run r078）"
+          }
+        ],
+        "after": [
+          {
+            "kind": "assembly",
+            "statement": "43 件按契约装成整机，70 个接口机检（含 motion-clearance）、0 过盈"
+          },
+          {
+            "kind": "motion",
+            "statement": "42 个交付版本实例：摇柄 2 圈经 10:1 蜗杆驱动 Ø14 主轴与 8 线轮，0 干涉（run r082）"
+          }
+        ]
+      }
+    ],
+    "children": {
+      "added": [],
+      "removed": [],
+      "changed": [
+        {
+          "id": "crank_shaft",
+          "path": "root/crank_shaft",
+          "fields": [
+            {
+              "path": "root/crank_shaft.version",
+              "before": "v058",
+              "after": "v071"
+            }
+          ]
+        },
+        {
+          "id": "handwheel",
+          "path": "root/handwheel",
+          "fields": [
+            {
+              "path": "root/handwheel.version",
+              "before": "v028",
+              "after": "v073"
+            }
+          ]
+        }
+      ]
+    },
+    "interfaces": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "name": "冰雪城堡八线手摇绕线器",
+    "unit": "mm",
+    "up": "z",
+    "root": {
+      "id": "machine",
+      "name": "冰雪城堡八线手摇绕线器",
+      "kind": "assembly",
+      "brief": {
+        "buyVsMake": [
+          {
+            "item": "结构件/蜗杆/蜗轮/碟簧/销/卡簧",
+            "decision": "make",
+            "by": "user",
+            "note": "用户要求无外购件"
+          }
+        ],
+        "processes": [
+          "fdm-pla-0.4"
+        ],
+        "processesBy": "user",
+        "verify": [
+          "assembly",
+          "motion"
+        ],
+        "verifyBy": "user",
+        "assumptions": [
+          {
+            "text": "整机包络约 226×204×248 mm（<=250，>=120）；最大单件 204 mm，适配 220×220×250 打印床",
+            "by": "assumed"
+          },
+          {
+            "text": "8 条线按 Ø2 mm 尼龙/棉线，单轮约 12–18 m；Ø1 mm 线约 30–45 m",
+            "by": "assumed"
+          },
+          {
+            "text": "单摇柄经双头蜗杆 10:1 同时收 8 轮；每轮由碟簧组 + 止推垫圈压紧的摩擦离合传递扭矩，拉线超扭矩时打滑",
+            "by": "assumed"
+          },
+          {
+            "text": "摩擦离合名义预紧 16–25 N、离合扭矩约 110–180 N·mm；碟簧自由高 6.5、安装 5.68，预紧未实测",
+            "by": "assumed"
+          },
+          {
+            "text": "运动仿真用规定传动比（蜗杆 10:1、8 轮 1:1），不模拟摩擦打滑与线张力",
+            "by": "assumed"
+          },
+          {
+            "text": "全部连接为打印榫/销/卡扣/销轴，无胶水、无螺钉、无轴承",
+            "by": "user"
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "base_lower",
+          "name": "底座下座",
+          "kind": "part",
+          "version": "v010",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#8fb8d8"
+        },
+        {
+          "id": "base_mid",
+          "name": "底座中框",
+          "kind": "part",
+          "version": "v041",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#9cc6e2"
+        },
+        {
+          "id": "base_top",
+          "name": "底座顶板",
+          "kind": "part",
+          "version": "v063",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#b7d7ea"
+        },
+        {
+          "id": "keep",
+          "name": "主塔",
+          "kind": "part",
+          "version": "v046",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#cfe8f5"
+        },
+        {
+          "id": "crown",
+          "name": "冰冠",
+          "kind": "part",
+          "version": "v068",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#eaf7ff"
+        },
+        {
+          "id": "snowflake",
+          "name": "雪花顶饰",
+          "kind": "part",
+          "version": "v067",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#f7fdff"
+        },
+        {
+          "id": "gatehouse",
+          "name": "城门楼",
+          "kind": "part",
+          "version": "v055",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#b9d8e8"
+        },
+        {
+          "id": "main_shaft",
+          "name": "主轴",
+          "kind": "part",
+          "version": "v061",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#e8f4fb"
+        },
+        {
+          "id": "worm_wheel",
+          "name": "蜗轮",
+          "kind": "part",
+          "version": "v062",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#4f8bb0"
+        },
+        {
+          "id": "crank_shaft",
+          "name": "曲柄轴",
+          "kind": "part",
+          "version": "v071",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "color": "#6aa7c9"
+        },
+        {
+          "id": "handwheel",
+          "name": "手轮",
+          "kind": "part",
+          "version": "v073",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              106,
+              -17.3,
+              27
+            ]
+          },
+          "color": "#5b98bb"
+        },
+        {
+          "id": "shaft_clip",
+          "name": "挡圈",
+          "kind": "part",
+          "version": "v066",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              32
+            ]
+          },
+          "color": "#9fc6dc"
+        },
+        {
+          "id": "thrust_washer",
+          "name": "止推垫圈",
+          "kind": "part",
+          "version": "v069",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              221.68
+            ]
+          },
+          "color": "#d7eefb"
+        },
+        {
+          "id": "spring_stack",
+          "name": "碟簧组",
+          "kind": "part",
+          "version": "v070",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              216
+            ]
+          },
+          "color": "#d7eefb"
+        },
+        {
+          "id": "spool1",
+          "name": "线轮1",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              56
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool2",
+          "name": "线轮2",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              76
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool3",
+          "name": "线轮3",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              96
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool4",
+          "name": "线轮4",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              116
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool5",
+          "name": "线轮5",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              136
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool6",
+          "name": "线轮6",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              156
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool7",
+          "name": "线轮7",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              176
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "spool8",
+          "name": "线轮8",
+          "kind": "part",
+          "version": "v064",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              196
+            ]
+          },
+          "color": "#7fc4e8"
+        },
+        {
+          "id": "disc1",
+          "name": "摩擦压盘1",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              54
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc2",
+          "name": "摩擦压盘2",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              74
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc3",
+          "name": "摩擦压盘3",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              94
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc4",
+          "name": "摩擦压盘4",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              114
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc5",
+          "name": "摩擦压盘5",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              134
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc6",
+          "name": "摩擦压盘6",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              154
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc7",
+          "name": "摩擦压盘7",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              174
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc8",
+          "name": "摩擦压盘8",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              194
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "disc9",
+          "name": "摩擦压盘9",
+          "kind": "part",
+          "version": "v065",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              0,
+              214
+            ]
+          },
+          "color": "#5f9fc4"
+        },
+        {
+          "id": "turret1",
+          "name": "角塔1",
+          "kind": "part",
+          "version": "v053",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              77,
+              77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              45
+            ]
+          },
+          "color": "#a9cfe6"
+        },
+        {
+          "id": "turret2",
+          "name": "角塔2",
+          "kind": "part",
+          "version": "v053",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              -77,
+              77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              135
+            ]
+          },
+          "color": "#a9cfe6"
+        },
+        {
+          "id": "turret3",
+          "name": "角塔3",
+          "kind": "part",
+          "version": "v053",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              -77,
+              -77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              225
+            ]
+          },
+          "color": "#a9cfe6"
+        },
+        {
+          "id": "turret4",
+          "name": "角塔4",
+          "kind": "part",
+          "version": "v053",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              77,
+              -77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              315
+            ]
+          },
+          "color": "#a9cfe6"
+        },
+        {
+          "id": "wall_e",
+          "name": "东墙",
+          "kind": "part",
+          "version": "v038",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              77,
+              0,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              0
+            ]
+          },
+          "color": "#b9d8e8"
+        },
+        {
+          "id": "wall_w",
+          "name": "西墙",
+          "kind": "part",
+          "version": "v038",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              -77,
+              0,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              180
+            ]
+          },
+          "color": "#b9d8e8"
+        },
+        {
+          "id": "wall_n",
+          "name": "北墙",
+          "kind": "part",
+          "version": "v038",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              90
+            ]
+          },
+          "color": "#b9d8e8"
+        },
+        {
+          "id": "wall_s",
+          "name": "南门墙",
+          "kind": "part",
+          "version": "v039",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              0,
+              -77,
+              38
+            ],
+            "rotate": [
+              0,
+              0,
+              -90
+            ]
+          },
+          "color": "#b9d8e8"
+        },
+        {
+          "id": "pin1",
+          "name": "定位销1",
+          "kind": "part",
+          "version": "v001",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              36.76955262170048,
+              36.76955262170047,
+              32
+            ]
+          },
+          "color": "#e8f4fb"
+        },
+        {
+          "id": "pin2",
+          "name": "定位销2",
+          "kind": "part",
+          "version": "v001",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              -36.76955262170047,
+              36.76955262170048,
+              32
+            ]
+          },
+          "color": "#e8f4fb"
+        },
+        {
+          "id": "pin3",
+          "name": "定位销3",
+          "kind": "part",
+          "version": "v001",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              -36.76955262170048,
+              -36.76955262170047,
+              32
+            ]
+          },
+          "color": "#e8f4fb"
+        },
+        {
+          "id": "pin4",
+          "name": "定位销4",
+          "kind": "part",
+          "version": "v001",
+          "process": {
+            "id": "fdm-pla-0.4",
+            "source": "policy"
+          },
+          "transform": {
+            "translate": [
+              36.76955262170046,
+              -36.76955262170048,
+              32
+            ]
+          },
+          "color": "#e8f4fb"
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "I01",
+          "a": "base_lower.下座顶面",
+          "b": "base_mid.中框底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I02",
+          "a": "base_mid.中框顶面",
+          "b": "base_top.顶板下表面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I03",
+          "a": "base_top.中轴",
+          "b": "base_lower.中轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.2,
+            "max": 0.2
+          }
+        },
+        {
+          "id": "I04",
+          "a": "base_top.顶板上表面",
+          "b": "keep.塔底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I05",
+          "a": "base_top.中轴",
+          "b": "keep.中轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I06",
+          "a": "base_top.托座顶",
+          "b": "disc1.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I07",
+          "a": "base_top.中轴",
+          "b": "main_shaft.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I08",
+          "a": "keep.颈顶",
+          "b": "crown.冠底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I09",
+          "a": "keep.中轴",
+          "b": "crown.中轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I10",
+          "a": "crown.冠顶",
+          "b": "snowflake.底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I11",
+          "a": "keep.中轴",
+          "b": "snowflake.中轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I12",
+          "a": "main_shaft.中轴",
+          "b": "worm_wheel.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.2,
+            "max": 0.2
+          }
+        },
+        {
+          "id": "I13",
+          "a": "main_shaft.轮位",
+          "b": "worm_wheel.节圆中",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I14",
+          "a": "crank_shaft.蜗杆中",
+          "b": "worm_wheel.节圆中",
+          "type": "齿轮",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": 16.8,
+            "max": 17.8
+          },
+          "note": "蜗杆/蜗轮名义中心距 17.3（0.3 啮合间隙）"
+        },
+        {
+          "id": "I15",
+          "a": "base_mid.曲柄轴",
+          "b": "crank_shaft.曲柄轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I16",
+          "a": "crank_shaft.榫端",
+          "b": "handwheel.轮毂面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I17",
+          "a": "crank_shaft.曲柄轴",
+          "b": "handwheel.手轮轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I18",
+          "a": "main_shaft.挡圈位",
+          "b": "shaft_clip.底",
+          "type": "卡簧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": 0.5,
+            "max": 1.5
+          }
+        },
+        {
+          "id": "I19",
+          "a": "main_shaft.中轴",
+          "b": "shaft_clip.中轴",
+          "type": "同轴",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I20",
+          "a": "main_shaft.中轴",
+          "b": "spool1.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I21",
+          "a": "disc1.顶面",
+          "b": "spool1.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I22",
+          "a": "spool1.顶面",
+          "b": "disc2.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I23",
+          "a": "main_shaft.中轴",
+          "b": "spool2.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I24",
+          "a": "disc2.顶面",
+          "b": "spool2.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I25",
+          "a": "spool2.顶面",
+          "b": "disc3.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I26",
+          "a": "main_shaft.中轴",
+          "b": "spool3.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I27",
+          "a": "disc3.顶面",
+          "b": "spool3.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I28",
+          "a": "spool3.顶面",
+          "b": "disc4.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I29",
+          "a": "main_shaft.中轴",
+          "b": "spool4.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I30",
+          "a": "disc4.顶面",
+          "b": "spool4.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I31",
+          "a": "spool4.顶面",
+          "b": "disc5.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I32",
+          "a": "main_shaft.中轴",
+          "b": "spool5.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I33",
+          "a": "disc5.顶面",
+          "b": "spool5.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I34",
+          "a": "spool5.顶面",
+          "b": "disc6.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I35",
+          "a": "main_shaft.中轴",
+          "b": "spool6.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I36",
+          "a": "disc6.顶面",
+          "b": "spool6.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I37",
+          "a": "spool6.顶面",
+          "b": "disc7.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I38",
+          "a": "main_shaft.中轴",
+          "b": "spool7.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I39",
+          "a": "disc7.顶面",
+          "b": "spool7.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I40",
+          "a": "spool7.顶面",
+          "b": "disc8.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I41",
+          "a": "main_shaft.中轴",
+          "b": "spool8.中轴",
+          "type": "转动副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I42",
+          "a": "disc8.顶面",
+          "b": "spool8.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I43",
+          "a": "spool8.顶面",
+          "b": "disc9.底面",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I44",
+          "a": "main_shaft.中轴",
+          "b": "disc1.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I45",
+          "a": "main_shaft.中轴",
+          "b": "disc2.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I46",
+          "a": "main_shaft.中轴",
+          "b": "disc3.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I47",
+          "a": "main_shaft.中轴",
+          "b": "disc4.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I48",
+          "a": "main_shaft.中轴",
+          "b": "disc5.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I49",
+          "a": "main_shaft.中轴",
+          "b": "disc6.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I50",
+          "a": "main_shaft.中轴",
+          "b": "disc7.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I51",
+          "a": "main_shaft.中轴",
+          "b": "disc8.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I52",
+          "a": "main_shaft.中轴",
+          "b": "disc9.中轴",
+          "type": "固定副",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "id": "I53",
+          "a": "disc9.顶面",
+          "b": "spring_stack.底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I54",
+          "a": "spring_stack.顶",
+          "b": "thrust_washer.底",
+          "type": "预紧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.5,
+            "max": 0.5
+          }
+        },
+        {
+          "id": "I55",
+          "a": "thrust_washer.顶",
+          "b": "crown.冠底",
+          "type": "预紧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": 0,
+            "max": 0.6
+          }
+        },
+        {
+          "id": "I56",
+          "a": "spring_stack.底",
+          "b": "spring_stack.顶",
+          "type": "弹簧",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": 5.5,
+            "max": 5.9
+          }
+        },
+        {
+          "id": "I57",
+          "a": "base_top.角塔孔1",
+          "b": "turret1.中轴",
+          "type": "销孔",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I58",
+          "a": "base_top.顶板上表面",
+          "b": "turret1.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I59",
+          "a": "base_top.角塔孔2",
+          "b": "turret2.中轴",
+          "type": "销孔",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I60",
+          "a": "base_top.顶板上表面",
+          "b": "turret2.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I61",
+          "a": "base_top.角塔孔3",
+          "b": "turret3.中轴",
+          "type": "销孔",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I62",
+          "a": "base_top.顶板上表面",
+          "b": "turret3.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I63",
+          "a": "base_top.角塔孔4",
+          "b": "turret4.中轴",
+          "type": "销孔",
+          "severity": "hard",
+          "check": "coaxial",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I64",
+          "a": "base_top.顶板上表面",
+          "b": "turret4.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I65",
+          "a": "base_top.顶板上表面",
+          "b": "wall_e.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I66",
+          "a": "base_top.顶板上表面",
+          "b": "wall_w.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I67",
+          "a": "base_top.顶板上表面",
+          "b": "wall_n.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I68",
+          "a": "base_top.顶板上表面",
+          "b": "wall_s.身底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I69",
+          "a": "base_top.顶板上表面",
+          "b": "gatehouse.底",
+          "type": "贴合",
+          "severity": "hard",
+          "check": "distance",
+          "tolerance": {
+            "min": -0.3,
+            "max": 0.3
+          }
+        },
+        {
+          "id": "I70",
+          "a": "crank_shaft.曲柄轴",
+          "b": "base_mid.曲柄轴",
+          "type": "运动",
+          "severity": "hard",
+          "check": "motion-clearance",
+          "tolerance": {
+            "min": -0.01,
+            "max": 0.01
+          },
+          "evidence": {
+            "runId": "r078"
+          }
+        }
+      ]
+    },
+    "manufacturing": {
+      "allowed": [
+        {
+          "id": "fdm-pla-0.4",
+          "note": "用户指定 FDM / PLA；全部自制"
+        }
+      ],
+      "approvedBy": "PROMPT.md",
+      "delegate": false
+    },
+    "claims": [
+      {
+        "kind": "assembly",
+        "statement": "43 件按契约装成整机，70 个接口机检（含 motion-clearance）、0 过盈"
+      },
+      {
+        "kind": "motion",
+        "statement": "42 个交付版本实例：摇柄 2 圈经 10:1 蜗杆驱动 Ø14 主轴与 8 线轮，0 干涉（run r082）"
+      }
+    ]
+  }
+}

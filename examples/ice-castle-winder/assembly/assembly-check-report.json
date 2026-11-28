@@ -1,0 +1,10 @@
+{
+  "runId": "r086",
+  "checkedAt": "2026-11-26T00:50:11.570Z",
+  "manifestPath": "/home/songsenand/Project/ToyMarker/examples/ice-castle-winder/assembly/assembly.json",
+  "manifestHash": "1907df1e",
+  "contractRevision": 17,
+  "contractHash": "sha256:1907df1e7b0292e51888a1446cec258c77fcaa9cbd4220c35928bd80ab76a110",
+  "contractStatus": "sealed",
+  "schema": "assembly-check-pointer/v1"
+}

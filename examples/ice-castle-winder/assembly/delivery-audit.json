@@ -1,0 +1,992 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-26T00:50:19.125Z",
+  "project": "/home/songsenand/Project/ToyMarker/examples/ice-castle-winder",
+  "claims": [
+    {
+      "kind": "assembly",
+      "statement": "43 件按契约装成整机，70 个接口机检（含 motion-clearance）、0 过盈"
+    },
+    {
+      "kind": "motion",
+      "statement": "42 个交付版本实例：Ø14 主轴 + v076 全圆角/倒角曲柄，0 干涉（run r085）"
+    }
+  ],
+  "verdict": "excluded",
+  "findings": [
+    {
+      "severity": "info",
+      "code": "brief-assumed",
+      "detail": "5 item(s) were decided by the agent, not the user: assumption: 整机包络约 226×204×248 mm（<=250，>=120）；最大单件 204 mm，适配 220×220×250 打印床; assumption: 8 条线按 Ø2 mm 尼龙/棉线，单轮约 12–18 m；Ø1 mm 线约 30–45 m; assumption: 单摇柄经双头蜗杆 10:1 同时收 8 轮；每轮由碟簧组 + 止推垫圈压紧的摩擦离合传递扭矩，拉线超扭矩时打滑; assumption: 摩擦离合名义预紧 16–25 N、离合扭矩约 110–180 N·mm；碟簧自由高 6.5、安装 5.68，预紧未实测; assumption: 运动仿真用规定传动比（蜗杆 10:1、8 轮 1:1），不模拟摩擦打滑与线张力"
+    },
+    {
+      "severity": "blocked",
+      "code": "latest-printability-failing",
+      "detail": "the newest printability run (r084) on 曲柄轴 v076 is RED — the current design has an unresolved blocking result"
+    },
+    {
+      "severity": "blocked",
+      "code": "failing-printability",
+      "detail": "r061 (printability) failed: 打印悬垂 261.1mm² · 最薄 0.03mm · 可疑处 12 — on 城门楼 v055"
+    },
+    {
+      "severity": "info",
+      "code": "versions-uncited-history",
+      "detail": "22 superseded/unreferenced version(s) have no run: v075, v074, v072, v060, v059, v050, v047, v045, v042, v035 … — history, not a delivery gap"
+    },
+    {
+      "severity": "warn",
+      "code": "stale-evidence",
+      "detail": "45/85 runs cite geometry that has since been replaced — e.g. r013(printability, superseded v031), r012(printability, superseded v033), r003(assembly-check, superseded v002/v014/v016/v019/v021/v023/v024/v026/v028/v029/v031/v032/v033/v036/v037/v040), r002(assembly-check, superseded v002/v014/v016/v017/v018/v019/v021/v023/v024/v026/v028/v029/v030/v031/v032/v033/v036/v037), r001(assembly-check, superseded v002/v014/v015/v016/v017/v018/v019/v020/v021/v022/v023/v024/v026/v028/v029/v030/v031)"
+    },
+    {
+      "severity": "info",
+      "code": "overlay-backed-runs",
+      "detail": "85 run(s) were computed with packages from the user overlay: attrs==26.1.0, bpy==5.2.3, cattrs==26.2.1, certifi==2026.10.23, charset-normalizer==3.5.2, Cython==3.3.0 … (+7) — reproducible only where the same overlay is installed"
+    }
+  ],
+  "visual": {
+    "required": true,
+    "checked": 20,
+    "missing": [],
+    "stale": []
+  },
+  "versions": {
+    "total": 76,
+    "neverCited": [
+      "v075",
+      "v074",
+      "v072",
+      "v060",
+      "v059",
+      "v050",
+      "v047",
+      "v045",
+      "v042",
+      "v035",
+      "v034",
+      "v027",
+      "v013",
+      "v012",
+      "v011",
+      "v009",
+      "v008",
+      "v007",
+      "v006",
+      "v005",
+      "v004",
+      "v003"
+    ],
+    "currentUncited": [],
+    "supersededUncited": [
+      "v075",
+      "v074",
+      "v072",
+      "v060",
+      "v059",
+      "v050",
+      "v047",
+      "v045",
+      "v042",
+      "v035",
+      "v034",
+      "v027",
+      "v013",
+      "v012",
+      "v011",
+      "v009",
+      "v008",
+      "v007",
+      "v006",
+      "v005",
+      "v004",
+      "v003"
+    ],
+    "newest": "v076",
+    "newestTimestamp": "2026-11-26T00:49:02.327Z"
+  },
+  "parts": {
+    "total": 24,
+    "newestNeverValidated": []
+  },
+  "runs": {
+    "total": 85,
+    "retired": [
+      {
+        "id": "r074",
+        "kind": "motion",
+        "reason": "被 r078 取代：r074 是 Ø14 主轴但冰冠/垫圈/碟簧孔未改的中间态，3 处轴向干涉已由 v068/v069/v070 修复",
+        "retiredAt": "2026-11-26T00:28:52.674Z"
+      }
+    ],
+    "stale": [
+      {
+        "id": "r083",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r082",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r080",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v071"
+        ]
+      },
+      {
+        "id": "r079",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v028",
+          "v058"
+        ]
+      },
+      {
+        "id": "r078",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v028",
+          "v058"
+        ]
+      },
+      {
+        "id": "r066",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v026",
+          "v028",
+          "v033",
+          "v037",
+          "v051",
+          "v054",
+          "v056",
+          "v057",
+          "v058"
+        ]
+      },
+      {
+        "id": "r065",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v026",
+          "v028",
+          "v033",
+          "v037",
+          "v051",
+          "v054",
+          "v056",
+          "v058"
+        ]
+      },
+      {
+        "id": "r064",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v058"
+        ]
+      },
+      {
+        "id": "r063",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v057"
+        ]
+      },
+      {
+        "id": "r062",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v056"
+        ]
+      },
+      {
+        "id": "r060",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v054"
+        ]
+      },
+      {
+        "id": "r058",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v029",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v051",
+          "v052"
+        ]
+      },
+      {
+        "id": "r057",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v052"
+        ]
+      },
+      {
+        "id": "r056",
+        "kind": "motion",
+        "status": "pass",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v051",
+          "v052"
+        ]
+      },
+      {
+        "id": "r053",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v040"
+        ]
+      },
+      {
+        "id": "r052",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v002"
+        ]
+      },
+      {
+        "id": "r051",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v014"
+        ]
+      },
+      {
+        "id": "r049",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v026"
+        ]
+      },
+      {
+        "id": "r048",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v037"
+        ]
+      },
+      {
+        "id": "r047",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v029"
+        ]
+      },
+      {
+        "id": "r046",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r045",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v049"
+        ]
+      },
+      {
+        "id": "r044",
+        "kind": "printability",
+        "status": "check",
+        "superseded": [
+          "v051"
+        ]
+      },
+      {
+        "id": "r043",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v021"
+        ]
+      },
+      {
+        "id": "r042",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v032"
+        ]
+      },
+      {
+        "id": "r041",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v019"
+        ]
+      },
+      {
+        "id": "r040",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v036"
+        ]
+      },
+      {
+        "id": "r038",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v033"
+        ]
+      },
+      {
+        "id": "r035",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v029",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v049",
+          "v051"
+        ]
+      },
+      {
+        "id": "r031",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v029",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v048",
+          "v049"
+        ]
+      },
+      {
+        "id": "r024",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v029",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v043",
+          "v044"
+        ]
+      },
+      {
+        "id": "r022",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v019",
+          "v021",
+          "v026",
+          "v028",
+          "v029",
+          "v031",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040",
+          "v043",
+          "v044"
+        ]
+      },
+      {
+        "id": "r021",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v028"
+        ]
+      },
+      {
+        "id": "r020",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v044"
+        ]
+      },
+      {
+        "id": "r019",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v043"
+        ]
+      },
+      {
+        "id": "r018",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v021"
+        ]
+      },
+      {
+        "id": "r017",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v032"
+        ]
+      },
+      {
+        "id": "r016",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v019"
+        ]
+      },
+      {
+        "id": "r015",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v037"
+        ]
+      },
+      {
+        "id": "r014",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v036"
+        ]
+      },
+      {
+        "id": "r013",
+        "kind": "printability",
+        "status": "fail",
+        "superseded": [
+          "v031"
+        ]
+      },
+      {
+        "id": "r012",
+        "kind": "printability",
+        "status": "pass",
+        "superseded": [
+          "v033"
+        ]
+      },
+      {
+        "id": "r003",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v016",
+          "v019",
+          "v021",
+          "v023",
+          "v024",
+          "v026",
+          "v028",
+          "v029",
+          "v031",
+          "v032",
+          "v033",
+          "v036",
+          "v037",
+          "v040"
+        ]
+      },
+      {
+        "id": "r002",
+        "kind": "assembly-check",
+        "status": "check",
+        "superseded": [
+          "v002",
+          "v014",
+          "v016",
+          "v017",
+          "v018",
+          "v019",
+          "v021",
+          "v023",
+          "v024",
+          "v026",
+          "v028",
+          "v029",
+          "v030",
+          "v031",
+          "v032",
+          "v033",
+          "v036",
+          "v037"
+        ]
+      },
+      {
+        "id": "r001",
+        "kind": "assembly-check",
+        "status": "fail",
+        "superseded": [
+          "v002",
+          "v014",
+          "v015",
+          "v016",
+          "v017",
+          "v018",
+          "v019",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v024",
+          "v026",
+          "v028",
+          "v029",
+          "v030",
+          "v031"
+        ]
+      }
+    ],
+    "failing": [
+      {
+        "id": "r084",
+        "kind": "printability",
+        "summary": "打印悬垂 692.5mm² · 最薄 0.03mm · 可疑处 8",
+        "sourceVersionIds": [
+          "v076"
+        ],
+        "current": true
+      },
+      {
+        "id": "r080",
+        "kind": "printability",
+        "summary": "打印悬垂 689.7mm² · 最薄 0.079mm · 可疑处 8",
+        "sourceVersionIds": [
+          "v071"
+        ],
+        "current": false
+      },
+      {
+        "id": "r064",
+        "kind": "printability",
+        "summary": "打印悬垂 675.4mm² · 最薄 0.083mm · 可疑处 10",
+        "sourceVersionIds": [
+          "v058"
+        ],
+        "current": false
+      },
+      {
+        "id": "r062",
+        "kind": "printability",
+        "summary": "打印悬垂 67.3mm² · 最薄 0.096mm · 可疑处 5",
+        "sourceVersionIds": [
+          "v056"
+        ],
+        "current": false
+      },
+      {
+        "id": "r061",
+        "kind": "printability",
+        "summary": "打印悬垂 261.1mm² · 最薄 0.03mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v055"
+        ],
+        "current": true
+      },
+      {
+        "id": "r057",
+        "kind": "printability",
+        "summary": "打印悬垂 677.1mm² · 最薄 0.08mm · 可疑处 9",
+        "sourceVersionIds": [
+          "v052"
+        ],
+        "current": false
+      },
+      {
+        "id": "r053",
+        "kind": "printability",
+        "summary": "打印悬垂 1239.7mm² · 最薄 0.442mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v040"
+        ],
+        "current": false
+      },
+      {
+        "id": "r045",
+        "kind": "printability",
+        "summary": "打印悬垂 677.1mm² · 最薄 0.08mm · 可疑处 9",
+        "sourceVersionIds": [
+          "v049"
+        ],
+        "current": false
+      },
+      {
+        "id": "r043",
+        "kind": "printability",
+        "summary": "打印悬垂 76.8mm² · 最薄 0.068mm · 可疑处 7",
+        "sourceVersionIds": [
+          "v021"
+        ],
+        "current": false
+      },
+      {
+        "id": "r042",
+        "kind": "printability",
+        "summary": "打印悬垂 235mm² · 最薄 0.03mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v032"
+        ],
+        "current": false
+      },
+      {
+        "id": "r040",
+        "kind": "printability",
+        "summary": "打印悬垂 10275.7mm² · 最薄 0.299mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v036"
+        ],
+        "current": false
+      },
+      {
+        "id": "r032",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r030",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r029",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r028",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r027",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r026",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r025",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r023",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r020",
+        "kind": "printability",
+        "summary": "打印悬垂 677.1mm² · 最薄 0.08mm · 可疑处 9",
+        "sourceVersionIds": [
+          "v044"
+        ],
+        "current": false
+      },
+      {
+        "id": "r019",
+        "kind": "printability",
+        "summary": "打印悬垂 186.9mm² · 最薄 0.025mm · 可疑处 3",
+        "sourceVersionIds": [
+          "v043"
+        ],
+        "current": false
+      },
+      {
+        "id": "r018",
+        "kind": "printability",
+        "summary": "打印悬垂 76.8mm² · 最薄 0.068mm · 可疑处 7",
+        "sourceVersionIds": [
+          "v021"
+        ],
+        "current": false
+      },
+      {
+        "id": "r017",
+        "kind": "printability",
+        "summary": "打印悬垂 235mm² · 最薄 0.03mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v032"
+        ],
+        "current": false
+      },
+      {
+        "id": "r014",
+        "kind": "printability",
+        "summary": "打印悬垂 10275.7mm² · 最薄 0.299mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v036"
+        ],
+        "current": false
+      },
+      {
+        "id": "r013",
+        "kind": "printability",
+        "summary": "打印悬垂 2417.3mm² · 最薄 0.082mm · 可疑处 12",
+        "sourceVersionIds": [
+          "v031"
+        ],
+        "current": false
+      },
+      {
+        "id": "r009",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r008",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r007",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r006",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 豁免区 2 对 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r005",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 144 次 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r004",
+        "kind": "motion",
+        "summary": "❌ 不可交付 · 初始最大失配 0.00mm · 采样 48/24 · 干涉 48 次 · 行程 0.0mm",
+        "sourceVersionIds": [],
+        "current": false
+      },
+      {
+        "id": "r001",
+        "kind": "assembly-check",
+        "summary": "69 接口 · 通过 67 · 硬冲突 2 · 未声明 28",
+        "sourceVersionIds": [
+          "v001",
+          "v002",
+          "v010",
+          "v014",
+          "v015",
+          "v016",
+          "v017",
+          "v018",
+          "v019",
+          "v020",
+          "v021",
+          "v022",
+          "v023",
+          "v024",
+          "v025",
+          "v026",
+          "v028",
+          "v029",
+          "v030",
+          "v031"
+        ],
+        "current": false
+      }
+    ],
+    "duplicateGroups": [],
+    "latestByKind": {
+      "assembly-check": {
+        "id": "r086",
+        "status": "check",
+        "timestamp": "2026-11-26T00:50:11.705Z"
+      },
+      "motion": {
+        "id": "r085",
+        "status": "pass",
+        "timestamp": "2026-11-26T00:49:52.755Z"
+      },
+      "printability": {
+        "id": "r084",
+        "status": "fail",
+        "timestamp": "2026-11-26T00:49:10.735Z"
+      }
+    }
+  },
+  "brief": {
+    "manifest": true,
+    "present": true,
+    "processes": [
+      "fdm-pla-0.4"
+    ],
+    "verify": [
+      "assembly",
+      "motion"
+    ],
+    "assumed": [
+      {
+        "item": "assumption: 整机包络约 226×204×248 mm（<=250，>=120）；最大单件 204 mm，适配 220×220×250 打印床",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 8 条线按 Ø2 mm 尼龙/棉线，单轮约 12–18 m；Ø1 mm 线约 30–45 m",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 单摇柄经双头蜗杆 10:1 同时收 8 轮；每轮由碟簧组 + 止推垫圈压紧的摩擦离合传递扭矩，拉线超扭矩时打滑",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 摩擦离合名义预紧 16–25 N、离合扭矩约 110–180 N·mm；碟簧自由高 6.5、安装 5.68，预紧未实测",
+        "kind": "assumption"
+      },
+      {
+        "item": "assumption: 运动仿真用规定传动比（蜗杆 10:1、8 轮 1:1），不模拟摩擦打滑与线张力",
+        "kind": "assumption"
+      }
+    ]
+  },
+  "contract": {
+    "name": "冰雪城堡八线手摇绕线器",
+    "interfaces": 70,
+    "kinematicInterfaces": 11,
+    "byCheck": {
+      "distance": 39,
+      "coaxial": 30,
+      "motion-clearance": 1
+    },
+    "staleNodes": [],
+    "geometryNewerThanCheck": false,
+    "revision": 17,
+    "hash": "sha256:1907df1e7b0292e51888a1446cec258c77fcaa9cbd4220c35928bd80ab76a110",
+    "changedSinceCheck": false,
+    "checkRevision": 17,
+    "checkHash": "sha256:1907df1e7b0292e51888a1446cec258c77fcaa9cbd4220c35928bd80ab76a110"
+  },
+  "unregistered": {
+    "scanned": 0,
+    "files": [],
+    "exempt": [],
+    "missingExempt": [],
+    "truncated": false
+  },
+  "judgement": "excluded",
+  "summary": "EXCLUDED · 2 blocked · 1 warn · 3 info · 2 current failing · 0 current uncited · 76 versions / 24 parts / 85 runs · stale runs 45"
+}
