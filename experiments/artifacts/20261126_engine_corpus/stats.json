@@ -1,0 +1,229 @@
+{
+  "pairs": {
+    "shuttle": {
+      "scad": {
+        "dir": "examples/sewing-rotary-hook",
+        "kernels": {
+          "openscad": 147,
+          "?": 2
+        },
+        "sessions": 1,
+        "authored_parts": 23,
+        "versions": 149,
+        "versions_per_part": 6.48,
+        "per_part_max": 28,
+        "per_part_median": 4,
+        "delivered_parts": 23,
+        "interfaces": 36,
+        "runs": 103,
+        "status": {
+          "pass": 32,
+          "fail": 48,
+          "check": 23
+        },
+        "pass": 32,
+        "check": 23,
+        "fail": 48,
+        "fail_pct": 46.6,
+        "fail_ci95": [
+          37.3,
+          56.2
+        ],
+        "runs_per_part": 4.48,
+        "run_kinds": {
+          "assembly": 34,
+          "assembly-check": 14,
+          "motion": 28,
+          "physics": 1,
+          "printability": 20,
+          "machinability": 3,
+          "turning": 2,
+          "sheet2d": 1
+        },
+        "run_kind_count": 8,
+        "failure_causes": {
+          "motion-interference": 44,
+          "assembly-undeclared": 7,
+          "printability-wall/overhang": 17,
+          "cnc-access": 3
+        },
+        "audit": "excluded",
+        "source_files": 19,
+        "loc": {
+          ".scad": 360,
+          ".py": 92
+        },
+        "first": "2026-11-21",
+        "last": "2026-11-23"
+      },
+      "cadquery": {
+        "dir": "examples/sewing-rotary-hook-cq",
+        "kernels": {
+          "cadquery": 123,
+          "?": 3
+        },
+        "sessions": 1,
+        "authored_parts": 29,
+        "versions": 126,
+        "versions_per_part": 4.34,
+        "per_part_max": 25,
+        "per_part_median": 2,
+        "delivered_parts": 27,
+        "interfaces": 18,
+        "runs": 42,
+        "status": {
+          "fail": 28,
+          "pass": 6,
+          "check": 8
+        },
+        "pass": 6,
+        "check": 8,
+        "fail": 28,
+        "fail_pct": 66.7,
+        "fail_ci95": [
+          51.6,
+          79.0
+        ],
+        "runs_per_part": 1.45,
+        "run_kinds": {
+          "motion": 25,
+          "assembly": 3,
+          "assembly-check": 4,
+          "printability": 5,
+          "sheet2d": 2,
+          "machinability": 2,
+          "turning": 1
+        },
+        "run_kind_count": 7,
+        "failure_causes": {
+          "motion-interference": 24,
+          "assembly-undeclared": 4,
+          "printability-wall/overhang": 5,
+          "cnc-access": 2,
+          "turning": 1
+        },
+        "audit": "excluded",
+        "source_files": 13,
+        "loc": {
+          ".py": 317
+        },
+        "first": "2026-11-23",
+        "last": "2026-11-24"
+      },
+      "fail_z": -2.19
+    },
+    "derailleur": {
+      "scad": {
+        "dir": "examples/bicycle-derailleur-3spd",
+        "kernels": {
+          "openscad": 31,
+          "?": 1
+        },
+        "sessions": 1,
+        "authored_parts": 11,
+        "versions": 32,
+        "versions_per_part": 2.91,
+        "per_part_max": 6,
+        "per_part_median": 3,
+        "delivered_parts": 21,
+        "interfaces": 29,
+        "runs": 51,
+        "status": {
+          "check": 16,
+          "pass": 25,
+          "fail": 10
+        },
+        "pass": 25,
+        "check": 16,
+        "fail": 10,
+        "fail_pct": 19.6,
+        "fail_ci95": [
+          11.0,
+          32.5
+        ],
+        "runs_per_part": 4.64,
+        "run_kinds": {
+          "assembly-check": 6,
+          "assembly": 8,
+          "motion": 6,
+          "stress": 2,
+          "printability": 13,
+          "appearance": 1,
+          "machinability": 8,
+          "turning": 7
+        },
+        "run_kind_count": 8,
+        "failure_causes": {
+          "assembly-undeclared": 3,
+          "motion-interference": 5,
+          "stress": 2,
+          "printability-wall/overhang": 6,
+          "cnc-access": 8
+        },
+        "audit": "difficult",
+        "source_files": 11,
+        "loc": {
+          ".scad": 193,
+          ".py": 120
+        },
+        "first": "2026-11-20",
+        "last": "2026-11-20"
+      },
+      "cadquery": {
+        "dir": "examples/bicycle-derailleur-3spd-cq",
+        "kernels": {
+          "cadquery": 76,
+          "?": 9
+        },
+        "sessions": 1,
+        "authored_parts": 17,
+        "versions": 85,
+        "versions_per_part": 5.0,
+        "per_part_max": 18,
+        "per_part_median": 3,
+        "delivered_parts": 36,
+        "interfaces": 62,
+        "runs": 104,
+        "status": {
+          "check": 40,
+          "pass": 58,
+          "fail": 6
+        },
+        "pass": 58,
+        "check": 40,
+        "fail": 6,
+        "fail_pct": 5.8,
+        "fail_ci95": [
+          2.7,
+          12.0
+        ],
+        "runs_per_part": 6.12,
+        "run_kinds": {
+          "assembly-check": 21,
+          "motion": 26,
+          "assembly": 15,
+          "printability": 23,
+          "stress": 5,
+          "machinability": 13,
+          "turning": 1
+        },
+        "run_kind_count": 7,
+        "failure_causes": {
+          "assembly-undeclared": 7,
+          "motion-interference": 4,
+          "printability-wall/overhang": 18,
+          "stress": 5,
+          "cnc-access": 12
+        },
+        "audit": "difficult",
+        "source_files": 12,
+        "loc": {
+          ".py": 276
+        },
+        "first": "2026-11-20",
+        "last": "2026-11-20"
+      },
+      "fail_z": 2.66
+    }
+  }
+}
