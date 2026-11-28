@@ -2,8 +2,8 @@
 
 [中文](HARNESS.md) | English
 
-**Version**: v2.4 (2026-11-13)
-**History**: v2.4 sets the brand to **Yingzao (营造)** and the preset display name to “Yingzao mode”; technical ids are unchanged. v2.3 added §6.1 and §11.17, narrowing “fill the gaps” to the core loop. Earlier history is kept in the Chinese original.
+**Version**: v2.5 (2026-11-28)
+**History**: v2.5 adds §6.2 “The skill is a map, not an inspector”, §11.18 “Gates in tools, maps in skills”, and §11.19 “Design for laziness”; earlier history is kept in the Chinese original. v2.4 sets the brand to **Yingzao (营造)** and the preset display name to “Yingzao mode”; technical ids are unchanged. v2.3 added §6.1 and §11.17, narrowing “fill the gaps” to the core loop.
 
 **Status**: `DESIGN.md` records the current design; `DECISION-LOG.md` records decisions. When this file and the others disagree, the **positioning statements here** win.
 **Admission test**: this file only holds a statement if it still holds after removing proper nouns, paths and numbers.
@@ -101,6 +101,21 @@ We are not a product company, we are a venue. Product thinking asks “what did 
 - **Incubator, not a factory for one product**; support is tiered, not universal.
 - **No promise of zero product gaps**; we promise venue utilities, QA and a stated support level.
 
+### 6.2 The skill is a map, not an inspector
+
+A skill's job is to point the way: what the venue offers, which path fits this problem, why, and where the traps are. It loads on demand as a context-economy choice; it is **neither guaranteed to load nor a process-enforcement layer**. A “you must do X first” rule that lives only in a skill hands a mandatory step to the model's discretion; if the skill is not loaded, not read, or judged unnecessary, the step is skipped — that is a division-of-responsibility error, not disobedience.
+
+**Test**: delete the skill; the flow must still be impossible to skip (the tool refuses, acts automatically, or leaves an unfinished state). If deleting the skill loses the flow, the flow was described, not implemented.
+
+Therefore:
+
+- **Mandatory** = a tool precondition, state machine or gate; the skill only explains why and where to look next.
+- Every checklist item in a skill must map to an existing refusal or automatic action; an item without one is a hint, not a rule.
+- A tool's error must name the executable next step (which action, which field), not hand the process judgement back to the reader.
+- When skill and tool disagree, the tool's behaviour wins; docs follow the tool, not the reverse.
+
+In one line: **the skill answers “which path”, the tool answers “was this step done and what is missing”, and the gate answers “may this ship”.**
+
 ## 7. Gaps and boundaries: toy → productivity tool
 
 **Rule: fill gaps in the core loop; non-core capabilities may be declared boundaries with clean handoffs.** Treating every boundary as a gap is scope creep; treating every gap as a boundary keeps it a toy forever.
@@ -159,6 +174,9 @@ Order matters: ① boundary document first; ② protocol first (datum/truth/cont
 15. **State the coordinate identity only under the conditions where it holds.** For transformed geometry/pose compensation, `R(local−p) + (pos+p) = R·local + pos` holds only when `R·p = p`. A fixture that passes with an identity rotation does not prove the identity.
 16. **Self-correcting solvers hide construction errors: measure the initial state, not only the final state.** For constrained multi-body scenes, measure initial mismatch (joint anchor distance) before stepping; above threshold, refuse and name the location. A late-state number describes only that pose.
 17. **Venue before product.** The criterion is whether the venue is more usable, utilities more connected, QA more trustworthy, and users better able to bring materials — not whether the feature table is more complete. Support may be tiered; no promise of zero product gaps.
+
+18. **Gates in tools, maps in skills.** A mandatory step must be carried by a tool precondition or state machine; the skill only explains and navigates. Test: delete the skill and the flow still cannot be skipped. An on-demand skill is not a process-enforcement layer.
+19. **Design for laziness: make the correct path the shortest path.** An agent will skip steps, so never make the correct flow longer than the incorrect one. A new version of an existing part should have its identity, parent version and process prefilled by the tool, with the model supplying only geometry; only a genuinely new part should demand explicit detail. A shortcut must be unique and traceable; on ambiguity, refuse and list the candidates rather than guessing identity.
 
 ---
 
