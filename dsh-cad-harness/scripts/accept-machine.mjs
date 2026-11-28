@@ -41,6 +41,20 @@ check(m?.nodes.length === 4, 'nested assemblies contribute their nodes (4)', Str
 check(m?.distinctParts === 3, 'duplicate instances count once in distinctParts (3)', String(m?.distinctParts));
 check(m?.nodes.filter((n) => n.part === '吊架').length === 2, 'two hanger INSTANCES stay two nodes');
 check(m?.nodes[0]?.version === 'v001', 'a node keeps its pinned version', String(m?.nodes[0]?.version));
+// The whole-machine 3D preview needs the authored placement, not just the name.
+const beam = m?.nodes.find((n) => n.part === '横梁');
+check(JSON.stringify(beam?.translate) === '[0,0,101]', 'a node keeps its translate for the 3D preview',
+  JSON.stringify(beam?.translate));
+const rotated = parseMachine({
+  root: { kind: 'assembly', children: [
+    { id: 'a', kind: 'part', part: '甲', version: 'v001', transform: { rotate: [0, 0, 90] } },
+    { id: 'b', kind: 'part', part: '乙', version: 'v001', transform: { translate: [0, 0] } },
+  ] },
+});
+check(JSON.stringify(rotated?.nodes[0]?.rotate) === '[0,0,90]', 'a node keeps its rotate',
+  JSON.stringify(rotated?.nodes[0]?.rotate));
+check(rotated?.nodes[1]?.translate === undefined, 'a malformed translate is dropped, not half-read',
+  JSON.stringify(rotated?.nodes[1]?.translate));
 
 check(parseMachine({ root: { kind: 'assembly', children: [] } }) === null, 'an empty assembly is NOT a machine');
 check(parseMachine({}) === null, 'a payload without a root is null');
